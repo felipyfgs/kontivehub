@@ -1,0 +1,279 @@
+# =============================================================================
+# Monorepo KontiveHub — fonte única de ignore
+# Nested .gitignore só onde o framework exige pastas vazias versionadas
+# (ex.: apps/api/storage/**/.gitignore, bootstrap/cache). Não duplicar aqui
+# regras de apps/api ou apps/web em .gitignore locais do app.
+# =============================================================================
+
+# --- Local-only (templates, massa piloto, artefatos de máquina; NÃO versionar) ---
+.local/
+# Dump local de docs/SDK externos (ex.: Integra Contador); nunca versionar
+.references/
+
+# --- Secrets e ambiente ---
+.env
+.env.*
+!.env.example
+apps/api/.env
+apps/api/.env.*
+!apps/api/.env.example
+apps/web/.env
+apps/web/.env.*
+!apps/web/.env.example
+**/.env
+!**/.env.example
+apps/api/auth.json
+**/auth.json
+# Chaves e segredos soltos.
+# Evitar **/*secret* amplo: bloqueava infra/docker/ops/secret-scan.sh e classes *Secret*.
+**/secrets/
+**/.secrets/
+**/*credentials*
+**/*secret*.env
+**/*secrets*.json
+!**/*.example
+# Exceções só para docs/exemplos que casariam com padrões de segredo acima
+!**/*secret*.md
+!**/*credentials*.md
+!**/*secrets*.example
+
+# --- Dependências ---
+**/node_modules/
+apps/api/vendor/
+# Store local do pnpm (nunca versionar; regenera com install)
+**/.pnpm-store/
+.pnpm-store/
+**/composer.phar
+composer.phar
+
+# --- API Laravel (apps/api) ---
+apps/api/public/build
+apps/api/public/hot
+apps/api/public/storage
+apps/api/public/fonts-manifest.dev.json
+apps/api/storage/*.key
+apps/api/storage/pail
+apps/api/storage/logs/*
+!apps/api/storage/logs/.gitignore
+# XML de smoke/fiscal em logs (defesa além de *)
+apps/api/storage/logs/*.xml
+apps/api/storage/app/certs/
+apps/api/storage/app/tmp-manual-nfce/
+apps/api/storage/app/backups/
+apps/api/storage/framework/cache/data/*
+!apps/api/storage/framework/cache/data/.gitignore
+apps/api/storage/framework/sessions/*
+!apps/api/storage/framework/sessions/.gitignore
+apps/api/storage/framework/testing/*
+!apps/api/storage/framework/testing/.gitignore
+apps/api/storage/framework/views/*
+!apps/api/storage/framework/views/.gitignore
+# Private disk (volume Docker / artefatos locais)
+apps/api/storage/app/private/*
+!apps/api/storage/app/private/.gitignore
+apps/api/bootstrap/cache/*.php
+!apps/api/bootstrap/cache/.gitignore
+apps/api/.phpunit.result.cache
+apps/api/.phpunit.cache
+apps/api/_ide_helper.php
+apps/api/_ide_helper_models.php
+apps/api/.phpstorm.meta.php
+apps/api/Homestead.json
+apps/api/Homestead.yaml
+apps/api/.phpactor.json
+apps/api/.php-cs-fixer.cache
+apps/api/.phpstan.result.cache
+# Certs SVRS só de teste (nunca produção)
+apps/api/tests/fixtures/svrs-nfce/test-only.*
+
+# --- Web Nuxt (apps/web) ---
+apps/web/.nuxt/
+apps/web/.nuxt-*/
+apps/web/.output/
+apps/web/.data/
+apps/web/.nitro/
+apps/web/.cache/
+apps/web/dist
+apps/web/dist/
+apps/web/logs/
+apps/web/.fleet/
+apps/web/.history/
+apps/web/.eslintcache
+apps/web/.vite/
+apps/web/**/*.tsbuildinfo
+# Fixture Vitest/Nuxt regenerável (não versionar cache gerado)
+apps/web/tests/**/.nuxt/
+apps/web/tests/**/node_modules/
+apps/web/tests/unit/nuxt-fixture/.nuxtrc
+
+# --- Python sidecars (services/*) ---
+**/__pycache__/
+**/*.py[cod]
+**/*$py.class
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.coverage
+**/coverage.xml
+**/htmlcov/
+**/*.egg-info/
+**/.eggs/
+**/.venv/
+**/venv/
+**/ENV/
+# Builds hatch/pip locais do sidecar
+services/**/dist/
+services/**/build/
+# Celery local (se rodar fora do Compose)
+**/celerybeat-schedule
+**/celerybeat-schedule.*
+**/celerybeat.pid
+# Artefatos efêmeros do executor MEI (TTL; nunca SoT — Postgres é a verdade)
+services/mei/**/artifacts-data/
+services/mei/.artifacts/
+services/mei/tmp/
+services/mei/**/tmp-mei/
+
+# --- Docker / runtime local ---
+docker-compose.override.yml
+docker-compose.*.local.yml
+backups/
+# dumps acidentais fora de backups/
+*.sql
+*.sql.gz
+*.dump
+*.sqlite
+*.sqlite3
+# Estado ACME (Traefik / Let's Encrypt) — NUNCA versionar
+**/acme.json
+letsencrypt/
+**/letsencrypt/
+
+# --- Vault, dados fiscais e certificados (NUNCA versionar) ---
+# Massa piloto: .local/dados/ (já coberto por .local/). Defesa se recriar na raiz:
+dados/
+data/
+vault/
+.vault/
+**/vault-objects/
+private_storage/
+*.pfx
+*.p12
+*.pem
+*.key
+*.crt
+*.cer
+*.jks
+*.p7b
+# PDF sensível / termo assinado exportado por engano
+**/*termo*.pdf
+**/*contrato-serpro*
+!docker/**/*.conf
+!**/.gitkeep
+# Fixtures de teste PEM/PFX ficam em apps/api/tests/fixtures (git may track if mode allows)
+
+# --- Documentos locais soltos na raiz (contratos, dumps de sessão) ---
+/*.pdf
+/*.docx
+/*.doc
+/*.xlsx
+/*.xls
+/*.csv
+
+# --- Arquivos de backup / pacotes acidentais ---
+*.bak
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+*.rar
+
+# --- Temp local ---
+tmp/
+.tmp/
+.cache/
+*.tmp
+*.temp
+
+# --- Testes / cobertura / caches ---
+coverage/
+.phpunit.result.cache
+.phpunit.cache
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- IDE / OS / editores / agentes locais ---
+.idea/
+.vscode/
+.zed/
+.nova/
+# Cursor: versionar mounts de equipe (agents, rules, commands, skills)
+.cursor/*
+!.cursor/agents/
+!.cursor/agents/**
+!.cursor/rules/
+!.cursor/rules/**
+!.cursor/commands/
+!.cursor/commands/**
+!.cursor/skills/
+!.cursor/skills/**
+.fleet/
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.swo
+
+# --- Ferramentas locais de agente (engines inteiras — só disco local) ---
+.grok/
+# Codex: versionar agents, config e skills do projeto
+.codex/*
+!.codex/agents/
+!.codex/agents/**
+!.codex/config.toml
+!.codex/skills/
+!.codex/skills/**
+.opencode/
+.mimocode/
+
+# Layouts antigos removidos — não recriar
+.agents/
+/docs/
+
+# --- Artefatos locais de review/agente e screenshots de sessão ---
+.artifacts/
+.playwright-mcp/
+.review-reports/
+.code-review/
+# Logs/dumps avulsos na raiz (além de *.log / .tmp/)
+.tmp-*
+# Scripts de diagnóstico ad-hoc (nunca versionar)
+**/diag_*.php
+diag_*.php
+/image.png
+/image copy.png
+/pw-*.png
+# PNGs acidentais na raiz (screenshots de sessão / debug visual)
+/*.png
+# Evidências visuais geradas localmente — regeneráveis e não versionadas
+/docs/ui-screenshots/
+/storage/app/serpro-e2e-ui/
+apps/web/pw-clients.mjs
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/blob-report/
+# Baselines de regressão visual Playwright — só local (pesados; regenerar com
+# PLAYWRIGHT_INCLUDE_VISUAL=1 pnpm test:e2e:visual --update-snapshots)
+apps/web/tests/e2e/__screenshots__/
+# merge/patch leftovers
+*.orig
+*.rej
+
+# OpenSpec: changes ativas E archive são versionados (openspec/config.yaml + CI).
+# NÃO usar `openspec/changes/*` — o validate do workflow percorre deltas ativos.
+openspec/**/.openspec-cache/
+openspec/**/.DS_Store
