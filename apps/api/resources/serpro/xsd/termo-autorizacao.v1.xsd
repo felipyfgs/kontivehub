@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  =============================================================================
+  DERIVED SCHEMA — NOT an official SERPRO XSD download.
+  =============================================================================
+  Purpose: strict local contract for termoDeAutorizacao until SERPRO publishes
+  an official downloadable XSD. Validation still rejects wrapping/XMLDSig abuse
+  in TermoXmlValidator.
+
+  Source (documental):
+    title: Padrões técnicos de assinatura XML do Termo (API Integra Contador)
+    url: https://apicenter.estaleiro.serpro.gov.br/documentacao/api-integra-contador/pt/solucoes/integra-contador-gerenciador/autenticaprocurador/padroes_tecnicos_assinatura_xml/
+    document_revision: 2026-04-10
+    retrieved_on: 2026-07-16
+    schema_version: 1.0.0-derived
+    schema_id: hub.serpro.termo-autorizacao.v1.derived
+
+  Content hash of this file is recorded in:
+    resources/serpro/xsd/termo-autorizacao.v1.meta.json
+  =============================================================================
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           elementFormDefault="qualified"
+           attributeFormDefault="unqualified"
+           version="1.0.0-derived">
+
+  <xs:element name="termoDeAutorizacao">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="dados" type="DadosType"/>
+        <!-- Optional Signature: validator enforces single ds:Signature after signing -->
+        <xs:any namespace="http://www.w3.org/2000/09/xmldsig#"
+                processContents="lax"
+                minOccurs="0"
+                maxOccurs="1"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:complexType name="DadosType">
+    <xs:sequence>
+      <xs:element name="sistema" type="SistemaType"/>
+      <xs:element name="termo" type="TextoAttrType"/>
+      <xs:element name="avisoLegal" type="TextoAttrType"/>
+      <xs:element name="finalidade" type="TextoAttrType"/>
+      <xs:element name="dataAssinatura" type="DataAttrType"/>
+      <xs:element name="vigencia" type="DataAttrType"/>
+      <xs:element name="destinatario" type="ParticipanteType"/>
+      <xs:element name="assinadoPor" type="AssinadoPorType"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="SistemaType">
+    <xs:attribute name="id" type="xs:string" use="required" fixed="API Integra Contador"/>
+  </xs:complexType>
+
+  <xs:complexType name="TextoAttrType">
+    <xs:attribute name="texto" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="DataAttrType">
+    <xs:attribute name="data" type="DataAaaammdd" use="required"/>
+  </xs:complexType>
+
+  <xs:simpleType name="DataAaaammdd">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[0-9]{8}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:complexType name="ParticipanteType">
+    <xs:attribute name="numero" type="Cnpj14" use="required"/>
+    <xs:attribute name="nome" type="xs:string" use="required"/>
+    <xs:attribute name="tipo" type="xs:string" use="required" fixed="PJ"/>
+    <xs:attribute name="papel" type="xs:string" use="required" fixed="contratante"/>
+  </xs:complexType>
+
+  <xs:complexType name="AssinadoPorType">
+    <xs:attribute name="numero" type="NiAutor" use="required"/>
+    <xs:attribute name="nome" type="xs:string" use="required"/>
+    <xs:attribute name="tipo" type="TipoPessoa" use="required"/>
+    <xs:attribute name="papel" type="xs:string" use="required" fixed="autor pedido de dados"/>
+  </xs:complexType>
+
+  <!-- Official docs currently describe numeric NI; alfanumérico gated separately. -->
+  <xs:simpleType name="Cnpj14">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[0-9A-Za-z]{14}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="NiAutor">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="([0-9A-Za-z]{11}|[0-9A-Za-z]{14})"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="TipoPessoa">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="PF"/>
+      <xs:enumeration value="PJ"/>
+    </xs:restriction>
+  </xs:simpleType>
+</xs:schema>

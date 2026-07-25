@@ -1,0 +1,96 @@
+{
+    "schemaVersion": 1,
+    "combinedDigest": "b070adbcb8587161be1de85e3a20d1540b31caeefbf607e58c355df67299dd13",
+    "inventoryDigests": {
+        "api": "4f732a3ce71b9f9da4abe6c9f4c88fba7c72ddf78b9c5d6a09d16bd75390cce2",
+        "web": "4f9a29c1c57e6abf283b18ae1dcf711f829a82a5de605235bfca79de515be2f0"
+    },
+    "api": {
+        "files": 2037,
+        "symbols": 13309,
+        "executableFiles": 1977,
+        "parseErrors": 0,
+        "byApp": {
+            "api": 2037
+        },
+        "byCategory": {
+            "application": 1497,
+            "bootstrap": 3,
+            "configuration": 42,
+            "control": 4,
+            "dependency-manifest": 2,
+            "documentation": 1,
+            "factory": 34,
+            "fixture": 18,
+            "migration": 164,
+            "other": 16,
+            "public-asset": 3,
+            "resource": 19,
+            "route": 3,
+            "rpa": 1,
+            "seeder": 9,
+            "storage-placeholder": 10,
+            "test": 211
+        },
+        "byLanguage": {
+            "json": 33,
+            "markdown": 1,
+            "other": 21,
+            "php": 1973,
+            "python": 4,
+            "text": 2,
+            "xml": 1,
+            "xsd": 1,
+            "yaml": 1
+        },
+        "bySymbolKind": {
+            "arrow-function": 907,
+            "class": 1705,
+            "closure": 1188,
+            "enum": 193,
+            "function": 52,
+            "interface": 44,
+            "method": 9215,
+            "trait": 5
+        }
+    },
+    "web": {
+        "files": 674,
+        "symbols": 7250,
+        "executableFiles": 647,
+        "parseErrors": 0,
+        "byApp": {
+            "web": 674
+        },
+        "byCategory": {
+            "application": 520,
+            "configuration": 5,
+            "control": 1,
+            "dependency-manifest": 2,
+            "documentation": 1,
+            "fixture": 12,
+            "other": 5,
+            "public-asset": 4,
+            "script": 6,
+            "server": 1,
+            "test": 117
+        },
+        "byLanguage": {
+            "css": 1,
+            "image": 4,
+            "javascript": 9,
+            "json": 8,
+            "markdown": 3,
+            "other": 9,
+            "typescript": 313,
+            "vue": 325,
+            "yaml": 2
+        },
+        "bySymbolKind": {
+            "arrow-function": 4343,
+            "function": 2381,
+            "interface": 511,
+            "method": 15
+        }
+    }
+}

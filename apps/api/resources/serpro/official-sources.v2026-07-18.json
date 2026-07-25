@@ -1,0 +1,197 @@
+{
+  "version": "2026-07-18",
+  "retrieved_on": "2026-07-18",
+  "notes": "Snapshot versionado de fontes oficiais. Somente registros HTTP_CONTENT canônicos possuem hash SHA-256 do corpo capturado; mudança de hash exige REVIEW_REQUIRED.",
+  "sources": [
+    {
+      "source_key": "api_reference_production",
+      "title": "API Reference Integra Contador (produção)",
+      "url": "https://apicenter.estaleiro.serpro.gov.br/documentacao/api-integra-contador/pt/chamadas/api_reference/",
+      "document_type": "API_REFERENCE",
+      "verification_kind": "HTTP_CONTENT",
+      "expected_http_status": 200,
+      "revision": "2026-03-13",
+      "retrieved_on": "2026-07-18",
+      "content_sha256": "9437e8ada68075589321495b49d1a7e291d258905dc2841ea5e8ee0b632eaa61",
+      "canonical": true,
+      "affected_capabilities": [
+        "oauth",
+        "gateway",
+        "routes",
+        "envelope",
+        "executor"
+      ],
+      "notes": "Protocolo canônico de rotas /integra-contador/v1/{Apoiar|Consultar|Declarar|Emitir|Monitorar}."
+    },
+    {
+      "source_key": "oauth_authenticate",
+      "title": "Autenticação OAuth2 mTLS (endpoint canônico)",
+      "url": "https://apicenter.estaleiro.serpro.gov.br/documentacao/api-integra-contador/pt/quick_start/",
+      "document_type": "OAUTH",
+      "verification_kind": "HTTP_CONTENT",
+      "expected_http_status": 200,
+      "revision": "2026-03",
+      "retrieved_on": "2026-07-18",
+      "content_sha256": "2d679d1aa5ed7561a184d35dd5fdb39bdf7865646c88a09465c3c7428fd4eb34",
+      "canonical": true,
+      "affected_capabilities": [
+        "oauth",
+        "mtls",
+        "credentials"
+      ],
+      "notes": "POST https://autenticacao.sapi.serpro.gov.br/authenticate — único fluxo aceito até resposta formal sobre curl da Área do Cliente."
+    },
+    {
+      "source_key": "termo_xml_signature",
+      "title": "Padrões técnicos de assinatura XML do Termo",
+      "url": "https://apicenter.estaleiro.serpro.gov.br/documentacao/api-integra-contador/pt/solucoes/integra-contador-gerenciador/autenticaprocurador/padroes_tecnicos_assinatura_xml/",
+      "document_type": "TERMO",
+      "verification_kind": "HTTP_CONTENT",
+      "expected_http_status": 200,
+      "revision": "2026",
+      "retrieved_on": "2026-07-18",
+      "content_sha256": "637a68cb6b4a926fe18f51c88ede71fb31bf09ec197e22378c6c6fcda7b7706a",
+      "canonical": true,
+      "affected_capabilities": [
+        "termo",
+        "xmldsig",
+        "autentica_procurador"
+      ],
+      "notes": "XSD oficial baixável ainda não confirmado; schema local é DERIVED."
+    },
+    {
+      "source_key": "envio_xml_assinado_81",
+      "title": "ENVIOXMLASSINADO81 — pedidoDados.dados com xml Base64",
+      "url": "https://apicenter.estaleiro.serpro.gov.br/documentacao/api-integra-contador/pt/solucoes/integra-contador-gerenciador/autenticaprocurador/servicos/envio_de_xml_assinado/",
+      "document_type": "TERMO",
+      "verification_kind": "HTTP_CONTENT",
+      "expected_http_status": 200,
+      "revision": "2026",
+      "retrieved_on": "2026-07-18",
+      "content_sha256": "1c07cfc127c40e0db18b84bd332247576d0a93b46dc583f51b3060591ee91409",
+      "canonical": true,
+      "affected_capabilities": [
+        "autentica_procurador",
+        "termo_cache",
+        "token_procurador"
+      ]
+    },
+    {
+      "source_key": "return_codes_billing",
+      "title": "Códigos de retorno e bilhetagem",
+      "url": "https://apicenter.estaleiro.serpro.gov.br/documentacao/api-integra-contador/pt/codigos_retorno/",
+      "document_type": "BILLING",
+      "verification_kind": "HTTP_CONTENT",
+      "expected_http_status": 200,
+      "revision": "2026",
+      "retrieved_on": "2026-07-18",
+      "content_sha256": "fe1d8658dc7447944b6d2202b8fcbe4312d7a3592778f0e7ec5a0e648169a096",
+      "canonical": true,
+      "affected_capabilities": [
+        "billing",
+        "ledger",
+        "classifier",
+        "budget"
+      ]
+    },
+    {
+      "source_key": "service_catalog",
+      "title": "Catálogo de serviços Integra Contador",
+      "url": "https://apicenter.estaleiro.serpro.gov.br/documentacao/api-integra-contador/pt/catalogo_de_servicos/",
+      "document_type": "SERVICE_CATALOG",
+      "verification_kind": "HTTP_CONTENT",
+      "expected_http_status": 200,
+      "revision": "2026",
+      "retrieved_on": "2026-07-18",
+      "content_sha256": "6c2d695c1a4032738f2749796042ac8346544b5cd377436dd1ccd074058aa70d",
+      "canonical": true,
+      "affected_capabilities": [
+        "catalog",
+        "coordinates",
+        "eligibility"
+      ]
+    },
+    {
+      "source_key": "services_vs_proxies",
+      "title": "Matriz serviços x procurações e-CAC",
+      "url": "https://apicenter.estaleiro.serpro.gov.br/documentacao/api-integra-contador/pt/servicos_vs_procuracoes/",
+      "document_type": "PROCURACOES",
+      "verification_kind": "HTTP_CONTENT",
+      "expected_http_status": 200,
+      "revision": "2026",
+      "retrieved_on": "2026-07-18",
+      "content_sha256": "1a52f1305390eb5919625e30446c8a5ff45758c52564ff4c932fe5ba45fbec84",
+      "canonical": true,
+      "affected_capabilities": [
+        "procuracoes",
+        "eligibility",
+        "powers_matrix"
+      ]
+    },
+    {
+      "source_key": "eventos_limites",
+      "title": "Limites dos Eventos de Atualização",
+      "url": "https://apicenter.estaleiro.serpro.gov.br/documentacao/api-integra-contador/pt/solucoes/integra-contador-gerenciador/eventosatualizacao/limites/",
+      "document_type": "EVENTOS",
+      "verification_kind": "HTTP_CONTENT",
+      "expected_http_status": 200,
+      "revision": "2026",
+      "retrieved_on": "2026-07-18",
+      "content_sha256": "db18a3c9768afe11db2e119ecf372da1297480c71d2df433f147134d9c6539be",
+      "canonical": true,
+      "affected_capabilities": [
+        "eventos",
+        "monitorar",
+        "rate_limit"
+      ]
+    },
+    {
+      "source_key": "cnpj_alphanumeric_rfb",
+      "title": "CNPJ alfanumérico — transição RFB (jul/2026)",
+      "url": "https://www.gov.br/receitafederal/pt-br/acesso-a-informacao/acoes-e-programas/programas-e-atividades/cnpj-alfanumerico",
+      "document_type": "IDENTITY",
+      "verification_kind": "DYNAMIC_REFERENCE",
+      "revision": "2026-07",
+      "retrieved_on": "2026-07-18",
+      "canonical": false,
+      "affected_capabilities": [
+        "identity",
+        "termo",
+        "eventos",
+        "ui"
+      ],
+      "notes": "Fonte temática específica da RFB observada com HTTP 200, mas com bytes instáveis entre capturas da mesma rodada; referência dinâmica fora dos gates de hash. Divergência com contratos documentados do Integra Contador exige OFFICIAL_CLARIFICATION_REQUIRED."
+    },
+    {
+      "source_key": "tls_chain_validation",
+      "title": "Cadeia TLS / endpoint de validação gateway",
+      "url": "https://gateway.apiserpro.serpro.gov.br/",
+      "document_type": "TLS",
+      "verification_kind": "TRANSPORT_CHECK",
+      "revision": "2026",
+      "retrieved_on": "2026-07-18",
+      "canonical": false,
+      "affected_capabilities": [
+        "tls",
+        "mtls",
+        "credentials"
+      ],
+      "notes": "Endpoint de handshake/readiness; não representa documento HTTP canônico e não possui content_sha256."
+    },
+    {
+      "source_key": "oauth_portal_curl_divergence",
+      "title": "Curl gerado pela Área do Cliente (NÃO canônico)",
+      "url": null,
+      "document_type": "OAUTH_DIVERGENCE",
+      "verification_kind": "HISTORICAL_REFERENCE",
+      "revision": "pending-ticket",
+      "retrieved_on": "2026-07-18",
+      "canonical": false,
+      "affected_capabilities": [
+        "oauth"
+      ],
+      "notes": "Registrado para chamado SERPRO. NÃO implementa segundo fluxo até resposta formal; não possui conteúdo oficial recuperável nem content_sha256.",
+      "segregation_class": "HISTORICAL_UNVERIFIED"
+    }
+  ]
+}

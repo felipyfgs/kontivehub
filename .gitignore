@@ -211,7 +211,16 @@ pnpm-debug.log*
 .vscode/
 .zed/
 .nova/
-.cursor/
+# Cursor: versionar mounts de equipe (agents, rules, commands, skills)
+.cursor/*
+!.cursor/agents/
+!.cursor/agents/**
+!.cursor/rules/
+!.cursor/rules/**
+!.cursor/commands/
+!.cursor/commands/**
+!.cursor/skills/
+!.cursor/skills/**
 .fleet/
 .DS_Store
 Thumbs.db
@@ -222,7 +231,12 @@ Thumbs.db
 # --- Ferramentas locais de agente (engines inteiras — só disco local) ---
 .grok/
 # Codex: versionar agents, config e skills do projeto
-.codex/
+.codex/*
+!.codex/agents/
+!.codex/agents/**
+!.codex/config.toml
+!.codex/skills/
+!.codex/skills/**
 .opencode/
 .mimocode/
 

@@ -1,0 +1,13 @@
+allowBuilds:
+  '@parcel/watcher': false
+  '@tailwindcss/oxide': false
+  esbuild: false
+  maplibre-gl: false
+  unrs-resolver: false
+  vue-demi: false
+
+overrides:
+  '@tiptap/core': 3.27.3
+  '@tiptap/pm': 3.27.3
+  '@tiptap/y-tiptap': 3.0.4
+  esbuild: 0.28.1

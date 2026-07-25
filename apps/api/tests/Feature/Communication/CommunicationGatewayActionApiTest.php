@@ -1,0 +1,420 @@
+<?php
+
+namespace Tests\Feature\Communication;
+
+use App\Contracts\CommunicationTransport;
+use App\DTO\Communication\GatewayCommandData;
+use App\DTO\Communication\GatewayCommandReceipt;
+use App\DTO\Communication\GatewayQueryData;
+use App\Enums\Communication\ConversationStatus;
+use App\Enums\Communication\GatewayCommandType;
+use App\Enums\Communication\InboxStatus;
+use App\Enums\Communication\MessageDirection;
+use App\Enums\Communication\MessageKind;
+use App\Enums\Communication\MessageSource;
+use App\Enums\Communication\MessageStatus;
+use App\Enums\OfficeRole;
+use App\Enums\TenantPermission;
+use App\Enums\TenantRole;
+use App\Exceptions\CommunicationTransportException;
+use App\Models\CommunicationContact;
+use App\Models\CommunicationConversation;
+use App\Models\CommunicationIdentity;
+use App\Models\CommunicationInbox;
+use App\Models\CommunicationInboxMember;
+use App\Models\CommunicationMessage;
+use App\Models\CommunicationOutboxEntry;
+use App\Models\Office;
+use App\Models\OfficeMembership;
+use App\Models\TenantPermissionProfile;
+use App\Models\User;
+use App\Services\Communication\Outbox\CommunicationOutboxDispatcher;
+use App\Support\CurrentOffice;
+use App\Support\MultitenantRbac\EffectivePermissionsResolver;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
+use Laravel\Sanctum\Sanctum;
+use Psr\Http\Message\StreamInterface;
+use Tests\TestCase;
+
+final class CommunicationGatewayActionApiTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private ActionApiTransport $transport;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Queue::fake();
+        config([
+            'communication.enabled' => true,
+            'communication.gateway.enabled' => true,
+        ]);
+        $this->transport = new ActionApiTransport;
+        $this->app->instance(CommunicationTransport::class, $this->transport);
+    }
+
+    public function test_member_with_reply_can_enqueue_typed_conversation_actions_from_domain_ids(): void
+    {
+        $office = Office::factory()->create(['communication_enabled' => true]);
+        $operator = User::factory()->forOffice($office, OfficeRole::Operator)->create();
+        $inbox = $this->inbox($office);
+        $this->member($inbox, $operator);
+        [$conversation, $inbound, $outbound, $poll] = $this->conversation($office, $inbox);
+        $this->authenticate($operator);
+        $base = '/api/v1/communication/conversations/'.$conversation->id;
+
+        $edit = $this->putJson($base.'/messages/'.$outbound->id.'/edit', ['text' => 'Texto corrigido'])
+            ->assertStatus(202)
+            ->assertJsonPath('data.type', GatewayCommandType::EditMessage->value);
+        $this->deleteJson($base.'/messages/'.$outbound->id)
+            ->assertStatus(202)
+            ->assertJsonPath('data.type', GatewayCommandType::RevokeMessage->value);
+        $this->putJson($base.'/messages/'.$inbound->id.'/reaction', ['emoji' => null])
+            ->assertStatus(202)
+            ->assertJsonPath('data.type', GatewayCommandType::ReactMessage->value);
+        $this->postJson($base.'/messages/'.$poll->id.'/poll-votes', ['option_names' => ['Sim']])
+            ->assertStatus(202)
+            ->assertJsonPath('data.type', GatewayCommandType::VotePoll->value);
+        $this->postJson($base.'/messages/'.$inbound->id.'/receipts', ['receipt' => 'READ'])
+            ->assertStatus(202)
+            ->assertJsonPath('data.type', GatewayCommandType::MarkMessage->value);
+        $this->postJson($base.'/presence/subscribe')
+            ->assertStatus(202)
+            ->assertJsonPath('data.type', GatewayCommandType::SubscribePresence->value);
+        $this->putJson($base.'/presence', ['presence' => 'RECORDING', 'media' => 'AUDIO'])
+            ->assertStatus(202)
+            ->assertJsonPath('data.type', GatewayCommandType::SetChatPresence->value);
+        $this->putJson($base.'/disappearing', ['timer_seconds' => 86400])
+            ->assertStatus(202)
+            ->assertJsonPath('data.type', GatewayCommandType::SetChatDisappearing->value);
+        $this->putJson($base.'/state', ['action' => 'STAR', 'value' => true, 'message_id' => $inbound->id])
+            ->assertStatus(202)
+            ->assertJsonPath('data.type', GatewayCommandType::UpdateChatState->value);
+
+        $this->assertDatabaseCount('communication_outbox_entries', 9);
+        $reaction = CommunicationOutboxEntry::query()->withoutGlobalScopes()
+            ->where('type', GatewayCommandType::ReactMessage->value)->firstOrFail();
+        $this->assertSame('+5511999997001', $reaction->payload_encrypted['to']);
+        $this->assertSame('provider-inbound-0001', $reaction->payload_encrypted['target_message_id']);
+        $this->assertSame('', $reaction->payload_encrypted['emoji']);
+        $this->assertSame('+5511999997001', $reaction->payload_encrypted['sender']);
+        $this->assertNull($reaction->message_id);
+
+        $editEntry = CommunicationOutboxEntry::query()->withoutGlobalScopes()
+            ->where('command_id', $edit->json('data.command_id'))->firstOrFail();
+        app(CommunicationOutboxDispatcher::class)->dispatch((int) $editEntry->id);
+        $this->assertCount(1, $this->transport->commands);
+        $this->assertSame($editEntry->command_id, $this->transport->commands[0]->providerMessageId);
+        $this->assertSame('provider-outbound-0001', $this->transport->commands[0]->payload['target_message_id']);
+    }
+
+    public function test_history_and_recovery_apply_manage_and_reply_boundaries(): void
+    {
+        $office = Office::factory()->create(['communication_enabled' => true]);
+        $operator = User::factory()->forOffice($office, OfficeRole::Operator)->create();
+        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
+        $inbox = $this->inbox($office);
+        $this->member($inbox, $operator);
+        [$conversation, $inbound] = $this->conversation($office, $inbox);
+        $base = '/api/v1/communication/conversations/'.$conversation->id.'/messages/'.$inbound->id;
+
+        $this->authenticate($operator);
+        $this->postJson($base.'/recovery', ['operation' => 'UNAVAILABLE'])
+            ->assertStatus(202)
+            ->assertJsonPath('data.type', GatewayCommandType::RequestUnavailableMessage->value);
+        $this->postJson($base.'/recovery', ['operation' => 'MEDIA_RETRY'])
+            ->assertStatus(202)
+            ->assertJsonPath('data.type', GatewayCommandType::RequestMediaRetry->value);
+        $this->postJson($base.'/history', ['count' => 20])->assertForbidden();
+        $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/app-state/sync')->assertForbidden();
+        $this->assertDatabaseCount('communication_outbox_entries', 2);
+
+        $this->authenticate($admin);
+        $this->postJson($base.'/history', ['count' => 20])
+            ->assertStatus(202)
+            ->assertJsonPath('data.type', GatewayCommandType::RequestHistorySync->value);
+        $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/app-state/sync')
+            ->assertStatus(202)
+            ->assertJsonPath('data.type', GatewayCommandType::UpdateChatState->value);
+    }
+
+    public function test_permission_membership_and_office_are_rejected_before_outbox_or_query(): void
+    {
+        $office = Office::factory()->create(['communication_enabled' => true]);
+        $foreignOffice = Office::factory()->create(['communication_enabled' => true]);
+        $member = User::factory()->forOffice($office, OfficeRole::Operator)->create();
+        $notMember = User::factory()->forOffice($office, OfficeRole::Operator)->create();
+        $viewer = User::factory()->forOffice($office, OfficeRole::Viewer)->create();
+        $foreignAdmin = User::factory()->forOffice($foreignOffice, OfficeRole::Admin)->create();
+        $inbox = $this->inbox($office);
+        $this->member($inbox, $member);
+        $this->member($inbox, $viewer);
+        [$conversation, $inbound] = $this->conversation($office, $inbox);
+        $reaction = '/api/v1/communication/conversations/'.$conversation->id.'/messages/'.$inbound->id.'/reaction';
+
+        $this->authenticate($notMember);
+        $this->putJson($reaction, ['emoji' => '👍'])->assertForbidden();
+        $this->authenticate($viewer);
+        $this->putJson($reaction, ['emoji' => '👍'])->assertForbidden();
+        $this->authenticate($member);
+        $this->putJson('/api/v1/communication/inboxes/'.$inbox->id.'/privacy', [
+            'name' => 'last', 'value' => 'contacts',
+        ])->assertForbidden();
+        $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/contacts/check', [
+            'users' => ['+5511999997001'],
+        ])->assertForbidden();
+
+        $this->authenticate($foreignAdmin);
+        $this->putJson($reaction, ['emoji' => '👍'])->assertNotFound();
+        $this->getJson('/api/v1/communication/inboxes/'.$inbox->id.'/privacy')->assertNotFound();
+
+        $this->assertDatabaseCount('communication_outbox_entries', 0);
+        $this->assertCount(0, $this->transport->queries);
+    }
+
+    public function test_admin_controls_use_the_current_inbox_session_and_sanitized_queries(): void
+    {
+        $office = Office::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
+        $inbox = $this->inbox($office, 'session-admin-actions-0001');
+        [$conversation] = $this->conversation($office, $inbox);
+        $identity = $conversation->identity;
+        $this->authenticate($admin);
+
+        $this->putJson('/api/v1/communication/inboxes/'.$inbox->id.'/privacy', [
+            'name' => 'profile', 'value' => 'contacts',
+        ])->assertStatus(202)->assertJsonPath('data.type', GatewayCommandType::UpdatePrivacy->value);
+        $this->putJson('/api/v1/communication/inboxes/'.$inbox->id.'/blocklist', [
+            'identity_id' => $identity->id, 'action' => 'BLOCK',
+        ])->assertStatus(202)->assertJsonPath('data.type', GatewayCommandType::UpdateBlocklist->value);
+        $this->putJson('/api/v1/communication/inboxes/'.$inbox->id.'/presence', [
+            'presence' => 'AVAILABLE', 'force_active_delivery_receipts' => true,
+        ])->assertStatus(202)->assertJsonPath('data.type', GatewayCommandType::SetPresence->value);
+        $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/session/reset')
+            ->assertStatus(202)->assertJsonPath('data.type', GatewayCommandType::ResetSession->value);
+        $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/session/connect')
+            ->assertStatus(202)->assertJsonPath('data.type', GatewayCommandType::ConnectSession->value);
+        $this->putJson('/api/v1/communication/inboxes/'.$inbox->id.'/session/passive', ['passive' => true])
+            ->assertStatus(202)->assertJsonPath('data.type', GatewayCommandType::SetPassive->value);
+        $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/session/pair-phone', [
+            'phone' => '+5511999997001', 'show_push_notification' => false,
+        ])->assertStatus(202)->assertJsonPath('data.type', GatewayCommandType::PairPhone->value);
+        $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/session/passkey/respond', [
+            'id' => 'passkey-request-0001',
+            'client_data_json' => 'client-data',
+            'authenticator_data' => 'authenticator-data',
+            'signature' => 'signature-data',
+        ])->assertStatus(202)->assertJsonPath('data.type', GatewayCommandType::RespondPasskey->value);
+        $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/session/passkey/confirm', [
+            'id' => 'passkey-request-0001', 'confirm' => true,
+        ])->assertStatus(202)->assertJsonPath('data.type', GatewayCommandType::ConfirmPasskey->value);
+        $this->putJson('/api/v1/communication/inboxes/'.$inbox->id.'/default-disappearing', [
+            'timer_seconds' => 604800,
+        ])->assertStatus(202)->assertJsonPath('data.type', GatewayCommandType::SetDefaultDisappearing->value);
+        $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/app-state/sync')
+            ->assertStatus(202)->assertJsonPath('data.type', GatewayCommandType::UpdateChatState->value);
+        $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/app-state/mark-clean', [
+            'timestamp' => 1784746800,
+        ])->assertStatus(202)->assertJsonPath('data.type', GatewayCommandType::UpdateChatState->value);
+        $this->getJson('/api/v1/communication/inboxes/'.$inbox->id.'/session/status')
+            ->assertOk()
+            ->assertJsonPath('data.session_id', 'session-admin-actions-0001')
+            ->assertJsonPath('data.status', InboxStatus::Connected->value)
+            ->assertJsonPath('data.connected', true)
+            ->assertJsonPath('data.logged_in', true)
+            ->assertJsonPath('data.ready', true)
+            ->assertJsonPath('data.has_credentials', true);
+        $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/contacts/check', [
+            'users' => ['+5511999997001'],
+        ])->assertOk()->assertJsonPath('data.type', 'USER_CHECK');
+        $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/contacts/info', [
+            'users' => ['+5511999997001'],
+        ])->assertOk()->assertJsonPath('data.type', 'USER_INFO');
+        $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/contacts/business-profiles', [
+            'users' => ['+5511999997001'],
+        ])->assertOk()->assertJsonPath('data.type', 'BUSINESS_PROFILE');
+        $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/contacts/profile-picture', [
+            'identity_id' => $identity->id, 'preview' => true,
+        ])->assertOk()->assertJsonPath('data.type', 'PROFILE_PICTURE');
+        $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/contacts/qr-link', [
+            'revoke' => false,
+        ])->assertOk()->assertJsonPath('data.type', 'CONTACT_QR_LINK');
+        $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/contacts/qr-resolve', [
+            'link' => 'https://wa.me/qr/example',
+        ])->assertOk()->assertJsonPath('data.type', 'CONTACT_QR_RESOLVE');
+        $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/contacts/business-link-resolve', [
+            'link' => 'https://wa.me/message/example',
+        ])->assertOk()->assertJsonPath('data.type', 'BUSINESS_LINK_RESOLVE');
+        $this->getJson('/api/v1/communication/inboxes/'.$inbox->id.'/blocklist')
+            ->assertOk()->assertJsonPath('data.type', 'BLOCKLIST');
+        $this->getJson('/api/v1/communication/inboxes/'.$inbox->id.'/privacy')
+            ->assertOk()->assertJsonPath('data.type', 'PRIVACY_SETTINGS');
+        $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/session/disconnect')
+            ->assertStatus(202)->assertJsonPath('data.type', GatewayCommandType::DisconnectSession->value);
+        $this->assertSame(InboxStatus::Disconnected, $inbox->refresh()->status);
+
+        $this->assertCount(9, $this->transport->queries);
+        foreach ($this->transport->queries as $query) {
+            $this->assertSame('session-admin-actions-0001', $query->sessionId);
+        }
+        $block = CommunicationOutboxEntry::query()->withoutGlobalScopes()
+            ->where('type', GatewayCommandType::UpdateBlocklist->value)->firstOrFail();
+        $this->assertSame('+5511999997001', $block->payload_encrypted['to']);
+        $this->assertArrayNotHasKey('office_id', $block->payload_encrypted);
+        $this->assertArrayNotHasKey('session_id', $block->payload_encrypted);
+    }
+
+    public function test_legacy_manage_permission_still_authorizes_the_new_canonical_boundary(): void
+    {
+        config(['features.canonical_multitenant_rbac.enabled' => true]);
+        $office = Office::factory()->create(['communication_enabled' => true]);
+        $user = User::factory()->forOffice($office, OfficeRole::Operator)->create();
+        $profile = TenantPermissionProfile::factory()->forOffice($office)->create();
+        $profile->syncPermissionKeys([TenantPermission::CommunicationManage]);
+        $membership = OfficeMembership::query()->withoutGlobalScopes()
+            ->where('office_id', $office->id)->where('user_id', $user->id)->firstOrFail();
+        $membership->forceFill([
+            'tenant_role' => TenantRole::TenantUser,
+            'permission_profile_id' => $profile->id,
+            'authorization_version' => (int) $membership->authorization_version + 1,
+        ])->save();
+        $inbox = $this->inbox($office);
+        $this->authenticate($user);
+
+        $this->getJson('/api/v1/communication/inboxes/'.$inbox->id.'/privacy')
+            ->assertOk()
+            ->assertJsonPath('data.type', 'PRIVACY_SETTINGS');
+        $this->assertSame('communication.manage_inboxes', TenantPermission::CommunicationManageInboxes->value);
+        $this->assertContains(
+            TenantPermission::CommunicationManageInboxes->value,
+            app(EffectivePermissionsResolver::class)->forCurrentContext($user),
+        );
+    }
+
+    private function authenticate(User $user): void
+    {
+        Sanctum::actingAs($user);
+        app(CurrentOffice::class)->clear();
+    }
+
+    private function inbox(Office $office, ?string $sessionId = null): CommunicationInbox
+    {
+        return CommunicationInbox::query()->withoutGlobalScopes()->create([
+            'office_id' => $office->id,
+            'name' => 'Inbox '.Str::random(6),
+            'session_id' => $sessionId ?? 'session-'.strtolower((string) Str::ulid()),
+            'status' => InboxStatus::Connected,
+            'is_enabled' => true,
+        ]);
+    }
+
+    private function member(CommunicationInbox $inbox, User $user): void
+    {
+        $membership = OfficeMembership::query()->withoutGlobalScopes()
+            ->where('office_id', $inbox->office_id)->where('user_id', $user->id)->firstOrFail();
+        CommunicationInboxMember::query()->withoutGlobalScopes()->create([
+            'office_id' => $inbox->office_id,
+            'inbox_id' => $inbox->id,
+            'office_membership_id' => $membership->id,
+            'is_active' => true,
+        ]);
+    }
+
+    /** @return array{CommunicationConversation,CommunicationMessage,CommunicationMessage,CommunicationMessage} */
+    private function conversation(Office $office, CommunicationInbox $inbox): array
+    {
+        $contact = CommunicationContact::query()->withoutGlobalScopes()->create([
+            'office_id' => $office->id, 'name' => 'Contato', 'is_active' => true,
+        ]);
+        $identity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
+            'office_id' => $office->id,
+            'contact_id' => $contact->id,
+            'channel' => 'WHATSAPP',
+            'address_encrypted' => '+5511999997001',
+            'address_hash' => hash('sha256', '+5511999997001'),
+            'address_masked' => '***7001',
+            'is_active' => true,
+        ]);
+        $conversation = CommunicationConversation::query()->withoutGlobalScopes()->create([
+            'office_id' => $office->id,
+            'inbox_id' => $inbox->id,
+            'identity_id' => $identity->id,
+            'status' => ConversationStatus::Open,
+            'last_message_at' => now(),
+        ]);
+        $inbound = $this->message($office, $inbox, $conversation, MessageDirection::Inbound, MessageKind::Text, 'provider-inbound-0001');
+        $outbound = $this->message($office, $inbox, $conversation, MessageDirection::Outbound, MessageKind::Text, 'provider-outbound-0001');
+        $poll = $this->message($office, $inbox, $conversation, MessageDirection::Inbound, MessageKind::Poll, 'provider-poll-0001');
+
+        return [$conversation->load('identity'), $inbound, $outbound, $poll];
+    }
+
+    private function message(
+        Office $office,
+        CommunicationInbox $inbox,
+        CommunicationConversation $conversation,
+        MessageDirection $direction,
+        MessageKind $kind,
+        string $providerId,
+    ): CommunicationMessage {
+        return CommunicationMessage::query()->withoutGlobalScopes()->create([
+            'office_id' => $office->id,
+            'inbox_id' => $inbox->id,
+            'conversation_id' => $conversation->id,
+            'identity_id' => $conversation->identity_id,
+            'direction' => $direction,
+            'kind' => $kind,
+            'source' => $direction === MessageDirection::Inbound ? MessageSource::Gateway : MessageSource::Human,
+            'status' => $direction === MessageDirection::Inbound ? MessageStatus::Delivered : MessageStatus::Sent,
+            'body_encrypted' => 'Mensagem '.$providerId,
+            'provider_message_id' => $providerId,
+            'content_digest' => hash('sha256', $providerId),
+            'occurred_at' => now(),
+        ]);
+    }
+}
+
+final class ActionApiTransport implements CommunicationTransport
+{
+    /** @var list<GatewayCommandData> */
+    public array $commands = [];
+
+    /** @var list<GatewayQueryData> */
+    public array $queries = [];
+
+    public function dispatch(GatewayCommandData $command): GatewayCommandReceipt
+    {
+        $this->commands[] = $command;
+
+        return new GatewayCommandReceipt($command->commandId, false);
+    }
+
+    public function query(GatewayQueryData $query): array
+    {
+        $this->queries[] = $query;
+
+        return ['type' => $query->type->value];
+    }
+
+    public function sessionStatus(string $sessionId): array
+    {
+        return [
+            'session_id' => $sessionId,
+            'status' => 'CONNECTED',
+            'desired_connected' => true,
+            'reconnect_count' => 0,
+            'connected' => true,
+            'logged_in' => true,
+            'ready' => true,
+            'has_credentials' => true,
+        ];
+    }
+
+    public function downloadMedia(string $spoolId): StreamInterface
+    {
+        throw new CommunicationTransportException('MEDIA_NOT_CONFIGURED', false);
+    }
+}

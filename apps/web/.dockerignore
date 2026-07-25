@@ -1,0 +1,11 @@
+.env
+.env.*
+node_modules/
+.pnpm-store/
+.nuxt/
+.output/
+.data/
+.cache/
+coverage/
+test-results/
+playwright-report/

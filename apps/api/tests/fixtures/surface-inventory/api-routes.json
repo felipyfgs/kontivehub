@@ -1,0 +1,3590 @@
+[
+  {
+    "method": "GET",
+    "uri": "api/broadcasting/auth",
+    "group": "communication",
+    "action": "BroadcastController@authenticate"
+  },
+  {
+    "method": "POST",
+    "uri": "api/internal/v1/communication/gateway/events",
+    "group": "communication",
+    "action": "CommunicationGatewayEventController"
+  },
+  {
+    "method": "GET",
+    "uri": "api/internal/v1/communication/gateway/media/{command}",
+    "group": "communication",
+    "action": "CommunicationGatewayMediaController"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/account",
+    "group": "auth",
+    "action": "UpdateAccountController"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/activations/complete",
+    "group": "activations",
+    "action": "PublicActivationController@complete"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/activations/inspect",
+    "group": "activations",
+    "action": "PublicActivationController@inspect"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/assistant/conversations",
+    "group": "assistant",
+    "action": "AssistantConversationController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/assistant/conversations",
+    "group": "assistant",
+    "action": "AssistantConversationController@store"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/assistant/conversations/{conversation}/approve-tool",
+    "group": "assistant",
+    "action": "AssistantChatController@approve"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/assistant/conversations/{conversation}/chat",
+    "group": "assistant",
+    "action": "AssistantChatController@chat"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/assistant/conversations/{conversation}/deny-tool",
+    "group": "assistant",
+    "action": "AssistantChatController@deny"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/assistant/conversations/{conversation}/messages",
+    "group": "assistant",
+    "action": "AssistantConversationController@messages"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/auth/confirm-password",
+    "group": "auth",
+    "action": "ConfirmPasswordController"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/auth/confirm-totp",
+    "group": "auth",
+    "action": "FiscalMutationController@confirmTotp"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/client-categories",
+    "group": "client-categories",
+    "action": "ClientCategoryController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/client-categories",
+    "group": "client-categories",
+    "action": "ClientCategoryController@store"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/client-categories/{clientCategory}",
+    "group": "client-categories",
+    "action": "ClientCategoryController@update"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/clients",
+    "group": "clients",
+    "action": "ClientController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/clients",
+    "group": "clients",
+    "action": "ClientController@store"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/clients/bulk-categories",
+    "group": "clients",
+    "action": "ClientCategoryAssignmentController@bulk"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/clients/bulk-status",
+    "group": "clients",
+    "action": "ClientController@bulkStatus"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/clients/{client}",
+    "group": "clients",
+    "action": "ClientController@show"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/clients/{client}",
+    "group": "clients",
+    "action": "ClientController@update"
+  },
+  {
+    "method": "PUT",
+    "uri": "api/v1/clients/{client}/categories",
+    "group": "clients",
+    "action": "ClientCategoryAssignmentController@replace"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/clients/{client}/contacts",
+    "group": "clients",
+    "action": "ClientContactController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/clients/{client}/contacts",
+    "group": "clients",
+    "action": "ClientContactController@store"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/clients/{client}/contacts/{contact}",
+    "group": "clients",
+    "action": "ClientContactController@update"
+  },
+  {
+    "method": "DELETE",
+    "uri": "api/v1/clients/{client}/contacts/{contact}",
+    "group": "clients",
+    "action": "ClientContactController@destroy"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/clients/{client}/credential",
+    "group": "clients",
+    "action": "ClientCredentialController@show"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/clients/{client}/credential",
+    "group": "clients",
+    "action": "ClientCredentialController@store"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/clients/{client}/custom-fields/{customField}",
+    "group": "clients",
+    "action": "ClientController@updateCustomField"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/clients/{client}/establishments",
+    "group": "clients",
+    "action": "EstablishmentController@store"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/clients/{client}/refresh-registration",
+    "group": "clients",
+    "action": "ClientController@refreshRegistration"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/cnpj/{cnpj}/lookup",
+    "group": "cnpj",
+    "action": "CnpjLookupController"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/attachments/{attachment}/download",
+    "group": "communication",
+    "action": "CommunicationDataController@downloadAttachment"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/attachments/{attachment}/preview",
+    "group": "communication",
+    "action": "CommunicationDataController@previewAttachment"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/automation-policies",
+    "group": "communication",
+    "action": "CommunicationAutomationController@index"
+  },
+  {
+    "method": "PUT",
+    "uri": "api/v1/communication/automation-policies",
+    "group": "communication",
+    "action": "CommunicationAutomationController@upsert"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/canned-responses",
+    "group": "communication",
+    "action": "CommunicationCatalogController@cannedResponses"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/canned-responses",
+    "group": "communication",
+    "action": "CommunicationCatalogController@storeCannedResponse"
+  },
+  {
+    "method": "PUT",
+    "uri": "api/v1/communication/canned-responses/{canned}",
+    "group": "communication",
+    "action": "CommunicationCatalogController@updateCannedResponse"
+  },
+  {
+    "method": "DELETE",
+    "uri": "api/v1/communication/canned-responses/{canned}",
+    "group": "communication",
+    "action": "CommunicationCatalogController@deleteCannedResponse"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/canned-responses/{canned}/deactivate",
+    "group": "communication",
+    "action": "CommunicationCatalogController@deactivateCannedResponse"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/canned-responses/{canned}/duplicate",
+    "group": "communication",
+    "action": "CommunicationCatalogController@duplicateCannedResponse"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/canned-responses/{canned}/render",
+    "group": "communication",
+    "action": "CommunicationCatalogController@renderCannedResponse"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/clients/{client}/automation-recipients",
+    "group": "communication",
+    "action": "CommunicationAutomationController@recipients"
+  },
+  {
+    "method": "PUT",
+    "uri": "api/v1/communication/clients/{client}/automation-recipients",
+    "group": "communication",
+    "action": "CommunicationAutomationController@updateRecipients"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/contacts",
+    "group": "communication",
+    "action": "CommunicationContactController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/contacts",
+    "group": "communication",
+    "action": "CommunicationContactController@store"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/contacts/{contact}",
+    "group": "communication",
+    "action": "CommunicationContactController@show"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/communication/contacts/{contact}",
+    "group": "communication",
+    "action": "CommunicationContactController@update"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/contacts/{contact}/export",
+    "group": "communication",
+    "action": "CommunicationDataController@exportContact"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/contacts/{contact}/identities",
+    "group": "communication",
+    "action": "CommunicationContactController@addIdentity"
+  },
+  {
+    "method": "DELETE",
+    "uri": "api/v1/communication/contacts/{contact}/personal-data",
+    "group": "communication",
+    "action": "CommunicationDataController@purgeContact"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/conversations",
+    "group": "communication",
+    "action": "CommunicationConversationController@index"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/conversations/{conversation}",
+    "group": "communication",
+    "action": "CommunicationConversationController@show"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/communication/conversations/{conversation}",
+    "group": "communication",
+    "action": "CommunicationConversationController@update"
+  },
+  {
+    "method": "PUT",
+    "uri": "api/v1/communication/conversations/{conversation}/disappearing",
+    "group": "communication",
+    "action": "CommunicationConversationGatewayController@disappearing"
+  },
+  {
+    "method": "PUT",
+    "uri": "api/v1/communication/conversations/{conversation}/labels/{label}",
+    "group": "communication",
+    "action": "CommunicationConversationController@addLabel"
+  },
+  {
+    "method": "DELETE",
+    "uri": "api/v1/communication/conversations/{conversation}/labels/{label}",
+    "group": "communication",
+    "action": "CommunicationConversationController@removeLabel"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/conversations/{conversation}/messages",
+    "group": "communication",
+    "action": "CommunicationConversationController@send"
+  },
+  {
+    "method": "DELETE",
+    "uri": "api/v1/communication/conversations/{conversation}/messages/{message}",
+    "group": "communication",
+    "action": "CommunicationConversationGatewayController@revoke"
+  },
+  {
+    "method": "PUT",
+    "uri": "api/v1/communication/conversations/{conversation}/messages/{message}/edit",
+    "group": "communication",
+    "action": "CommunicationConversationGatewayController@edit"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/conversations/{conversation}/messages/{message}/history",
+    "group": "communication",
+    "action": "CommunicationConversationGatewayController@history"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/conversations/{conversation}/messages/{message}/poll-votes",
+    "group": "communication",
+    "action": "CommunicationConversationGatewayController@votePoll"
+  },
+  {
+    "method": "PUT",
+    "uri": "api/v1/communication/conversations/{conversation}/messages/{message}/reaction",
+    "group": "communication",
+    "action": "CommunicationConversationGatewayController@react"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/conversations/{conversation}/messages/{message}/receipts",
+    "group": "communication",
+    "action": "CommunicationConversationGatewayController@receipt"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/conversations/{conversation}/messages/{message}/recovery",
+    "group": "communication",
+    "action": "CommunicationConversationGatewayController@recovery"
+  },
+  {
+    "method": "PUT",
+    "uri": "api/v1/communication/conversations/{conversation}/presence",
+    "group": "communication",
+    "action": "CommunicationConversationGatewayController@chatPresence"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/conversations/{conversation}/presence/subscribe",
+    "group": "communication",
+    "action": "CommunicationConversationGatewayController@subscribePresence"
+  },
+  {
+    "method": "PUT",
+    "uri": "api/v1/communication/conversations/{conversation}/state",
+    "group": "communication",
+    "action": "CommunicationConversationGatewayController@state"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/events",
+    "group": "communication",
+    "action": "CommunicationDataController@sync"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/communication/flow-bindings/{binding}",
+    "group": "communication",
+    "action": "CommunicationFlowController@updateBinding"
+  },
+  {
+    "method": "DELETE",
+    "uri": "api/v1/communication/flow-bindings/{binding}",
+    "group": "communication",
+    "action": "CommunicationFlowController@destroyBinding"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/flow-bindings/{binding}/disable",
+    "group": "communication",
+    "action": "CommunicationFlowController@disableBinding"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/flow-bindings/{binding}/enable",
+    "group": "communication",
+    "action": "CommunicationFlowController@enableBinding"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/flow-runs",
+    "group": "communication",
+    "action": "CommunicationFlowRunController@index"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/flow-runs/{run}",
+    "group": "communication",
+    "action": "CommunicationFlowRunController@show"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/flow-runs/{run}/handoff",
+    "group": "communication",
+    "action": "CommunicationFlowRunController@handoff"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/flow-runs/{run}/pause",
+    "group": "communication",
+    "action": "CommunicationFlowRunController@pause"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/flow-runs/{run}/restart",
+    "group": "communication",
+    "action": "CommunicationFlowRunController@restart"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/flow-runs/{run}/resume",
+    "group": "communication",
+    "action": "CommunicationFlowRunController@resume"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/flow-runs/{run}/stop",
+    "group": "communication",
+    "action": "CommunicationFlowRunController@stop"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/flows",
+    "group": "communication",
+    "action": "CommunicationFlowController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/flows",
+    "group": "communication",
+    "action": "CommunicationFlowController@store"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/flows/{flow}",
+    "group": "communication",
+    "action": "CommunicationFlowController@show"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/communication/flows/{flow}",
+    "group": "communication",
+    "action": "CommunicationFlowController@update"
+  },
+  {
+    "method": "DELETE",
+    "uri": "api/v1/communication/flows/{flow}",
+    "group": "communication",
+    "action": "CommunicationFlowController@destroy"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/flows/{flow}/bindings",
+    "group": "communication",
+    "action": "CommunicationFlowController@indexBindings"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/flows/{flow}/bindings",
+    "group": "communication",
+    "action": "CommunicationFlowController@storeBinding"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/flows/{flow}/clone",
+    "group": "communication",
+    "action": "CommunicationFlowController@cloneFlow"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/flows/{flow}/draft",
+    "group": "communication",
+    "action": "CommunicationFlowController@showDraft"
+  },
+  {
+    "method": "PUT",
+    "uri": "api/v1/communication/flows/{flow}/draft",
+    "group": "communication",
+    "action": "CommunicationFlowController@updateDraft"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/flows/{flow}/dry-run",
+    "group": "communication",
+    "action": "CommunicationFlowController@dryRun"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/flows/{flow}/preview",
+    "group": "communication",
+    "action": "CommunicationFlowController@previewGraph"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/flows/{flow}/publish",
+    "group": "communication",
+    "action": "CommunicationFlowController@publish"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/flows/{flow}/validate",
+    "group": "communication",
+    "action": "CommunicationFlowController@validateGraph"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/flows/{flow}/versions/{version}/clone",
+    "group": "communication",
+    "action": "CommunicationFlowController@cloneVersion"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/identities/{identity}/links",
+    "group": "communication",
+    "action": "CommunicationContactController@linkIdentity"
+  },
+  {
+    "method": "DELETE",
+    "uri": "api/v1/communication/identities/{identity}/links/{link}",
+    "group": "communication",
+    "action": "CommunicationContactController@unlinkIdentity"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/inboxes",
+    "group": "communication",
+    "action": "CommunicationInboxController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/inboxes",
+    "group": "communication",
+    "action": "CommunicationInboxController@store"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/communication/inboxes/{inbox}",
+    "group": "communication",
+    "action": "CommunicationInboxController@update"
+  },
+  {
+    "method": "DELETE",
+    "uri": "api/v1/communication/inboxes/{inbox}",
+    "group": "communication",
+    "action": "CommunicationInboxController@destroy"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/inboxes/{inbox}/app-state/mark-clean",
+    "group": "communication",
+    "action": "CommunicationInboxGatewayController@markStateClean"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/inboxes/{inbox}/app-state/sync",
+    "group": "communication",
+    "action": "CommunicationInboxGatewayController@syncState"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/inboxes/{inbox}/blocklist",
+    "group": "communication",
+    "action": "CommunicationInboxGatewayController@blocklist"
+  },
+  {
+    "method": "PUT",
+    "uri": "api/v1/communication/inboxes/{inbox}/blocklist",
+    "group": "communication",
+    "action": "CommunicationInboxGatewayController@updateBlocklist"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/inboxes/{inbox}/contacts/business-link-resolve",
+    "group": "communication",
+    "action": "CommunicationInboxGatewayController@resolveBusinessLink"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/inboxes/{inbox}/contacts/business-profiles",
+    "group": "communication",
+    "action": "CommunicationInboxGatewayController@businessProfiles"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/inboxes/{inbox}/contacts/check",
+    "group": "communication",
+    "action": "CommunicationInboxGatewayController@checkUsers"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/inboxes/{inbox}/contacts/info",
+    "group": "communication",
+    "action": "CommunicationInboxGatewayController@userInfo"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/inboxes/{inbox}/contacts/profile-picture",
+    "group": "communication",
+    "action": "CommunicationInboxGatewayController@profilePicture"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/inboxes/{inbox}/contacts/qr-link",
+    "group": "communication",
+    "action": "CommunicationInboxGatewayController@contactQrLink"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/inboxes/{inbox}/contacts/qr-resolve",
+    "group": "communication",
+    "action": "CommunicationInboxGatewayController@resolveContactQr"
+  },
+  {
+    "method": "PUT",
+    "uri": "api/v1/communication/inboxes/{inbox}/default-disappearing",
+    "group": "communication",
+    "action": "CommunicationInboxGatewayController@defaultDisappearing"
+  },
+  {
+    "method": "PUT",
+    "uri": "api/v1/communication/inboxes/{inbox}/members",
+    "group": "communication",
+    "action": "CommunicationInboxController@replaceMembers"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/inboxes/{inbox}/pairing",
+    "group": "communication",
+    "action": "CommunicationInboxController@startPairing"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/inboxes/{inbox}/pairing",
+    "group": "communication",
+    "action": "CommunicationInboxController@pairing"
+  },
+  {
+    "method": "PUT",
+    "uri": "api/v1/communication/inboxes/{inbox}/presence",
+    "group": "communication",
+    "action": "CommunicationInboxGatewayController@globalPresence"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/inboxes/{inbox}/privacy",
+    "group": "communication",
+    "action": "CommunicationInboxGatewayController@privacy"
+  },
+  {
+    "method": "PUT",
+    "uri": "api/v1/communication/inboxes/{inbox}/privacy",
+    "group": "communication",
+    "action": "CommunicationInboxGatewayController@updatePrivacy"
+  },
+  {
+    "method": "DELETE",
+    "uri": "api/v1/communication/inboxes/{inbox}/session",
+    "group": "communication",
+    "action": "CommunicationInboxController@revoke"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/inboxes/{inbox}/session/connect",
+    "group": "communication",
+    "action": "CommunicationInboxController@startPairing"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/inboxes/{inbox}/session/disconnect",
+    "group": "communication",
+    "action": "CommunicationInboxGatewayController@disconnect"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/inboxes/{inbox}/session/logout",
+    "group": "communication",
+    "action": "CommunicationInboxController@revoke"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/inboxes/{inbox}/session/pair-phone",
+    "group": "communication",
+    "action": "CommunicationInboxGatewayController@pairPhone"
+  },
+  {
+    "method": "PUT",
+    "uri": "api/v1/communication/inboxes/{inbox}/session/passive",
+    "group": "communication",
+    "action": "CommunicationInboxGatewayController@passive"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/inboxes/{inbox}/session/passkey/confirm",
+    "group": "communication",
+    "action": "CommunicationInboxGatewayController@confirmPasskey"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/inboxes/{inbox}/session/passkey/respond",
+    "group": "communication",
+    "action": "CommunicationInboxGatewayController@respondPasskey"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/inboxes/{inbox}/session/reset",
+    "group": "communication",
+    "action": "CommunicationInboxGatewayController@reset"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/inboxes/{inbox}/session/status",
+    "group": "communication",
+    "action": "CommunicationInboxGatewayController@sessionStatus"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/labels",
+    "group": "communication",
+    "action": "CommunicationCatalogController@labels"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/labels",
+    "group": "communication",
+    "action": "CommunicationCatalogController@storeLabel"
+  },
+  {
+    "method": "DELETE",
+    "uri": "api/v1/communication/labels/{label}",
+    "group": "communication",
+    "action": "CommunicationCatalogController@deleteLabel"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/outbound-capabilities",
+    "group": "communication",
+    "action": "CommunicationCatalogController@outboundCapabilities"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/communication/settings",
+    "group": "communication",
+    "action": "CommunicationInboxController@updateOfficeSettings"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/cte/coverage",
+    "group": "cte",
+    "action": "CteOperationsController@coverage"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/cte/health",
+    "group": "cte",
+    "action": "CteOperationsController@health"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/cte/onboarding",
+    "group": "cte",
+    "action": "CteOperationsController@onboarding"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/cte/pending",
+    "group": "cte",
+    "action": "CteOperationsController@pending"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/cte/repairs",
+    "group": "cte",
+    "action": "CteOperationsController@repairKnownNsu"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/documents",
+    "group": "documents",
+    "action": "NoteController@index"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/documents/by-client",
+    "group": "documents",
+    "action": "NoteController@byClient"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/documents/import",
+    "group": "documents",
+    "action": "DocumentImportController@store"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/documents/import-batches",
+    "group": "documents",
+    "action": "DocumentImportBatchController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/documents/import-batches",
+    "group": "documents",
+    "action": "DocumentImportBatchController@store"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/documents/import-batches/{batch}",
+    "group": "documents",
+    "action": "DocumentImportBatchController@show"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/documents/import-batches/{batch}/export.csv",
+    "group": "documents",
+    "action": "DocumentImportBatchController@exportCsv"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/documents/import-batches/{batch}/items",
+    "group": "documents",
+    "action": "DocumentImportBatchController@items"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/documents/import-batches/{batch}/items/{item}/retry",
+    "group": "documents",
+    "action": "DocumentImportBatchController@retryItem"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/documents/insights",
+    "group": "documents",
+    "action": "NoteController@insights"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/documents/{accessKey}",
+    "group": "documents",
+    "action": "NoteController@show"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/documents/{accessKey}/manifestations",
+    "group": "documents",
+    "action": "NoteController@manifest"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/documents/{accessKey}/unlock-xml",
+    "group": "documents",
+    "action": "NoteController@unlockXml"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/documents/{accessKey}/xml",
+    "group": "documents",
+    "action": "NoteController@downloadXml"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/establishments/{establishment}",
+    "group": "establishments",
+    "action": "EstablishmentController@update"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/exports",
+    "group": "exports",
+    "action": "ExportController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/exports",
+    "group": "exports",
+    "action": "ExportController@store"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/exports/{export}/download",
+    "group": "exports",
+    "action": "ExportController@download"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/first-access/complete",
+    "group": "first-access",
+    "action": "PublicActivationController@completeFirstAccess"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/categories",
+    "group": "fiscal",
+    "action": "FiscalCategoryController@indexCategories"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/category-links",
+    "group": "fiscal",
+    "action": "FiscalCategoryController@indexLinks"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/category-links",
+    "group": "fiscal",
+    "action": "FiscalCategoryController@associate"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/category-links/batch",
+    "group": "fiscal",
+    "action": "FiscalCategoryController@associateBatch"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/clients/{clientId}/pnr-renunciations",
+    "group": "fiscal",
+    "action": "PnrRenunciationController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/clients/{clientId}/pnr-renunciations/history",
+    "group": "fiscal",
+    "action": "PnrRenunciationController@history"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/clients/{clientId}/pnr-renunciations/receipt",
+    "group": "fiscal",
+    "action": "PnrRenunciationController@receipt"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/clients/{clientId}/pnr-renunciations/status",
+    "group": "fiscal",
+    "action": "PnrRenunciationController@status"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/clients/{clientId}/registrations",
+    "group": "fiscal",
+    "action": "RegistrationLinkController@showForClient"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/clients/{clientId}/registrations/refresh",
+    "group": "fiscal",
+    "action": "RegistrationLinkController@refresh"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/clients/{clientId}/tax-processes",
+    "group": "fiscal",
+    "action": "TaxProcessController@showForClient"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/clients/{clientId}/tax-processes/refresh",
+    "group": "fiscal",
+    "action": "TaxProcessController@refresh"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/fiscal/dctfweb/clients/{client}/communication-preference",
+    "group": "fiscal",
+    "action": "DctfwebMonitoringController@updatePreferences"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/dctfweb/clients/{client}/communication-preview",
+    "group": "fiscal",
+    "action": "DctfwebMonitoringController@preview"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/dctfweb/clients/{client}/communication-send",
+    "group": "fiscal",
+    "action": "DctfwebMonitoringController@send"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/dctfweb/clients/{client}/communications",
+    "group": "fiscal",
+    "action": "DctfwebMonitoringController@tracking"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/dctfweb/clients/{client}/evidence/{evidence}/download",
+    "group": "fiscal",
+    "action": "DctfwebMonitoringController@downloadEvidence"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/dctfweb/clients/{client}/history",
+    "group": "fiscal",
+    "action": "DctfwebMonitoringController@history"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/fiscal/dctfweb/communication-preferences/bulk",
+    "group": "fiscal",
+    "action": "DctfwebMonitoringController@batchPreferences"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/dctfweb/consult",
+    "group": "fiscal",
+    "action": "DctfwebController@enqueueConsult"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/dctfweb/declarations",
+    "group": "fiscal",
+    "action": "DctfwebController@indexDeclarations"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/dctfweb/declarations/{declaration}",
+    "group": "fiscal",
+    "action": "DctfwebController@showDeclaration"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/dctfweb/events",
+    "group": "fiscal",
+    "action": "DctfwebController@ingestEvent"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/dctfweb/evidence/{evidence}/download",
+    "group": "fiscal",
+    "action": "DctfwebMonitoringController@downloadEvidenceById"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/dctfweb/transmit",
+    "group": "fiscal",
+    "action": "DctfwebController@transmit"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/declarations",
+    "group": "fiscal",
+    "action": "DeclarationHubController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/declarations/calendar",
+    "group": "fiscal",
+    "action": "DeclarationHubController@publishCalendar"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/declarations/catalog",
+    "group": "fiscal",
+    "action": "DeclarationHubController@catalog"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/declarations/operations/mutations/{mutation}",
+    "group": "fiscal",
+    "action": "DeclarationOperationController@show"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/declarations/operations/mutations/{mutation}/reconcile",
+    "group": "fiscal",
+    "action": "DeclarationOperationController@reconcile"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/declarations/operations/{action}/execute",
+    "group": "fiscal",
+    "action": "DeclarationOperationController@execute"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/declarations/operations/{action}/preflight",
+    "group": "fiscal",
+    "action": "DeclarationOperationController@preflight"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/declarations/operations/{action}/read",
+    "group": "fiscal",
+    "action": "DeclarationOperationController@read"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/declarations/project",
+    "group": "fiscal",
+    "action": "DeclarationHubController@project"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/declarations/summary",
+    "group": "fiscal",
+    "action": "DeclarationHubController@summary"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/declarations/{projection}",
+    "group": "fiscal",
+    "action": "DeclarationHubController@show"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/declarations/{projection}/evidences",
+    "group": "fiscal",
+    "action": "DeclarationHubController@attachEvidence"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/declarations/{projection}/evidences/{evidence}",
+    "group": "fiscal",
+    "action": "DeclarationHubController@showEvidence"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/evidence/{evidence}/download",
+    "group": "fiscal",
+    "action": "FiscalSnapshotController@downloadEvidence"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/fgts/competences",
+    "group": "fiscal",
+    "action": "FgtsEsocialController@competences"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/fgts/competences/{status}",
+    "group": "fiscal",
+    "action": "FgtsEsocialController@showCompetence"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/fgts/coverage",
+    "group": "fiscal",
+    "action": "FgtsEsocialController@coverage"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/fgts/digital/coverage",
+    "group": "fiscal",
+    "action": "FgtsDigitalController@coverage"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/fgts/digital/preview",
+    "group": "fiscal",
+    "action": "FgtsDigitalController@preview"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/fgts/digital/previews/{run}/emit",
+    "group": "fiscal",
+    "action": "FgtsDigitalController@emit"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/fgts/digital/readiness",
+    "group": "fiscal",
+    "action": "FgtsDigitalController@readiness"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/fgts/digital/representations",
+    "group": "fiscal",
+    "action": "FgtsDigitalController@storeRepresentation"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/fgts/digital/runs",
+    "group": "fiscal",
+    "action": "FgtsDigitalController@runs"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/fgts/digital/sessions/import",
+    "group": "fiscal",
+    "action": "FgtsDigitalController@importSession"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/fgts/digital/sync",
+    "group": "fiscal",
+    "action": "FgtsDigitalController@sync"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/fgts/digital/sync-now",
+    "group": "fiscal",
+    "action": "FgtsDigitalController@syncNow"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/fgts/events",
+    "group": "fiscal",
+    "action": "FgtsEsocialController@events"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/fgts/readiness",
+    "group": "fiscal",
+    "action": "FgtsEsocialController@readiness"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/fgts/sync",
+    "group": "fiscal",
+    "action": "FgtsEsocialController@sync"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/fgts/sync-now",
+    "group": "fiscal",
+    "action": "FgtsEsocialController@syncNow"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/findings",
+    "group": "fiscal",
+    "action": "FiscalSnapshotController@findings"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/guides",
+    "group": "fiscal",
+    "action": "TaxGuideController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/guides",
+    "group": "fiscal",
+    "action": "TaxGuideController@store"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/guides/challenge",
+    "group": "fiscal",
+    "action": "TaxGuideController@challenge"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/guides/downloads/{token}",
+    "group": "fiscal",
+    "action": "TaxGuideController@download"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/guides/payment-count/clients/{client}/consult",
+    "group": "fiscal",
+    "action": "PagtowebPaymentCountController@consult"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/guides/payment-count/clients/{client}/history",
+    "group": "fiscal",
+    "action": "PagtowebPaymentCountController@history"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/guides/payments/clients/{client}/consult",
+    "group": "fiscal",
+    "action": "PagtowebPaymentListController@consult"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/guides/payments/clients/{client}/history",
+    "group": "fiscal",
+    "action": "PagtowebPaymentListController@history"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/guides/preflight",
+    "group": "fiscal",
+    "action": "TaxGuideController@preflight"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/guides/receipts/clients/{client}/history",
+    "group": "fiscal",
+    "action": "PagtowebArrecadacaoReceiptController@history"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/guides/receipts/clients/{client}/request",
+    "group": "fiscal",
+    "action": "PagtowebArrecadacaoReceiptController@request"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/guides/receipts/clients/{client}/{receipt}/download",
+    "group": "fiscal",
+    "action": "PagtowebArrecadacaoReceiptController@download"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/guides/revenue-support/clients/{client}/consult",
+    "group": "fiscal",
+    "action": "SicalcRevenueSupportController@consult"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/guides/revenue-support/clients/{client}/history",
+    "group": "fiscal",
+    "action": "SicalcRevenueSupportController@history"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/guides/{guide}",
+    "group": "fiscal",
+    "action": "TaxGuideController@show"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/guides/{guide}/download-token",
+    "group": "fiscal",
+    "action": "TaxGuideController@issueDownloadToken"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/guides/{guide}/payment-confirmations",
+    "group": "fiscal",
+    "action": "TaxGuideController@confirmPayment"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/guides/{guide}/reconcile",
+    "group": "fiscal",
+    "action": "TaxGuideController@reconcile"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/installments/guides",
+    "group": "fiscal",
+    "action": "TaxInstallmentController@guides"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/installments/modalities",
+    "group": "fiscal",
+    "action": "TaxInstallmentController@modalities"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/installments/monitor",
+    "group": "fiscal",
+    "action": "TaxInstallmentController@monitor"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/installments/orders",
+    "group": "fiscal",
+    "action": "TaxInstallmentController@orders"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/installments/orders/{order}",
+    "group": "fiscal",
+    "action": "TaxInstallmentController@showOrder"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/installments/parcels",
+    "group": "fiscal",
+    "action": "TaxInstallmentController@parcels"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/installments/runs",
+    "group": "fiscal",
+    "action": "TaxInstallmentController@enqueue"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/mailbox/alerts",
+    "group": "fiscal",
+    "action": "MailboxMessageController@alerts"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/mailbox/messages",
+    "group": "fiscal",
+    "action": "MailboxMessageController@index"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/mailbox/messages/{message}",
+    "group": "fiscal",
+    "action": "MailboxMessageController@show"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/mailbox/messages/{message}/attachments/{attachment}",
+    "group": "fiscal",
+    "action": "MailboxMessageController@downloadAttachment"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/mailbox/messages/{message}/body",
+    "group": "fiscal",
+    "action": "MailboxMessageController@downloadBody"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/mailbox/messages/{message}/detail",
+    "group": "fiscal",
+    "action": "MailboxMonitoringController@detail"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/mailbox/messages/{message}/detail-preview",
+    "group": "fiscal",
+    "action": "MailboxMonitoringController@detailPreview"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/fiscal/mailbox/messages/{message}/triage",
+    "group": "fiscal",
+    "action": "MailboxMessageController@triage"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/mailbox/monitoring",
+    "group": "fiscal",
+    "action": "MailboxMonitoringController@show"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/fiscal/mailbox/monitoring",
+    "group": "fiscal",
+    "action": "MailboxMonitoringController@update"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/mailbox/monitoring/preview",
+    "group": "fiscal",
+    "action": "MailboxMonitoringController@preview"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/mailbox/monitoring/sync",
+    "group": "fiscal",
+    "action": "MailboxMonitoringController@sync"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/mailbox/state",
+    "group": "fiscal",
+    "action": "MailboxMessageController@state"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/manual-consults",
+    "group": "fiscal",
+    "action": "ManualConsultController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/manual-consults",
+    "group": "fiscal",
+    "action": "ManualConsultController@store"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/mei-automation/attempts/{attempt}",
+    "group": "mei",
+    "action": "MeiAutomationAttemptController@show"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/mei-automation/attempts/{attempt}/artifacts/{artifact}/download",
+    "group": "mei",
+    "action": "MeiAutomationAttemptController@download"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/mit/apuracoes",
+    "group": "fiscal",
+    "action": "MitController@index"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/mit/apuracoes/{apuracao}",
+    "group": "fiscal",
+    "action": "MitController@show"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/mit/consult",
+    "group": "fiscal",
+    "action": "MitController@enqueueConsult"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/mit/encerrar",
+    "group": "fiscal",
+    "action": "MitController@encerrar"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/mit/lista-apuracoes",
+    "group": "fiscal",
+    "action": "MitController@indexListaApuracoes"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/mit/lista-apuracoes",
+    "group": "fiscal",
+    "action": "MitController@enqueueListaApuracoes"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/modules/{module}/clients",
+    "group": "fiscal",
+    "action": "FiscalModulePortfolioController@clients"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/modules/{module}/overview",
+    "group": "fiscal",
+    "action": "FiscalModulePortfolioController@overview"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/monitoring/coverage",
+    "group": "fiscal",
+    "action": "MonitoringCoverageController"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/monitoring/insights",
+    "group": "fiscal",
+    "action": "MonitoringInsightsController"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/monitoring/membership",
+    "group": "fiscal",
+    "action": "MonitoringModuleMembershipController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/monitoring/membership/exclude",
+    "group": "fiscal",
+    "action": "MonitoringModuleMembershipController@exclude"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/monitoring/membership/include",
+    "group": "fiscal",
+    "action": "MonitoringModuleMembershipController@include"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/mutations",
+    "group": "fiscal",
+    "action": "FiscalMutationController@execute"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/mutations/preflight",
+    "group": "fiscal",
+    "action": "FiscalMutationController@preflight"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/mutations/{mutation}",
+    "group": "fiscal",
+    "action": "FiscalMutationController@show"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/mutations/{mutation}/reconcile",
+    "group": "fiscal",
+    "action": "FiscalMutationController@reconcile"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/pending-items",
+    "group": "fiscal",
+    "action": "FiscalSnapshotController@pending"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/registrations",
+    "group": "fiscal",
+    "action": "RegistrationLinkController@index"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/runs",
+    "group": "fiscal",
+    "action": "FiscalMonitoringRunController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/runs",
+    "group": "fiscal",
+    "action": "FiscalMonitoringRunController@store"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/runs/{run}",
+    "group": "fiscal",
+    "action": "FiscalMonitoringRunController@show"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/simples-mei/catalog",
+    "group": "fiscal",
+    "action": "SimplesMeiController@catalog"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/simples-mei/ccmei/clients/{client}/consult",
+    "group": "fiscal",
+    "action": "CcmeiMonitoringController@consult"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/simples-mei/ccmei/clients/{client}/history",
+    "group": "fiscal",
+    "action": "CcmeiMonitoringController@history"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/simples-mei/ccmei/clients/{client}/issued-certificates",
+    "group": "fiscal",
+    "action": "CcmeiMonitoringController@issuedCertificates"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/simples-mei/ccmei/clients/{client}/issued-certificates",
+    "group": "fiscal",
+    "action": "CcmeiMonitoringController@issueCertificate"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/simples-mei/ccmei/clients/{client}/issued-certificates/{certificate}/download",
+    "group": "fiscal",
+    "action": "CcmeiMonitoringController@downloadIssuedCertificate"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/simples-mei/ccmei/registration-status/clients/{client}/consult",
+    "group": "fiscal",
+    "action": "CcmeiMonitoringController@consultRegistrationStatus"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/simples-mei/ccmei/registration-status/clients/{client}/history",
+    "group": "fiscal",
+    "action": "CcmeiMonitoringController@registrationStatusHistory"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/simples-mei/clients/{client}/competences",
+    "group": "fiscal",
+    "action": "SimplesMeiController@competences"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/simples-mei/clients/{client}/regime-calendar",
+    "group": "fiscal",
+    "action": "SimplesMeiController@regimeCalendar"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/simples-mei/clients/{client}/regime-options",
+    "group": "fiscal",
+    "action": "SimplesMeiController@regimeOptions"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/simples-mei/clients/{client}/regime-resolutions",
+    "group": "fiscal",
+    "action": "SimplesMeiController@regimeResolutions"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/simples-mei/clients/{client}/regimes",
+    "group": "fiscal",
+    "action": "SimplesMeiController@regimes"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/simples-mei/clients/{client}/snapshots",
+    "group": "fiscal",
+    "action": "SimplesMeiController@snapshots"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/simples-mei/consult",
+    "group": "fiscal",
+    "action": "SimplesMeiController@consult"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/simples-mei/das",
+    "group": "fiscal",
+    "action": "SimplesMeiController@generateDas"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/simples-mei/dasn-simei/clients/{client}/history",
+    "group": "fiscal",
+    "action": "DasnSimeiController@history"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/simples-mei/dasn-simei/consult",
+    "group": "fiscal",
+    "action": "DasnSimeiController@consult"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/simples-mei/defis/clients/{client}/consult",
+    "group": "fiscal",
+    "action": "DefisDeclarationsMonitoringController@consult"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/simples-mei/defis/clients/{client}/history",
+    "group": "fiscal",
+    "action": "DefisDeclarationsMonitoringController@history"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/simples-mei/defis/latest-declaration/artifacts/{artifact}/download",
+    "group": "fiscal",
+    "action": "DefisLatestDeclarationMonitoringController@download"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/simples-mei/defis/latest-declaration/clients/{client}/consult",
+    "group": "fiscal",
+    "action": "DefisLatestDeclarationMonitoringController@consult"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/simples-mei/defis/latest-declaration/clients/{client}/history",
+    "group": "fiscal",
+    "action": "DefisLatestDeclarationMonitoringController@history"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/simples-mei/defis/specific-declaration/artifacts/{artifact}/download",
+    "group": "fiscal",
+    "action": "DefisSpecificDeclarationMonitoringController@download"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/simples-mei/defis/specific-declaration/clients/{client}/consult",
+    "group": "fiscal",
+    "action": "DefisSpecificDeclarationMonitoringController@consult"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/simples-mei/defis/specific-declaration/clients/{client}/history",
+    "group": "fiscal",
+    "action": "DefisSpecificDeclarationMonitoringController@history"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/simples-mei/pgdasd/artifacts/{artifact}/download",
+    "group": "fiscal",
+    "action": "PgdasdMonitoringController@downloadArtifactById"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/fiscal/simples-mei/pgdasd/clients/{client}/communication-preference",
+    "group": "fiscal",
+    "action": "PgdasdMonitoringController@updatePreferences"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/simples-mei/pgdasd/clients/{client}/communication-preview",
+    "group": "fiscal",
+    "action": "PgdasdMonitoringController@preview"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/simples-mei/pgdasd/clients/{client}/communication-send",
+    "group": "fiscal",
+    "action": "PgdasdMonitoringController@send"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/simples-mei/pgdasd/clients/{client}/communications",
+    "group": "fiscal",
+    "action": "PgdasdMonitoringController@tracking"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/simples-mei/pgdasd/clients/{client}/documents",
+    "group": "fiscal",
+    "action": "PgdasdMonitoringController@collectDocuments"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/simples-mei/pgdasd/clients/{client}/history",
+    "group": "fiscal",
+    "action": "PgdasdMonitoringController@history"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/fiscal/simples-mei/pgdasd/communication-preferences/bulk",
+    "group": "fiscal",
+    "action": "PgdasdMonitoringController@batchPreferences"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/fiscal/simples-mei/pgmei/clients/{client}/communication-preference",
+    "group": "fiscal",
+    "action": "PgmeiMonitoringController@updatePreferences"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/simples-mei/pgmei/clients/{client}/communication-preview",
+    "group": "fiscal",
+    "action": "PgmeiMonitoringController@preview"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/simples-mei/pgmei/clients/{client}/communication-send",
+    "group": "fiscal",
+    "action": "PgmeiMonitoringController@send"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/simples-mei/pgmei/clients/{client}/communications",
+    "group": "fiscal",
+    "action": "PgmeiMonitoringController@tracking"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/simples-mei/pgmei/clients/{client}/history",
+    "group": "fiscal",
+    "action": "PgmeiMonitoringController@history"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/fiscal/simples-mei/pgmei/communication-preferences/bulk",
+    "group": "fiscal",
+    "action": "PgmeiMonitoringController@batchPreferences"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/simples-mei/pgmei/consult",
+    "group": "fiscal",
+    "action": "PgmeiMonitoringController@consult"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/simples-mei/pgmei/das",
+    "group": "fiscal",
+    "action": "MeiDasController@store"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/simples-mei/pgmei/das/preflight",
+    "group": "fiscal",
+    "action": "MeiDasController@preflight"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/simples-mei/regime-calendar/consult",
+    "group": "fiscal",
+    "action": "SimplesMeiController@consultRegimeCalendar"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/simples-mei/regime-option/consult",
+    "group": "fiscal",
+    "action": "SimplesMeiController@consultRegimeOption"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/simples-mei/regime-resolution/consult",
+    "group": "fiscal",
+    "action": "SimplesMeiController@consultRegimeResolution"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/simples-mei/transmit",
+    "group": "fiscal",
+    "action": "SimplesMeiController@transmit"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/sitfis",
+    "group": "fiscal",
+    "action": "SitfisSituationController@show"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/sitfis/clients/{client}/history",
+    "group": "fiscal",
+    "action": "SitfisSituationController@history"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/sitfis/refresh",
+    "group": "fiscal",
+    "action": "SitfisSituationController@refresh"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/snapshots",
+    "group": "fiscal",
+    "action": "FiscalSnapshotController@index"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/snapshots/{snapshot}",
+    "group": "fiscal",
+    "action": "FiscalSnapshotController@show"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/tax-processes",
+    "group": "fiscal",
+    "action": "TaxProcessController@index"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/tax-processes/{id}",
+    "group": "fiscal",
+    "action": "TaxProcessController@show"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/fiscal/{module}/clients/{client}/communication-preference",
+    "group": "fiscal",
+    "action": "MonitoringModuleCommunicationController@updatePreferences"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/{module}/clients/{client}/communication-preview",
+    "group": "fiscal",
+    "action": "MonitoringModuleCommunicationController@preview"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/fiscal/{module}/clients/{client}/communication-send",
+    "group": "fiscal",
+    "action": "MonitoringModuleCommunicationController@send"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/fiscal/{module}/clients/{client}/communications",
+    "group": "fiscal",
+    "action": "MonitoringModuleCommunicationController@tracking"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/integrations/cte/push",
+    "group": "integrations",
+    "action": "CteEmitterPushController@push"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/list-filters",
+    "group": "list-filters",
+    "action": "SavedListFilterController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/list-filters",
+    "group": "list-filters",
+    "action": "SavedListFilterController@store"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/list-filters/{listFilter}",
+    "group": "list-filters",
+    "action": "SavedListFilterController@update"
+  },
+  {
+    "method": "DELETE",
+    "uri": "api/v1/list-filters/{listFilter}",
+    "group": "list-filters",
+    "action": "SavedListFilterController@destroy"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/me",
+    "group": "auth",
+    "action": "MeController"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/notes",
+    "group": "notes",
+    "action": "NoteController@index"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/notes/by-client",
+    "group": "notes",
+    "action": "NoteController@byClient"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/notes/insights",
+    "group": "notes",
+    "action": "NoteController@insights"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/notes/{accessKey}",
+    "group": "notes",
+    "action": "NoteController@show"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/notes/{accessKey}/xml",
+    "group": "notes",
+    "action": "NoteController@downloadXml"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/office/autxml",
+    "group": "office",
+    "action": "OfficeAutXmlController@overview"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/office/autxml/cursor",
+    "group": "office",
+    "action": "OfficeAutXmlController@cursor"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/office/autxml/enrollments",
+    "group": "office",
+    "action": "OfficeAutXmlController@enroll"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/office/autxml/enrollments/{enrollment}/confirm",
+    "group": "office",
+    "action": "OfficeAutXmlController@confirm"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/office/autxml/enrollments/{enrollment}/inactivate",
+    "group": "office",
+    "action": "OfficeAutXmlController@inactivate"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/office/fiscal-identity",
+    "group": "office",
+    "action": "OfficeFiscalCredentialController@showIdentity"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/office/fiscal-identity",
+    "group": "office",
+    "action": "OfficeFiscalCredentialController@storeIdentity"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/office/fiscal-identity/credential",
+    "group": "office",
+    "action": "OfficeFiscalCredentialController@storeCredential"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/office/fiscal-identity/credentials/{credential}/revoke",
+    "group": "office",
+    "action": "OfficeFiscalCredentialController@revokeCredential"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/office/integration-tokens",
+    "group": "office",
+    "action": "CteEmitterPushController@listTokens"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/office/integration-tokens",
+    "group": "office",
+    "action": "CteEmitterPushController@issueToken"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/office/integration-tokens/{token}/revoke",
+    "group": "office",
+    "action": "CteEmitterPushController@revokeToken"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/office/members",
+    "group": "office",
+    "action": "OfficeMemberController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/office/members",
+    "group": "office",
+    "action": "OfficeMemberController@store"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/office/members/{membership}",
+    "group": "office",
+    "action": "OfficeMemberController@update"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/office/members/{membership}/activation/regenerate",
+    "group": "office",
+    "action": "OfficeMemberController@regenerateActivation"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/office/members/{membership}/deactivate",
+    "group": "office",
+    "action": "OfficeMemberController@deactivate"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/office/members/{membership}/reactivate",
+    "group": "office",
+    "action": "OfficeMemberController@reactivate"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/office/members/{membership}/recipient",
+    "group": "office",
+    "action": "OfficeMemberController@updateRecipient"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/office/serpro-authorization",
+    "group": "serpro",
+    "action": "OfficeSerproAuthorizationController@show"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/office/serpro-authorization/author",
+    "group": "serpro",
+    "action": "OfficeSerproAuthorizationController@configureAuthor"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/office/serpro-authorization/author-a1",
+    "group": "serpro",
+    "action": "OfficeSerproAuthorizationController@storeAuthorA1"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/office/serpro-authorization/eligibility",
+    "group": "serpro",
+    "action": "OfficeSerproAuthorizationController@eligibility"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/office/serpro-authorization/health",
+    "group": "serpro",
+    "action": "OfficeSerproAuthorizationController@platformHealth"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/office/serpro-authorization/proxy-powers",
+    "group": "serpro",
+    "action": "OfficeSerproAuthorizationController@listProxyPowers"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/office/serpro-authorization/proxy-powers",
+    "group": "serpro",
+    "action": "OfficeSerproAuthorizationController@importProxyPower"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/office/serpro-authorization/proxy-powers/sync",
+    "group": "serpro",
+    "action": "OfficeSerproAuthorizationController@syncProxyPowers"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/office/serpro-authorization/refresh-token",
+    "group": "serpro",
+    "action": "OfficeSerproAuthorizationController@refreshToken"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/office/serpro-authorization/termo",
+    "group": "serpro",
+    "action": "OfficeSerproAuthorizationController@uploadTermo"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/office/serpro-authorization/termo/draft",
+    "group": "serpro",
+    "action": "OfficeSerproAuthorizationController@generateTermoDraft"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/office/serpro-authorization/termo/draft",
+    "group": "serpro",
+    "action": "OfficeSerproAuthorizationController@downloadTermoDraft"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/office/serpro-authorization/termo/sign-managed-a1",
+    "group": "serpro",
+    "action": "OfficeSerproAuthorizationController@signTermoManagedA1"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/office/serpro-usage",
+    "group": "serpro",
+    "action": "OfficeSerproUsageController@summary"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/office/serpro-usage/entries",
+    "group": "serpro",
+    "action": "OfficeSerproUsageController@entries"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/office/settings",
+    "group": "office",
+    "action": "OfficeSettingsController@show"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/office/settings/consent",
+    "group": "office",
+    "action": "OfficeSettingsController@showConsent"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/office/settings/consent",
+    "group": "office",
+    "action": "OfficeSettingsController@grantConsent"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/office/settings/consent/revoke",
+    "group": "office",
+    "action": "OfficeSettingsController@revokeConsent"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/office/settings/credential",
+    "group": "office",
+    "action": "OfficeSettingsController@showCredential"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/office/settings/credential",
+    "group": "office",
+    "action": "OfficeSettingsController@storeCredential"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/office/settings/credential/remove",
+    "group": "office",
+    "action": "OfficeSettingsController@removeCredential"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/office/settings/credential/replace",
+    "group": "office",
+    "action": "OfficeSettingsController@replaceCredential"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/office/settings/monitor-schedules",
+    "group": "office",
+    "action": "OfficeSettingsController@listMonitorSchedules"
+  },
+  {
+    "method": "PUT",
+    "uri": "api/v1/office/settings/monitor-schedules/{monitorKey}",
+    "group": "office",
+    "action": "OfficeSettingsController@updateMonitorSchedule"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/office/settings/onboarding-status",
+    "group": "office",
+    "action": "OfficeSettingsController@onboardingStatus"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/office/settings/profile",
+    "group": "office",
+    "action": "OfficeSettingsController@updateProfile"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/office/settings/refresh-integration",
+    "group": "office",
+    "action": "OfficeSettingsController@refreshIntegration"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/office/subscription",
+    "group": "office",
+    "action": "OfficeSubscriptionController@show"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/onboarding",
+    "group": "onboarding",
+    "action": "InitialOnboardingController@complete"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/onboarding/status",
+    "group": "onboarding",
+    "action": "InitialOnboardingController@status"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/operations/inbox",
+    "group": "operations",
+    "action": "OperationsInboxController"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/operations/quarantine",
+    "group": "operations",
+    "action": "FiscalDocumentQuarantineController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/operations/quarantine/{quarantine}/resolve",
+    "group": "operations",
+    "action": "FiscalDocumentQuarantineController@resolve"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/operations/summary",
+    "group": "operations",
+    "action": "OperationsSummaryController"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/outbound/deadline/advance-target",
+    "group": "outbound",
+    "action": "OutboundDeadlineController@advanceTarget"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/outbound/deadline/capacity",
+    "group": "outbound",
+    "action": "OutboundDeadlineController@capacityForecast"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/outbound/deadline/competence",
+    "group": "outbound",
+    "action": "OutboundDeadlineController@competenceSummary"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/outbound/deadline/confirm-partial",
+    "group": "outbound",
+    "action": "OutboundDeadlineController@confirmPartialExport"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/outbound/deadline/contingency-batch",
+    "group": "outbound",
+    "action": "OutboundDeadlineController@contingencyBatch"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/outbound/deadline/export",
+    "group": "outbound",
+    "action": "OutboundDeadlineController@exportMonthly"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/outbound/deadline/metrics",
+    "group": "outbound",
+    "action": "OutboundDeadlineController@metrics"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/outbound/deadline/pending",
+    "group": "outbound",
+    "action": "OutboundDeadlineController@pendingItems"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/outbound/establishments/{establishment}/seed",
+    "group": "outbound",
+    "action": "OutboundCaptureController@storeSeed"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/outbound/kill-switch",
+    "group": "outbound",
+    "action": "OutboundCaptureController@killSwitchStatus"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/outbound/kill-switch",
+    "group": "outbound",
+    "action": "OutboundCaptureController@killSwitch"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/outbound/profiles",
+    "group": "outbound",
+    "action": "OutboundCaptureController@indexProfiles"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/outbound/profiles/{profile}",
+    "group": "outbound",
+    "action": "OutboundCaptureController@showProfile"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/outbound/profiles/{profile}/activate",
+    "group": "outbound",
+    "action": "OutboundCaptureController@activate"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/outbound/profiles/{profile}/csc",
+    "group": "outbound",
+    "action": "OutboundCaptureController@showCsc"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/outbound/profiles/{profile}/csc",
+    "group": "outbound",
+    "action": "OutboundCaptureController@storeCsc"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/outbound/profiles/{profile}/package",
+    "group": "outbound",
+    "action": "OutboundCaptureController@uploadPackage"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/outbound/profiles/{profile}/series",
+    "group": "outbound",
+    "action": "OutboundCaptureController@listSeries"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/outbound/runs",
+    "group": "outbound",
+    "action": "OutboundCaptureController@listRuns"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/outbound/series/{series}/numbers",
+    "group": "outbound",
+    "action": "OutboundCaptureController@listNumbers"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/outbound/series/{series}/reset",
+    "group": "outbound",
+    "action": "OutboundCaptureController@resetSeries"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/outbound/series/{series}/trigger-query",
+    "group": "outbound",
+    "action": "OutboundCaptureController@triggerQuery"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/outbound/svrs-nfce/breaker",
+    "group": "outbound",
+    "action": "SvrsNfceRecoveryController@breakerStatus"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/outbound/svrs-nfce/breaker/reset",
+    "group": "outbound",
+    "action": "SvrsNfceRecoveryController@breakerReset"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/outbound/svrs-nfce/kill-switch",
+    "group": "outbound",
+    "action": "SvrsNfceRecoveryController@killSwitchStatus"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/outbound/svrs-nfce/kill-switch",
+    "group": "outbound",
+    "action": "SvrsNfceRecoveryController@killSwitch"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/outbound/svrs-nfce/profiles/{profile}/summary",
+    "group": "outbound",
+    "action": "SvrsNfceRecoveryController@profileSummary"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/outbound/svrs-nfce/recoveries",
+    "group": "outbound",
+    "action": "SvrsNfceRecoveryController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/outbound/svrs-nfce/recoveries",
+    "group": "outbound",
+    "action": "SvrsNfceRecoveryController@enqueue"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/outbound/svrs-nfce/recoveries/{recovery}",
+    "group": "outbound",
+    "action": "SvrsNfceRecoveryController@attempts"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/outbound/svrs-nfce/recoveries/{recovery}/attempts",
+    "group": "outbound",
+    "action": "SvrsNfceRecoveryController@attempts"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/outbound/svrs-nfce/recoveries/{recovery}/retry",
+    "group": "outbound",
+    "action": "SvrsNfceRecoveryController@retry"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/outbound/svrs-nfce/summary",
+    "group": "outbound",
+    "action": "SvrsNfceRecoveryController@channelSummary"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/outbound/svrs-portal/egress",
+    "group": "outbound",
+    "action": "SvrsNfceRecoveryController@egressCohortHealth"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/outbound/svrs-portal/egress/elevate-budget",
+    "group": "outbound",
+    "action": "SvrsNfceRecoveryController@refuseBudgetElevation"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/outbound/svrs-portal/egress/extend-cooldown",
+    "group": "outbound",
+    "action": "SvrsNfceRecoveryController@extendEgressCooldown"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/outbound/svrs-portal/egress/select-canary",
+    "group": "outbound",
+    "action": "SvrsNfceRecoveryController@selectEgressCanary"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/fiscal/modules",
+    "group": "platform",
+    "action": "FiscalModuleControlController@globalIndex"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/platform/fiscal/modules/{module}/restriction",
+    "group": "platform",
+    "action": "FiscalModuleControlController@updateGlobal"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/offices",
+    "group": "platform",
+    "action": "PlatformOfficeSelectController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/platform/offices",
+    "group": "platform",
+    "action": "PlatformOfficeController@store"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/offices/admin",
+    "group": "platform",
+    "action": "PlatformOfficeController@index"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/offices/current",
+    "group": "platform",
+    "action": "PlatformOfficeSelectController@current"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/platform/offices/select",
+    "group": "platform",
+    "action": "PlatformOfficeSelectController@select"
+  },
+  {
+    "method": "DELETE",
+    "uri": "api/v1/platform/offices/select",
+    "group": "platform",
+    "action": "PlatformOfficeSelectController@clear"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/offices/selector",
+    "group": "platform",
+    "action": "PlatformOfficeSelectController@index"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/offices/{office}",
+    "group": "platform",
+    "action": "PlatformOfficeController@show"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/platform/offices/{office}/activation/regenerate",
+    "group": "platform",
+    "action": "PlatformOfficeController@regenerateActivation"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/platform/offices/{office}/first-admin",
+    "group": "platform",
+    "action": "PlatformOfficeController@updateFirstAdmin"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/owner",
+    "group": "platform",
+    "action": "PlatformOwnerController@show"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/platform/owner",
+    "group": "platform",
+    "action": "PlatformOwnerController@update"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/serpro-usage/consolidation",
+    "group": "serpro",
+    "action": "SerproUsageAdminController@consolidation"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/platform/serpro-usage/recompute",
+    "group": "serpro",
+    "action": "SerproUsageAdminController@recompute"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/platform/serpro-usage/reconciliations",
+    "group": "serpro",
+    "action": "SerproUsageAdminController@registerReconciliation"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/platform/serpro/breaker/reset",
+    "group": "serpro",
+    "action": "SerproContractController@breakerReset"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/serpro/budgets",
+    "group": "serpro",
+    "action": "SerproPlatformOpsController@listBudgets"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/serpro/catalog",
+    "group": "serpro",
+    "action": "SerproContractController@catalog"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/serpro/configuration",
+    "group": "serpro",
+    "action": "SerproPlatformConfigurationController@show"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/serpro/contracts",
+    "group": "serpro",
+    "action": "SerproContractController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/platform/serpro/contracts",
+    "group": "serpro",
+    "action": "SerproPlatformConfigurationController@legacyMutationRemoved"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/serpro/contracts/{serproContract}",
+    "group": "serpro",
+    "action": "SerproContractController@show"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/platform/serpro/contracts/{serproContract}/activate",
+    "group": "serpro",
+    "action": "SerproPlatformConfigurationController@legacyMutationRemoved"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/platform/serpro/contracts/{serproContract}/block",
+    "group": "serpro",
+    "action": "SerproPlatformConfigurationController@legacyMutationRemoved"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/platform/serpro/contracts/{serproContract}/deactivate",
+    "group": "serpro",
+    "action": "SerproPlatformConfigurationController@legacyMutationRemoved"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/platform/serpro/credential-versions",
+    "group": "serpro",
+    "action": "SerproPlatformConfigurationController@storeCredentialVersion"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/serpro/credential-versions",
+    "group": "serpro",
+    "action": "SerproPlatformOpsController@listCredentialVersions"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/serpro/credential-versions/{serproCredentialVersion}",
+    "group": "serpro",
+    "action": "SerproPlatformOpsController@showCredentialVersion"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/platform/serpro/credential-versions/{serproCredentialVersion}/approvals",
+    "group": "serpro",
+    "action": "SerproPlatformOpsController@approveCredentialVersion"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/platform/serpro/credential-versions/{serproCredentialVersion}/cutover",
+    "group": "serpro",
+    "action": "SerproPlatformConfigurationController@cutoverCredentialVersion"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/platform/serpro/credential-versions/{serproCredentialVersion}/test-connection",
+    "group": "serpro",
+    "action": "SerproPlatformConfigurationController@testConnection"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/platform/serpro/credential-versions/{serproCredentialVersion}/verify",
+    "group": "serpro",
+    "action": "SerproPlatformConfigurationController@verifyCredentialVersion"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/serpro/dte-canary",
+    "group": "serpro",
+    "action": "SerproDteCanaryController@summary"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/platform/serpro/dte-canary",
+    "group": "serpro",
+    "action": "SerproDteCanaryController@create"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/platform/serpro/dte-canary/disable",
+    "group": "serpro",
+    "action": "SerproDteCanaryController@disable"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/serpro/dte-canary/{serproDteCanaryRequest}",
+    "group": "serpro",
+    "action": "SerproDteCanaryController@show"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/platform/serpro/dte-canary/{serproDteCanaryRequest}/approve-owner",
+    "group": "serpro",
+    "action": "SerproDteCanaryController@approveOwner"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/platform/serpro/dte-canary/{serproDteCanaryRequest}/execute",
+    "group": "serpro",
+    "action": "SerproDteCanaryController@execute"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/platform/serpro/dte-canary/{serproDteCanaryRequest}/promote-limited",
+    "group": "serpro",
+    "action": "SerproDteCanaryController@promoteLimited"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/platform/serpro/dte-canary/{serproDteCanaryRequest}/reconcile",
+    "group": "serpro",
+    "action": "SerproDteCanaryController@reconcile"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/platform/serpro/dte-canary/{serproDteCanaryRequest}/target",
+    "group": "serpro",
+    "action": "SerproDteCanaryController@selectTarget"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/platform/serpro/external-gates/{gate}",
+    "group": "serpro",
+    "action": "SerproPlatformConfigurationController@updateExternalGate"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/serpro/health",
+    "group": "serpro",
+    "action": "SerproContractController@health"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/serpro/kill-switch",
+    "group": "serpro",
+    "action": "SerproContractController@killSwitchStatus"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/platform/serpro/kill-switch",
+    "group": "serpro",
+    "action": "SerproContractController@killSwitch"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/serpro/metrics",
+    "group": "serpro",
+    "action": "SerproPlatformOpsController@metrics"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/serpro/production-onboarding",
+    "group": "serpro",
+    "action": "SerproProductionOnboardingController@show"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/platform/serpro/production-onboarding",
+    "group": "serpro",
+    "action": "SerproProductionOnboardingController@store"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/serpro/readiness",
+    "group": "serpro",
+    "action": "SerproPlatformOpsController@readiness"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/serpro/rollouts",
+    "group": "serpro",
+    "action": "SerproPlatformOpsController@listRollouts"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/platform/serpro/rollouts",
+    "group": "serpro",
+    "action": "SerproPlatformOpsController@requestRollout"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/platform/serpro/rollouts/{serproRolloutApproval}/approve",
+    "group": "serpro",
+    "action": "SerproPlatformOpsController@approveRollout"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/platform/serpro/rollouts/{serproRolloutApproval}/reject",
+    "group": "serpro",
+    "action": "SerproPlatformOpsController@rejectRollout"
+  },
+  {
+    "method": "PUT",
+    "uri": "api/v1/platform/serpro/usage-limits",
+    "group": "serpro",
+    "action": "SerproPlatformConfigurationController@updateUsageLimits"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/tenants",
+    "group": "platform",
+    "action": "TenantAdminController@index"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/tenants/{office}",
+    "group": "platform",
+    "action": "TenantAdminController@show"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/tenants/{office}/fiscal/modules",
+    "group": "platform",
+    "action": "FiscalModuleControlController@officeIndex"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/platform/tenants/{office}/fiscal/modules/{module}/restriction",
+    "group": "platform",
+    "action": "FiscalModuleControlController@updateOffice"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/platform/tenants/{office}/subscription",
+    "group": "platform",
+    "action": "TenantAdminController@updateSubscription"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/serpro/authorization",
+    "group": "serpro",
+    "action": "SerproTenantController@authorization"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/serpro/dte-canary/pending",
+    "group": "serpro",
+    "action": "DteCanaryTenantController@pending"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/serpro/dte-canary/{serproDteCanaryRequest}/confirm",
+    "group": "serpro",
+    "action": "DteCanaryTenantController@confirmParticipation"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/serpro/dte-canary/{serproDteCanaryRequest}/result",
+    "group": "serpro",
+    "action": "DteCanaryTenantController@result"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/serpro/health",
+    "group": "serpro",
+    "action": "SerproTenantController@health"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/serpro/readiness",
+    "group": "serpro",
+    "action": "SerproTenantController@readiness"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/serpro/usage",
+    "group": "serpro",
+    "action": "SerproTenantController@usageSummary"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/serpro/usage/entries",
+    "group": "serpro",
+    "action": "SerproTenantController@usageEntries"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/sync-runs",
+    "group": "sync-runs",
+    "action": "SyncController@history"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/sync-runs",
+    "group": "sync-runs",
+    "action": "SyncController@trigger"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/tenants/memberships",
+    "group": "tenants",
+    "action": "TenantSwitchController@memberships"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/tenants/switch",
+    "group": "tenants",
+    "action": "TenantSwitchController@switch"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/work/calendar",
+    "group": "work",
+    "action": "OperationalDashboardController@calendar"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/work/calendar/day",
+    "group": "work",
+    "action": "OperationalDashboardController@calendarDay"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/work/departments",
+    "group": "work",
+    "action": "WorkDepartmentController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/work/departments",
+    "group": "work",
+    "action": "WorkDepartmentController@store"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/work/departments/{department}",
+    "group": "work",
+    "action": "WorkDepartmentController@update"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/work/departments/{department}/assign-membership",
+    "group": "work",
+    "action": "WorkDepartmentController@assignMembership"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/work/exports",
+    "group": "work",
+    "action": "OperationalDashboardController@createExport"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/work/exports/{export}",
+    "group": "work",
+    "action": "OperationalDashboardController@showExport"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/work/exports/{export}/download",
+    "group": "work",
+    "action": "OperationalDashboardController@downloadExport"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/work/generation-batches/{batch}",
+    "group": "work",
+    "action": "ProcessGenerationController@show"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/work/generation-batches/{batch}/confirm",
+    "group": "work",
+    "action": "ProcessGenerationController@confirm"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/work/generation-batches/{batch}/retry",
+    "group": "work",
+    "action": "ProcessGenerationController@retry"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/work/kpis",
+    "group": "work",
+    "action": "OperationalDashboardController@kpis"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/work/process-groups",
+    "group": "work",
+    "action": "OperationalProcessGroupController@index"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/work/processes",
+    "group": "work",
+    "action": "OperationalProcessController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/work/processes",
+    "group": "work",
+    "action": "OperationalProcessController@store"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/work/processes/bulk",
+    "group": "work",
+    "action": "OperationalProcessController@bulk"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/work/processes/{process}",
+    "group": "work",
+    "action": "OperationalProcessController@show"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/work/processes/{process}",
+    "group": "work",
+    "action": "OperationalProcessController@update"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/work/processes/{process}/archive",
+    "group": "work",
+    "action": "OperationalProcessController@archive"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/work/processes/{process}/comments",
+    "group": "work",
+    "action": "OperationalProcessController@comment"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/work/processes/{process}/tasks",
+    "group": "work",
+    "action": "OperationalTaskController@storeOnProcess"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/work/processes/{process}/tasks/reorder",
+    "group": "work",
+    "action": "OperationalTaskController@reorder"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/work/processes/{process}/timeline",
+    "group": "work",
+    "action": "OperationalProcessController@timeline"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/work/queue",
+    "group": "work",
+    "action": "OperationalTaskController@queue"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/work/tasks/bulk",
+    "group": "work",
+    "action": "OperationalTaskController@bulk"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/work/tasks/{task}",
+    "group": "work",
+    "action": "OperationalTaskController@show"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/work/tasks/{task}/assign",
+    "group": "work",
+    "action": "OperationalTaskController@assign"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/work/tasks/{task}/block",
+    "group": "work",
+    "action": "OperationalTaskController@block"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/work/tasks/{task}/claim",
+    "group": "work",
+    "action": "OperationalTaskController@claim"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/work/tasks/{task}/comments",
+    "group": "work",
+    "action": "OperationalTaskController@comment"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/work/tasks/{task}/complete",
+    "group": "work",
+    "action": "OperationalTaskController@complete"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/work/tasks/{task}/dispense",
+    "group": "work",
+    "action": "OperationalTaskController@dispense"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/work/tasks/{task}/evidences",
+    "group": "work",
+    "action": "OperationalTaskController@uploadEvidence"
+  },
+  {
+    "method": "DELETE",
+    "uri": "api/v1/work/tasks/{task}/evidences/{evidence}",
+    "group": "work",
+    "action": "OperationalTaskController@removeEvidence"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/work/tasks/{task}/evidences/{evidence}/download",
+    "group": "work",
+    "action": "OperationalTaskController@downloadEvidence"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/work/tasks/{task}/reopen",
+    "group": "work",
+    "action": "OperationalTaskController@reopen"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/work/tasks/{task}/resume",
+    "group": "work",
+    "action": "OperationalTaskController@resume"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/work/tasks/{task}/start",
+    "group": "work",
+    "action": "OperationalTaskController@start"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/work/tasks/{task}/structure",
+    "group": "work",
+    "action": "OperationalTaskController@updateStructure"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/work/template-catalog",
+    "group": "work",
+    "action": "ProcessTemplateCatalogController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/work/template-catalog/{catalogKey}/install",
+    "group": "work",
+    "action": "ProcessTemplateCatalogController@install"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/work/templates",
+    "group": "work",
+    "action": "ProcessTemplateController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/work/templates",
+    "group": "work",
+    "action": "ProcessTemplateController@store"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/work/templates/{template}",
+    "group": "work",
+    "action": "ProcessTemplateController@show"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/work/templates/{template}",
+    "group": "work",
+    "action": "ProcessTemplateController@update"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/work/templates/{template}/generation-batches",
+    "group": "work",
+    "action": "ProcessTemplateController@generationBatches"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/work/templates/{template}/preview",
+    "group": "work",
+    "action": "ProcessGenerationController@preview"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/work/templates/{template}/recurrence",
+    "group": "work",
+    "action": "ProcessTemplateController@showRecurrence"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/work/templates/{template}/recurrence",
+    "group": "work",
+    "action": "ProcessTemplateController@updateRecurrence"
+  },
+  {
+    "method": "POST",
+    "uri": "forgot-password",
+    "group": "auth",
+    "action": "PasswordResetLinkController@store"
+  },
+  {
+    "method": "GET",
+    "uri": "horizon/api/batches",
+    "group": "monitoring",
+    "action": "BatchesController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "horizon/api/batches/retry/{id}",
+    "group": "monitoring",
+    "action": "BatchesController@retry"
+  },
+  {
+    "method": "GET",
+    "uri": "horizon/api/batches/{id}",
+    "group": "monitoring",
+    "action": "BatchesController@show"
+  },
+  {
+    "method": "GET",
+    "uri": "horizon/api/jobs/completed",
+    "group": "monitoring",
+    "action": "CompletedJobsController@index"
+  },
+  {
+    "method": "GET",
+    "uri": "horizon/api/jobs/failed",
+    "group": "monitoring",
+    "action": "FailedJobsController@index"
+  },
+  {
+    "method": "GET",
+    "uri": "horizon/api/jobs/failed/{id}",
+    "group": "monitoring",
+    "action": "FailedJobsController@show"
+  },
+  {
+    "method": "GET",
+    "uri": "horizon/api/jobs/pending",
+    "group": "monitoring",
+    "action": "PendingJobsController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "horizon/api/jobs/retry/{id}",
+    "group": "monitoring",
+    "action": "RetryController@store"
+  },
+  {
+    "method": "GET",
+    "uri": "horizon/api/jobs/silenced",
+    "group": "monitoring",
+    "action": "SilencedJobsController@index"
+  },
+  {
+    "method": "GET",
+    "uri": "horizon/api/jobs/{id}",
+    "group": "monitoring",
+    "action": "JobsController@show"
+  },
+  {
+    "method": "GET",
+    "uri": "horizon/api/masters",
+    "group": "monitoring",
+    "action": "MasterSupervisorController@index"
+  },
+  {
+    "method": "GET",
+    "uri": "horizon/api/metrics/jobs",
+    "group": "monitoring",
+    "action": "JobMetricsController@index"
+  },
+  {
+    "method": "GET",
+    "uri": "horizon/api/metrics/jobs/{id}",
+    "group": "monitoring",
+    "action": "JobMetricsController@show"
+  },
+  {
+    "method": "GET",
+    "uri": "horizon/api/metrics/queues",
+    "group": "monitoring",
+    "action": "QueueMetricsController@index"
+  },
+  {
+    "method": "GET",
+    "uri": "horizon/api/metrics/queues/{id}",
+    "group": "monitoring",
+    "action": "QueueMetricsController@show"
+  },
+  {
+    "method": "GET",
+    "uri": "horizon/api/monitoring",
+    "group": "monitoring",
+    "action": "MonitoringController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "horizon/api/monitoring",
+    "group": "monitoring",
+    "action": "MonitoringController@store"
+  },
+  {
+    "method": "GET",
+    "uri": "horizon/api/monitoring/{tag}",
+    "group": "monitoring",
+    "action": "MonitoringController@paginate"
+  },
+  {
+    "method": "DELETE",
+    "uri": "horizon/api/monitoring/{tag}",
+    "group": "monitoring",
+    "action": "MonitoringController@destroy"
+  },
+  {
+    "method": "GET",
+    "uri": "horizon/api/stats",
+    "group": "monitoring",
+    "action": "DashboardStatsController@index"
+  },
+  {
+    "method": "GET",
+    "uri": "horizon/api/workload",
+    "group": "monitoring",
+    "action": "WorkloadController@index"
+  },
+  {
+    "method": "GET",
+    "uri": "horizon/{view?}",
+    "group": "monitoring",
+    "action": "HomeController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "login",
+    "group": "auth",
+    "action": "AuthenticatedSessionController@store"
+  },
+  {
+    "method": "POST",
+    "uri": "logout",
+    "group": "auth",
+    "action": "AuthenticatedSessionController@destroy"
+  },
+  {
+    "method": "POST",
+    "uri": "reset-password",
+    "group": "auth",
+    "action": "NewPasswordController@store"
+  },
+  {
+    "method": "GET",
+    "uri": "sanctum/csrf-cookie",
+    "group": "auth",
+    "action": "CsrfCookieController@show"
+  },
+  {
+    "method": "GET",
+    "uri": "storage/{path}",
+    "group": "storage",
+    "action": "Closure"
+  },
+  {
+    "method": "PUT",
+    "uri": "storage/{path}",
+    "group": "storage",
+    "action": "Closure"
+  },
+  {
+    "method": "GET",
+    "uri": "up",
+    "group": "monitoring",
+    "action": "Closure"
+  },
+  {
+    "method": "POST",
+    "uri": "user/confirm-password",
+    "group": "auth",
+    "action": "ConfirmablePasswordController@store"
+  },
+  {
+    "method": "GET",
+    "uri": "user/confirmed-password-status",
+    "group": "auth",
+    "action": "ConfirmedPasswordStatusController@show"
+  },
+  {
+    "method": "PUT",
+    "uri": "user/password",
+    "group": "auth",
+    "action": "PasswordController@update"
+  },
+  {
+    "method": "PUT",
+    "uri": "user/profile-information",
+    "group": "auth",
+    "action": "ProfileInformationController@update"
+  }
+]

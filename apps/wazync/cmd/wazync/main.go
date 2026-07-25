@@ -1,0 +1,134 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/command"
+	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/config"
+	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/cryptobox"
+	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/dispatcher"
+	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/httpapi"
+	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/media"
+	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/protocol"
+	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/security"
+	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/session"
+	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/spool"
+	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/store"
+)
+
+func main() {
+	cfg, err := config.Load()
+	if err != nil {
+		slog.Error("invalid Wazync configuration", "error", err.Error())
+		os.Exit(1)
+	}
+
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
+	persistence, dataBox, err := openStore(ctx, cfg)
+	if err != nil {
+		slog.Error("Wazync store initialization failed", "error", err.Error())
+		os.Exit(1)
+	}
+	defer persistence.Close()
+	var deviceResolver *protocol.DeviceResolver
+	var mediaSpool *spool.Store
+	clientSettings := protocol.ClientSettings{
+		ConnectTimeout:           cfg.WAConnectTimeout,
+		ReadyTimeout:             cfg.WAReadyTimeout,
+		HTTPTimeout:              cfg.WAHTTPTimeout,
+		ProxyAddress:             cfg.WAProxyURL,
+		MaxParallelRetryHandlers: cfg.WARetryHandlers,
+	}
+	if cfg.Enabled {
+		mediaSpool, err = spool.Open(cfg.SpoolDirectory, dataBox)
+		if err != nil {
+			slog.Error("Wazync spool initialization failed")
+			os.Exit(1)
+		}
+		deviceResolver, err = protocol.OpenDeviceResolver(ctx, cfg.DatabaseURL, dataBox, clientSettings)
+		if err != nil {
+			slog.Error("WhatsMeow device store initialization failed")
+			os.Exit(1)
+		}
+		defer deviceResolver.Close()
+	}
+
+	keys := map[string]string{}
+	if cfg.CurrentKeyID != "" && cfg.CurrentSecret != "" {
+		keys[cfg.CurrentKeyID] = cfg.CurrentSecret
+	}
+	if cfg.PreviousKeyID != "" && cfg.PreviousSecret != "" {
+		keys[cfg.PreviousKeyID] = cfg.PreviousSecret
+	}
+	verifier := security.NewVerifier(keys, cfg.HMACWindow, cfg.NonceTTL, persistence)
+	api := httpapi.New(cfg.Enabled, cfg.MaxBodyBytes, persistence, verifier)
+	if cfg.Enabled {
+		api.WithMediaStore(mediaSpool)
+		eventBridge := protocol.NewEventBridge(persistence, mediaSpool, cfg.MaxMediaBytes)
+		api.WithRecipientScopeMetrics(eventBridge)
+		eventBridge.SetDeviceRecorder(deviceResolver)
+		deviceResolver.SetEventSink(eventBridge.HandleWithSuccess)
+		adapter := protocol.NewWhatsMeowAdapter(deviceResolver, clientSettings).WithRecoveryStore(persistence)
+		api.WithQueryExecutor(adapter).WithSessionInspector(adapter)
+		sessionManager := session.NewManager(
+			persistence, adapter, cfg.ReplicaID, cfg.SessionCapacity, cfg.LeaseTTL, cfg.HeartbeatEvery,
+		)
+		eventBridge.SetLifecycleObserver(sessionManager.NotifyLifecycle)
+		pairing := session.NewPairingCoordinator(persistence, adapter, deviceResolver)
+		mediaFetcher := media.NewFetcher(
+			cfg.LaravelMediaURL, cfg.CurrentKeyID, cfg.CurrentSecret, cfg.MaxMediaBytes, nil,
+		)
+		worker := command.New(persistence, sessionManager, pairing, adapter, cfg.ReplicaID).
+			WithMediaFetcher(mediaFetcher)
+		eventDispatcher := dispatcher.New(
+			persistence, cfg.LaravelEventsURL, cfg.CurrentKeyID, cfg.CurrentSecret, nil,
+		).WithSpool(mediaSpool)
+		go sessionManager.Run(ctx)
+		go worker.Run(ctx, 250*time.Millisecond)
+		go eventDispatcher.Run(ctx, time.Second)
+	}
+	server := &http.Server{
+		Addr:              cfg.HTTPAddress,
+		Handler:           api.Handler(),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+
+	go func() {
+		slog.Info("Wazync listening", "enabled", cfg.Enabled)
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("Wazync HTTP server stopped", "error", err.Error())
+			cancel()
+		}
+	}()
+
+	<-ctx.Done()
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		slog.Error("Wazync HTTP shutdown failed", "error", err.Error())
+	}
+}
+
+func openStore(ctx context.Context, cfg config.Config) (store.Store, *cryptobox.Box, error) {
+	if !cfg.Enabled {
+		return store.NewMemory(), nil, nil
+	}
+	box, err := cryptobox.New(cfg.DataKey)
+	if err != nil {
+		return nil, nil, err
+	}
+	persistence, err := store.OpenPostgres(ctx, cfg.DatabaseURL, box)
+	return persistence, box, err
+}

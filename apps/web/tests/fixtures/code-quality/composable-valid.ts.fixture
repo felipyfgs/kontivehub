@@ -1,0 +1,13 @@
+import { computed, ref } from 'vue'
+
+export function useCounter(initial = 0) {
+  const count = ref(initial)
+  const doubled = computed(() => count.value * 2)
+  const normalize = (values: number[]) => values.map(value => Math.max(0, value))
+
+  function reset(): void {
+    count.value = 0
+  }
+
+  return { count, doubled, normalize, reset }
+}

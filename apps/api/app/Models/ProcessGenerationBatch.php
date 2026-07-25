@@ -1,0 +1,71 @@
+<?php
+
+namespace App\Models;
+
+use App\Enums\Work\GenerationBatchStatus;
+use App\Models\Concerns\BelongsToOffice;
+use Database\Factories\ProcessGenerationBatchFactory;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+#[Fillable([
+    'office_id',
+    'process_template_id',
+    'template_lock_version',
+    'competence',
+    'reference_period_type',
+    'reference_period_start',
+    'reference_period_end',
+    'status',
+    'payload_hash',
+    'idempotency_key',
+    'request_snapshot',
+    'preview_summary',
+    'requested_by_membership_id',
+    'expires_at',
+    'queued_at',
+    'completed_at',
+])]
+class ProcessGenerationBatch extends Model
+{
+    /** @use HasFactory<ProcessGenerationBatchFactory> */
+    use BelongsToOffice, HasFactory;
+
+    protected function casts(): array
+    {
+        return [
+            'status' => GenerationBatchStatus::class,
+            'reference_period_start' => 'date',
+            'reference_period_end' => 'date',
+            'template_lock_version' => 'integer',
+            'request_snapshot' => 'array',
+            'preview_summary' => 'array',
+            'expires_at' => 'immutable_datetime',
+            'queued_at' => 'immutable_datetime',
+            'completed_at' => 'immutable_datetime',
+        ];
+    }
+
+    public function template(): BelongsTo
+    {
+        return $this->belongsTo(ProcessTemplate::class, 'process_template_id');
+    }
+
+    public function requestedByMembership(): BelongsTo
+    {
+        return $this->belongsTo(OfficeMembership::class, 'requested_by_membership_id');
+    }
+
+    public function items(): HasMany
+    {
+        return $this->hasMany(ProcessGenerationItem::class, 'batch_id');
+    }
+
+    protected static function newFactory(): ProcessGenerationBatchFactory
+    {
+        return ProcessGenerationBatchFactory::new();
+    }
+}

@@ -1,0 +1,288 @@
+name: ${COMPOSE_PROJECT_NAME:-app}
+
+x-php: &php
+  image: ${COMPOSE_PROJECT_NAME:-app}-php:dev
+  build:
+    context: ./infra/docker/php
+    target: dev
+  env_file:
+    - path: ./apps/api/.env
+      required: false
+  environment:
+    APP_ENV: ${APP_ENV:-local}
+    FISCAL_PROFILE: ${FISCAL_PROFILE:-dev}
+    FISCAL_KILL_SWITCH: ${FISCAL_KILL_SWITCH:-false}
+    DB_CONNECTION: pgsql
+    DB_HOST: postgres
+    DB_PORT: 5432
+    DB_DATABASE: ${DB_DATABASE:-nfse}
+    DB_USERNAME: ${DB_USERNAME:-nfse}
+    DB_PASSWORD: ${DB_PASSWORD:-nfse}
+    REDIS_HOST: redis
+    REDIS_PORT: 6379
+    QUEUE_CONNECTION: redis
+    CACHE_STORE: redis
+    SESSION_DRIVER: redis
+    BROADCAST_CONNECTION: ${BROADCAST_CONNECTION:-log}
+    REVERB_APP_ID: ${REVERB_APP_ID:-communication-disabled}
+    REVERB_APP_KEY: ${REVERB_APP_KEY:-communication-disabled}
+    REVERB_APP_SECRET: ${REVERB_APP_SECRET:-communication-disabled}
+    REVERB_HOST: reverb
+    REVERB_PORT: 8081
+    REVERB_SCHEME: http
+    REVERB_SERVER_PORT: 8081
+    REVERB_SCALING_ENABLED: "true"
+    REVERB_ALLOWED_ORIGINS: ${REVERB_ALLOWED_ORIGINS:-http://localhost:8080,http://localhost:3000}
+    CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8080,http://localhost:3000}
+    COMMUNICATION_ENABLED: ${COMMUNICATION_ENABLED:-false}
+    # Flows: fail-closed por default; mesmo padrão FPM/www-data do assistente.
+    COMMUNICATION_FLOWS_ENABLED: ${COMMUNICATION_FLOWS_ENABLED:-false}
+    COMMUNICATION_FLOWS_RUNTIME_ENABLED: ${COMMUNICATION_FLOWS_RUNTIME_ENABLED:-false}
+    # Assistente: injeta no process env do FPM (www-data). Requer vars no .env da raiz
+    # (Compose interpola). Após alterar: docker compose up -d --force-recreate php horizon scheduler reverb
+    ASSISTANT_ENABLED: ${ASSISTANT_ENABLED:-false}
+    OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    ASSISTANT_MODEL: ${ASSISTANT_MODEL:-gpt-4o-mini}
+    WAZYNC_ENABLED: ${WAZYNC_ENABLED:-false}
+    WAZYNC_URL: http://wazync:8080
+    WAZYNC_HMAC_KEY_ID: ${WAZYNC_HMAC_KEY_ID:-}
+    WAZYNC_HMAC_SECRET: ${WAZYNC_HMAC_SECRET:-}
+    WAZYNC_HMAC_PREVIOUS_KEY_ID: ${WAZYNC_HMAC_PREVIOUS_KEY_ID:-}
+    WAZYNC_HMAC_PREVIOUS_SECRET: ${WAZYNC_HMAC_PREVIOUS_SECRET:-}
+    SANCTUM_STATEFUL_DOMAINS: ${SANCTUM_STATEFUL_DOMAINS:-localhost,localhost:3000,127.0.0.1,127.0.0.1:3000}
+    VAULT_DISK_ROOT: /var/vault
+    CODE_QUALITY_ARTIFACT_ROOT: /var/www/html/resources/code-quality/artifacts
+  volumes:
+    - ./apps/api:/var/www/html
+    - vault_data:/var/vault
+    - private_storage:/var/www/html/storage/app/private
+  restart: unless-stopped
+  networks:
+    - app
+
+services:
+  nginx:
+    image: ${COMPOSE_PROJECT_NAME:-app}-nginx:dev
+    build:
+      context: ./infra/docker/nginx
+      target: dev
+    ports:
+      # 0.0.0.0: acesso remoto por IP:porta (dev). Postgres/Redis seguem em 127.0.0.1.
+      - "${APP_PORT:-8080}:80"
+    volumes:
+      - ./apps/api:/var/www/html:ro
+      - ./apps/web/.output/public:/var/www/frontend:ro
+    depends_on:
+      php:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      reverb:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/up"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - app
+
+  php:
+    <<: *php
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "php -r 'exit(0);'"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  horizon:
+    <<: *php
+    image: ${COMPOSE_PROJECT_NAME:-app}-php-rpa:dev
+    build:
+      context: ./infra/docker/php
+      target: rpa-dev
+    command: ["php", "artisan", "horizon"]
+    depends_on:
+      php:
+        condition: service_started
+      redis:
+        condition: service_healthy
+
+  scheduler:
+    <<: *php
+    command: ["php", "artisan", "schedule:work"]
+    depends_on:
+      php:
+        condition: service_started
+      redis:
+        condition: service_healthy
+
+  reverb:
+    <<: *php
+    command: ["php", "artisan", "reverb:start", "--host=0.0.0.0", "--port=8081"]
+    expose:
+      - "8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php", "-r", "$$s=@fsockopen('127.0.0.1',8081); exit($$s ? 0 : 1);"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  frontend-dev:
+    image: ${COMPOSE_PROJECT_NAME:-app}-frontend-dev:dev
+    build: ./infra/docker/frontend
+    working_dir: /app
+    volumes:
+      - ./apps/web:/app
+      - ./apps/api/resources/code-quality:/workspace/api-code-quality:ro
+      - frontend_node_modules:/app/node_modules
+    ports:
+      # 0.0.0.0: Nuxt dev acessível remotamente por IP:porta
+      - "${FRONTEND_DEV_PORT:-3000}:3000"
+    environment:
+      LOCAL_UID: ${LOCAL_UID:-1000}
+      LOCAL_GID: ${LOCAL_GID:-1000}
+      NUXT_SANCTUM_PROXY: "true"
+      NUXT_SANCTUM_PROXY_BASE: http://nginx
+      NUXT_DEVTOOLS: ${NUXT_DEVTOOLS:-true}
+      CHOKIDAR_USEPOLLING: ${CHOKIDAR_USEPOLLING:-true}
+      HOST: 0.0.0.0
+      FRONTEND_DEV_PORT: ${FRONTEND_DEV_PORT:-3000}
+      # IP/host visto pelo browser remoto (HMR WebSocket). Ex.: PUBLIC_HOST=74.x.x.x
+      NUXT_DEV_HMR_HOST: ${PUBLIC_HOST:-}
+      PUBLIC_HOST: ${PUBLIC_HOST:-}
+      NUXT_PUBLIC_COMMUNICATION_ENABLED: ${COMMUNICATION_ENABLED:-false}
+      NUXT_PUBLIC_REVERB_APP_KEY: ${REVERB_APP_KEY:-communication-disabled}
+      NUXT_PUBLIC_REVERB_HOST: ${PUBLIC_HOST:-localhost}
+      NUXT_PUBLIC_REVERB_PORT: ${APP_PORT:-8080}
+      NUXT_PUBLIC_REVERB_SCHEME: http
+      CODE_QUALITY_ARTIFACT_ROOT: /workspace/api-code-quality/artifacts
+      CODE_QUALITY_SCHEMA_PATH: /workspace/api-code-quality/schema.json
+    init: true
+    profiles: ["dev"]
+    depends_on:
+      nginx:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - app
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-nfse}
+      POSTGRES_USER: ${DB_USERNAME:-nfse}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-nfse}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - app
+
+  wazync-db-init:
+    image: postgres:17-alpine
+    entrypoint: ["/bin/sh", "/opt/fiscal-hub/init-wazync.sh"]
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${DB_DATABASE:-nfse}
+      POSTGRES_USER: ${DB_USERNAME:-nfse}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-nfse}
+      WAZYNC_DB_USER: ${WAZYNC_DB_USER:-wazync}
+      WAZYNC_DB_PASSWORD: ${WAZYNC_DB_PASSWORD:-wazync-local-only}
+    volumes:
+      - ./infra/docker/postgres/init-wazync.sh:/opt/fiscal-hub/init-wazync.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - app
+
+  wazync:
+    image: ${COMPOSE_PROJECT_NAME:-app}-wazync:dev
+    build:
+      context: .
+      dockerfile: infra/docker/wazync/Dockerfile
+    environment:
+      WAZYNC_ENABLED: ${WAZYNC_ENABLED:-false}
+      WAZYNC_DATABASE_URL: ${WAZYNC_DATABASE_URL:-postgres://${WAZYNC_DB_USER:-wazync}@postgres:5432/${DB_DATABASE:-nfse}?search_path=wazync}
+      PGPASSWORD: ${WAZYNC_DB_PASSWORD:-wazync-local-only}
+      WAZYNC_EVENTS_URL: http://nginx/api/internal/v1/communication/gateway/events
+      WAZYNC_MEDIA_URL: http://nginx/api/internal/v1/communication/gateway/media
+      WAZYNC_HMAC_KEY_ID: ${WAZYNC_HMAC_KEY_ID:-}
+      WAZYNC_HMAC_SECRET: ${WAZYNC_HMAC_SECRET:-}
+      WAZYNC_HMAC_PREVIOUS_KEY_ID: ${WAZYNC_HMAC_PREVIOUS_KEY_ID:-}
+      WAZYNC_HMAC_PREVIOUS_SECRET: ${WAZYNC_HMAC_PREVIOUS_SECRET:-}
+      WAZYNC_DATA_KEY: ${WAZYNC_DATA_KEY:-}
+      WAZYNC_HMAC_WINDOW: ${WAZYNC_HMAC_WINDOW:-5m}
+      WAZYNC_NONCE_TTL: ${WAZYNC_NONCE_TTL:-10m}
+      WAZYNC_SESSION_CAPACITY: ${WAZYNC_SESSION_CAPACITY:-250}
+      WAZYNC_LEASE_TTL: ${WAZYNC_LEASE_TTL:-2m}
+      WAZYNC_HEARTBEAT_EVERY: ${WAZYNC_HEARTBEAT_EVERY:-10s}
+      WAZYNC_MEDIA_MAX_BYTES: ${COMMUNICATION_MEDIA_MAX_BYTES:-20971520}
+    volumes:
+      - wazync_spool:/var/lib/wazync/spool
+    expose:
+      - "8080"
+    depends_on:
+      wazync-db-init:
+        condition: service_completed_successfully
+      nginx:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - app
+
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - app
+
+volumes:
+  postgres_data:
+  redis_data:
+  vault_data:
+  private_storage:
+  frontend_node_modules:
+  wazync_spool:
+
+networks:
+  app:
+    driver: bridge

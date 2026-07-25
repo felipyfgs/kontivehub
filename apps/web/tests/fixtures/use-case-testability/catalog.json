@@ -1,0 +1,200 @@
+{
+  "schemaVersion": 1,
+  "actors": [
+    { "id": "public", "context": "none", "description": "Pessoa sem sessão autenticada" },
+    { "id": "office-admin", "context": "office", "description": "Administrador com membership real no escritório" },
+    { "id": "operator", "context": "office", "description": "Operador com permissões fiscais e operacionais" },
+    { "id": "viewer", "context": "office", "description": "Usuário somente leitura" },
+    { "id": "platform-admin", "context": "platform", "description": "Administrador global sem acesso fiscal implícito" }
+  ],
+  "integrations": [
+    { "id": "serpro-integra", "testMode": "blocked", "description": "SERPRO/Integra Contador" },
+    { "id": "sefaz", "testMode": "blocked", "description": "Canais SEFAZ/SVRS" },
+    { "id": "mei-portal", "testMode": "blocked", "description": "Cliente HTTP opcional do portal MEI" },
+    { "id": "communication-provider", "testMode": "blocked", "description": "Provedor externo de comunicação" }
+  ],
+  "journeys": [
+    {
+      "id": "public-access",
+      "title": "Ativação e onboarding público",
+      "critical": false,
+      "actors": ["public"],
+      "apiGroups": ["activations", "onboarding", "first-access"],
+      "pageSections": [],
+      "pageRoutes": ["/onboarding", "/reset-password"],
+      "apiClients": [
+        "app/composables/api/createActivationApi.ts",
+        "app/composables/api/createOnboardingApi.ts"
+      ],
+      "integrations": [],
+      "evidence": [],
+      "gaps": ["L1", "L2", "L3"]
+    },
+    {
+      "id": "identity-tenancy",
+      "title": "Identidade, conta e troca de escritório",
+      "critical": true,
+      "actors": ["office-admin", "operator", "viewer"],
+      "apiGroups": ["auth", "tenants"],
+      "pageSections": ["auth", "conta"],
+      "pageRoutes": [],
+      "apiClients": ["app/composables/api/createAuthApi.ts"],
+      "integrations": [],
+      "evidence": [
+        { "level": "L1", "file": "apps/api/tests/Feature/CriticalUseCaseJourneyApiTest.php", "anchor": "test_identity_and_tenant_switch_preserve_office_isolation" },
+        { "level": "L2", "file": "apps/web/tests/unit/critical-use-case-journeys.test.ts", "anchor": "identity and tenant" },
+        { "level": "L3", "file": "apps/web/tests/e2e/specs/critical-use-case-journeys.spec.ts", "anchor": "operador alterna tenant" }
+      ],
+      "gaps": []
+    },
+    {
+      "id": "platform-governance",
+      "title": "Governança global da plataforma",
+      "critical": false,
+      "actors": ["platform-admin"],
+      "apiGroups": ["platform"],
+      "pageSections": ["admin", "admin/serpro"],
+      "pageRoutes": [],
+      "apiClients": ["app/composables/api/createPlatformApi.ts"],
+      "integrations": ["serpro-integra"],
+      "evidence": [
+        { "level": "L1", "file": "apps/api/tests/Feature/PlatformFiscalModuleControlApiTest.php", "anchor": "test_platform_admin_lists" },
+        { "level": "L2", "file": "apps/web/tests/unit/admin-serpro-inventory-gate.test.ts", "anchor": "admin/serpro inventory gate" }
+      ],
+      "gaps": ["L3"]
+    },
+    {
+      "id": "office-operations",
+      "title": "Configuração e onboarding do escritório",
+      "critical": false,
+      "actors": ["office-admin", "operator", "viewer"],
+      "apiGroups": ["office"],
+      "pageSections": ["settings"],
+      "pageRoutes": [],
+      "apiClients": ["app/composables/api/createOfficeApi.ts"],
+      "integrations": ["serpro-integra", "sefaz"],
+      "evidence": [
+        { "level": "L1", "file": "apps/api/tests/Feature/OfficeOnboardingStatusApiTest.php", "anchor": "without_crossing_tenants" },
+        { "level": "L2", "file": "apps/web/tests/unit/office-onboarding-progress.test.ts", "anchor": "onboarding fiscal" }
+      ],
+      "gaps": ["L3"]
+    },
+    {
+      "id": "client-lifecycle",
+      "title": "Catálogo e ciclo de vida de clientes",
+      "critical": true,
+      "actors": ["office-admin", "operator", "viewer"],
+      "apiGroups": ["clients", "client-categories", "cnpj", "establishments"],
+      "pageSections": ["clients"],
+      "pageRoutes": [],
+      "apiClients": ["app/composables/api/createClientsApi.ts"],
+      "integrations": ["serpro-integra"],
+      "evidence": [
+        { "level": "L1", "file": "apps/api/tests/Feature/CriticalUseCaseJourneyApiTest.php", "anchor": "test_client_catalog_is_tenant_scoped" },
+        { "level": "L2", "file": "apps/web/tests/unit/critical-use-case-journeys.test.ts", "anchor": "client lifecycle" },
+        { "level": "L3", "file": "apps/web/tests/e2e/specs/critical-use-case-journeys.spec.ts", "anchor": "catálogo de clientes" }
+      ],
+      "gaps": []
+    },
+    {
+      "id": "documents-notes",
+      "title": "Documentos, notas e exportações",
+      "critical": false,
+      "actors": ["office-admin", "operator", "viewer"],
+      "apiGroups": ["documents", "notes", "storage", "exports"],
+      "pageSections": ["docs", "notes"],
+      "pageRoutes": ["/exports"],
+      "apiClients": ["app/composables/api/createDocumentsApi.ts"],
+      "integrations": ["sefaz"],
+      "evidence": [],
+      "gaps": ["L1", "L2", "L3"]
+    },
+    {
+      "id": "communication-inbox",
+      "title": "Atendimento WhatsApp compartilhado",
+      "critical": false,
+      "actors": ["office-admin", "operator", "viewer"],
+      "apiGroups": ["communication"],
+      "pageSections": ["communication"],
+      "pageRoutes": [],
+      "apiClients": ["app/composables/api/createCommunicationApi.ts"],
+      "integrations": ["communication-provider"],
+      "evidence": [
+        { "level": "L1", "file": "apps/api/tests/Feature/Communication/CommunicationApiTest.php", "anchor": "test_rbac_limits_non_admin_to_membership_and_hides_foreign_office" },
+        { "level": "L2", "file": "apps/web/tests/unit/communication-workspace-ui-gate.test.ts", "anchor": "integra REST office-scoped" }
+      ],
+      "gaps": ["L3"]
+    },
+    {
+      "id": "fiscal-monitoring",
+      "title": "Monitoramento fiscal e consultas",
+      "critical": true,
+      "actors": ["office-admin", "operator", "viewer"],
+      "apiGroups": ["fiscal", "monitoring", "mei", "sync-runs"],
+      "pageSections": ["monitoring"],
+      "pageRoutes": ["/closing", "/health"],
+      "apiClients": [
+        "app/composables/api/createFiscalApi.ts",
+        "app/composables/api/createMeiPublicServicesApi.ts",
+        "app/composables/useSitfisMonitoring.ts"
+      ],
+      "integrations": ["serpro-integra", "mei-portal", "communication-provider"],
+      "evidence": [
+        { "level": "L1", "file": "apps/api/tests/Feature/SimplesMeiPortfolioHttpTest.php", "anchor": "test_isolates_other_office_clients" },
+        { "level": "L2", "file": "apps/web/tests/unit/simples-nacional-portfolio-e2e.test.ts", "anchor": "membership e permissões" },
+        { "level": "L3", "file": "apps/web/tests/e2e/specs/monitoring-workspace.spec.ts", "anchor": "sem egress fiscal" }
+      ],
+      "gaps": []
+    },
+    {
+      "id": "operational-work",
+      "title": "Fila e processos operacionais",
+      "critical": true,
+      "actors": ["office-admin", "operator", "viewer"],
+      "apiGroups": ["work", "operations", "list-filters", "assistant"],
+      "pageSections": ["work"],
+      "pageRoutes": ["/"],
+      "apiClients": [
+        "app/composables/api/createWorkApi.ts",
+        "app/composables/api/createOperationsApi.ts",
+        "app/composables/api/createSavedListFiltersApi.ts"
+      ],
+      "integrations": [],
+      "evidence": [
+        { "level": "L1", "file": "apps/api/tests/Feature/CriticalUseCaseJourneyApiTest.php", "anchor": "test_work_queue_is_tenant_scoped" },
+        { "level": "L2", "file": "apps/web/tests/unit/critical-use-case-journeys.test.ts", "anchor": "operational work" },
+        { "level": "L3", "file": "apps/web/tests/e2e/specs/critical-use-case-journeys.spec.ts", "anchor": "fila de trabalho" }
+      ],
+      "gaps": []
+    },
+    {
+      "id": "outbound-capture",
+      "title": "Captura, integrações e documentos de saída",
+      "critical": false,
+      "actors": ["office-admin", "operator", "viewer"],
+      "apiGroups": ["outbound", "cte", "integrations"],
+      "pageSections": [],
+      "pageRoutes": ["/syncs"],
+      "apiClients": ["app/composables/api/createOutboundApi.ts"],
+      "integrations": ["sefaz"],
+      "evidence": [],
+      "gaps": ["L1", "L2", "L3"]
+    },
+    {
+      "id": "serpro-governance",
+      "title": "Autorização e consumo SERPRO",
+      "critical": false,
+      "actors": ["platform-admin", "office-admin", "operator", "viewer"],
+      "apiGroups": ["serpro"],
+      "pageSections": [],
+      "pageRoutes": [],
+      "apiClients": [
+        "app/composables/api/createOfficeApi.ts",
+        "app/composables/api/createPlatformApi.ts"
+      ],
+      "integrations": ["serpro-integra"],
+      "evidence": [],
+      "gaps": ["L1", "L2", "L3"]
+    }
+  ]
+}

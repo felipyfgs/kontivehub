@@ -1,0 +1,52 @@
+import { describe, expect, it } from 'vitest'
+import type { CommunicationConversation } from '~/types/communication'
+import {
+  isCommunicationConversationRequestCurrent,
+  mergeCommunicationConversationPage
+} from '~/composables/useCommunicationWorkspace'
+
+function conversation(id: number, priority = 0): CommunicationConversation {
+  return {
+    id,
+    inbox_id: 1,
+    status: 'OPEN',
+    priority,
+    lock_version: 1,
+    last_message_at: `2026-07-23T12:${String(id).padStart(2, '0')}:00-03:00`
+  }
+}
+
+describe('paginação do workspace de comunicação', () => {
+  it('substitui a página inicial e concatena próximas páginas sem ids duplicados', () => {
+    const stale = [conversation(99)]
+    const firstPage = mergeCommunicationConversationPage(
+      stale,
+      [conversation(2), conversation(1)],
+      false
+    )
+    expect(firstPage.map(item => item.id)).toEqual([2, 1])
+
+    const secondPage = mergeCommunicationConversationPage(
+      firstPage,
+      [conversation(3), conversation(2, 4)],
+      true
+    )
+    expect(secondPage.map(item => item.id)).toEqual([2, 3, 1])
+    expect(secondPage.filter(item => item.id === 2)).toHaveLength(1)
+    expect(secondPage.find(item => item.id === 2)?.priority).toBe(4)
+  })
+
+  it('descarta resposta fora de ordem por geração e por troca de Office', () => {
+    const active = { generation: 8, sessionEpoch: 12 }
+
+    expect(isCommunicationConversationRequestCurrent(active, active)).toBe(true)
+    expect(isCommunicationConversationRequestCurrent(
+      { generation: 7, sessionEpoch: 12 },
+      active
+    )).toBe(false)
+    expect(isCommunicationConversationRequestCurrent(
+      { generation: 8, sessionEpoch: 11 },
+      active
+    )).toBe(false)
+  })
+})

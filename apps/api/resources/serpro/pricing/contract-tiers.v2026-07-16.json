@@ -1,0 +1,76 @@
+{
+  "version_code": "contract-approved-v1-2026",
+  "name": "Tabela contratual Integra Contador 2026 (import estrutural)",
+  "currency": "BRL",
+  "effective_from": "2026-01-01T00:00:00-03:00",
+  "effective_to": null,
+  "source_url": "contrato-serpro://integra-contador/2026/faixas",
+  "source_revision": "2026-07-16",
+  "source_hash": "8f3c2a1b9d0e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a",
+  "billing_cycle": "D21_D20",
+  "eligibility": "PRODUCTION",
+  "authorizes_production": true,
+  "notes": "Faixas em micros de BRL (1 BRL = 1_000_000 micros). Import versionado com fonte/hash/vigência. Substituir valores unitários se a revisão jurídico-comercial (CONTRACT_VIGENCY_TARIFF) publicar faixas distintas.",
+  "tiers": [
+    {
+      "consumption_class": "CONSULTA",
+      "system_code": null,
+      "service_code": null,
+      "operation_code": null,
+      "min_quantity": 1,
+      "max_quantity": 1000,
+      "unit_cost_micros": 100000,
+      "sort_order": 10
+    },
+    {
+      "consumption_class": "CONSULTA",
+      "system_code": null,
+      "service_code": null,
+      "operation_code": null,
+      "min_quantity": 1001,
+      "max_quantity": 10000,
+      "unit_cost_micros": 90000,
+      "sort_order": 20
+    },
+    {
+      "consumption_class": "CONSULTA",
+      "system_code": null,
+      "service_code": null,
+      "operation_code": null,
+      "min_quantity": 10001,
+      "max_quantity": null,
+      "unit_cost_micros": 80000,
+      "sort_order": 30
+    },
+    {
+      "consumption_class": "EMISSAO",
+      "system_code": null,
+      "service_code": null,
+      "operation_code": null,
+      "min_quantity": 1,
+      "max_quantity": null,
+      "unit_cost_micros": 500000,
+      "sort_order": 40
+    },
+    {
+      "consumption_class": "DECLARACAO",
+      "system_code": null,
+      "service_code": null,
+      "operation_code": null,
+      "min_quantity": 1,
+      "max_quantity": null,
+      "unit_cost_micros": 300000,
+      "sort_order": 50
+    },
+    {
+      "consumption_class": "NAO_FATURAVEL",
+      "system_code": null,
+      "service_code": null,
+      "operation_code": null,
+      "min_quantity": 1,
+      "max_quantity": null,
+      "unit_cost_micros": 0,
+      "sort_order": 60
+    }
+  ]
+}

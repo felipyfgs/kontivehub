@@ -1,0 +1,1 @@
+{"contract_version":1,"status":"SUCCEEDED","code":"PAYMENT_QUERIED","message":"Pagamento consultado por fixture.","data":{"guides":[{"identifier":"GFD-202607-0001","competence":"2026-07","amount_cents":184250,"due_date":"2026-08-20","payment_status":"CONFIRMED","guide_type":"MONTHLY"}]},"artifacts":[],"session":null}

@@ -1,0 +1,1289 @@
+{
+  "matrix_version": "2026.07.16.1",
+  "source_key": "services_vs_proxies",
+  "source_url": "https://apicenter.estaleiro.serpro.gov.br/documentacao/api-integra-contador/pt/servicos_vs_procuracoes/",
+  "source_revision": "2026",
+  "source_content_sha256": "f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff001122334455",
+  "derived_from_catalog": "official-service-catalog.v2026-07-16.json",
+  "catalog_manifest_version": "2026.07.16.1",
+  "matrix_content_sha256": "f9a9f1155504af689a2071f0c967a5ba57079ad19b266b587476d2b3f101f87e",
+  "review_status": "APPROVED",
+  "retrieved_on": "2026-07-16",
+  "notes": "Matriz versionada idSistema+idServico → poderes e-CAC. Hash da fonte divergente exige REVIEW_REQUIRED.",
+  "entries": [
+    {
+      "id_sistema": "PGDASD",
+      "id_servico": "TRANSDECLARACAO11",
+      "operation_key": "pgdasd.transdeclaracao",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00146"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Declarar"
+    },
+    {
+      "id_sistema": "PGDASD",
+      "id_servico": "GERARDAS12",
+      "operation_key": "pgdasd.gerardas",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00146"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "PGDASD",
+      "id_servico": "CONSDECLARACAO13",
+      "operation_key": "pgdasd.consdeclaracao",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00146"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PGDASD",
+      "id_servico": "CONSULTIMADECREC14",
+      "operation_key": "pgdasd.consultimadecrec",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00146"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PGDASD",
+      "id_servico": "CONSDECREC15",
+      "operation_key": "pgdasd.consdecrec",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00146"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PGDASD",
+      "id_servico": "CONSEXTRATO16",
+      "operation_key": "pgdasd.consextrato",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00146"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PGDASD",
+      "id_servico": "GERARDASCOBRANCA17",
+      "operation_key": "pgdasd.gerardascobranca",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00146"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "PGDASD",
+      "id_servico": "GERARDASPROCESSO18",
+      "operation_key": "pgdasd.gerardasprocesso",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00146"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "PGDASD",
+      "id_servico": "GERARDASAVULSO19",
+      "operation_key": "pgdasd.gerardasavulso",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00146"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "REGIMEAPURACAO",
+      "id_servico": "EFETUAROPCAOREGIME101",
+      "operation_key": "regimeapuracao.efetuaropcaoregime",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00060"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Declarar"
+    },
+    {
+      "id_sistema": "REGIMEAPURACAO",
+      "id_servico": "CONSULTARANOSCALENDARIOS102",
+      "operation_key": "regimeapuracao.consultaranoscalendarios",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00060"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "REGIMEAPURACAO",
+      "id_servico": "CONSULTAROPCAOREGIME103",
+      "operation_key": "regimeapuracao.consultaropcaoregime",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00060"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "REGIMEAPURACAO",
+      "id_servico": "CONSULTARRESOLUCAO104",
+      "operation_key": "regimeapuracao.consultarresolucao",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00060"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "DEFIS",
+      "id_servico": "TRANSDECLARACAO141",
+      "operation_key": "defis.transdeclaracao",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00146"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Declarar"
+    },
+    {
+      "id_sistema": "DEFIS",
+      "id_servico": "CONSDECLARACAO142",
+      "operation_key": "defis.consdeclaracao",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00146"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "DEFIS",
+      "id_servico": "CONSULTIMADECREC143",
+      "operation_key": "defis.consultimadecrec",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00146"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "DEFIS",
+      "id_servico": "CONSDECREC144",
+      "operation_key": "defis.consdecrec",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00146"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PGMEI",
+      "id_servico": "GERARDASPDF21",
+      "operation_key": "pgmei.gerardaspdf",
+      "proxy_rule": "NOT_APPLICABLE",
+      "required_proxy_powers": [],
+      "official_state": "PRODUCTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "PGMEI",
+      "id_servico": "GERARDASCODBARRA22",
+      "operation_key": "pgmei.gerardascodbarra",
+      "proxy_rule": "NOT_APPLICABLE",
+      "required_proxy_powers": [],
+      "official_state": "PRODUCTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "PGMEI",
+      "id_servico": "ATUBENEFICIO23",
+      "operation_key": "pgmei.atubeneficio",
+      "proxy_rule": "NOT_APPLICABLE",
+      "required_proxy_powers": [],
+      "official_state": "PRODUCTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "PGMEI",
+      "id_servico": "DIVIDAATIVA24",
+      "operation_key": "pgmei.dividaativa",
+      "proxy_rule": "NOT_APPLICABLE",
+      "required_proxy_powers": [],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "CCMEI",
+      "id_servico": "EMITIRCCMEI121",
+      "operation_key": "ccmei.emitirccmei",
+      "proxy_rule": "NOT_APPLICABLE",
+      "required_proxy_powers": [],
+      "official_state": "PRODUCTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "CCMEI",
+      "id_servico": "DADOSCCMEI122",
+      "operation_key": "ccmei.dadosccmei",
+      "proxy_rule": "NOT_APPLICABLE",
+      "required_proxy_powers": [],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "CCMEI",
+      "id_servico": "CCMEISITCADASTRAL123",
+      "operation_key": "ccmei.ccmeisitcadastral",
+      "proxy_rule": "NOT_APPLICABLE",
+      "required_proxy_powers": [],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "DASNSIMEI",
+      "id_servico": "TRANSDECLARACAO151",
+      "operation_key": "dasnsimei.transdeclaracao",
+      "proxy_rule": "NOT_APPLICABLE",
+      "required_proxy_powers": [],
+      "official_state": "PROSPECTION",
+      "route": "Declarar"
+    },
+    {
+      "id_sistema": "DASNSIMEI",
+      "id_servico": "CONSULTIMADECREC152",
+      "operation_key": "dasnsimei.consultimadecrec",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00229"
+      ],
+      "official_state": "PROSPECTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "DASNSIMEI",
+      "id_servico": "GERARDASEXCESSO153",
+      "operation_key": "dasnsimei.gerardasexcesso",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00229"
+      ],
+      "official_state": "PROSPECTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "DCTFWEB",
+      "id_servico": "GERARGUIA31",
+      "operation_key": "dctfweb.gerarguia",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00103"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "DCTFWEB",
+      "id_servico": "CONSRECIBO32",
+      "operation_key": "dctfweb.consrecibo",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00103"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "DCTFWEB",
+      "id_servico": "CONSDECCOMPLETA33",
+      "operation_key": "dctfweb.consdeccompleta",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00103"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "DCTFWEB",
+      "id_servico": "CONSRELCREDITO34",
+      "operation_key": "dctfweb.consrelcredito",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00103"
+      ],
+      "official_state": "PROSPECTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "DCTFWEB",
+      "id_servico": "CONSRELDEBITO35",
+      "operation_key": "dctfweb.consreldebito",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00103"
+      ],
+      "official_state": "PROSPECTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "DCTFWEB",
+      "id_servico": "GERARGUIAMAED36",
+      "operation_key": "dctfweb.gerarguiamaed",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00103"
+      ],
+      "official_state": "PROSPECTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "DCTFWEB",
+      "id_servico": "CONSNOTIFMAED37",
+      "operation_key": "dctfweb.consnotifmaed",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00103"
+      ],
+      "official_state": "PROSPECTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "DCTFWEB",
+      "id_servico": "CONSXMLDECLARACAO38",
+      "operation_key": "dctfweb.consxmldeclaracao",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00103"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "DCTFWEB",
+      "id_servico": "APLVINCULACAO39",
+      "operation_key": "dctfweb.aplvinculacao",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00103"
+      ],
+      "official_state": "PROSPECTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "DCTFWEB",
+      "id_servico": "TRANSDECLARACAO310",
+      "operation_key": "dctfweb.transdeclaracao",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00103"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Declarar"
+    },
+    {
+      "id_sistema": "DCTFWEB",
+      "id_servico": "GERARGUIACOMABATIMENTO311",
+      "operation_key": "dctfweb.gerarguiacomabatimento",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00103"
+      ],
+      "official_state": "PROSPECTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "DCTFWEB",
+      "id_servico": "EDITARVALORSUSPENSO312",
+      "operation_key": "dctfweb.editarvalorsuspenso",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00103"
+      ],
+      "official_state": "PROSPECTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "DCTFWEB",
+      "id_servico": "GERARGUIAANDAMENTO313",
+      "operation_key": "dctfweb.gerarguiaandamento",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00103"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "MIT",
+      "id_servico": "ENCAPURACAO314",
+      "operation_key": "mit.encapuracao",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00103"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Declarar"
+    },
+    {
+      "id_sistema": "MIT",
+      "id_servico": "SITUACAOENC315",
+      "operation_key": "mit.situacaoenc",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00103"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Apoiar"
+    },
+    {
+      "id_sistema": "MIT",
+      "id_servico": "CONSAPURACAO316",
+      "operation_key": "mit.consapuracao",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00103"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "MIT",
+      "id_servico": "LISTAAPURACOES317",
+      "operation_key": "mit.listaapuracoes",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00103"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PROCURACOES",
+      "id_servico": "OBTERPROCURACAO41",
+      "operation_key": "procuracoes.obter",
+      "proxy_rule": "NOT_APPLICABLE",
+      "required_proxy_powers": [],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "SICALC",
+      "id_servico": "CONSOLIDARGERARDARF51",
+      "operation_key": "sicalc.consolidargerardarf",
+      "proxy_rule": "NOT_APPLICABLE",
+      "required_proxy_powers": [],
+      "official_state": "PRODUCTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "SICALC",
+      "id_servico": "CONSULTAAPOIORECEITAS52",
+      "operation_key": "sicalc.consultaapoioreceitas",
+      "proxy_rule": "NOT_APPLICABLE",
+      "required_proxy_powers": [],
+      "official_state": "PRODUCTION",
+      "route": "Apoiar"
+    },
+    {
+      "id_sistema": "SICALC",
+      "id_servico": "GERARDARFCODBARRA53",
+      "operation_key": "sicalc.gerardarfcodbarra",
+      "proxy_rule": "NOT_APPLICABLE",
+      "required_proxy_powers": [],
+      "official_state": "PRODUCTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "SICALC",
+      "id_servico": "CONSOLIDAR54",
+      "operation_key": "sicalc.consolidar",
+      "proxy_rule": "NOT_APPLICABLE",
+      "required_proxy_powers": [],
+      "official_state": "UNDER_CONSTRUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "CAIXAPOSTAL",
+      "id_servico": "MSGCONTRIBUINTE61",
+      "operation_key": "caixa_postal.lista",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00006"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "CAIXAPOSTAL",
+      "id_servico": "MSGDETALHAMENTO62",
+      "operation_key": "caixa_postal.detalhe",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00006"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "CAIXAPOSTAL",
+      "id_servico": "INNOVAMSG63",
+      "operation_key": "caixa_postal.indicador",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00006"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Monitorar"
+    },
+    {
+      "id_sistema": "DTE",
+      "id_servico": "CONSULTASITUACAODTE111",
+      "operation_key": "dte.consultar",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00050"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PAGTOWEB",
+      "id_servico": "PAGAMENTOS71",
+      "operation_key": "pagtoweb.pagamentos",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00004"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PAGTOWEB",
+      "id_servico": "COMPARRECADACAO72",
+      "operation_key": "pagtoweb.comparrecadacao",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00004"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "PAGTOWEB",
+      "id_servico": "CONTACONSDOCARRPG73",
+      "operation_key": "pagtoweb.contaconsdocarrpg",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00004"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "AUTENTICAPROCURADOR",
+      "id_servico": "ENVIOXMLASSINADO81",
+      "operation_key": "autentica_procurador.envio_xml_assinado",
+      "proxy_rule": "NOT_APPLICABLE",
+      "required_proxy_powers": [],
+      "official_state": "PRODUCTION",
+      "route": "Apoiar"
+    },
+    {
+      "id_sistema": "AUTENTICAPROCURADOR",
+      "id_servico": "EXPIRARAUTORIZACAO82",
+      "operation_key": "autenticaprocurador.expirarautorizacao",
+      "proxy_rule": "NOT_APPLICABLE",
+      "required_proxy_powers": [],
+      "official_state": "CANCELED",
+      "route": "Apoiar"
+    },
+    {
+      "id_sistema": "EVENTOSATUALIZACAO",
+      "id_servico": "SOLICEVENTOSPF131",
+      "operation_key": "eventosatualizacao.soliceventospf",
+      "proxy_rule": "EVENT_DEPENDENT",
+      "required_proxy_powers": [],
+      "official_state": "PRODUCTION",
+      "route": "Monitorar"
+    },
+    {
+      "id_sistema": "EVENTOSATUALIZACAO",
+      "id_servico": "SOLICEVENTOSPJ132",
+      "operation_key": "eventosatualizacao.soliceventospj",
+      "proxy_rule": "EVENT_DEPENDENT",
+      "required_proxy_powers": [],
+      "official_state": "PRODUCTION",
+      "route": "Monitorar"
+    },
+    {
+      "id_sistema": "EVENTOSATUALIZACAO",
+      "id_servico": "OBTEREVENTOSPF133",
+      "operation_key": "eventosatualizacao.obtereventospf",
+      "proxy_rule": "EVENT_DEPENDENT",
+      "required_proxy_powers": [],
+      "official_state": "PRODUCTION",
+      "route": "Monitorar"
+    },
+    {
+      "id_sistema": "EVENTOSATUALIZACAO",
+      "id_servico": "OBTEREVENTOSPJ134",
+      "operation_key": "eventosatualizacao.obtereventospj",
+      "proxy_rule": "EVENT_DEPENDENT",
+      "required_proxy_powers": [],
+      "official_state": "PRODUCTION",
+      "route": "Monitorar"
+    },
+    {
+      "id_sistema": "SITFIS",
+      "id_servico": "SOLICITARPROTOCOLO91",
+      "operation_key": "sitfis.solicitar_protocolo",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00002"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Apoiar"
+    },
+    {
+      "id_sistema": "SITFIS",
+      "id_servico": "RELATORIOSITFIS92",
+      "operation_key": "sitfis.emitir_relatorio",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00002"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "PARCSN",
+      "id_servico": "GERARDAS161",
+      "operation_key": "parcsn.gerardas",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00076",
+        "00188"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "PARCSN",
+      "id_servico": "PARCELASPARAGERAR162",
+      "operation_key": "parcsn.parcelasparagerar",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00076",
+        "00188"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PARCSN",
+      "id_servico": "PEDIDOSPARC163",
+      "operation_key": "parcsn.pedidosparc",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00076",
+        "00188"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PARCSN",
+      "id_servico": "OBTERPARC164",
+      "operation_key": "parcsn.obterparc",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00076",
+        "00188"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PARCSN",
+      "id_servico": "DETPAGTOPARC165",
+      "operation_key": "parcsn.detpagtoparc",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00076",
+        "00188"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PARCSN-ESP",
+      "id_servico": "GERARDAS171",
+      "operation_key": "parcsn_esp.gerardas",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00125"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "PARCSN-ESP",
+      "id_servico": "PARCELASPARAGERAR172",
+      "operation_key": "parcsn_esp.parcelasparagerar",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00125"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PARCSN-ESP",
+      "id_servico": "PEDIDOSPARC173",
+      "operation_key": "parcsn_esp.pedidosparc",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00125"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PARCSN-ESP",
+      "id_servico": "OBTERPARC174",
+      "operation_key": "parcsn_esp.obterparc",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00125"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PARCSN-ESP",
+      "id_servico": "DETPAGTOPARC175",
+      "operation_key": "parcsn_esp.detpagtoparc",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00125"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PERTSN",
+      "id_servico": "GERARDAS181",
+      "operation_key": "pertsn.gerardas",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00149",
+        "10011"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "PERTSN",
+      "id_servico": "PARCELASPARAGERAR182",
+      "operation_key": "pertsn.parcelasparagerar",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00149",
+        "10011"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PERTSN",
+      "id_servico": "PEDIDOSPARC183",
+      "operation_key": "pertsn.pedidosparc",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00149",
+        "10011"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PERTSN",
+      "id_servico": "OBTERPARC184",
+      "operation_key": "pertsn.obterparc",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00149",
+        "10011"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PERTSN",
+      "id_servico": "DETPAGTOPARC185",
+      "operation_key": "pertsn.detpagtoparc",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00149",
+        "10011"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "RELPSN",
+      "id_servico": "GERARDAS191",
+      "operation_key": "relpsn.gerardas",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00210",
+        "10036"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "RELPSN",
+      "id_servico": "PARCELASPARAGERAR192",
+      "operation_key": "relpsn.parcelasparagerar",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00210",
+        "10036"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "RELPSN",
+      "id_servico": "PEDIDOSPARC193",
+      "operation_key": "relpsn.pedidosparc",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00210",
+        "10036"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "RELPSN",
+      "id_servico": "OBTERPARC194",
+      "operation_key": "relpsn.obterparc",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00210",
+        "10036"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "RELPSN",
+      "id_servico": "DETPAGTOPARC195",
+      "operation_key": "relpsn.detpagtoparc",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00210",
+        "10036"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PARCMEI",
+      "id_servico": "GERARDAS201",
+      "operation_key": "parcmei.gerardas",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00134"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "PARCMEI",
+      "id_servico": "PARCELASPARAGERAR202",
+      "operation_key": "parcmei.parcelasparagerar",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00134"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PARCMEI",
+      "id_servico": "PEDIDOSPARC203",
+      "operation_key": "parcmei.pedidosparc",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00134"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PARCMEI",
+      "id_servico": "OBTERPARC204",
+      "operation_key": "parcmei.obterparc",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00134"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PARCMEI",
+      "id_servico": "DETPAGTOPARC205",
+      "operation_key": "parcmei.detpagtoparc",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00134"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PARCMEI-ESP",
+      "id_servico": "GERARDAS211",
+      "operation_key": "parcmei_esp.gerardas",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00133"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "PARCMEI-ESP",
+      "id_servico": "PARCELASPARAGERAR212",
+      "operation_key": "parcmei_esp.parcelasparagerar",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00133"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PARCMEI-ESP",
+      "id_servico": "PEDIDOSPARC213",
+      "operation_key": "parcmei_esp.pedidosparc",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00133"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PARCMEI-ESP",
+      "id_servico": "OBTERPARC214",
+      "operation_key": "parcmei_esp.obterparc",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00133"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PARCMEI-ESP",
+      "id_servico": "DETPAGTOPARC215",
+      "operation_key": "parcmei_esp.detpagtoparc",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00133"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PERTMEI",
+      "id_servico": "GERARDAS221",
+      "operation_key": "pertmei.gerardas",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00152",
+        "10012"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "PERTMEI",
+      "id_servico": "PARCELASPARAGERAR222",
+      "operation_key": "pertmei.parcelasparagerar",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00152",
+        "10012"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PERTMEI",
+      "id_servico": "PEDIDOSPARC223",
+      "operation_key": "pertmei.pedidosparc",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00152",
+        "10012"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PERTMEI",
+      "id_servico": "OBTERPARC224",
+      "operation_key": "pertmei.obterparc",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00152",
+        "10012"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PERTMEI",
+      "id_servico": "DETPAGTOPARC225",
+      "operation_key": "pertmei.detpagtoparc",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00152",
+        "10012"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "RELPMEI",
+      "id_servico": "GERARDAS231",
+      "operation_key": "relpmei.gerardas",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00209",
+        "10035"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "RELPMEI",
+      "id_servico": "PARCELASPARAGERAR232",
+      "operation_key": "relpmei.parcelasparagerar",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00209",
+        "10035"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "RELPMEI",
+      "id_servico": "PEDIDOSPARC233",
+      "operation_key": "relpmei.pedidosparc",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00209",
+        "10035"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "RELPMEI",
+      "id_servico": "OBTERPARC234",
+      "operation_key": "relpmei.obterparc",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00209",
+        "10035"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "RELPMEI",
+      "id_servico": "DETPAGTOPARC235",
+      "operation_key": "relpmei.detpagtoparc",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00209",
+        "10035"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PARC-PAEX",
+      "id_servico": "OBTEREXTRATOPDF171",
+      "operation_key": "parc_paex.obterextratopdf",
+      "proxy_rule": "NOT_APPLICABLE",
+      "required_proxy_powers": [],
+      "official_state": "PROSPECTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PARC-PAEX",
+      "id_servico": "OBTEREXTRATOJSON172",
+      "operation_key": "parc_paex.obterextratojson",
+      "proxy_rule": "NOT_APPLICABLE",
+      "required_proxy_powers": [],
+      "official_state": "PROSPECTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PARC-PAEX",
+      "id_servico": "EMITIRDOCARRECADACAO173",
+      "operation_key": "parc_paex.emitirdocarrecadacao",
+      "proxy_rule": "NOT_APPLICABLE",
+      "required_proxy_powers": [],
+      "official_state": "PROSPECTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "PARC-SIPADE",
+      "id_servico": "OBTEREXTRATOPDF181",
+      "operation_key": "parc_sipade.obterextratopdf",
+      "proxy_rule": "NOT_APPLICABLE",
+      "required_proxy_powers": [],
+      "official_state": "PROSPECTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PARC-SIPADE",
+      "id_servico": "OBTEREXTRATOJSON182",
+      "operation_key": "parc_sipade.obterextratojson",
+      "proxy_rule": "NOT_APPLICABLE",
+      "required_proxy_powers": [],
+      "official_state": "PROSPECTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PARC-SIPADE",
+      "id_servico": "EMITIRDOCARRECADACAO183",
+      "operation_key": "parc_sipade.emitirdocarrecadacao",
+      "proxy_rule": "NOT_APPLICABLE",
+      "required_proxy_powers": [],
+      "official_state": "PROSPECTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "PNRCONTADOR",
+      "id_servico": "CONSVINCULOS261",
+      "operation_key": "pnr_contador.consultar_vinculos",
+      "proxy_rule": "NOT_APPLICABLE",
+      "required_proxy_powers": [],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PNRCONTADOR",
+      "id_servico": "SOLICRENUNCIA262",
+      "operation_key": "pnr_contador.solicitar_renuncia",
+      "proxy_rule": "NOT_APPLICABLE",
+      "required_proxy_powers": [],
+      "official_state": "PRODUCTION",
+      "route": "Declarar"
+    },
+    {
+      "id_sistema": "PNRCONTADOR",
+      "id_servico": "CONSRENUNCIA263",
+      "operation_key": "pnr_contador.consultar_renuncias",
+      "proxy_rule": "NOT_APPLICABLE",
+      "required_proxy_powers": [],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "PNRCONTADOR",
+      "id_servico": "COMPRENUNCIA264",
+      "operation_key": "pnr_contador.emitir_comprovante",
+      "proxy_rule": "NOT_APPLICABLE",
+      "required_proxy_powers": [],
+      "official_state": "PRODUCTION",
+      "route": "Emitir"
+    },
+    {
+      "id_sistema": "PNRCONTADOR",
+      "id_servico": "SITSOLICRENUNCIA265",
+      "operation_key": "pnr_contador.situacao_renuncia",
+      "proxy_rule": "NOT_APPLICABLE",
+      "required_proxy_powers": [],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "EPROCESSO",
+      "id_servico": "CONSPROCPORINTER271",
+      "operation_key": "eprocesso.consultar_por_interessado",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00051"
+      ],
+      "official_state": "PRODUCTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "EPROCESSO",
+      "id_servico": "OBTLISTDOCSPROC272",
+      "operation_key": "eprocesso.obtlistdocsproc",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00051"
+      ],
+      "official_state": "PROSPECTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "EPROCESSO",
+      "id_servico": "OBTDOCPROC273",
+      "operation_key": "eprocesso.obtdocproc",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00051"
+      ],
+      "official_state": "PROSPECTION",
+      "route": "Consultar"
+    },
+    {
+      "id_sistema": "EPROCESSO",
+      "id_servico": "CONSCOMUNINTIM274",
+      "operation_key": "eprocesso.conscomunintim",
+      "proxy_rule": "REQUIRED_WHEN_REPRESENTING",
+      "required_proxy_powers": [
+        "00051"
+      ],
+      "official_state": "PROSPECTION",
+      "route": "Consultar"
+    }
+  ]
+}

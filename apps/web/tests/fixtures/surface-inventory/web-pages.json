@@ -1,0 +1,644 @@
+[
+  {
+    "section": "/",
+    "file": "app/pages/index.vue",
+    "route": "/",
+    "notes": "Home dashboard"
+  },
+  {
+    "section": "/",
+    "file": "app/pages/health.vue",
+    "route": "/health",
+    "notes": "Health check surface"
+  },
+  {
+    "section": "/",
+    "file": "app/pages/closing.vue",
+    "route": "/closing",
+    "notes": "Closing workflow"
+  },
+  {
+    "section": "/",
+    "file": "app/pages/syncs.vue",
+    "route": "/syncs",
+    "notes": "Sync operations"
+  },
+  {
+    "section": "/",
+    "file": "app/pages/exports.vue",
+    "route": "/exports",
+    "notes": "Exports"
+  },
+  {
+    "section": "/",
+    "file": "app/pages/onboarding.vue",
+    "route": "/onboarding",
+    "notes": "layout: `auth`; first admin setup"
+  },
+  {
+    "section": "/",
+    "file": "app/pages/reset-password.vue",
+    "route": "/reset-password",
+    "notes": "layout: `auth`; callback público de redefinição de senha"
+  },
+  {
+    "section": "communication",
+    "file": "app/pages/communication/index.vue",
+    "route": "/communication",
+    "notes": "Inbox WhatsApp compartilhada com lista, timeline, contexto e administração"
+  },
+  {
+    "section": "communication",
+    "file": "app/pages/communication/conversations/[id].vue",
+    "route": "/communication/conversations/:id",
+    "notes": "Deep-link canônico de uma conversa no workspace compartilhado"
+  },
+  {
+    "section": "communication",
+    "file": "app/pages/communication/contacts/index.vue",
+    "route": "/communication/contacts",
+    "notes": "Catálogo de contatos de comunicação (ShellDataTable + filtros)"
+  },
+  {
+    "section": "communication",
+    "file": "app/pages/communication/contacts/[id].vue",
+    "route": "/communication/contacts/:id",
+    "notes": "Ficha do contato: edit, identities, links, export e purge"
+  },
+  {
+    "section": "communication",
+    "file": "app/pages/communication/quick-responses/index.vue",
+    "route": "/communication/quick-responses",
+    "notes": "Gestão de respostas rápidas: create/edit/duplicate/deactivate"
+  },
+  {
+    "section": "communication",
+    "file": "app/pages/communication/flows/index.vue",
+    "route": "/communication/flows",
+    "notes": "Gestão de fluxos: listagem/CRUD mínimo sem canvas Vue Flow"
+  },
+  {
+    "section": "communication",
+    "file": "app/pages/communication/flows/[id]/index.vue",
+    "route": "/communication/flows/:id",
+    "notes": "Detalhe de fluxo: metadados, versões, bindings, runs e atalho ao editor"
+  },
+  {
+    "section": "communication",
+    "file": "app/pages/communication/flows/[id]/editor.vue",
+    "route": "/communication/flows/:id/editor",
+    "notes": "Editor visual Vue Flow: paleta, canvas, inspector, dry-run e preview"
+  },
+  {
+    "section": "auth",
+    "file": "app/pages/login.vue",
+    "route": "/login",
+    "notes": "layout: `auth`"
+  },
+  {
+    "section": "auth",
+    "file": "app/pages/activate.vue",
+    "route": "/activate",
+    "notes": "layout: `auth`"
+  },
+  {
+    "section": "auth",
+    "file": "app/pages/first-access.vue",
+    "route": "/first-access",
+    "notes": "layout: `auth`"
+  },
+  {
+    "section": "auth",
+    "file": "app/pages/two-factor/setup.vue",
+    "route": "/two-factor/setup",
+    "notes": "layout: `auth`; **redirect-only** → `/` or `/login`"
+  },
+  {
+    "section": "auth",
+    "file": "app/pages/two-factor-challenge.vue",
+    "route": "/two-factor-challenge",
+    "notes": "layout: `auth`; **redirect-only** → `/` or `/login`"
+  },
+  {
+    "section": "clients",
+    "file": "app/pages/clients.vue",
+    "route": "/clients",
+    "notes": "**parent shell** (catalog chrome; Lista/Dashboard)"
+  },
+  {
+    "section": "clients",
+    "file": "app/pages/clients/index.vue",
+    "route": "/clients",
+    "notes": "Default child under shell (lista)"
+  },
+  {
+    "section": "clients",
+    "file": "app/pages/clients/dashboard.vue",
+    "route": "/clients/dashboard",
+    "notes": "Dashboard under shell"
+  },
+  {
+    "section": "clients",
+    "file": "app/pages/clients/[id].vue",
+    "route": "/clients/:id",
+    "notes": "**parent shell** (detail header + tabs)"
+  },
+  {
+    "section": "clients",
+    "file": "app/pages/clients/[id]/index.vue",
+    "route": "/clients/:id",
+    "notes": "**redirect-only** → `/clients/:id/cadastro`"
+  },
+  {
+    "section": "clients",
+    "file": "app/pages/clients/[id]/cadastro.vue",
+    "route": "/clients/:id/cadastro",
+    "notes": "Active detail tab"
+  },
+  {
+    "section": "clients",
+    "file": "app/pages/clients/[id]/observacoes.vue",
+    "route": "/clients/:id/observacoes",
+    "notes": "Active detail tab"
+  },
+  {
+    "section": "clients",
+    "file": "app/pages/clients/[id]/dados-adicionais.vue",
+    "route": "/clients/:id/dados-adicionais",
+    "notes": "Active detail tab"
+  },
+  {
+    "section": "clients",
+    "file": "app/pages/clients/[id]/departamento.vue",
+    "route": "/clients/:id/departamento",
+    "notes": "Active detail tab"
+  },
+  {
+    "section": "clients",
+    "file": "app/pages/clients/[id]/contato.vue",
+    "route": "/clients/:id/contato",
+    "notes": "Active detail tab"
+  },
+  {
+    "section": "clients",
+    "file": "app/pages/clients/[id]/contratos.vue",
+    "route": "/clients/:id/contratos",
+    "notes": "Active detail tab"
+  },
+  {
+    "section": "clients",
+    "file": "app/pages/clients/[id]/configuracao.vue",
+    "route": "/clients/:id/configuracao",
+    "notes": "**redirect-only** → `dados-adicionais` tab"
+  },
+  {
+    "section": "clients",
+    "file": "app/pages/clients/[id]/certificado.vue",
+    "route": "/clients/:id/certificado",
+    "notes": "**redirect-only** (legacy → 4-page IA via `legacyClientPathToHref`)"
+  },
+  {
+    "section": "clients",
+    "file": "app/pages/clients/[id]/ccmei.vue",
+    "route": "/clients/:id/ccmei",
+    "notes": "**redirect-only** (legacy)"
+  },
+  {
+    "section": "clients",
+    "file": "app/pages/clients/[id]/comprovantes.vue",
+    "route": "/clients/:id/comprovantes",
+    "notes": "**redirect-only** (legacy)"
+  },
+  {
+    "section": "clients",
+    "file": "app/pages/clients/[id]/pagamentos.vue",
+    "route": "/clients/:id/pagamentos",
+    "notes": "**redirect-only** (legacy)"
+  },
+  {
+    "section": "clients",
+    "file": "app/pages/clients/[id]/sicalc.vue",
+    "route": "/clients/:id/sicalc",
+    "notes": "**redirect-only** (legacy)"
+  },
+  {
+    "section": "clients",
+    "file": "app/pages/clients/[id]/renuncias.vue",
+    "route": "/clients/:id/renuncias",
+    "notes": "**redirect-only** (legacy)"
+  },
+  {
+    "section": "clients",
+    "file": "app/pages/clients/[id]/saidas.vue",
+    "route": "/clients/:id/saidas",
+    "notes": "**redirect-only** (legacy)"
+  },
+  {
+    "section": "clients",
+    "file": "app/pages/clients/[id]/sincronizacao.vue",
+    "route": "/clients/:id/sincronizacao",
+    "notes": "**redirect-only** (legacy)"
+  },
+  {
+    "section": "clients",
+    "file": "app/pages/clients/[id]/integracoes.vue",
+    "route": "/clients/:id/integracoes",
+    "notes": "**redirect-only** (legacy)"
+  },
+  {
+    "section": "clients",
+    "file": "app/pages/clients/[id]/fiscal.vue",
+    "route": "/clients/:id/fiscal",
+    "notes": "**redirect-only** (legacy)"
+  },
+  {
+    "section": "clients",
+    "file": "app/pages/clients/[id]/estabelecimentos.vue",
+    "route": "/clients/:id/estabelecimentos",
+    "notes": "**redirect-only** (legacy)"
+  },
+  {
+    "section": "monitoring",
+    "file": "app/pages/monitoring/index.vue",
+    "route": "/monitoring",
+    "notes": "Monitoring hub"
+  },
+  {
+    "section": "monitoring",
+    "file": "app/pages/monitoring/declarations.vue",
+    "route": "/monitoring/declarations",
+    "notes": ""
+  },
+  {
+    "section": "monitoring",
+    "file": "app/pages/monitoring/sitfis.vue",
+    "route": "/monitoring/sitfis",
+    "notes": ""
+  },
+  {
+    "section": "monitoring",
+    "file": "app/pages/monitoring/installments.vue",
+    "route": "/monitoring/installments",
+    "notes": ""
+  },
+  {
+    "section": "monitoring",
+    "file": "app/pages/monitoring/fgts.vue",
+    "route": "/monitoring/fgts",
+    "notes": ""
+  },
+  {
+    "section": "monitoring",
+    "file": "app/pages/monitoring/guides.vue",
+    "route": "/monitoring/guides",
+    "notes": ""
+  },
+  {
+    "section": "monitoring",
+    "file": "app/pages/monitoring/registrations.vue",
+    "route": "/monitoring/registrations",
+    "notes": ""
+  },
+  {
+    "section": "monitoring",
+    "file": "app/pages/monitoring/tax-processes.vue",
+    "route": "/monitoring/tax-processes",
+    "notes": ""
+  },
+  {
+    "section": "monitoring",
+    "file": "app/pages/monitoring/clients/[clientId].vue",
+    "route": "/monitoring/clients/:clientId/:section?",
+    "notes": "**definePageMeta path override**; optional `:section` param"
+  },
+  {
+    "section": "monitoring",
+    "file": "app/pages/monitoring/mailbox.vue",
+    "route": "/monitoring/mailbox",
+    "notes": "**parent shell** (master–detail inbox)"
+  },
+  {
+    "section": "monitoring",
+    "file": "app/pages/monitoring/mailbox/index.vue",
+    "route": "/monitoring/mailbox",
+    "notes": "Empty detail state (child of shell)"
+  },
+  {
+    "section": "monitoring",
+    "file": "app/pages/monitoring/mailbox/[id].vue",
+    "route": "/monitoring/mailbox/:id",
+    "notes": "Message detail (child of shell)"
+  },
+  {
+    "section": "monitoring",
+    "file": "app/pages/monitoring/mei/index.vue",
+    "route": "/monitoring/mei",
+    "notes": ""
+  },
+  {
+    "section": "monitoring",
+    "file": "app/pages/monitoring/simples/index.vue",
+    "route": "/monitoring/simples",
+    "notes": ""
+  },
+  {
+    "section": "monitoring",
+    "file": "app/pages/monitoring/simples/[submodule].vue",
+    "route": "/monitoring/simples/:submodule",
+    "notes": "**redirect-only** via middleware `monitoring-submodule-legacy` (301)"
+  },
+  {
+    "section": "monitoring",
+    "file": "app/pages/monitoring/simples-mei/index.vue",
+    "route": "/monitoring/simples-mei",
+    "notes": "**redirect-only** → `/monitoring/simples` (301)"
+  },
+  {
+    "section": "monitoring",
+    "file": "app/pages/monitoring/simples-mei/[submodule].vue",
+    "route": "/monitoring/simples-mei/:submodule",
+    "notes": "**redirect-only** via middleware `monitoring-submodule-legacy` (301)"
+  },
+  {
+    "section": "monitoring",
+    "file": "app/pages/monitoring/dctfweb/index.vue",
+    "route": "/monitoring/dctfweb",
+    "notes": ""
+  },
+  {
+    "section": "monitoring",
+    "file": "app/pages/monitoring/dctfweb/[submodule].vue",
+    "route": "/monitoring/dctfweb/:submodule",
+    "notes": "**redirect-only** via middleware `monitoring-submodule-legacy` (301)"
+  },
+  {
+    "section": "admin",
+    "file": "app/pages/admin/index.vue",
+    "route": "/admin",
+    "notes": "**redirect-only** (`definePageMeta redirect` → `/admin/offices`)"
+  },
+  {
+    "section": "admin",
+    "file": "app/pages/admin/departments.vue",
+    "route": "/admin/departments",
+    "notes": "**redirect-only** → `/conta/departamentos` (also **middleware redirect**)"
+  },
+  {
+    "section": "admin",
+    "file": "app/pages/admin/fiscal-modules.vue",
+    "route": "/admin/fiscal-modules",
+    "notes": "Platform admin"
+  },
+  {
+    "section": "admin",
+    "file": "app/pages/admin/offices/index.vue",
+    "route": "/admin/offices",
+    "notes": "Offices list"
+  },
+  {
+    "section": "admin",
+    "file": "app/pages/admin/offices/new.vue",
+    "route": "/admin/offices/new",
+    "notes": "Create office"
+  },
+  {
+    "section": "admin",
+    "file": "app/pages/admin/offices/[id].vue",
+    "route": "/admin/offices/:id",
+    "notes": "Office detail"
+  },
+  {
+    "section": "admin",
+    "file": "app/pages/admin/owner/index.vue",
+    "route": "/admin/owner",
+    "notes": "**redirect-only** → `/admin/offices` (also **middleware redirect**)"
+  },
+  {
+    "section": "admin/serpro",
+    "file": "app/pages/admin/serpro.vue",
+    "route": "/admin/serpro",
+    "notes": "**parent shell** (SERPRO console chrome)"
+  },
+  {
+    "section": "admin/serpro",
+    "file": "app/pages/admin/serpro/index.vue",
+    "route": "/admin/serpro",
+    "notes": "Default child under shell"
+  },
+  {
+    "section": "admin/serpro",
+    "file": "app/pages/admin/serpro/configuration.vue",
+    "route": "/admin/serpro/configuration",
+    "notes": ""
+  },
+  {
+    "section": "admin/serpro",
+    "file": "app/pages/admin/serpro/catalog.vue",
+    "route": "/admin/serpro/catalog",
+    "notes": ""
+  },
+  {
+    "section": "admin/serpro",
+    "file": "app/pages/admin/serpro/contracts.vue",
+    "route": "/admin/serpro/contracts",
+    "notes": ""
+  },
+  {
+    "section": "admin/serpro",
+    "file": "app/pages/admin/serpro/usage.vue",
+    "route": "/admin/serpro/usage",
+    "notes": ""
+  },
+  {
+    "section": "admin/serpro",
+    "file": "app/pages/admin/serpro/rollout.vue",
+    "route": "/admin/serpro/rollout",
+    "notes": ""
+  },
+  {
+    "section": "admin/serpro",
+    "file": "app/pages/admin/serpro/dte-canary.vue",
+    "route": "/admin/serpro/dte-canary",
+    "notes": ""
+  },
+  {
+    "section": "settings",
+    "file": "app/pages/settings.vue",
+    "route": "/settings",
+    "notes": "**redirect-only** (301)"
+  },
+  {
+    "section": "settings",
+    "file": "app/pages/settings/index.vue",
+    "route": "/settings",
+    "notes": "**redirect-only** (301)"
+  },
+  {
+    "section": "settings",
+    "file": "app/pages/settings/proxies.vue",
+    "route": "/settings/proxies",
+    "notes": "**redirect-only** (+ middleware)"
+  },
+  {
+    "section": "settings",
+    "file": "app/pages/settings/departments.vue",
+    "route": "/settings/departments",
+    "notes": "Full page exists; **middleware redirect** before render"
+  },
+  {
+    "section": "settings",
+    "file": "app/pages/settings/team.vue",
+    "route": "/settings/team",
+    "notes": "Full page exists; **middleware redirect**"
+  },
+  {
+    "section": "settings",
+    "file": "app/pages/settings/usage.vue",
+    "route": "/settings/usage",
+    "notes": "Full page exists; **middleware redirect**"
+  },
+  {
+    "section": "settings",
+    "file": "app/pages/settings/subscription.vue",
+    "route": "/settings/subscription",
+    "notes": "Full page exists; **middleware redirect**"
+  },
+  {
+    "section": "settings",
+    "file": "app/pages/settings/cte.vue",
+    "route": "/settings/cte",
+    "notes": "**redirect-only** (+ middleware)"
+  },
+  {
+    "section": "conta",
+    "file": "app/pages/conta.vue",
+    "route": "/conta",
+    "notes": "**parent shell** (ShellSettingsShell)"
+  },
+  {
+    "section": "conta",
+    "file": "app/pages/conta/index.vue",
+    "route": "/conta",
+    "notes": "Account profile/home"
+  },
+  {
+    "section": "conta",
+    "file": "app/pages/conta/escritorio.vue",
+    "route": "/conta/escritorio",
+    "notes": "Office settings (replaces `/settings`)"
+  },
+  {
+    "section": "conta",
+    "file": "app/pages/conta/equipe.vue",
+    "route": "/conta/equipe",
+    "notes": "Team (replaces `/settings/team`)"
+  },
+  {
+    "section": "conta",
+    "file": "app/pages/conta/departamentos.vue",
+    "route": "/conta/departamentos",
+    "notes": "Departments (replaces `/settings/departments`)"
+  },
+  {
+    "section": "conta",
+    "file": "app/pages/conta/consumo.vue",
+    "route": "/conta/consumo",
+    "notes": "Usage (replaces `/settings/usage`)"
+  },
+  {
+    "section": "conta",
+    "file": "app/pages/conta/assinatura.vue",
+    "route": "/conta/assinatura",
+    "notes": "Subscription (replaces `/settings/subscription`)"
+  },
+  {
+    "section": "docs",
+    "file": "app/pages/docs/index.vue",
+    "route": "/docs",
+    "notes": "Documents hub"
+  },
+  {
+    "section": "docs",
+    "file": "app/pages/docs/catalog.vue",
+    "route": "/docs/catalog",
+    "notes": "Filtered catalog (incl. CT-e)"
+  },
+  {
+    "section": "docs",
+    "file": "app/pages/docs/[accessKey].vue",
+    "route": "/docs/:accessKey",
+    "notes": "Single document by access key"
+  },
+  {
+    "section": "docs",
+    "file": "app/pages/docs/imports/index.vue",
+    "route": "/docs/imports",
+    "notes": "Import history"
+  },
+  {
+    "section": "docs",
+    "file": "app/pages/docs/imports/[id].vue",
+    "route": "/docs/imports/:id",
+    "notes": "Import batch detail"
+  },
+  {
+    "section": "docs",
+    "file": "app/pages/docs/import-batches.vue",
+    "route": "/docs/import-batches",
+    "notes": "**redirect-only** → `/docs/imports`"
+  },
+  {
+    "section": "notes",
+    "file": "app/pages/notes/index.vue",
+    "route": "/notes",
+    "notes": "**redirect-only** (301) → `/docs`"
+  },
+  {
+    "section": "notes",
+    "file": "app/pages/notes/[accessKey].vue",
+    "route": "/notes/:accessKey",
+    "notes": "**redirect-only** (301) → `/docs/:accessKey`"
+  },
+  {
+    "section": "work",
+    "file": "app/pages/work/index.vue",
+    "route": "/work",
+    "notes": "Work hub"
+  },
+  {
+    "section": "work",
+    "file": "app/pages/work/calendar.vue",
+    "route": "/work/calendar",
+    "notes": "Calendar view"
+  },
+  {
+    "section": "work",
+    "file": "app/pages/work/processes/index.vue",
+    "route": "/work/processes",
+    "notes": "Processes list"
+  },
+  {
+    "section": "work",
+    "file": "app/pages/work/processes/[id].vue",
+    "route": "/work/processes/:id",
+    "notes": "Process detail"
+  },
+  {
+    "section": "work",
+    "file": "app/pages/work/templates/index.vue",
+    "route": "/work/templates",
+    "notes": "Templates (guarded: redirects to `/work` if no permission)"
+  },
+  {
+    "section": "work",
+    "file": "app/pages/work/tasks/index.vue",
+    "route": "/work/tasks",
+    "notes": "Tasks list"
+  },
+  {
+    "section": "work",
+    "file": "app/pages/work/tasks/[id].vue",
+    "route": "/work/tasks/:id",
+    "notes": "Task detail"
+  }
+]

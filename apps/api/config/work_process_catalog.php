@@ -1,0 +1,118 @@
+<?php
+
+use App\Enums\Work\DueRuleType;
+
+return [
+    'templates' => [
+        'PGDAS_MENSAL' => [
+            'version' => 1,
+            'name' => 'PGDAS mensal',
+            'description' => 'Apuração, transmissão e entrega do PGDAS-D e do DAS ao cliente.',
+            'department_role' => 'FISCAL',
+            'monitoring_module_key' => 'PGDASD',
+            'default_due_rule_type' => DueRuleType::FixedDayOfCompetence->value,
+            'default_due_rule_value' => 20,
+            'audience_rules' => [
+                'tax_regimes' => ['SIMPLES_NACIONAL'],
+                'category_ids' => [],
+                'category_match' => 'ANY',
+                'excluded_category_ids' => [],
+            ],
+            'tasks' => [
+                ['title' => 'Buscar XML e documentos', 'days_before_due' => 8],
+                ['title' => 'Importar documentos no sistema', 'days_before_due' => 6],
+                ['title' => 'Conferir faturamento', 'days_before_due' => 4],
+                ['title' => 'Apurar Simples Nacional', 'days_before_due' => 3, 'is_critical' => true],
+                ['title' => 'Preencher e transmitir PGDAS-D', 'days_before_due' => 2, 'is_critical' => true, 'requires_evidence' => true],
+                ['title' => 'Arquivar declaração e recibo', 'days_before_due' => 1, 'requires_evidence' => true],
+                ['title' => 'Enviar DAS ao cliente', 'days_before_due' => 0, 'requires_evidence' => true],
+            ],
+        ],
+        'FOLHA_MENSAL' => [
+            'version' => 1,
+            'name' => 'Folha de pagamento mensal',
+            'description' => 'Preparação, fechamento e entrega da folha e dos encargos mensais.',
+            'department_role' => 'PESSOAL',
+            'monitoring_module_key' => null,
+            'default_due_rule_type' => DueRuleType::FixedDayOfCompetence->value,
+            'default_due_rule_value' => 7,
+            'audience_rules' => [
+                'tax_regimes' => [],
+                'category_ids' => [],
+                'category_match' => 'ANY',
+                'excluded_category_ids' => [],
+            ],
+            'tasks' => [
+                ['title' => 'Receber e conferir movimentações da folha', 'days_before_due' => 6],
+                ['title' => 'Gerar recibos mensais', 'days_before_due' => 4],
+                ['title' => 'Enviar eventos periódicos ao eSocial', 'days_before_due' => 3, 'is_critical' => true],
+                ['title' => 'Conferir encargos e guias', 'days_before_due' => 2, 'is_critical' => true],
+                ['title' => 'Enviar folha e guias ao cliente', 'days_before_due' => 0, 'requires_evidence' => true],
+            ],
+        ],
+        'FECHAMENTO_CONTABIL' => [
+            'version' => 1,
+            'name' => 'Fechamento contábil mensal',
+            'description' => 'Importação, conciliação, revisão e entrega do fechamento contábil.',
+            'department_role' => 'CONTABIL',
+            'monitoring_module_key' => null,
+            'default_due_rule_type' => DueRuleType::FixedDayOfCompetence->value,
+            'default_due_rule_value' => 20,
+            'audience_rules' => [
+                'tax_regimes' => [],
+                'category_ids' => [],
+                'category_match' => 'ANY',
+                'excluded_category_ids' => [],
+            ],
+            'tasks' => [
+                ['title' => 'Importar extratos e lançamentos', 'days_before_due' => 10],
+                ['title' => 'Conciliar contas patrimoniais', 'days_before_due' => 7],
+                ['title' => 'Revisar pendências contábeis', 'days_before_due' => 4, 'is_critical' => true],
+                ['title' => 'Emitir balancete e demonstrativos', 'days_before_due' => 1, 'requires_evidence' => true],
+                ['title' => 'Entregar fechamento ao cliente', 'days_before_due' => 0, 'requires_evidence' => true],
+            ],
+        ],
+        'PARCELAMENTO_ENVIO' => [
+            'version' => 1,
+            'name' => 'Envio de parcela tributária',
+            'description' => 'Conferência do parcelamento, emissão e envio da parcela ao cliente.',
+            'department_role' => 'FISCAL',
+            'monitoring_module_key' => 'INSTALLMENTS',
+            'default_due_rule_type' => DueRuleType::FixedDayOfCompetence->value,
+            'default_due_rule_value' => 25,
+            'audience_rules' => [
+                'tax_regimes' => [],
+                'category_ids' => [],
+                'category_match' => 'ANY',
+                'excluded_category_ids' => [],
+            ],
+            'tasks' => [
+                ['title' => 'Conferir parcelamentos ativos', 'days_before_due' => 5],
+                ['title' => 'Emitir guia da parcela', 'days_before_due' => 3, 'is_critical' => true, 'requires_evidence' => true],
+                ['title' => 'Revisar vencimento e valor', 'days_before_due' => 2],
+                ['title' => 'Enviar parcela ao cliente', 'days_before_due' => 0, 'requires_evidence' => true],
+            ],
+        ],
+        'MEI_MENSAL' => [
+            'version' => 1,
+            'name' => 'Rotina mensal MEI',
+            'description' => 'Conferência mensal, emissão do DAS-MEI e comunicação ao cliente.',
+            'department_role' => 'FISCAL',
+            'monitoring_module_key' => 'PGMEI',
+            'default_due_rule_type' => DueRuleType::FixedDayOfCompetence->value,
+            'default_due_rule_value' => 20,
+            'audience_rules' => [
+                'tax_regimes' => ['MEI'],
+                'category_ids' => [],
+                'category_match' => 'ANY',
+                'excluded_category_ids' => [],
+            ],
+            'tasks' => [
+                ['title' => 'Conferir situação e competência do MEI', 'days_before_due' => 5],
+                ['title' => 'Emitir DAS-MEI', 'days_before_due' => 3, 'is_critical' => true, 'requires_evidence' => true],
+                ['title' => 'Conferir vencimento e valor', 'days_before_due' => 2],
+                ['title' => 'Enviar DAS-MEI ao cliente', 'days_before_due' => 0, 'requires_evidence' => true],
+            ],
+        ],
+    ],
+];

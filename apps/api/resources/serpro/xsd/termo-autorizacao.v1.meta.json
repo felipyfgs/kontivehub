@@ -1,0 +1,23 @@
+{
+  "schema_id": "hub.serpro.termo-autorizacao.v1.derived",
+  "schema_version": "1.0.0-derived",
+  "official_xsd": false,
+  "label": "DERIVED — NOT official SERPRO XSD",
+  "file": "termo-autorizacao.v1.xsd",
+  "content_sha256": "4d7ff14a6b5f21c3580a96d453c7f3ee4e3337e128eb74857bd89d64737f26c7",
+  "source": {
+    "title": "Padrões técnicos de assinatura XML do Termo (API Integra Contador)",
+    "url": "https://apicenter.estaleiro.serpro.gov.br/documentacao/api-integra-contador/pt/solucoes/integra-contador-gerenciador/autenticaprocurador/padroes_tecnicos_assinatura_xml/",
+    "document_revision": "2026-04-10",
+    "retrieved_on": "2026-07-16",
+    "document_type": "TERMO",
+    "notes": "XSD oficial baixável não confirmado; este schema é estrito e derivado da documentação HTML. Substituir quando SERPRO publicar XSD oficial."
+  },
+  "root_element": "termoDeAutorizacao",
+  "envelope_service": {
+    "route": "/Apoiar",
+    "idSistema": "AUTENTICAPROCURADOR",
+    "idServico": "ENVIOXMLASSINADO81",
+    "versaoSistema": "1.0"
+  }
+}

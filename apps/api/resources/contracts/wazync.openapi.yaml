@@ -1,0 +1,1770 @@
+openapi: 3.1.0
+jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
+info:
+  title: Contrato interno KontiveHub ↔ Wazync
+  version: 1.1.0
+  license:
+    name: Uso interno
+    identifier: LicenseRef-Internal
+  description: |
+    Contrato privado e fail-closed do runtime Wazync para conversas WhatsApp 1:1.
+    Nenhuma rota do gateway deve ser publicada pelo proxy externo. Grupos, communities,
+    newsletters/canais, status/broadcast, JIDs crus, protobufs e eventos brutos
+    estão fora deste contrato.
+
+    A versão `v1` permanece compatível com o envelope original. Em
+    `MESSAGE_SEND`, a ausência de `kind` mantém o payload legado `{to,text,media}`:
+    sem `media` significa `TEXT`; com `media`, o tipo é inferido do MIME apenas
+    entre IMAGE, AUDIO, VIDEO e DOCUMENT.
+servers:
+  - url: http://wazync:8080
+security:
+  - CommunicationKeyId: []
+    CommunicationTimestamp: []
+    CommunicationNonce: []
+    CommunicationSignature: []
+paths:
+  /internal/v1/commands:
+    post:
+      operationId: acceptCommand
+      summary: Persiste um comando idempotente antes de responder 202.
+      description: |
+        O corpo bruto é autenticado por HMAC antes do parse e o nonce é consumido
+        uma única vez. Repetição idempotente usa um novo nonce e o mesmo
+        `command_id`, `provider_message_id` e corpo canônico.
+      parameters:
+        - $ref: '#/components/parameters/KeyId'
+        - $ref: '#/components/parameters/Timestamp'
+        - $ref: '#/components/parameters/Nonce'
+        - $ref: '#/components/parameters/Signature'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GatewayCommand'
+      responses:
+        '202':
+          description: Comando persistido, inclusive quando já aceito com o mesmo digest.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandAcceptance'
+        '401':
+          $ref: '#/components/responses/InvalidSignature'
+        '409':
+          description: command_id já existe com digest diferente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          $ref: '#/components/responses/BodyTooLarge'
+        '422':
+          $ref: '#/components/responses/InvalidEnvelope'
+        '503':
+          $ref: '#/components/responses/GatewayUnavailable'
+  /internal/v1/queries:
+    post:
+      operationId: executeQuery
+      summary: Executa uma consulta 1:1 sanitizada, assinada e protegida contra replay.
+      description: |
+        Query síncrona privada. O caller deve impor deadline HTTP; cancelamento é
+        propagado ao executor. A assinatura cobre exatamente o método `POST`, o
+        path `/internal/v1/queries` sem query string, timestamp, nonce e SHA-256
+        dos bytes do corpo. O nonce é escopado por `key_id`, reclamado somente
+        depois de assinatura válida e não pode ser reutilizado durante o maior
+        valor entre a janela temporal e o TTL de nonce. Uma segunda execução da
+        mesma requisição assinada recebe 401 antes de qualquer chamada ao provider.
+      parameters:
+        - $ref: '#/components/parameters/KeyId'
+        - $ref: '#/components/parameters/Timestamp'
+        - $ref: '#/components/parameters/Nonce'
+        - $ref: '#/components/parameters/Signature'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GatewayQuery'
+      responses:
+        '200':
+          description: Resultado sanitizado; nunca inclui device JID, node, protobuf ou credencial.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResult'
+        '401':
+          $ref: '#/components/responses/InvalidSignature'
+        '404':
+          description: Alvo da consulta inexistente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          $ref: '#/components/responses/BodyTooLarge'
+        '422':
+          $ref: '#/components/responses/InvalidEnvelope'
+        '502':
+          description: Falha do provider sem fallback permissivo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          $ref: '#/components/responses/GatewayUnavailable'
+  /internal/v1/sessions/{sessionId}:
+    get:
+      operationId: sessionStatus
+      summary: Consulta estado técnico sanitizado de uma sessão.
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Identifier'
+        - $ref: '#/components/parameters/KeyId'
+        - $ref: '#/components/parameters/Timestamp'
+        - $ref: '#/components/parameters/Nonce'
+        - $ref: '#/components/parameters/Signature'
+      responses:
+        '200':
+          description: Estado sanitizado, sem credencial nem JID do device.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionStatus'
+        '401':
+          $ref: '#/components/responses/InvalidSignature'
+        '404':
+          description: Sessão inexistente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          $ref: '#/components/responses/GatewayUnavailable'
+  /internal/v1/media/{spoolId}:
+    get:
+      operationId: downloadSpoolMedia
+      summary: Transmite um blob temporário descriptografado pela rede interna.
+      parameters:
+        - name: spoolId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Identifier'
+        - $ref: '#/components/parameters/KeyId'
+        - $ref: '#/components/parameters/Timestamp'
+        - $ref: '#/components/parameters/Nonce'
+        - $ref: '#/components/parameters/Signature'
+      responses:
+        '200':
+          description: Stream binário; o spool só é removido depois do ACK do evento.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                contentMediaType: application/octet-stream
+        '401':
+          $ref: '#/components/responses/InvalidSignature'
+        '404':
+          description: Spool inexistente ou expirado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          $ref: '#/components/responses/GatewayUnavailable'
+  /healthz:
+    get:
+      operationId: health
+      summary: Verifica processo e dependências essenciais sem expor dados de sessão.
+      security: []
+      responses:
+        '200':
+          description: Processo e dependências essenciais saudáveis.
+        '503':
+          description: Dependência essencial indisponível.
+  /metrics:
+    get:
+      operationId: metrics
+      summary: Métricas internas sem telefone, texto, QR ou credenciais.
+      security: []
+      responses:
+        '200':
+          description: Métricas Prometheus sanitizadas.
+components:
+  securitySchemes:
+    CommunicationKeyId:
+      type: apiKey
+      in: header
+      name: X-Communication-Key-Id
+      description: Parte identificadora da autenticação HMAC; não concede acesso isoladamente.
+    CommunicationTimestamp:
+      type: apiKey
+      in: header
+      name: X-Communication-Timestamp
+      description: Parte temporal da autenticação HMAC; não concede acesso isoladamente.
+    CommunicationNonce:
+      type: apiKey
+      in: header
+      name: X-Communication-Nonce
+      description: Parte antirreplay da autenticação HMAC; não concede acesso isoladamente.
+    CommunicationSignature:
+      type: apiKey
+      in: header
+      name: X-Communication-Signature
+      description: Assinatura HMAC que deve ser apresentada junto aos outros três headers.
+  parameters:
+    KeyId:
+      name: X-Communication-Key-Id
+      in: header
+      required: true
+      description: Identificador da chave atual ou anterior durante rotação controlada.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+    Timestamp:
+      name: X-Communication-Timestamp
+      in: header
+      required: true
+      description: Unix time em segundos; deve estar dentro da janela configurada (300 s por padrão).
+      schema:
+        type: string
+        pattern: '^[0-9]{10}$'
+    Nonce:
+      name: X-Communication-Nonce
+      in: header
+      required: true
+      description: Valor único por key_id e tentativa HTTP; retries geram nonce novo.
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$'
+    Signature:
+      name: X-Communication-Signature
+      in: header
+      required: true
+      description: |
+        `v1=hex(HMAC-SHA256(secret, canonical))`, em que `canonical` contém,
+        separados por LF e sem LF final: método HTTP em maiúsculas; path escapado
+        sem query string; timestamp decimal; nonce; SHA-256 hexadecimal dos bytes
+        exatos do corpo (corpo vazio para GET).
+      schema:
+        type: string
+        pattern: '^v1=[a-f0-9]{64}$'
+  responses:
+    InvalidSignature:
+      description: HMAC ausente/inválido, timestamp fora da janela ou nonce reutilizado.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InvalidEnvelope:
+      description: Envelope, tipo ou payload fora da allowlist.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    BodyTooLarge:
+      description: Corpo excede o limite configurado.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    GatewayUnavailable:
+      description: Gateway desabilitado ou dependência interna indisponível.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    Identifier:
+      type: string
+      pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$'
+    E164:
+      type: string
+      pattern: '^\+[1-9][0-9]{7,14}$'
+    OpaqueLID:
+      type: string
+      pattern: '^lid:[1-9][0-9]{0,19}$'
+    OneToOneAddress:
+      description: E.164 ou LID opaco da sessão; nunca JID cru, device JID ou server arbitrário.
+      oneOf:
+        - $ref: '#/components/schemas/E164'
+        - $ref: '#/components/schemas/OpaqueLID'
+    GatewayCommandType:
+      type: string
+      enum:
+        - SESSION_PROVISION
+        - SESSION_PAIR
+        - SESSION_PAIR_PHONE
+        - SESSION_PASSKEY_RESPOND
+        - SESSION_PASSKEY_CONFIRM
+        - SESSION_CONNECT
+        - SESSION_DISCONNECT
+        - SESSION_RESET
+        - SESSION_SET_PASSIVE
+        - SESSION_LOGOUT
+        - MESSAGE_SEND
+        - MESSAGE_EDIT
+        - MESSAGE_REVOKE
+        - MESSAGE_REACT
+        - POLL_VOTE
+        - MESSAGE_MARK
+        - MESSAGE_REQUEST_UNAVAILABLE
+        - MEDIA_RETRY_REQUEST
+        - PRESENCE_SET
+        - PRESENCE_SUBSCRIBE
+        - CHAT_PRESENCE_SET
+        - CHAT_DISAPPEARING_SET
+        - CHAT_STATE_UPDATE
+        - BLOCKLIST_UPDATE
+        - PRIVACY_UPDATE
+        - DEFAULT_DISAPPEARING_SET
+        - HISTORY_SYNC_REQUEST
+    GatewayQueryType:
+      type: string
+      enum:
+        - USER_CHECK
+        - USER_INFO
+        - BUSINESS_PROFILE
+        - PROFILE_PICTURE
+        - CONTACT_QR_LINK
+        - CONTACT_QR_RESOLVE
+        - BUSINESS_LINK_RESOLVE
+        - BLOCKLIST
+        - PRIVACY_SETTINGS
+    GatewayEventType:
+      type: string
+      enum:
+        - MESSAGE_RECEIVED
+        - MESSAGE_STATUS_CHANGED
+        - MESSAGE_ACTION_RECEIVED
+        - SESSION_STATUS_CHANGED
+        - PAIRING_UPDATED
+        - MEDIA_READY
+        - CHAT_PRESENCE_CHANGED
+        - CONTACT_PRESENCE_CHANGED
+        - CONTACT_PROFILE_CHANGED
+        - CONTACT_IDENTITY_CHANGED
+        - PRIVACY_SETTINGS_CHANGED
+        - BLOCKLIST_CHANGED
+        - CHAT_STATE_CHANGED
+        - HISTORY_SYNCED
+        - SYNC_STATUS_CHANGED
+        - MEDIA_RETRY_UPDATED
+        - GATEWAY_ALERT
+    MessageKind:
+      type: string
+      enum:
+        - TEXT
+        - IMAGE
+        - AUDIO
+        - VIDEO
+        - DOCUMENT
+        - STICKER
+        - LOCATION
+        - CONTACT
+        - POLL
+        - INTERACTIVE
+        - UNSUPPORTED
+    GatewayCommand:
+      type: object
+      additionalProperties: false
+      required: [contract_version, command_id, session_id, type, payload]
+      properties:
+        contract_version:
+          const: v1
+        command_id:
+          $ref: '#/components/schemas/Identifier'
+        session_id:
+          $ref: '#/components/schemas/Identifier'
+        type:
+          $ref: '#/components/schemas/GatewayCommandType'
+        provider_message_id:
+          $ref: '#/components/schemas/Identifier'
+        payload:
+          type: object
+      allOf:
+        - $ref: '#/components/schemas/CommandPayloadByType'
+        - if:
+            properties:
+              type:
+                enum: [MESSAGE_SEND, MESSAGE_EDIT, MESSAGE_REVOKE, MESSAGE_REACT, POLL_VOTE]
+            required: [type]
+          then:
+            required: [provider_message_id]
+            properties:
+              provider_message_id:
+                $ref: '#/components/schemas/Identifier'
+    CommandPayloadByType:
+      allOf:
+        - if:
+            properties: {type: {const: SESSION_PROVISION}}
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/SessionProvisionPayload'}}
+        - if:
+            properties:
+              type:
+                enum: [SESSION_PAIR, SESSION_CONNECT, SESSION_DISCONNECT, SESSION_RESET, SESSION_LOGOUT]
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/EmptyPayload'}}
+        - if:
+            properties: {type: {const: SESSION_PAIR_PHONE}}
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/PairPhonePayload'}}
+        - if:
+            properties: {type: {const: SESSION_PASSKEY_RESPOND}}
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/PasskeyResponsePayload'}}
+        - if:
+            properties: {type: {const: SESSION_PASSKEY_CONFIRM}}
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/PasskeyConfirmationPayload'}}
+        - if:
+            properties: {type: {const: SESSION_SET_PASSIVE}}
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/PassivePayload'}}
+        - if:
+            properties: {type: {const: MESSAGE_SEND}}
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/MessageSendPayload'}}
+        - if:
+            properties: {type: {const: MESSAGE_EDIT}}
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/MessageEditPayload'}}
+        - if:
+            properties:
+              type:
+                enum: [MESSAGE_REVOKE, MESSAGE_REQUEST_UNAVAILABLE]
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/MessageTargetPayload'}}
+        - if:
+            properties: {type: {const: MESSAGE_REACT}}
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/MessageReactionPayload'}}
+        - if:
+            properties: {type: {const: POLL_VOTE}}
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/PollVotePayload'}}
+        - if:
+            properties: {type: {const: MESSAGE_MARK}}
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/MessageMarkPayload'}}
+        - if:
+            properties: {type: {const: MEDIA_RETRY_REQUEST}}
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/MediaRetryPayload'}}
+        - if:
+            properties: {type: {const: PRESENCE_SET}}
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/PresencePayload'}}
+        - if:
+            properties: {type: {const: PRESENCE_SUBSCRIBE}}
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/ContactPresencePayload'}}
+        - if:
+            properties: {type: {const: CHAT_PRESENCE_SET}}
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/ChatPresencePayload'}}
+        - if:
+            properties: {type: {const: CHAT_DISAPPEARING_SET}}
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/DisappearingPayload'}}
+        - if:
+            properties: {type: {const: CHAT_STATE_UPDATE}}
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/ChatStatePayload'}}
+        - if:
+            properties: {type: {const: BLOCKLIST_UPDATE}}
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/BlocklistUpdatePayload'}}
+        - if:
+            properties: {type: {const: PRIVACY_UPDATE}}
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/PrivacyUpdatePayload'}}
+        - if:
+            properties: {type: {const: DEFAULT_DISAPPEARING_SET}}
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/DefaultDisappearingPayload'}}
+        - if:
+            properties: {type: {const: HISTORY_SYNC_REQUEST}}
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/HistoryPayload'}}
+    EmptyPayload:
+      type: object
+      additionalProperties: false
+      maxProperties: 0
+    SessionProvisionPayload:
+      type: object
+      additionalProperties: false
+      properties:
+        desired_connected:
+          type: boolean
+    PairPhonePayload:
+      type: object
+      additionalProperties: false
+      required: [phone]
+      properties:
+        phone:
+          $ref: '#/components/schemas/E164'
+        show_push_notification:
+          type: boolean
+    PasskeyResponsePayload:
+      type: object
+      additionalProperties: false
+      required: [id, client_data_json, authenticator_data, signature]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 2048
+        client_data_json:
+          type: string
+          minLength: 1
+          maxLength: 16384
+        authenticator_data:
+          type: string
+          minLength: 1
+          maxLength: 16384
+        signature:
+          type: string
+          minLength: 1
+          maxLength: 16384
+    PasskeyConfirmationPayload:
+      type: object
+      additionalProperties: false
+      required: [id, confirm]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 2048
+        confirm:
+          type: boolean
+    PassivePayload:
+      type: object
+      additionalProperties: false
+      required: [passive]
+      properties:
+        passive:
+          type: boolean
+    MessageSendPayload:
+      description: Payload rico tipado ou envelope legado sem `kind`.
+      oneOf:
+        - $ref: '#/components/schemas/LegacyMessageSendPayload'
+        - $ref: '#/components/schemas/TextMessageSendPayload'
+        - $ref: '#/components/schemas/MediaMessageSendPayload'
+        - $ref: '#/components/schemas/LocationMessageSendPayload'
+        - $ref: '#/components/schemas/ContactMessageSendPayload'
+        - $ref: '#/components/schemas/PollMessageSendPayload'
+        - $ref: '#/components/schemas/InteractiveMessageSendPayload'
+    LegacyMessageSendPayload:
+      type: object
+      additionalProperties: false
+      required: [to]
+      properties:
+        to:
+          $ref: '#/components/schemas/OneToOneAddress'
+        text:
+          type: string
+          minLength: 1
+          maxLength: 65536
+        media:
+          $ref: '#/components/schemas/MediaReference'
+      minProperties: 2
+    TextMessageSendPayload:
+      type: object
+      additionalProperties: false
+      required: [to, kind, text]
+      properties:
+        to:
+          $ref: '#/components/schemas/OneToOneAddress'
+        kind:
+          const: TEXT
+        text:
+          type: string
+          minLength: 1
+          maxLength: 65536
+        reply_to:
+          $ref: '#/components/schemas/MessageReference'
+        link_preview:
+          $ref: '#/components/schemas/LinkPreviewPayload'
+    MediaMessageSendPayload:
+      type: object
+      additionalProperties: false
+      required: [to, kind, media]
+      properties:
+        to:
+          $ref: '#/components/schemas/OneToOneAddress'
+        kind:
+          enum: [IMAGE, AUDIO, VIDEO, DOCUMENT, STICKER]
+        caption:
+          type: string
+          maxLength: 65536
+        reply_to:
+          $ref: '#/components/schemas/MessageReference'
+        media:
+          $ref: '#/components/schemas/MediaReference'
+    LocationMessageSendPayload:
+      type: object
+      additionalProperties: false
+      required: [to, kind, location]
+      properties:
+        to:
+          $ref: '#/components/schemas/OneToOneAddress'
+        kind:
+          const: LOCATION
+        location:
+          $ref: '#/components/schemas/LocationPayload'
+        reply_to:
+          $ref: '#/components/schemas/MessageReference'
+    ContactMessageSendPayload:
+      type: object
+      additionalProperties: false
+      required: [to, kind, contact]
+      properties:
+        to:
+          $ref: '#/components/schemas/OneToOneAddress'
+        kind:
+          const: CONTACT
+        contact:
+          $ref: '#/components/schemas/ContactPayload'
+        reply_to:
+          $ref: '#/components/schemas/MessageReference'
+    PollMessageSendPayload:
+      type: object
+      additionalProperties: false
+      required: [to, kind, poll]
+      properties:
+        to:
+          $ref: '#/components/schemas/OneToOneAddress'
+        kind:
+          const: POLL
+        poll:
+          $ref: '#/components/schemas/PollPayload'
+        reply_to:
+          $ref: '#/components/schemas/MessageReference'
+    InteractiveMessageSendPayload:
+      type: object
+      additionalProperties: false
+      required: [to, kind, interactive]
+      properties:
+        to:
+          $ref: '#/components/schemas/OneToOneAddress'
+        kind:
+          const: INTERACTIVE
+        interactive:
+          $ref: '#/components/schemas/InteractivePayload'
+        reply_to:
+          $ref: '#/components/schemas/MessageReference'
+    MessageReference:
+      type: object
+      additionalProperties: false
+      required: [message_id]
+      properties:
+        message_id:
+          $ref: '#/components/schemas/Identifier'
+        sender:
+          $ref: '#/components/schemas/OneToOneAddress'
+    InboundMessageReference:
+      type: object
+      additionalProperties: false
+      required: [provider_message_id]
+      properties:
+        provider_message_id:
+          $ref: '#/components/schemas/Identifier'
+        sender:
+          $ref: '#/components/schemas/OneToOneAddress'
+    MediaReference:
+      type: object
+      additionalProperties: false
+      required: [attachment_id, filename, mime_type, size_bytes, sha256]
+      properties:
+        attachment_id:
+          type: integer
+          minimum: 1
+        filename:
+          type: string
+          minLength: 1
+          maxLength: 255
+          pattern: '^[^/\\\r\n]+$'
+        mime_type:
+          type: string
+          minLength: 3
+          maxLength: 127
+          pattern: '^[a-zA-Z0-9!#$&^_.+-]+/[a-zA-Z0-9!#$&^_.+-]+$'
+        size_bytes:
+          type: integer
+          minimum: 1
+          maximum: 52428800
+        sha256:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+        ptt:
+          type: boolean
+    LinkPreviewPayload:
+      type: object
+      additionalProperties: false
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          pattern: '^https://'
+          maxLength: 2048
+        title:
+          type: string
+          maxLength: 512
+        description:
+          type: string
+          maxLength: 2048
+    LocationPayload:
+      type: object
+      additionalProperties: false
+      required: [latitude, longitude]
+      properties:
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+        name:
+          type: string
+          maxLength: 512
+        address:
+          type: string
+          maxLength: 2048
+    ContactPayload:
+      type: object
+      additionalProperties: false
+      required: [display_name, vcard]
+      properties:
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 512
+        vcard:
+          type: string
+          minLength: 1
+          maxLength: 65536
+    PollPayload:
+      type: object
+      additionalProperties: false
+      required: [name, options, selectable_options]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        options:
+          type: array
+          minItems: 2
+          maxItems: 12
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 512
+        selectable_options:
+          type: integer
+          minimum: 1
+          maximum: 12
+    InteractivePayload:
+      type: object
+      additionalProperties: false
+      required: [mode, options]
+      properties:
+        mode:
+          enum: [BUTTONS, LIST]
+        title:
+          type: string
+          maxLength: 512
+        description:
+          type: string
+          maxLength: 2048
+        options:
+          type: array
+          minItems: 1
+          maxItems: 20
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 512
+    InboundInteractivePayload:
+      type: object
+      additionalProperties: false
+      required: [mode]
+      properties:
+        mode:
+          enum: [BUTTON_RESPONSE, LIST_RESPONSE, TEMPLATE_BUTTON_RESPONSE, NATIVE_FLOW_RESPONSE, BUTTONS, LIST, NATIVE_FLOW, TEMPLATE]
+        title: {type: string, maxLength: 4096}
+        description: {type: string, maxLength: 4096}
+        selected_id: {type: string, maxLength: 1024}
+        display_text: {type: string, maxLength: 4096}
+        name: {type: string, maxLength: 1024}
+    InboundLinkPreviewPayload:
+      type: object
+      additionalProperties: false
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          pattern: '^https?://'
+          maxLength: 2048
+        title: {type: string, maxLength: 4096}
+        description: {type: string, maxLength: 8192}
+    InboundLocationPayload:
+      type: object
+      additionalProperties: false
+      required: [latitude, longitude, live]
+      properties:
+        latitude: {type: number, minimum: -90, maximum: 90}
+        longitude: {type: number, minimum: -180, maximum: 180}
+        name: {type: string, maxLength: 1024}
+        address: {type: string, maxLength: 4096}
+        caption: {type: string, maxLength: 4096}
+        live: {type: boolean}
+        accuracy_meters: {type: integer, minimum: 0}
+        sequence: {type: integer, minimum: 0}
+    InboundContactPayload:
+      type: object
+      additionalProperties: false
+      required: [display_name, vcard]
+      properties:
+        display_name: {type: string, maxLength: 1024}
+        vcard: {type: string, maxLength: 65536}
+    InboundPollPayload:
+      type: object
+      additionalProperties: false
+      required: [name, options, selectable_options]
+      properties:
+        name: {type: string, maxLength: 4096}
+        options:
+          type: array
+          maxItems: 12
+          items: {type: string, maxLength: 1024}
+        selectable_options: {type: integer, minimum: 0, maximum: 12}
+    MessageTargetPayload:
+      type: object
+      additionalProperties: false
+      required: [to, target_message_id]
+      properties:
+        to:
+          $ref: '#/components/schemas/OneToOneAddress'
+        target_message_id:
+          $ref: '#/components/schemas/Identifier'
+        sender:
+          $ref: '#/components/schemas/OneToOneAddress'
+    MessageEditPayload:
+      type: object
+      additionalProperties: false
+      required: [to, target_message_id, text]
+      properties:
+        to:
+          $ref: '#/components/schemas/OneToOneAddress'
+        target_message_id:
+          $ref: '#/components/schemas/Identifier'
+        sender:
+          $ref: '#/components/schemas/OneToOneAddress'
+        text:
+          type: string
+          minLength: 1
+          maxLength: 65536
+    MessageReactionPayload:
+      type: object
+      additionalProperties: false
+      required: [to, target_message_id, emoji]
+      properties:
+        to:
+          $ref: '#/components/schemas/OneToOneAddress'
+        target_message_id:
+          $ref: '#/components/schemas/Identifier'
+        sender:
+          $ref: '#/components/schemas/OneToOneAddress'
+        emoji:
+          description: String vazia remove a reação vigente.
+          type: string
+          maxLength: 32
+    PollVotePayload:
+      type: object
+      additionalProperties: false
+      required: [to, target_message_id, option_names]
+      properties:
+        to:
+          $ref: '#/components/schemas/OneToOneAddress'
+        target_message_id:
+          $ref: '#/components/schemas/Identifier'
+        sender:
+          $ref: '#/components/schemas/OneToOneAddress'
+        option_names:
+          type: array
+          maxItems: 12
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 512
+    MessageMarkPayload:
+      type: object
+      additionalProperties: false
+      required: [to, message_ids, receipt]
+      properties:
+        to:
+          $ref: '#/components/schemas/OneToOneAddress'
+        message_ids:
+          type: array
+          minItems: 1
+          maxItems: 100
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Identifier'
+        receipt:
+          enum: [READ, PLAYED]
+        sender:
+          $ref: '#/components/schemas/OneToOneAddress'
+        timestamp:
+          type: integer
+          minimum: 0
+        protocol:
+          type: boolean
+    MediaRetryPayload:
+      type: object
+      additionalProperties: false
+      required: [to, target_message_id, sender, from_me]
+      properties:
+        to:
+          $ref: '#/components/schemas/OneToOneAddress'
+        target_message_id:
+          $ref: '#/components/schemas/Identifier'
+        sender:
+          $ref: '#/components/schemas/OneToOneAddress'
+        from_me:
+          type: boolean
+    PresencePayload:
+      type: object
+      additionalProperties: false
+      required: [presence]
+      properties:
+        presence:
+          enum: [AVAILABLE, UNAVAILABLE]
+        force_active_delivery_receipts:
+          type: boolean
+    ContactPresencePayload:
+      type: object
+      additionalProperties: false
+      required: [to]
+      properties:
+        to:
+          $ref: '#/components/schemas/OneToOneAddress'
+    ChatPresencePayload:
+      type: object
+      additionalProperties: false
+      required: [to, presence]
+      properties:
+        to:
+          $ref: '#/components/schemas/OneToOneAddress'
+        presence:
+          enum: [COMPOSING, PAUSED, RECORDING]
+        media:
+          enum: [TEXT, AUDIO]
+    DisappearingPayload:
+      type: object
+      additionalProperties: false
+      required: [to, timer_seconds]
+      properties:
+        to:
+          $ref: '#/components/schemas/OneToOneAddress'
+        timer_seconds:
+          type: integer
+          minimum: 0
+          maximum: 31536000
+    ChatStatePayload:
+      oneOf:
+        - $ref: '#/components/schemas/ScopedChatStatePayload'
+        - $ref: '#/components/schemas/SyncChatStatePayload'
+        - $ref: '#/components/schemas/MarkCleanChatStatePayload'
+    ScopedChatStatePayload:
+      type: object
+      additionalProperties: false
+      required: [to, action]
+      properties:
+        to:
+          $ref: '#/components/schemas/OneToOneAddress'
+        action:
+          enum: [ARCHIVE, MUTE, PIN, STAR, MARK_READ, DELETE_CHAT]
+        value:
+          type: boolean
+        target_message_id:
+          $ref: '#/components/schemas/Identifier'
+        sender:
+          $ref: '#/components/schemas/OneToOneAddress'
+        timestamp:
+          type: integer
+          minimum: 0
+        duration_seconds:
+          type: integer
+          minimum: 0
+          maximum: 31536000
+        delete_media:
+          type: boolean
+        from_me:
+          type: boolean
+    SyncChatStatePayload:
+      type: object
+      additionalProperties: false
+      required: [action]
+      properties:
+        action:
+          const: SYNC
+    MarkCleanChatStatePayload:
+      type: object
+      additionalProperties: false
+      required: [action, timestamp]
+      properties:
+        action:
+          const: MARK_CLEAN
+        timestamp:
+          type: integer
+          minimum: 1
+    BlocklistUpdatePayload:
+      type: object
+      additionalProperties: false
+      required: [to, action]
+      properties:
+        to:
+          $ref: '#/components/schemas/OneToOneAddress'
+        action:
+          enum: [BLOCK, UNBLOCK]
+    PrivacyUpdatePayload:
+      oneOf:
+        - $ref: '#/components/schemas/PrivacyVisibilityPayload'
+        - $ref: '#/components/schemas/PrivacyReadReceiptsPayload'
+        - $ref: '#/components/schemas/PrivacyOnlinePayload'
+    PrivacyVisibilityPayload:
+      type: object
+      additionalProperties: false
+      required: [name, value]
+      properties:
+        name:
+          enum: [last, profile]
+        value:
+          enum: [all, contacts, contact_blacklist, none]
+    PrivacyReadReceiptsPayload:
+      type: object
+      additionalProperties: false
+      required: [name, value]
+      properties:
+        name:
+          const: readreceipts
+        value:
+          enum: [all, none]
+    PrivacyOnlinePayload:
+      type: object
+      additionalProperties: false
+      required: [name, value]
+      properties:
+        name:
+          const: online
+        value:
+          enum: [all, match_last_seen]
+    DefaultDisappearingPayload:
+      type: object
+      additionalProperties: false
+      required: [timer_seconds]
+      properties:
+        timer_seconds:
+          type: integer
+          minimum: 0
+          maximum: 31536000
+    HistoryPayload:
+      type: object
+      additionalProperties: false
+      required: [to, last_message_id, last_message_from, last_message_timestamp, last_message_from_me, count]
+      properties:
+        to:
+          $ref: '#/components/schemas/OneToOneAddress'
+        last_message_id:
+          $ref: '#/components/schemas/Identifier'
+        last_message_from:
+          $ref: '#/components/schemas/OneToOneAddress'
+        last_message_timestamp:
+          type: integer
+          minimum: 1
+        last_message_from_me:
+          type: boolean
+        count:
+          type: integer
+          minimum: 1
+          maximum: 50
+    GatewayQuery:
+      type: object
+      additionalProperties: false
+      required: [contract_version, query_id, session_id, type, payload]
+      properties:
+        contract_version:
+          const: v1
+        query_id:
+          $ref: '#/components/schemas/Identifier'
+        session_id:
+          $ref: '#/components/schemas/Identifier'
+        type:
+          $ref: '#/components/schemas/GatewayQueryType'
+        payload:
+          type: object
+      allOf:
+        - $ref: '#/components/schemas/QueryPayloadByType'
+    QueryPayloadByType:
+      allOf:
+        - if:
+            properties:
+              type:
+                enum: [USER_CHECK, USER_INFO, BUSINESS_PROFILE]
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/UsersQueryPayload'}}
+        - if:
+            properties: {type: {const: PROFILE_PICTURE}}
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/ProfilePictureQueryPayload'}}
+        - if:
+            properties: {type: {const: CONTACT_QR_LINK}}
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/ContactQRQueryPayload'}}
+        - if:
+            properties:
+              type:
+                enum: [CONTACT_QR_RESOLVE, BUSINESS_LINK_RESOLVE]
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/LinkQueryPayload'}}
+        - if:
+            properties:
+              type:
+                enum: [BLOCKLIST, PRIVACY_SETTINGS]
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/EmptyPayload'}}
+    UsersQueryPayload:
+      type: object
+      additionalProperties: false
+      required: [users]
+      properties:
+        users:
+          type: array
+          minItems: 1
+          maxItems: 100
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/OneToOneAddress'
+    ProfilePictureQueryPayload:
+      type: object
+      additionalProperties: false
+      required: [user]
+      properties:
+        user:
+          $ref: '#/components/schemas/OneToOneAddress'
+        preview:
+          type: boolean
+    ContactQRQueryPayload:
+      type: object
+      additionalProperties: false
+      properties:
+        revoke:
+          type: boolean
+    LinkQueryPayload:
+      type: object
+      additionalProperties: false
+      required: [link]
+      properties:
+        link:
+          type: string
+          format: uri
+          pattern: '^https://'
+          maxLength: 2048
+    QueryResult:
+      type: object
+      additionalProperties: false
+      required: [contract_version, query_id, result]
+      properties:
+        contract_version:
+          const: v1
+        query_id:
+          $ref: '#/components/schemas/Identifier'
+        result:
+          oneOf:
+            - $ref: '#/components/schemas/UserCheckResult'
+            - $ref: '#/components/schemas/UserInfoResult'
+            - $ref: '#/components/schemas/BusinessProfileResult'
+            - $ref: '#/components/schemas/ProfilePictureResult'
+            - $ref: '#/components/schemas/ContactQRLinkResult'
+            - $ref: '#/components/schemas/ResolvedContactResult'
+            - $ref: '#/components/schemas/ResolvedBusinessResult'
+            - $ref: '#/components/schemas/BlocklistResult'
+            - $ref: '#/components/schemas/PrivacySettingsResult'
+    UserCheckResult:
+      type: object
+      additionalProperties: false
+      required: [users]
+      properties:
+        users:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            required: [input, exists]
+            properties:
+              input: {$ref: '#/components/schemas/OneToOneAddress'}
+              exists: {type: boolean}
+              user: {$ref: '#/components/schemas/OneToOneAddress'}
+              verified_name: {type: string, maxLength: 512}
+    UserInfoResult:
+      type: object
+      additionalProperties: false
+      required: [user_info]
+      properties:
+        user_info:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            required: [user]
+            properties:
+              user: {$ref: '#/components/schemas/OneToOneAddress'}
+              status: {type: string, maxLength: 2048}
+              verified_name: {type: string, maxLength: 512}
+    BusinessProfileResult:
+      type: object
+      additionalProperties: false
+      required: [business_profiles]
+      properties:
+        business_profiles:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            required: [user]
+            properties:
+              user: {$ref: '#/components/schemas/OneToOneAddress'}
+              name: {type: string, maxLength: 512}
+              description: {type: string, maxLength: 4096}
+              email: {type: string, format: email, maxLength: 320}
+              website: {type: string, format: uri, maxLength: 2048}
+              category: {type: string, maxLength: 512}
+    ProfilePictureResult:
+      type: object
+      additionalProperties: false
+      required: [profile_picture]
+      properties:
+        profile_picture:
+          oneOf:
+            - type: 'null'
+            - type: object
+              additionalProperties: false
+              required: [user, url]
+              properties:
+                user: {$ref: '#/components/schemas/OneToOneAddress'}
+                url: {type: string, format: uri, maxLength: 4096}
+                id: {type: string, maxLength: 512}
+    ContactQRLinkResult:
+      type: object
+      additionalProperties: false
+      required: [contact_qr_link]
+      properties:
+        contact_qr_link:
+          type: object
+          additionalProperties: false
+          required: [link]
+          properties:
+            link: {type: string, format: uri, maxLength: 2048}
+            expires_at: {type: string, format: date-time}
+    ResolvedContactResult:
+      type: object
+      additionalProperties: false
+      required: [contact]
+      properties:
+        contact:
+          type: object
+          additionalProperties: false
+          required: [user]
+          properties:
+            user: {$ref: '#/components/schemas/OneToOneAddress'}
+            prefilled_text: {type: string, maxLength: 65536}
+    ResolvedBusinessResult:
+      type: object
+      additionalProperties: false
+      required: [business]
+      properties:
+        business:
+          type: object
+          additionalProperties: false
+          required: [user]
+          properties:
+            user: {$ref: '#/components/schemas/OneToOneAddress'}
+            message: {type: string, maxLength: 65536}
+    BlocklistResult:
+      type: object
+      additionalProperties: false
+      required: [blocked_users]
+      properties:
+        blocked_users:
+          type: array
+          maxItems: 10000
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/OneToOneAddress'
+    PrivacySettingsResult:
+      type: object
+      additionalProperties: false
+      required: [settings]
+      properties:
+        settings:
+          type: array
+          maxItems: 16
+          items:
+            type: object
+            additionalProperties: false
+            required: [name, value]
+            properties:
+              name: {enum: [last, profile, readreceipts, online]}
+              value: {enum: [all, contacts, contact_blacklist, none, match_last_seen]}
+    CommandAcceptance:
+      type: object
+      additionalProperties: false
+      required: [command_id, status, duplicate]
+      properties:
+        command_id:
+          $ref: '#/components/schemas/Identifier'
+        status:
+          const: ACCEPTED
+        duplicate:
+          type: boolean
+    SessionStatus:
+      type: object
+      additionalProperties: false
+      required: [session_id, status, desired_connected, reconnect_count]
+      properties:
+        session_id:
+          $ref: '#/components/schemas/Identifier'
+        status:
+          enum: [DISABLED, PROVISIONED, PAIRING, CONNECTED, DEGRADED, REVOKED]
+        desired_connected:
+          type: boolean
+        reconnect_count:
+          type: integer
+          minimum: 0
+        pairing_expires_at:
+          type: [string, 'null']
+          format: date-time
+    GatewayEvent:
+      type: object
+      additionalProperties: false
+      required: [contract_version, gateway_event_id, session_id, type, occurred_at, payload]
+      properties:
+        contract_version:
+          const: v1
+        gateway_event_id:
+          $ref: '#/components/schemas/Identifier'
+        session_id:
+          $ref: '#/components/schemas/Identifier'
+        type:
+          $ref: '#/components/schemas/GatewayEventType'
+        occurred_at:
+          type: string
+          format: date-time
+        payload:
+          type: object
+      allOf:
+        - $ref: '#/components/schemas/EventPayloadByType'
+    EventPayloadByType:
+      allOf:
+        - if: {properties: {type: {const: MESSAGE_RECEIVED}}, required: [type]}
+          then: {properties: {payload: {$ref: '#/components/schemas/MessageReceivedEventPayload'}}}
+        - if: {properties: {type: {const: MESSAGE_STATUS_CHANGED}}, required: [type]}
+          then: {properties: {payload: {$ref: '#/components/schemas/MessageStatusEventPayload'}}}
+        - if: {properties: {type: {const: MESSAGE_ACTION_RECEIVED}}, required: [type]}
+          then: {properties: {payload: {$ref: '#/components/schemas/MessageActionEventPayload'}}}
+        - if: {properties: {type: {const: SESSION_STATUS_CHANGED}}, required: [type]}
+          then: {properties: {payload: {$ref: '#/components/schemas/SessionStatusEventPayload'}}}
+        - if: {properties: {type: {const: PAIRING_UPDATED}}, required: [type]}
+          then: {properties: {payload: {$ref: '#/components/schemas/PairingEventPayload'}}}
+        - if: {properties: {type: {const: MEDIA_READY}}, required: [type]}
+          then: {properties: {payload: {$ref: '#/components/schemas/MediaReadyEventPayload'}}}
+        - if: {properties: {type: {const: CHAT_PRESENCE_CHANGED}}, required: [type]}
+          then: {properties: {payload: {$ref: '#/components/schemas/ChatPresenceEventPayload'}}}
+        - if: {properties: {type: {const: CONTACT_PRESENCE_CHANGED}}, required: [type]}
+          then: {properties: {payload: {$ref: '#/components/schemas/ContactPresenceEventPayload'}}}
+        - if: {properties: {type: {const: CONTACT_PROFILE_CHANGED}}, required: [type]}
+          then: {properties: {payload: {$ref: '#/components/schemas/ContactProfileEventPayload'}}}
+        - if: {properties: {type: {const: CONTACT_IDENTITY_CHANGED}}, required: [type]}
+          then: {properties: {payload: {$ref: '#/components/schemas/IdentityEventPayload'}}}
+        - if: {properties: {type: {const: PRIVACY_SETTINGS_CHANGED}}, required: [type]}
+          then: {properties: {payload: {$ref: '#/components/schemas/PrivacyEventPayload'}}}
+        - if: {properties: {type: {const: BLOCKLIST_CHANGED}}, required: [type]}
+          then: {properties: {payload: {$ref: '#/components/schemas/BlocklistEventPayload'}}}
+        - if: {properties: {type: {const: CHAT_STATE_CHANGED}}, required: [type]}
+          then: {properties: {payload: {$ref: '#/components/schemas/ChatStateEventPayload'}}}
+        - if: {properties: {type: {const: HISTORY_SYNCED}}, required: [type]}
+          then: {properties: {payload: {$ref: '#/components/schemas/HistoryEventPayload'}}}
+        - if: {properties: {type: {const: SYNC_STATUS_CHANGED}}, required: [type]}
+          then: {properties: {payload: {$ref: '#/components/schemas/SyncStatusEventPayload'}}}
+        - if: {properties: {type: {const: MEDIA_RETRY_UPDATED}}, required: [type]}
+          then: {properties: {payload: {$ref: '#/components/schemas/MediaRetryEventPayload'}}}
+        - if: {properties: {type: {const: GATEWAY_ALERT}}, required: [type]}
+          then: {properties: {payload: {$ref: '#/components/schemas/GatewayAlertEventPayload'}}}
+    MessageReceivedEventPayload:
+      type: object
+      additionalProperties: false
+      required: [provider_message_id, from, kind, provider_type, family]
+      properties:
+        provider_message_id: {$ref: '#/components/schemas/Identifier'}
+        from: {$ref: '#/components/schemas/OneToOneAddress'}
+        kind: {$ref: '#/components/schemas/MessageKind'}
+        provider_type: {type: string, pattern: '^[A-Za-z][A-Za-z0-9._-]{0,79}$'}
+        family: {type: string, pattern: '^[A-Z][A-Z0-9_]{1,31}$'}
+        text: {type: string, maxLength: 65536}
+        caption: {type: string, maxLength: 65536}
+        link_preview: {$ref: '#/components/schemas/InboundLinkPreviewPayload'}
+        occurred_at: {type: string, format: date-time}
+        reply_to: {$ref: '#/components/schemas/InboundMessageReference'}
+        direction: {enum: [INBOUND, OUTBOUND]}
+        history: {type: boolean}
+        spool_id: {$ref: '#/components/schemas/Identifier'}
+        media_size_bytes: {type: integer, minimum: 0, maximum: 52428800}
+        media_sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+        mime_type: {type: string, maxLength: 127}
+        filename: {type: string, maxLength: 255}
+        media_error_code: {type: string, pattern: '^[A-Z][A-Z0-9_]{2,79}$'}
+        location: {$ref: '#/components/schemas/InboundLocationPayload'}
+        contacts:
+          type: array
+          maxItems: 50
+          items: {$ref: '#/components/schemas/InboundContactPayload'}
+        poll: {$ref: '#/components/schemas/InboundPollPayload'}
+        interactive: {$ref: '#/components/schemas/InboundInteractivePayload'}
+        ptt: {type: boolean}
+        gif: {type: boolean}
+        animated: {type: boolean}
+        duration_seconds: {type: integer, minimum: 0}
+        content_present: {type: boolean}
+        variants:
+          type: array
+          maxItems: 16
+          items: {type: string, maxLength: 80}
+    MessageStatusEventPayload:
+      type: object
+      additionalProperties: false
+      required: [provider_message_id, status]
+      properties:
+        provider_message_id: {$ref: '#/components/schemas/Identifier'}
+        status: {enum: [QUEUED, ACCEPTED, SENT, DELIVERED, READ, PLAYED, FAILED, UNKNOWN, CANCELED]}
+        error_code: {type: string, pattern: '^[A-Z][A-Z0-9_]{2,79}$'}
+    MessageActionEventPayload:
+      type: object
+      additionalProperties: false
+      required: [action, target_message_id, from]
+      properties:
+        action: {enum: [EDIT, REVOKE, REACTION, POLL_VOTE, INTERACTIVE_RESPONSE]}
+        provider_message_id: {$ref: '#/components/schemas/Identifier'}
+        target_message_id: {$ref: '#/components/schemas/Identifier'}
+        from: {$ref: '#/components/schemas/OneToOneAddress'}
+        kind: {$ref: '#/components/schemas/MessageKind'}
+        provider_type: {type: string, pattern: '^[A-Za-z][A-Za-z0-9._-]{0,79}$'}
+        family: {type: string, pattern: '^[A-Z][A-Z0-9_]{1,31}$'}
+        text: {type: string, maxLength: 65536}
+        caption: {type: string, maxLength: 65536}
+        link_preview: {$ref: '#/components/schemas/InboundLinkPreviewPayload'}
+        location: {$ref: '#/components/schemas/InboundLocationPayload'}
+        contacts:
+          type: array
+          maxItems: 50
+          items: {$ref: '#/components/schemas/InboundContactPayload'}
+        poll: {$ref: '#/components/schemas/InboundPollPayload'}
+        interactive: {$ref: '#/components/schemas/InboundInteractivePayload'}
+        ptt: {type: boolean}
+        gif: {type: boolean}
+        animated: {type: boolean}
+        duration_seconds: {type: integer, minimum: 0}
+        content_present: {type: boolean}
+        variants:
+          type: array
+          maxItems: 16
+          items: {type: string, maxLength: 80}
+        emoji: {type: string, maxLength: 32}
+        removed: {type: boolean}
+        selected_id: {type: string, maxLength: 1024}
+        option_names:
+          type: array
+          maxItems: 12
+          uniqueItems: true
+          items: {type: string, maxLength: 512}
+        option_hashes:
+          type: array
+          maxItems: 12
+          uniqueItems: true
+          items: {type: string, pattern: '^[a-f0-9]{64}$'}
+        history: {type: boolean}
+    SessionStatusEventPayload:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: {enum: [DISABLED, PROVISIONED, PAIRING, CONNECTED, DEGRADED, REVOKED]}
+        reason_code: {type: string, pattern: '^[A-Z][A-Z0-9_]{2,79}$'}
+        retry_after_seconds: {type: integer, minimum: 0, maximum: 86400}
+    PairingEventPayload:
+      type: object
+      additionalProperties: false
+      required: [event]
+      properties:
+        event: {type: string, minLength: 1, maxLength: 80}
+        code: {type: string, maxLength: 2048}
+        expires_at: {type: string, format: date-time}
+        error_code: {type: string, maxLength: 80}
+        passkey_request:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/PasskeyRequest'
+    PasskeyRequest:
+      type: object
+      additionalProperties: false
+      required: [request_id, challenge, timeout_ms, relying_party_id]
+      properties:
+        request_id: {$ref: '#/components/schemas/Identifier'}
+        challenge:
+          type: string
+          minLength: 1
+          maxLength: 16384
+          pattern: '^[A-Za-z0-9_-]+$'
+        timeout_ms: {type: integer, minimum: 1, maximum: 300000}
+        relying_party_id:
+          type: string
+          minLength: 1
+          maxLength: 253
+          pattern: '^[A-Za-z0-9.-]+$'
+        user_verification:
+          enum: [required, preferred, discouraged]
+        allowed_credentials:
+          type: array
+          maxItems: 32
+          items:
+            $ref: '#/components/schemas/PasskeyCredential'
+    PasskeyCredential:
+      type: object
+      additionalProperties: false
+      required: [id, type]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 16384
+          pattern: '^[A-Za-z0-9_-]+$'
+        type:
+          const: public-key
+        transports:
+          type: array
+          maxItems: 5
+          uniqueItems: true
+          items:
+            enum: [usb, nfc, ble, internal, hybrid]
+    MediaReadyEventPayload:
+      type: object
+      additionalProperties: false
+      required: [provider_message_id, spool_id, size_bytes, sha256, mime_type]
+      properties:
+        provider_message_id: {$ref: '#/components/schemas/Identifier'}
+        spool_id: {$ref: '#/components/schemas/Identifier'}
+        size_bytes: {type: integer, minimum: 0, maximum: 52428800}
+        sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+        mime_type: {type: string, maxLength: 127}
+        filename: {type: string, maxLength: 255}
+    ChatPresenceEventPayload:
+      type: object
+      additionalProperties: false
+      required: [from, presence, ttl_seconds]
+      properties:
+        from: {$ref: '#/components/schemas/OneToOneAddress'}
+        presence: {enum: [COMPOSING, PAUSED, RECORDING]}
+        media: {enum: [TEXT, AUDIO]}
+        ttl_seconds: {type: integer, minimum: 1, maximum: 300}
+    ContactPresenceEventPayload:
+      type: object
+      additionalProperties: false
+      required: [from, available, ttl_seconds]
+      properties:
+        from: {$ref: '#/components/schemas/OneToOneAddress'}
+        available: {type: boolean}
+        last_seen: {type: string, format: date-time}
+        ttl_seconds: {type: integer, minimum: 1, maximum: 3600}
+    ContactProfileEventPayload:
+      type: object
+      additionalProperties: false
+      required: [user]
+      properties:
+        user: {$ref: '#/components/schemas/OneToOneAddress'}
+        display_name: {type: string, maxLength: 512}
+        business_name: {type: string, maxLength: 512}
+        picture_id: {type: string, maxLength: 512}
+        about: {type: string, maxLength: 2048}
+    IdentityEventPayload:
+      type: object
+      additionalProperties: false
+      required: [user, change]
+      properties:
+        user: {$ref: '#/components/schemas/OneToOneAddress'}
+        change: {enum: [IDENTITY_CHANGED, MAPPING_CHANGED]}
+    PrivacyEventPayload:
+      type: object
+      additionalProperties: false
+      required: [settings]
+      properties:
+        settings:
+          $ref: '#/components/schemas/PrivacySettingsResult/properties/settings'
+    BlocklistEventPayload:
+      type: object
+      additionalProperties: false
+      required: [action, users]
+      properties:
+        action: {enum: [SET, BLOCK, UNBLOCK]}
+        users:
+          type: array
+          maxItems: 10000
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/OneToOneAddress'}
+    ChatStateEventPayload:
+      type: object
+      additionalProperties: false
+      required: [to, action]
+      properties:
+        to: {$ref: '#/components/schemas/OneToOneAddress'}
+        action: {enum: [ARCHIVE, MUTE, PIN, STAR, MARK_READ, DELETE_FOR_ME, CLEAR_CHAT, DELETE_CHAT, LABEL_CHAT, LABEL_MESSAGE, SYNC, MARK_CLEAN]}
+        value: {type: boolean}
+        target_message_id: {$ref: '#/components/schemas/Identifier'}
+        label_id: {type: string, minLength: 1, maxLength: 128}
+    HistoryEventPayload:
+      type: object
+      additionalProperties: false
+      required: [batch_id, messages, complete]
+      properties:
+        batch_id: {$ref: '#/components/schemas/Identifier'}
+        cursor: {type: string, maxLength: 2048}
+        complete: {type: boolean}
+        sync_type: {type: string, minLength: 1, maxLength: 80}
+        chunk_order: {type: integer, minimum: 0}
+        progress: {type: integer, minimum: 0, maximum: 100}
+        message_count: {type: integer, minimum: 0, maximum: 100}
+        rejected_count: {type: integer, minimum: 0}
+        truncated: {type: boolean}
+        messages:
+          type: array
+          maxItems: 100
+          items: {$ref: '#/components/schemas/MessageReceivedEventPayload'}
+    SyncStatusEventPayload:
+      type: object
+      additionalProperties: false
+      required: [component, status]
+      properties:
+        component: {enum: [APP_STATE, HISTORY, OFFLINE]}
+        status: {enum: [STARTED, COMPLETED, FAILED]}
+        error_code: {type: string, pattern: '^[A-Z][A-Z0-9_]{2,79}$'}
+    MediaRetryEventPayload:
+      type: object
+      additionalProperties: false
+      required: [provider_message_id, status]
+      properties:
+        provider_message_id: {$ref: '#/components/schemas/Identifier'}
+        status: {enum: [REQUESTED, READY, FAILED]}
+        spool_id: {$ref: '#/components/schemas/Identifier'}
+        generation: {type: integer, minimum: 0}
+        attempt: {type: integer, minimum: 0}
+        size_bytes: {type: integer, minimum: 0, maximum: 52428800}
+        sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+        mime_type: {type: string, maxLength: 127}
+        filename: {type: string, maxLength: 255}
+        error_code: {type: string, pattern: '^[A-Z][A-Z0-9_]{2,79}$'}
+    GatewayAlertEventPayload:
+      type: object
+      additionalProperties: false
+      required: [code, severity, retryable]
+      properties:
+        code: {type: string, pattern: '^[A-Z][A-Z0-9_]{2,79}$'}
+        severity: {enum: [INFO, WARNING, ERROR, CRITICAL]}
+        retryable: {type: boolean}
+        retry_after_seconds: {type: integer, minimum: 0, maximum: 86400}
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+          pattern: '^[A-Z][A-Z0-9_]{2,79}$'
+webhooks:
+  gatewayEvent:
+    post:
+      operationId: ingestGatewayEvent
+      summary: Evento allowlisted entregue pelo gateway ao Laravel pelo menos uma vez.
+      description: |
+        Eventos duráveis e sinais efêmeros usam o mesmo envelope autenticado. O
+        Laravel deduplica `gateway_event_id`; replay do nonce HTTP é rejeitado
+        antes da ingestão. Payload não pode conter evento bruto, node, token,
+        media key, direct path, QR bruto ou credencial.
+      parameters:
+        - $ref: '#/components/parameters/KeyId'
+        - $ref: '#/components/parameters/Timestamp'
+        - $ref: '#/components/parameters/Nonce'
+        - $ref: '#/components/parameters/Signature'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GatewayEvent'
+      responses:
+        '204':
+          description: Evento persistido ou já processado.
+        '401':
+          $ref: '#/components/responses/InvalidSignature'
+        '409':
+          description: gateway_event_id reutilizado com digest diferente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          $ref: '#/components/responses/InvalidEnvelope'

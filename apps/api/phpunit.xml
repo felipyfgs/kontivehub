@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+>
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory>app</directory>
+        </include>
+    </source>
+    <php>
+        <!-- server: Laravel Env lê $_SERVER com prioridade sobre putenv/$_ENV no container Docker -->
+        <server name="APP_ENV" value="testing"/>
+        <server name="APP_NAME" value="KontiveHub"/>
+        <server name="APP_URL" value="https://api.kontivehub.com.br"/>
+        <server name="FRONTEND_URL" value="https://app.kontivehub.com.br"/>
+        <server name="PORTAL_URL" value="https://portal.kontivehub.com.br"/>
+        <server name="APP_KEY" value="base64:QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE="/>
+        <server name="AUTH_TWO_FACTOR_REQUIRED" value="false"/>
+        <server name="APP_MAINTENANCE_DRIVER" value="file"/>
+        <server name="BCRYPT_ROUNDS" value="4"/>
+        <server name="BROADCAST_CONNECTION" value="null"/>
+        <server name="CACHE_STORE" value="array"/>
+        <server name="DB_CONNECTION" value="sqlite"/>
+        <server name="DB_DATABASE" value=":memory:"/>
+        <server name="DB_URL" value=""/>
+        <!-- Fixtures determinísticas: não herdar slugs locais do piloto. -->
+        <server name="FISCAL_DEMO_OFFICE_SLUG" value="contador"/>
+        <server name="FISCAL_DEMO_SENTINEL_SLUG" value="plataforma"/>
+        <server name="WORK_DEMO_OFFICE_SLUG" value="contador"/>
+        <server name="WORK_DEMO_SENTINEL_SLUG" value="plataforma"/>
+        <server name="FISCAL_MONITORING_MUTATING_ENABLED" value="false"/>
+        <!-- Perfil/flags de piloto: $_SERVER do Docker não pode vazar para a suíte -->
+        <server name="FISCAL_PROFILE" value="dev"/>
+        <server name="MEI_AUTOMATION_ENABLED" value="false"/>
+        <server name="MEI_AUTOMATION_KILL_SWITCH" value="false"/>
+        <server name="MEI_AUTOMATION_LIVE_EGRESS_ENABLED" value="false"/>
+        <server name="MEI_AUTOMATION_FIXTURE_ENABLED" value="false"/>
+        <server name="SERPRO_TERM_REPRESENTATION_TRIAL" value="REUSE_STORED_TERM"/>
+        <server name="SERPRO_TERM_REPRESENTATION_PRODUCTION" value="PENDING_VALIDATION"/>
+        <server name="MEI_AUTOMATION_PROVIDER_DEFAULT" value="serpro"/>
+        <server name="MEI_AUTOMATION_PROVIDER_PGMEI_DAS_PDF" value=""/>
+        <server name="MEI_AUTOMATION_PROVIDER_PGMEI_DAS_BARCODE" value=""/>
+        <server name="MEI_AUTOMATION_PROVIDER_PGMEI_DEBT" value=""/>
+        <server name="MEI_AUTOMATION_PROVIDER_DASN_HISTORY" value=""/>
+        <!-- Suíte legada: fail-closed de tenant é coberto por testes dedicados com flag true -->
+        <server name="FISCAL_MODEL_FAIL_CLOSED_SCOPES" value="false"/>
+        <server name="MAIL_MAILER" value="array"/>
+        <server name="MAIL_FROM_ADDRESS" value="noreply@kontivehub.com.br"/>
+        <server name="MAIL_FROM_NAME" value="KontiveHub"/>
+        <server name="QUEUE_CONNECTION" value="sync"/>
+        <server name="SESSION_DRIVER" value="array"/>
+        <server name="SESSION_COOKIE" value="kontivehub_session"/>
+        <server name="SESSION_DOMAIN" value=".kontivehub.com.br"/>
+        <server name="SESSION_SECURE_COOKIE" value="true"/>
+        <server name="SESSION_HTTP_ONLY" value="true"/>
+        <server name="SESSION_SAME_SITE" value="lax"/>
+        <server name="SANCTUM_STATEFUL_DOMAINS" value="app.kontivehub.com.br,portal.kontivehub.com.br,api.kontivehub.com.br,localhost,localhost:8080,localhost:3000,127.0.0.1,127.0.0.1:8080,127.0.0.1:3000"/>
+        <server name="CORS_ALLOWED_ORIGINS" value="https://app.kontivehub.com.br,https://portal.kontivehub.com.br"/>
+        <server name="REVERB_ALLOWED_ORIGINS" value="https://app.kontivehub.com.br,https://portal.kontivehub.com.br"/>
+        <server name="PULSE_ENABLED" value="false"/>
+        <server name="TELESCOPE_ENABLED" value="false"/>
+        <server name="NIGHTWATCH_ENABLED" value="false"/>
+        <server name="VAULT_MASTER_KEY" value="AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="/>
+        <server name="VAULT_MASTER_KEY_VERSION" value="1"/>
+        <server name="VAULT_DISK_ROOT" value="/tmp/nfse-vault-test"/>
+        <server name="LOG_CHANNEL" value="stderr"/>
+        <!-- Canal MA: $_SERVER precisa vencer as flags do piloto injetadas pelo Docker -->
+        <server name="SEFAZ_MA_OUTBOUND_ENABLED" value="false"/>
+        <server name="SEFAZ_MA_PROTOCOL_QUERY_ENABLED" value="false"/>
+        <server name="SEFAZ_MA_M2M_RETRIEVAL_ENABLED" value="false"/>
+        <server name="SEFAZ_MA_MUTATING_PROBE_ENABLED" value="false"/>
+        <server name="SEFAZ_MA_OUTBOUND_KILL_SWITCH" value="false"/>
+        <server name="SEFAZ_MA_M2M_STATUS" value="NO_GO_M2M"/>
+        <server name="SEFAZ_SVRS_NFCE_XML_REQUIRE_SIGNATURE" value="false"/>
+        <server name="SEFAZ_SVRS_NFCE_XML_RETRIEVAL_ENABLED" value="false"/>
+        <server name="SEFAZ_SVRS_NFCE_XML_AUTO_QUEUE_ENABLED" value="false"/>
+        <server name="SEFAZ_SVRS_NFCE_XML_KILL_SWITCH" value="false"/>
+        <server name="SEFAZ_SVRS_NFCE_XML_PILOT_ALLOWLIST_ONLY" value="false"/>
+        <server name="SEFAZ_SVRS_NFE55_XML_RETRIEVAL_ENABLED" value="false"/>
+        <server name="SEFAZ_SVRS_NFE55_XML_AUTO_QUEUE_ENABLED" value="false"/>
+        <server name="SEFAZ_SVRS_NFE55_XML_KILL_SWITCH" value="false"/>
+        <server name="SVRS_EGRESS_COHORT_ID" value="test-cohort"/>
+        <server name="SEFAZ_CTE_REQUIRE_SIGNATURE" value="false"/>
+        <server name="PLATFORM_PRIVILEGED_CONTEXT" value="false"/>
+        <server name="INITIAL_ONBOARDING_ENABLED" value="false"/>
+        <server name="INITIAL_ONBOARDING_TOKEN" value=""/>
+        <server name="COMMUNICATION_ENABLED" value="false"/>
+        <server name="COMMUNICATION_FLOWS_ENABLED" value="false"/>
+        <server name="COMMUNICATION_FLOWS_RUNTIME_ENABLED" value="false"/>
+        <server name="WAZYNC_ENABLED" value="false"/>
+        <server name="WAZYNC_URL" value="http://wazync:8080"/>
+        <server name="WAZYNC_HMAC_KEY_ID" value=""/>
+        <server name="WAZYNC_HMAC_SECRET" value=""/>
+
+        <env name="APP_ENV" value="testing" force="true"/>
+        <env name="APP_NAME" value="KontiveHub" force="true"/>
+        <env name="APP_URL" value="https://api.kontivehub.com.br" force="true"/>
+        <env name="FRONTEND_URL" value="https://app.kontivehub.com.br" force="true"/>
+        <env name="PORTAL_URL" value="https://portal.kontivehub.com.br" force="true"/>
+        <env name="APP_KEY" value="base64:QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=" force="true"/>
+        <env name="AUTH_TWO_FACTOR_REQUIRED" value="false" force="true"/>
+        <env name="APP_MAINTENANCE_DRIVER" value="file" force="true"/>
+        <env name="BCRYPT_ROUNDS" value="4" force="true"/>
+        <env name="BROADCAST_CONNECTION" value="null" force="true"/>
+        <env name="CACHE_STORE" value="array" force="true"/>
+        <env name="DB_CONNECTION" value="sqlite" force="true"/>
+        <env name="DB_DATABASE" value=":memory:" force="true"/>
+        <env name="DB_URL" value="" force="true"/>
+        <env name="FISCAL_DEMO_OFFICE_SLUG" value="contador" force="true"/>
+        <env name="FISCAL_DEMO_SENTINEL_SLUG" value="plataforma" force="true"/>
+        <env name="WORK_DEMO_OFFICE_SLUG" value="contador" force="true"/>
+        <env name="WORK_DEMO_SENTINEL_SLUG" value="plataforma" force="true"/>
+        <env name="FISCAL_MONITORING_MUTATING_ENABLED" value="false" force="true"/>
+        <env name="FISCAL_PROFILE" value="dev" force="true"/>
+        <env name="MEI_AUTOMATION_ENABLED" value="false" force="true"/>
+        <env name="MEI_AUTOMATION_KILL_SWITCH" value="false" force="true"/>
+        <env name="MEI_AUTOMATION_LIVE_EGRESS_ENABLED" value="false" force="true"/>
+        <env name="MEI_AUTOMATION_FIXTURE_ENABLED" value="false" force="true"/>
+        <env name="SERPRO_TERM_REPRESENTATION_TRIAL" value="REUSE_STORED_TERM" force="true"/>
+        <env name="SERPRO_TERM_REPRESENTATION_PRODUCTION" value="PENDING_VALIDATION" force="true"/>
+        <env name="MEI_AUTOMATION_PROVIDER_DEFAULT" value="serpro" force="true"/>
+        <env name="MEI_AUTOMATION_PROVIDER_PGMEI_DAS_PDF" value="" force="true"/>
+        <env name="MEI_AUTOMATION_PROVIDER_PGMEI_DAS_BARCODE" value="" force="true"/>
+        <env name="MEI_AUTOMATION_PROVIDER_PGMEI_DEBT" value="" force="true"/>
+        <env name="MEI_AUTOMATION_PROVIDER_DASN_HISTORY" value="" force="true"/>
+        <env name="FISCAL_MODEL_FAIL_CLOSED_SCOPES" value="false" force="true"/>
+        <env name="MAIL_MAILER" value="array" force="true"/>
+        <env name="MAIL_FROM_ADDRESS" value="noreply@kontivehub.com.br" force="true"/>
+        <env name="MAIL_FROM_NAME" value="KontiveHub" force="true"/>
+        <env name="QUEUE_CONNECTION" value="sync" force="true"/>
+        <env name="SESSION_DRIVER" value="array" force="true"/>
+        <env name="SESSION_COOKIE" value="kontivehub_session" force="true"/>
+        <env name="SESSION_DOMAIN" value=".kontivehub.com.br" force="true"/>
+        <env name="SESSION_SECURE_COOKIE" value="true" force="true"/>
+        <env name="SESSION_HTTP_ONLY" value="true" force="true"/>
+        <env name="SESSION_SAME_SITE" value="lax" force="true"/>
+        <env name="SANCTUM_STATEFUL_DOMAINS" value="app.kontivehub.com.br,portal.kontivehub.com.br,api.kontivehub.com.br,localhost,localhost:8080,localhost:3000,127.0.0.1,127.0.0.1:8080,127.0.0.1:3000" force="true"/>
+        <env name="CORS_ALLOWED_ORIGINS" value="https://app.kontivehub.com.br,https://portal.kontivehub.com.br" force="true"/>
+        <env name="REVERB_ALLOWED_ORIGINS" value="https://app.kontivehub.com.br,https://portal.kontivehub.com.br" force="true"/>
+        <env name="PULSE_ENABLED" value="false" force="true"/>
+        <env name="TELESCOPE_ENABLED" value="false" force="true"/>
+        <env name="NIGHTWATCH_ENABLED" value="false" force="true"/>
+        <env name="VAULT_MASTER_KEY" value="AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" force="true"/>
+        <env name="VAULT_MASTER_KEY_VERSION" value="1" force="true"/>
+        <env name="VAULT_DISK_ROOT" value="/tmp/nfse-vault-test" force="true"/>
+        <env name="LOG_CHANNEL" value="stderr" force="true"/>
+        <!-- Canal MA: defaults off no CI mesmo se .env local tiver piloto ligado -->
+        <env name="SEFAZ_MA_OUTBOUND_ENABLED" value="false" force="true"/>
+        <env name="SEFAZ_MA_PROTOCOL_QUERY_ENABLED" value="false" force="true"/>
+        <env name="SEFAZ_MA_M2M_RETRIEVAL_ENABLED" value="false" force="true"/>
+        <env name="SEFAZ_MA_MUTATING_PROBE_ENABLED" value="false" force="true"/>
+        <env name="SEFAZ_MA_OUTBOUND_KILL_SWITCH" value="false" force="true"/>
+        <env name="SEFAZ_MA_M2M_STATUS" value="NO_GO_M2M" force="true"/>
+        <!-- Canal autXML do escritório: defaults off no CI -->
+        <env name="SEFAZ_AUTXML_DISTDFE_ENABLED" value="false" force="true"/>
+        <env name="SEFAZ_AUTXML_KILL_SWITCH" value="false" force="true"/>
+        <env name="SEFAZ_AUTXML_OFFICE_ALLOWLIST" value="" force="true"/>
+        <env name="SEFAZ_AUTXML_ALLOW_ALL_OFFICES" value="false" force="true"/>
+        <env name="IMPORT_ASYNC_BATCHES_ENABLED" value="false" force="true"/>
+        <env name="OUTBOUND_DEADLINE_SCHEDULING_ENABLED" value="false" force="true"/>
+        <env name="OUTBOUND_DEADLINE_PLANNER_ENABLED" value="false" force="true"/>
+        <env name="OUTBOUND_DEADLINE_DISPATCH_ENABLED" value="false" force="true"/>
+        <env name="OUTBOUND_DEADLINE_SHADOW_MODE" value="true" force="true"/>
+        <env name="OUTBOUND_DEADLINE_RETRY_POLICY" value="false" force="true"/>
+        <!-- Portal SVRS: defaults off no CI mesmo com kill switch de piloto no .env -->
+        <env name="SEFAZ_SVRS_NFCE_XML_RETRIEVAL_ENABLED" value="false" force="true"/>
+        <env name="SEFAZ_SVRS_NFCE_XML_AUTO_QUEUE_ENABLED" value="false" force="true"/>
+        <env name="SEFAZ_SVRS_NFCE_XML_PILOT_ALLOWLIST_ONLY" value="false" force="true"/>
+        <env name="SEFAZ_SVRS_NFCE_XML_KILL_SWITCH" value="false" force="true"/>
+        <env name="SEFAZ_SVRS_NFCE_XML_REQUIRE_SIGNATURE" value="false" force="true"/>
+        <env name="SEFAZ_SVRS_NFE55_XML_RETRIEVAL_ENABLED" value="false" force="true"/>
+        <env name="SEFAZ_SVRS_NFE55_XML_AUTO_QUEUE_ENABLED" value="false" force="true"/>
+        <env name="SEFAZ_SVRS_NFE55_XML_KILL_SWITCH" value="false" force="true"/>
+        <env name="SVRS_EGRESS_COHORT_ID" value="test-cohort" force="true"/>
+        <env name="SEFAZ_CTE_REQUIRE_SIGNATURE" value="false" force="true"/>
+        <env name="PLATFORM_PRIVILEGED_CONTEXT" value="false" force="true"/>
+        <env name="INITIAL_ONBOARDING_ENABLED" value="false" force="true"/>
+        <env name="INITIAL_ONBOARDING_TOKEN" value="" force="true"/>
+        <env name="COMMUNICATION_ENABLED" value="false" force="true"/>
+        <env name="COMMUNICATION_FLOWS_ENABLED" value="false" force="true"/>
+        <env name="COMMUNICATION_FLOWS_RUNTIME_ENABLED" value="false" force="true"/>
+        <env name="WAZYNC_ENABLED" value="false" force="true"/>
+        <env name="WAZYNC_URL" value="http://wazync:8080" force="true"/>
+        <env name="WAZYNC_HMAC_KEY_ID" value="" force="true"/>
+        <env name="WAZYNC_HMAC_SECRET" value="" force="true"/>
+        <env name="SVRS_EGRESS_MIN_INTERVAL_GLOBAL" value="120" force="true"/>
+        <env name="SVRS_EGRESS_MIN_INTERVAL_ROOT" value="900" force="true"/>
+        <env name="SVRS_EGRESS_MAX_KEYS_PER_JOB" value="1" force="true"/>
+        <!-- Ledger SERPRO: shadow on / bloqueio comercial off no CI -->
+        <env name="SERPRO_USAGE_SHADOW_MODE" value="true" force="true"/>
+        <env name="SERPRO_USAGE_COMMERCIAL_BLOCKING" value="false" force="true"/>
+        <!-- Integra Contador: fail-closed; .env local de piloto não deve vazar -->
+        <server name="SERPRO_DEFAULT_ENVIRONMENT" value="TRIAL"/>
+        <server name="SERPRO_SMOKE_ENABLED" value="false"/>
+        <server name="SERPRO_KILL_SWITCH" value="false"/>
+        <server name="SERPRO_PROD_CHECK_STRICT" value="false"/>
+        <server name="SERPRO_CAPABILITY_SITFIS" value="disabled"/>
+        <server name="SERPRO_CAPABILITY_AUTENTICA_PROCURADOR" value="disabled"/>
+        <server name="SERPRO_CAPABILITY_AUTHORIZATION" value="disabled"/>
+        <server name="SERPRO_CAPABILITY_MAILBOX" value="disabled"/>
+        <server name="SERPRO_CAPABILITY_DCTFWEB" value="disabled"/>
+        <server name="SERPRO_CAPABILITY_SIMPLES_MEI" value="disabled"/>
+        <server name="SERPRO_CAPABILITY_INSTALLMENTS" value="disabled"/>
+        <server name="SERPRO_CAPABILITY_GUIDES" value="disabled"/>
+        <server name="SERPRO_CAPABILITY_REGISTRATIONS" value="disabled"/>
+        <server name="SERPRO_CAPABILITY_TAX_PROCESSES" value="disabled"/>
+        <server name="SERPRO_CAPABILITY_DEFAULT" value="disabled"/>
+        <env name="SERPRO_DEFAULT_ENVIRONMENT" value="TRIAL" force="true"/>
+        <env name="SERPRO_SMOKE_ENABLED" value="false" force="true"/>
+        <env name="SERPRO_KILL_SWITCH" value="false" force="true"/>
+        <env name="SERPRO_PROD_CHECK_STRICT" value="false" force="true"/>
+        <env name="SERPRO_CAPABILITY_SITFIS" value="disabled" force="true"/>
+        <env name="SERPRO_CAPABILITY_AUTENTICA_PROCURADOR" value="disabled" force="true"/>
+        <env name="SERPRO_CAPABILITY_AUTHORIZATION" value="disabled" force="true"/>
+        <env name="SERPRO_CAPABILITY_MAILBOX" value="disabled" force="true"/>
+        <env name="SERPRO_CAPABILITY_DCTFWEB" value="disabled" force="true"/>
+        <env name="SERPRO_CAPABILITY_SIMPLES_MEI" value="disabled" force="true"/>
+        <env name="SERPRO_CAPABILITY_INSTALLMENTS" value="disabled" force="true"/>
+        <env name="SERPRO_CAPABILITY_GUIDES" value="disabled" force="true"/>
+        <env name="SERPRO_CAPABILITY_REGISTRATIONS" value="disabled" force="true"/>
+        <env name="SERPRO_CAPABILITY_TAX_PROCESSES" value="disabled" force="true"/>
+        <env name="SERPRO_CAPABILITY_DEFAULT" value="disabled" force="true"/>
+    </php>
+</phpunit>

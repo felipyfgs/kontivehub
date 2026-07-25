@@ -1,0 +1,53 @@
+{
+  "ni": "27865757000102",
+  "tipoEstabelecimento": "1",
+  "nomeEmpresarial": "GLOBO COMUNICACAO E PARTICIPACOES S/A",
+  "nomeFantasia": "TV GLOBO",
+  "situacaoCadastral": {
+    "codigo": "2",
+    "data": "2005-11-03",
+    "motivo": "ATIVA"
+  },
+  "dataAbertura": "1986-01-25",
+  "naturezaJuridica": {
+    "codigo": "2046",
+    "descricao": "Sociedade Anônima Fechada"
+  },
+  "cnaePrincipal": {
+    "codigo": "6021700",
+    "descricao": "Atividades de televisão aberta"
+  },
+  "cnaeSecundarias": [
+    {
+      "codigo": "4752100",
+      "descricao": "Comércio varejista especializado de equipamentos de telefonia e comunicação"
+    }
+  ],
+  "endereco": {
+    "logradouro": "RUA LOPES QUINTAS",
+    "numero": "303",
+    "complemento": "",
+    "cep": "22460901",
+    "bairro": "JARDIM BOTANICO",
+    "municipio": "RIO DE JANEIRO",
+    "uf": "RJ"
+  },
+  "porteEmpresa": "05",
+  "capitalSocial": 6983568523.86,
+  "correioEletronico": "contato@example.com",
+  "telefones": [
+    { "ddd": "21", "numero": "25402345" }
+  ],
+  "informacoesAdicionais": {
+    "optanteMei": false,
+    "optanteSimples": false
+  },
+  "socios": [
+    {
+      "tipoSocio": "Pessoa Física",
+      "nome": "PEDRO BORGES GARCIA",
+      "qualificacao": "Diretor",
+      "dataInclusao": "2024-03-21"
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+<?php
+
+namespace App\Http\Requests\Communication;
+
+use App\Support\CurrentOffice;
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+
+final class UpdateInboxRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return true;
+    }
+
+    public function rules(): array
+    {
+        $officeId = (int) app(CurrentOffice::class)->office()->id;
+        $inboxId = (int) $this->route('inbox');
+
+        return [
+            'name' => [
+                'sometimes',
+                'string',
+                'min:1',
+                'max:120',
+                Rule::unique('communication_inboxes', 'name')
+                    ->ignore($inboxId)
+                    ->where(fn ($query) => $query
+                        ->where('office_id', $officeId)),
+            ],
+            'is_enabled' => ['sometimes', 'boolean'],
+            'is_default' => ['sometimes', 'boolean'],
+            'work_department_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'lock_version' => ['required', 'integer', 'min:1'],
+        ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('name') && is_string($this->input('name'))) {
+            $this->merge(['name' => trim($this->string('name')->toString())]);
+        }
+    }
+}
