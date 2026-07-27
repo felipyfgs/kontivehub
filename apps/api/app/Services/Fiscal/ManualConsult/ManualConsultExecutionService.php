@@ -8,7 +8,7 @@ use App\Jobs\Fiscal\ExecuteFiscalMonitoringRunJob;
 use App\Jobs\Fiscal\RefreshRegistrationLinksJob;
 use App\Jobs\Fiscal\RefreshTaxProcessesJob;
 use App\Models\Client;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Fiscal\Guides\PagtowebPaymentCountQueryService;
 use App\Services\Fiscal\Guides\PagtowebPaymentListQueryService;
 use App\Services\Fiscal\Guides\SicalcRevenueSupportQueryService;
@@ -23,7 +23,7 @@ use App\Services\Fiscal\SimplesMei\SimplesMeiQueryService;
 use App\Services\FiscalMonitoring\FiscalMonitoringRunService;
 use App\Services\Integra\Dctfweb\DctfwebCodes;
 use App\Services\Integra\Dctfweb\DctfwebDeclarationService;
-use App\Services\Integra\Dctfweb\MitApuracaoService;
+use App\Services\Integra\Dctfweb\MitAssessmentService;
 use App\Services\Integra\Dctfweb\MitListaApuracoesQueryService;
 use App\Services\Integra\EnsureClientProcuracaoForConsult;
 use App\Services\Integra\Parcelamento\ParcelamentoServiceCatalog;
@@ -56,7 +56,7 @@ final class ManualConsultExecutionService
         private readonly PagtowebPaymentCountQueryService $pagtowebCount,
         private readonly SitfisSnapshotService $sitfis,
         private readonly DctfwebDeclarationService $dctfwebDeclarations,
-        private readonly MitApuracaoService $mit,
+        private readonly MitAssessmentService $mit,
         private readonly MitListaApuracoesQueryService $mitLista,
         private readonly EnsureClientProcuracaoForConsult $procuracaoEnsure,
     ) {}
@@ -66,7 +66,7 @@ final class ManualConsultExecutionService
      * @return array<string, mixed>
      */
     public function execute(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $actionId,
         array $params,
@@ -78,7 +78,7 @@ final class ManualConsultExecutionService
         }
 
         $def = $this->readPolicy->authorizeDispatch(
-            $office,
+            $tenant,
             $client,
             $actionId,
             $actorUserId,
@@ -86,7 +86,7 @@ final class ManualConsultExecutionService
 
         if ($def->requiredProxyPowers !== []) {
             $ensure = $this->procuracaoEnsure->ensure(
-                $office,
+                $tenant,
                 $client,
                 $this->eligibility->environment(),
                 $def->requiredProxyPowers,
@@ -100,11 +100,11 @@ final class ManualConsultExecutionService
             }
         }
 
-        $this->readPolicy->assertDispatchReady($office, $client, $def, $actorUserId);
+        $this->readPolicy->assertDispatchReady($tenant, $client, $def, $actorUserId);
 
         $result = $this->executionContext->within(
             $def,
-            fn (): array => $this->dispatch($office, $client, $def, $params, $actorUserId),
+            fn (): array => $this->dispatch($tenant, $client, $def, $params, $actorUserId),
         );
 
         return [
@@ -122,40 +122,40 @@ final class ManualConsultExecutionService
      * @return array<string, mixed>
      */
     private function dispatch(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         ManualConsultActionDefinition $def,
         array $params,
         ?int $actorUserId,
     ): array {
         return match ($def->handler) {
-            'ccmei_data' => $this->ccmei->enqueueManualConsult($office, $client, $actorUserId),
-            'ccmei_status' => $this->ccmeiStatus->enqueueManualConsult($office, $client, $actorUserId),
-            'defis_list' => $this->defisList->enqueueManualConsult($office, $client, $actorUserId),
+            'ccmei_data' => $this->ccmei->enqueueManualConsult($tenant, $client, $actorUserId),
+            'ccmei_status' => $this->ccmeiStatus->enqueueManualConsult($tenant, $client, $actorUserId),
+            'defis_list' => $this->defisList->enqueueManualConsult($tenant, $client, $actorUserId),
             'defis_latest' => $this->defisLatest->enqueueManualConsult(
-                $office,
+                $tenant,
                 $client,
                 (int) $this->requireParam($params, 'year'),
                 $actorUserId,
             ),
             'defis_specific' => $this->defisSpecific->enqueueManualConsult(
-                $office,
+                $tenant,
                 $client,
                 (int) $this->requireParam($params, 'reference_id'),
                 $actorUserId,
             ),
             'pgmei_debt' => [
                 'runs' => $this->pgmei->enqueueManualConsult(
-                    $office,
+                    $tenant,
                     [$client->id],
                     (int) $this->requireParam($params, 'year'),
                     true,
                     $actorUserId,
                 ),
             ],
-            'pgdasd_documents' => $this->pgdasdDocuments($office, $client, $def, $params, $actorUserId),
+            'pgdasd_documents' => $this->pgdasdDocuments($tenant, $client, $def, $params, $actorUserId),
             'pgdasd_extract' => $this->enqueueRun(
-                $office,
+                $tenant,
                 $client,
                 $def,
                 $actorUserId,
@@ -164,7 +164,7 @@ final class ManualConsultExecutionService
                 ],
             ),
             'regime_calendar' => $this->simplesMei->enqueueConsult(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 systemCode: 'INTEGRA_SN',
                 serviceCode: 'REGIME_APURACAO',
@@ -173,7 +173,7 @@ final class ManualConsultExecutionService
                 dispatch: true,
             )->toPublicArray(),
             'regime_option' => $this->simplesMei->enqueueConsult(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 systemCode: 'INTEGRA_SN',
                 serviceCode: 'REGIME_APURACAO',
@@ -183,7 +183,7 @@ final class ManualConsultExecutionService
                 dispatch: true,
             )->toPublicArray(),
             'regime_resolution' => $this->simplesMei->enqueueConsult(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 systemCode: 'INTEGRA_SN',
                 serviceCode: 'REGIME_APURACAO',
@@ -193,43 +193,43 @@ final class ManualConsultExecutionService
                 dispatch: true,
             )->toPublicArray(),
             'sicalc_support' => $this->sicalc->enqueueManualConsult(
-                $office,
+                $tenant,
                 $client,
                 (string) $this->requireParam($params, 'codigo_receita'),
                 $actorUserId,
             ),
             'pagtoweb_list' => $this->pagtowebList->enqueueManualConsult(
-                $office,
+                $tenant,
                 $client,
                 (array) ($params['filters'] ?? []),
                 $actorUserId,
             ),
             'pagtoweb_count' => $this->pagtowebCount->enqueueManualConsult(
-                $office,
+                $tenant,
                 $client,
                 (array) ($params['filters'] ?? []),
                 $actorUserId,
             ),
-            'sitfis_refresh' => $this->sitfisRefresh($office, $client, $actorUserId),
-            'dctfweb_read' => $this->dctfwebRead($office, $client, $def, $params, $actorUserId),
-            'mit_read' => $this->mitRead($office, $client, $def, $params, $actorUserId),
-            'mit_lista' => $this->mitLista($office, $client, $params, $actorUserId),
+            'sitfis_refresh' => $this->sitfisRefresh($tenant, $client, $actorUserId),
+            'dctfweb_read' => $this->dctfwebRead($tenant, $client, $def, $params, $actorUserId),
+            'mit_read' => $this->mitRead($tenant, $client, $def, $params, $actorUserId),
+            'mit_lista' => $this->mitLista($tenant, $client, $params, $actorUserId),
             'mailbox_list', 'mailbox_indicator', 'dte_status' => $this->enqueueRun(
-                $office,
+                $tenant,
                 $client,
                 $def,
                 $actorUserId,
             ),
             'mailbox_detail' => $this->enqueueRun(
-                $office,
+                $tenant,
                 $client,
                 $def,
                 $actorUserId,
                 progress: ['message_id' => (string) $this->requireParam($params, 'message_id')],
             ),
-            'installment_read' => $this->installmentRead($office, $client, $def, $params, $actorUserId),
-            'registrations_refresh' => $this->registrationsRefresh($office, $client, $def, $actorUserId),
-            'tax_process_refresh' => $this->taxProcessRefresh($office, $client, $def, $actorUserId),
+            'installment_read' => $this->installmentRead($tenant, $client, $def, $params, $actorUserId),
+            'registrations_refresh' => $this->registrationsRefresh($tenant, $client, $def, $actorUserId),
+            'tax_process_refresh' => $this->taxProcessRefresh($tenant, $client, $def, $actorUserId),
             default => throw new HttpException(422, ManualConsultEligibility::AdapterMissing->label()),
         };
     }
@@ -239,7 +239,7 @@ final class ManualConsultExecutionService
      * @return array<string, mixed>
      */
     private function pgdasdDocuments(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         ManualConsultActionDefinition $def,
         array $params,
@@ -256,7 +256,7 @@ final class ManualConsultExecutionService
             }
 
             return $this->enqueueRun(
-                $office,
+                $tenant,
                 $client,
                 $def,
                 $actorUserId,
@@ -279,7 +279,7 @@ final class ManualConsultExecutionService
         }
 
         $run = $this->pgdasd->enqueueDocumentCollect(
-            $office,
+            $tenant,
             $client,
             $operation,
             $payload,
@@ -294,17 +294,17 @@ final class ManualConsultExecutionService
      * @return array<string, mixed>
      */
     private function dctfwebRead(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         ManualConsultActionDefinition $def,
         array $params,
         ?int $actorUserId,
     ): array {
         $periodKey = (string) $this->requireParam($params, 'period_key');
-        $declaration = $this->dctfwebDeclarations->findOrCreate($office, $client, $periodKey);
+        $declaration = $this->dctfwebDeclarations->findOrCreate($tenant, $client, $periodKey);
         $op = $def->runCodes['operation'] ?? DctfwebCodes::OP_CONSULTAR_RECIBO;
         $run = $this->runs->enqueueManual(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             systemCode: DctfwebCodes::SYSTEM_DCTFWEB,
             serviceCode: DctfwebCodes::SERVICE_DCTFWEB,
@@ -329,17 +329,17 @@ final class ManualConsultExecutionService
      * @return array<string, mixed>
      */
     private function mitRead(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         ManualConsultActionDefinition $def,
         array $params,
         ?int $actorUserId,
     ): array {
         $periodKey = (string) $this->requireParam($params, 'period_key');
-        $apuracao = $this->mit->findOrCreate($office, $client, $periodKey);
+        $apuracao = $this->mit->findOrCreate($tenant, $client, $periodKey);
         $op = $def->runCodes['operation'] ?? 'CONSULTAR_SITUACAO';
         $run = $this->runs->enqueueManual(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             systemCode: DctfwebCodes::SYSTEM_MIT,
             serviceCode: DctfwebCodes::SERVICE_MIT,
@@ -370,7 +370,7 @@ final class ManualConsultExecutionService
      * @return array<string, mixed>
      */
     private function mitLista(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         array $params,
         ?int $actorUserId,
@@ -382,7 +382,7 @@ final class ManualConsultExecutionService
         ], static fn (?int $v): bool => $v !== null));
 
         $run = $this->mitLista->enqueue(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             filters: $filters,
             actorId: $actorUserId,
@@ -395,10 +395,10 @@ final class ManualConsultExecutionService
     /**
      * @return array<string, mixed>
      */
-    private function sitfisRefresh(Office $office, Client $client, ?int $actorUserId): array
+    private function sitfisRefresh(Tenant $tenant, Client $client, ?int $actorUserId): array
     {
         $result = $this->sitfis->refresh(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             force: false,
             actorId: $actorUserId,
@@ -420,7 +420,7 @@ final class ManualConsultExecutionService
      * @return array<string, mixed>
      */
     private function installmentRead(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         ManualConsultActionDefinition $def,
         array $params,
@@ -437,7 +437,7 @@ final class ManualConsultExecutionService
         };
 
         $run = $this->runs->enqueueManual(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             systemCode: ParcelamentoServiceCatalog::SOLUTION,
             serviceCode: $modality,
@@ -480,13 +480,13 @@ final class ManualConsultExecutionService
      * @return array<string, mixed>
      */
     private function registrationsRefresh(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         ManualConsultActionDefinition $def,
         ?int $actorUserId,
     ): array {
         $job = RefreshRegistrationLinksJob::dispatchIfAllowed(
-            (int) $office->id,
+            (int) $tenant->id,
             (int) $client->id,
             bin2hex(random_bytes(8)),
             manualActionId: $def->actionId,
@@ -503,13 +503,13 @@ final class ManualConsultExecutionService
      * @return array<string, mixed>
      */
     private function taxProcessRefresh(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         ManualConsultActionDefinition $def,
         ?int $actorUserId,
     ): array {
         $job = RefreshTaxProcessesJob::dispatchIfAllowed(
-            (int) $office->id,
+            (int) $tenant->id,
             (int) $client->id,
             bin2hex(random_bytes(8)),
             manualActionId: $def->actionId,
@@ -527,7 +527,7 @@ final class ManualConsultExecutionService
      * @return array<string, mixed>
      */
     private function enqueueRun(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         ManualConsultActionDefinition $def,
         ?int $actorUserId,
@@ -540,7 +540,7 @@ final class ManualConsultExecutionService
         }
 
         $run = $this->runs->enqueueManual(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             systemCode: $codes['system'],
             serviceCode: $codes['service'],

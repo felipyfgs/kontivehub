@@ -34,7 +34,6 @@ describe('simples-mei consulta rápida', () => {
     expect(page).toContain('trackConsultPending')
     expect(read('app/pages/monitoring/simples/index.vue')).toContain('submodule="PGDASD"')
     expect(read('app/pages/monitoring/mei/index.vue')).toContain('submodule="PGMEI"')
-    expect(read('app/pages/monitoring/simples-mei/index.vue')).toContain('/monitoring/simples')
   })
 
   it('colunas expõem atalho de consulta por linha', () => {

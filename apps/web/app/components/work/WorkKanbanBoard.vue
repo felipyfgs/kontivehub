@@ -2,7 +2,7 @@
 /**
  * Board Kanban da fila de tarefas — colunas por status + DnD → mutações HTTP.
  */
-import type { OperationalTaskSummary } from '~/types/work'
+import type { WorkTaskSummary } from '~/types/work'
 import type { IDragEvent } from '@vue-dnd-kit/core'
 import { apiErrorMessage } from '~/utils/api-error'
 import {
@@ -19,7 +19,7 @@ import {
 } from '~/utils/work-kanban-transition'
 
 const props = defineProps<{
-  items: OperationalTaskSummary[]
+  items: WorkTaskSummary[]
   total: number
   loading?: boolean
   error?: string | null
@@ -53,7 +53,7 @@ const reopenOpen = ref(false)
 const reopenJustification = ref('')
 
 type PendingDrop = {
-  task: OperationalTaskSummary
+  task: WorkTaskSummary
   from: WorkKanbanColumnStatus
   to: WorkKanbanColumnStatus
   action: WorkKanbanTransitionAction
@@ -80,7 +80,7 @@ function cloneBoard(source: WorkKanbanBoardColumns): WorkKanbanBoardColumns {
   }
 }
 
-function syncColumns(items: OperationalTaskSummary[]) {
+function syncColumns(items: WorkTaskSummary[]) {
   const grouped = groupTasksForKanbanBoard(items)
   for (const status of WORK_KANBAN_COLUMNS) {
     columnItems[status] = grouped[status].map(item => ({ ...item }))
@@ -111,7 +111,7 @@ watch(reopenOpen, (open) => {
 function findTaskLocation(taskId: number): {
   status: WorkKanbanColumnStatus
   index: number
-  task: OperationalTaskSummary
+  task: WorkTaskSummary
 } | null {
   for (const status of WORK_KANBAN_COLUMNS) {
     const index = columnItems[status].findIndex(task => task.id === taskId)
@@ -125,7 +125,7 @@ function findTaskLocation(taskId: number): {
 function moveTaskOptimistic(
   taskId: number,
   to: WorkKanbanColumnStatus
-): { from: WorkKanbanColumnStatus, task: OperationalTaskSummary } | null {
+): { from: WorkKanbanColumnStatus, task: WorkTaskSummary } | null {
   const located = findTaskLocation(taskId)
   if (!located) return null
   const [removed] = columnItems[located.status].splice(located.index, 1)
@@ -142,7 +142,7 @@ function restoreBoard(snapshot: WorkKanbanBoardColumns) {
 }
 
 async function persistTransition(
-  task: OperationalTaskSummary,
+  task: WorkTaskSummary,
   action: WorkKanbanTransitionAction,
   reason?: string
 ) {
@@ -213,7 +213,7 @@ function cancelPendingModal() {
 }
 
 async function onColumnDrop(
-  event: IDragEvent<OperationalTaskSummary, { status: WorkKanbanColumnStatus }>
+  event: IDragEvent<WorkTaskSummary, { status: WorkKanbanColumnStatus }>
 ): Promise<boolean> {
   const dragged = event.draggedItems[0]
   const toStatus = (event.dropZone?.data as { status?: WorkKanbanColumnStatus } | undefined)?.status

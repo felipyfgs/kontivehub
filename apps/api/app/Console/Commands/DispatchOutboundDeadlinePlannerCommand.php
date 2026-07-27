@@ -7,14 +7,14 @@ use App\Enums\OutboundRetrievalOrigin;
 use App\Enums\SvrsNfceRecoveryStatus;
 use App\Jobs\PlanOutboundDeadlineScheduleJob;
 use App\Jobs\RecoverSvrsNfceXmlJob;
-use App\Models\MaOutboundRetrievalRequest;
+use App\Models\OutboundRetrievalRequest;
 use App\Services\Outbound\OutboundDeadlineFairQueue;
 use App\Services\Outbound\OutboundDeadlineSatisfactionService;
 use Illuminate\Console\Command;
 
 class DispatchOutboundDeadlinePlannerCommand extends Command
 {
-    protected $signature = 'outbound:deadline-plan {--office= : office_id opcional} {--dispatch : enfileira slots vencidos (se flags on)}';
+    protected $signature = 'outbound:deadline-plan {--tenant= : tenant_id opcional} {--dispatch : enfileira slots vencidos (se flags on)}';
 
     protected $description = 'Planeja prazos/capacidade de captura de saídas (shadow por default)';
 
@@ -26,8 +26,8 @@ class DispatchOutboundDeadlinePlannerCommand extends Command
             return self::SUCCESS;
         }
 
-        $office = $this->option('office') !== null ? (int) $this->option('office') : null;
-        PlanOutboundDeadlineScheduleJob::dispatchSync($office);
+        $tenant = $this->option('tenant') !== null ? (int) $this->option('tenant') : null;
+        PlanOutboundDeadlineScheduleJob::dispatchSync($tenant);
 
         $this->info('Planner de prazo executado.');
 
@@ -69,7 +69,7 @@ class DispatchOutboundDeadlinePlannerCommand extends Command
             return self::SUCCESS;
         }
 
-        $dueQuery = MaOutboundRetrievalRequest::query()
+        $dueQuery = OutboundRetrievalRequest::query()
             ->where('origin', OutboundRetrievalOrigin::SvrsPortalByKey)
             ->whereIn('recovery_status', [
                 SvrsNfceRecoveryStatus::Eligible->value,
@@ -86,9 +86,9 @@ class DispatchOutboundDeadlinePlannerCommand extends Command
             ->where('capacity_at_risk', false)
             ->limit(max($limit, $limit * 10));
 
-        // Mesmo filtro de office do planner: --office=N não pode despachar slots de outros escritórios.
-        if ($office !== null) {
-            $dueQuery->where('office_id', $office);
+        // Mesmo filtro de tenant do planner: --tenant=N não pode despachar slots de outros escritórios.
+        if ($tenant !== null) {
+            $dueQuery->where('tenant_id', $tenant);
         }
 
         $candidates = $dueQuery->get();
@@ -100,10 +100,10 @@ class DispatchOutboundDeadlinePlannerCommand extends Command
         foreach ($due as $req) {
             // Revalidar: se vault/catálogo já tem full, cancela em vez de enfileirar
             if ($req->access_key) {
-                $pref = $satisfaction->preferExistingSource((int) $req->office_id, (string) $req->access_key);
+                $pref = $satisfaction->preferExistingSource((int) $req->tenant_id, (string) $req->access_key);
                 if ($pref['has_full']) {
                     $satisfaction->markCapturedBySource(
-                        (int) $req->office_id,
+                        (int) $req->tenant_id,
                         (string) $req->access_key,
                         $pref['source'] ?? 'VAULT',
                         $pref['sha256'],

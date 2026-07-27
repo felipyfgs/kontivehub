@@ -2,7 +2,7 @@
  * Árvore Cliente → processos → tasks no modo `group=client`.
  * Multi-expand de clientes/processos, cache por group key e prefetch paralelo.
  */
-import type { OperationalProcess } from '~/types/work'
+import type { WorkProcess } from '~/types/work'
 
 /** Concorrência do prefetch de filhos (3–5). */
 export const GROUP_CHILDREN_PREFETCH_CONCURRENCY = 4
@@ -11,7 +11,7 @@ export type GroupChildrenCacheStatus = 'idle' | 'loading' | 'ready' | 'error'
 
 export interface GroupChildrenCacheEntry {
   status: GroupChildrenCacheStatus
-  processes: OperationalProcess[]
+  processes: WorkProcess[]
   error: string | null
   page: number
   total: number
@@ -101,8 +101,8 @@ export async function mapWithConcurrency<T>(
 /** Processos materializados (cache ready) — elegíveis a bulk. */
 export function materialisedProcessesFromCache(
   cache: Record<string, GroupChildrenCacheEntry>
-): OperationalProcess[] {
-  const out: OperationalProcess[] = []
+): WorkProcess[] {
+  const out: WorkProcess[] = []
   const seen = new Set<number>()
   for (const entry of Object.values(cache)) {
     if (entry.status !== 'ready') continue
@@ -120,9 +120,9 @@ export function materialisedProcessesFromCache(
  * filhos/grupos, mantém metadados das seleções anteriores sem inventar recursos.
  */
 export function mergeMaterialisedProcesses(
-  current: Record<string, OperationalProcess>,
-  processes: readonly OperationalProcess[]
-): Record<string, OperationalProcess> {
+  current: Record<string, WorkProcess>,
+  processes: readonly WorkProcess[]
+): Record<string, WorkProcess> {
   const next = { ...current }
   for (const process of processes) {
     next[String(process.id)] = process
@@ -131,7 +131,7 @@ export function mergeMaterialisedProcesses(
 }
 
 export function groupChildrenSelectionState(
-  processes: readonly OperationalProcess[],
+  processes: readonly WorkProcess[],
   processSelection: Record<string, boolean>
 ): 'none' | 'some' | 'all' {
   if (!processes.length) return 'none'

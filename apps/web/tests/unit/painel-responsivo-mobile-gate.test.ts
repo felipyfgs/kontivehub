@@ -14,11 +14,11 @@ const MOBILE_CARD_SURFACES = [
   'app/pages/docs/imports/[id].vue',
   'app/pages/work/templates/index.vue',
   'app/pages/work/processes/index.vue',
-  'app/pages/admin/offices/index.vue',
+  'app/pages/admin/tenants/index.vue',
   'app/pages/admin/serpro/catalog.vue',
   'app/pages/admin/serpro/contracts.vue',
   'app/pages/admin/serpro/usage.vue',
-  'app/pages/settings/usage.vue',
+  'app/components/settings/TenantUsagePage.vue',
   'app/components/docs/Catalog.vue',
   'app/components/docs/ByClient.vue',
   'app/components/docs/Detail.vue',
@@ -188,17 +188,17 @@ describe('painel-responsivo-mobile-gate', () => {
       'app/pages/clients/[id]/dados-adicionais.vue',
       'app/pages/clients/[id]/observacoes.vue',
       'app/pages/clients/[id]/contratos.vue',
-      'app/pages/settings/team.vue',
-      'app/pages/settings/departments.vue',
-      'app/pages/settings/subscription.vue',
-      'app/pages/settings/usage.vue'
+      'app/components/settings/TenantTeamPage.vue',
+      'app/components/settings/TenantDepartmentsPage.vue',
+      'app/components/settings/TenantSubscriptionPage.vue',
+      'app/components/settings/TenantUsagePage.vue'
     ]
     for (const rel of leafPages) {
       const source = readFileSync(root(rel), 'utf8')
       expect(source, rel).toContain('ShellSectionHeader')
     }
 
-    const team = readFileSync(root('app/pages/settings/team.vue'), 'utf8')
+    const team = readFileSync(root('app/components/settings/TenantTeamPage.vue'), 'utf8')
     expect(team).toContain('ShellFilterToolbarLite')
   })
 
@@ -230,15 +230,15 @@ describe('painel-responsivo-mobile-gate', () => {
     expect(adicionais).toContain('ShellPanelAccordion')
     expect(adicionais).toContain('USwitch')
 
-    const office = readFileSync(root('app/components/settings/OfficeSettingsPanel.vue'), 'utf8')
-    expect(office).toContain('ShellPanelAccordion')
-    expect(office).toContain('SettingsOfficeCredentialSection')
-    expect(office).toContain('refreshIntegration')
-    expect(office).not.toContain('settings-onboarding-status')
-    expect(office).not.toContain('UStepper')
-    expect(office).not.toContain('consentimento')
+    const tenant = readFileSync(root('app/components/settings/TenantSettingsPanel.vue'), 'utf8')
+    expect(tenant).toContain('ShellPanelAccordion')
+    expect(tenant).toContain('SettingsTenantCredentialSection')
+    expect(tenant).toContain('refreshIntegration')
+    expect(tenant).not.toContain('settings-onboarding-status')
+    expect(tenant).not.toContain('UStepper')
+    expect(tenant).not.toContain('consentimento')
 
-    const credential = readFileSync(root('app/components/settings/OfficeCredentialSection.vue'), 'utf8')
+    const credential = readFileSync(root('app/components/settings/TenantCredentialSection.vue'), 'utf8')
     expect(credential).toContain('Atualizar integração')
     expect(credential).toContain('settings-credential-refresh-integration')
 
@@ -275,11 +275,9 @@ describe('painel-responsivo-mobile-gate', () => {
         return false
       }
       const source = readFileSync(full, 'utf8')
-      // Só pages que montam navbar/painel próprio (não redirects puros)
+      // Só pages que montam navbar ou painel próprio.
       const hasChrome = /ShellPageNavbar|UDashboardNavbar|UDashboardPanel|ShellPagePanel|ShellSettingsShell/.test(source)
       if (!hasChrome) return false
-      // Redirect-only meta
-      if (/definePageMeta\(\s*\{[^}]*redirect:/s.test(source) && !hasChrome) return false
       return true
     })
 

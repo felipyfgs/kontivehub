@@ -13,10 +13,10 @@ use App\Models\Client;
 use App\Models\Establishment;
 use App\Models\FiscalMutationOperation;
 use App\Models\MeiAutomationAttempt;
-use App\Models\Office;
-use App\Models\OfficeSerproAuthorization;
 use App\Models\SerproApiUsageEntry;
 use App\Models\SerproContract;
+use App\Models\Tenant;
+use App\Models\TenantSerproAuthorization;
 use App\Services\Fiscal\Mutations\FiscalMutationIntegraRequestFactory;
 use App\Services\MeiAutomation\MeiDasMutationReconciler;
 use App\Services\MeiAutomation\MeiPortalFiscalMutationTransport;
@@ -33,9 +33,9 @@ final class MeiPortalFiscalMutationTransportTest extends TestCase
 
     public function test_portal_queued_is_idempotent_and_does_not_consume_serpro(): void
     {
-        [$office, $client, $mutation] = $this->mutation();
+        [$tenant, $client, $mutation] = $this->mutation();
         $this->enablePortal();
-        $this->enableSerproFallback($office);
+        $this->enableSerproFallback($tenant);
         Queue::fake();
         Http::fake([
             'http://mei:8080/v1/jobs' => Http::response([
@@ -48,7 +48,7 @@ final class MeiPortalFiscalMutationTransportTest extends TestCase
                 'action_type' => 'MUTATION',
             ], 202),
         ]);
-        $request = $this->request($office, $client, $mutation);
+        $request = $this->request($tenant, $client, $mutation);
         $transport = app(MeiPortalFiscalMutationTransport::class);
 
         self::assertTrue($transport->execute($request)->isStillProcessing());
@@ -65,9 +65,9 @@ final class MeiPortalFiscalMutationTransportTest extends TestCase
 
     public function test_success_confirms_portal_without_serpro_and_uncertain_never_resends(): void
     {
-        [$office, $client, $confirmedMutation] = $this->mutation();
+        [$tenant, $client, $confirmedMutation] = $this->mutation();
         $confirmedAttempt = $this->attempt(
-            $office,
+            $tenant,
             $client,
             $confirmedMutation,
             MeiAutomationStatus::Succeeded,
@@ -79,9 +79,9 @@ final class MeiPortalFiscalMutationTransportTest extends TestCase
         self::assertSame(FiscalMutationStatus::Confirmed, $confirmedMutation->refresh()->status);
         self::assertSame(0, SerproApiUsageEntry::query()->withoutGlobalScopes()->count());
 
-        [, , $uncertainMutation] = $this->mutation($office, $client);
+        [, , $uncertainMutation] = $this->mutation($tenant, $client);
         $uncertainAttempt = $this->attempt(
-            $office,
+            $tenant,
             $client,
             $uncertainMutation,
             MeiAutomationStatus::Uncertain,
@@ -111,9 +111,9 @@ final class MeiPortalFiscalMutationTransportTest extends TestCase
 
     public function test_pre_submission_transport_failure_falls_back_once_to_serpro(): void
     {
-        [$office, $client, $mutation] = $this->mutation();
+        [$tenant, $client, $mutation] = $this->mutation();
         $this->enablePortal();
-        $this->enableSerproFallback($office);
+        $this->enableSerproFallback($tenant);
         $serpro = new FakeSerproFiscalMutationTransport;
         $this->app->instance(SerproFiscalMutationTransport::class, $serpro);
         Http::fake([
@@ -121,7 +121,7 @@ final class MeiPortalFiscalMutationTransportTest extends TestCase
         ]);
 
         $response = app(MeiPortalFiscalMutationTransport::class)
-            ->execute($this->request($office, $client, $mutation));
+            ->execute($this->request($tenant, $client, $mutation));
 
         self::assertTrue($response->success);
         self::assertSame(1, $serpro->executeCalls);
@@ -133,9 +133,9 @@ final class MeiPortalFiscalMutationTransportTest extends TestCase
 
     public function test_pre_submission_connection_failure_falls_back_once_to_serpro(): void
     {
-        [$office, $client, $mutation] = $this->mutation();
+        [$tenant, $client, $mutation] = $this->mutation();
         $this->enablePortal();
-        $this->enableSerproFallback($office);
+        $this->enableSerproFallback($tenant);
         $serpro = new FakeSerproFiscalMutationTransport;
         $this->app->instance(SerproFiscalMutationTransport::class, $serpro);
         Http::fake(function () {
@@ -143,7 +143,7 @@ final class MeiPortalFiscalMutationTransportTest extends TestCase
         });
 
         $response = app(MeiPortalFiscalMutationTransport::class)
-            ->execute($this->request($office, $client, $mutation));
+            ->execute($this->request($tenant, $client, $mutation));
 
         self::assertTrue($response->success);
         self::assertSame(1, $serpro->executeCalls);
@@ -153,17 +153,17 @@ final class MeiPortalFiscalMutationTransportTest extends TestCase
             ->fallback_reason);
     }
 
-    /** @return array{Office, Client, FiscalMutationOperation} */
-    private function mutation(?Office $office = null, ?Client $client = null): array
+    /** @return array{Tenant, Client, FiscalMutationOperation} */
+    private function mutation(?Tenant $tenant = null, ?Client $client = null): array
     {
-        $office ??= Office::factory()->create();
-        $client ??= Client::factory()->forOffice($office)->create();
+        $tenant ??= Tenant::factory()->create();
+        $client ??= Client::factory()->forTenant($tenant)->create();
         if (! Establishment::query()->withoutGlobalScopes()->where('client_id', $client->id)->exists()) {
             Establishment::factory()->forClient($client)->create();
         }
         $key = (string) Str::uuid();
         $mutation = FiscalMutationOperation::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'idempotency_key' => $key,
             'logical_key' => 'mei-das|'.$key,
@@ -172,6 +172,7 @@ final class MeiPortalFiscalMutationTransportTest extends TestCase
             'solution_code' => 'INTEGRA_MEI',
             'service_code' => 'PGMEI',
             'operation_code' => 'GERAR_DAS',
+            'operation_key' => 'pgmei.gerardaspdf',
             'module_key' => 'simples_mei',
             'competence_period_key' => '2025-01',
             'status' => FiscalMutationStatus::Sent,
@@ -185,24 +186,23 @@ final class MeiPortalFiscalMutationTransportTest extends TestCase
             'sent_at' => now(),
         ]);
 
-        return [$office, $client, $mutation];
+        return [$tenant, $client, $mutation];
     }
 
     private function request(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         FiscalMutationOperation $mutation,
     ): IntegraRequest {
         return new IntegraRequest(
-            officeId: (int) $office->id,
+            tenantId: (int) $tenant->id,
             clientId: (int) $client->id,
             environment: 'TRIAL',
             contractorCnpj: '04252011000110',
             authorIdentity: '52998224725',
             contributorCnpj: '04252011000110',
             operationKey: 'pgmei.gerardaspdf',
-            payload: [
-                'mutation_operation_id' => $mutation->id,
+            businessData: [
                 'competencies' => ['2025-01'],
                 'due_date' => '2026-07-20',
                 'output_format' => 'PDF',
@@ -210,21 +210,19 @@ final class MeiPortalFiscalMutationTransportTest extends TestCase
             idempotencyKey: $mutation->idempotency_key,
             correlationId: $mutation->correlation_id,
             isMutating: true,
-            solutionCode: 'INTEGRA_MEI',
-            serviceCode: 'PGMEI',
-            operationCode: 'GERAR_DAS',
+            mutationOperationId: (int) $mutation->id,
         );
     }
 
     private function attempt(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         FiscalMutationOperation $mutation,
         MeiAutomationStatus $status,
         bool $submitted,
     ): MeiAutomationAttempt {
         return MeiAutomationAttempt::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'fiscal_mutation_operation_id' => $mutation->id,
             'external_job_id' => (string) Str::uuid(),
@@ -245,7 +243,7 @@ final class MeiPortalFiscalMutationTransportTest extends TestCase
             'mei_automation.kill_switch' => false,
             'mei_automation.live_egress_enabled' => true,
             'mei_automation.fixture_enabled' => false,
-            'mei_automation.allow_all_offices' => true,
+            'mei_automation.allow_all_tenants' => true,
             'mei_automation.provider_policy.default' => 'portal_then_serpro',
             'mei_automation.provider_policy.operations' => [
                 'pgmei.gerardaspdf' => 'portal_then_serpro',
@@ -258,15 +256,15 @@ final class MeiPortalFiscalMutationTransportTest extends TestCase
         ]);
     }
 
-    private function enableSerproFallback(Office $office): void
+    private function enableSerproFallback(Tenant $tenant): void
     {
         SerproContract::query()->create([
             'environment' => 'TRIAL',
             'status' => 'ACTIVE',
             'contractor_cnpj' => '04252011000110',
         ]);
-        OfficeSerproAuthorization::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+        TenantSerproAuthorization::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
             'environment' => 'TRIAL',
             'status' => 'TERM_VALID',
             'author_identity_type' => 'CPF',

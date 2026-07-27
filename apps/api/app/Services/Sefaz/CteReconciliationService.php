@@ -22,13 +22,13 @@ final class CteReconciliationService
     ) {}
 
     /** @return array{events_linked: int, quarantines_resolved: int, coverage_recomputed: int} */
-    public function reconcileDocument(int $officeId, string $accessKey): array
+    public function reconcileDocument(int $tenantId, string $accessKey): array
     {
         $accessKey = strtoupper(trim($accessKey));
 
-        return DB::transaction(function () use ($officeId, $accessKey): array {
+        return DB::transaction(function () use ($tenantId, $accessKey): array {
             $parent = CteDocument::query()
-                ->where('office_id', $officeId)
+                ->where('tenant_id', $tenantId)
                 ->where('access_key', $accessKey)
                 ->where('is_summary', false)
                 ->first();
@@ -37,13 +37,13 @@ final class CteReconciliationService
             }
 
             $events = CteEvent::query()
-                ->where('office_id', $officeId)
+                ->where('tenant_id', $tenantId)
                 ->where('access_key', $accessKey)
                 ->whereNull('cte_document_id')
                 ->update(['cte_document_id' => $parent->id]);
 
             $quarantines = FiscalDocumentQuarantine::query()
-                ->where('office_id', $officeId)
+                ->where('tenant_id', $tenantId)
                 ->where('access_key', $accessKey)
                 ->where('resolution_status', QuarantineResolutionStatus::Open->value)
                 ->whereIn('reason', [
@@ -54,7 +54,7 @@ final class CteReconciliationService
                 ])
                 ->get();
             foreach ($quarantines as $quarantine) {
-                // UnmatchedIssuer só resolve se o emitente agora existe no office
+                // UnmatchedIssuer só resolve se o emitente agora existe no tenant
                 if (in_array($quarantine->reason, [
                     QuarantineReason::UnmatchedIssuer,
                     QuarantineReason::EnrollmentMissing,
@@ -65,12 +65,12 @@ final class CteReconciliationService
                     }
                     $hasIssuer = DocumentInterest::query()
                         ->join('establishments', 'establishments.id', '=', 'document_interests.establishment_id')
-                        ->where('document_interests.office_id', $officeId)
+                        ->where('document_interests.tenant_id', $tenantId)
                         ->where('document_interests.dfe_document_id', $parent->dfe_document_id)
                         ->where('establishments.cnpj', strtoupper($issuer))
                         ->exists()
                         || Establishment::query()
-                            ->where('office_id', $officeId)
+                            ->where('tenant_id', $tenantId)
                             ->where('cnpj', strtoupper($issuer))
                             ->where('is_active', true)
                             ->exists();
@@ -92,7 +92,7 @@ final class CteReconciliationService
             }
 
             $bestQuality = DocumentAcquisition::query()
-                ->where('office_id', $officeId)
+                ->where('tenant_id', $tenantId)
                 ->where(function ($q) use ($parent, $accessKey): void {
                     $q->where('dfe_document_id', $parent->dfe_document_id)
                         ->orWhere('access_key', $accessKey);
@@ -108,7 +108,7 @@ final class CteReconciliationService
 
             $clientIds = DocumentInterest::query()
                 ->join('establishments', 'establishments.id', '=', 'document_interests.establishment_id')
-                ->where('document_interests.office_id', $officeId)
+                ->where('document_interests.tenant_id', $tenantId)
                 ->where('document_interests.dfe_document_id', $parent->dfe_document_id)
                 ->pluck('establishments.client_id')
                 ->unique();
@@ -116,7 +116,7 @@ final class CteReconciliationService
             $coverageCount = 0;
             if ($period !== null) {
                 foreach ($clientIds as $clientId) {
-                    $this->coverage->recompute($officeId, (int) $clientId, $period);
+                    $this->coverage->recompute($tenantId, (int) $clientId, $period);
                     $coverageCount++;
                 }
             }
@@ -133,7 +133,7 @@ final class CteReconciliationService
 
     /**
      * Lote: reconcilia chaves com eventos órfãos ou quarentenas abertas associáveis
-     * após cadastro de cliente/emitente ou import — sempre escopado por office_id.
+     * após cadastro de cliente/emitente ou import — sempre escopado por tenant_id.
      *
      * @return array{
      *   keys_processed: int,
@@ -142,12 +142,12 @@ final class CteReconciliationService
      *   coverage_recomputed: int
      * }
      */
-    public function reconcileOrphans(int $officeId, int $limit = 200): array
+    public function reconcileOrphans(int $tenantId, int $limit = 200): array
     {
         $limit = max(1, min(2000, $limit));
 
         $keysFromEvents = CteEvent::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereNull('cte_document_id')
             ->whereNotNull('access_key')
             ->orderBy('id')
@@ -155,7 +155,7 @@ final class CteReconciliationService
             ->pluck('access_key');
 
         $keysFromQuarantine = FiscalDocumentQuarantine::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('resolution_status', QuarantineResolutionStatus::Open->value)
             ->whereIn('reason', [
                 QuarantineReason::OrphanEvent->value,
@@ -182,7 +182,7 @@ final class CteReconciliationService
         ];
 
         foreach ($keys as $key) {
-            $result = $this->reconcileDocument($officeId, $key);
+            $result = $this->reconcileDocument($tenantId, $key);
             $totals['keys_processed']++;
             $totals['events_linked'] += $result['events_linked'];
             $totals['quarantines_resolved'] += $result['quarantines_resolved'];

@@ -15,7 +15,7 @@ final class CorrelateCommunicationFlowEventJob implements ShouldQueue
     public int $timeout = 60;
 
     public function __construct(
-        public readonly int $officeId,
+        public readonly int $tenantId,
         public readonly int $conversationId,
         public readonly int $messageId,
         public readonly string $eventKey,
@@ -26,7 +26,7 @@ final class CorrelateCommunicationFlowEventJob implements ShouldQueue
     public function handle(CommunicationFlowCorrelator $correlator): void
     {
         $correlator->correlateMessage(
-            $this->officeId,
+            $this->tenantId,
             $this->conversationId,
             $this->messageId,
             $this->eventKey,

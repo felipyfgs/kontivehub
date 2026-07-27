@@ -14,21 +14,18 @@ use App\DTO\Serpro\ProcuracaoLookupResult;
 final class FixtureIntegraProcuracoesClient implements IntegraProcuracoesClient
 {
     /**
-     * Alias de catálogo Trial + códigos oficiais e-CAC usados em elegibilidade.
+     * Códigos oficiais e-CAC usados em elegibilidade.
      *
      * @var list<array{power_code: string, system_code: string}>
      */
     private const FIXTURE_POWERS = [
-        ['power_code' => 'PGDASD', 'system_code' => 'PGDASD'],
         ['power_code' => '00146', 'system_code' => 'PGDASD'],
-        ['power_code' => 'DEFIS', 'system_code' => 'DEFIS'],
-        ['power_code' => 'REGIME_APURACAO', 'system_code' => 'REGIMEAPURACAO'],
         ['power_code' => '00060', 'system_code' => 'REGIMEAPURACAO'],
-        ['power_code' => 'PGMEI', 'system_code' => 'PGMEI'],
-        ['power_code' => 'CCMEI', 'system_code' => 'CCMEI'],
-        ['power_code' => 'DASN_SIMEI', 'system_code' => 'DASNSIMEI'],
+        ['power_code' => '00229', 'system_code' => 'DASNSIMEI'],
         ['power_code' => '00103', 'system_code' => 'DCTFWEB'],
         ['power_code' => '00002', 'system_code' => 'SITFIS'],
+        ['power_code' => '00004', 'system_code' => 'PAGTOWEB'],
+        ['power_code' => '00006', 'system_code' => 'CAIXA_POSTAL'],
     ];
 
     public function lookup(ProcuracaoLookupRequest $request): ProcuracaoLookupResult

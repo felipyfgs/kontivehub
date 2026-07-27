@@ -19,7 +19,7 @@ enum SerproReadinessGate: string
     case CanaryReady = 'CANARY_READY';
     case ProductionReady = 'PRODUCTION_READY';
 
-    /** Gates de contrato/ambiente global (sem Office). */
+    /** Gates de contrato/ambiente global (sem Tenant). */
     public function isGlobalGate(): bool
     {
         return match ($this) {

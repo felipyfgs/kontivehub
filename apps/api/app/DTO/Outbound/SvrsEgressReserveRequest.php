@@ -3,7 +3,7 @@
 namespace App\DTO\Outbound;
 
 /**
- * Pedido de reserva de orçamento (antes de materializar A1 ou rede).
+ * Pedido de reserva de orçamento (antes de materializar certificado ou rede).
  */
 final class SvrsEgressReserveRequest
 {
@@ -11,7 +11,7 @@ final class SvrsEgressReserveRequest
         public readonly string $rootCnpj,
         public readonly string $accessKeyMask,
         public readonly string $channel,
-        public readonly int $officeId,
+        public readonly int $tenantId,
         public readonly int $exchangesNeeded = 2,
         public readonly bool $isCanary = false,
         public readonly ?string $correlationId = null,

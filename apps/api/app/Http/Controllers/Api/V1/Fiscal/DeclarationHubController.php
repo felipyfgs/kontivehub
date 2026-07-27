@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1\Fiscal;
 
-use App\Enums\OfficeRole;
 use App\Enums\TaxDeliveryEvidenceKind;
+use App\Enums\TenantRole;
 use App\Http\Controllers\Controller;
 use App\Models\Client;
 use App\Models\TaxObligationDefinition;
@@ -16,7 +16,7 @@ use App\Services\Fiscal\Declarations\TaxDeadlineCalendarService;
 use App\Services\Fiscal\Declarations\TaxDeliveryEvidenceService;
 use App\Services\Fiscal\Declarations\TaxObligationCatalogService;
 use App\Services\Fiscal\Declarations\TaxObligationProjectionService;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -29,7 +29,7 @@ use RuntimeException;
 class DeclarationHubController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly TaxObligationCatalogService $catalog,
         private readonly TaxObligationProjectionService $projections,
         private readonly TaxDeliveryEvidenceService $evidences,
@@ -60,7 +60,7 @@ class DeclarationHubController extends Controller
     public function index(Request $request): JsonResponse
     {
         $this->assertCanRead();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
         $filters = [
             'client_id' => $request->query('client_id'),
@@ -80,10 +80,10 @@ class DeclarationHubController extends Controller
             $filters['is_open'] = filter_var($request->query('is_open'), FILTER_VALIDATE_BOOL);
         }
 
-        $page = $this->hub->list($office, $filters);
-        $enriched = $this->pgdasdEnrichment->enrichPublicList($office, $page->getCollection(), true);
+        $page = $this->hub->list($tenant, $filters);
+        $enriched = $this->pgdasdEnrichment->enrichPublicList($tenant, $page->getCollection(), true);
         $clientId = is_numeric($filters['client_id'] ?? null) ? (int) $filters['client_id'] : null;
-        $enriched = $this->dctfwebEnrichment->enrichPublicRows($office, $enriched, $clientId);
+        $enriched = $this->dctfwebEnrichment->enrichPublicRows($tenant, $enriched, $clientId);
         $page->setCollection(collect($enriched));
 
         return response()->json($page);
@@ -92,14 +92,14 @@ class DeclarationHubController extends Controller
     public function summary(Request $request): JsonResponse
     {
         $this->assertCanRead();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
         $clientId = $request->query('client_id');
         $periodKey = $request->query('period_key');
 
         return response()->json([
             'data' => $this->hub->summaryByObligation(
-                $office,
+                $tenant,
                 is_numeric($clientId) ? (int) $clientId : null,
                 is_string($periodKey) ? $periodKey : null,
             ),
@@ -109,9 +109,9 @@ class DeclarationHubController extends Controller
     public function show(int $projection): JsonResponse
     {
         $this->assertCanRead();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
-        $model = $this->hub->find($office, $projection);
+        $model = $this->hub->find($tenant, $projection);
         if ($model === null) {
             return response()->json(['message' => 'Projeção de declaração não encontrada.'], 404);
         }
@@ -131,7 +131,7 @@ class DeclarationHubController extends Controller
     public function project(Request $request): JsonResponse
     {
         $this->assertCanWrite();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
         $data = $request->validate([
             'client_id' => ['required', 'integer'],
@@ -144,7 +144,7 @@ class DeclarationHubController extends Controller
 
         $client = Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($data['client_id'])
             ->first();
 
@@ -155,7 +155,7 @@ class DeclarationHubController extends Controller
         try {
             if (! empty($data['all'])) {
                 $items = $this->projections->projectAllForClient(
-                    $office,
+                    $tenant,
                     $client,
                     $data['period_key'],
                     $data['period_year'] ?? null,
@@ -181,7 +181,7 @@ class DeclarationHubController extends Controller
             }
 
             $projection = $this->projections->project(
-                $office,
+                $tenant,
                 $client,
                 $definition,
                 $data['period_key'],
@@ -199,9 +199,9 @@ class DeclarationHubController extends Controller
     public function attachEvidence(Request $request, int $projection): JsonResponse
     {
         $this->assertCanWrite();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
-        $model = $this->hub->find($office, $projection);
+        $model = $this->hub->find($tenant, $projection);
         if ($model === null) {
             return response()->json(['message' => 'Projeção de declaração não encontrada.'], 404);
         }
@@ -220,7 +220,7 @@ class DeclarationHubController extends Controller
         ]);
 
         try {
-            $evidence = $this->evidences->attach($office, $model, [
+            $evidence = $this->evidences->attach($tenant, $model, [
                 'kind' => TaxDeliveryEvidenceKind::from($data['kind']),
                 'protocol_number' => $data['protocol_number'] ?? null,
                 'receipt_number' => $data['receipt_number'] ?? null,
@@ -238,7 +238,7 @@ class DeclarationHubController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        $fresh = $this->hub->find($office, $projection);
+        $fresh = $this->hub->find($tenant, $projection);
 
         return response()->json([
             'data' => [
@@ -251,9 +251,9 @@ class DeclarationHubController extends Controller
     public function showEvidence(int $projection, int $evidence): JsonResponse
     {
         $this->assertCanRead();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
-        $model = $this->hub->findEvidence($office, $projection, $evidence);
+        $model = $this->hub->findEvidence($tenant, $projection, $evidence);
         if ($model === null) {
             return response()->json(['message' => 'Evidência não encontrada.'], 404);
         }
@@ -310,7 +310,7 @@ class DeclarationHubController extends Controller
 
     private function assertCanRead(): void
     {
-        $role = $this->currentOffice->role();
+        $role = $this->currentTenant->role();
         if ($role === null) {
             abort(403, 'Perfil não resolvido.');
         }
@@ -318,16 +318,16 @@ class DeclarationHubController extends Controller
 
     private function assertCanWrite(): void
     {
-        $role = $this->currentOffice->role();
-        if ($role === null || ! in_array($role, [OfficeRole::Admin, OfficeRole::Operator], true)) {
+        $role = $this->currentTenant->role();
+        if ($role === null || ! in_array($role, [TenantRole::TenantAdmin, TenantRole::TenantUser], true)) {
             abort(403, 'Ação não autorizada para o perfil atual.');
         }
     }
 
     private function assertCanAdmin(): void
     {
-        $role = $this->currentOffice->role();
-        if ($role !== OfficeRole::Admin) {
+        $role = $this->currentTenant->role();
+        if ($role !== TenantRole::TenantAdmin) {
             abort(403, 'Somente ADMIN do escritório.');
         }
     }

@@ -8,7 +8,7 @@ use App\Enums\FiscalVerificationKind;
 use App\Enums\MeiAutomationStatus;
 use App\Enums\MeiProvider;
 use App\Models\Client;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\MeiAutomation\MeiAutomationAttemptRepository;
 use App\Services\MeiAutomation\MeiAutomationAttemptService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -22,12 +22,12 @@ class MeiAutomationAttemptServiceTest extends TestCase
     public function test_builds_stable_fingerprint_and_opaque_client_reference(): void
     {
         config()->set('mei_automation.hmac.secret', 'shared-test-secret');
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
         $service = app(MeiAutomationAttemptService::class);
 
         $attempt = $service->start(
-            $office,
+            $tenant,
             $client,
             'pgmei.dividaativa',
             MeiProvider::ReceitaPortal,
@@ -48,10 +48,10 @@ class MeiAutomationAttemptServiceTest extends TestCase
 
     public function test_synchronizes_safe_metadata_and_redacts_error(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
         $attempt = app(MeiAutomationAttemptService::class)->start(
-            $office,
+            $tenant,
             $client,
             'pgmei.dividaativa',
             MeiProvider::ReceitaPortal,
@@ -82,13 +82,13 @@ class MeiAutomationAttemptServiceTest extends TestCase
 
     public function test_attempt_idempotency_reuses_same_input_and_rejects_collision(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
         $service = app(MeiAutomationAttemptService::class);
         $input = ['cnpj' => '11222333000181', 'calendar_year' => 2026];
 
         $first = $service->start(
-            $office,
+            $tenant,
             $client,
             'pgmei.dividaativa',
             MeiProvider::ReceitaPortal,
@@ -96,7 +96,7 @@ class MeiAutomationAttemptServiceTest extends TestCase
             $input,
         );
         $second = $service->start(
-            $office,
+            $tenant,
             $client,
             'pgmei.dividaativa',
             MeiProvider::ReceitaPortal,
@@ -107,7 +107,7 @@ class MeiAutomationAttemptServiceTest extends TestCase
 
         $this->expectException(LogicException::class);
         $service->start(
-            $office,
+            $tenant,
             $client,
             'pgmei.dividaativa',
             MeiProvider::ReceitaPortal,
@@ -118,10 +118,10 @@ class MeiAutomationAttemptServiceTest extends TestCase
 
     public function test_success_result_is_validated_encrypted_and_versioned(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
         $attempt = app(MeiAutomationAttemptService::class)->start(
-            $office,
+            $tenant,
             $client,
             'pgmei.dividaativa',
             MeiProvider::ReceitaPortal,

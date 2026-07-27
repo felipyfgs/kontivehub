@@ -2,13 +2,13 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'mailbox_message_id',
     'external_id',
     'filename_sanitized',
@@ -23,7 +23,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class MailboxAttachment extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     public $timestamps = false;
 
@@ -51,7 +51,7 @@ class MailboxAttachment extends Model
     {
         return [
             'id' => $this->id,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'mailbox_message_id' => $this->mailbox_message_id,
             'external_id' => $this->external_id,
             'filename_sanitized' => $this->filename_sanitized,

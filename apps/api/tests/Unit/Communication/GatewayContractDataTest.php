@@ -42,14 +42,14 @@ class GatewayContractDataTest extends TestCase
             commandId: 'command-0001',
             sessionId: 'session-0001',
             type: GatewayCommandType::SendMessage,
-            payload: ['text' => 'Olá', 'to' => '+5511999991234'],
+            payload: ['text' => 'Olá', 'kind' => 'TEXT', 'to' => '+5511999991234'],
             providerMessageId: 'message-0001',
         );
         $right = new GatewayCommandData(
             commandId: 'command-0001',
             sessionId: 'session-0001',
             type: GatewayCommandType::SendMessage,
-            payload: ['to' => '+5511999991234', 'text' => 'Olá'],
+            payload: ['to' => '+5511999991234', 'kind' => 'TEXT', 'text' => 'Olá'],
             providerMessageId: 'message-0001',
         );
 

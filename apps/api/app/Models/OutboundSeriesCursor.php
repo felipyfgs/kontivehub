@@ -4,7 +4,7 @@ namespace App\Models;
 
 use App\Enums\OutboundFiscalModel;
 use App\Enums\OutboundSeriesStatus;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Model;
@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * Cursor de série por nNF — NÃO possui last_nsu.
  */
 #[Fillable([
-    'office_id', 'outbound_capture_profile_id', 'establishment_id', 'environment', 'model',
+    'tenant_id', 'outbound_capture_profile_id', 'establishment_id', 'environment', 'model',
     'series', 'seed_nnf', 'discovery_position', 'highest_confirmed_nnf', 'status', 'tp_emis',
     'seed_access_key', 'seed_vault_object_id', 'seed_sha256', 'seed_issued_at',
     'next_run_at', 'last_run_at', 'locked_at', 'lock_owner', 'last_error', 'last_cstat',
@@ -24,7 +24,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Hidden(['seed_vault_object_id'])]
 class OutboundSeriesCursor extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {

@@ -6,22 +6,22 @@ use App\Enums\CredentialStatus;
 use App\Exceptions\EsocialBxException;
 use App\Models\Client;
 use App\Models\ClientCredential;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Certificates\CredentialService;
 
 final class EsocialBxCredentialResolver
 {
     public function __construct(private readonly CredentialService $credentials) {}
 
-    public function active(Office $office, Client $client): ?ClientCredential
+    public function active(Tenant $tenant, Client $client): ?ClientCredential
     {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             return null;
         }
 
         return ClientCredential::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('status', CredentialStatus::Active)
             ->latest('id')
@@ -29,13 +29,13 @@ final class EsocialBxCredentialResolver
     }
 
     /** @return array{pfx:string,password:string} */
-    public function material(Office $office, Client $client): array
+    public function material(Tenant $tenant, Client $client): array
     {
-        $credential = $this->active($office, $client);
+        $credential = $this->active($tenant, $client);
         if ($credential === null) {
             throw new EsocialBxException(
                 'ESOCIAL_BX_CREDENTIAL_MISSING',
-                'Cliente sem certificado A1 ativo para o eSocial BX.',
+                'Cliente sem certificado ativo para o eSocial BX.',
                 blocked: true,
             );
         }
@@ -43,7 +43,7 @@ final class EsocialBxCredentialResolver
         if ($material === null) {
             throw new EsocialBxException(
                 'ESOCIAL_BX_CREDENTIAL_UNUSABLE',
-                'Certificado A1 expirado ou indisponível para o eSocial BX.',
+                'certificado expirado ou indisponível para o eSocial BX.',
                 blocked: true,
             );
         }

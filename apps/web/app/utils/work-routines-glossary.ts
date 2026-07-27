@@ -1,6 +1,6 @@
 /**
  * Glossário canônico de labels do módulo Trabalho (C2).
- * Paths técnicos (`/work/templates`, `ProcessTemplate`) podem permanecer.
+ * Paths técnicos (`/work/templates`, `WorkProcessTemplate`) podem permanecer.
  */
 export const WORK_ROUTINES_GLOSSARY = {
   rotina: {
@@ -32,9 +32,7 @@ export const WORK_ROUTINES_GLOSSARY = {
     singular: 'Executor',
     plural: 'Executores',
     description: 'Responsável pela Tarefa (execução).'
-  },
-  /** Termo técnico legado — não usar como rótulo principal na UI. */
-  modeloLegacyForbiddenAsPrimaryLabel: 'Modelo'
+  }
 } as const
 
 /** Superfícies Work onde "Modelo/Modelos" deve ser substituído por Rotina/Rotinas. */

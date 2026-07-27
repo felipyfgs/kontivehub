@@ -6,7 +6,7 @@ use App\Models\MailboxAlert;
 use App\Models\MailboxAttachment;
 use App\Models\MailboxContributorState;
 use App\Models\MailboxMessage;
-use App\Models\Office;
+use App\Models\Tenant;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 final class MailboxQueryService
@@ -15,14 +15,14 @@ final class MailboxQueryService
      * @return LengthAwarePaginator<int, MailboxMessage>
      */
     public function messages(
-        Office $office,
+        Tenant $tenant,
         int $perPage = 50,
         ?int $clientId = null,
         ?string $triageStatus = null,
     ): LengthAwarePaginator {
         $q = MailboxMessage::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->orderByDesc('received_at_official')
             ->orderByDesc('id');
 
@@ -36,31 +36,31 @@ final class MailboxQueryService
         return $q->paginate($perPage);
     }
 
-    public function message(Office $office, int $messageId): ?MailboxMessage
+    public function message(Tenant $tenant, int $messageId): ?MailboxMessage
     {
         return MailboxMessage::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($messageId)
             ->with('attachments')
             ->first();
     }
 
-    public function attachment(Office $office, int $messageId, int $attachmentId): ?MailboxAttachment
+    public function attachment(Tenant $tenant, int $messageId, int $attachmentId): ?MailboxAttachment
     {
         return MailboxAttachment::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('mailbox_message_id', $messageId)
             ->whereKey($attachmentId)
             ->first();
     }
 
-    public function state(Office $office, int $clientId): ?MailboxContributorState
+    public function state(Tenant $tenant, int $clientId): ?MailboxContributorState
     {
         return MailboxContributorState::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $clientId)
             ->first();
     }
@@ -68,11 +68,11 @@ final class MailboxQueryService
     /**
      * @return LengthAwarePaginator<int, MailboxAlert>
      */
-    public function alerts(Office $office, int $perPage = 50, bool $activeOnly = true): LengthAwarePaginator
+    public function alerts(Tenant $tenant, int $perPage = 50, bool $activeOnly = true): LengthAwarePaginator
     {
         $q = MailboxAlert::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->orderByDesc('id');
 
         if ($activeOnly) {

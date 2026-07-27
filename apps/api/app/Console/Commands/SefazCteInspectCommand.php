@@ -5,7 +5,7 @@ namespace App\Console\Commands;
 use App\Enums\CaptureChannel;
 use App\Models\ChannelSyncCursor;
 use App\Models\CteCoverageSnapshot;
-use App\Models\OfficeDistributionCursor;
+use App\Models\TenantDistributionCursor;
 use Illuminate\Console\Command;
 
 /**
@@ -15,25 +15,25 @@ use Illuminate\Console\Command;
 class SefazCteInspectCommand extends Command
 {
     protected $signature = 'sefaz:cte-inspect
-                            {--office= : Filtra por office_id}
+                            {--tenant= : Filtra por tenant_id}
                             {--json : Saída JSON sanitizada}';
 
     protected $description = 'Lista cursores e cobertura CT-e sem material fiscal bruto';
 
     public function handle(): int
     {
-        $officeId = $this->option('office');
-        $officeFilter = $officeId !== null && $officeId !== '' ? (int) $officeId : null;
+        $tenantId = $this->option('tenant');
+        $tenantFilter = $tenantId !== null && $tenantId !== '' ? (int) $tenantId : null;
 
         $clientCursors = ChannelSyncCursor::query()
             ->where('channel', CaptureChannel::CteDistDfe->value)
-            ->when($officeFilter !== null, fn ($q) => $q->where('office_id', $officeFilter))
+            ->when($tenantFilter !== null, fn ($q) => $q->where('tenant_id', $tenantFilter))
             ->with('establishment:id,client_id,cnpj')
             ->orderBy('id')
             ->get()
             ->map(fn (ChannelSyncCursor $c) => [
                 'id' => $c->id,
-                'office_id' => $c->office_id,
+                'tenant_id' => $c->tenant_id,
                 'channel' => CaptureChannel::CteDistDfe->value,
                 'establishment_id' => $c->establishment_id,
                 'client_id' => $c->establishment?->client_id,
@@ -48,14 +48,14 @@ class SefazCteInspectCommand extends Command
                     && ! ($c->next_sync_at?->isFuture() ?? false),
             ])->values()->all();
 
-        $officeCursors = OfficeDistributionCursor::query()
+        $tenantCursors = TenantDistributionCursor::query()
             ->where('channel', CaptureChannel::CteAutXmlDistDfe->value)
-            ->when($officeFilter !== null, fn ($q) => $q->where('office_id', $officeFilter))
+            ->when($tenantFilter !== null, fn ($q) => $q->where('tenant_id', $tenantFilter))
             ->orderBy('id')
             ->get()
-            ->map(fn (OfficeDistributionCursor $c) => [
+            ->map(fn (TenantDistributionCursor $c) => [
                 'id' => $c->id,
-                'office_id' => $c->office_id,
+                'tenant_id' => $c->tenant_id,
                 'channel' => CaptureChannel::CteAutXmlDistDfe->value,
                 'status' => $c->status?->value ?? (string) $c->status,
                 'last_nsu' => $c->last_nsu,
@@ -67,12 +67,12 @@ class SefazCteInspectCommand extends Command
             ])->values()->all();
 
         $coverage = CteCoverageSnapshot::query()
-            ->when($officeFilter !== null, fn ($q) => $q->where('office_id', $officeFilter))
+            ->when($tenantFilter !== null, fn ($q) => $q->where('tenant_id', $tenantFilter))
             ->orderByDesc('period')
             ->limit(50)
             ->get()
             ->map(fn (CteCoverageSnapshot $s) => [
-                'office_id' => $s->office_id,
+                'tenant_id' => $s->tenant_id,
                 'client_id' => $s->client_id,
                 'period' => $s->period,
                 'status' => $s->status?->value ?? (string) $s->status,
@@ -84,11 +84,11 @@ class SefazCteInspectCommand extends Command
 
         $payload = [
             'client_streams' => $clientCursors,
-            'office_streams' => $officeCursors,
+            'tenant_streams' => $tenantCursors,
             'coverage' => $coverage,
             'summary' => [
                 'client_streams' => count($clientCursors),
-                'office_streams' => count($officeCursors),
+                'tenant_streams' => count($tenantCursors),
                 'coverage_rows' => count($coverage),
             ],
         ];
@@ -101,18 +101,18 @@ class SefazCteInspectCommand extends Command
 
         $this->info('CT-e client streams: '.count($clientCursors));
         $this->table(
-            ['id', 'office', 'est', 'status', 'last_nsu', 'cStat', 'retry'],
+            ['id', 'tenant', 'est', 'status', 'last_nsu', 'cStat', 'retry'],
             collect($clientCursors)->map(fn (array $r) => [
-                $r['id'], $r['office_id'], $r['establishment_id'], $r['status'],
+                $r['id'], $r['tenant_id'], $r['establishment_id'], $r['status'],
                 $r['last_nsu'], $r['last_cstat'] ?? '—', $r['retry_allowed'] ? 'yes' : 'no',
             ])->all()
         );
 
-        $this->info('CT-e autXML office streams: '.count($officeCursors));
+        $this->info('CT-e autXML tenant streams: '.count($tenantCursors));
         $this->table(
-            ['id', 'office', 'status', 'last_nsu', 'cStat', 'consumer'],
-            collect($officeCursors)->map(fn (array $r) => [
-                $r['id'], $r['office_id'], $r['status'], $r['last_nsu'],
+            ['id', 'tenant', 'status', 'last_nsu', 'cStat', 'consumer'],
+            collect($tenantCursors)->map(fn (array $r) => [
+                $r['id'], $r['tenant_id'], $r['status'], $r['last_nsu'],
                 $r['last_cstat'] ?? '—', $r['external_consumer_status'] ?? '—',
             ])->all()
         );

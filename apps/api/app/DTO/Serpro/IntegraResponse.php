@@ -47,8 +47,7 @@ final class IntegraResponse
     }
 
     /**
-     * Marca sintética é sempre entrada inválida no runtime. A string existe
-     * somente para que linhas/respostas legadas possam ser postas em quarentena.
+     * Marca sintética é sempre entrada inválida no runtime.
      */
     public function hasSimulatedSource(): bool
     {
@@ -63,7 +62,7 @@ final class IntegraResponse
             httpStatus: 0,
             body: [],
             errorCode: 'SIMULATED_SOURCE_REJECTED',
-            errorMessage: 'Resposta sintética/legada não é aceita pelo runtime SERPRO.',
+            errorMessage: 'Resposta sintética não é aceita pelo runtime SERPRO.',
             simulated: false,
             correlationId: $this->correlationId,
             latencyMs: $this->latencyMs,

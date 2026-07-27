@@ -1,7 +1,6 @@
 /** Rotas públicas de autenticação/ativação (sem sessão). */
 export const AUTH_PUBLIC_PATHS = [
   '/login',
-  '/two-factor-challenge',
   '/reset-password',
   '/activate',
   '/first-access',

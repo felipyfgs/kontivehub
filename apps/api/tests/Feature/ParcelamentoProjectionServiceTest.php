@@ -6,10 +6,10 @@ use App\Enums\FiscalSituation;
 use App\Enums\TaxInstallmentModality;
 use App\Enums\TaxInstallmentParcelStatus;
 use App\Models\Client;
-use App\Models\Office;
 use App\Models\TaxInstallmentOrder;
 use App\Models\TaxInstallmentParcel;
 use App\Models\TaxInstallmentPayment;
+use App\Models\Tenant;
 use App\Services\Integra\Parcelamento\ParcelamentoProjectionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -20,13 +20,13 @@ class ParcelamentoProjectionServiceTest extends TestCase
 
     public function test_projects_each_parcel_and_payment_only_into_its_source_order(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->for($office)->create();
-        $otherOffice = Office::factory()->create();
-        $otherClient = Client::factory()->for($otherOffice)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->for($tenant)->create();
+        $otherTenant = Tenant::factory()->create();
+        $otherClient = Client::factory()->for($otherTenant)->create();
 
         TaxInstallmentOrder::query()->create([
-            'office_id' => $otherOffice->id,
+            'tenant_id' => $otherTenant->id,
             'client_id' => $otherClient->id,
             'modality' => TaxInstallmentModality::Parcsn,
             'regime' => 'SN',
@@ -39,7 +39,7 @@ class ParcelamentoProjectionServiceTest extends TestCase
         ]);
 
         $result = app(ParcelamentoProjectionService::class)->projectFromMonitorBody(
-            $office,
+            $tenant,
             $client,
             TaxInstallmentModality::Parcsn,
             ['pedidos' => [
@@ -85,18 +85,28 @@ class ParcelamentoProjectionServiceTest extends TestCase
         $this->assertCount(1, $result['payments']);
 
         $orders = TaxInstallmentOrder::query()
-            ->where('office_id', $office->id)
+            ->withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
             ->get()
             ->keyBy('external_order_id');
-        $firstParcels = TaxInstallmentParcel::query()->where('order_id', $orders['1']->id)->get();
-        $secondParcels = TaxInstallmentParcel::query()->where('order_id', $orders['2']->id)->get();
+        $firstParcels = TaxInstallmentParcel::query()
+            ->withoutGlobalScopes()
+            ->where('order_id', $orders['1']->id)
+            ->get();
+        $secondParcels = TaxInstallmentParcel::query()
+            ->withoutGlobalScopes()
+            ->where('order_id', $orders['2']->id)
+            ->get();
         $this->assertSame(['202402'], $firstParcels->pluck('parcel_key')->all());
         $this->assertSame(['202503'], $secondParcels->pluck('parcel_key')->all());
         $this->assertSame(TaxInstallmentParcelStatus::Paid, $firstParcels->first()->status);
-        $this->assertSame('DAS-1', TaxInstallmentPayment::query()->where('order_id', $orders['1']->id)->value('payment_ref'));
+        $this->assertSame('DAS-1', TaxInstallmentPayment::query()
+            ->withoutGlobalScopes()
+            ->where('order_id', $orders['1']->id)
+            ->value('payment_ref'));
         $this->assertDatabaseCount('tax_installment_orders', 3);
         $this->assertDatabaseHas('tax_installment_orders', [
-            'office_id' => $otherOffice->id,
+            'tenant_id' => $otherTenant->id,
             'client_id' => $otherClient->id,
             'external_order_id' => '1',
         ]);
@@ -104,11 +114,11 @@ class ParcelamentoProjectionServiceTest extends TestCase
 
     public function test_empty_orders_are_unknown_and_do_not_invent_regular_status(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->for($office)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->for($tenant)->create();
 
         $result = app(ParcelamentoProjectionService::class)->projectFromMonitorBody(
-            $office,
+            $tenant,
             $client,
             TaxInstallmentModality::Relpsn,
             ['pedidos' => []],
@@ -121,11 +131,11 @@ class ParcelamentoProjectionServiceTest extends TestCase
 
     public function test_unassigned_available_parcels_are_not_persisted(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->for($office)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->for($tenant)->create();
 
         $result = app(ParcelamentoProjectionService::class)->projectFromMonitorBody(
-            $office,
+            $tenant,
             $client,
             TaxInstallmentModality::Pertsn,
             [

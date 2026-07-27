@@ -6,7 +6,7 @@ use App\Enums\FiscalSituation;
 use App\Enums\TaxRegimeCode;
 use App\Models\Client;
 use App\Models\ClientCommunicationDispatch;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Fiscal\SimplesMei\Pgdasd\PgdasdCommunicationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -21,7 +21,7 @@ class SimplesMeiPortfolioHttpTest extends TestCase
     public function test_overview_and_clients_list_only_simples_nacional(): void
     {
         $seed = $this->seedSimplesNacionalPortfolio();
-        $this->actingAsOfficeUser($seed['operator']);
+        $this->actingAsTenantUser($seed['operator']);
 
         $this->getJson('/api/v1/fiscal/modules/simples_mei/overview?submodule=PGDASD')
             ->assertOk()
@@ -40,7 +40,7 @@ class SimplesMeiPortfolioHttpTest extends TestCase
     public function test_viewer_can_read_portfolio(): void
     {
         $seed = $this->seedSimplesNacionalPortfolio();
-        $this->actingAsOfficeUser($seed['viewer']);
+        $this->actingAsTenantUser($seed['viewer']);
 
         $this->getJson('/api/v1/fiscal/modules/simples_mei/overview?submodule=PGDASD')
             ->assertOk()
@@ -53,8 +53,8 @@ class SimplesMeiPortfolioHttpTest extends TestCase
     public function test_restricted_module_returns_403(): void
     {
         $seed = $this->seedSimplesNacionalPortfolio();
-        $this->restrictSimplesMeiModule($seed['office'], $seed['operator']);
-        $this->actingAsOfficeUser($seed['operator']);
+        $this->restrictSimplesMeiModule($seed['tenant'], $seed['operator']);
+        $this->actingAsTenantUser($seed['operator']);
 
         $this->getJson('/api/v1/fiscal/modules/simples_mei/overview?submodule=PGDASD')
             ->assertForbidden();
@@ -62,43 +62,41 @@ class SimplesMeiPortfolioHttpTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_user_without_office_role_is_forbidden(): void
+    public function test_user_without_tenant_role_is_forbidden(): void
     {
-        $office = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
         $orphan = User::factory()->create();
-        $orphan->forceFill(['selected_office_id' => $office->id])->saveQuietly();
-        Client::factory()->for($office)->create([
+        $orphan->forceFill(['selected_tenant_id' => $tenant->id])->saveQuietly();
+        Client::factory()->for($tenant)->create([
             'is_active' => true,
-            'matrix_client_id' => null,
             'tax_regime' => TaxRegimeCode::SimplesNacional->value,
         ]);
 
-        $this->actingAsOfficeUser($orphan);
+        $this->actingAsTenantUser($orphan);
 
         $this->getJson('/api/v1/fiscal/modules/simples_mei/overview?submodule=PGDASD')
             ->assertForbidden();
     }
 
-    public function test_rejects_client_supplied_office_id(): void
+    public function test_rejects_client_supplied_tenant_id(): void
     {
         $seed = $this->seedSimplesNacionalPortfolio();
-        $this->actingAsOfficeUser($seed['operator']);
+        $this->actingAsTenantUser($seed['operator']);
 
-        $this->getJson('/api/v1/fiscal/modules/simples_mei/clients?submodule=PGDASD&office_id='.$seed['office']->id)
+        $this->getJson('/api/v1/fiscal/modules/simples_mei/clients?submodule=PGDASD&tenant_id='.$seed['tenant']->id)
             ->assertStatus(422)
-            ->assertJsonPath('code', 'CLIENT_OFFICE_ID_REJECTED');
+            ->assertJsonPath('code', 'CLIENT_TENANT_ID_REJECTED');
     }
 
-    public function test_isolates_other_office_clients(): void
+    public function test_isolates_other_tenant_clients(): void
     {
         $seed = $this->seedSimplesNacionalPortfolio();
-        $otherOffice = Office::factory()->create();
-        Client::factory()->for($otherOffice)->create([
+        $otherTenant = Tenant::factory()->create();
+        Client::factory()->for($otherTenant)->create([
             'is_active' => true,
-            'matrix_client_id' => null,
             'tax_regime' => TaxRegimeCode::SimplesNacional->value,
         ]);
-        $this->actingAsOfficeUser($seed['operator']);
+        $this->actingAsTenantUser($seed['operator']);
 
         $this->getJson('/api/v1/fiscal/modules/simples_mei/clients?submodule=PGDASD&per_page=50')
             ->assertOk()
@@ -108,18 +106,17 @@ class SimplesMeiPortfolioHttpTest extends TestCase
     public function test_filters_by_client_id_situation_and_send_status(): void
     {
         $seed = $this->seedSimplesNacionalPortfolio();
-        $second = Client::factory()->for($seed['office'])->create([
+        $second = Client::factory()->for($seed['tenant'])->create([
             'legal_name' => 'Segundo SN',
             'is_active' => true,
-            'matrix_client_id' => null,
             'tax_regime' => TaxRegimeCode::SimplesNacional->value,
         ]);
 
-        $this->seedPgdasProjection($seed['office'], $seed['sn'], '2026-06', FiscalSituation::Pending);
-        $this->seedPgdasProjection($seed['office'], $second, '2026-05', FiscalSituation::UpToDate);
+        $this->seedPgdasProjection($seed['tenant'], $seed['sn'], '2026-06', FiscalSituation::Pending);
+        $this->seedPgdasProjection($seed['tenant'], $second, '2026-05', FiscalSituation::UpToDate);
 
         ClientCommunicationDispatch::query()->create([
-            'office_id' => $seed['office']->id,
+            'tenant_id' => $seed['tenant']->id,
             'client_id' => $seed['sn']->id,
             'module_key' => PgdasdCommunicationService::MODULE,
             'submodule_key' => PgdasdCommunicationService::SUBMODULE,
@@ -131,7 +128,7 @@ class SimplesMeiPortfolioHttpTest extends TestCase
             'queued_at' => now(),
         ]);
 
-        $this->actingAsOfficeUser($seed['operator']);
+        $this->actingAsTenantUser($seed['operator']);
 
         $byClient = $this->getJson('/api/v1/fiscal/modules/simples_mei/clients?submodule=PGDASD&client_id='.$seed['sn']->id)
             ->assertOk()
@@ -164,19 +161,17 @@ class SimplesMeiPortfolioHttpTest extends TestCase
     public function test_sort_and_pagination(): void
     {
         $seed = $this->seedSimplesNacionalPortfolio();
-        Client::factory()->for($seed['office'])->create([
+        Client::factory()->for($seed['tenant'])->create([
             'legal_name' => 'AAA Primeiro',
             'is_active' => true,
-            'matrix_client_id' => null,
             'tax_regime' => TaxRegimeCode::SimplesNacional->value,
         ]);
-        Client::factory()->for($seed['office'])->create([
+        Client::factory()->for($seed['tenant'])->create([
             'legal_name' => 'ZZZ Ultimo',
             'is_active' => true,
-            'matrix_client_id' => null,
             'tax_regime' => TaxRegimeCode::SimplesNacional->value,
         ]);
-        $this->actingAsOfficeUser($seed['operator']);
+        $this->actingAsTenantUser($seed['operator']);
 
         $asc = $this->getJson('/api/v1/fiscal/modules/simples_mei/clients?submodule=PGDASD&sort=legal_name&sort_direction=asc&per_page=2&page=1')
             ->assertOk();

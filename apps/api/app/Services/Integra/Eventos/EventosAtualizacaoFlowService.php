@@ -9,8 +9,8 @@ use App\DTO\Serpro\SerproOperationCommand;
 use App\Enums\SerproCapabilityDriver;
 use App\Enums\SerproEnvironment;
 use App\Models\Client;
-use App\Models\Office;
 use App\Models\SerproEventosRun;
+use App\Models\Tenant;
 use App\Services\Integra\Mailbox\MailboxEventosResultProcessor;
 use App\Services\Serpro\CapabilityDriverResolver;
 use App\Services\Serpro\EventosRateLimiter;
@@ -46,7 +46,7 @@ final class EventosAtualizacaoFlowService
      * @param  list<string>|null  $contributorIdentities  identidades no lote (sem PII em log)
      */
     public function solicit(
-        Office $office,
+        Tenant $tenant,
         string $personType,
         string $evento,
         ?Client $client = null,
@@ -59,7 +59,7 @@ final class EventosAtualizacaoFlowService
             throw new RuntimeException('EVENTOS_PERSON_TYPE_INVALID: use PF ou PJ.');
         }
 
-        $flag = $this->flags->assertAllowed('PollEventosAtualizacaoJob', $office->id);
+        $flag = $this->flags->assertAllowed('PollEventosAtualizacaoJob', $tenant->id);
         if (! $flag['allowed']) {
             throw new RuntimeException(($flag['code'] ?? 'FLAG_BLOCKED').': '.($flag['message'] ?? ''));
         }
@@ -73,7 +73,7 @@ final class EventosAtualizacaoFlowService
         $contributorsCount = count($batch->numbers);
         $this->limits->assertBatchSize($contributorsCount);
 
-        $this->limits->attemptDaily((int) $office->id, $personType);
+        $this->limits->attemptDaily((int) $tenant->id, $personType);
 
         $environment ??= SerproEnvironment::tryFrom(strtoupper((string) config('serpro.default_environment', 'TRIAL')))
             ?? SerproEnvironment::Trial;
@@ -91,11 +91,11 @@ final class EventosAtualizacaoFlowService
             : ['evento' => $evento];
 
         $response = $this->operations->run(new SerproOperationCommand(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             operationKey: $solicitKey,
             businessData: $businessData,
-            idempotencyKey: sprintf('eventos:solicit:%d:%s:%s', $office->id, $personType, $correlationId),
+            idempotencyKey: sprintf('eventos:solicit:%d:%s:%s', $tenant->id, $personType, $correlationId),
             correlationId: $correlationId,
             module: 'authorization',
             eventosBatchContributor: $batch,
@@ -103,7 +103,7 @@ final class EventosAtualizacaoFlowService
 
         if ($response->hasSimulatedSource()) {
             return $this->persistFailedSolicit(
-                $office, $client, $environment, $personType, $evento, $correlationId,
+                $tenant, $client, $environment, $personType, $evento, $correlationId,
                 $solicitKey, $obterKey, max(1, $contributorsCount),
                 'SIMULATED_SOURCE_REJECTED',
                 'Resposta sintética não pode iniciar fluxo de eventos.',
@@ -113,13 +113,13 @@ final class EventosAtualizacaoFlowService
 
         if ($response->httpStatus === 429 || $response->errorCode === 'RATE_LIMIT_LOCAL') {
             $until = $this->limits->markRemote429(
-                (int) $office->id,
+                (int) $tenant->id,
                 $personType,
                 $response->retryAfterSeconds,
             );
 
             return $this->persistFailedSolicit(
-                $office,
+                $tenant,
                 $client,
                 $environment,
                 $personType,
@@ -136,7 +136,7 @@ final class EventosAtualizacaoFlowService
 
         if (! $response->success) {
             return $this->persistFailedSolicit(
-                $office,
+                $tenant,
                 $client,
                 $environment,
                 $personType,
@@ -174,7 +174,7 @@ final class EventosAtualizacaoFlowService
         $expiresAt = $now->addMinutes($limitMin);
 
         return SerproEventosRun::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client?->id,
             'environment' => $environment,
             'person_type' => $personType,
@@ -246,7 +246,7 @@ final class EventosAtualizacaoFlowService
             return $run->fresh() ?? $run;
         }
 
-        $flag = $this->flags->assertAllowed('PollEventosAtualizacaoJob', (int) $run->office_id);
+        $flag = $this->flags->assertAllowed('PollEventosAtualizacaoJob', (int) $run->tenant_id);
         if (! $flag['allowed']) {
             $run->forceFill([
                 'status' => SerproEventosRun::STATUS_BLOCKED,
@@ -257,7 +257,7 @@ final class EventosAtualizacaoFlowService
             return $run->fresh() ?? $run;
         }
 
-        $office = Office::query()->findOrFail($run->office_id);
+        $tenant = Tenant::query()->findOrFail($run->tenant_id);
         $client = $run->client_id
             ? Client::query()->withoutGlobalScopes()->whereKey($run->client_id)->first()
             : null;
@@ -269,11 +269,11 @@ final class EventosAtualizacaoFlowService
             : ['protocolo' => $run->protocol, 'evento' => $run->evento];
 
         $response = $this->operations->run(new SerproOperationCommand(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             operationKey: (string) $run->operation_key_obter,
             businessData: $businessData,
-            idempotencyKey: sprintf('eventos:obter:%d:%s', $run->office_id, $run->protocol),
+            idempotencyKey: sprintf('eventos:obter:%d:%s', $run->tenant_id, $run->protocol),
             correlationId: $run->correlation_id,
             module: 'authorization',
             eventosBatchContributor: EventosBatchContributor::forObtain((string) $run->person_type),
@@ -281,7 +281,7 @@ final class EventosAtualizacaoFlowService
 
         if ($response->httpStatus === 429) {
             $until = $this->limits->markRemote429(
-                (int) $run->office_id,
+                (int) $run->tenant_id,
                 (string) $run->person_type,
                 $response->retryAfterSeconds,
             );
@@ -432,7 +432,7 @@ final class EventosAtualizacaoFlowService
     }
 
     private function persistFailedSolicit(
-        Office $office,
+        Tenant $tenant,
         ?Client $client,
         SerproEnvironment $environment,
         string $personType,
@@ -453,7 +453,7 @@ final class EventosAtualizacaoFlowService
             : SerproEventosRun::PHASE_FAILED;
 
         return SerproEventosRun::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client?->id,
             'environment' => $environment,
             'person_type' => $personType,

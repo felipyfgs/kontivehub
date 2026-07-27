@@ -5,7 +5,7 @@ namespace App\Services\Fiscal\Declarations;
 use App\Enums\SerproEnvironment;
 use App\Models\Client;
 use App\Models\FiscalMutationOperation;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Fiscal\Mutations\FiscalMutationService;
 use App\Services\Fiscal\Mutations\MutationPreflightResult;
@@ -25,7 +25,7 @@ final class DeclarationMutationService
 
     /** @param array<string, mixed> $params */
     public function preflight(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         User $user,
         string $actionId,
@@ -35,7 +35,7 @@ final class DeclarationMutationService
         [$operationKey, $entry, $payload] = $this->definition($client, $actionId, $params);
 
         return $this->mutations->preflight(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             user: $user,
             solutionCode: (string) $entry['id_sistema'],
@@ -46,14 +46,14 @@ final class DeclarationMutationService
             environment: SerproEnvironment::Production->value,
             requestPayload: $payload,
             module: $this->module((string) $entry['id_sistema']),
-            providerOperationKey: $operationKey,
+            operationKey: $operationKey,
             requireRecentAuth: false,
         );
     }
 
     /** @param array<string, mixed> $params */
     public function execute(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         User $user,
         string $actionId,
@@ -66,7 +66,7 @@ final class DeclarationMutationService
         [$operationKey, $entry, $payload] = $this->definition($client, $actionId, $params);
 
         return $this->mutations->execute(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             user: $user,
             solutionCode: (string) $entry['id_sistema'],
@@ -80,7 +80,7 @@ final class DeclarationMutationService
             environment: SerproEnvironment::Production->value,
             requestPayload: $payload,
             module: $this->module((string) $entry['id_sistema']),
-            providerOperationKey: $operationKey,
+            operationKey: $operationKey,
         );
     }
 
@@ -112,7 +112,7 @@ final class DeclarationMutationService
     private function module(string $system): string
     {
         return in_array(strtoupper($system), ['DCTFWEB', 'MIT'], true)
-            ? 'dctfweb_mit'
+            ? 'dctfweb'
             : 'simples_mei';
     }
 }

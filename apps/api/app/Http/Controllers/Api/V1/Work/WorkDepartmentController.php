@@ -3,24 +3,24 @@
 namespace App\Http\Controllers\Api\V1\Work;
 
 use App\Http\Controllers\Controller;
-use App\Models\OfficeMembership;
+use App\Models\TenantMembership;
 use App\Models\WorkDepartment;
 use App\Services\Audit\AuditLogger;
-use App\Support\CurrentOffice;
-use App\Support\Work\RejectClientOfficeId;
+use App\Support\CurrentTenant;
+use App\Support\Work\RejectClientTenantId;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class WorkDepartmentController extends Controller
 {
-    public function index(Request $request, CurrentOffice $currentOffice): JsonResponse
+    public function index(Request $request, CurrentTenant $currentTenant): JsonResponse
     {
         $this->authorize('viewAny', WorkDepartment::class);
-        RejectClientOfficeId::strip($request);
+        RejectClientTenantId::strip($request);
 
         $perPage = min(max((int) $request->input('per_page', 50), 1), 100);
-        $q = WorkDepartment::query()->where('office_id', $currentOffice->id())->orderBy('name');
+        $q = WorkDepartment::query()->where('tenant_id', $currentTenant->id())->orderBy('name');
 
         if ($request->filled('is_active')) {
             $q->where('is_active', $request->boolean('is_active'));
@@ -34,20 +34,20 @@ class WorkDepartmentController extends Controller
         ]);
     }
 
-    public function store(Request $request, CurrentOffice $currentOffice, AuditLogger $audit): JsonResponse
+    public function store(Request $request, CurrentTenant $currentTenant, AuditLogger $audit): JsonResponse
     {
         $this->authorize('create', WorkDepartment::class);
-        RejectClientOfficeId::strip($request);
+        RejectClientTenantId::strip($request);
 
         $data = $request->validate([
-            'name' => ['required', 'string', 'max:120', Rule::unique('work_departments', 'name')->where('office_id', $currentOffice->id())],
-            'code' => ['required', 'string', 'max:20', 'regex:/^[A-Za-z0-9_\-]+$/', Rule::unique('work_departments', 'code')->where('office_id', $currentOffice->id())],
+            'name' => ['required', 'string', 'max:120', Rule::unique('work_departments', 'name')->where('tenant_id', $currentTenant->id())],
+            'code' => ['required', 'string', 'max:20', 'regex:/^[A-Za-z0-9_\-]+$/', Rule::unique('work_departments', 'code')->where('tenant_id', $currentTenant->id())],
             'color' => ['nullable', 'string', 'max:16', 'regex:/^#?[0-9A-Fa-f]{3,8}$/'],
             'is_active' => ['sometimes', 'boolean'],
         ]);
 
         $dept = WorkDepartment::query()->create([
-            'office_id' => $currentOffice->id(),
+            'tenant_id' => $currentTenant->id(),
             'name' => $data['name'],
             'code' => strtoupper($data['code']),
             'color' => $data['color'] ?? null,
@@ -59,14 +59,14 @@ class WorkDepartmentController extends Controller
         return response()->json(['data' => $this->public($dept)], 201);
     }
 
-    public function update(Request $request, WorkDepartment $department, CurrentOffice $currentOffice, AuditLogger $audit): JsonResponse
+    public function update(Request $request, WorkDepartment $department, CurrentTenant $currentTenant, AuditLogger $audit): JsonResponse
     {
         $this->authorize('update', $department);
-        RejectClientOfficeId::strip($request);
+        RejectClientTenantId::strip($request);
 
         $data = $request->validate([
-            'name' => ['sometimes', 'string', 'max:120', Rule::unique('work_departments', 'name')->where('office_id', $currentOffice->id())->ignore($department->id)],
-            'code' => ['sometimes', 'string', 'max:20', 'regex:/^[A-Za-z0-9_\-]+$/', Rule::unique('work_departments', 'code')->where('office_id', $currentOffice->id())->ignore($department->id)],
+            'name' => ['sometimes', 'string', 'max:120', Rule::unique('work_departments', 'name')->where('tenant_id', $currentTenant->id())->ignore($department->id)],
+            'code' => ['sometimes', 'string', 'max:20', 'regex:/^[A-Za-z0-9_\-]+$/', Rule::unique('work_departments', 'code')->where('tenant_id', $currentTenant->id())->ignore($department->id)],
             'color' => ['nullable', 'string', 'max:16'],
             'is_active' => ['sometimes', 'boolean'],
         ]);
@@ -81,18 +81,18 @@ class WorkDepartmentController extends Controller
         return response()->json(['data' => $this->public($department)]);
     }
 
-    public function assignMembership(Request $request, WorkDepartment $department, CurrentOffice $currentOffice, AuditLogger $audit): JsonResponse
+    public function assignMembership(Request $request, WorkDepartment $department, CurrentTenant $currentTenant, AuditLogger $audit): JsonResponse
     {
         $this->authorize('update', $department);
-        RejectClientOfficeId::strip($request);
+        RejectClientTenantId::strip($request);
 
         $data = $request->validate([
             'membership_id' => ['required', 'integer'],
         ]);
 
-        $membership = OfficeMembership::query()
+        $membership = TenantMembership::query()
             ->where('id', $data['membership_id'])
-            ->where('office_id', $currentOffice->id())
+            ->where('tenant_id', $currentTenant->id())
             ->where('is_active', true)
             ->firstOrFail();
 

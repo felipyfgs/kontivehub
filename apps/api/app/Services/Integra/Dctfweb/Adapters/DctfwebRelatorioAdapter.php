@@ -60,7 +60,7 @@ final class DctfwebRelatorioAdapter extends AbstractDctfwebAdapter
         $metadata = $this->codec->sanitize($response->dados);
         $projected = $this->declarations->projectArtifact(
             run: $request->run,
-            office: $request->office,
+            tenant: $request->tenant,
             client: $request->client,
             periodKey: $periodKey,
             kind: DctfwebArtifactKind::Relatorio,

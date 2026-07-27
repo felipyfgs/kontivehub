@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import OfficeDepartmentsPage from '../settings/departments.vue'
+import TenantDepartmentsPage from '~/components/settings/TenantDepartmentsPage.vue'
 </script>
 
 <template>
-  <OfficeDepartmentsPage />
+  <TenantDepartmentsPage />
 </template>

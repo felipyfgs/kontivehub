@@ -7,20 +7,20 @@
  *  #body → layout tipo nota (DocsDetail)
  *  #footer → copiar · baixar XML · fechar
  */
-import type { NfseNote } from '~/types/api'
+import type { FiscalDocument } from '~/types/api'
 
 const open = defineModel<boolean>('open', { default: false })
 
 const props = defineProps<{
   accessKey: string | null
-  preview?: NfseNote | null
+  preview?: FiscalDocument | null
 }>()
 
 const sanctum = useSanctumClient()
 const toast = useToast()
 const downloading = ref(false)
 /** Preenchido pelo GET de detalhe quando a lista filtrada não tem preview. */
-const resolvedNote = ref<NfseNote | null>(null)
+const resolvedNote = ref<FiscalDocument | null>(null)
 
 watch(
   () => props.accessKey,
@@ -66,7 +66,7 @@ const description = computed(() => {
   return parts.length ? parts.join(' · ') : 'Documento fiscal eletrônico'
 })
 
-function onDetailLoaded(note: NfseNote) {
+function onDetailLoaded(note: FiscalDocument) {
   if (note.access_key === props.accessKey) {
     resolvedNote.value = note
   }

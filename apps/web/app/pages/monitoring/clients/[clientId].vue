@@ -7,7 +7,7 @@
 import { breakpointsTailwind, useBreakpoints } from '@vueuse/core'
 import NavbarMoreActions from '~/components/navigation/NavbarMoreActions.vue'
 import type { Client, FiscalFinding, FiscalMonitoringRun, FiscalPendingItem, FiscalSnapshot } from '~/types/api'
-import type { OperationalProcess } from '~/types/work'
+import type { WorkProcess } from '~/types/work'
 import type {
   FiscalDocumentDescriptor,
   FiscalRegistrationLink,
@@ -30,8 +30,7 @@ import ShellDataTable from '~/components/shell/DataTable.vue'
 const FiscalStatusBadge = resolveComponent('FiscalStatusBadge')
 const FiscalDocumentAction = resolveComponent('FiscalDocumentAction')
 
-// Um único path com section opcional — evita warn do Vue Router de alias
-// com params diferentes do record original (`:section` vs só `:clientId`).
+// Um único path com section opcional e parâmetros consistentes.
 definePageMeta({
   path: '/monitoring/clients/:clientId/:section?'
 })
@@ -149,11 +148,11 @@ const tab = computed({
 })
 
 const pageTitle = computed(() =>
-  client.value?.name || client.value?.legal_name || `Cliente #${clientId.value}`
+  client.value?.display_name || client.value?.legal_name || `Cliente #${clientId.value}`
 )
 
 const snapshots = ref<FiscalSnapshot[]>([])
-const operationalProcesses = ref<OperationalProcess[]>([])
+const workProcesses = ref<WorkProcess[]>([])
 const overviewProcessCards = computed(() =>
   buildClientMonitoringOverview(clientId.value, snapshots.value, {
     isMei: clientIsMeiSignal.value
@@ -651,7 +650,7 @@ function invalidateAllSections() {
     sections[key] = emptySection()
     clearSectionData(key)
   }
-  operationalProcesses.value = []
+  workProcesses.value = []
   Object.assign(operationalWorkState, emptySection())
 }
 
@@ -671,7 +670,7 @@ async function loadClient(force = false) {
   clientError.value = null
   try {
     const data = (await api.clients.get(clientId.value)).data
-    // Descarte se o office/epoch mudou durante o request (mesmo clientId em outro tenant).
+    // Descarte se o tenant/epoch mudou durante o request (mesmo clientId em outro tenant).
     if (cacheKey() !== keyNow) return
     client.value = data
   } catch (caught) {
@@ -704,11 +703,11 @@ async function loadOperationalWork(force = false) {
       per_page: 5
     })
     if (cacheKey() !== keyNow) return
-    operationalProcesses.value = response.data || []
+    workProcesses.value = response.data || []
     operationalWorkState.loadedKey = keyNow
   } catch (caught) {
     if (cacheKey() !== keyNow) return
-    operationalProcesses.value = []
+    workProcesses.value = []
     operationalWorkState.loadedKey = null
     operationalWorkState.error = apiErrorMessage(caught, 'Falha ao carregar o trabalho operacional.')
   } finally {
@@ -895,16 +894,7 @@ watch(tab, (next) => {
   void loadSection(next)
 })
 
-onMounted(async () => {
-  const legacyTab = String(route.query.tab || '')
-  if (Object.keys(route.query).length > 0) {
-    const base = `/monitoring/clients/${clientId.value}`
-    await router.replace(isSectionKey(legacyTab) && legacyTab !== 'overview'
-      ? `${base}/${legacyTab}`
-      : base)
-  }
-  await bootstrap()
-})
+onMounted(bootstrap)
 </script>
 
 <template>
@@ -1054,9 +1044,9 @@ onMounted(async () => {
                   />
                 </section>
 
-                <MonitoringClientOperationalWork
+                <MonitoringClientWork
                   :client-id="clientId"
-                  :items="operationalProcesses"
+                  :items="workProcesses"
                   :loading="operationalWorkState.loading"
                   :error="operationalWorkState.error"
                   @retry="loadOperationalWork(true)"
@@ -1445,7 +1435,7 @@ onMounted(async () => {
                 <MonitoringSitfisHistoryView
                   :client-id="clientId"
                   :client-name="client?.legal_name || client?.display_name"
-                  :cnpj-masked="client?.cnpj || client?.root_cnpj"
+                  :cnpj-masked="client?.root_cnpj"
                 />
               </div>
 

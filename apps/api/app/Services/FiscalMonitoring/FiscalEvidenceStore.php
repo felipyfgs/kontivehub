@@ -13,7 +13,7 @@ use RuntimeException;
 use Throwable;
 
 /**
- * Storage seguro de artefatos no cofre (AAD com purpose + office_id + sha256).
+ * Storage seguro de artefatos no cofre (AAD com purpose + tenant_id + sha256).
  * Download autorizado não expõe paths internos nem URLs permanentes.
  */
 final class FiscalEvidenceStore
@@ -23,12 +23,12 @@ final class FiscalEvidenceStore
     ) {}
 
     /**
-     * @return array{office_id:int,sha256:string,purpose:string}
+     * @return array{tenant_id:int,sha256:string,purpose:string}
      */
-    public static function aad(int $officeId, string $sha256): array
+    public static function aad(int $tenantId, string $sha256): array
     {
         return SecureObjectPurpose::FiscalEvidence->aadBase([
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'sha256' => $sha256,
         ]);
     }
@@ -55,11 +55,11 @@ final class FiscalEvidenceStore
 
         $sha256 = hash('sha256', $bytes);
 
-        // Idempotente por (office, sha, run) — adapters de módulo + núcleo podem
+        // Idempotente por (tenant, sha, run) — adapters de módulo + núcleo podem
         // reutilizar o mesmo artefato na mesma execução sem violar unique.
         $existing = FiscalEvidenceArtifact::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $run->office_id)
+            ->where('tenant_id', $run->tenant_id)
             ->where('run_id', $run->id)
             ->where('content_sha256', $sha256)
             ->first();
@@ -67,14 +67,14 @@ final class FiscalEvidenceStore
             return $existing;
         }
 
-        $aad = self::aad((int) $run->office_id, $sha256);
+        $aad = self::aad((int) $run->tenant_id, $sha256);
         $objectId = $this->vault->put($bytes, $aad);
 
         $retentionDays = (int) config('fiscal_monitoring.evidence.retention_days', 2555);
         $observed = $observedAt ?? CarbonImmutable::now();
 
         return FiscalEvidenceArtifact::query()->create([
-            'office_id' => $run->office_id,
+            'tenant_id' => $run->tenant_id,
             'run_id' => $run->id,
             'vault_object_id' => $objectId,
             'content_sha256' => $sha256,
@@ -102,14 +102,14 @@ final class FiscalEvidenceStore
      *
      * @throws RuntimeException
      */
-    public function readAuthorized(FiscalEvidenceArtifact $artifact, int $officeId): string
+    public function readAuthorized(FiscalEvidenceArtifact $artifact, int $tenantId): string
     {
-        $reason = $this->unavailableReason($artifact, $officeId);
+        $reason = $this->unavailableReason($artifact, $tenantId);
         if ($reason !== null) {
             throw new RuntimeException('Evidência fiscal indisponível para download.');
         }
 
-        $aad = self::aad($officeId, $artifact->content_sha256);
+        $aad = self::aad($tenantId, $artifact->content_sha256);
         $bytes = $this->vault->get($artifact->vault_object_id, $aad);
         if (! hash_equals((string) $artifact->content_sha256, hash('sha256', $bytes))) {
             throw new RuntimeException('Integridade da evidência fiscal rejeitada.');
@@ -123,9 +123,9 @@ final class FiscalEvidenceStore
 
     public function unavailableReason(
         FiscalEvidenceArtifact $artifact,
-        int $officeId,
+        int $tenantId,
     ): ?DocumentUnavailableReason {
-        if ((int) $artifact->office_id !== $officeId) {
+        if ((int) $artifact->tenant_id !== $tenantId) {
             return DocumentUnavailableReason::NotAvailable;
         }
         if ($artifact->verification_state === FiscalVerificationState::Rejected) {
@@ -149,8 +149,8 @@ final class FiscalEvidenceStore
         $run = FiscalMonitoringRun::query()
             ->withoutGlobalScopes()
             ->whereKey($artifact->run_id)
-            ->first(['id', 'office_id']);
-        if ($run === null || (int) $run->office_id !== $officeId) {
+            ->first(['id', 'tenant_id']);
+        if ($run === null || (int) $run->tenant_id !== $tenantId) {
             return DocumentUnavailableReason::IntegrityRejected;
         }
 

@@ -4,7 +4,7 @@ namespace App\Support;
 
 use App\Enums\FiscalControlModule;
 use App\Enums\FiscalOperationClass;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Fiscal\Availability\FiscalModuleAvailabilityService;
 use InvalidArgumentException;
 
@@ -15,7 +15,7 @@ use InvalidArgumentException;
  * 1. kill_switch global
  * 2. global_enabled
  * 3. módulo enabled
- * 4. allowlist / allow_all_offices (quando officeId informado)
+ * 4. allowlist / allow_all_tenants (quando tenantId informado)
  * 5. para mutações: mutating.kill_switch, mutating.enabled, module.mutating_enabled
  *
  * Defaults de config: tudo OFF. Nunca hardcode enable=true neste helper.
@@ -25,14 +25,15 @@ final class FeatureFlags
     /** @var list<string> */
     public const MODULES = [
         'simples_mei',
-        'dctfweb_mit',
-        'parcelamentos',
+        'dctfweb',
+        'installments',
         'sitfis',
         'mailbox',
-        'declaracoes',
-        'guias',
+        'declarations',
+        'guides',
         'fgts',
-        'mutacoes',
+        'registrations',
+        'tax_processes',
     ];
 
     public static function isKillSwitchActive(): bool
@@ -62,54 +63,41 @@ final class FeatureFlags
     }
 
     /**
-     * RBAC multi-tenant canônico (TenantPermission / TenantRole).
-     * Default OFF; kill switch global vence. Com OFF, autoridade permanece legada.
+     * Configuração unificada do escritório (perfil + certificado + consentimento).
+     * Default OFF; kill switch vence; allowlist vazia exige allow_all_tenants.
      */
-    public static function isCanonicalMultitenantRbacEnabled(): bool
+    public static function isUnifiedTenantConfigEnabled(?int $tenantId = null): bool
     {
         if (self::isKillSwitchActive()) {
             return false;
         }
 
-        return (bool) config('features.canonical_multitenant_rbac.enabled', false);
-    }
-
-    /**
-     * Configuração unificada do escritório (perfil + A1 canônico + consentimento).
-     * Default OFF; kill switch vence; allowlist vazia exige allow_all_offices.
-     */
-    public static function isUnifiedOfficeConfigEnabled(?int $officeId = null): bool
-    {
-        if (self::isKillSwitchActive()) {
+        if (! (bool) config('features.unified_tenant_config.enabled', false)) {
             return false;
         }
 
-        if (! (bool) config('features.unified_office_config.enabled', false)) {
-            return false;
-        }
-
-        if ($officeId === null) {
+        if ($tenantId === null) {
             return true;
         }
 
         /** @var list<int> $allowlist */
-        $allowlist = config('features.unified_office_config.office_allowlist', []);
+        $allowlist = config('features.unified_tenant_config.tenant_allowlist', []);
         if (! is_array($allowlist)) {
             $allowlist = [];
         }
 
         if ($allowlist === []) {
-            return (bool) config('features.unified_office_config.allow_all_offices', false);
+            return (bool) config('features.unified_tenant_config.allow_all_tenants', false);
         }
 
-        return in_array($officeId, $allowlist, true);
+        return in_array($tenantId, $allowlist, true);
     }
 
     /**
      * Onboarding simplificado de produção SERPRO.
      * Default OFF; allowlist vazia não libera ninguém.
      */
-    public static function isSerproProductionOnboardingEnabled(?int $officeId = null): bool
+    public static function isSerproProductionOnboardingEnabled(?int $tenantId = null): bool
     {
         if (self::isKillSwitchActive()) {
             return false;
@@ -119,21 +107,21 @@ final class FeatureFlags
             return false;
         }
 
-        if ($officeId === null) {
+        if ($tenantId === null) {
             return true;
         }
 
         /** @var list<int> $allowlist */
-        $allowlist = config('features.serpro_production_onboarding.office_allowlist', []);
+        $allowlist = config('features.serpro_production_onboarding.tenant_allowlist', []);
         if (! is_array($allowlist)) {
             $allowlist = [];
         }
 
         if ($allowlist === []) {
-            return (bool) config('features.serpro_production_onboarding.allow_all_offices', false);
+            return (bool) config('features.serpro_production_onboarding.allow_all_tenants', false);
         }
 
-        return in_array($officeId, $allowlist, true);
+        return in_array($tenantId, $allowlist, true);
     }
 
     /**
@@ -152,28 +140,24 @@ final class FeatureFlags
     }
 
     /**
-     * Módulo habilitado globalmente (e para o tenant, se officeId informado).
+     * Módulo habilitado globalmente (e para o tenant, se tenantId informado).
      */
-    public static function isModuleEnabled(string $module, ?int $officeId = null): bool
+    public static function isModuleEnabled(string $module, ?int $tenantId = null): bool
     {
-        if ($module === 'mutacoes') {
-            return false;
-        }
-
         $canonical = FiscalControlModule::fromRuntimeKey($module);
-        $office = $officeId === null
+        $tenant = $tenantId === null
             ? null
-            : Office::query()->withoutGlobalScopes()->find($officeId);
+            : Tenant::query()->withoutGlobalScopes()->find($tenantId);
 
         return app(FiscalModuleAvailabilityService::class)
-            ->resolve($canonical, $office, FiscalOperationClass::Read)
+            ->resolve($canonical, $tenant, FiscalOperationClass::Read)
             ->allowed;
     }
 
     /**
      * Operação mutante permitida para o módulo (e tenant opcional).
      */
-    public static function isMutatingEnabled(string $module, ?int $officeId = null): bool
+    public static function isMutatingEnabled(string $module, ?int $tenantId = null): bool
     {
         if (self::isKillSwitchActive()
             || (bool) config('features.mutating.kill_switch', false)
@@ -190,23 +174,23 @@ final class FeatureFlags
             return false;
         }
 
-        if ($officeId === null) {
+        if ($tenantId === null) {
             return true;
         }
 
-        $allowlist = config("features.modules.{$module}.office_allowlist", []);
+        $allowlist = config("features.modules.{$module}.tenant_allowlist", []);
         if (! is_array($allowlist)) {
             $allowlist = [];
         }
 
         return $allowlist === []
-            ? (bool) config("features.modules.{$module}.allow_all_offices", false)
-            : in_array($officeId, $allowlist, true);
+            ? (bool) config("features.modules.{$module}.allow_all_tenants", false)
+            : in_array($tenantId, $allowlist, true);
     }
 
-    public static function isOfficeAllowedForModule(string $module, int $officeId): bool
+    public static function isTenantAllowedForModule(string $module, int $tenantId): bool
     {
-        return self::isModuleEnabled($module, $officeId);
+        return self::isModuleEnabled($module, $tenantId);
     }
 
     /**
@@ -216,10 +200,9 @@ final class FeatureFlags
      *     kill_switch: bool,
      *     global_enabled: bool,
      *     platform_privileged_context: bool,
-     *     canonical_multitenant_rbac: bool,
-     *     unified_office_config: bool,
+     *     unified_tenant_config: bool,
      *     mutating: array{enabled: bool, kill_switch: bool},
-     *     modules: array<string, array{enabled: bool, mutating_enabled: bool, allow_all_offices: bool, allowlist_count: int}>
+     *     modules: array<string, array{enabled: bool, mutating_enabled: bool, allow_all_tenants: bool, allowlist_count: int}>
      * }
      */
     public static function snapshot(): array
@@ -227,12 +210,12 @@ final class FeatureFlags
         $modules = [];
         foreach (self::MODULES as $module) {
             /** @var list<int>|mixed $allowlist */
-            $allowlist = config("features.modules.{$module}.office_allowlist", []);
+            $allowlist = config("features.modules.{$module}.tenant_allowlist", []);
             $count = is_array($allowlist) ? count($allowlist) : 0;
             $modules[$module] = [
                 'enabled' => (bool) config("features.modules.{$module}.enabled", false),
                 'mutating_enabled' => (bool) config("features.modules.{$module}.mutating_enabled", false),
-                'allow_all_offices' => (bool) config("features.modules.{$module}.allow_all_offices", false),
+                'allow_all_tenants' => (bool) config("features.modules.{$module}.allow_all_tenants", false),
                 'allowlist_count' => $count,
             ];
         }
@@ -241,8 +224,7 @@ final class FeatureFlags
             'kill_switch' => self::isKillSwitchActive(),
             'global_enabled' => (bool) config('features.global_enabled', false),
             'platform_privileged_context' => self::isPlatformPrivilegedContextEnabled(),
-            'canonical_multitenant_rbac' => self::isCanonicalMultitenantRbacEnabled(),
-            'unified_office_config' => self::isUnifiedOfficeConfigEnabled(),
+            'unified_tenant_config' => self::isUnifiedTenantConfigEnabled(),
             'serpro_production_onboarding' => self::isSerproProductionOnboardingEnabled(),
             'mutating' => [
                 'enabled' => (bool) config('features.mutating.enabled', false),

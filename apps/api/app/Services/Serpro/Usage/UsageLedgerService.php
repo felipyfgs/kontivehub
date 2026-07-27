@@ -8,13 +8,11 @@ use App\Enums\SerproConsumptionClass;
 use App\Enums\SerproDataSegregationClass;
 use App\Enums\SerproUsageReservationStatus;
 use App\Enums\SerproUsageResult;
-use App\Models\Office;
 use App\Models\SerproApiUsageEntry;
 use App\Models\SerproApiUsageReservation;
 use App\Services\Audit\AuditLogger;
 use App\Services\Serpro\IntegraBillingClassifier;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use LogicException;
 
@@ -46,13 +44,13 @@ final class UsageLedgerService
             ->first();
 
         if ($existing !== null) {
-            $this->assertSameOffice($existing, $request->officeId);
+            $this->assertSameTenant($existing, $request->tenantId);
 
             return new UsageReserveOutcome(
                 allowed: $existing->status !== SerproUsageReservationStatus::Blocked,
                 reservation: $existing,
                 replayed: true,
-                budget: $this->budget->tenantSnapshot($request->officeId),
+                budget: $this->budget->tenantSnapshot($request->tenantId),
             );
         }
 
@@ -133,17 +131,17 @@ final class UsageLedgerService
                 ->first();
 
             if ($race !== null) {
-                $this->assertSameOffice($race, $request->officeId);
+                $this->assertSameTenant($race, $request->tenantId);
 
                 return [
                     'reservation' => $race,
-                    'budget' => $this->budget->tenantSnapshot($request->officeId),
+                    'budget' => $this->budget->tenantSnapshot($request->tenantId),
                     'allowed' => $race->status !== SerproUsageReservationStatus::Blocked,
                     'replayed' => true,
                 ];
             }
 
-            $this->lockOfficeBudget($request->officeId);
+            $this->lockTenantBudget($request->tenantId);
 
             $costMicros = (int) ($estimate['estimated_cost_micros'] ?? 0);
             $blockReason = null;
@@ -173,7 +171,7 @@ final class UsageLedgerService
             $budgetEnvironment = strtoupper((string) $environment);
 
             $budgetEval = $this->budget->evaluate(
-                officeId: $request->officeId,
+                tenantId: $request->tenantId,
                 class: $class,
                 quantity: $request->quantity,
                 isEssential: $isEssential,
@@ -197,7 +195,7 @@ final class UsageLedgerService
             if ($allowed && ! $request->isSimulated && $costMicros > 0 && $this->shadow->requiresPositiveMonetaryBudgets()) {
                 try {
                     $budgetIds = $this->budget->atomicReserveMicros(
-                        officeId: $request->officeId,
+                        tenantId: $request->tenantId,
                         costMicros: $costMicros,
                         cycleCode: (string) $budgetEval['cycle_code'],
                         isCanary: $request->isCanary,
@@ -224,16 +222,26 @@ final class UsageLedgerService
                 : SerproUsageReservationStatus::Blocked;
 
             $create = [
-                'office_id' => $request->officeId,
+                'tenant_id' => $request->tenantId,
                 'idempotency_key' => $request->idempotencyKey,
                 'client_id' => $request->clientId,
                 'contributor_ref' => $request->contributorRef,
                 'system_code' => $request->systemCode,
                 'service_code' => $request->serviceCode,
                 'operation_code' => $request->operationCode,
+                'operation_key' => $request->operationKey,
                 'consumption_class' => $class,
                 'quantity' => $request->quantity,
                 'is_essential' => $isEssential,
+                'is_simulated' => $request->isSimulated,
+                'request_tag' => $requestTag,
+                'functional_route' => $request->functionalRoute,
+                'environment' => $environment,
+                'serpro_contract_id' => $request->serproContractId,
+                'catalog_revision' => $catalogRevision,
+                'price_revision' => $estimate['price_revision'] ?? null,
+                'segregation_class' => $segregation,
+                'attempt_state' => $allowed ? 'reserved' : 'blocked',
                 'status' => $status,
                 'correlation_id' => $correlationId,
                 'price_version_id' => $request->isSimulated ? null : $estimate['price_version_id'],
@@ -246,28 +254,9 @@ final class UsageLedgerService
                 'finalized_at' => $allowed ? null : now(),
             ];
 
-            if (Schema::hasColumn('serpro_api_usage_reservations', 'operation_key')) {
-                $create['operation_key'] = $request->operationKey;
-                $create['is_simulated'] = $request->isSimulated;
-                $create['request_tag'] = $requestTag;
-                $create['functional_route'] = $request->functionalRoute;
-            }
-            if (Schema::hasColumn('serpro_api_usage_reservations', 'environment')) {
-                $create['environment'] = $environment;
-                $create['serpro_contract_id'] = $request->serproContractId;
-                $create['catalog_revision'] = $catalogRevision;
-                $create['price_revision'] = $estimate['price_revision'] ?? null;
-                $create['segregation_class'] = $segregation;
-                $create['attempt_state'] = $allowed ? 'reserved' : 'blocked';
-            }
-
             $reservation = SerproApiUsageReservation::query()->create($create);
 
-            if ($budgetIds !== [] && Schema::hasColumn('serpro_api_usage_reservations', 'durable_result_ref') === false) {
-                // metadata em block_reason não — guarda ids no correlation via refresh opcional
-            }
-            // Persist budget ids em metadata se coluna existir (json notes não há); usa durable_result_ref como ref opaca.
-            if ($budgetIds !== [] && Schema::hasColumn('serpro_api_usage_reservations', 'durable_result_ref')) {
+            if ($budgetIds !== []) {
                 $reservation->durable_result_ref = 'budgets:'.implode(',', $budgetIds);
                 $reservation->save();
             }
@@ -290,12 +279,12 @@ final class UsageLedgerService
                 result: 'BLOCKED',
                 subject: $reservation,
                 context: [
-                    'office_id' => $request->officeId,
+                    'tenant_id' => $request->tenantId,
                     'service_code' => $request->serviceCode,
                     'operation_code' => $request->operationCode,
                     'block_reason' => $reservation->block_reason,
                 ],
-                officeId: $request->officeId,
+                tenantId: $request->tenantId,
             );
         }
 
@@ -412,10 +401,8 @@ final class UsageLedgerService
                 $locked->http_status = $httpStatus;
                 $locked->possibly_billable = $billable;
                 $locked->finalized_at = now();
-                if (Schema::hasColumn('serpro_api_usage_reservations', 'attempt_state')) {
-                    $locked->attempt_state = $remoteState === 'uncertain' ? 'uncertain' : 'acknowledged';
-                    $locked->remote_state = $remoteState;
-                }
+                $locked->attempt_state = $remoteState === 'uncertain' ? 'uncertain' : 'acknowledged';
+                $locked->remote_state = $remoteState;
                 $locked->save();
 
                 return $existingEntry;
@@ -425,7 +412,7 @@ final class UsageLedgerService
             $this->settleBudgetsFromReservation($locked, $cost, consume: $billable);
 
             $entryData = [
-                'office_id' => $locked->office_id,
+                'tenant_id' => $locked->tenant_id,
                 'reservation_id' => $locked->id,
                 'idempotency_key' => $locked->idempotency_key,
                 'client_id' => $locked->client_id,
@@ -433,8 +420,20 @@ final class UsageLedgerService
                 'system_code' => $locked->system_code,
                 'service_code' => $locked->service_code,
                 'operation_code' => $locked->operation_code,
+                'operation_key' => $locked->operation_key,
                 'consumption_class' => $locked->consumption_class,
                 'quantity' => $locked->quantity,
+                'is_simulated' => (bool) $locked->is_simulated,
+                'request_tag' => $locked->request_tag,
+                'functional_route' => $locked->functional_route,
+                'environment' => $locked->environment,
+                'serpro_contract_id' => $locked->serpro_contract_id,
+                'attempt_state' => $remoteState === 'uncertain' ? 'uncertain' : 'acknowledged',
+                'catalog_revision' => $locked->catalog_revision,
+                'price_revision' => $locked->price_revision,
+                'remote_state' => $remoteState,
+                'segregation_class' => $locked->segregation_class
+                    ?? ($locked->shadow_mode ? SerproDataSegregationClass::Shadow->value : SerproDataSegregationClass::Production->value),
                 'result' => $result,
                 'correlation_id' => $locked->correlation_id,
                 'price_version_id' => $locked->price_version_id,
@@ -446,22 +445,6 @@ final class UsageLedgerService
                 'occurred_at' => now(),
                 'created_at' => now(),
             ];
-            if (Schema::hasColumn('serpro_api_usage_entries', 'operation_key')) {
-                $entryData['operation_key'] = $locked->operation_key;
-                $entryData['is_simulated'] = (bool) $locked->is_simulated;
-                $entryData['request_tag'] = $locked->request_tag;
-                $entryData['functional_route'] = $locked->functional_route;
-            }
-            if (Schema::hasColumn('serpro_api_usage_entries', 'environment')) {
-                $entryData['environment'] = $locked->environment ?? null;
-                $entryData['serpro_contract_id'] = $locked->serpro_contract_id ?? null;
-                $entryData['attempt_state'] = $remoteState === 'uncertain' ? 'uncertain' : 'acknowledged';
-                $entryData['catalog_revision'] = $locked->catalog_revision ?? null;
-                $entryData['price_revision'] = $locked->price_revision ?? null;
-                $entryData['remote_state'] = $remoteState;
-                $entryData['segregation_class'] = $locked->segregation_class
-                    ?? ($locked->shadow_mode ? SerproDataSegregationClass::Shadow->value : SerproDataSegregationClass::Production->value);
-            }
 
             $entry = SerproApiUsageEntry::query()->create($entryData);
 
@@ -471,10 +454,8 @@ final class UsageLedgerService
             $locked->http_status = $httpStatus;
             $locked->possibly_billable = $possiblyBillable ?? $billable;
             $locked->finalized_at = now();
-            if (Schema::hasColumn('serpro_api_usage_reservations', 'attempt_state')) {
-                $locked->attempt_state = $remoteState === 'uncertain' ? 'uncertain' : 'acknowledged';
-                $locked->remote_state = $remoteState;
-            }
+            $locked->attempt_state = $remoteState === 'uncertain' ? 'uncertain' : 'acknowledged';
+            $locked->remote_state = $remoteState;
             $locked->save();
 
             return $entry;
@@ -501,9 +482,7 @@ final class UsageLedgerService
             $locked->result = SerproUsageResult::Released;
             $locked->possibly_billable = false;
             $locked->finalized_at = now();
-            if (Schema::hasColumn('serpro_api_usage_reservations', 'attempt_state')) {
-                $locked->attempt_state = 'released';
-            }
+            $locked->attempt_state = 'released';
             $locked->save();
 
             return $locked;
@@ -615,29 +594,18 @@ final class UsageLedgerService
         $this->budget->settleReservedMicros($ids, $cost, $consume);
     }
 
-    private function assertSameOffice(SerproApiUsageReservation $reservation, int $officeId): void
+    private function assertSameTenant(SerproApiUsageReservation $reservation, int $tenantId): void
     {
-        if ((int) $reservation->office_id !== $officeId) {
+        if ((int) $reservation->tenant_id !== $tenantId) {
             throw new LogicException(
-                'idempotency_key já utilizado por outro office_id (isolamento de tenant).'
+                'idempotency_key já utilizado por outro tenant_id (isolamento de tenant).'
             );
         }
     }
 
-    private function lockOfficeBudget(int $officeId): void
+    private function lockTenantBudget(int $tenantId): void
     {
-        $driver = DB::connection()->getDriverName();
-
-        if ($driver === 'pgsql') {
-            DB::select('SELECT pg_advisory_xact_lock(?, ?)', [0x5E12_0001, $officeId]);
-
-            return;
-        }
-
-        Office::query()
-            ->whereKey($officeId)
-            ->lockForUpdate()
-            ->first();
+        DB::select('SELECT pg_advisory_xact_lock(?, ?)', [0x5E12_0001, $tenantId]);
     }
 
     /**

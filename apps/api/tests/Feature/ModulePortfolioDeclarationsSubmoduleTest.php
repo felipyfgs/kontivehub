@@ -10,9 +10,9 @@ use App\Enums\FiscalSituation;
 use App\Enums\TaxObligationApplicability;
 use App\Models\Client;
 use App\Models\FiscalCategory;
-use App\Models\Office;
 use App\Models\TaxObligationDefinition;
 use App\Models\TaxObligationProjection;
+use App\Models\Tenant;
 use App\Services\FiscalMonitoring\ModulePortfolio\ModulePortfolioQueryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -32,7 +32,6 @@ class ModulePortfolioDeclarationsSubmoduleTest extends TestCase
                 'MIT',
                 'FGTS',
                 'DIRF',
-                'DECLARACOES',
             ],
             FiscalModuleKey::Declarations->knownSubmodules(),
         );
@@ -40,11 +39,11 @@ class ModulePortfolioDeclarationsSubmoduleTest extends TestCase
 
     public function test_pgdas_submodule_filters_to_pgdas_d_projections(): void
     {
-        [$office, $pgdasClient, $defisClient] = $this->seedObligationClients();
+        [$tenant, $pgdasClient, $defisClient] = $this->seedObligationClients();
         $portfolio = app(ModulePortfolioQueryService::class);
 
         $page = $portfolio->clients(
-            $office,
+            $tenant,
             FiscalModuleKey::Declarations,
             ModulePortfolioFilters::fromRequest(['submodule' => 'PGDAS', 'per_page' => 50]),
         );
@@ -61,11 +60,11 @@ class ModulePortfolioDeclarationsSubmoduleTest extends TestCase
 
     public function test_dirf_submodule_returns_empty_unsupported_coverage(): void
     {
-        [$office] = $this->seedObligationClients();
+        [$tenant] = $this->seedObligationClients();
         $portfolio = app(ModulePortfolioQueryService::class);
 
         $overview = $portfolio->overview(
-            $office,
+            $tenant,
             FiscalModuleKey::Declarations,
             ModulePortfolioFilters::fromRequest(['submodule' => 'DIRF']),
         );
@@ -73,7 +72,7 @@ class ModulePortfolioDeclarationsSubmoduleTest extends TestCase
         $this->assertSame(0, $overview->totalClients);
 
         $page = $portfolio->clients(
-            $office,
+            $tenant,
             FiscalModuleKey::Declarations,
             ModulePortfolioFilters::fromRequest(['submodule' => 'DIRF']),
         );
@@ -82,7 +81,7 @@ class ModulePortfolioDeclarationsSubmoduleTest extends TestCase
 
     public function test_dasn_simei_and_mit_use_isolated_obligation_populations(): void
     {
-        [$office, , , $dasnClient, $mitClient] = $this->seedObligationClients();
+        [$tenant, , , $dasnClient, $mitClient] = $this->seedObligationClients();
         $portfolio = app(ModulePortfolioQueryService::class);
 
         foreach ([
@@ -93,8 +92,8 @@ class ModulePortfolioDeclarationsSubmoduleTest extends TestCase
                 'submodule' => $submodule,
                 'per_page' => 50,
             ]);
-            $overview = $portfolio->overview($office, FiscalModuleKey::Declarations, $filters);
-            $page = $portfolio->clients($office, FiscalModuleKey::Declarations, $filters);
+            $overview = $portfolio->overview($tenant, FiscalModuleKey::Declarations, $filters);
+            $page = $portfolio->clients($tenant, FiscalModuleKey::Declarations, $filters);
 
             $this->assertSame(1, $overview->totalClients, $submodule);
             $this->assertSame(1, $page->total(), $submodule);
@@ -109,11 +108,11 @@ class ModulePortfolioDeclarationsSubmoduleTest extends TestCase
 
     public function test_overview_exposes_stable_counts_for_all_obligation_tabs(): void
     {
-        [$office] = $this->seedObligationClients();
+        [$tenant] = $this->seedObligationClients();
         $portfolio = app(ModulePortfolioQueryService::class);
 
         $overview = $portfolio->overview(
-            $office,
+            $tenant,
             FiscalModuleKey::Declarations,
             ModulePortfolioFilters::fromRequest(['submodule' => 'PGDAS']),
         );
@@ -131,11 +130,11 @@ class ModulePortfolioDeclarationsSubmoduleTest extends TestCase
     }
 
     /**
-     * @return array{0: Office, 1: Client, 2: Client, 3: Client, 4: Client}
+     * @return array{0: Tenant, 1: Client, 2: Client, 3: Client, 4: Client}
      */
     private function seedObligationClients(): array
     {
-        $office = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
         $this->ensureDeclarationsCategory();
 
         $pgdasDef = TaxObligationDefinition::query()->firstOrCreate(
@@ -179,25 +178,21 @@ class ModulePortfolioDeclarationsSubmoduleTest extends TestCase
             ],
         );
 
-        $pgdasClient = Client::factory()->for($office)->create([
+        $pgdasClient = Client::factory()->for($tenant)->create([
             'is_active' => true,
-            'matrix_client_id' => null,
         ]);
-        $defisClient = Client::factory()->for($office)->create([
+        $defisClient = Client::factory()->for($tenant)->create([
             'is_active' => true,
-            'matrix_client_id' => null,
         ]);
-        $dasnClient = Client::factory()->for($office)->create([
+        $dasnClient = Client::factory()->for($tenant)->create([
             'is_active' => true,
-            'matrix_client_id' => null,
         ]);
-        $mitClient = Client::factory()->for($office)->create([
+        $mitClient = Client::factory()->for($tenant)->create([
             'is_active' => true,
-            'matrix_client_id' => null,
         ]);
 
         TaxObligationProjection::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $pgdasClient->id,
             'obligation_definition_id' => $pgdasDef->id,
             'period_key' => '2026-06',
@@ -209,7 +204,7 @@ class ModulePortfolioDeclarationsSubmoduleTest extends TestCase
             'applicability' => TaxObligationApplicability::Applicable,
         ]);
         TaxObligationProjection::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $defisClient->id,
             'obligation_definition_id' => $defisDef->id,
             'period_key' => '2025',
@@ -222,7 +217,7 @@ class ModulePortfolioDeclarationsSubmoduleTest extends TestCase
         ]);
 
         TaxObligationProjection::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $dasnClient->id,
             'obligation_definition_id' => $dasnDef->id,
             'period_key' => '2025',
@@ -234,7 +229,7 @@ class ModulePortfolioDeclarationsSubmoduleTest extends TestCase
             'applicability' => TaxObligationApplicability::Applicable,
         ]);
         TaxObligationProjection::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $mitClient->id,
             'obligation_definition_id' => $mitDef->id,
             'period_key' => '2026-06',
@@ -246,7 +241,7 @@ class ModulePortfolioDeclarationsSubmoduleTest extends TestCase
             'applicability' => TaxObligationApplicability::Applicable,
         ]);
 
-        return [$office, $pgdasClient, $defisClient, $dasnClient, $mitClient];
+        return [$tenant, $pgdasClient, $defisClient, $dasnClient, $mitClient];
     }
 
     private function ensureDeclarationsCategory(): void
@@ -255,7 +250,7 @@ class ModulePortfolioDeclarationsSubmoduleTest extends TestCase
             ['code' => 'DECLARACOES'],
             [
                 'name' => 'Declarações',
-                'module_key' => 'declaracoes',
+                'module_key' => 'declarations',
                 'default_coverage' => FiscalCoverage::Partial,
                 'default_mutability' => FiscalMutability::ReadOnly,
                 'system_code' => 'INTEGRA_CONTADOR',

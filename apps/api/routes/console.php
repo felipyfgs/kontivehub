@@ -23,7 +23,7 @@ Schedule::command('outbound:deadline-plan')->hourly();
 Schedule::command('exports:purge-expired')->hourly();
 Schedule::command('import:purge-expired-spools')->hourly();
 Schedule::command('credentials:refresh-expiry')->hourly();
-// SERPRO lifecycle: alertas de PFX/A1/Termo/token/procurações — sem assinar/mutar
+// SERPRO lifecycle: alertas de PFX/certificado/Termo/token/procurações — sem assinar/mutar
 Schedule::command('serpro:lifecycle-scan')->dailyAt('04:00');
 // Consulta oficial de procurações: no-op até flag + allowlist + capability explícitas.
 Schedule::command('serpro:dispatch-due-procuracao-syncs')->hourly();

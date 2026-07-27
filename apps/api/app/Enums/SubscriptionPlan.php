@@ -9,7 +9,7 @@ enum SubscriptionPlan: string
     case Enterprise = 'ENTERPRISE';
 
     /**
-     * Defaults técnicos/SaaS (orçamento de chamadas API + limites legados).
+     * Defaults técnicos/SaaS (orçamento de chamadas API + limites comerciais).
      * monthly_api_quota alimenta UsageBudgetGate — não é franquia comercial de monitor.
      *
      * @return array{monthly_api_quota: int, max_clients: int, max_users: int}
@@ -52,7 +52,7 @@ enum SubscriptionPlan: string
 
     /**
      * Máximo padrão de clientes do plano (franquia comercial de carteira).
-     * Override negociado acima de 200 fica em office_subscriptions.negotiated_client_limit.
+     * Override negociado acima de 200 fica em tenant_subscriptions.negotiated_client_limit.
      */
     public function commercialMaxClients(): int
     {

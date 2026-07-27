@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use App\Enums\AdnDocumentType;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Model;
@@ -11,13 +11,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
-    'office_id', 'sha256', 'document_type', 'schema_version', 'access_key',
+    'tenant_id', 'sha256', 'document_type', 'schema_version', 'access_key',
     'vault_object_id', 'byte_size', 'parse_status', 'parse_alert',
 ])]
 #[Hidden(['vault_object_id'])]
 class DfeDocument extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {
@@ -37,8 +37,8 @@ class DfeDocument extends Model
         return $this->hasMany(DocumentAcquisition::class);
     }
 
-    public function note(): HasOne
+    public function nfseDocument(): HasOne
     {
-        return $this->hasOne(NfseNote::class);
+        return $this->hasOne(NfseDocument::class);
     }
 }

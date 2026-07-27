@@ -6,7 +6,7 @@ use App\Enums\FiscalControlModule;
 use App\Enums\FiscalModuleControlScope;
 use App\Http\Controllers\Controller;
 use App\Models\FiscalModuleControl;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Auth\RecentPasswordConfirmationGate;
 use App\Services\Fiscal\Availability\FiscalModuleAvailabilityService;
@@ -33,19 +33,19 @@ final class FiscalModuleControlController extends Controller
         ]);
     }
 
-    public function officeIndex(Office $office): JsonResponse
+    public function tenantIndex(Tenant $tenant): JsonResponse
     {
         return response()->json([
             'data' => [
-                'office' => [
-                    'id' => $office->id,
-                    'name' => $office->name,
-                    'slug' => $office->slug,
-                    'is_active' => $office->is_active,
+                'tenant' => [
+                    'id' => $tenant->id,
+                    'name' => $tenant->name,
+                    'slug' => $tenant->slug,
+                    'is_active' => $tenant->is_active,
                 ],
                 'profile' => (string) config('fiscal.profile'),
                 'kill_switch' => (bool) config('fiscal.kill_switch'),
-                'modules' => array_map(fn (FiscalControlModule $module): array => $this->modulePayload($module, $office), FiscalControlModule::cases()),
+                'modules' => array_map(fn (FiscalControlModule $module): array => $this->modulePayload($module, $tenant), FiscalControlModule::cases()),
             ],
         ]);
     }
@@ -55,16 +55,16 @@ final class FiscalModuleControlController extends Controller
         return $this->update($request, $this->resolveModule($module), FiscalModuleControlScope::Global, null);
     }
 
-    public function updateOffice(Request $request, Office $office, string $module): JsonResponse
+    public function updateTenant(Request $request, Tenant $tenant, string $module): JsonResponse
     {
-        return $this->update($request, $this->resolveModule($module), FiscalModuleControlScope::Office, $office);
+        return $this->update($request, $this->resolveModule($module), FiscalModuleControlScope::Tenant, $tenant);
     }
 
     private function update(
         Request $request,
         FiscalControlModule $module,
         FiscalModuleControlScope $scope,
-        ?Office $office,
+        ?Tenant $tenant,
     ): JsonResponse {
         $validated = $request->validate([
             'restricted' => ['required', 'boolean'],
@@ -83,7 +83,7 @@ final class FiscalModuleControlController extends Controller
         $this->controls->setRestriction(
             $module,
             $scope,
-            $office,
+            $tenant,
             (bool) $validated['restricted'],
             (string) $validated['reason'],
             $actor,
@@ -91,7 +91,7 @@ final class FiscalModuleControlController extends Controller
         );
 
         return response()->json([
-            'data' => $this->modulePayload($module, $office),
+            'data' => $this->modulePayload($module, $tenant),
             'message' => $validated['restricted']
                 ? 'Módulo restringido imediatamente.'
                 : 'Módulo liberado; a sincronização de recuperação será agendada.',
@@ -99,16 +99,16 @@ final class FiscalModuleControlController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function modulePayload(FiscalControlModule $module, ?Office $office = null): array
+    private function modulePayload(FiscalControlModule $module, ?Tenant $tenant = null): array
     {
         $global = $this->findControl($module, FiscalModuleControlScope::Global);
-        $local = $office !== null
-            ? $this->findControl($module, FiscalModuleControlScope::Office, (int) $office->id)
+        $local = $tenant !== null
+            ? $this->findControl($module, FiscalModuleControlScope::Tenant, (int) $tenant->id)
             : null;
 
-        return array_merge($this->availability->resolve($module, $office)->toArray(), [
+        return array_merge($this->availability->resolve($module, $tenant)->toArray(), [
             'global_restriction' => $this->controlPayload($global),
-            'office_restriction' => $this->controlPayload($local),
+            'tenant_restriction' => $this->controlPayload($local),
             'blocked_jobs_count' => (int) (($global?->blocked_jobs_count ?? 0) + ($local?->blocked_jobs_count ?? 0)),
         ]);
     }
@@ -116,11 +116,11 @@ final class FiscalModuleControlController extends Controller
     private function findControl(
         FiscalControlModule $module,
         FiscalModuleControlScope $scope,
-        ?int $officeId = null,
+        ?int $tenantId = null,
     ): ?FiscalModuleControl {
         return FiscalModuleControl::query()
             ->with('updatedBy:id,name')
-            ->where('control_key', FiscalModuleControl::controlKey($module, $scope, $officeId))
+            ->where('control_key', FiscalModuleControl::controlKey($module, $scope, $tenantId))
             ->first();
     }
 

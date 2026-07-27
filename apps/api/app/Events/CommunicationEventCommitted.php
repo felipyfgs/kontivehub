@@ -16,7 +16,7 @@ final class CommunicationEventCommitted implements ShouldBroadcastNow
 
     /** @param array<string, mixed> $payload */
     public function __construct(
-        public readonly int $officeId,
+        public readonly int $tenantId,
         public readonly int $cursor,
         public readonly string $eventType,
         public readonly ?int $inboxId,
@@ -29,7 +29,7 @@ final class CommunicationEventCommitted implements ShouldBroadcastNow
     public static function fromModel(CommunicationEvent $event): self
     {
         return new self(
-            officeId: (int) $event->office_id,
+            tenantId: (int) $event->tenant_id,
             cursor: (int) $event->id,
             eventType: $event->type,
             inboxId: $event->inbox_id !== null ? (int) $event->inbox_id : null,
@@ -44,7 +44,7 @@ final class CommunicationEventCommitted implements ShouldBroadcastNow
     {
         return [new PrivateChannel($this->inboxId !== null
             ? 'communication.inbox.'.$this->inboxId
-            : 'communication.office.'.$this->officeId)];
+            : 'communication.tenant.'.$this->tenantId)];
     }
 
     public function broadcastAs(): string

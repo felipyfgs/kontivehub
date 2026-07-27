@@ -2,7 +2,7 @@
 
 namespace Database\Factories;
 
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\WorkDepartment;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -20,7 +20,7 @@ class WorkDepartmentFactory extends Factory
         ]).' '.fake()->numerify('##');
 
         return [
-            'office_id' => Office::factory(),
+            'tenant_id' => Tenant::factory(),
             'name' => $name,
             'code' => strtoupper(fake()->unique()->lexify('???')),
             'color' => fake()->hexColor(),

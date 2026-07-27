@@ -160,7 +160,7 @@ function itemLink(item: InboxItem): string {
           color="warning"
           variant="subtle"
           icon="i-lucide-badge-alert"
-          :title="`Certificados A1 a vencer (30d): ${summary.credentials_expiring_30d}`"
+          :title="`Certificados a vencer (30d): ${summary.credentials_expiring_30d}`"
           :actions="[{ label: 'Clientes', to: '/clients', color: 'neutral', variant: 'ghost' }]"
         />
         <UAlert
@@ -169,7 +169,7 @@ function itemLink(item: InboxItem): string {
           variant="subtle"
           icon="i-lucide-loader-circle"
           :title="`Exportações na fila: ${summary.exports_pending}`"
-          :actions="[{ label: 'Export', to: '/exports', color: 'neutral', variant: 'ghost' }]"
+          :actions="[{ label: 'Exportações', to: '/exports', color: 'neutral', variant: 'ghost' }]"
         />
         <UAlert
           v-if="attentionTotal === 0 && !backup?.stale && !backup?.never"

@@ -25,16 +25,16 @@ final class FiscalItemsCollector
     /**
      * @return Collection<int, array<string, mixed>>
      */
-    public function collect(int $officeId, InboxCapabilities $role): Collection
+    public function collect(int $tenantId, InboxCapabilities $role): Collection
     {
         // collect() base: map() em Eloquent\Collection devolve Eloquent\Collection
         // e merge() tentaria getKey() nos arrays de item.
         return collect()
-            ->merge($this->fiscalPendingItems($officeId))
-            ->merge($this->guideDueItems($officeId))
-            ->merge($this->uncertainMutationItems($officeId))
-            ->merge($this->parsingAlertItems($officeId))
-            ->merge($this->sitfisRunItems($officeId))
+            ->merge($this->fiscalPendingItems($tenantId))
+            ->merge($this->guideDueItems($tenantId))
+            ->merge($this->uncertainMutationItems($tenantId))
+            ->merge($this->parsingAlertItems($tenantId))
+            ->merge($this->sitfisRunItems($tenantId))
             ->values();
     }
 
@@ -43,10 +43,10 @@ final class FiscalItemsCollector
      *
      * @return Collection<int, array<string, mixed>>
      */
-    private function fiscalPendingItems(int $officeId): Collection
+    private function fiscalPendingItems(int $tenantId): Collection
     {
         $rows = FiscalPendingItem::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('status', FiscalPendingStatus::Open)
             ->whereIn('severity', [
                 FiscalFindingSeverity::Critical->value,
@@ -101,10 +101,10 @@ final class FiscalItemsCollector
      *
      * @return Collection<int, array<string, mixed>>
      */
-    private function guideDueItems(int $officeId): Collection
+    private function guideDueItems(int $tenantId): Collection
     {
         $guides = TaxGuide::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereNotNull('due_at')
             ->where('due_at', '<=', now()->addDays(7))
             ->where('due_at', '>=', now()->subDays(3))
@@ -144,10 +144,10 @@ final class FiscalItemsCollector
      *
      * @return Collection<int, array<string, mixed>>
      */
-    private function uncertainMutationItems(int $officeId): Collection
+    private function uncertainMutationItems(int $tenantId): Collection
     {
         $ops = FiscalMutationOperation::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereIn('status', [
                 FiscalMutationStatus::UnknownResult->value,
                 FiscalMutationStatus::Reconciling->value,
@@ -194,10 +194,10 @@ final class FiscalItemsCollector
      *
      * @return Collection<int, array<string, mixed>>
      */
-    private function parsingAlertItems(int $officeId): Collection
+    private function parsingAlertItems(int $tenantId): Collection
     {
         $runs = FiscalMonitoringRun::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where(function ($q) {
                 $q->where('error_code', 'like', '%PARSE%')
                     ->orWhere('result', FiscalRunResult::Partial->value ?? 'PARTIAL')
@@ -246,11 +246,11 @@ final class FiscalItemsCollector
     /**
      * @return Collection<int, array<string, mixed>>
      */
-    private function sitfisRunItems(int $officeId): Collection
+    private function sitfisRunItems(int $tenantId): Collection
     {
         // Só falhas e conclusões com alerta de parse — COMPLETED limpos não poluem a inbox.
         return FiscalMonitoringRun::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('service_code', 'SITFIS')
             ->where(function ($q): void {
                 $q->where('status', 'FAILED')
@@ -307,7 +307,7 @@ final class FiscalItemsCollector
                     cursor: null,
                 );
                 $item['id'] = substr(hash('sha256', 'sitfis-run:'.$run->id), 0, 32);
-                $item['links'] = ['run' => '/fiscal/runs/'.$run->id];
+                $item['links'] = ['monitoring' => '/monitoring'];
 
                 return $item;
             })

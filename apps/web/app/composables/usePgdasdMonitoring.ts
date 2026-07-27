@@ -3,8 +3,7 @@ import type {
   PgdasdCommunicationPreview,
   PgdasdCommunicationTracking,
   PgdasdDeclarationState,
-  PgdasdHistoryPayload,
-  PgdasdHistoryPeriod
+  PgdasdHistoryPayload
 } from '~/types/fiscal-modules'
 import { pgdasdDeclarationMeta } from '~/utils/pgdasd'
 
@@ -18,7 +17,7 @@ export function usePgdasdMonitoring() {
   async function fetchHistory(
     clientId: number,
     params?: { year?: number }
-  ): Promise<PgdasdHistoryPayload | PgdasdHistoryPeriod[]> {
+  ): Promise<PgdasdHistoryPayload> {
     const res = await fiscal.pgdasd.history(clientId, params)
     return res.data
   }

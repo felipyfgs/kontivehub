@@ -6,7 +6,7 @@ use App\Contracts\SecureObjectStore;
 use App\Contracts\SerproOperationExecutor;
 use App\Models\CcmeiIssuedCertificate;
 use App\Models\Client;
-use App\Models\Office;
+use App\Models\Tenant;
 use RuntimeException;
 
 /** Histórico local, emissão manual confirmada e leitura autorizada de CCMEI121. */
@@ -21,12 +21,12 @@ final class CcmeiCertificateIssuanceService
     ) {}
 
     /** @return array<string, mixed> */
-    public function history(Office $office, Client $client): array
+    public function history(Tenant $tenant, Client $client): array
     {
-        $this->assertClient($office, $client);
+        $this->assertClient($tenant, $client);
         $certificates = CcmeiIssuedCertificate::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->latest('observed_at')
             ->latest('id')
@@ -44,16 +44,16 @@ final class CcmeiCertificateIssuanceService
     }
 
     /** @return array{success:bool,certificate?:array<string,mixed>,error_code?:string|null,error_message?:string|null} */
-    public function issue(Office $office, Client $client, ?string $correlationId = null): array
+    public function issue(Tenant $tenant, Client $client, ?string $correlationId = null): array
     {
-        $this->assertClient($office, $client);
-        $this->assertActiveClient($office, $client);
+        $this->assertClient($tenant, $client);
+        $this->assertActiveClient($tenant, $client);
         $response = $this->operations->execute(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             operationKey: self::OPERATION_KEY,
             businessData: [],
-            idempotencyKey: sprintf('ccmei:issue:%d:%d', $office->id, $client->id),
+            idempotencyKey: sprintf('ccmei:issue:%d:%d', $tenant->id, $client->id),
             correlationId: $correlationId,
             module: 'simples_mei',
         );
@@ -65,7 +65,7 @@ final class CcmeiCertificateIssuanceService
         }
 
         try {
-            $certificate = $this->projector->project($office, $client, (string) $response->sourceProvenance, $response->dados);
+            $certificate = $this->projector->project($tenant, $client, (string) $response->sourceProvenance, $response->dados);
         } catch (RuntimeException $exception) {
             return $this->failure('RESPONSE_LAYOUT_INVALID', $exception->getMessage());
         }
@@ -73,13 +73,13 @@ final class CcmeiCertificateIssuanceService
         return ['success' => true, 'certificate' => $certificate->toPublicArray()];
     }
 
-    public function findForDownload(Office $office, Client $client, int $certificateId): ?CcmeiIssuedCertificate
+    public function findForDownload(Tenant $tenant, Client $client, int $certificateId): ?CcmeiIssuedCertificate
     {
-        $this->assertClient($office, $client);
+        $this->assertClient($tenant, $client);
 
         return CcmeiIssuedCertificate::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->whereKey($certificateId)
             ->first();
@@ -94,25 +94,25 @@ final class CcmeiCertificateIssuanceService
         return $this->vault->get(
             $certificate->certificate_vault_object_id,
             CcmeiCertificateIssuanceProjector::certificateAad(
-                (int) $certificate->office_id,
+                (int) $certificate->tenant_id,
                 (int) $certificate->client_id,
                 $certificate->certificate_sha256,
             ),
         );
     }
 
-    private function assertClient(Office $office, Client $client): void
+    private function assertClient(Tenant $tenant, Client $client): void
     {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new RuntimeException('Cliente não encontrado no escritório atual.');
         }
     }
 
-    private function assertActiveClient(Office $office, Client $client): void
+    private function assertActiveClient(Tenant $tenant, Client $client): void
     {
         $exists = Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($client->getKey())
             ->exists();
 

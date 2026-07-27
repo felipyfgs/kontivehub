@@ -5,7 +5,7 @@ namespace App\Services\Fiscal\Guides\DTO;
 final class GuidePaymentLookupRequest
 {
     public function __construct(
-        public readonly int $officeId,
+        public readonly int $tenantId,
         public readonly int $clientId,
         public readonly string $systemCode,
         public readonly string $serviceCode,

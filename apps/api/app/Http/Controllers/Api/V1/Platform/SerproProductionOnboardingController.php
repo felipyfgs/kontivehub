@@ -10,7 +10,7 @@ use App\Models\SerproProductionOnboarding;
 use App\Models\User;
 use App\Services\Authorization\TenantAuthorization;
 use App\Services\Serpro\SerproProductionOnboardingService;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use App\Support\FeatureFlags;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,22 +20,22 @@ use Throwable;
 class SerproProductionOnboardingController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly TenantAuthorization $tenantAuthorization,
         private readonly SerproProductionOnboardingService $onboarding,
     ) {}
 
     public function show(Request $request): JsonResponse
     {
-        $office = $this->currentOffice->resolve($request->user());
-        if ($office === null) {
-            return $this->officeRequired();
+        $tenant = $this->currentTenant->resolve($request->user());
+        if ($tenant === null) {
+            return $this->tenantRequired();
         }
 
-        $state = $this->onboarding->latestForOffice($office);
+        $state = $this->onboarding->latestForTenant($tenant);
 
         return response()->json([
-            'data' => $this->envelope($request, $office->id, $state),
+            'data' => $this->envelope($request, $tenant->id, $state),
         ]);
     }
 
@@ -47,9 +47,9 @@ class SerproProductionOnboardingController extends Controller
             return response()->json(['message' => 'Não autenticado.'], 401);
         }
 
-        $office = $this->currentOffice->resolve($actor);
-        if ($office === null) {
-            return $this->officeRequired();
+        $tenant = $this->currentTenant->resolve($actor);
+        if ($tenant === null) {
+            return $this->tenantRequired();
         }
 
         if (! $this->tenantAuthorization->allows($actor, TenantPermission::CredentialsManage)) {
@@ -60,7 +60,7 @@ class SerproProductionOnboardingController extends Controller
         }
 
         try {
-            $state = $this->onboarding->activate($office, $actor, $request->toDto());
+            $state = $this->onboarding->activate($tenant, $actor, $request->toDto());
         } catch (RuntimeException $e) {
             $status = str_contains($e->getMessage(), 'desabilitada') ? 403 : 422;
 
@@ -78,15 +78,15 @@ class SerproProductionOnboardingController extends Controller
         }
 
         return response()->json([
-            'data' => $this->envelope($request, $office->id, $state),
+            'data' => $this->envelope($request, $tenant->id, $state),
         ], 201);
     }
 
-    private function officeRequired(): JsonResponse
+    private function tenantRequired(): JsonResponse
     {
         return response()->json([
             'message' => 'Selecione um escritório ativo para ativar SERPRO em produção.',
-            'code' => CurrentOffice::CONTEXT_STATUS_REQUIRED,
+            'code' => CurrentTenant::CONTEXT_STATUS_REQUIRED,
         ], 409);
     }
 
@@ -104,11 +104,11 @@ class SerproProductionOnboardingController extends Controller
         ];
     }
 
-    private function envelope(Request $request, int $officeId, ?SerproProductionOnboarding $state): array
+    private function envelope(Request $request, int $tenantId, ?SerproProductionOnboarding $state): array
     {
         return [
-            'enabled' => FeatureFlags::isSerproProductionOnboardingEnabled($officeId),
-            'office_id' => $officeId,
+            'enabled' => FeatureFlags::isSerproProductionOnboardingEnabled($tenantId),
+            'tenant_id' => $tenantId,
             'consent' => $this->publicConsent(),
             'onboarding' => $state !== null
                 ? (new SerproProductionOnboardingResource($state))->toArray($request)

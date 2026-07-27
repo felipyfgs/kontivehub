@@ -2,7 +2,7 @@
  * Mapeamento puro coluna Kanban ↔ transição HTTP da fila de tarefas.
  * Sem persistência de reorder; DISPENSADA fora do board.
  */
-import type { OperationalTaskSummary, TaskStatus } from '~/types/work'
+import type { WorkTaskSummary, TaskStatus } from '~/types/work'
 
 export type WorkKanbanColumnStatus = 'A_FAZER' | 'EM_PROGRESSO' | 'IMPEDIDA' | 'CONCLUIDA'
 
@@ -85,11 +85,11 @@ export function actionForKanbanDrop(
   return { kind: 'invalid', message: INVALID_DROP_MESSAGE }
 }
 
-export type WorkKanbanBoardColumns = Record<WorkKanbanColumnStatus, OperationalTaskSummary[]>
+export type WorkKanbanBoardColumns = Record<WorkKanbanColumnStatus, WorkTaskSummary[]>
 
 /** Agrupa elegíveis; omite DISPENSADA e status desconhecidos. */
 export function groupTasksForKanbanBoard(
-  items: OperationalTaskSummary[]
+  items: WorkTaskSummary[]
 ): WorkKanbanBoardColumns {
   const columns: WorkKanbanBoardColumns = {
     A_FAZER: [],

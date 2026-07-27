@@ -12,7 +12,7 @@ use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
 use App\Models\MailboxMessage;
 use App\Models\MailboxMonitoringSetting;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\FiscalMonitoring\FiscalIdempotency;
 use App\Support\FeatureFlags;
 use Illuminate\Support\Facades\Log;
@@ -26,14 +26,14 @@ final class MailboxDetailEnqueueService
     /**
      * @return list<FiscalMonitoringRun>
      */
-    public function enqueueAfterList(Office $office, Client $client): array
+    public function enqueueAfterList(Tenant $tenant, Client $client): array
     {
-        if (! FeatureFlags::isModuleEnabled('mailbox', (int) $office->id)) {
+        if (! FeatureFlags::isModuleEnabled('mailbox', (int) $tenant->id)) {
             return [];
         }
 
         $setting = MailboxMonitoringSetting::query()->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->first();
         $limit = max(0, (int) ($setting?->auto_detail_limit
             ?? config('fiscal_monitoring.mailbox.max_detail_fetches_per_sync', 0)));
@@ -43,12 +43,12 @@ final class MailboxDetailEnqueueService
 
         $candidates = MailboxMessage::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('has_body', false)
             ->whereNotNull('external_id')
             ->where('external_id', '!=', '')
-            ->orderByRaw('CASE WHEN official_read_indicator IS FALSE OR official_read_indicator = 0 THEN 0 ELSE 1 END')
+            ->orderByRaw('CASE WHEN official_read_indicator IS FALSE THEN 0 ELSE 1 END')
             ->orderByDesc('received_at_official')
             ->orderByDesc('id')
             ->limit($limit * 3)
@@ -65,11 +65,11 @@ final class MailboxDetailEnqueueService
                 continue;
             }
 
-            if ($this->hasOpenDetailRun($office, $client, $externalId)) {
+            if ($this->hasOpenDetailRun($tenant, $client, $externalId)) {
                 continue;
             }
 
-            $run = $this->createDetailRun($office, $client, $externalId, (int) $message->id, true);
+            $run = $this->createDetailRun($tenant, $client, $externalId, (int) $message->id, true);
             if ($run !== null) {
                 $enqueued[] = $run;
             }
@@ -78,9 +78,9 @@ final class MailboxDetailEnqueueService
         return $enqueued;
     }
 
-    public function enqueueOnDemand(Office $office, Client $client, MailboxMessage $message): FiscalMonitoringRun
+    public function enqueueOnDemand(Tenant $tenant, Client $client, MailboxMessage $message): FiscalMonitoringRun
     {
-        if ((int) $message->office_id !== (int) $office->id || (int) $message->client_id !== (int) $client->id) {
+        if ((int) $message->tenant_id !== (int) $tenant->id || (int) $message->client_id !== (int) $client->id) {
             throw new \RuntimeException('MAILBOX_MESSAGE_SCOPE_MISMATCH');
         }
         if ($message->has_body) {
@@ -91,20 +91,20 @@ final class MailboxDetailEnqueueService
             throw new \RuntimeException('MAILBOX_MESSAGE_EXTERNAL_ID_MISSING');
         }
 
-        $existing = $this->existingDetailRun($office, $client, $externalId);
+        $existing = $this->existingDetailRun($tenant, $client, $externalId);
         if ($existing !== null) {
             return $existing;
         }
 
-        return $this->createDetailRun($office, $client, $externalId, (int) $message->id, false)
+        return $this->createDetailRun($tenant, $client, $externalId, (int) $message->id, false)
             ?? throw new \RuntimeException('MAILBOX_DETAIL_ENQUEUE_FAILED');
     }
 
-    private function hasOpenDetailRun(Office $office, Client $client, string $externalId): bool
+    private function hasOpenDetailRun(Tenant $tenant, Client $client, string $externalId): bool
     {
         return FiscalMonitoringRun::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('system_code', 'INTEGRA_CAIXAPOSTAL')
             ->where('service_code', 'CAIXA_POSTAL')
@@ -114,11 +114,11 @@ final class MailboxDetailEnqueueService
             ->exists();
     }
 
-    private function existingDetailRun(Office $office, Client $client, string $externalId): ?FiscalMonitoringRun
+    private function existingDetailRun(Tenant $tenant, Client $client, string $externalId): ?FiscalMonitoringRun
     {
         return FiscalMonitoringRun::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('system_code', 'INTEGRA_CAIXAPOSTAL')
             ->where('service_code', 'CAIXA_POSTAL')
@@ -129,7 +129,7 @@ final class MailboxDetailEnqueueService
     }
 
     private function createDetailRun(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $externalId,
         int $messageId,
@@ -139,7 +139,7 @@ final class MailboxDetailEnqueueService
         $slot = 'mailbox-detail:'
             .substr(hash('sha256', strtoupper(trim($externalId))), 0, 40);
         $key = FiscalIdempotency::runKey(
-            (int) $office->id,
+            (int) $tenant->id,
             (int) $client->id,
             'INTEGRA_CAIXAPOSTAL',
             'CAIXA_POSTAL',
@@ -151,7 +151,7 @@ final class MailboxDetailEnqueueService
 
         try {
             $run = FiscalMonitoringRun::query()->create([
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'client_id' => $client->id,
                 'system_code' => 'INTEGRA_CAIXAPOSTAL',
                 'service_code' => 'CAIXA_POSTAL',
@@ -173,7 +173,7 @@ final class MailboxDetailEnqueueService
             ]);
         } catch (\Throwable $e) {
             Log::warning('mailbox.detail_enqueue_failed', [
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'client_id' => $client->id,
                 'error' => mb_substr($e->getMessage(), 0, 200),
             ]);

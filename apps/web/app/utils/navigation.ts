@@ -1,7 +1,7 @@
 import type { NavigationMenuItem } from '@nuxt/ui'
 import type { MeUser } from '~/types/api'
 import { accountNavigationItems, accountNavigationTree } from '~/utils/account-navigation'
-import { lacksOfficeContext } from '~/utils/auth-redirect'
+import { lacksTenantContext } from '~/utils/auth-redirect'
 import { DOCS_NAV_ITEMS, OPERATIONS_NAV_ITEMS } from '~/utils/docs-operations-navigation'
 import { fiscalNavigationItems } from '~/utils/fiscal-navigation'
 import {
@@ -95,13 +95,13 @@ function platformAdminDestinations(path = ''): NavDestination[] {
     label: 'Admin',
     icon: 'i-lucide-shield',
     type: 'trigger',
-    defaultOpen: path === '/admin' || path.startsWith('/admin/'),
+    defaultOpen: path.startsWith('/admin/'),
     children: [
       {
-        id: 'platform-offices',
+        id: 'platform-tenants',
         label: 'Escritórios',
         icon: 'i-lucide-building-2',
-        to: '/admin/offices'
+        to: '/admin/tenants'
       },
       {
         id: 'platform-fiscal-modules',
@@ -126,8 +126,8 @@ export function mainDestinations(
 ): NavDestination[] {
   const path = options?.path || ''
 
-  // PLATFORM_ADMIN sem Office: somente superfícies globais /admin.
-  if (lacksOfficeContext(user) && canAccessPlatformAdmin(user)) {
+  // PLATFORM_ADMIN sem Tenant: somente superfícies globais /admin.
+  if (lacksTenantContext(user) && canAccessPlatformAdmin(user)) {
     return platformAdminDestinations(path)
   }
 
@@ -290,7 +290,7 @@ export function secondaryDestinations(): NavDestination[] {
 
 /** Ações rápidas da command palette — somente as autorizadas. */
 export function quickActions(user?: MeUser | null): QuickAction[] {
-  if (lacksOfficeContext(user)) {
+  if (lacksTenantContext(user)) {
     return []
   }
 

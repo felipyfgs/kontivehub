@@ -6,7 +6,7 @@ import type { ClientCredential, ClientCredentialSummary } from '~/types/api'
 const props = withDefaults(defineProps<{
   clientId: number
   credential: ClientCredential | null
-  /** Summary do show — permite OPERATOR/VIEWER ver status sem detalhe completo. */
+  /** Resumo público do certificado, sem exigir acesso aos detalhes protegidos. */
   credentialSummary?: ClientCredentialSummary | null
   canManageCredentials: boolean
   /** false quando a page já fornece ShellSectionHeader. */
@@ -100,12 +100,12 @@ watch(open, (value) => {
   <div class="space-y-4">
     <ShellSectionHeader
       v-if="showHeader"
-      title="Certificado A1"
+      title="Certificado"
       description="Um certificado por raiz do cliente. PFX e senha nunca são recuperáveis pela API."
     >
       <UButton
         v-if="canManageCredentials"
-        :label="credential ? 'Substituir' : 'Enviar A1'"
+        :label="credential ? 'Substituir' : 'Enviar certificado'"
         color="neutral"
         class="w-fit lg:ms-auto"
         icon="i-lucide-upload"
@@ -117,7 +117,7 @@ watch(open, (value) => {
       class="flex justify-end"
     >
       <UButton
-        :label="credential ? 'Substituir' : 'Enviar A1'"
+        :label="credential ? 'Substituir' : 'Enviar certificado'"
         color="neutral"
         class="w-fit"
         icon="i-lucide-upload"
@@ -143,14 +143,14 @@ watch(open, (value) => {
           <UAlert
             color="info"
             icon="i-lucide-lock-keyhole"
-            title="Gerenciado por ADMIN"
+            title="Gerenciamento restrito"
           />
         </template>
         <UAlert
           v-else
           color="info"
           icon="i-lucide-lock-keyhole"
-          title="Gerenciado por ADMIN"
+          title="Gerenciamento restrito"
         />
       </div>
       <div v-else-if="credential" class="space-y-3 text-sm">
@@ -199,17 +199,17 @@ watch(open, (value) => {
       <UEmpty
         v-else
         icon="i-lucide-badge-alert"
-        title="A1 não configurado"
+        title="certificado não configurado"
         description="O upload valida senha, titular, raiz, validade e fingerprint antes da ativação."
       >
-        <UButton label="Enviar e validar A1" @click="() => { open = true }" />
+        <UButton label="Enviar e validar certificado" @click="() => { open = true }" />
       </UEmpty>
     </UPageCard>
 
     <ShellFormModal
       v-if="canManageCredentials"
       v-model:open="open"
-      title="Enviar certificado A1"
+      title="Enviar certificado"
       description="O PFX e a senha são usados somente para validação e armazenados no cofre. Nunca poderão ser recuperados pela API."
       submit-label="Validar e ativar"
       :loading="activating"

@@ -7,19 +7,19 @@ use App\Enums\FiscalMutability;
 use App\Enums\FiscalRunStatus;
 use App\Enums\FiscalSituation;
 use App\Enums\FiscalTrigger;
-use App\Enums\OfficeRole;
 use App\Enums\SerproAuthorizationStatus;
 use App\Enums\SerproEnvironment;
 use App\Enums\TaxProxyPowerSource;
 use App\Enums\TaxProxyPowerStatus;
+use App\Enums\TenantRole;
 use App\Jobs\Fiscal\ExecuteFiscalMonitoringRunJob;
 use App\Models\AuditLog;
 use App\Models\Client;
 use App\Models\Establishment;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
-use App\Models\OfficeSerproAuthorization;
 use App\Models\TaxProxyPower;
+use App\Models\Tenant;
+use App\Models\TenantSerproAuthorization;
 use App\Models\User;
 use App\Services\Fiscal\ManualConsult\ManualConsultActionCatalog;
 use App\Services\Fiscal\ManualConsult\ManualConsultExecutionService;
@@ -27,7 +27,7 @@ use App\Services\Fiscal\ManualConsult\ManualConsultReadPolicy;
 use App\Services\Fiscal\ManualConsult\ManualConsultReadPolicyException;
 use App\Services\FiscalMonitoring\FiscalMonitoringRunService;
 use App\Services\FiscalMonitoring\Surfaces\MonitoringSurfaceRegistry;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
@@ -40,12 +40,12 @@ class ManualConsultReadPolicyTest extends TestCase
     public function test_direct_mutating_action_is_rejected_and_audited_before_enqueue(): void
     {
         Queue::fake();
-        [$office, $operator, $client] = $this->tenantContext(OfficeRole::Operator);
+        [$tenant, $operator, $client] = $this->tenantContext(TenantRole::TenantUser);
         $actionId = $this->actionIdForOperation('dctfweb.gerarguia');
 
         try {
             app(ManualConsultExecutionService::class)->execute(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 actionId: $actionId,
                 params: [],
@@ -74,14 +74,14 @@ class ManualConsultReadPolicyTest extends TestCase
     public function test_allowed_read_action_is_tagged_for_worker_revalidation(): void
     {
         Queue::fake();
-        [$office, $operator, $client] = $this->tenantContext(OfficeRole::Operator);
+        [$tenant, $operator, $client] = $this->tenantContext(TenantRole::TenantUser);
         $definition = app(ManualConsultActionCatalog::class)
             ->findByOperationKey('caixa_postal.lista');
         $this->assertNotNull($definition);
-        $this->seedUsableProxyPower($office, $client, $definition->requiredProxyPowers);
+        $this->seedUsableProxyPower($tenant, $client, $definition->requiredProxyPowers);
 
         app(ManualConsultExecutionService::class)->execute(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             actionId: $definition->actionId,
             params: [],
@@ -102,11 +102,11 @@ class ManualConsultReadPolicyTest extends TestCase
     public function test_worker_blocks_workspace_run_when_actor_is_viewer(): void
     {
         Queue::fake();
-        [$office, $viewer, $client] = $this->tenantContext(OfficeRole::Viewer);
+        [$tenant, $viewer, $client] = $this->tenantContext(TenantRole::TenantUser, 'viewer');
         $definition = app(ManualConsultActionCatalog::class)
             ->findByOperationKey('pgdasd.consdeclaracao');
         $this->assertNotNull($definition);
-        $run = $this->workspaceRun($office, $client, $viewer, $definition->actionId);
+        $run = $this->workspaceRun($tenant, $client, $viewer, $definition->actionId);
 
         (new ExecuteFiscalMonitoringRunJob($run->id))->handle(
             app(FiscalMonitoringRunService::class),
@@ -126,10 +126,10 @@ class ManualConsultReadPolicyTest extends TestCase
     public function test_worker_rejects_mutating_action_even_when_run_was_injected_directly(): void
     {
         Queue::fake();
-        [$office, $operator, $client] = $this->tenantContext(OfficeRole::Operator);
+        [$tenant, $operator, $client] = $this->tenantContext(TenantRole::TenantUser);
         $actionId = $this->actionIdForOperation('dctfweb.gerarguia');
         $run = FiscalMonitoringRun::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'system_code' => 'INTEGRA_DCTFWEB',
             'service_code' => 'DCTFWEB',
@@ -169,11 +169,11 @@ class ManualConsultReadPolicyTest extends TestCase
     {
         Queue::fake();
         config()->set('serpro.default_environment', 'PRODUCTION');
-        [$office, $operator, $client] = $this->tenantContext(OfficeRole::Operator);
+        [$tenant, $operator, $client] = $this->tenantContext(TenantRole::TenantUser);
         $definition = app(ManualConsultActionCatalog::class)
             ->findByOperationKey('pgdasd.consdeclaracao');
         $this->assertNotNull($definition);
-        $run = $this->workspaceRun($office, $client, $operator, $definition->actionId);
+        $run = $this->workspaceRun($tenant, $client, $operator, $definition->actionId);
 
         (new ExecuteFiscalMonitoringRunJob($run->id))->handle(
             app(FiscalMonitoringRunService::class),
@@ -195,13 +195,13 @@ class ManualConsultReadPolicyTest extends TestCase
     {
         Queue::fake();
         config()->set('serpro.default_environment', 'PRODUCTION');
-        [$office, $operator, $client] = $this->tenantContext(OfficeRole::Operator);
+        [$tenant, $operator, $client] = $this->tenantContext(TenantRole::TenantUser);
         $definition = app(ManualConsultActionCatalog::class)
             ->findByOperationKey('pgdasd.consdeclaracao');
         $this->assertNotNull($definition);
         $this->assertNotEmpty($definition->requiredProxyPowers);
-        OfficeSerproAuthorization::query()->create([
-            'office_id' => $office->id,
+        TenantSerproAuthorization::query()->create([
+            'tenant_id' => $tenant->id,
             'environment' => 'PRODUCTION',
             'status' => SerproAuthorizationStatus::TokenActive,
             'author_identity_type' => 'CNPJ',
@@ -210,7 +210,7 @@ class ManualConsultReadPolicyTest extends TestCase
             'procurador_token_vault_object_id' => '01J00000000000000000000000',
             'procurador_token_expires_at' => now()->addHour(),
         ]);
-        $run = $this->workspaceRun($office, $client, $operator, $definition->actionId);
+        $run = $this->workspaceRun($tenant, $client, $operator, $definition->actionId);
 
         (new ExecuteFiscalMonitoringRunJob($run->id))->handle(
             app(FiscalMonitoringRunService::class),
@@ -228,37 +228,37 @@ class ManualConsultReadPolicyTest extends TestCase
         $this->assertSanitizedAuditContext($audit->context);
     }
 
-    /** @return array{Office, User, Client} */
-    private function tenantContext(OfficeRole $role): array
+    /** @return array{Tenant, User, Client} */
+    private function tenantContext(TenantRole $role, string $permissionProfile = 'operator'): array
     {
-        $office = Office::factory()->create();
-        $actor = User::factory()->forOffice($office, $role)->create();
-        $client = Client::factory()->for($office)->create();
+        $tenant = Tenant::factory()->create();
+        $actor = User::factory()->forTenant($tenant, $role, $permissionProfile)->create();
+        $client = Client::factory()->for($tenant)->create();
         Sanctum::actingAs($actor);
-        $currentOffice = app(CurrentOffice::class);
-        $currentOffice->clear();
-        $this->assertSame($office->id, $currentOffice->resolve($actor)?->id);
+        $currentTenant = app(CurrentTenant::class);
+        $currentTenant->clear();
+        $this->assertSame($tenant->id, $currentTenant->resolve($actor)?->id);
 
-        return [$office, $actor, $client];
+        return [$tenant, $actor, $client];
     }
 
     /**
      * @param  list<string>  $requiredPowers
      */
-    private function seedUsableProxyPower(Office $office, Client $client, array $requiredPowers): void
+    private function seedUsableProxyPower(Tenant $tenant, Client $client, array $requiredPowers): void
     {
         $powerCode = $requiredPowers[0] ?? '00006';
         $contributorCnpj = '26461528000151';
 
         Establishment::factory()->forClient($client)->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'cnpj' => $contributorCnpj,
             'is_active' => true,
-            'is_matrix' => true,
+            'is_headquarters' => true,
         ]);
 
-        $auth = OfficeSerproAuthorization::query()->create([
-            'office_id' => $office->id,
+        $auth = TenantSerproAuthorization::query()->create([
+            'tenant_id' => $tenant->id,
             'environment' => SerproEnvironment::Trial,
             'status' => SerproAuthorizationStatus::TokenActive,
             'author_identity_type' => 'CNPJ',
@@ -269,9 +269,9 @@ class ManualConsultReadPolicyTest extends TestCase
         ]);
 
         TaxProxyPower::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
-            'office_serpro_authorization_id' => $auth->id,
+            'tenant_serpro_authorization_id' => $auth->id,
             'author_identity' => $auth->author_identity,
             'contributor_cnpj' => $contributorCnpj,
             'system_code' => 'CAIXAPOSTAL',
@@ -303,7 +303,7 @@ class ManualConsultReadPolicyTest extends TestCase
     }
 
     private function workspaceRun(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         User $actor,
         string $actionId,
@@ -313,7 +313,7 @@ class ManualConsultReadPolicyTest extends TestCase
         $this->assertNotNull($codes);
 
         return FiscalMonitoringRun::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'system_code' => $codes['system'],
             'service_code' => $codes['service'],

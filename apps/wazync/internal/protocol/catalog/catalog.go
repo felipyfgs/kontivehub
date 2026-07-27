@@ -18,12 +18,11 @@ const (
 	Implemented Disposition = "IMPLEMENTED"
 	Internal    Disposition = "INTERNAL"
 	Excluded    Disposition = "EXCLUDED"
-	Deprecated  Disposition = "DEPRECATED"
 )
 
 // Entry records why an upstream symbol exists in the coverage plan and where
 // its behavior is owned. Evidence points to concrete implementation/tests or
-// to the documented reason for an exclusion, deprecation or composition.
+// to the documented reason for an exclusion or composition.
 type Entry struct {
 	Source      string
 	Scope       string
@@ -151,7 +150,7 @@ func buildClientMethods() map[string]Entry {
 	}, "GetUserDevices", "GetUserDevicesContext")
 
 	register(Entry{
-		Scope: "deprecated upstream API", Disposition: Deprecated, Owner: "policy",
+		Scope: "unsupported upstream API", Disposition: Excluded, Owner: "policy",
 		Evidence: "forbidden in new code; use the supported replacement documented in catalog.md",
 	}, "DangerousInternals", "RevokeMessage", "DownloadAny")
 

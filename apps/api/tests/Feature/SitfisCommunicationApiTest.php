@@ -2,15 +2,15 @@
 
 namespace Tests\Feature;
 
-use App\Enums\OfficeRole;
 use App\Enums\TaxRegimeCode;
+use App\Enums\TenantRole;
 use App\Models\Client;
 use App\Models\ClientCommunicationPreference;
 use App\Models\ClientContact;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Fiscal\Sitfis\SitfisCommunicationService;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -30,9 +30,9 @@ class SitfisCommunicationApiTest extends TestCase
 
     public function test_preference_patch_and_preview_for_sitfis_module(): void
     {
-        [$office, $user, $client] = $this->seedReadyClient();
+        [$tenant, $user, $client] = $this->seedReadyClient();
         Sanctum::actingAs($user);
-        app(CurrentOffice::class)->clear();
+        app(CurrentTenant::class)->clear();
 
         $this->patchJson("/api/v1/fiscal/sitfis/clients/{$client->id}/communication-preference", [
             'email_enabled' => true,
@@ -45,7 +45,7 @@ class SitfisCommunicationApiTest extends TestCase
             ->assertJsonPath('data.email_enabled', true);
 
         $this->assertDatabaseHas('client_communication_preferences', [
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'module_key' => SitfisCommunicationService::MODULE,
             'submodule_key' => SitfisCommunicationService::SUBMODULE,
@@ -63,12 +63,12 @@ class SitfisCommunicationApiTest extends TestCase
 
     public function test_send_fail_closed_when_provider_disabled(): void
     {
-        [$office, $user, $client] = $this->seedReadyClient();
+        [$tenant, $user, $client] = $this->seedReadyClient();
         Sanctum::actingAs($user);
-        app(CurrentOffice::class)->clear();
+        app(CurrentTenant::class)->clear();
 
         ClientCommunicationPreference::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'module_key' => SitfisCommunicationService::MODULE,
             'submodule_key' => SitfisCommunicationService::SUBMODULE,
@@ -91,25 +91,24 @@ class SitfisCommunicationApiTest extends TestCase
     }
 
     /**
-     * @return array{0: Office, 1: User, 2: Client}
+     * @return array{0: Tenant, 1: User, 2: Client}
      */
     private function seedReadyClient(): array
     {
-        $office = Office::factory()->create();
-        $user = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $client = Client::factory()->for($office)->create([
+        $tenant = Tenant::factory()->create();
+        $user = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $client = Client::factory()->for($tenant)->create([
             'is_active' => true,
-            'matrix_client_id' => null,
             'tax_regime' => TaxRegimeCode::SimplesNacional->value,
         ]);
         ClientContact::factory()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'email' => 'sitfis-ops@example.com',
             'is_active' => true,
             'receives_alerts' => true,
         ]);
 
-        return [$office, $user, $client];
+        return [$tenant, $user, $client];
     }
 }

@@ -56,8 +56,8 @@ return [
     | Chave externa do pacote unificado (cifra+autentica artefato)
     |--------------------------------------------------------------------------
     |
-    | base64 de 32 bytes. NÃO é VAULT_MASTER_KEY. Ausente = pacote em claro
-    | com checksums (legado v2). Preferir sempre definida em produção.
+    | Base64 de 32 bytes. NÃO é VAULT_MASTER_KEY. É obrigatória para backups
+    | completos, que sempre produzem um pacote cifrado e autenticado.
     |
     */
     'package_key' => env('BACKUP_PACKAGE_KEY', ''),

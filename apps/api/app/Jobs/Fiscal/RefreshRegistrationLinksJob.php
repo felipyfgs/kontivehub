@@ -3,15 +3,15 @@
 namespace App\Jobs\Fiscal;
 
 use App\Models\Client;
-use App\Models\Office;
 use App\Models\SerproAsyncJobRun;
+use App\Models\Tenant;
 use App\Services\Fiscal\ManualConsult\ManualConsultReadPolicy;
 use App\Services\Fiscal\ManualConsult\ManualConsultReadPolicyException;
 use App\Services\Integra\Registrations\RegistrationLinkProjectionService;
 use App\Services\Serpro\SerproAsyncJobRunStore;
 use App\Services\Serpro\SerproJobFlagGuard;
 use App\Services\Serpro\SerproMetricsExporter;
-use App\Support\FiscalDataModel\PrivilegedOfficeContext;
+use App\Support\FiscalDataModel\PrivilegedTenantContext;
 use App\Support\LogSanitizer;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -38,7 +38,7 @@ final class RefreshRegistrationLinksJob implements ShouldQueue
     public array $backoff;
 
     public function __construct(
-        public readonly int $officeId,
+        public readonly int $tenantId,
         public readonly int $clientId,
         public readonly ?string $correlationId = null,
         public readonly bool $flagCheckedAtDispatch = false,
@@ -57,19 +57,19 @@ final class RefreshRegistrationLinksJob implements ShouldQueue
      * Dispatch com verificação de flag (fail-closed).
      */
     public static function dispatchIfAllowed(
-        int $officeId,
+        int $tenantId,
         int $clientId,
         ?string $correlationId = null,
         ?string $manualActionId = null,
         ?int $actorUserId = null,
     ): ?self {
         $guard = app(SerproJobFlagGuard::class);
-        $check = $guard->assertAllowed('RefreshRegistrationLinksJob', $officeId);
+        $check = $guard->assertAllowed('RefreshRegistrationLinksJob', $tenantId);
         if (! $check['allowed']) {
             Log::info('serpro.job.dispatch_blocked', [
                 'job' => 'RefreshRegistrationLinksJob',
                 'code' => $check['code'],
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
             ]);
 
             return null;
@@ -78,14 +78,14 @@ final class RefreshRegistrationLinksJob implements ShouldQueue
         $store = app(SerproAsyncJobRunStore::class);
         $run = $store->start(
             jobType: 'RefreshRegistrationLinksJob',
-            officeId: $officeId,
+            tenantId: $tenantId,
             clientId: $clientId,
             correlationId: $correlationId,
             flagCheckedAtDispatch: true,
         );
 
         $job = new self(
-            $officeId,
+            $tenantId,
             $clientId,
             $correlationId,
             true,
@@ -112,7 +112,7 @@ final class RefreshRegistrationLinksJob implements ShouldQueue
         if ($run === null) {
             $run = $runs->start(
                 jobType: 'RefreshRegistrationLinksJob',
-                officeId: $this->officeId,
+                tenantId: $this->tenantId,
                 clientId: $this->clientId,
                 correlationId: $this->correlationId,
                 flagCheckedAtDispatch: $this->flagCheckedAtDispatch,
@@ -122,7 +122,7 @@ final class RefreshRegistrationLinksJob implements ShouldQueue
         }
 
         // Flag revalidada dentro do job (não confiar só no dispatch)
-        $check = $flags->assertAllowed('RefreshRegistrationLinksJob', $this->officeId);
+        $check = $flags->assertAllowed('RefreshRegistrationLinksJob', $this->tenantId);
         $runs->markFlagAtHandle($run);
         if (! $check['allowed']) {
             $runs->fail($run, (string) $check['code'], (string) $check['message'], SerproAsyncJobRun::STATUS_BLOCKED);
@@ -131,12 +131,12 @@ final class RefreshRegistrationLinksJob implements ShouldQueue
         }
 
         if ($this->manualActionId !== null) {
-            $office = Office::query()->find($this->officeId);
+            $tenant = Tenant::query()->find($this->tenantId);
             $client = Client::query()->withoutGlobalScopes()
-                ->where('office_id', $this->officeId)
+                ->where('tenant_id', $this->tenantId)
                 ->whereKey($this->clientId)
                 ->first();
-            if ($office === null || $client === null) {
+            if ($tenant === null || $client === null) {
                 $runs->fail(
                     $run,
                     'MANUAL_TENANT_CONTEXT_MISSING',
@@ -149,7 +149,7 @@ final class RefreshRegistrationLinksJob implements ShouldQueue
 
             try {
                 $manualConsultPolicy->assertAsyncJobMayExecute(
-                    $office,
+                    $tenant,
                     $client,
                     $this->manualActionId,
                     $this->actorUserId,
@@ -167,15 +167,15 @@ final class RefreshRegistrationLinksJob implements ShouldQueue
             }
         }
 
-        PrivilegedOfficeContext::enter('job:RefreshRegistrationLinksJob');
+        PrivilegedTenantContext::enter('job:RefreshRegistrationLinksJob');
         try {
-            $office = Office::query()->findOrFail($this->officeId);
+            $tenant = Tenant::query()->findOrFail($this->tenantId);
             $client = Client::query()->withoutGlobalScopes()
-                ->where('office_id', $this->officeId)
+                ->where('tenant_id', $this->tenantId)
                 ->whereKey($this->clientId)
                 ->firstOrFail();
 
-            $result = $service->refresh($office, $client, $this->correlationId);
+            $result = $service->refresh($tenant, $client, $this->correlationId);
 
             if (! ($result['success'] ?? false)) {
                 $code = (string) ($result['error_code'] ?? 'REFRESH_FAILED');
@@ -208,7 +208,7 @@ final class RefreshRegistrationLinksJob implements ShouldQueue
         } catch (Throwable $e) {
             $metrics->recordRetry('registration_links');
             Log::warning('serpro.job.registration_links_failed', [
-                'office_id' => $this->officeId,
+                'tenant_id' => $this->tenantId,
                 'client_id' => $this->clientId,
                 'error' => LogSanitizer::scrubString(mb_substr($e->getMessage(), 0, 200)),
                 'attempt' => $this->attempts(),
@@ -218,7 +218,7 @@ final class RefreshRegistrationLinksJob implements ShouldQueue
             }
             throw $e;
         } finally {
-            PrivilegedOfficeContext::leave();
+            PrivilegedTenantContext::leave();
         }
     }
 
@@ -233,7 +233,7 @@ final class RefreshRegistrationLinksJob implements ShouldQueue
     public function failed(?Throwable $e): void
     {
         Log::error('serpro.job.registration_links_exhausted', [
-            'office_id' => $this->officeId,
+            'tenant_id' => $this->tenantId,
             'client_id' => $this->clientId,
             'error' => $e !== null ? LogSanitizer::scrubString(mb_substr($e->getMessage(), 0, 200)) : null,
         ]);

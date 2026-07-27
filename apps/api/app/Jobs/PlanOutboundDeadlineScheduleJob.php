@@ -17,7 +17,7 @@ class PlanOutboundDeadlineScheduleJob implements ShouldQueue
 
     public int $timeout = 300;
 
-    public function __construct(public ?int $officeId = null)
+    public function __construct(public ?int $tenantId = null)
     {
         $this->onQueue((string) config('outbound_deadline.queue', 'capture-outbound-ma'));
     }
@@ -28,6 +28,6 @@ class PlanOutboundDeadlineScheduleJob implements ShouldQueue
             return;
         }
 
-        $planner->plan($this->officeId);
+        $planner->plan($this->tenantId);
     }
 }

@@ -7,8 +7,8 @@ use App\Enums\DctfwebDeclarationState;
 use App\Enums\FiscalSituation;
 use App\Models\DctfwebDeclaration;
 use App\Models\DctfwebEvidenceVersion;
-use App\Models\Office;
 use App\Models\TaxObligationProjection;
+use App\Models\Tenant;
 use Illuminate\Support\Collection;
 
 /**
@@ -21,7 +21,7 @@ final class DeclarationDctfwebEnrichmentService
      * @param  list<array<string, mixed>>  $rows  Já serializados (ex.: após enrichment PGDAS)
      * @return list<array<string, mixed>>
      */
-    public function enrichPublicRows(Office $office, array $rows, ?int $clientId = null): array
+    public function enrichPublicRows(Tenant $tenant, array $rows, ?int $clientId = null): array
     {
         $dctfwebRows = collect($rows)->filter(
             fn (array $row) => ($row['obligation_code'] ?? null) === 'DCTFWEB'
@@ -39,8 +39,8 @@ final class DeclarationDctfwebEnrichmentService
             return $rows;
         }
 
-        $declarations = $this->loadDeclarations($office, $clientIds);
-        $documents = $this->loadReciboDocuments($office, $clientIds);
+        $declarations = $this->loadDeclarations($tenant, $clientIds);
+        $documents = $this->loadReciboDocuments($tenant, $clientIds);
 
         $enriched = collect($rows)->map(function (array $row) use ($declarations, $documents): array {
             if (($row['obligation_code'] ?? null) !== 'DCTFWEB') {
@@ -87,7 +87,7 @@ final class DeclarationDctfwebEnrichmentService
      * @return list<array<string, mixed>>
      */
     public function enrichFromProjections(
-        Office $office,
+        Tenant $tenant,
         iterable $projections,
         bool $withDeepLinks = true,
         ?int $clientId = null,
@@ -96,18 +96,18 @@ final class DeclarationDctfwebEnrichmentService
             ->map(fn (TaxObligationProjection $p) => $p->toPublicArray($withDeepLinks))
             ->all();
 
-        return $this->enrichPublicRows($office, $base, $clientId);
+        return $this->enrichPublicRows($tenant, $base, $clientId);
     }
 
     /**
      * @param  list<int>  $clientIds
      * @return Collection<string, DctfwebDeclaration>
      */
-    private function loadDeclarations(Office $office, array $clientIds): Collection
+    private function loadDeclarations(Tenant $tenant, array $clientIds): Collection
     {
         $rows = DctfwebDeclaration::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->orderByDesc('last_productive_consulted_at')
             ->orderByDesc('id')
@@ -129,11 +129,11 @@ final class DeclarationDctfwebEnrichmentService
      * @param  list<int>  $clientIds
      * @return Collection<string, array<string, mixed>>
      */
-    private function loadReciboDocuments(Office $office, array $clientIds): Collection
+    private function loadReciboDocuments(Tenant $tenant, array $clientIds): Collection
     {
         $versions = DctfwebEvidenceVersion::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->where('artifact_kind', DctfwebArtifactKind::Recibo->value)
             ->where('is_current', true)
@@ -219,12 +219,12 @@ final class DeclarationDctfwebEnrichmentService
 
         $row = [
             'id' => 'dctfweb-decl-'.$declaration->id,
-            'office_id' => $declaration->office_id,
+            'tenant_id' => $declaration->tenant_id,
             'client_id' => $declaration->client_id,
             'obligation_definition_id' => null,
             'obligation_code' => 'DCTFWEB',
             'obligation_name' => 'DCTFWeb',
-            'module_key' => 'declaracoes',
+            'module_key' => 'declarations',
             'system_code' => 'INTEGRA_DCTFWEB',
             'service_code' => 'DCTFWEB',
             'period_key' => $declaration->period_key,

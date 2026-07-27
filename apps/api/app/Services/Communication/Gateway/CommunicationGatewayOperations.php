@@ -20,7 +20,7 @@ use Illuminate\Support\Str;
 
 /**
  * Boundary tenant-aware para as futuras APIs de ações e controles da inbox.
- * A sessão sempre vem da inbox autorizada; office_id nunca é aceito do caller.
+ * A sessão sempre vem da inbox autorizada; tenant_id nunca é aceito do caller.
  */
 final readonly class CommunicationGatewayOperations
 {
@@ -75,7 +75,9 @@ final readonly class CommunicationGatewayOperations
         $this->access->assertManage($actor, $inbox);
         $this->availability->assertGatewayAvailable();
         $status = $this->transport->sessionStatus((string) $inbox->session_id);
-        $canonical = InboxStatus::normalize($status['status'] ?? null);
+        $canonical = is_string($status['status'] ?? null)
+            ? InboxStatus::tryFrom($status['status'])
+            : null;
         if ($canonical === null) {
             throw new \RuntimeException('Status de sessão inválido.');
         }

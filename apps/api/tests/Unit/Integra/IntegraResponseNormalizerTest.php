@@ -21,7 +21,7 @@ class IntegraResponseNormalizerTest extends TestCase
 
         $this->normalizer = new IntegraResponseNormalizer;
         $this->request = new IntegraRequest(
-            officeId: 10,
+            tenantId: 10,
             clientId: 20,
             environment: SerproEnvironment::Trial->value,
             contractorCnpj: '11222333000181',

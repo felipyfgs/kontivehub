@@ -154,32 +154,7 @@ const TRACKING_META: Record<PgdasdTrackingStatus, PgdasdStateMeta> = {
 }
 
 export function pgdasdSummary(row?: SimplesMeiClientRow | null): PgdasdClientSummary | null {
-  if (!row?.detail) return null
-  if (row.detail.pgdasd) return row.detail.pgdasd
-
-  const hasLegacySummary = row.detail.declaration_state != null
-    || row.detail.last_declaration != null
-    || row.detail.rbt12 != null
-    || row.detail.last_productive_consulted_at != null
-    || row.detail.communication != null
-    || row.detail.payment_state != null
-  if (!hasLegacySummary) return null
-
-  return {
-    expected_period_key: row.detail.period_key,
-    latest_declaration: row.detail.last_declaration,
-    declaration_state: row.detail.declaration_state,
-    payment_state: row.detail.payment_state,
-    payment_state_reason: row.detail.payment_state_reason,
-    payment_das_count: row.detail.payment_das_count,
-    payment_unpaid_count: row.detail.payment_unpaid_count,
-    payment_paid_count: row.detail.payment_paid_count,
-    payment_open_competencies: row.detail.payment_open_competencies,
-    last_valid_query_at: row.detail.last_productive_consulted_at,
-    rbt12: row.detail.rbt12,
-    documents: row.detail.documents,
-    communication: row.detail.communication
-  }
+  return row?.detail?.pgdasd ?? null
 }
 
 export function pgdasdDeclarationState(value?: string | null): PgdasdDeclarationState {
@@ -321,13 +296,6 @@ export function pgdasdRbt12DetailItems(rbt12?: PgdasdRbt12Summary | null): Pgdas
   return items
 }
 
-/** @deprecated Preferir `pgdasdRbt12DetailItems` no popover; mantido para compat de testes. */
-export function pgdasdRbt12Tooltip(rbt12?: PgdasdRbt12Summary | null): string {
-  return pgdasdRbt12DetailItems(rbt12)
-    .map(item => `${item.label}: ${item.value}`)
-    .join(' · ')
-}
-
 export function pgdasdCanRequestAutomatic(
   preference?: PgdasdCommunicationPreference | null
 ): boolean {
@@ -337,13 +305,10 @@ export function pgdasdCanRequestAutomatic(
     || (preference.whatsapp_enabled && eligible.has('WHATSAPP'))
 }
 
-/** Aceita o envelope oficial e o array aditivo usado durante deploy escalonado. */
 export function pgdasdHistoryPeriods(
-  payload?: PgdasdHistoryPayload | PgdasdHistoryPeriod[] | null
+  payload?: PgdasdHistoryPayload | null
 ): PgdasdHistoryPeriod[] {
-  if (Array.isArray(payload)) return payload
   if (Array.isArray(payload?.periods)) return payload.periods
-  if (Array.isArray(payload?.history)) return payload.history
   return []
 }
 
@@ -352,7 +317,7 @@ export function pgdasdHistoryPeriods(
  * Sempre inclui o ano corrente e os anos presentes em `period_key` / seed.
  */
 export function pgdasdHistoryCalendarYears(
-  payload?: PgdasdHistoryPayload | PgdasdHistoryPeriod[] | null,
+  payload?: PgdasdHistoryPayload | null,
   seedYears: Iterable<number> = [],
   now: Date = new Date()
 ): number[] {

@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
     'kind',
     'severity',
     'environment',
-    'office_id',
+    'tenant_id',
     'cycle_code',
     'sanitized_summary',
     'expected_micros',

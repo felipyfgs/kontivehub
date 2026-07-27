@@ -10,7 +10,7 @@ func TestOneToOneCommandAndQueryFamiliesAreExplicit(t *testing.T) {
 
 	commands := []CommandType{
 		CommandProvisionSession, CommandPairSession, CommandPairPhone, CommandPasskeyRespond,
-		CommandPasskeyConfirm, CommandConnectSession, CommandDisconnectSession, CommandResetSession,
+		CommandPasskeyConfirm, CommandConnectSession, CommandDisconnectSession,
 		CommandSetPassive, CommandLogoutSession, CommandSendMessage, CommandEditMessage,
 		CommandRevokeMessage, CommandReactMessage, CommandVotePoll, CommandMarkMessage,
 		CommandRequestUnavailable, CommandRetryMedia, CommandSetPresence, CommandSubscribePresence,
@@ -38,27 +38,17 @@ func TestOneToOneCommandAndQueryFamiliesAreExplicit(t *testing.T) {
 	}
 }
 
-func TestSessionStatusContractNormalizesLegacyValues(t *testing.T) {
+func TestSessionStatusContractAcceptsOnlyCanonicalValues(t *testing.T) {
 	t.Parallel()
 	for _, status := range []SessionStatus{SessionDisconnected, SessionConnecting, SessionConnected} {
 		if !status.Valid() {
 			t.Fatalf("canonical status %s is invalid", status)
 		}
 	}
-	for legacy, expected := range map[string]SessionStatus{
-		"PAIRING":     SessionConnecting,
-		"DISABLED":    SessionDisconnected,
-		"PROVISIONED": SessionDisconnected,
-		"DEGRADED":    SessionDisconnected,
-		"REVOKED":     SessionDisconnected,
-		"LOGGED_OUT":  SessionDisconnected,
-	} {
-		if got := NormalizeSessionStatus(legacy); got != expected {
-			t.Fatalf("normalize %s: got %s want %s", legacy, got, expected)
+	for _, invalid := range []SessionStatus{"PAIRING", "DISABLED", "PROVISIONED", "DEGRADED", "REVOKED", "LOGGED_OUT"} {
+		if invalid.Valid() {
+			t.Fatalf("non-canonical status %s entered the persisted contract", invalid)
 		}
-	}
-	if SessionStatus("PAIRING").Valid() || SessionStatus("LOGOUT").Valid() {
-		t.Fatal("legacy/logout value entered the persisted status contract")
 	}
 }
 
@@ -75,6 +65,10 @@ func TestPayloadValidationRejectsUnknownNestedFields(t *testing.T) {
 	invalid.Payload = json.RawMessage(`{"to":"+5511999991234","raw_proto":true}`)
 	if err := invalid.ValidatePayload(); err == nil {
 		t.Fatal("unknown message payload field was accepted")
+	}
+	invalid.Payload = json.RawMessage(`{"to":"+5511999991234","text":"sem kind"}`)
+	if err := invalid.ValidatePayload(); err == nil {
+		t.Fatal("untyped message payload was accepted")
 	}
 
 	query := Query{Type: QueryProfilePicture, Payload: json.RawMessage(

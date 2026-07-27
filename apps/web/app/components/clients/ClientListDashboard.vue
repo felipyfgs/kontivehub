@@ -50,12 +50,12 @@ const statsCards = computed(() => {
       value: props.stats.active
     },
     {
-      title: 'A1 OK',
+      title: 'certificado OK',
       icon: 'i-lucide-badge-check',
       value: props.stats.credential_ok ?? 0
     },
     {
-      title: 'A vencer / sem A1',
+      title: 'A vencer / sem certificado',
       icon: 'i-lucide-badge-alert',
       value: (props.stats.credential_expiring_30d || 0)
         + (props.stats.without_credential || 0)
@@ -106,7 +106,7 @@ type RecentRow = {
   cnpj: string
   status: 'active' | 'inactive'
   date: string | null
-  a1: string
+  certificate: string
 }
 
 const recentRows = computed((): RecentRow[] => {
@@ -114,23 +114,23 @@ const recentRows = computed((): RecentRow[] => {
     .slice(0, 8)
     .map((c) => {
       const s = c.credential_summary
-      let a1 = 'Sem A1'
+      let certificate = 'Sem certificado'
       if (s) {
         const validTo = s.valid_to ? new Date(s.valid_to) : null
         const expired = s.status === 'EXPIRED'
           || !!(validTo && validTo < new Date())
         const expiring = !!(validTo && validTo <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000))
-        if (expired) a1 = 'Vencido'
-        else if (expiring || s.expires_alert_1 || s.expires_alert_7 || s.expires_alert_30) a1 = 'A vencer'
-        else a1 = 'OK'
+        if (expired) certificate = 'Vencido'
+        else if (expiring || s.expires_alert_1 || s.expires_alert_7 || s.expires_alert_30) certificate = 'A vencer'
+        else certificate = 'OK'
       }
       return {
         id: c.id,
-        name: c.legal_name || c.name,
-        cnpj: formatCnpj(c.cnpj || c.root_cnpj),
+        name: c.display_name || c.legal_name,
+        cnpj: formatCnpj(c.root_cnpj),
         status: c.is_active ? 'active' : 'inactive',
         date: c.created_at || null,
-        a1
+        certificate
       }
     })
 })
@@ -178,17 +178,17 @@ const columns: TableColumn<RecentRow>[] = [
     cell: ({ row }) => h('span', { class: 'font-mono text-sm' }, row.original.cnpj)
   },
   {
-    accessorKey: 'a1',
-    header: () => h('div', { class: 'text-right' }, 'A1'),
+    accessorKey: 'certificate',
+    header: () => h('div', { class: 'text-right' }, 'certificado'),
     cell: ({ row }) => {
       const color = {
         'OK': 'success' as const,
         'A vencer': 'warning' as const,
         'Vencido': 'error' as const,
-        'Sem A1': 'neutral' as const
-      }[row.original.a1] || 'neutral' as const
+        'Sem certificado': 'neutral' as const
+      }[row.original.certificate] || 'neutral' as const
       return h('div', { class: 'text-right' }, [
-        h(UBadge, { variant: 'subtle', color }, () => row.original.a1)
+        h(UBadge, { variant: 'subtle', color }, () => row.original.certificate)
       ])
     }
   }

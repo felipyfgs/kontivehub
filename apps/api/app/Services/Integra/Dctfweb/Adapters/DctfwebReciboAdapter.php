@@ -79,9 +79,7 @@ final class DctfwebReciboAdapter extends AbstractDctfwebAdapter
         return $pack['result'];
     }
 
-    /**
-     * PA congelado no progress do run; period_key comercial não sobrescreve.
-     */
+    /** PA congelado no progress do run. */
     private function resolveFrozenPeriodKey(FiscalAdapterRequest $request): string
     {
         return $this->postConsult->resolveExpectedPeriodKey($request);

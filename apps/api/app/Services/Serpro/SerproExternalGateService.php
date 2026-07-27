@@ -61,8 +61,8 @@ final class SerproExternalGateService
                 'description' => 'Contrato permite arranjo, mas não substitui procuração RFB nem certificação jurídica da plataforma.',
             ],
             SerproExternalGateKind::OpsRolesRpoRto->value => [
-                'title' => 'Definir responsáveis, on-call, RPO/RTO, escrow/KMS e custódia A1',
-                'description' => 'Identidades de Office/cliente canário NÃO devem ser gravadas em artefatos OpenSpec versionados.',
+                'title' => 'Definir responsáveis, on-call, RPO/RTO, escrow/KMS e custódia certificado',
+                'description' => 'Identidades de Tenant/cliente canário NÃO devem ser gravadas em artefatos OpenSpec versionados.',
             ],
         ];
 

@@ -5,7 +5,6 @@ namespace App\Services\Serpro\Catalog;
 use App\Enums\SerproPlatformSupport;
 use App\Models\SerproServiceCatalogEntry;
 use App\Services\Serpro\CapabilityDriverResolver;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * Matriz de coverage por operation_key.
@@ -245,18 +244,15 @@ final class OperationCoverageMatrix
             }
         }
 
-        // DB catalog metadata may declare test_ref
-        if (Schema::hasTable('serpro_service_catalog_entries')) {
-            $row = SerproServiceCatalogEntry::query()
-                ->where('operation_key', $operationKey)
-                ->whereNull('effective_to')
-                ->orderByDesc('catalog_version')
-                ->first();
-            if ($row !== null) {
-                $meta = is_array($row->metadata) ? $row->metadata : [];
-                if (! empty($meta['test_ref']) || ! empty($meta['has_tests'])) {
-                    return true;
-                }
+        $row = SerproServiceCatalogEntry::query()
+            ->where('operation_key', $operationKey)
+            ->whereNull('effective_to')
+            ->orderByDesc('catalog_version')
+            ->first();
+        if ($row !== null) {
+            $meta = is_array($row->metadata) ? $row->metadata : [];
+            if (! empty($meta['test_ref']) || ! empty($meta['has_tests'])) {
+                return true;
             }
         }
 

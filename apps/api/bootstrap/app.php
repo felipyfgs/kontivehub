@@ -1,11 +1,9 @@
 <?php
 
-use App\Http\Middleware\EnsureAdminTwoFactor;
-use App\Http\Middleware\EnsureOfficeContext;
-use App\Http\Middleware\EnsureOfficeSubscriptionWritable;
 use App\Http\Middleware\EnsurePlatformAdmin;
-use App\Http\Middleware\EnsurePlatformAdminTwoFactor;
 use App\Http\Middleware\EnsureRecentPasswordConfirmation;
+use App\Http\Middleware\EnsureTenantContext;
+use App\Http\Middleware\EnsureTenantSubscriptionWritable;
 use App\Http\Middleware\EnsureWorkRealMembership;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -15,7 +13,7 @@ use Illuminate\Http\Request;
 return Application::configure(basePath: dirname(__DIR__))
     ->withBroadcasting(
         __DIR__.'/../routes/channels.php',
-        ['prefix' => 'api', 'middleware' => ['api', 'auth:sanctum', EnsureOfficeContext::class]],
+        ['prefix' => 'api', 'middleware' => ['api', 'auth:sanctum', EnsureTenantContext::class]],
     )
     ->withRouting(
         api: __DIR__.'/../routes/api.php',
@@ -29,12 +27,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->redirectGuestsTo(fn (Request $request) => null);
 
         $middleware->alias([
-            'office' => EnsureOfficeContext::class,
-            'office.writable' => EnsureOfficeSubscriptionWritable::class,
-            'admin.2fa' => EnsureAdminTwoFactor::class, // no-op legado
+            'tenant' => EnsureTenantContext::class,
+            'tenant.writable' => EnsureTenantSubscriptionWritable::class,
             'platform.admin' => EnsurePlatformAdmin::class,
-            'platform.2fa' => EnsurePlatformAdminTwoFactor::class, // no-op legado
-            'privileged.password' => EnsureRecentPasswordConfirmation::class,
             'password.recent' => EnsureRecentPasswordConfirmation::class,
             'work.real_membership' => EnsureWorkRealMembership::class,
         ]);
@@ -43,7 +38,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->dontReportWhen(fn (Throwable $error): bool => $error instanceof DomainException
             && in_array($error->getMessage(), [
                 'COMMUNICATION_DISABLED',
-                'OFFICE_COMMUNICATION_DISABLED',
+                'TENANT_COMMUNICATION_DISABLED',
                 'INBOX_COMMUNICATION_DISABLED',
                 'INBOX_NOT_CONNECTED',
                 'ASSISTANT_DISABLED',
@@ -55,7 +50,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(function (DomainException $error, Request $request) {
             $communicationCodes = [
                 'COMMUNICATION_DISABLED',
-                'OFFICE_COMMUNICATION_DISABLED',
+                'TENANT_COMMUNICATION_DISABLED',
                 'INBOX_COMMUNICATION_DISABLED',
                 'INBOX_NOT_CONNECTED',
             ];

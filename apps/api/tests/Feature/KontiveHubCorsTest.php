@@ -23,7 +23,7 @@ class KontiveHubCorsTest extends TestCase
     }
 
     #[DataProvider('rejectedOrigins')]
-    public function test_preflight_does_not_authorize_external_or_legacy_origins(string $origin): void
+    public function test_preflight_does_not_authorize_untrusted_origins(string $origin): void
     {
         $response = $this->withHeaders([
             'Origin' => $origin,
@@ -45,7 +45,7 @@ class KontiveHubCorsTest extends TestCase
     public static function rejectedOrigins(): array
     {
         return [
-            'legacy' => ['https://app.inovaicontabil.com.br'],
+            'untrusted' => ['https://app.example.invalid'],
             'external' => ['https://attacker.example'],
         ];
     }

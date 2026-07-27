@@ -9,13 +9,11 @@ import {
   clientModalTabItems
 } from '~/utils/client-detail-tabs'
 
-type ModalSection = 'resumo' | 'cadastro' | 'contato' | 'configuracao' | 'dados-adicionais' | 'estabelecimentos' | 'certificado' | 'sincronizacao'
-
 const open = defineModel<boolean>('open', { default: false })
 
 const props = defineProps<{
   clientId: number | null
-  initialSection?: ModalSection
+  initialSection?: ClientModalTab
 }>()
 
 const emit = defineEmits<{
@@ -32,37 +30,19 @@ const loading = ref(false)
 const formOpen = ref(false)
 
 const title = computed(() =>
-  item.value?.display_name || item.value?.legal_name || item.value?.name || 'Cliente'
+  item.value?.display_name || item.value?.legal_name || 'Cliente'
 )
 
 const description = computed(() => {
   if (!item.value) {
     return loading.value ? 'Carregando detalhes…' : 'Detalhes do cliente'
   }
-  const cnpj = item.value.cnpj || item.value.establishments?.[0]?.cnpj || item.value.root_cnpj
+  const cnpj = item.value.establishments?.find(establishment => establishment.is_headquarters)?.cnpj
+    || item.value.root_cnpj
   return `CNPJ ${cnpj}`
 })
 
 const primaryItems = clientModalTabItems()
-
-function mapInitialSection(section?: ModalSection) {
-  switch (section) {
-    case 'contato':
-      activeTab.value = 'contato'
-      break
-    case 'configuracao':
-    case 'dados-adicionais':
-    case 'certificado':
-    case 'sincronizacao':
-      activeTab.value = 'dados-adicionais'
-      break
-    case 'estabelecimentos':
-    case 'cadastro':
-    case 'resumo':
-    default:
-      activeTab.value = 'cadastro'
-  }
-}
 
 function onPrimaryChange(value: string | number) {
   activeTab.value = value as ClientModalTab
@@ -104,7 +84,7 @@ watch(
   () => [open.value, props.clientId, props.initialSection] as const,
   ([isOpen]) => {
     if (!isOpen) return
-    mapInitialSection(props.initialSection)
+    activeTab.value = props.initialSection ?? 'cadastro'
     formOpen.value = false
     void load()
   }
@@ -178,7 +158,7 @@ watch(
       <div class="flex w-full flex-wrap items-center justify-between gap-2">
         <p class="text-xs text-muted">
           <template v-if="item">
-            CNPJ {{ item.cnpj || item.establishments?.[0]?.cnpj || item.root_cnpj }}
+            CNPJ {{ item.establishments?.find(establishment => establishment.is_headquarters)?.cnpj || item.root_cnpj }}
           </template>
         </p>
         <div class="flex flex-wrap items-center gap-2">

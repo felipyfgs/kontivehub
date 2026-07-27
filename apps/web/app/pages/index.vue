@@ -204,7 +204,7 @@ watch(sessionEpoch, () => {
           :loading="loading"
         />
 
-        <HomeSerproOffice
+        <HomeSerproTenant
           :summary="summary"
           :loading="loading"
         />

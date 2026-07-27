@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** Perfil global do próprio usuário, independente do papel ou do Office atual. */
+/** Perfil global do próprio usuário, independente do papel ou do Tenant atual. */
 import * as z from 'zod'
 import type { FormSubmitEvent } from '@nuxt/ui'
 import { apiErrorMessage, apiFieldErrors } from '~/utils/api-error'
@@ -30,10 +30,9 @@ const fieldErrors = reactive({
 const saving = ref(false)
 
 const roleLabel = computed(() => {
-  if (me.value?.is_platform_admin) return 'Proprietário da plataforma'
-  if (me.value?.role === 'ADMIN') return 'Administrador'
-  if (me.value?.role === 'OPERATOR') return 'Operador'
-  if (me.value?.role === 'VIEWER') return 'Visualizador'
+  if (me.value?.platform_role === 'platform_admin') return 'Proprietário da plataforma'
+  if (me.value?.tenant_role === 'tenant_admin') return 'Administrador'
+  if (me.value?.tenant_role === 'tenant_user') return me.value.permission_profile?.name || 'Usuário'
   return 'Usuário'
 })
 

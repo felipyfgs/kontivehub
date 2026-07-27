@@ -78,12 +78,6 @@
     "action": "ConfirmPasswordController"
   },
   {
-    "method": "POST",
-    "uri": "api/v1/auth/confirm-totp",
-    "group": "auth",
-    "action": "FiscalMutationController@confirmTotp"
-  },
-  {
     "method": "GET",
     "uri": "api/v1/client-categories",
     "group": "client-categories",
@@ -702,18 +696,6 @@
     "action": "CommunicationInboxController@replaceMembers"
   },
   {
-    "method": "POST",
-    "uri": "api/v1/communication/inboxes/{inbox}/pairing",
-    "group": "communication",
-    "action": "CommunicationInboxController@startPairing"
-  },
-  {
-    "method": "GET",
-    "uri": "api/v1/communication/inboxes/{inbox}/pairing",
-    "group": "communication",
-    "action": "CommunicationInboxController@pairing"
-  },
-  {
     "method": "PUT",
     "uri": "api/v1/communication/inboxes/{inbox}/presence",
     "group": "communication",
@@ -730,12 +712,6 @@
     "uri": "api/v1/communication/inboxes/{inbox}/privacy",
     "group": "communication",
     "action": "CommunicationInboxGatewayController@updatePrivacy"
-  },
-  {
-    "method": "DELETE",
-    "uri": "api/v1/communication/inboxes/{inbox}/session",
-    "group": "communication",
-    "action": "CommunicationInboxController@revoke"
   },
   {
     "method": "POST",
@@ -780,12 +756,6 @@
     "action": "CommunicationInboxGatewayController@respondPasskey"
   },
   {
-    "method": "POST",
-    "uri": "api/v1/communication/inboxes/{inbox}/session/reset",
-    "group": "communication",
-    "action": "CommunicationInboxGatewayController@reset"
-  },
-  {
     "method": "GET",
     "uri": "api/v1/communication/inboxes/{inbox}/session/status",
     "group": "communication",
@@ -819,7 +789,7 @@
     "method": "PATCH",
     "uri": "api/v1/communication/settings",
     "group": "communication",
-    "action": "CommunicationInboxController@updateOfficeSettings"
+    "action": "CommunicationInboxController@updateTenantSettings"
   },
   {
     "method": "GET",
@@ -855,19 +825,13 @@
     "method": "GET",
     "uri": "api/v1/documents",
     "group": "documents",
-    "action": "NoteController@index"
+    "action": "FiscalDocumentController@index"
   },
   {
     "method": "GET",
     "uri": "api/v1/documents/by-client",
     "group": "documents",
-    "action": "NoteController@byClient"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/documents/import",
-    "group": "documents",
-    "action": "DocumentImportController@store"
+    "action": "FiscalDocumentController@byClient"
   },
   {
     "method": "GET",
@@ -909,31 +873,31 @@
     "method": "GET",
     "uri": "api/v1/documents/insights",
     "group": "documents",
-    "action": "NoteController@insights"
+    "action": "FiscalDocumentController@insights"
   },
   {
     "method": "GET",
     "uri": "api/v1/documents/{accessKey}",
     "group": "documents",
-    "action": "NoteController@show"
+    "action": "FiscalDocumentController@show"
   },
   {
     "method": "POST",
     "uri": "api/v1/documents/{accessKey}/manifestations",
     "group": "documents",
-    "action": "NoteController@manifest"
+    "action": "FiscalDocumentController@manifest"
   },
   {
     "method": "POST",
     "uri": "api/v1/documents/{accessKey}/unlock-xml",
     "group": "documents",
-    "action": "NoteController@unlockXml"
+    "action": "FiscalDocumentController@unlockXml"
   },
   {
     "method": "GET",
     "uri": "api/v1/documents/{accessKey}/xml",
     "group": "documents",
-    "action": "NoteController@downloadXml"
+    "action": "FiscalDocumentController@downloadXml"
   },
   {
     "method": "PATCH",
@@ -1312,12 +1276,6 @@
     "uri": "api/v1/fiscal/guides",
     "group": "fiscal",
     "action": "TaxGuideController@store"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/fiscal/guides/challenge",
-    "group": "fiscal",
-    "action": "TaxGuideController@challenge"
   },
   {
     "method": "GET",
@@ -1770,18 +1728,6 @@
     "action": "SimplesMeiController@snapshots"
   },
   {
-    "method": "POST",
-    "uri": "api/v1/fiscal/simples-mei/consult",
-    "group": "fiscal",
-    "action": "SimplesMeiController@consult"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/fiscal/simples-mei/das",
-    "group": "fiscal",
-    "action": "SimplesMeiController@generateDas"
-  },
-  {
     "method": "GET",
     "uri": "api/v1/fiscal/simples-mei/dasn-simei/clients/{client}/history",
     "group": "fiscal",
@@ -1962,12 +1908,6 @@
     "action": "SimplesMeiController@consultRegimeResolution"
   },
   {
-    "method": "POST",
-    "uri": "api/v1/fiscal/simples-mei/transmit",
-    "group": "fiscal",
-    "action": "SimplesMeiController@transmit"
-  },
-  {
     "method": "GET",
     "uri": "api/v1/fiscal/sitfis",
     "group": "fiscal",
@@ -2068,324 +2008,6 @@
     "uri": "api/v1/me",
     "group": "auth",
     "action": "MeController"
-  },
-  {
-    "method": "GET",
-    "uri": "api/v1/notes",
-    "group": "notes",
-    "action": "NoteController@index"
-  },
-  {
-    "method": "GET",
-    "uri": "api/v1/notes/by-client",
-    "group": "notes",
-    "action": "NoteController@byClient"
-  },
-  {
-    "method": "GET",
-    "uri": "api/v1/notes/insights",
-    "group": "notes",
-    "action": "NoteController@insights"
-  },
-  {
-    "method": "GET",
-    "uri": "api/v1/notes/{accessKey}",
-    "group": "notes",
-    "action": "NoteController@show"
-  },
-  {
-    "method": "GET",
-    "uri": "api/v1/notes/{accessKey}/xml",
-    "group": "notes",
-    "action": "NoteController@downloadXml"
-  },
-  {
-    "method": "GET",
-    "uri": "api/v1/office/autxml",
-    "group": "office",
-    "action": "OfficeAutXmlController@overview"
-  },
-  {
-    "method": "GET",
-    "uri": "api/v1/office/autxml/cursor",
-    "group": "office",
-    "action": "OfficeAutXmlController@cursor"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/office/autxml/enrollments",
-    "group": "office",
-    "action": "OfficeAutXmlController@enroll"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/office/autxml/enrollments/{enrollment}/confirm",
-    "group": "office",
-    "action": "OfficeAutXmlController@confirm"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/office/autxml/enrollments/{enrollment}/inactivate",
-    "group": "office",
-    "action": "OfficeAutXmlController@inactivate"
-  },
-  {
-    "method": "GET",
-    "uri": "api/v1/office/fiscal-identity",
-    "group": "office",
-    "action": "OfficeFiscalCredentialController@showIdentity"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/office/fiscal-identity",
-    "group": "office",
-    "action": "OfficeFiscalCredentialController@storeIdentity"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/office/fiscal-identity/credential",
-    "group": "office",
-    "action": "OfficeFiscalCredentialController@storeCredential"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/office/fiscal-identity/credentials/{credential}/revoke",
-    "group": "office",
-    "action": "OfficeFiscalCredentialController@revokeCredential"
-  },
-  {
-    "method": "GET",
-    "uri": "api/v1/office/integration-tokens",
-    "group": "office",
-    "action": "CteEmitterPushController@listTokens"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/office/integration-tokens",
-    "group": "office",
-    "action": "CteEmitterPushController@issueToken"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/office/integration-tokens/{token}/revoke",
-    "group": "office",
-    "action": "CteEmitterPushController@revokeToken"
-  },
-  {
-    "method": "GET",
-    "uri": "api/v1/office/members",
-    "group": "office",
-    "action": "OfficeMemberController@index"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/office/members",
-    "group": "office",
-    "action": "OfficeMemberController@store"
-  },
-  {
-    "method": "PATCH",
-    "uri": "api/v1/office/members/{membership}",
-    "group": "office",
-    "action": "OfficeMemberController@update"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/office/members/{membership}/activation/regenerate",
-    "group": "office",
-    "action": "OfficeMemberController@regenerateActivation"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/office/members/{membership}/deactivate",
-    "group": "office",
-    "action": "OfficeMemberController@deactivate"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/office/members/{membership}/reactivate",
-    "group": "office",
-    "action": "OfficeMemberController@reactivate"
-  },
-  {
-    "method": "PATCH",
-    "uri": "api/v1/office/members/{membership}/recipient",
-    "group": "office",
-    "action": "OfficeMemberController@updateRecipient"
-  },
-  {
-    "method": "GET",
-    "uri": "api/v1/office/serpro-authorization",
-    "group": "serpro",
-    "action": "OfficeSerproAuthorizationController@show"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/office/serpro-authorization/author",
-    "group": "serpro",
-    "action": "OfficeSerproAuthorizationController@configureAuthor"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/office/serpro-authorization/author-a1",
-    "group": "serpro",
-    "action": "OfficeSerproAuthorizationController@storeAuthorA1"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/office/serpro-authorization/eligibility",
-    "group": "serpro",
-    "action": "OfficeSerproAuthorizationController@eligibility"
-  },
-  {
-    "method": "GET",
-    "uri": "api/v1/office/serpro-authorization/health",
-    "group": "serpro",
-    "action": "OfficeSerproAuthorizationController@platformHealth"
-  },
-  {
-    "method": "GET",
-    "uri": "api/v1/office/serpro-authorization/proxy-powers",
-    "group": "serpro",
-    "action": "OfficeSerproAuthorizationController@listProxyPowers"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/office/serpro-authorization/proxy-powers",
-    "group": "serpro",
-    "action": "OfficeSerproAuthorizationController@importProxyPower"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/office/serpro-authorization/proxy-powers/sync",
-    "group": "serpro",
-    "action": "OfficeSerproAuthorizationController@syncProxyPowers"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/office/serpro-authorization/refresh-token",
-    "group": "serpro",
-    "action": "OfficeSerproAuthorizationController@refreshToken"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/office/serpro-authorization/termo",
-    "group": "serpro",
-    "action": "OfficeSerproAuthorizationController@uploadTermo"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/office/serpro-authorization/termo/draft",
-    "group": "serpro",
-    "action": "OfficeSerproAuthorizationController@generateTermoDraft"
-  },
-  {
-    "method": "GET",
-    "uri": "api/v1/office/serpro-authorization/termo/draft",
-    "group": "serpro",
-    "action": "OfficeSerproAuthorizationController@downloadTermoDraft"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/office/serpro-authorization/termo/sign-managed-a1",
-    "group": "serpro",
-    "action": "OfficeSerproAuthorizationController@signTermoManagedA1"
-  },
-  {
-    "method": "GET",
-    "uri": "api/v1/office/serpro-usage",
-    "group": "serpro",
-    "action": "OfficeSerproUsageController@summary"
-  },
-  {
-    "method": "GET",
-    "uri": "api/v1/office/serpro-usage/entries",
-    "group": "serpro",
-    "action": "OfficeSerproUsageController@entries"
-  },
-  {
-    "method": "GET",
-    "uri": "api/v1/office/settings",
-    "group": "office",
-    "action": "OfficeSettingsController@show"
-  },
-  {
-    "method": "GET",
-    "uri": "api/v1/office/settings/consent",
-    "group": "office",
-    "action": "OfficeSettingsController@showConsent"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/office/settings/consent",
-    "group": "office",
-    "action": "OfficeSettingsController@grantConsent"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/office/settings/consent/revoke",
-    "group": "office",
-    "action": "OfficeSettingsController@revokeConsent"
-  },
-  {
-    "method": "GET",
-    "uri": "api/v1/office/settings/credential",
-    "group": "office",
-    "action": "OfficeSettingsController@showCredential"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/office/settings/credential",
-    "group": "office",
-    "action": "OfficeSettingsController@storeCredential"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/office/settings/credential/remove",
-    "group": "office",
-    "action": "OfficeSettingsController@removeCredential"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/office/settings/credential/replace",
-    "group": "office",
-    "action": "OfficeSettingsController@replaceCredential"
-  },
-  {
-    "method": "GET",
-    "uri": "api/v1/office/settings/monitor-schedules",
-    "group": "office",
-    "action": "OfficeSettingsController@listMonitorSchedules"
-  },
-  {
-    "method": "PUT",
-    "uri": "api/v1/office/settings/monitor-schedules/{monitorKey}",
-    "group": "office",
-    "action": "OfficeSettingsController@updateMonitorSchedule"
-  },
-  {
-    "method": "GET",
-    "uri": "api/v1/office/settings/onboarding-status",
-    "group": "office",
-    "action": "OfficeSettingsController@onboardingStatus"
-  },
-  {
-    "method": "PATCH",
-    "uri": "api/v1/office/settings/profile",
-    "group": "office",
-    "action": "OfficeSettingsController@updateProfile"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/office/settings/refresh-integration",
-    "group": "office",
-    "action": "OfficeSettingsController@refreshIntegration"
-  },
-  {
-    "method": "GET",
-    "uri": "api/v1/office/subscription",
-    "group": "office",
-    "action": "OfficeSubscriptionController@show"
   },
   {
     "method": "POST",
@@ -2599,12 +2221,6 @@
   },
   {
     "method": "GET",
-    "uri": "api/v1/outbound/svrs-nfce/recoveries/{recovery}",
-    "group": "outbound",
-    "action": "SvrsNfceRecoveryController@attempts"
-  },
-  {
-    "method": "GET",
     "uri": "api/v1/outbound/svrs-nfce/recoveries/{recovery}/attempts",
     "group": "outbound",
     "action": "SvrsNfceRecoveryController@attempts"
@@ -2656,66 +2272,6 @@
     "uri": "api/v1/platform/fiscal/modules/{module}/restriction",
     "group": "platform",
     "action": "FiscalModuleControlController@updateGlobal"
-  },
-  {
-    "method": "GET",
-    "uri": "api/v1/platform/offices",
-    "group": "platform",
-    "action": "PlatformOfficeSelectController@index"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/platform/offices",
-    "group": "platform",
-    "action": "PlatformOfficeController@store"
-  },
-  {
-    "method": "GET",
-    "uri": "api/v1/platform/offices/admin",
-    "group": "platform",
-    "action": "PlatformOfficeController@index"
-  },
-  {
-    "method": "GET",
-    "uri": "api/v1/platform/offices/current",
-    "group": "platform",
-    "action": "PlatformOfficeSelectController@current"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/platform/offices/select",
-    "group": "platform",
-    "action": "PlatformOfficeSelectController@select"
-  },
-  {
-    "method": "DELETE",
-    "uri": "api/v1/platform/offices/select",
-    "group": "platform",
-    "action": "PlatformOfficeSelectController@clear"
-  },
-  {
-    "method": "GET",
-    "uri": "api/v1/platform/offices/selector",
-    "group": "platform",
-    "action": "PlatformOfficeSelectController@index"
-  },
-  {
-    "method": "GET",
-    "uri": "api/v1/platform/offices/{office}",
-    "group": "platform",
-    "action": "PlatformOfficeController@show"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/platform/offices/{office}/activation/regenerate",
-    "group": "platform",
-    "action": "PlatformOfficeController@regenerateActivation"
-  },
-  {
-    "method": "PATCH",
-    "uri": "api/v1/platform/offices/{office}/first-admin",
-    "group": "platform",
-    "action": "PlatformOfficeController@updateFirstAdmin"
   },
   {
     "method": "GET",
@@ -2778,34 +2334,10 @@
     "action": "SerproContractController@index"
   },
   {
-    "method": "POST",
-    "uri": "api/v1/platform/serpro/contracts",
-    "group": "serpro",
-    "action": "SerproPlatformConfigurationController@legacyMutationRemoved"
-  },
-  {
     "method": "GET",
     "uri": "api/v1/platform/serpro/contracts/{serproContract}",
     "group": "serpro",
     "action": "SerproContractController@show"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/platform/serpro/contracts/{serproContract}/activate",
-    "group": "serpro",
-    "action": "SerproPlatformConfigurationController@legacyMutationRemoved"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/platform/serpro/contracts/{serproContract}/block",
-    "group": "serpro",
-    "action": "SerproPlatformConfigurationController@legacyMutationRemoved"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/platform/serpro/contracts/{serproContract}/deactivate",
-    "group": "serpro",
-    "action": "SerproPlatformConfigurationController@legacyMutationRemoved"
   },
   {
     "method": "POST",
@@ -2827,15 +2359,9 @@
   },
   {
     "method": "POST",
-    "uri": "api/v1/platform/serpro/credential-versions/{serproCredentialVersion}/approvals",
+    "uri": "api/v1/platform/serpro/credential-versions/{serproCredentialVersion}/activation",
     "group": "serpro",
-    "action": "SerproPlatformOpsController@approveCredentialVersion"
-  },
-  {
-    "method": "POST",
-    "uri": "api/v1/platform/serpro/credential-versions/{serproCredentialVersion}/cutover",
-    "group": "serpro",
-    "action": "SerproPlatformConfigurationController@cutoverCredentialVersion"
+    "action": "SerproPlatformConfigurationController@activateCredentialVersion"
   },
   {
     "method": "POST",
@@ -2988,26 +2514,74 @@
     "action": "TenantAdminController@index"
   },
   {
+    "method": "POST",
+    "uri": "api/v1/platform/tenants",
+    "group": "platform",
+    "action": "PlatformTenantController@store"
+  },
+  {
     "method": "GET",
-    "uri": "api/v1/platform/tenants/{office}",
+    "uri": "api/v1/platform/tenants/admin",
+    "group": "platform",
+    "action": "PlatformTenantController@index"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/tenants/current",
+    "group": "platform",
+    "action": "PlatformTenantSelectController@current"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/platform/tenants/select",
+    "group": "platform",
+    "action": "PlatformTenantSelectController@select"
+  },
+  {
+    "method": "DELETE",
+    "uri": "api/v1/platform/tenants/select",
+    "group": "platform",
+    "action": "PlatformTenantSelectController@clear"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/tenants/selector",
+    "group": "platform",
+    "action": "PlatformTenantSelectController@index"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/tenants/{tenant}",
     "group": "platform",
     "action": "TenantAdminController@show"
   },
   {
+    "method": "POST",
+    "uri": "api/v1/platform/tenants/{tenant}/activation/regenerate",
+    "group": "platform",
+    "action": "PlatformTenantController@regenerateActivation"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/platform/tenants/{tenant}/first-admin",
+    "group": "platform",
+    "action": "PlatformTenantController@updateFirstAdmin"
+  },
+  {
     "method": "GET",
-    "uri": "api/v1/platform/tenants/{office}/fiscal/modules",
+    "uri": "api/v1/platform/tenants/{tenant}/fiscal/modules",
     "group": "platform",
-    "action": "FiscalModuleControlController@officeIndex"
+    "action": "FiscalModuleControlController@tenantIndex"
   },
   {
     "method": "PATCH",
-    "uri": "api/v1/platform/tenants/{office}/fiscal/modules/{module}/restriction",
+    "uri": "api/v1/platform/tenants/{tenant}/fiscal/modules/{module}/restriction",
     "group": "platform",
-    "action": "FiscalModuleControlController@updateOffice"
+    "action": "FiscalModuleControlController@updateTenant"
   },
   {
     "method": "PATCH",
-    "uri": "api/v1/platform/tenants/{office}/subscription",
+    "uri": "api/v1/platform/tenants/{tenant}/subscription",
     "group": "platform",
     "action": "TenantAdminController@updateSubscription"
   },
@@ -3073,6 +2647,276 @@
   },
   {
     "method": "GET",
+    "uri": "api/v1/tenant/autxml",
+    "group": "tenant",
+    "action": "TenantAutXmlController@overview"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/tenant/autxml/cursor",
+    "group": "tenant",
+    "action": "TenantAutXmlController@cursor"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/tenant/autxml/enrollments",
+    "group": "tenant",
+    "action": "TenantAutXmlController@enroll"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/tenant/autxml/enrollments/{enrollment}/confirm",
+    "group": "tenant",
+    "action": "TenantAutXmlController@confirm"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/tenant/autxml/enrollments/{enrollment}/inactivate",
+    "group": "tenant",
+    "action": "TenantAutXmlController@inactivate"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/tenant/fiscal-identity",
+    "group": "tenant",
+    "action": "TenantFiscalCredentialController@showIdentity"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/tenant/fiscal-identity",
+    "group": "tenant",
+    "action": "TenantFiscalCredentialController@storeIdentity"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/tenant/integration-tokens",
+    "group": "tenant",
+    "action": "CteEmitterPushController@listTokens"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/tenant/integration-tokens",
+    "group": "tenant",
+    "action": "CteEmitterPushController@issueToken"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/tenant/integration-tokens/{token}/revoke",
+    "group": "tenant",
+    "action": "CteEmitterPushController@revokeToken"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/tenant/members",
+    "group": "tenant",
+    "action": "TenantMemberController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/tenant/members",
+    "group": "tenant",
+    "action": "TenantMemberController@store"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/tenant/members/{membership}",
+    "group": "tenant",
+    "action": "TenantMemberController@update"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/tenant/members/{membership}/activation/regenerate",
+    "group": "tenant",
+    "action": "TenantMemberController@regenerateActivation"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/tenant/members/{membership}/deactivate",
+    "group": "tenant",
+    "action": "TenantMemberController@deactivate"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/tenant/members/{membership}/reactivate",
+    "group": "tenant",
+    "action": "TenantMemberController@reactivate"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/tenant/members/{membership}/recipient",
+    "group": "tenant",
+    "action": "TenantMemberController@updateRecipient"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/tenant/serpro-authorization",
+    "group": "serpro",
+    "action": "TenantSerproAuthorizationController@show"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/tenant/serpro-authorization/author",
+    "group": "serpro",
+    "action": "TenantSerproAuthorizationController@configureAuthor"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/tenant/serpro-authorization/eligibility",
+    "group": "serpro",
+    "action": "TenantSerproAuthorizationController@eligibility"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/tenant/serpro-authorization/health",
+    "group": "serpro",
+    "action": "TenantSerproAuthorizationController@platformHealth"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/tenant/serpro-authorization/proxy-powers",
+    "group": "serpro",
+    "action": "TenantSerproAuthorizationController@listProxyPowers"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/tenant/serpro-authorization/proxy-powers",
+    "group": "serpro",
+    "action": "TenantSerproAuthorizationController@importProxyPower"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/tenant/serpro-authorization/proxy-powers/sync",
+    "group": "serpro",
+    "action": "TenantSerproAuthorizationController@syncProxyPowers"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/tenant/serpro-authorization/refresh-token",
+    "group": "serpro",
+    "action": "TenantSerproAuthorizationController@refreshToken"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/tenant/serpro-authorization/termo",
+    "group": "serpro",
+    "action": "TenantSerproAuthorizationController@uploadTermo"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/tenant/serpro-authorization/termo/draft",
+    "group": "serpro",
+    "action": "TenantSerproAuthorizationController@generateTermoDraft"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/tenant/serpro-authorization/termo/draft",
+    "group": "serpro",
+    "action": "TenantSerproAuthorizationController@downloadTermoDraft"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/tenant/serpro-authorization/termo/sign-with-certificate",
+    "group": "serpro",
+    "action": "TenantSerproAuthorizationController@signTermoManagedCertificate"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/tenant/serpro-usage",
+    "group": "serpro",
+    "action": "TenantSerproUsageController@summary"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/tenant/serpro-usage/entries",
+    "group": "serpro",
+    "action": "TenantSerproUsageController@entries"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/tenant/settings",
+    "group": "tenant",
+    "action": "TenantSettingsController@show"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/tenant/settings/certificate",
+    "group": "tenant",
+    "action": "TenantSettingsController@showCertificate"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/tenant/settings/certificate",
+    "group": "tenant",
+    "action": "TenantSettingsController@storeCertificate"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/tenant/settings/certificate/remove",
+    "group": "tenant",
+    "action": "TenantSettingsController@removeCertificate"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/tenant/settings/certificate/replace",
+    "group": "tenant",
+    "action": "TenantSettingsController@replaceCertificate"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/tenant/settings/consent",
+    "group": "tenant",
+    "action": "TenantSettingsController@showConsent"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/tenant/settings/consent",
+    "group": "tenant",
+    "action": "TenantSettingsController@grantConsent"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/tenant/settings/consent/revoke",
+    "group": "tenant",
+    "action": "TenantSettingsController@revokeConsent"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/tenant/settings/monitor-schedules",
+    "group": "tenant",
+    "action": "TenantSettingsController@listMonitorSchedules"
+  },
+  {
+    "method": "PUT",
+    "uri": "api/v1/tenant/settings/monitor-schedules/{monitorKey}",
+    "group": "tenant",
+    "action": "TenantSettingsController@updateMonitorSchedule"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/tenant/settings/onboarding-status",
+    "group": "tenant",
+    "action": "TenantSettingsController@onboardingStatus"
+  },
+  {
+    "method": "PATCH",
+    "uri": "api/v1/tenant/settings/profile",
+    "group": "tenant",
+    "action": "TenantSettingsController@updateProfile"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/tenant/settings/refresh-integration",
+    "group": "tenant",
+    "action": "TenantSettingsController@refreshIntegration"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/tenant/subscription",
+    "group": "tenant",
+    "action": "TenantSubscriptionController@show"
+  },
+  {
+    "method": "GET",
     "uri": "api/v1/tenants/memberships",
     "group": "tenants",
     "action": "TenantSwitchController@memberships"
@@ -3087,13 +2931,13 @@
     "method": "GET",
     "uri": "api/v1/work/calendar",
     "group": "work",
-    "action": "OperationalDashboardController@calendar"
+    "action": "WorkDashboardController@calendar"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/calendar/day",
     "group": "work",
-    "action": "OperationalDashboardController@calendarDay"
+    "action": "WorkDashboardController@calendarDay"
   },
   {
     "method": "GET",
@@ -3123,265 +2967,265 @@
     "method": "POST",
     "uri": "api/v1/work/exports",
     "group": "work",
-    "action": "OperationalDashboardController@createExport"
+    "action": "WorkDashboardController@createExport"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/exports/{export}",
     "group": "work",
-    "action": "OperationalDashboardController@showExport"
+    "action": "WorkDashboardController@showExport"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/exports/{export}/download",
     "group": "work",
-    "action": "OperationalDashboardController@downloadExport"
+    "action": "WorkDashboardController@downloadExport"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/generation-batches/{batch}",
     "group": "work",
-    "action": "ProcessGenerationController@show"
+    "action": "WorkProcessGenerationController@show"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/generation-batches/{batch}/confirm",
     "group": "work",
-    "action": "ProcessGenerationController@confirm"
+    "action": "WorkProcessGenerationController@confirm"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/generation-batches/{batch}/retry",
     "group": "work",
-    "action": "ProcessGenerationController@retry"
+    "action": "WorkProcessGenerationController@retry"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/kpis",
     "group": "work",
-    "action": "OperationalDashboardController@kpis"
+    "action": "WorkDashboardController@kpis"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/process-groups",
     "group": "work",
-    "action": "OperationalProcessGroupController@index"
+    "action": "WorkProcessGroupController@index"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/processes",
     "group": "work",
-    "action": "OperationalProcessController@index"
+    "action": "WorkProcessController@index"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/processes",
     "group": "work",
-    "action": "OperationalProcessController@store"
+    "action": "WorkProcessController@store"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/processes/bulk",
     "group": "work",
-    "action": "OperationalProcessController@bulk"
+    "action": "WorkProcessController@bulk"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/processes/{process}",
     "group": "work",
-    "action": "OperationalProcessController@show"
+    "action": "WorkProcessController@show"
   },
   {
     "method": "PATCH",
     "uri": "api/v1/work/processes/{process}",
     "group": "work",
-    "action": "OperationalProcessController@update"
+    "action": "WorkProcessController@update"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/processes/{process}/archive",
     "group": "work",
-    "action": "OperationalProcessController@archive"
+    "action": "WorkProcessController@archive"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/processes/{process}/comments",
     "group": "work",
-    "action": "OperationalProcessController@comment"
+    "action": "WorkProcessController@comment"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/processes/{process}/tasks",
     "group": "work",
-    "action": "OperationalTaskController@storeOnProcess"
+    "action": "WorkTaskController@storeOnProcess"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/processes/{process}/tasks/reorder",
     "group": "work",
-    "action": "OperationalTaskController@reorder"
+    "action": "WorkTaskController@reorder"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/processes/{process}/timeline",
     "group": "work",
-    "action": "OperationalProcessController@timeline"
+    "action": "WorkProcessController@timeline"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/queue",
     "group": "work",
-    "action": "OperationalTaskController@queue"
+    "action": "WorkTaskController@queue"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/tasks/bulk",
     "group": "work",
-    "action": "OperationalTaskController@bulk"
+    "action": "WorkTaskController@bulk"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/tasks/{task}",
     "group": "work",
-    "action": "OperationalTaskController@show"
+    "action": "WorkTaskController@show"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/tasks/{task}/assign",
     "group": "work",
-    "action": "OperationalTaskController@assign"
+    "action": "WorkTaskController@assign"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/tasks/{task}/block",
     "group": "work",
-    "action": "OperationalTaskController@block"
+    "action": "WorkTaskController@block"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/tasks/{task}/claim",
     "group": "work",
-    "action": "OperationalTaskController@claim"
+    "action": "WorkTaskController@claim"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/tasks/{task}/comments",
     "group": "work",
-    "action": "OperationalTaskController@comment"
+    "action": "WorkTaskController@comment"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/tasks/{task}/complete",
     "group": "work",
-    "action": "OperationalTaskController@complete"
+    "action": "WorkTaskController@complete"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/tasks/{task}/dispense",
     "group": "work",
-    "action": "OperationalTaskController@dispense"
+    "action": "WorkTaskController@dispense"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/tasks/{task}/evidences",
     "group": "work",
-    "action": "OperationalTaskController@uploadEvidence"
+    "action": "WorkTaskController@uploadEvidence"
   },
   {
     "method": "DELETE",
     "uri": "api/v1/work/tasks/{task}/evidences/{evidence}",
     "group": "work",
-    "action": "OperationalTaskController@removeEvidence"
+    "action": "WorkTaskController@removeEvidence"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/tasks/{task}/evidences/{evidence}/download",
     "group": "work",
-    "action": "OperationalTaskController@downloadEvidence"
+    "action": "WorkTaskController@downloadEvidence"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/tasks/{task}/reopen",
     "group": "work",
-    "action": "OperationalTaskController@reopen"
+    "action": "WorkTaskController@reopen"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/tasks/{task}/resume",
     "group": "work",
-    "action": "OperationalTaskController@resume"
+    "action": "WorkTaskController@resume"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/tasks/{task}/start",
     "group": "work",
-    "action": "OperationalTaskController@start"
+    "action": "WorkTaskController@start"
   },
   {
     "method": "PATCH",
     "uri": "api/v1/work/tasks/{task}/structure",
     "group": "work",
-    "action": "OperationalTaskController@updateStructure"
+    "action": "WorkTaskController@updateStructure"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/template-catalog",
     "group": "work",
-    "action": "ProcessTemplateCatalogController@index"
+    "action": "WorkProcessTemplateCatalogController@index"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/template-catalog/{catalogKey}/install",
     "group": "work",
-    "action": "ProcessTemplateCatalogController@install"
+    "action": "WorkProcessTemplateCatalogController@install"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/templates",
     "group": "work",
-    "action": "ProcessTemplateController@index"
+    "action": "WorkProcessTemplateController@index"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/templates",
     "group": "work",
-    "action": "ProcessTemplateController@store"
+    "action": "WorkProcessTemplateController@store"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/templates/{template}",
     "group": "work",
-    "action": "ProcessTemplateController@show"
+    "action": "WorkProcessTemplateController@show"
   },
   {
     "method": "PATCH",
     "uri": "api/v1/work/templates/{template}",
     "group": "work",
-    "action": "ProcessTemplateController@update"
+    "action": "WorkProcessTemplateController@update"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/templates/{template}/generation-batches",
     "group": "work",
-    "action": "ProcessTemplateController@generationBatches"
+    "action": "WorkProcessTemplateController@generationBatches"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/templates/{template}/preview",
     "group": "work",
-    "action": "ProcessGenerationController@preview"
+    "action": "WorkProcessGenerationController@preview"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/templates/{template}/recurrence",
     "group": "work",
-    "action": "ProcessTemplateController@showRecurrence"
+    "action": "WorkProcessTemplateController@showRecurrence"
   },
   {
     "method": "PATCH",
     "uri": "api/v1/work/templates/{template}/recurrence",
     "group": "work",
-    "action": "ProcessTemplateController@updateRecurrence"
+    "action": "WorkProcessTemplateController@updateRecurrence"
   },
   {
     "method": "POST",

@@ -10,7 +10,6 @@ export type ClientCategoryColorItem = {
 /**
  * Paleta curada para tags/categorias — padrão de produtos como GitHub Labels
  * e Linear: ~18 matizes distinguíveis, com nomes e hex estáveis.
- * Os 7 primeiros preservam o contrato legado (primary…neutral).
  */
 export const CLIENT_CATEGORY_COLOR_PALETTE: readonly ClientCategoryColorItem[] = [
   { value: 'primary', label: 'Laranja', hex: '#FF7A00' },

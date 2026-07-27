@@ -18,7 +18,7 @@ use App\Models\CommunicationConversation;
 use App\Models\CommunicationInboxMember;
 use App\Models\CommunicationLabel;
 use App\Models\CommunicationMessage;
-use App\Models\OfficeMembership;
+use App\Models\TenantMembership;
 use App\Models\User;
 use App\Models\WorkDepartment;
 use App\Services\Communication\Authorization\CommunicationAccess;
@@ -27,7 +27,7 @@ use App\Services\Communication\Events\CommunicationEventRecorder;
 use App\Services\Communication\Flows\CommunicationFlowRunControlService;
 use App\Services\Communication\Media\CommunicationMediaStore;
 use App\Services\Communication\Outbox\CommunicationOutboxService;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -38,7 +38,7 @@ use Throwable;
 final class CommunicationConversationController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly CommunicationAccess $access,
         private readonly CommunicationAvailability $availability,
         private readonly CommunicationOutboxService $outbox,
@@ -134,16 +134,16 @@ final class CommunicationConversationController extends Controller
             }
         }
         if (array_key_exists('assignee_membership_id', $attributes) && $attributes['assignee_membership_id'] !== null) {
-            $membership = OfficeMembership::query()->where('office_id', $model->office_id)
+            $membership = TenantMembership::query()->where('tenant_id', $model->tenant_id)
                 ->where('is_active', true)->findOrFail((int) $attributes['assignee_membership_id']);
             $hasInbox = CommunicationInboxMember::query()->withoutGlobalScopes()
                 ->where('inbox_id', $model->inbox_id)
-                ->where('office_membership_id', $membership->id)
+                ->where('tenant_membership_id', $membership->id)
                 ->where('is_active', true)->exists();
             abort_unless($hasInbox || $membership->role?->isAdmin(), 422, 'Responsável sem acesso à inbox.');
         }
         if (array_key_exists('work_department_id', $attributes) && $attributes['work_department_id'] !== null) {
-            WorkDepartment::query()->withoutGlobalScopes()->where('office_id', $model->office_id)
+            WorkDepartment::query()->withoutGlobalScopes()->where('tenant_id', $model->tenant_id)
                 ->findOrFail((int) $attributes['work_department_id']);
         }
         if (isset($data['status'])) {
@@ -168,12 +168,12 @@ final class CommunicationConversationController extends Controller
         }
         $updated = $model->fresh();
         $this->events->record(
-            (int) $updated->office_id,
+            (int) $updated->tenant_id,
             'CONVERSATION_UPDATED',
             ['status' => $updated->status->value, 'lock_version' => (int) $updated->lock_version],
             inboxId: (int) $updated->inbox_id,
             conversationId: (int) $updated->id,
-            actorMembershipId: $this->currentOffice->realMembership()?->id,
+            actorMembershipId: $this->currentTenant->realMembership()?->id,
         );
 
         return (new CommunicationConversationResource($updated->load(['identity.contact', 'clients', 'labels'])))->response();
@@ -279,7 +279,7 @@ final class CommunicationConversationController extends Controller
             $stream = fopen($uploadPath, 'rb');
             abort_unless(is_resource($stream), 422, 'Arquivo inválido.');
             $storageContext = [
-                'office_id' => (int) $model->office_id,
+                'tenant_id' => (int) $model->tenant_id,
                 'inbox_id' => (int) $model->inbox_id,
                 'upload_id' => (string) Str::uuid(),
             ];
@@ -312,12 +312,12 @@ final class CommunicationConversationController extends Controller
                 $richPayload,
             ): CommunicationMessage {
                 $message = CommunicationMessage::query()->create([
-                    'office_id' => $model->office_id,
+                    'tenant_id' => $model->tenant_id,
                     'inbox_id' => $model->inbox_id,
                     'conversation_id' => $model->id,
                     'identity_id' => $model->identity_id,
                     'reply_to_message_id' => $replyTo?->id,
-                    'author_membership_id' => $this->currentOffice->realMembership()?->id,
+                    'author_membership_id' => $this->currentTenant->realMembership()?->id,
                     'direction' => $internal ? MessageDirection::Internal : MessageDirection::Outbound,
                     'kind' => $kind,
                     'provider_type' => $this->outboundProviderType($kind, $richPayload),
@@ -333,7 +333,7 @@ final class CommunicationConversationController extends Controller
                 $attachment = null;
                 if ($upload !== null && is_array($stored) && is_array($storageContext)) {
                     $attachment = CommunicationAttachment::query()->create([
-                        'office_id' => $model->office_id,
+                        'tenant_id' => $model->tenant_id,
                         'message_id' => $message->id,
                         'object_id' => $stored['object_id'],
                         'original_name_encrypted' => $this->safeFilename($upload->getClientOriginalName()),
@@ -386,12 +386,12 @@ final class CommunicationConversationController extends Controller
                     $this->outbox->enqueue($model->inbox, GatewayCommandType::SendMessage, $payload, $message);
                     $this->flowRuns->handoffActiveForConversation(
                         (int) $model->id,
-                        $this->currentOffice->realMembership(),
+                        $this->currentTenant->realMembership(),
                         'human_outbound',
                     );
                 }
                 $this->events->record(
-                    (int) $model->office_id,
+                    (int) $model->tenant_id,
                     $internal ? 'INTERNAL_NOTE_CREATED' : 'MESSAGE_QUEUED',
                     [
                         'message_id' => (int) $message->id,
@@ -402,7 +402,7 @@ final class CommunicationConversationController extends Controller
                     inboxId: (int) $model->inbox_id,
                     conversationId: (int) $model->id,
                     messageId: (int) $message->id,
-                    actorMembershipId: $this->currentOffice->realMembership()?->id,
+                    actorMembershipId: $this->currentTenant->realMembership()?->id,
                 );
 
                 return $message;
@@ -423,8 +423,8 @@ final class CommunicationConversationController extends Controller
         $this->access->assertReply($this->actor($request), $model->inbox);
         $labelModel = CommunicationLabel::query()->findOrFail($label);
         $model->labels()->syncWithoutDetaching([$labelModel->id => [
-            'office_id' => $model->office_id,
-            'assigned_by_membership_id' => $this->currentOffice->realMembership()?->id,
+            'tenant_id' => $model->tenant_id,
+            'assigned_by_membership_id' => $this->currentTenant->realMembership()?->id,
         ]]);
 
         return response()->json(['data' => ['label_id' => $labelModel->id]], 201);

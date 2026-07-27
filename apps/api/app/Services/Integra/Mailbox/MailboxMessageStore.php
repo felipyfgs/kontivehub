@@ -11,7 +11,7 @@ use App\Models\Client;
 use App\Models\MailboxAttachment;
 use App\Models\MailboxContributorState;
 use App\Models\MailboxMessage;
-use App\Models\Office;
+use App\Models\Tenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -32,7 +32,7 @@ final class MailboxMessageStore
      * @return array{created:int,updated:int,messages:list<MailboxMessage>}
      */
     public function applyList(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         CaixaPostalListResult $list,
         ?int $runId = null,
@@ -45,7 +45,7 @@ final class MailboxMessageStore
         $now = CarbonImmutable::now();
 
         DB::transaction(function () use (
-            $office, $client, $list, $runId, $retentionDays, $sensitivity, $now,
+            $tenant, $client, $list, $runId, $retentionDays, $sensitivity, $now,
             &$created, &$updated, &$messages
         ) {
             foreach ($list->items as $item) {
@@ -54,10 +54,10 @@ final class MailboxMessageStore
                     continue;
                 }
 
-                $hash = MailboxIdempotency::messageHash((int) $office->id, (int) $client->id, $externalId);
+                $hash = MailboxIdempotency::messageHash((int) $tenant->id, (int) $client->id, $externalId);
                 $existing = MailboxMessage::query()
                     ->withoutGlobalScopes()
-                    ->where('office_id', $office->id)
+                    ->where('tenant_id', $tenant->id)
                     ->where('message_hash', $hash)
                     ->lockForUpdate()
                     ->first();
@@ -90,7 +90,7 @@ final class MailboxMessageStore
 
                 if ($existing === null) {
                     $msg = MailboxMessage::query()->create(array_merge($attrs, [
-                        'office_id' => $office->id,
+                        'tenant_id' => $tenant->id,
                         'client_id' => $client->id,
                         'external_id' => $externalId,
                         'message_hash' => $hash,
@@ -112,7 +112,7 @@ final class MailboxMessageStore
                 $messages[] = $msg;
             }
 
-            $state = $this->lockState($office, $client);
+            $state = $this->lockState($tenant, $client);
             $state->forceFill([
                 'messages_status' => MailboxMessagesConsultStatus::Consulted,
                 'messages_source' => MailboxSource::CaixaPostal,
@@ -121,7 +121,7 @@ final class MailboxMessageStore
                 'official_unread_count' => $list->officialUnreadCount,
                 'stored_message_count' => MailboxMessage::query()
                     ->withoutGlobalScopes()
-                    ->where('office_id', $office->id)
+                    ->where('tenant_id', $tenant->id)
                     ->where('client_id', $client->id)
                     ->count(),
             ])->save();
@@ -138,29 +138,29 @@ final class MailboxMessageStore
      * Aplica detalhe: corpo/anexos no cofre; não altera triagem; não força leitura oficial.
      */
     public function applyDetail(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         CaixaPostalDetailResult $detail,
         ?int $runId = null,
     ): MailboxMessage {
-        $hash = MailboxIdempotency::messageHash((int) $office->id, (int) $client->id, $detail->externalId);
+        $hash = MailboxIdempotency::messageHash((int) $tenant->id, (int) $client->id, $detail->externalId);
         $retentionDays = (int) config('fiscal_monitoring.mailbox.retention_days', 2555);
         $sensitivity = (string) config('fiscal_monitoring.mailbox.sensitivity_class', 'FISCAL_RESTRICTED');
         $now = CarbonImmutable::now();
 
         return DB::transaction(function () use (
-            $office, $client, $detail, $runId, $hash, $retentionDays, $sensitivity, $now
+            $tenant, $client, $detail, $runId, $hash, $retentionDays, $sensitivity, $now
         ) {
             $msg = MailboxMessage::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('message_hash', $hash)
                 ->lockForUpdate()
                 ->first();
 
             if ($msg === null) {
                 $msg = MailboxMessage::query()->create([
-                    'office_id' => $office->id,
+                    'tenant_id' => $tenant->id,
                     'client_id' => $client->id,
                     'external_id' => $detail->externalId,
                     'message_hash' => $hash,
@@ -195,7 +195,7 @@ final class MailboxMessageStore
                 // Idempotente: se mesmo sha, não regrava vault
                 $sha = hash('sha256', $detail->bodyBytes);
                 if ($msg->body_sha256 !== $sha || $msg->body_vault_object_id === null) {
-                    $stored = $this->vault->putBody((int) $office->id, $detail->bodyBytes);
+                    $stored = $this->vault->putBody((int) $tenant->id, $detail->bodyBytes);
                     $fill['body_vault_object_id'] = $stored['vault_object_id'];
                     $fill['body_sha256'] = $stored['sha256'];
                     $fill['body_byte_size'] = $stored['byte_size'];
@@ -212,16 +212,16 @@ final class MailboxMessageStore
                 if ($bytes === '') {
                     continue;
                 }
-                $stored = $this->vault->putAttachment((int) $office->id, $bytes);
+                $stored = $this->vault->putAttachment((int) $tenant->id, $bytes);
                 $existingAtt = MailboxAttachment::query()
                     ->withoutGlobalScopes()
-                    ->where('office_id', $office->id)
+                    ->where('tenant_id', $tenant->id)
                     ->where('mailbox_message_id', $msg->id)
                     ->where('content_sha256', $stored['sha256'])
                     ->first();
                 if ($existingAtt === null) {
                     MailboxAttachment::query()->create([
-                        'office_id' => $office->id,
+                        'tenant_id' => $tenant->id,
                         'mailbox_message_id' => $msg->id,
                         'external_id' => $this->clip($att['external_id'] ?? null, 160),
                         'filename_sanitized' => $this->sanitizeFilename($att['filename'] ?? null),
@@ -253,9 +253,9 @@ final class MailboxMessageStore
         });
     }
 
-    public function markListError(Office $office, Client $client, ?int $runId = null): void
+    public function markListError(Tenant $tenant, Client $client, ?int $runId = null): void
     {
-        $state = $this->lockState($office, $client);
+        $state = $this->lockState($tenant, $client);
         // Não inventa CONSULTED; preserva UNKNOWN se nunca consultou com sucesso
         if ($state->messages_status === MailboxMessagesConsultStatus::Consulted) {
             // Mantém último sucesso; só anota erro em metadata
@@ -274,11 +274,11 @@ final class MailboxMessageStore
         ])->save();
     }
 
-    private function lockState(Office $office, Client $client): MailboxContributorState
+    private function lockState(Tenant $tenant, Client $client): MailboxContributorState
     {
         $state = MailboxContributorState::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->lockForUpdate()
             ->first();
@@ -288,7 +288,7 @@ final class MailboxMessageStore
         }
 
         return MailboxContributorState::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
         ]);
     }

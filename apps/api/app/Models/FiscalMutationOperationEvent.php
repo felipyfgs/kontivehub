@@ -3,13 +3,13 @@
 namespace App\Models;
 
 use App\Enums\FiscalMutationStatus;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'fiscal_mutation_operation_id',
     'from_status',
     'to_status',
@@ -22,7 +22,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class FiscalMutationOperationEvent extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     public $timestamps = false;
 

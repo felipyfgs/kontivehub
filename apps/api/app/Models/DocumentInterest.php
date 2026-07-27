@@ -4,18 +4,18 @@ namespace App\Models;
 
 use App\Enums\DocumentDirection;
 use App\Enums\FiscalRole;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'office_id', 'dfe_document_id', 'establishment_id', 'nsu', 'environment', 'channel',
+    'tenant_id', 'dfe_document_id', 'establishment_id', 'nsu', 'environment', 'channel',
     'fiscal_role', 'direction',
 ])]
 class DocumentInterest extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {

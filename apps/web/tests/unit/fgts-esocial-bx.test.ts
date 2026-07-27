@@ -41,7 +41,7 @@ describe('FGTS eSocial BX oficial', () => {
     expect(page).not.toContain('resolver CAPTCHA')
   })
 
-  it('envia readiness e sync tipados ao endpoint tenant-scoped sem office_id', async () => {
+  it('envia readiness e sync tipados ao endpoint tenant-scoped sem tenant_id', async () => {
     const clientMock = vi.fn()
       .mockResolvedValueOnce({ data: { ready: false, blockers: [] } })
       .mockResolvedValueOnce({
@@ -74,7 +74,7 @@ describe('FGTS eSocial BX oficial', () => {
         dispatch_job: true
       }
     })
-    expect(JSON.stringify(clientMock.mock.calls)).not.toContain('office_id')
+    expect(JSON.stringify(clientMock.mock.calls)).not.toContain('tenant_id')
   })
 
   it('nomeia a ação como sync eSocial e declara o custo e a cobertura antes da chamada', () => {

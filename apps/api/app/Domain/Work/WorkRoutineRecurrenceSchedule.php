@@ -4,8 +4,8 @@ namespace App\Domain\Work;
 
 use App\Enums\Work\RecurrenceFrequency;
 use App\Enums\Work\RecurrencePeriodOffset;
-use App\Models\Office;
-use App\Support\Work\OfficeTimezone;
+use App\Models\Tenant;
+use App\Support\Work\TenantTimezone;
 use Carbon\CarbonImmutable;
 use InvalidArgumentException;
 
@@ -112,13 +112,13 @@ final class WorkRoutineRecurrenceSchedule
     /**
      * Próximo disparo estritamente após $afterUtc (UTC), no fuso do Escritório.
      */
-    public function nextRunAtUtc(Office $office, ?CarbonImmutable $afterUtc = null): CarbonImmutable
+    public function nextRunAtUtc(Tenant $tenant, ?CarbonImmutable $afterUtc = null): CarbonImmutable
     {
         if (! $this->enabled || $this->frequency === null) {
             throw new InvalidArgumentException('Agenda inativa não calcula próximo disparo.');
         }
 
-        $tz = OfficeTimezone::for($office);
+        $tz = TenantTimezone::for($tenant);
         $afterUtc ??= CarbonImmutable::now('UTC');
         $cursor = $afterUtc->timezone($tz)->startOfDay()->addDay();
 
@@ -135,13 +135,13 @@ final class WorkRoutineRecurrenceSchedule
     /**
      * Próximo disparo a partir de agora (inclui hoje se ainda não passou meia-noite local do dia de geração).
      */
-    public function upcomingRunAtUtc(Office $office, ?CarbonImmutable $nowUtc = null): CarbonImmutable
+    public function upcomingRunAtUtc(Tenant $tenant, ?CarbonImmutable $nowUtc = null): CarbonImmutable
     {
         if (! $this->enabled || $this->frequency === null) {
             throw new InvalidArgumentException('Agenda inativa não calcula próximo disparo.');
         }
 
-        $tz = OfficeTimezone::for($office);
+        $tz = TenantTimezone::for($tenant);
         $nowUtc ??= CarbonImmutable::now('UTC');
         $cursor = $nowUtc->timezone($tz)->startOfDay();
 

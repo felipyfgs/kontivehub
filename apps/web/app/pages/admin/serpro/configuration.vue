@@ -30,10 +30,10 @@ const passwordModalOpen = ref(false)
 const passwordInput = ref('')
 const pendingAction = ref<null | (() => Promise<void>)>(null)
 
-/** Cutover exige confirmação OWNER (frase + senha) antes do POST /cutover. */
-const cutoverOwnerOpen = ref(false)
-const cutoverTarget = ref<SerproCredentialVersionSanitized | null>(null)
-const cutoverPhrase = expectedOwnerConfirmationPhrase('CREDENTIAL_CUTOVER')
+/** Ativação exige confirmação OWNER (frase + senha) antes do POST /activation. */
+const activationOwnerOpen = ref(false)
+const activationTarget = ref<SerproCredentialVersionSanitized | null>(null)
+const activationPhrase = expectedOwnerConfirmationPhrase('CREDENTIAL_ACTIVATION')
 
 const envItems = [
   { label: 'Demonstração SERPRO', value: 'TRIAL' },
@@ -224,10 +224,10 @@ function submitProductionOnboarding() {
 async function activateTrialCredential(v: SerproCredentialVersionSanitized) {
   await api.platform.serpro.credentialVersions.verify(v.id)
   await api.platform.serpro.credentialVersions.testConnection(v.id)
-  await executeCredentialCutover(
+  await executeCredentialActivation(
     v,
     'Ativação simplificada de credencial na Demonstração SERPRO.',
-    cutoverPhrase
+    activationPhrase
   )
 }
 
@@ -255,39 +255,39 @@ function testConnection(v: SerproCredentialVersionSanitized) {
   })
 }
 
-function cutover(v: SerproCredentialVersionSanitized) {
+function activate(v: SerproCredentialVersionSanitized) {
   if (!v.has_recent_connection_test) {
     toast.add({
-      title: 'Execute “Testar OAuth” de novo (evidência expira ~15 min) antes do cutover.',
+      title: 'Execute “Testar OAuth” de novo (evidência expira ~15 min) antes da ativação.',
       color: 'warning'
     })
     return
   }
-  cutoverTarget.value = v
-  cutoverOwnerOpen.value = true
+  activationTarget.value = v
+  activationOwnerOpen.value = true
 }
 
 /**
- * Fluxo canônico: request rollout CREDENTIAL_CUTOVER → approve OWNER → cutover(approval_id).
+ * Fluxo canônico: request rollout CREDENTIAL_ACTIVATION → approve OWNER → activate(approval_id).
  * Sem contrato prévio o backend cria shell a partir da versão.
  */
-async function confirmCutover(payload: {
+async function confirmActivation(payload: {
   reason: string
   confirmation_phrase: string
   password: string
 }) {
-  const v = cutoverTarget.value
+  const v = activationTarget.value
   if (!v) return
 
   acting.value = true
   try {
-    await executeCredentialCutover(v, payload.reason, payload.confirmation_phrase)
+    await executeCredentialActivation(v, payload.reason, payload.confirmation_phrase)
 
-    toast.add({ title: `Cutover v${v.version_number} concluído.`, color: 'success' })
-    cutoverTarget.value = null
+    toast.add({ title: `Ativação v${v.version_number} concluída.`, color: 'success' })
+    activationTarget.value = null
     await load()
   } catch (caught) {
-    const msg = apiErrorMessage(caught, 'Cutover bloqueado.')
+    const msg = apiErrorMessage(caught, 'Ativação bloqueada.')
     toast.add({
       title: /oauth|evidência|teste/i.test(msg)
         ? `${msg} — rode “Testar OAuth” e tente de novo.`
@@ -299,7 +299,7 @@ async function confirmCutover(payload: {
   }
 }
 
-async function executeCredentialCutover(
+async function executeCredentialActivation(
   v: SerproCredentialVersionSanitized,
   reason: string,
   confirmationPhrase: string
@@ -307,7 +307,7 @@ async function executeCredentialCutover(
   const window = defaultChangeWindow()
   const env = String(v.environment || environment.value || 'TRIAL').toUpperCase()
   const requested = await api.platform.serpro.rollouts.request({
-    action: 'CREDENTIAL_CUTOVER',
+    action: 'CREDENTIAL_ACTIVATION',
     subject_type: 'CREDENTIAL_VERSION',
     subject_id: v.id,
     reason,
@@ -330,7 +330,7 @@ async function executeCredentialCutover(
     change_window_end: window.change_window_end
   })
 
-  await api.platform.serpro.credentialVersions.cutover(v.id, {
+  await api.platform.serpro.credentialVersions.activate(v.id, {
     approval_id: approvalId,
     reason
   })
@@ -637,7 +637,7 @@ onMounted(() => {
           >
             <div class="min-w-0">
               <p class="text-sm text-muted">
-                {{ productionOnboarding?.office_id ? `Office #${productionOnboarding.office_id}` : 'Contexto não selecionado' }}
+                {{ productionOnboarding?.tenant_id ? `Tenant #${productionOnboarding.tenant_id}` : 'Contexto não selecionado' }}
               </p>
               <p
                 v-if="productionState?.status === 'ACTION_REQUIRED' || productionState?.status === 'FAILED'"
@@ -822,9 +822,9 @@ onMounted(() => {
                   v-else-if="v.status === 'VERIFIED' && v.has_recent_connection_test"
                   size="xs"
                   color="primary"
-                  label="Cutover"
+                  label="Ativação"
                   :loading="acting"
-                  @click="cutover(v)"
+                  @click="activate(v)"
                 />
                 <UButton
                   v-else-if="v.status === 'ACTIVE'"
@@ -938,12 +938,12 @@ onMounted(() => {
       </ShellFormModal>
 
       <SerproOwnerConfirmModal
-        v-model:open="cutoverOwnerOpen"
-        action="CREDENTIAL_CUTOVER"
-        title="Confirmar cutover da credencial SERPRO"
-        :expected-phrase="cutoverPhrase"
-        data-testid="serpro-config-cutover-owner-modal"
-        @confirm="confirmCutover"
+        v-model:open="activationOwnerOpen"
+        action="CREDENTIAL_ACTIVATION"
+        title="Confirmar ativação da credencial SERPRO"
+        :expected-phrase="activationPhrase"
+        data-testid="serpro-config-activation-owner-modal"
+        @confirm="confirmActivation"
       />
     </div>
   </div>

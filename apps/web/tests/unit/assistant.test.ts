@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { canUseAssistant, isAssistantAvailable } from '~/utils/assistant'
+import { canUseAssistant } from '~/utils/assistant'
 import type { MeUser } from '~/types/api'
 
 function source(rel: string): string {
@@ -16,7 +16,7 @@ function me(partial: Partial<MeUser> = {}): MeUser {
     two_factor_confirmed: false,
     two_factor_required: false,
     requires_two_factor_setup: false,
-    office: null,
+    tenant: null,
     role: 'ADMIN',
     ...partial
   }
@@ -24,7 +24,7 @@ function me(partial: Partial<MeUser> = {}): MeUser {
 
 describe('assistant availability', () => {
   it('exige me.assistant.enabled === true', () => {
-    expect(isAssistantAvailable(undefined)).toBe(false)
+    expect(canUseAssistant(undefined)).toBe(false)
     expect(canUseAssistant(me())).toBe(false)
     expect(canUseAssistant(me({ assistant: { enabled: false } }))).toBe(false)
     expect(canUseAssistant(me({ assistant: { enabled: true } }))).toBe(true)

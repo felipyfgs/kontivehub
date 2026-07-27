@@ -3,20 +3,20 @@
 namespace App\Models;
 
 use App\Enums\OutboundCaptureRunStatus;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'office_id', 'outbound_capture_profile_id', 'outbound_series_cursor_id',
+    'tenant_id', 'outbound_capture_profile_id', 'outbound_series_cursor_id',
     'run_type', 'status', 'nnf_start', 'nnf_end', 'numbers_consulted', 'keys_discovered',
     'xml_persisted', 'gaps_open', 'attempts_total', 'result_summary', 'last_error',
     'started_at', 'finished_at', 'triggered_by', 'user_id', 'metrics',
 ])]
 class OutboundCaptureRun extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {

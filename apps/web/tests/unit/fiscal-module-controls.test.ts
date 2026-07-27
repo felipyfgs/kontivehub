@@ -11,7 +11,7 @@ describe('controles dos módulos fiscais', () => {
   it('traduz os cinco estados efetivos da API', () => {
     expect(fiscalModuleStateLabel('AVAILABLE')).toBe('Disponível')
     expect(fiscalModuleStateLabel('GLOBALLY_RESTRICTED')).toBe('Restrito globalmente')
-    expect(fiscalModuleStateLabel('OFFICE_RESTRICTED')).toBe('Restrito para este escritório')
+    expect(fiscalModuleStateLabel('TENANT_RESTRICTED')).toBe('Restrito para este escritório')
     expect(fiscalModuleStateLabel('AWAITING_CONFIGURATION')).toBe('Aguardando configuração')
     expect(fiscalModuleStateLabel('TECHNICAL_FAILURE')).toBe('Falha técnica')
   })
@@ -36,10 +36,11 @@ describe('controles dos módulos fiscais', () => {
     expect(fiscalRestrictionDate(control)).toBe('2026-07-19T13:00:00-03:00')
   })
 
-  it('normaliza chaves da UI e surfaces para o catálogo canônico', () => {
-    expect(fiscalControlModuleKey('installments')).toBe('parcelamentos')
-    expect(fiscalControlModuleKey('sitfis')).toBe('situacao_fiscal')
-    expect(fiscalControlModuleKey(null, 'monitoring.registrations')).toBe('cadastros')
-    expect(fiscalControlModuleKey(null, 'monitoring.tax_processes')).toBe('processos_fiscais')
+  it('aceita somente chaves canônicas do catálogo', () => {
+    expect(fiscalControlModuleKey('installments')).toBe('installments')
+    expect(fiscalControlModuleKey('sitfis')).toBe('sitfis')
+    expect(fiscalControlModuleKey(null, 'monitoring.registrations')).toBe('registrations')
+    expect(fiscalControlModuleKey(null, 'monitoring.tax_processes')).toBe('tax_processes')
+    expect(fiscalControlModuleKey('parcelamentos')).toBeNull()
   })
 })

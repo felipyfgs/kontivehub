@@ -4,7 +4,6 @@ namespace App\DTO\Fiscal\SimplesMei;
 
 use App\Enums\FiscalGuideEmissionStatus;
 use App\Enums\FiscalGuidePaymentStatus;
-use InvalidArgumentException;
 
 /**
  * DAS gerado de forma assistida — emissão ≠ pagamento.
@@ -30,26 +29,11 @@ final readonly class DasGuideDto
      */
     public static function fromIntegraBody(array $body, string $fallbackCompetence = '', string $regimeFamily = 'SIMPLES_NACIONAL'): self
     {
-        $version = (string) ($body['dto_version'] ?? $body['version'] ?? self::VERSION);
-        if ($version !== self::VERSION) {
-            throw new InvalidArgumentException("DAS guide DTO versão não suportada: {$version}");
-        }
-
         $data = self::unwrapPayload($body);
-        $competence = (string) ($data['competence'] ?? $data['competencia'] ?? $data['periodoApuracao'] ?? $fallbackCompetence);
-        $doc = self::firstString($data, [
-            'document_number',
-            'numero_documento',
-            'numeroDocumento',
-        ]);
-        $due = self::firstString($data, [
-            'due_date',
-            'vencimento',
-            'dataVencimento',
-        ]);
+        $competence = (string) ($data['periodoApuracao'] ?? $fallbackCompetence);
+        $doc = self::firstString($data, ['numeroDocumento']);
+        $due = self::firstString($data, ['dataVencimento']);
         $amount = self::firstFloat($data, [
-            'amount',
-            'valor',
             'total',
             'principal',
         ]);
@@ -79,9 +63,6 @@ final readonly class DasGuideDto
      */
     private static function unwrapPayload(array $body): array
     {
-        if (isset($body['data']) && is_array($body['data'])) {
-            return $body['data'];
-        }
         if (isset($body['dados']) && is_array($body['dados'])) {
             return $body['dados'];
         }

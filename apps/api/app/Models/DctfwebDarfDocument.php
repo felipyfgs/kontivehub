@@ -3,13 +3,13 @@
 namespace App\Models;
 
 use App\Enums\FiscalPaymentStatus;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'client_id',
     'declaration_id',
     'competence_id',
@@ -25,7 +25,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class DctfwebDarfDocument extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {
@@ -55,7 +55,7 @@ class DctfwebDarfDocument extends Model
     {
         return [
             'id' => $this->id,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'client_id' => $this->client_id,
             'declaration_id' => $this->declaration_id,
             'competence_id' => $this->competence_id,

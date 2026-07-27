@@ -2,14 +2,14 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'name',
     'name_key',
     'color',
@@ -18,9 +18,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 ])]
 class ClientCategory extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
-    /** Paleta curada para tags (legado semântico + matizes extras). */
+    /** Paleta curada para tags. */
     public const COLORS = [
         'primary',
         'secondary',
@@ -64,7 +64,7 @@ class ClientCategory extends Model
     public function clients(): BelongsToMany
     {
         return $this->belongsToMany(Client::class, 'client_category_assignments')
-            ->withPivot(['office_id', 'assigned_by'])
+            ->withPivot(['tenant_id', 'assigned_by'])
             ->withTimestamps();
     }
 }

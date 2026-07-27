@@ -42,8 +42,8 @@ class MonitoringSurfaceRegistryTest extends TestCase
             }
         }
 
-        $this->assertSame('/monitoring/simples-mei', $registry->get('simples_mei_pgdasd')->routePattern);
-        $this->assertSame('/monitoring/simples-mei', $registry->get('simples_mei_pgmei')->routePattern);
+        $this->assertSame('/monitoring/simples', $registry->get('simples_mei_pgdasd')->routePattern);
+        $this->assertSame('/monitoring/mei', $registry->get('simples_mei_pgmei')->routePattern);
         $this->assertSame('/monitoring/dctfweb', $registry->get('dctfweb')->routePattern);
         $this->assertSame('/monitoring/dctfweb', $registry->get('mit')->routePattern);
 

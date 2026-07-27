@@ -11,7 +11,7 @@ use App\Enums\FiscalTrigger;
 use App\Jobs\Fiscal\ExecuteFiscalMonitoringRunJob;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
+use App\Models\Tenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use RuntimeException;
 use Tests\TestCase;
@@ -22,10 +22,10 @@ final class ExecuteFiscalMonitoringRunJobFailedTest extends TestCase
 
     public function test_failed_marks_non_terminal_run_as_failed(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->for($office)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->for($tenant)->create();
         $run = FiscalMonitoringRun::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'system_code' => 'INTEGRA_MEI',
             'service_code' => 'PGMEI',
@@ -54,10 +54,10 @@ final class ExecuteFiscalMonitoringRunJobFailedTest extends TestCase
 
     public function test_failed_does_not_rewrite_terminal_run(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->for($office)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->for($tenant)->create();
         $run = FiscalMonitoringRun::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'system_code' => 'INTEGRA_MEI',
             'service_code' => 'PGMEI',

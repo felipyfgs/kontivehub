@@ -3,7 +3,7 @@
 namespace App\Services\Sefaz;
 
 use App\Enums\SyncCursorStatus;
-use App\Models\OfficeDistributionCursor;
+use App\Models\TenantDistributionCursor;
 use Carbon\CarbonImmutable;
 
 /**
@@ -12,7 +12,7 @@ use Carbon\CarbonImmutable;
  */
 final class AutXmlCircuitBreaker
 {
-    public function openForCursor(OfficeDistributionCursor $cursor, string $cStat = '656', ?string $xMotivo = null): void
+    public function openForCursor(TenantDistributionCursor $cursor, string $cStat = '656', ?string $xMotivo = null): void
     {
         $hours = max(1.0, (float) config('sefaz.autxml.circuit_breaker_hours', 1));
         $cursor->status = SyncCursorStatus::Blocked;
@@ -25,7 +25,7 @@ final class AutXmlCircuitBreaker
         $cursor->save();
     }
 
-    public function isOpen(OfficeDistributionCursor $cursor): bool
+    public function isOpen(TenantDistributionCursor $cursor): bool
     {
         if ($cursor->status !== SyncCursorStatus::Blocked) {
             return false;
@@ -43,7 +43,7 @@ final class AutXmlCircuitBreaker
     /**
      * Impede retry antecipado: se ainda no cooldown, retorna false.
      */
-    public function mayQuery(OfficeDistributionCursor $cursor): bool
+    public function mayQuery(TenantDistributionCursor $cursor): bool
     {
         if (! $this->isOpen($cursor)) {
             return true;

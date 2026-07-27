@@ -9,7 +9,7 @@ namespace App\Services\Serpro\Usage;
 final class UsageReserveRequest
 {
     public function __construct(
-        public readonly int $officeId,
+        public readonly int $tenantId,
         public readonly string $idempotencyKey,
         public readonly string $systemCode,
         public readonly string $serviceCode,
@@ -28,8 +28,8 @@ final class UsageReserveRequest
         public readonly bool $isCanary = false,
         public readonly ?string $catalogRevision = null,
     ) {
-        if ($this->officeId <= 0) {
-            throw new \InvalidArgumentException('office_id obrigatório para reserva de uso SERPRO.');
+        if ($this->tenantId <= 0) {
+            throw new \InvalidArgumentException('tenant_id obrigatório para reserva de uso SERPRO.');
         }
         if ($this->idempotencyKey === '') {
             throw new \InvalidArgumentException('idempotency_key obrigatório.');

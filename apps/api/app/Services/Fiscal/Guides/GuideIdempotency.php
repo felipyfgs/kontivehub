@@ -4,12 +4,12 @@ namespace App\Services\Fiscal\Guides;
 
 /**
  * Chaves canônicas de emissão de guia.
- * Formato: office|client|system|service|operation|competence|debit|slot
+ * Formato: tenant|client|system|service|operation|competence|debit|slot
  */
 final class GuideIdempotency
 {
     public static function emissionKey(
-        int $officeId,
+        int $tenantId,
         int $clientId,
         string $systemCode,
         string $serviceCode,
@@ -19,7 +19,7 @@ final class GuideIdempotency
         string $slot = 'current',
     ): string {
         $parts = [
-            (string) $officeId,
+            (string) $tenantId,
             (string) $clientId,
             strtoupper($systemCode),
             strtoupper($serviceCode),

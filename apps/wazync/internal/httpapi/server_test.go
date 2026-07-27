@@ -47,7 +47,7 @@ func TestCommandEndpointIsDurableIdempotentAndDetectsDigestConflict(t *testing.T
 	t.Parallel()
 	persistence := store.NewMemory()
 	server := newTestServer(persistence)
-	body := []byte(`{"contract_version":"v1","command_id":"command-0001","session_id":"session-0001","type":"MESSAGE_SEND","provider_message_id":"message-0001","payload":{"to":"+5511999991234","text":"Olá"}}`)
+	body := []byte(`{"contract_version":"v1","command_id":"command-0001","session_id":"session-0001","type":"MESSAGE_SEND","provider_message_id":"message-0001","payload":{"to":"+5511999991234","kind":"TEXT","text":"Olá"}}`)
 
 	first := performCommand(t, server, body, "nonce-command-0001")
 	if first.Code != http.StatusAccepted || !strings.Contains(first.Body.String(), `"duplicate":false`) {
@@ -86,7 +86,7 @@ func TestCommandEndpointRejectsUnknownNestedPayloadFields(t *testing.T) {
 	t.Parallel()
 	persistence := store.NewMemory()
 	server := newTestServer(persistence)
-	body := []byte(`{"contract_version":"v1","command_id":"command-strict-0001","session_id":"session-strict-0001","type":"MESSAGE_SEND","provider_message_id":"message-strict-0001","payload":{"to":"+5511999991234","text":"Olá","raw_proto":{"secret":"forbidden"}}}`)
+	body := []byte(`{"contract_version":"v1","command_id":"command-strict-0001","session_id":"session-strict-0001","type":"MESSAGE_SEND","provider_message_id":"message-strict-0001","payload":{"to":"+5511999991234","kind":"TEXT","text":"Olá","raw_proto":{"secret":"forbidden"}}}`)
 
 	response := performCommand(t, server, body, "nonce-command-strict-0001")
 	if response.Code != http.StatusUnprocessableEntity {
@@ -125,7 +125,7 @@ func TestHealthAndMetricsNeverExposePayloadOrIdentifiers(t *testing.T) {
 	t.Parallel()
 	persistence := store.NewMemory()
 	server := newTestServer(persistence)
-	body := []byte(`{"contract_version":"v1","command_id":"command-private","session_id":"session-private","type":"MESSAGE_SEND","provider_message_id":"message-private","payload":{"to":"+5511988887777","text":"conteúdo sigiloso"}}`)
+	body := []byte(`{"contract_version":"v1","command_id":"command-private","session_id":"session-private","type":"MESSAGE_SEND","provider_message_id":"message-private","payload":{"to":"+5511988887777","kind":"TEXT","text":"conteúdo sigiloso"}}`)
 	if response := performCommand(t, server, body, "nonce-private-0001"); response.Code != http.StatusAccepted {
 		t.Fatalf("failed to seed command: %d %s", response.Code, response.Body.String())
 	}

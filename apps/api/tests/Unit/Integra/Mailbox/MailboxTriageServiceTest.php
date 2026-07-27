@@ -4,10 +4,10 @@ namespace Tests\Unit\Integra\Mailbox;
 
 use App\Enums\MailboxSource;
 use App\Enums\MailboxTriageStatus;
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Models\Client;
 use App\Models\MailboxMessage;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Integra\Mailbox\MailboxIdempotency;
 use App\Services\Integra\Mailbox\MailboxTriageService;
@@ -20,16 +20,16 @@ class MailboxTriageServiceTest extends TestCase
 
     public function test_triage_does_not_change_official_read_indicator(): void
     {
-        $office = Office::factory()->create();
-        $actor = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $client = Client::factory()->for($office)->create();
+        $tenant = Tenant::factory()->create();
+        $actor = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $client = Client::factory()->for($tenant)->create();
         $externalId = 'EXT-TRIAGE';
 
         $message = MailboxMessage::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'external_id' => $externalId,
-            'message_hash' => MailboxIdempotency::messageHash((int) $office->id, (int) $client->id, $externalId),
+            'message_hash' => MailboxIdempotency::messageHash((int) $tenant->id, (int) $client->id, $externalId),
             'source' => MailboxSource::CaixaPostal,
             'sensitivity_class' => 'FISCAL_RESTRICTED',
             'subject_preview' => 'Triagem',
@@ -41,7 +41,7 @@ class MailboxTriageServiceTest extends TestCase
         ]);
 
         $updated = app(MailboxTriageService::class)->update(
-            $office,
+            $tenant,
             $message,
             MailboxTriageStatus::Resolved,
             $actor,

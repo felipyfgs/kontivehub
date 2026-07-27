@@ -3,7 +3,6 @@
 namespace App\DTO\Fiscal\SimplesMei;
 
 use App\Enums\FiscalSituation;
-use InvalidArgumentException;
 
 final readonly class PgmeiDto
 {
@@ -25,11 +24,6 @@ final readonly class PgmeiDto
      */
     public static function fromIntegraBody(array $body, string $fallbackCompetence = ''): self
     {
-        $version = (string) ($body['dto_version'] ?? $body['version'] ?? self::VERSION);
-        if ($version !== self::VERSION) {
-            throw new InvalidArgumentException("PGMEI DTO versão não suportada: {$version}");
-        }
-
         $data = is_array($body['data'] ?? null) ? $body['data'] : $body;
         $status = strtoupper((string) ($data['status'] ?? $data['situacao'] ?? 'UNKNOWN'));
         $competence = (string) ($data['competence'] ?? $data['competencia'] ?? $fallbackCompetence);

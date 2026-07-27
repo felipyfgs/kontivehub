@@ -49,7 +49,7 @@ final class OutboundSeedService
                     'model' => $validated['model']->value,
                 ],
                 [
-                    'office_id' => $establishment->office_id,
+                    'tenant_id' => $establishment->tenant_id,
                     'client_id' => $establishment->client_id,
                     'uf' => 'MA',
                     'mode' => $mode ?? OutboundCaptureMode::Assisted,
@@ -58,9 +58,9 @@ final class OutboundSeedService
             );
 
             $sha = hash('sha256', $xml);
-            // AAD canônico: office_id + sha256 (export/download usam o mesmo par).
+            // AAD canônico: tenant_id + sha256 (export/download usam o mesmo par).
             $objectId = $this->store->put($xml, [
-                'office_id' => $establishment->office_id,
+                'tenant_id' => $establishment->tenant_id,
                 'sha256' => $sha,
             ]);
 
@@ -72,7 +72,7 @@ final class OutboundSeedService
                     'series' => $validated['series'],
                 ],
                 [
-                    'office_id' => $establishment->office_id,
+                    'tenant_id' => $establishment->tenant_id,
                     'outbound_capture_profile_id' => $profile->id,
                     'seed_nnf' => $validated['nnf'],
                     'discovery_position' => $validated['nnf'] + 1,
@@ -94,7 +94,7 @@ final class OutboundSeedService
                     'nnf' => $validated['nnf'],
                 ],
                 [
-                    'office_id' => $establishment->office_id,
+                    'tenant_id' => $establishment->tenant_id,
                     'outbound_series_cursor_id' => $series->id,
                     'status' => OutboundNumberStatus::XmlCaptured,
                     'candidate_access_key' => $validated['access_key'],
@@ -125,7 +125,7 @@ final class OutboundSeedService
                     // sem XML bruto
                 ],
                 $userId,
-                $establishment->office_id,
+                $establishment->tenant_id,
             );
 
             return ['profile' => $profile->fresh(), 'series' => $series->fresh()];

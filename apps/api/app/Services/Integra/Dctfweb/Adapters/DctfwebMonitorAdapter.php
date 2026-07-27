@@ -57,9 +57,7 @@ final class DctfwebMonitorAdapter extends AbstractDctfwebAdapter
         // Uma única operação: CONSULTAR_RECIBO (dctfweb.consrecibo / CONSRECIBO32).
         $response = $this->caller->call(
             request: $request,
-            solutionCode: DctfwebCodes::SYSTEM_DCTFWEB,
-            serviceCode: DctfwebCodes::SERVICE_DCTFWEB,
-            operationCode: DctfwebCodes::OP_CONSULTAR_RECIBO,
+            operationKey: DctfwebCodes::OPERATION_KEY_CONSRECIBO,
             payload: $payload,
         );
 

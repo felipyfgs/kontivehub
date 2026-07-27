@@ -151,7 +151,6 @@ const labels: Record<string, string> = {
   QUARANTINED: 'Em quarentena',
   QUEUED: 'Na fila',
   READY: 'Disponível',
-  REPLACED: 'Cancelada',
   REVIEW: 'Em revisão',
   RUNNING: 'Em execução',
   SCHEDULED: 'Agendada',
@@ -182,7 +181,7 @@ export type NfseOperationalGroup = 'AUTHORIZED' | 'CANCELLED' | 'REVIEW'
 export function nfseOperationalGroup(status?: string | null): NfseOperationalGroup {
   const s = (status || '').toUpperCase()
   if (['ACTIVE', 'SUBSTITUTE', 'JUDICIAL', 'AUTHORIZED'].includes(s)) return 'AUTHORIZED'
-  if (['CANCELLED', 'SUPERSEDED', 'REPLACED'].includes(s)) return 'CANCELLED'
+  if (['CANCELLED', 'SUPERSEDED'].includes(s)) return 'CANCELLED'
   return 'REVIEW'
 }
 
@@ -206,7 +205,6 @@ export function nfseGranularLabel(status?: string | null): string | null {
     SUBSTITUTE: 'NFS-e de Substituição',
     CANCELLED: 'Cancelada por evento',
     SUPERSEDED: 'Substituída',
-    REPLACED: 'Substituída',
     JUDICIAL: 'Decisão judicial',
     UNKNOWN: 'Situação indefinida'
   }
@@ -239,7 +237,7 @@ export function statusLabel(value?: string | null): string {
   if (!value) return '—'
   const upper = value.toUpperCase()
   // Situação fiscal unificada (NFS-e / NF-e / CT-e): Autorizada · Cancelada · Em revisão
-  if (['SUBSTITUTE', 'JUDICIAL', 'CANCELLED', 'CANCELED', 'SUPERSEDED', 'REPLACED', 'UNKNOWN', 'AUTHORIZED', 'REVIEW', 'DENIED', 'DENEGADA'].includes(upper)) {
+  if (['SUBSTITUTE', 'JUDICIAL', 'CANCELLED', 'CANCELED', 'SUPERSEDED', 'UNKNOWN', 'AUTHORIZED', 'REVIEW', 'DENIED', 'DENEGADA'].includes(upper)) {
     if (upper === 'DENIED' || upper === 'DENEGADA') return 'Denegada'
     return nfseOperationalLabel(value)
   }

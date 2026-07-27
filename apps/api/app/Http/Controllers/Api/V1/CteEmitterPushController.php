@@ -2,31 +2,30 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Http\Controllers\Controller;
-use App\Models\OfficeIntegrationToken;
+use App\Models\TenantIntegrationToken;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use App\Services\Auth\RecentPasswordConfirmationGate;
 use App\Services\Import\OutboundXmlIngestionService;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
 /**
  * EMITTER_PUSH: entrega autenticada de CT-e pelo emissor/ERP.
- * Token exibido uma vez; office_id derivado do principal, nunca do payload.
+ * Token exibido uma vez; tenant_id derivado do principal, nunca do payload.
  */
 class CteEmitterPushController extends Controller
 {
     /**
-     * ADMIN+2FA: emite token (plaintext uma vez).
-     * 2FA reassert no controller (não confiar só no middleware da rota).
+     * ADMIN + senha recente: emite token (plaintext uma vez).
      */
-    public function issueToken(Request $request, CurrentOffice $currentOffice, AuditLogger $audit): JsonResponse
+    public function issueToken(Request $request, CurrentTenant $currentTenant, AuditLogger $audit): JsonResponse
     {
-        if ($denied = $this->denyUnlessAdminWithTwoFactor($request, $currentOffice, 'emitir tokens de integração')) {
+        if ($denied = $this->denyUnlessAdminWithRecentPassword($request, $currentTenant, 'emitir tokens de integração')) {
             return $denied;
         }
         if (! config('sefaz.cte_emitter_push.enabled', false)) {
@@ -38,13 +37,13 @@ class CteEmitterPushController extends Controller
             'expires_in_days' => ['nullable', 'integer', 'min:1', 'max:730'],
         ]);
 
-        $office = $currentOffice->office();
+        $tenant = $currentTenant->tenant();
         $plain = 'cte_'.Str::random(48);
         $hash = hash('sha256', $plain);
         $prefix = substr($plain, 0, 12);
 
-        $token = OfficeIntegrationToken::query()->create([
-            'office_id' => $office->id,
+        $token = TenantIntegrationToken::query()->create([
+            'tenant_id' => $tenant->id,
             'name' => $validated['name'],
             'token_prefix' => $prefix,
             'token_hash' => $hash,
@@ -56,7 +55,7 @@ class CteEmitterPushController extends Controller
             'created_by' => $request->user()?->id,
         ]);
 
-        $audit->record('office.integration_token.issued', 'SUCCESS', $token, [
+        $audit->record('tenant.integration_token.issued', 'SUCCESS', $token, [
             'token_prefix' => $prefix,
             'scope' => 'cte:ingest',
             // sem plaintext
@@ -71,15 +70,15 @@ class CteEmitterPushController extends Controller
     }
 
     /**
-     * ADMIN+2FA: revoga token (sem recuperação).
-     * 2FA reassert no controller (não confiar só no middleware da rota).
+     * Admin com senha recente revoga token sem recuperação.
+     * A autorização é revalidada no controller.
      */
-    public function revokeToken(Request $request, CurrentOffice $currentOffice, OfficeIntegrationToken $token, AuditLogger $audit): JsonResponse
+    public function revokeToken(Request $request, CurrentTenant $currentTenant, TenantIntegrationToken $token, AuditLogger $audit): JsonResponse
     {
-        if ($denied = $this->denyUnlessAdminWithTwoFactor($request, $currentOffice, 'revogar tokens')) {
+        if ($denied = $this->denyUnlessAdminWithRecentPassword($request, $currentTenant, 'revogar tokens')) {
             return $denied;
         }
-        if ((int) $token->office_id !== (int) $currentOffice->office()->id) {
+        if ((int) $token->tenant_id !== (int) $currentTenant->tenant()->id) {
             return response()->json(['message' => 'Token não encontrado.'], 404);
         }
 
@@ -88,24 +87,24 @@ class CteEmitterPushController extends Controller
         $token->revoked_by = $request->user()?->id;
         $token->save();
 
-        $audit->record('office.integration_token.revoked', 'SUCCESS', $token, [
+        $audit->record('tenant.integration_token.revoked', 'SUCCESS', $token, [
             'token_prefix' => $token->token_prefix,
         ]);
 
         return response()->json(['data' => $token->toPublicArray()]);
     }
 
-    public function listTokens(CurrentOffice $currentOffice): JsonResponse
+    public function listTokens(CurrentTenant $currentTenant): JsonResponse
     {
-        if ($currentOffice->role() === null || ! in_array($currentOffice->role(), [OfficeRole::Admin, OfficeRole::Operator, OfficeRole::Viewer], true)) {
+        if ($currentTenant->role() === null) {
             return response()->json(['message' => 'Não autorizado.'], 403);
         }
 
-        $items = OfficeIntegrationToken::query()
-            ->where('office_id', $currentOffice->office()->id)
+        $items = TenantIntegrationToken::query()
+            ->where('tenant_id', $currentTenant->tenant()->id)
             ->orderByDesc('id')
             ->get()
-            ->map(fn (OfficeIntegrationToken $t) => $t->toPublicArray());
+            ->map(fn (TenantIntegrationToken $t) => $t->toPublicArray());
 
         return response()->json(['data' => $items]);
     }
@@ -114,9 +113,9 @@ class CteEmitterPushController extends Controller
      * Defesa em profundidade: ADMIN + senha recente.
      * Não depende do grupo de rotas — seguro se issue/revoke forem reutilizados.
      */
-    private function denyUnlessAdminWithTwoFactor(Request $request, CurrentOffice $currentOffice, string $actionLabel): ?JsonResponse
+    private function denyUnlessAdminWithRecentPassword(Request $request, CurrentTenant $currentTenant, string $actionLabel): ?JsonResponse
     {
-        if ($currentOffice->role() !== OfficeRole::Admin) {
+        if ($currentTenant->role() !== TenantRole::TenantAdmin) {
             return response()->json([
                 'message' => "Apenas ADMIN pode {$actionLabel}.",
             ], 403);
@@ -150,9 +149,9 @@ class CteEmitterPushController extends Controller
         }
 
         $hash = hash('sha256', $auth);
-        $token = OfficeIntegrationToken::query()->where('token_hash', $hash)->first();
+        $token = TenantIntegrationToken::query()->where('token_hash', $hash)->first();
         if ($token === null || ! $token->isUsable() || $token->scope !== 'cte:ingest') {
-            // Resposta genérica — sem revelar existência de office/token
+            // Resposta genérica — sem revelar existência de tenant/token
             return response()->json(['message' => 'Não autenticado.'], 401);
         }
 
@@ -170,7 +169,7 @@ class CteEmitterPushController extends Controller
 
         // Apenas ingestão de guarda — nunca emissão/cancelamento SEFAZ
         $report = $ingestion->ingestXmlBytes(
-            (int) $token->office_id,
+            (int) $token->tenant_id,
             null,
             $xml,
             'emitter-push.xml',

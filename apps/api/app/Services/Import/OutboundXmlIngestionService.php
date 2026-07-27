@@ -34,7 +34,7 @@ use RuntimeException;
 /**
  * Ingestão de XML de saída (NF-e / NFC-e / CT-e) — vault + projeção OUT.
  * Não transmite à SEFAZ; apenas armazena XML já autorizado.
- * Não materializa A1/CSC.
+ * Não materializa certificado/CSC.
  */
 final class OutboundXmlIngestionService
 {
@@ -59,7 +59,7 @@ final class OutboundXmlIngestionService
      *   items: list<array{status: string, filename: string, access_key?: string, kind?: string, message?: string, sha256?: string}>
      * }
      */
-    public function ingestUploads(int $officeId, ?int $clientId, array $files): array
+    public function ingestUploads(int $tenantId, ?int $clientId, array $files): array
     {
         $items = [];
         $imported = 0;
@@ -77,7 +77,7 @@ final class OutboundXmlIngestionService
             }
 
             if ($this->looksLikeZip($name, $bytes)) {
-                $nested = $this->ingestZipBytes($officeId, $clientId, $bytes, $name);
+                $nested = $this->ingestZipBytes($tenantId, $clientId, $bytes, $name);
                 foreach ($nested as $row) {
                     $items[] = $row;
                     match ($row['status']) {
@@ -90,7 +90,7 @@ final class OutboundXmlIngestionService
                 continue;
             }
 
-            $row = $this->ingestXmlBytes($officeId, $clientId, $bytes, $name);
+            $row = $this->ingestXmlBytes($tenantId, $clientId, $bytes, $name);
             $items[] = $row;
             match ($row['status']) {
                 'imported' => $imported++,
@@ -110,14 +110,14 @@ final class OutboundXmlIngestionService
     /**
      * @return list<array{status: string, filename: string, access_key?: string, kind?: string, message?: string, sha256?: string}>
      */
-    private function ingestZipBytes(int $officeId, ?int $clientId, string $zipBytes, string $zipName): array
+    private function ingestZipBytes(int $tenantId, ?int $clientId, string $zipBytes, string $zipName): array
     {
         $started = hrtime(true);
         $compressed = strlen($zipBytes);
         try {
             $entries = $this->zipReader->extractXmlEntries($zipBytes, $zipName);
         } catch (RuntimeException $e) {
-            $this->metrics->recordBackpressure($officeId, 'zip_rejected');
+            $this->metrics->recordBackpressure($tenantId, 'zip_rejected');
 
             return [['status' => 'error', 'filename' => $zipName, 'message' => $e->getMessage()]];
         }
@@ -157,13 +157,13 @@ final class OutboundXmlIngestionService
         });
 
         foreach ($okEntries as $entry) {
-            $row = $this->ingestXmlBytes($officeId, $clientId, $entry['bytes'], $entry['name']);
+            $row = $this->ingestXmlBytes($tenantId, $clientId, $entry['bytes'], $entry['name']);
             unset($entry);
             $out[] = $row;
         }
 
         $this->metrics->recordZip(
-            $officeId,
+            $tenantId,
             count($entries),
             count($okEntries),
             $rejected,
@@ -182,12 +182,12 @@ final class OutboundXmlIngestionService
     /**
      * @return array{status: string, filename: string, access_key?: string, kind?: string, message?: string, sha256?: string}
      */
-    public function ingestXmlBytes(int $officeId, ?int $clientId, string $bytes, string $filename): array
+    public function ingestXmlBytes(int $tenantId, ?int $clientId, string $bytes, string $filename): array
     {
         $sha = hash('sha256', $bytes);
 
         $existing = DfeDocument::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('sha256', $sha)
             ->first();
 
@@ -219,15 +219,15 @@ final class OutboundXmlIngestionService
         }
 
         if ($kindClass === 'procEventoNFe') {
-            return $this->ingestEventBytes($officeId, $bytes, $filename, $sha);
+            return $this->ingestEventBytes($tenantId, $bytes, $filename, $sha);
         }
 
         if ($kindClass === 'procEventoCTe') {
-            return $this->ingestCteEventBytes($officeId, $bytes, $filename, $sha);
+            return $this->ingestCteEventBytes($tenantId, $bytes, $filename, $sha);
         }
 
         if ($kindClass === 'procCTe') {
-            return $this->ingestCteBytes($officeId, $clientId, $bytes, $filename, $sha, $classified);
+            return $this->ingestCteBytes($tenantId, $clientId, $bytes, $filename, $sha, $classified);
         }
 
         $modelHint = $classified['model'] ?? null;
@@ -281,7 +281,7 @@ final class OutboundXmlIngestionService
 
         // Estabelecimento emitente (vínculo de interesse / validação de cliente).
         $establishmentQuery = Establishment::query()
-            ->whereHas('client', fn ($q) => $q->where('office_id', $officeId));
+            ->whereHas('client', fn ($q) => $q->where('tenant_id', $tenantId));
         if ($clientId !== null) {
             $establishmentQuery->where('client_id', $clientId);
         }
@@ -303,10 +303,10 @@ final class OutboundXmlIngestionService
                 'result_code' => 'CLIENT_MISMATCH',
             ];
         }
-        // Sem client_id: ainda tenta amarrar ao emitente do office (se existir).
+        // Sem client_id: ainda tenta amarrar ao emitente do tenant (se existir).
         if ($establishment === null) {
             $establishment = Establishment::query()
-                ->whereHas('client', fn ($q) => $q->where('office_id', $officeId))
+                ->whereHas('client', fn ($q) => $q->where('tenant_id', $tenantId))
                 ->where('cnpj', $issuer)
                 ->first();
         }
@@ -323,7 +323,7 @@ final class OutboundXmlIngestionService
 
         // Não sobrescrever captura DistDFe de entrada com import de saída na mesma chave.
         $existingFull = NfeDocument::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('access_key', $accessKey)
             ->where('is_summary', false)
             ->first();
@@ -352,13 +352,12 @@ final class OutboundXmlIngestionService
                 if ($existingDfe && $existingDfe->sha256 !== $sha) {
                     // Mesma chave, bytes divergentes → quarentena; canônico permanece
                     $qObject = $this->store->put($bytes, [
-                        'office_id' => $officeId,
+                        'tenant_id' => $tenantId,
                         'sha256' => $sha,
-                        'kind' => 'import-quarantine',
                     ]);
                     FiscalDocumentQuarantine::query()->firstOrCreate(
                         [
-                            'office_id' => $officeId,
+                            'tenant_id' => $tenantId,
                             'sha256' => $sha,
                             'source' => DocumentAcquisitionSource::ManualXml,
                             'nsu' => null,
@@ -390,7 +389,7 @@ final class OutboundXmlIngestionService
         $itemStarted = hrtime(true);
         try {
             DB::transaction(function () use (
-                $officeId,
+                $tenantId,
                 $bytes,
                 $sha,
                 $accessKey,
@@ -402,14 +401,14 @@ final class OutboundXmlIngestionService
                 $issuer,
             ): void {
                 $existingDfe = DfeDocument::query()
-                    ->where('office_id', $officeId)
+                    ->where('tenant_id', $tenantId)
                     ->where('sha256', $sha)
                     ->first();
                 if ($existingDfe !== null) {
                     $dfe = $existingDfe;
                 } else {
                     $objectId = $this->store->put($bytes, [
-                        'office_id' => $officeId,
+                        'tenant_id' => $tenantId,
                         'sha256' => $sha,
                     ]);
                     $alert = 'Importação manual de saída (não DistDFe).';
@@ -417,7 +416,7 @@ final class OutboundXmlIngestionService
                         $alert .= ' '.$parseAlertExtra;
                     }
                     $dfe = DfeDocument::query()->create([
-                        'office_id' => $officeId,
+                        'tenant_id' => $tenantId,
                         'sha256' => $sha,
                         'document_type' => AdnDocumentType::Nfe,
                         'schema_version' => $family === 'procNFe' ? 'procNFe_v4.00.xsd' : 'NFe_import.xml',
@@ -431,7 +430,7 @@ final class OutboundXmlIngestionService
 
                 NfeDocument::query()->updateOrCreate(
                     [
-                        'office_id' => $officeId,
+                        'tenant_id' => $tenantId,
                         'access_key' => $accessKey,
                         'is_summary' => false,
                     ],
@@ -464,7 +463,7 @@ final class OutboundXmlIngestionService
                         'channel' => CaptureChannel::ImportXml->value,
                     ],
                     [
-                        'office_id' => $officeId,
+                        'tenant_id' => $tenantId,
                         'environment' => 'import',
                         'nsu' => null,
                         'direction' => DocumentDirection::Out->value,
@@ -478,7 +477,7 @@ final class OutboundXmlIngestionService
                         'sha256' => $sha,
                     ],
                     [
-                        'office_id' => $officeId,
+                        'tenant_id' => $tenantId,
                         'access_key' => $accessKey,
                         'channel' => CaptureChannel::ImportXml->value,
                         'artifact_quality' => DocumentArtifactQuality::Original,
@@ -488,13 +487,13 @@ final class OutboundXmlIngestionService
                     ]
                 );
 
-                // Destinatário também cliente do office → interesse TAKER/IN no mesmo XML.
+                // Destinatário também cliente do tenant → interesse TAKER/IN no mesmo XML.
                 $recipient = isset($parsed['recipient_cnpj'])
                     ? strtoupper((string) $parsed['recipient_cnpj'])
                     : null;
                 if ($recipient !== null && $recipient !== '' && $recipient !== $issuer) {
                     $takerEstab = Establishment::query()
-                        ->whereHas('client', fn ($q) => $q->where('office_id', $officeId))
+                        ->whereHas('client', fn ($q) => $q->where('tenant_id', $tenantId))
                         ->where('cnpj', $recipient)
                         ->first();
                     if ($takerEstab !== null) {
@@ -506,7 +505,7 @@ final class OutboundXmlIngestionService
                                 'channel' => CaptureChannel::ImportXml->value,
                             ],
                             [
-                                'office_id' => $officeId,
+                                'tenant_id' => $tenantId,
                                 'environment' => 'import',
                                 'nsu' => null,
                                 'direction' => DocumentDirection::In->value,
@@ -519,14 +518,14 @@ final class OutboundXmlIngestionService
             // Satisfaz prazo e cancela recoveries SVRS pendentes (fonte preferencial)
             try {
                 app(OutboundDeadlineSatisfactionService::class)
-                    ->markCapturedBySource($officeId, $accessKey, 'MANUAL_XML', $sha);
+                    ->markCapturedBySource($tenantId, $accessKey, 'MANUAL_XML', $sha);
             } catch (\Throwable) {
             }
         } catch (\Throwable $e) {
             $msg = $e->getMessage();
             // Corrida de unique (PostgreSQL 23505 / MySQL 23000) → idempotente
             if (str_contains($msg, 'duplicate') || str_contains($msg, 'Unique') || str_contains($msg, '23505') || str_contains($msg, '1062')) {
-                $existing = DfeDocument::query()->where('office_id', $officeId)->where('sha256', $sha)->first();
+                $existing = DfeDocument::query()->where('tenant_id', $tenantId)->where('sha256', $sha)->first();
 
                 return [
                     'status' => 'duplicate',
@@ -539,7 +538,7 @@ final class OutboundXmlIngestionService
                 ];
             }
             Log::warning('documents.import.persist_failed', [
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'sha256' => $sha,
                 'error' => class_basename($e),
             ]);
@@ -554,7 +553,7 @@ final class OutboundXmlIngestionService
         }
 
         $this->metrics->recordItem(
-            $officeId,
+            $tenantId,
             'imported',
             strlen($bytes),
             (hrtime(true) - $itemStarted) / 1_000_000,
@@ -574,7 +573,7 @@ final class OutboundXmlIngestionService
      *
      * @return array{status: string, filename: string, access_key?: string, message?: string, sha256?: string, result_code?: string}
      */
-    private function ingestEventBytes(int $officeId, string $bytes, string $filename, string $sha): array
+    private function ingestEventBytes(int $tenantId, string $bytes, string $filename, string $sha): array
     {
         $fiscal = $this->fiscal->validateProcEvento($bytes);
         if (! ($fiscal['ok'] ?? false)) {
@@ -590,7 +589,7 @@ final class OutboundXmlIngestionService
         $key = strtoupper((string) ($parsed['access_key'] ?? ''));
 
         $parent = NfeDocument::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('access_key', $key)
             ->where('is_summary', false)
             ->first();
@@ -607,12 +606,11 @@ final class OutboundXmlIngestionService
 
         try {
             $objectId = $this->store->put($bytes, [
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'sha256' => $sha,
-                'kind' => 'import-event',
             ]);
             DfeDocument::query()->firstOrCreate(
-                ['office_id' => $officeId, 'sha256' => $sha],
+                ['tenant_id' => $tenantId, 'sha256' => $sha],
                 [
                     'document_type' => AdnDocumentType::NfeEvent,
                     'schema_version' => 'procEventoNFe',
@@ -659,13 +657,13 @@ final class OutboundXmlIngestionService
     }
 
     /**
-     * Import de cteProc modelo 57 — ISSUER/OUT por emit/CNPJ no office.
+     * Import de cteProc modelo 57 — ISSUER/OUT por emit/CNPJ no tenant.
      *
      * @param  array{kind: string, model: ?string}  $classified
      * @return array{status: string, filename: string, access_key?: string, kind?: string, message?: string, sha256?: string, result_code?: string}
      */
     private function ingestCteBytes(
-        int $officeId,
+        int $tenantId,
         ?int $clientId,
         string $bytes,
         string $filename,
@@ -716,7 +714,7 @@ final class OutboundXmlIngestionService
         }
 
         $establishmentQuery = Establishment::query()
-            ->whereHas('client', fn ($q) => $q->where('office_id', $officeId));
+            ->whereHas('client', fn ($q) => $q->where('tenant_id', $tenantId));
         if ($clientId !== null) {
             $establishmentQuery->where('client_id', $clientId);
         }
@@ -732,7 +730,7 @@ final class OutboundXmlIngestionService
         }
         if ($establishment === null) {
             $establishment = Establishment::query()
-                ->whereHas('client', fn ($q) => $q->where('office_id', $officeId))
+                ->whereHas('client', fn ($q) => $q->where('tenant_id', $tenantId))
                 ->where('cnpj', $issuer)
                 ->first();
         }
@@ -749,7 +747,7 @@ final class OutboundXmlIngestionService
 
         // Reconciliar com cópia autXML redigida existente
         $existingCte = CteDocument::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('access_key', $accessKey)
             ->where('is_summary', false)
             ->first();
@@ -774,13 +772,12 @@ final class OutboundXmlIngestionService
                 $existingQuality = $existingAcq?->artifact_quality;
                 if ($existingQuality === DocumentArtifactQuality::Original) {
                     $qObject = $this->store->put($bytes, [
-                        'office_id' => $officeId,
+                        'tenant_id' => $tenantId,
                         'sha256' => $sha,
-                        'kind' => 'import-quarantine',
                     ]);
                     FiscalDocumentQuarantine::query()->firstOrCreate(
                         [
-                            'office_id' => $officeId,
+                            'tenant_id' => $tenantId,
                             'sha256' => $sha,
                             'source' => DocumentAcquisitionSource::ManualXml,
                             'nsu' => null,
@@ -820,7 +817,7 @@ final class OutboundXmlIngestionService
 
         try {
             DB::transaction(function () use (
-                $officeId,
+                $tenantId,
                 $bytes,
                 $sha,
                 $accessKey,
@@ -831,14 +828,14 @@ final class OutboundXmlIngestionService
                 $source,
             ): void {
                 $existingDfe = DfeDocument::query()
-                    ->where('office_id', $officeId)
+                    ->where('tenant_id', $tenantId)
                     ->where('sha256', $sha)
                     ->first();
                 if ($existingDfe !== null) {
                     $dfe = $existingDfe;
                 } else {
                     $objectId = $this->store->put($bytes, [
-                        'office_id' => $officeId,
+                        'tenant_id' => $tenantId,
                         'sha256' => $sha,
                     ]);
                     $alert = 'Importação manual de CT-e (não DistDFe).';
@@ -846,7 +843,7 @@ final class OutboundXmlIngestionService
                         $alert .= ' '.$fiscal['parse_alert'];
                     }
                     $dfe = DfeDocument::query()->create([
-                        'office_id' => $officeId,
+                        'tenant_id' => $tenantId,
                         'sha256' => $sha,
                         'document_type' => AdnDocumentType::Cte,
                         'schema_version' => 'procCTe_v'.($parsed['schema_version'] ?? '4.00').'.xsd',
@@ -860,7 +857,7 @@ final class OutboundXmlIngestionService
 
                 CteDocument::query()->updateOrCreate(
                     [
-                        'office_id' => $officeId,
+                        'tenant_id' => $tenantId,
                         'access_key' => $accessKey,
                         'is_summary' => false,
                     ],
@@ -902,7 +899,7 @@ final class OutboundXmlIngestionService
                         'channel' => CaptureChannel::ImportXml->value,
                     ],
                     [
-                        'office_id' => $officeId,
+                        'tenant_id' => $tenantId,
                         'environment' => 'import',
                         'nsu' => null,
                         'direction' => DocumentDirection::Out->value,
@@ -916,7 +913,7 @@ final class OutboundXmlIngestionService
                         'sha256' => $sha,
                     ],
                     [
-                        'office_id' => $officeId,
+                        'tenant_id' => $tenantId,
                         'access_key' => $accessKey,
                         'channel' => CaptureChannel::ImportXml->value,
                         'artifact_quality' => $quality['quality'],
@@ -940,7 +937,7 @@ final class OutboundXmlIngestionService
                 ];
             }
             Log::warning('documents.import.cte_persist_failed', [
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'sha256' => $sha,
                 'error' => class_basename($e).': '.mb_substr($msg, 0, 200),
             ]);
@@ -954,7 +951,7 @@ final class OutboundXmlIngestionService
             ];
         }
 
-        $this->cteReconciliation->reconcileDocument($officeId, $accessKey);
+        $this->cteReconciliation->reconcileDocument($tenantId, $accessKey);
 
         return [
             'status' => 'imported',
@@ -968,7 +965,7 @@ final class OutboundXmlIngestionService
     /**
      * @return array{status: string, filename: string, access_key?: string, message?: string, sha256?: string, result_code?: string, kind?: string}
      */
-    private function ingestCteEventBytes(int $officeId, string $bytes, string $filename, string $sha): array
+    private function ingestCteEventBytes(int $tenantId, string $bytes, string $filename, string $sha): array
     {
         $fiscal = $this->fiscal->validateProcEventoCte($bytes);
         if (! ($fiscal['ok'] ?? false)) {
@@ -984,7 +981,7 @@ final class OutboundXmlIngestionService
         $key = strtoupper((string) ($parsed['access_key'] ?? ''));
 
         $parent = CteDocument::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('access_key', $key)
             ->where('is_summary', false)
             ->first();
@@ -1001,12 +998,11 @@ final class OutboundXmlIngestionService
 
         try {
             $objectId = $this->store->put($bytes, [
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'sha256' => $sha,
-                'kind' => 'import-event-cte',
             ]);
             $dfe = DfeDocument::query()->firstOrCreate(
-                ['office_id' => $officeId, 'sha256' => $sha],
+                ['tenant_id' => $tenantId, 'sha256' => $sha],
                 [
                     'document_type' => AdnDocumentType::Unknown,
                     'schema_version' => 'procEventoCTe',
@@ -1023,7 +1019,7 @@ final class OutboundXmlIngestionService
             }
             CteEvent::query()->updateOrCreate(
                 [
-                    'office_id' => $officeId,
+                    'tenant_id' => $tenantId,
                     'access_key' => $key,
                     'event_type' => $parsed['event_type'] ?? 'UNKNOWN',
                     'sequence' => $parsed['event_sequence'] ?? 0,
@@ -1058,7 +1054,7 @@ final class OutboundXmlIngestionService
             ];
         }
 
-        $this->cteReconciliation->reconcileDocument($officeId, $key);
+        $this->cteReconciliation->reconcileDocument($tenantId, $key);
 
         return [
             'status' => 'imported',

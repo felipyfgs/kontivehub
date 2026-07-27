@@ -4,13 +4,13 @@ namespace App\Models;
 
 use App\Enums\Communication\GatewayCommandType;
 use App\Enums\Communication\OutboxStatus;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'inbox_id',
     'message_id',
     'command_id',
@@ -30,7 +30,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class CommunicationOutboxEntry extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {

@@ -13,7 +13,7 @@ final class DeclarationOperationInputValidator
 
     /** @var list<string> */
     private const FORBIDDEN_KEYS = [
-        'officeid',
+        'tenantid',
         'operationkey',
         'idsistema',
         'idservico',

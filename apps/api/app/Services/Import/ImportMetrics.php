@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Log;
 final class ImportMetrics
 {
     public function recordZip(
-        int $officeId,
+        int $tenantId,
         int $entries,
         int $ok,
         int $rejected,
@@ -20,7 +20,7 @@ final class ImportMetrics
     ): void {
         $ratio = $compressedBytes > 0 ? round($uncompressedBytes / $compressedBytes, 2) : 0.0;
         Log::info('import.metrics.zip', [
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'entries' => $entries,
             'ok' => $ok,
             'rejected' => $rejected,
@@ -31,21 +31,21 @@ final class ImportMetrics
         ]);
     }
 
-    public function recordItem(int $officeId, string $resultCode, int $byteSize, float $elapsedMs): void
+    public function recordItem(int $tenantId, string $resultCode, int $byteSize, float $elapsedMs): void
     {
         // result_code é enum fechado (imported/duplicate/INVALID/…)
         Log::info('import.metrics.item', [
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'result_code' => mb_substr($resultCode, 0, 40),
             'byte_size' => $byteSize,
             'elapsed_ms' => (int) $elapsedMs,
         ]);
     }
 
-    public function recordBatch(int $officeId, string $status, int $items, int $imported, int $failed, float $elapsedMs): void
+    public function recordBatch(int $tenantId, string $status, int $items, int $imported, int $failed, float $elapsedMs): void
     {
         Log::info('import.metrics.batch', [
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'status' => mb_substr($status, 0, 40),
             'items' => $items,
             'imported' => $imported,
@@ -54,10 +54,10 @@ final class ImportMetrics
         ]);
     }
 
-    public function recordBackpressure(int $officeId, string $reason): void
+    public function recordBackpressure(int $tenantId, string $reason): void
     {
         Log::warning('import.metrics.backpressure', [
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'reason' => mb_substr($reason, 0, 80),
         ]);
     }

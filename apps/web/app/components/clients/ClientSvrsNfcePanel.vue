@@ -2,7 +2,7 @@
 /**
  * Card “XML NFC-e via SVRS” — arquétipo Settings (UPageCard + estados async).
  * Nunca renderiza HTML remoto, XML, PFX ou vault_object_id.
- * Lista sempre escopada ao client_id (nunca office-wide sem filtro).
+ * Lista sempre escopada ao client_id (nunca tenant-wide sem filtro).
  */
 import type {
   OutboundCaptureProfile,
@@ -138,7 +138,7 @@ const statusLabel = (status?: string | null): string => {
 }
 
 async function load() {
-  // Não carregar lista office-wide: exige clientId
+  // Não carregar lista tenant-wide: exige clientId
   if (!props.clientId) return
 
   overviewLoading.value = true
@@ -285,7 +285,7 @@ async function selectCanary() {
   }
 }
 
-// Aguarda perfis do parent (evita 1ª carga office-wide) e reage a mudanças
+// Aguarda perfis do parent (evita 1ª carga tenant-wide) e reage a mudanças
 watch(
   () => [props.clientId, props.profiles.map(p => p.id).join(',')] as const,
   () => { load() },
@@ -540,7 +540,7 @@ watch(
 
     <UPageCard
       v-if="canAdmin"
-      title="Controles ADMIN"
+      title="Controles restritos"
       description="Kill switch e breaker exigem 2FA. Motivo obrigatório."
       variant="subtle"
     >

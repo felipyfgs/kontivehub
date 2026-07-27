@@ -6,7 +6,7 @@ use App\Enums\MonitorCommercialDispatchState;
 use App\Enums\MonitorCommercialOrigin;
 use App\Models\Client;
 use App\Models\MonitorCommercialLedgerEntry;
-use App\Models\Office;
+use App\Models\Tenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
@@ -24,10 +24,10 @@ class MonitorCommercialLedgerEntryFactory extends Factory
         $end = $start->copy()->addMonthNoOverflow()->subSecond();
 
         return [
-            'office_id' => Office::factory(),
+            'tenant_id' => Tenant::factory(),
             'client_id' => function (array $attrs) {
-                return Client::factory()->forOffice(
-                    Office::query()->findOrFail($attrs['office_id'])
+                return Client::factory()->forTenant(
+                    Tenant::query()->findOrFail($attrs['tenant_id'])
                 )->create()->id;
             },
             'monitor_key' => 'sitfis',
@@ -47,15 +47,15 @@ class MonitorCommercialLedgerEntryFactory extends Factory
         ];
     }
 
-    public function forOffice(Office $office): static
+    public function forTenant(Tenant $tenant): static
     {
-        return $this->state(fn () => ['office_id' => $office->id]);
+        return $this->state(fn () => ['tenant_id' => $tenant->id]);
     }
 
     public function forClient(Client $client): static
     {
         return $this->state(fn () => [
-            'office_id' => $client->office_id,
+            'tenant_id' => $client->tenant_id,
             'client_id' => $client->id,
         ]);
     }

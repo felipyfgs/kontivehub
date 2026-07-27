@@ -8,8 +8,8 @@ use App\Enums\SerproCapabilityDriver;
 use App\Enums\SerproEnvironment;
 use App\Models\Client;
 use App\Models\FiscalRegistrationLink;
-use App\Models\Office;
-use App\Models\OfficeSerproAuthorization;
+use App\Models\Tenant;
+use App\Models\TenantSerproAuthorization;
 use App\Services\Integra\ContributorCnpjResolver;
 use App\Services\Serpro\CapabilityDriverResolver;
 use App\Services\Serpro\SerproContractService;
@@ -39,13 +39,13 @@ final class RegistrationLinkProjectionService
     /**
      * @return array{success: bool, count: int, simulated: bool, error_code?: string|null, error_message?: string|null}
      */
-    public function refresh(Office $office, Client $client, ?string $correlationId = null): array
+    public function refresh(Tenant $tenant, Client $client, ?string $correlationId = null): array
     {
-        if ($client->office_id !== $office->id) {
-            throw new RuntimeException('Cliente não pertence ao office.');
+        if ($client->tenant_id !== $tenant->id) {
+            throw new RuntimeException('Cliente não pertence ao tenant.');
         }
 
-        $lockKey = sprintf('fiscal:reglinks:%d:%d', $office->id, $client->id);
+        $lockKey = sprintf('fiscal:reglinks:%d:%d', $tenant->id, $client->id);
         $lock = Cache::lock($lockKey, 120);
         if (! $lock->get()) {
             return [
@@ -82,14 +82,14 @@ final class RegistrationLinkProjectionService
                 ];
             }
 
-            $auth = OfficeSerproAuthorization::query()
-                ->where('office_id', $office->id)
+            $auth = TenantSerproAuthorization::query()
+                ->where('tenant_id', $tenant->id)
                 ->where('environment', $env->value)
                 ->first();
             $author = (string) ($auth?->author_identity ?? $contract->contractor_cnpj);
             $contributor = $this->contributors->resolve($client);
 
-            $baseIdem = sprintf('reglinks:%d:%d:%s', $office->id, $client->id, now()->format('YmdHi'));
+            $baseIdem = sprintf('reglinks:%d:%d:%s', $tenant->id, $client->id, now()->format('YmdHi'));
             $rowsByCnpj = [];
             $lastCnpj = null;
             $simulated = false;
@@ -104,7 +104,7 @@ final class RegistrationLinkProjectionService
                 }
 
                 $response = $this->operations->execute(
-                    office: $office,
+                    tenant: $tenant,
                     client: $client,
                     operationKey: self::OPERATION_KEY,
                     businessData: $businessData,
@@ -182,11 +182,11 @@ final class RegistrationLinkProjectionService
             $rows = array_values($rowsByCnpj);
             $evidence = substr(hash('sha256', json_encode($rows, JSON_THROW_ON_ERROR)), 0, 32);
             $now = now();
-            DB::transaction(function () use ($rows, $office, $client, $contributor, $evidence, $simulated, $sourceProvenance, $now): void {
+            DB::transaction(function () use ($rows, $tenant, $client, $contributor, $evidence, $simulated, $sourceProvenance, $now): void {
                 foreach ($rows as $row) {
                     FiscalRegistrationLink::query()->updateOrCreate(
                         [
-                            'office_id' => $office->id,
+                            'tenant_id' => $tenant->id,
                             'client_id' => $client->id,
                             'link_key' => $row['cnpj'],
                         ],

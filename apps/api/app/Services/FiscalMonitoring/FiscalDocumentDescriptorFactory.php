@@ -7,7 +7,7 @@ use App\Enums\DocumentUnavailableReason;
 use App\Enums\MonitoringDocumentPolicy;
 use App\Enums\MonitoringResultKind;
 use App\Models\FiscalEvidenceArtifact;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\FiscalMonitoring\Surfaces\MonitoringSurfaceContract;
 
 /** Fonte única para descritores públicos de evidência do workspace. */
@@ -18,7 +18,7 @@ final class FiscalDocumentDescriptorFactory
     ) {}
 
     public function forSurface(
-        Office $office,
+        Tenant $tenant,
         MonitoringSurfaceContract $surface,
         ?FiscalEvidenceArtifact $artifact = null,
     ): FiscalDocumentDescriptorDto {
@@ -35,7 +35,7 @@ final class FiscalDocumentDescriptorFactory
 
         $artifactReason = $this->evidenceStore->unavailableReason(
             $artifact,
-            (int) $office->id,
+            (int) $tenant->id,
         );
         if ($artifactReason !== null) {
             return FiscalDocumentDescriptorDto::unavailable($artifactReason, $surface);

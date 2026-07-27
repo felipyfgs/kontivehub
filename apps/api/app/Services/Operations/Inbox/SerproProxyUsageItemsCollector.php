@@ -7,10 +7,10 @@ use App\Enums\SerproEnvironment;
 use App\Enums\TaxProxyPowerStatus;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
-use App\Models\OfficeSerproAuthorization;
 use App\Models\TaxProxyPower;
+use App\Models\TenantSerproAuthorization;
 use App\Services\Integra\TenantIntegraHealthService;
-use App\Services\Usage\OfficeUsageQueryService;
+use App\Services\Usage\TenantUsageQueryService;
 use Illuminate\Support\Collection;
 
 /**
@@ -21,18 +21,18 @@ final class SerproProxyUsageItemsCollector
     public function __construct(
         private readonly InboxItemFactory $items,
         private readonly TenantIntegraHealthService $integraHealth,
-        private readonly OfficeUsageQueryService $usage,
+        private readonly TenantUsageQueryService $usage,
     ) {}
 
     /**
      * @return Collection<int, array<string, mixed>>
      */
-    public function collect(int $officeId, InboxCapabilities $role): Collection
+    public function collect(int $tenantId, InboxCapabilities $role): Collection
     {
-        return $this->serproAuthItems($officeId)
-            ->merge($this->proxyPowerItems($officeId))
-            ->merge($this->sourceAvailabilityItems($officeId))
-            ->merge($this->usageItems($officeId))
+        return $this->serproAuthItems($tenantId)
+            ->merge($this->proxyPowerItems($tenantId))
+            ->merge($this->sourceAvailabilityItems($tenantId))
+            ->merge($this->usageItems($tenantId))
             ->values();
     }
 
@@ -41,14 +41,14 @@ final class SerproProxyUsageItemsCollector
      *
      * @return Collection<int, array<string, mixed>>
      */
-    private function serproAuthItems(int $officeId): Collection
+    private function serproAuthItems(int $tenantId): Collection
     {
         $items = collect();
         $env = SerproEnvironment::tryFrom((string) config('serpro.default_environment', 'TRIAL'))
             ?? SerproEnvironment::Trial;
 
-        $auth = OfficeSerproAuthorization::query()
-            ->where('office_id', $officeId)
+        $auth = TenantSerproAuthorization::query()
+            ->where('tenant_id', $tenantId)
             ->where('environment', $env->value)
             ->first();
 
@@ -175,7 +175,7 @@ final class SerproProxyUsageItemsCollector
         // Deep-links de settings
         return $items->map(function (array $item) {
             $item['links'] = array_merge($item['links'] ?? [], [
-                'serpro_authorization' => '/settings/integracao-serpro',
+                'serpro_authorization' => '/conta/escritorio',
             ]);
 
             return $item;
@@ -187,12 +187,12 @@ final class SerproProxyUsageItemsCollector
      *
      * @return Collection<int, array<string, mixed>>
      */
-    private function proxyPowerItems(int $officeId): Collection
+    private function proxyPowerItems(int $tenantId): Collection
     {
         $items = collect();
 
         $expired = TaxProxyPower::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where(function ($q) {
                 $q->where('status', TaxProxyPowerStatus::Expired)
                     ->orWhere(function ($q2) {
@@ -222,14 +222,14 @@ final class SerproProxyUsageItemsCollector
             );
             $item['id'] = substr(hash('sha256', 'proxy:exp:'.$power->id), 0, 32);
             $item['links'] = array_merge($item['links'] ?? [], [
-                'proxy' => '/clients/'.$power->client_id.'/procuracoes',
+                'client' => '/clients/'.$power->client_id.'/dados-adicionais',
             ]);
             $items->push($item);
         }
 
         // Clientes ativos sem nenhuma procuração ACTIVE
         $clientIdsWithActive = TaxProxyPower::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('status', TaxProxyPowerStatus::Active)
             ->where(function ($q) {
                 $q->whereNull('valid_to')->orWhere('valid_to', '>', now());
@@ -239,7 +239,7 @@ final class SerproProxyUsageItemsCollector
             ->all();
 
         $clientsMissing = Client::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->when($clientIdsWithActive !== [], fn ($q) => $q->whereNotIn('id', $clientIdsWithActive))
             ->orderBy('id')
@@ -247,8 +247,8 @@ final class SerproProxyUsageItemsCollector
             ->get();
 
         // Só alertar ausência se já existe onboarding SERPRO (evita ruído em escritórios só ADN)
-        $hasAuth = OfficeSerproAuthorization::query()
-            ->where('office_id', $officeId)
+        $hasAuth = TenantSerproAuthorization::query()
+            ->where('tenant_id', $tenantId)
             ->whereNotNull('termo_vault_object_id')
             ->exists();
 
@@ -268,7 +268,7 @@ final class SerproProxyUsageItemsCollector
                 );
                 $item['id'] = substr(hash('sha256', 'proxy:miss:'.$client->id), 0, 32);
                 $item['links'] = array_merge($item['links'] ?? [], [
-                    'proxy' => '/clients/'.$client->id.'/procuracoes',
+                    'client' => '/clients/'.$client->id.'/dados-adicionais',
                 ]);
                 $items->push($item);
             }
@@ -282,7 +282,7 @@ final class SerproProxyUsageItemsCollector
      *
      * @return Collection<int, array<string, mixed>>
      */
-    private function sourceAvailabilityItems(int $officeId): Collection
+    private function sourceAvailabilityItems(int $tenantId): Collection
     {
         $items = collect();
         $env = SerproEnvironment::tryFrom((string) config('serpro.default_environment', 'TRIAL'))
@@ -317,12 +317,12 @@ final class SerproProxyUsageItemsCollector
                 establishment: null,
                 cursor: null,
             );
-            $item['id'] = substr(hash('sha256', 'src:unavail:'.$officeId.':'.implode(',', $reasons)), 0, 32);
+            $item['id'] = substr(hash('sha256', 'src:unavail:'.$tenantId.':'.implode(',', $reasons)), 0, 32);
             $items->push($item);
         }
 
         $blockedRuns = FiscalMonitoringRun::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('status', 'BLOCKED')
             ->where('created_at', '>=', now()->subDay())
             ->with('client')
@@ -354,7 +354,7 @@ final class SerproProxyUsageItemsCollector
             );
             $item['id'] = substr(hash('sha256', 'qblock:'.$run->id), 0, 32);
             $item['links'] = array_merge($item['links'] ?? [], [
-                'run' => '/fiscal/runs/'.$run->id,
+                'monitoring' => '/monitoring',
             ]);
             // Sem retry imediato se for elegibilidade
             $item['actions'] = [
@@ -371,12 +371,12 @@ final class SerproProxyUsageItemsCollector
      *
      * @return Collection<int, array<string, mixed>>
      */
-    private function usageItems(int $officeId): Collection
+    private function usageItems(int $tenantId): Collection
     {
         $items = collect();
 
         try {
-            $raw = $this->usage->summary($officeId);
+            $raw = $this->usage->summary($tenantId);
             $summary = is_array($raw['summary'] ?? null) ? $raw['summary'] : [];
         } catch (\Throwable) {
             return $items;
@@ -401,7 +401,7 @@ final class SerproProxyUsageItemsCollector
                 establishment: null,
                 cursor: null,
             );
-            $item['id'] = substr(hash('sha256', 'usage:ex:'.$officeId.':'.($summary['period_year'] ?? '').($summary['period_month'] ?? '')), 0, 32);
+            $item['id'] = substr(hash('sha256', 'usage:ex:'.$tenantId.':'.($summary['period_year'] ?? '').($summary['period_month'] ?? '')), 0, 32);
             $item['links'] = ['usage' => '/conta/consumo'];
             $items->push($item);
         } elseif ($alert || ($ratio !== null && $ratio >= 0.8)) {
@@ -419,7 +419,7 @@ final class SerproProxyUsageItemsCollector
                 establishment: null,
                 cursor: null,
             );
-            $item['id'] = substr(hash('sha256', 'usage:hi:'.$officeId.':'.($summary['period_year'] ?? '').($summary['period_month'] ?? '')), 0, 32);
+            $item['id'] = substr(hash('sha256', 'usage:hi:'.$tenantId.':'.($summary['period_year'] ?? '').($summary['period_month'] ?? '')), 0, 32);
             $item['links'] = ['usage' => '/conta/consumo'];
             $items->push($item);
         }

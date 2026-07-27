@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use App\Enums\Communication\FlowStatus;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'name',
     'status',
     'lock_version',
@@ -19,7 +19,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 ])]
 class CommunicationFlow extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {
@@ -31,7 +31,7 @@ class CommunicationFlow extends Model
 
     public function createdBy(): BelongsTo
     {
-        return $this->belongsTo(OfficeMembership::class, 'created_by_membership_id');
+        return $this->belongsTo(TenantMembership::class, 'created_by_membership_id');
     }
 
     public function draft(): HasOne

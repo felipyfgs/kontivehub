@@ -2,13 +2,13 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'client_id',
     'projection_id',
     'operation_id',
@@ -24,7 +24,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class PgdasdArtifact extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {

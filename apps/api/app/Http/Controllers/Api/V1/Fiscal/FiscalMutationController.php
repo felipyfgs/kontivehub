@@ -2,13 +2,14 @@
 
 namespace App\Http\Controllers\Api\V1\Fiscal;
 
-use App\Enums\OfficeRole;
+use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
 use App\Models\Client;
+use App\Models\User;
+use App\Services\Authorization\TenantAuthorization;
 use App\Services\Fiscal\Mutations\FiscalMutationException;
 use App\Services\Fiscal\Mutations\FiscalMutationService;
-use App\Services\Fiscal\Mutations\RecentTwoFactorGate;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -18,51 +19,22 @@ use Illuminate\Http\Request;
 class FiscalMutationController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly FiscalMutationService $mutations,
-        private readonly RecentTwoFactorGate $totp,
+        private readonly TenantAuthorization $authorization,
     ) {}
-
-    /**
-     * Confirma TOTP recente (janela de alto risco).
-     */
-    public function confirmTotp(Request $request): JsonResponse
-    {
-        $this->assertAdmin();
-        $user = $request->user();
-        $data = $request->validate([
-            'code' => ['required', 'string', 'max:16'],
-        ]);
-
-        try {
-            $this->totp->confirmWithCode($user, $data['code'], $request);
-        } catch (\RuntimeException $e) {
-            return response()->json([
-                'message' => $e->getMessage(),
-                'code' => 'TOTP_INVALID',
-            ], 422);
-        }
-
-        return response()->json([
-            'data' => [
-                'confirmed' => true,
-                'window_minutes' => $this->totp->windowMinutes(),
-                'seconds_remaining' => $this->totp->secondsRemaining($request),
-            ],
-        ]);
-    }
 
     public function preflight(Request $request): JsonResponse
     {
-        $this->assertAdmin();
-        $office = $this->currentOffice->office();
-        $user = $request->user();
+        $user = $this->assertPermission($request, TenantPermission::FiscalMutationsExecute);
+        $tenant = $this->currentTenant->tenant();
 
         $data = $request->validate([
             'client_id' => ['required', 'integer'],
             'solution_code' => ['required', 'string', 'max:80'],
             'service_code' => ['required', 'string', 'max:120'],
             'operation_code' => ['required', 'string', 'max:120'],
+            'operation_key' => ['required', 'string', 'max:160', 'regex:/^[a-z0-9_]+(?:\.[a-z0-9_]+)+$/'],
             'competence_period_key' => ['nullable', 'string', 'max:20'],
             'idempotency_key' => ['nullable', 'string', 'max:160'],
             'environment' => ['nullable', 'string', 'max:20'],
@@ -70,7 +42,7 @@ class FiscalMutationController extends Controller
             'payload' => ['nullable', 'array'],
         ]);
 
-        $client = $this->resolveClient($office->id, (int) $data['client_id']);
+        $client = $this->resolveClient($tenant->id, (int) $data['client_id']);
         if ($client === null) {
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
@@ -79,12 +51,13 @@ class FiscalMutationController extends Controller
             ?? $request->header('Idempotency-Key');
 
         $result = $this->mutations->preflight(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             user: $user,
             solutionCode: $data['solution_code'],
             serviceCode: $data['service_code'],
             operationCode: $data['operation_code'],
+            operationKey: $data['operation_key'],
             competencePeriodKey: $data['competence_period_key'] ?? null,
             idempotencyKey: is_string($idempotency) ? $idempotency : null,
             environment: $data['environment'] ?? null,
@@ -99,15 +72,15 @@ class FiscalMutationController extends Controller
 
     public function execute(Request $request): JsonResponse
     {
-        $this->assertAdmin();
-        $office = $this->currentOffice->office();
-        $user = $request->user();
+        $user = $this->assertPermission($request, TenantPermission::FiscalMutationsExecute);
+        $tenant = $this->currentTenant->tenant();
 
         $data = $request->validate([
             'client_id' => ['required', 'integer'],
             'solution_code' => ['required', 'string', 'max:80'],
             'service_code' => ['required', 'string', 'max:120'],
             'operation_code' => ['required', 'string', 'max:120'],
+            'operation_key' => ['required', 'string', 'max:160', 'regex:/^[a-z0-9_]+(?:\.[a-z0-9_]+)+$/'],
             'competence_period_key' => ['nullable', 'string', 'max:20'],
             'idempotency_key' => ['nullable', 'string', 'max:160'],
             'preflight_token' => ['nullable', 'string', 'max:64'],
@@ -118,7 +91,7 @@ class FiscalMutationController extends Controller
             'confirmed' => ['required', 'boolean'],
         ]);
 
-        $client = $this->resolveClient($office->id, (int) $data['client_id']);
+        $client = $this->resolveClient($tenant->id, (int) $data['client_id']);
         if ($client === null) {
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
@@ -128,12 +101,13 @@ class FiscalMutationController extends Controller
 
         try {
             $operation = $this->mutations->execute(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 user: $user,
                 solutionCode: $data['solution_code'],
                 serviceCode: $data['service_code'],
                 operationCode: $data['operation_code'],
+                operationKey: $data['operation_key'],
                 confirmationPhrase: $data['confirmation_phrase'],
                 confirmed: (bool) $data['confirmed'],
                 competencePeriodKey: $data['competence_period_key'] ?? null,
@@ -150,11 +124,11 @@ class FiscalMutationController extends Controller
         return response()->json(['data' => $operation->toPublicArray()], 201);
     }
 
-    public function show(int $mutation): JsonResponse
+    public function show(Request $request, int $mutation): JsonResponse
     {
-        $this->assertCanRead();
-        $office = $this->currentOffice->office();
-        $model = $this->mutations->findForOffice($office, $mutation);
+        $this->assertPermission($request, TenantPermission::FiscalMonitoringView);
+        $tenant = $this->currentTenant->tenant();
+        $model = $this->mutations->findForTenant($tenant, $mutation);
         if ($model === null) {
             return response()->json(['message' => 'Operação não encontrada.'], 404);
         }
@@ -164,17 +138,16 @@ class FiscalMutationController extends Controller
 
     public function reconcile(Request $request, int $mutation): JsonResponse
     {
-        $this->assertAdmin();
-        $office = $this->currentOffice->office();
-        $user = $request->user();
+        $user = $this->assertPermission($request, TenantPermission::FiscalMutationsExecute);
+        $tenant = $this->currentTenant->tenant();
 
-        $model = $this->mutations->findForOffice($office, $mutation);
+        $model = $this->mutations->findForTenant($tenant, $mutation);
         if ($model === null) {
             return response()->json(['message' => 'Operação não encontrada.'], 404);
         }
 
         try {
-            $result = $this->mutations->reconcile($office, $model, $user);
+            $result = $this->mutations->reconcile($tenant, $model, $user);
         } catch (FiscalMutationException $e) {
             return response()->json($e->toArray(), $e->httpStatus());
         }
@@ -182,26 +155,22 @@ class FiscalMutationController extends Controller
         return response()->json(['data' => $result->toPublicArray()]);
     }
 
-    private function resolveClient(int $officeId, int $clientId): ?Client
+    private function resolveClient(int $tenantId, int $clientId): ?Client
     {
         return Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereKey($clientId)
             ->first();
     }
 
-    private function assertAdmin(): void
+    private function assertPermission(Request $request, TenantPermission $permission): User
     {
-        if ($this->currentOffice->role() !== OfficeRole::Admin) {
-            abort(403, 'Somente ADMIN pode executar mutações fiscais.');
+        $user = $request->user();
+        if (! $user instanceof User || ! $this->authorization->allows($user, $permission)) {
+            abort(403, 'Sem permissão para esta operação fiscal.');
         }
-    }
 
-    private function assertCanRead(): void
-    {
-        if ($this->currentOffice->role() === null) {
-            abort(403, 'Perfil não resolvido.');
-        }
+        return $user;
     }
 }

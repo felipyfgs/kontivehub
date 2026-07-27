@@ -4,25 +4,24 @@
  * Fonte: .local/reference/nuxt-dashboard-template/app/components/settings/MembersList.vue
  */
 import type { DropdownMenuItem } from '@nuxt/ui'
-import type { OfficeMember, OfficeRole } from '~/types/api'
+import type { TenantMember, TenantRole } from '~/types/api'
 
 const props = defineProps<{
-  members: OfficeMember[]
+  members: TenantMember[]
   actingId?: number | null
   canMutate?: boolean
 }>()
 
 const emit = defineEmits<{
-  changeRole: [member: OfficeMember, role: OfficeRole]
-  deactivate: [member: OfficeMember]
-  reactivate: [member: OfficeMember]
-  regenerate: [member: OfficeMember]
+  changeRole: [member: TenantMember, role: TenantRole]
+  deactivate: [member: TenantMember]
+  reactivate: [member: TenantMember]
+  regenerate: [member: TenantMember]
 }>()
 
-const roleItems: Array<{ label: string, value: OfficeRole }> = [
-  { label: 'Admin', value: 'ADMIN' },
-  { label: 'Operador', value: 'OPERATOR' },
-  { label: 'Visualizador', value: 'VIEWER' }
+const roleItems: Array<{ label: string, value: TenantRole }> = [
+  { label: 'Administrador', value: 'tenant_admin' },
+  { label: 'Usuário', value: 'tenant_user' }
 ]
 
 function roleLabel(role: string): string {
@@ -48,7 +47,7 @@ function statusLabel(status: string): string {
   }
 }
 
-function menuItems(member: OfficeMember): DropdownMenuItem[][] {
+function menuItems(member: TenantMember): DropdownMenuItem[][] {
   if (!props.canMutate) return []
 
   const items: DropdownMenuItem[] = []
@@ -80,12 +79,12 @@ function menuItems(member: OfficeMember): DropdownMenuItem[][] {
   return items.length ? [items] : []
 }
 
-function onRoleChange(member: OfficeMember, role: OfficeRole) {
+function onRoleChange(member: TenantMember, role: TenantRole) {
   if (role === member.role) return
   emit('changeRole', member, role)
 }
 
-function canChangeRole(member: OfficeMember): boolean {
+function canChangeRole(member: TenantMember): boolean {
   return Boolean(props.canMutate && (member.is_active || member.status === 'active'))
 }
 </script>
@@ -158,7 +157,7 @@ function canChangeRole(member: OfficeMember): boolean {
             :disabled="props.actingId === member.id"
             :aria-label="`Papel de ${member.name || member.email}`"
             data-testid="team-card-role-select"
-            @update:model-value="(v: OfficeRole) => onRoleChange(member, v)"
+            @update:model-value="(v: TenantRole) => onRoleChange(member, v)"
           />
           <UBadge
             v-else
@@ -167,6 +166,14 @@ function canChangeRole(member: OfficeMember): boolean {
             color="neutral"
             :label="roleLabel(member.role)"
             data-testid="team-card-role"
+          />
+          <UBadge
+            v-if="member.permission_profile"
+            size="sm"
+            variant="subtle"
+            color="neutral"
+            :label="member.permission_profile.name"
+            data-testid="team-card-permission-profile"
           />
         </div>
       </article>

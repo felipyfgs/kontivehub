@@ -4,38 +4,40 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\SavedListFilter;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
- * CRUD de presets de filtro de lista (tenant-scoped via CurrentOffice).
- * Nunca confia office_id do client (já stripado por EnsureOfficeContext; reforço local).
+ * CRUD de presets de filtro de lista (tenant-scoped via CurrentTenant).
+ * O tenant vem exclusivamente de CurrentTenant; tenant_id no payload é proibido.
  */
 class SavedListFilterController extends Controller
 {
-    public function index(Request $request, CurrentOffice $currentOffice): JsonResponse
+    public function index(Request $request, CurrentTenant $currentTenant): JsonResponse
     {
         $this->authorize('viewAny', SavedListFilter::class);
 
         $data = $request->validate([
-            'surface' => ['required', 'string', 'max:128'],
+            'surface' => ['required', 'string', Rule::in(SavedListFilter::SURFACES)],
         ]);
 
-        $officeId = $currentOffice->office()->id;
+        $tenantId = $currentTenant->tenant()->id;
         $userId = (int) $request->user()->id;
         $surface = $data['surface'];
 
         $items = SavedListFilter::query()
-            ->where('office_id', $officeId)
+            ->with('user:id,name')
+            ->where('tenant_id', $tenantId)
             ->where('surface', $surface)
             ->where(function ($q) use ($userId): void {
                 $q->where(function ($personal) use ($userId): void {
                     $personal->where('visibility', SavedListFilter::VISIBILITY_PERSONAL)
                         ->where('user_id', $userId);
-                })->orWhere('visibility', SavedListFilter::VISIBILITY_OFFICE);
+                })->orWhere('visibility', SavedListFilter::VISIBILITY_TENANT);
             })
             ->orderBy('visibility')
             ->orderBy('name')
@@ -46,23 +48,22 @@ class SavedListFilterController extends Controller
         return response()->json(['data' => $items]);
     }
 
-    public function store(Request $request, CurrentOffice $currentOffice): JsonResponse
+    public function store(Request $request, CurrentTenant $currentTenant): JsonResponse
     {
         $this->authorize('create', SavedListFilter::class);
-        $this->stripClientOfficeId($request);
 
         $data = $this->validatePayload($request);
         $visibility = $data['visibility'] ?? SavedListFilter::VISIBILITY_PERSONAL;
 
-        if ($visibility === SavedListFilter::VISIBILITY_OFFICE) {
-            $this->authorize('shareOffice', SavedListFilter::class);
+        if ($visibility === SavedListFilter::VISIBILITY_TENANT) {
+            $this->authorize('shareTenant', SavedListFilter::class);
         }
 
-        $officeId = $currentOffice->office()->id;
+        $tenantId = $currentTenant->tenant()->id;
         $userId = (int) $request->user()->id;
 
         $this->assertUniqueName(
-            officeId: $officeId,
+            tenantId: $tenantId,
             userId: $userId,
             surface: $data['surface'],
             name: $data['name'],
@@ -70,28 +71,27 @@ class SavedListFilterController extends Controller
         );
 
         $filter = SavedListFilter::query()->create([
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'user_id' => $userId,
             'surface' => $data['surface'],
             'name' => $data['name'],
             'visibility' => $visibility,
-            'schema_version' => $data['schema_version'] ?? 1,
+            'schema_version' => SavedListFilter::SCHEMA_VERSION,
             'payload' => $this->normalizePayload($data['payload'] ?? []),
         ]);
 
-        return response()->json(['data' => $this->public($filter)], 201);
+        return response()->json(['data' => $this->public($filter->load('user:id,name'))], 201);
     }
 
     public function update(
         Request $request,
         SavedListFilter $listFilter,
-        CurrentOffice $currentOffice,
+        CurrentTenant $currentTenant,
     ): JsonResponse {
         $this->authorize('update', $listFilter);
-        $this->stripClientOfficeId($request);
 
-        // Reforço: model binding + BelongsToOffice já isolam, mas garante office atual.
-        if ((int) $listFilter->office_id !== (int) $currentOffice->office()->id) {
+        // Reforço: model binding + BelongsToTenant já isolam, mas garante tenant atual.
+        if ((int) $listFilter->tenant_id !== (int) $currentTenant->tenant()->id) {
             abort(404);
         }
 
@@ -101,23 +101,22 @@ class SavedListFilterController extends Controller
             ? $data['visibility']
             : $listFilter->visibility;
 
-        if ($visibility === SavedListFilter::VISIBILITY_OFFICE) {
-            // Autor precisa poder publicar; ADMIN já autorizado em update de office de terceiros.
+        if ($visibility === SavedListFilter::VISIBILITY_TENANT) {
+            // Autor precisa poder publicar; ADMIN já autorizado em update de tenant de terceiros.
             $isAuthor = (int) $listFilter->user_id === (int) $request->user()->id;
-            if ($isAuthor || $listFilter->visibility !== SavedListFilter::VISIBILITY_OFFICE) {
-                $this->authorize('shareOffice', SavedListFilter::class);
+            if ($isAuthor || $listFilter->visibility !== SavedListFilter::VISIBILITY_TENANT) {
+                $this->authorize('shareTenant', SavedListFilter::class);
             }
         }
 
         $name = array_key_exists('name', $data) ? $data['name'] : $listFilter->name;
-        $surface = array_key_exists('surface', $data) ? $data['surface'] : $listFilter->surface;
+        $surface = $listFilter->surface;
 
         if ($name !== $listFilter->name
             || $visibility !== $listFilter->visibility
-            || $surface !== $listFilter->surface
         ) {
             $this->assertUniqueName(
-                officeId: (int) $listFilter->office_id,
+                tenantId: (int) $listFilter->tenant_id,
                 userId: (int) $listFilter->user_id,
                 surface: $surface,
                 name: $name,
@@ -130,14 +129,8 @@ class SavedListFilterController extends Controller
         if (array_key_exists('name', $data)) {
             $updates['name'] = $data['name'];
         }
-        if (array_key_exists('surface', $data)) {
-            $updates['surface'] = $data['surface'];
-        }
         if (array_key_exists('visibility', $data)) {
             $updates['visibility'] = $data['visibility'];
-        }
-        if (array_key_exists('schema_version', $data)) {
-            $updates['schema_version'] = $data['schema_version'];
         }
         if (array_key_exists('payload', $data)) {
             $updates['payload'] = $this->normalizePayload($data['payload'] ?? []);
@@ -148,16 +141,16 @@ class SavedListFilterController extends Controller
             $listFilter->save();
         }
 
-        return response()->json(['data' => $this->public($listFilter->refresh())]);
+        return response()->json(['data' => $this->public($listFilter->refresh()->load('user:id,name'))]);
     }
 
     public function destroy(
         SavedListFilter $listFilter,
-        CurrentOffice $currentOffice,
+        CurrentTenant $currentTenant,
     ): JsonResponse {
         $this->authorize('delete', $listFilter);
 
-        if ((int) $listFilter->office_id !== (int) $currentOffice->office()->id) {
+        if ((int) $listFilter->tenant_id !== (int) $currentTenant->tenant()->id) {
             abort(404);
         }
 
@@ -174,15 +167,20 @@ class SavedListFilterController extends Controller
         $required = $partial ? 'sometimes' : 'required';
 
         return $request->validate([
-            'surface' => [$required, 'string', 'max:128'],
+            'surface' => $partial
+                ? ['prohibited']
+                : ['required', 'string', Rule::in(SavedListFilter::SURFACES)],
             'name' => [$required, 'string', 'max:120'],
             'visibility' => [
                 $partial ? 'sometimes' : 'nullable',
                 'string',
-                Rule::in([SavedListFilter::VISIBILITY_PERSONAL, SavedListFilter::VISIBILITY_OFFICE]),
+                Rule::in([SavedListFilter::VISIBILITY_PERSONAL, SavedListFilter::VISIBILITY_TENANT]),
             ],
-            'schema_version' => ['sometimes', 'integer', 'min:1', 'max:100'],
-            'payload' => [$partial ? 'sometimes' : 'nullable', 'array'],
+            'tenant_id' => ['prohibited'],
+            'schema_version' => ['prohibited'],
+            'payload' => [$partial ? 'sometimes' : 'required', 'array'],
+            'payload.schema_version' => ['prohibited'],
+            'payload.tenant_id' => ['prohibited'],
         ]);
     }
 
@@ -192,13 +190,11 @@ class SavedListFilterController extends Controller
      */
     private function normalizePayload(array $payload): array
     {
-        unset($payload['office_id']);
-
         return $payload;
     }
 
     private function assertUniqueName(
-        int $officeId,
+        int $tenantId,
         int $userId,
         string $surface,
         string $name,
@@ -206,7 +202,7 @@ class SavedListFilterController extends Controller
         ?int $exceptId = null,
     ): void {
         $q = SavedListFilter::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('surface', $surface)
             ->where('name', $name)
             ->where('visibility', $visibility);
@@ -226,15 +222,6 @@ class SavedListFilterController extends Controller
         }
     }
 
-    private function stripClientOfficeId(Request $request): void
-    {
-        $request->request->remove('office_id');
-        $request->query->remove('office_id');
-        if ($request->isJson() && $request->json() !== null) {
-            $request->json()->remove('office_id');
-        }
-    }
-
     /**
      * @return array<string, mixed>
      */
@@ -247,10 +234,18 @@ class SavedListFilterController extends Controller
             'visibility' => $filter->visibility,
             'schema_version' => $filter->schema_version,
             'payload' => $filter->payload ?? [],
-            'user_id' => $filter->user_id,
+            'author' => [
+                'id' => $filter->user_id,
+                'name' => $filter->user?->name,
+            ],
+            'permissions' => [
+                'update' => Gate::allows('update', $filter),
+                'delete' => Gate::allows('delete', $filter),
+                'share' => Gate::allows('shareTenant', SavedListFilter::class),
+            ],
             'created_at' => $filter->created_at?->toIso8601String(),
             'updated_at' => $filter->updated_at?->toIso8601String(),
-            // office_id intencionalmente omitido do JSON público (contexto é a sessão).
+            // tenant_id intencionalmente omitido do JSON público (contexto é a sessão).
         ];
     }
 }

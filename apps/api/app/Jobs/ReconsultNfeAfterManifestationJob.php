@@ -29,7 +29,7 @@ class ReconsultNfeAfterManifestationJob implements ShouldQueue
     public int $timeout = 120;
 
     public function __construct(
-        public int $officeId,
+        public int $tenantId,
         public string $accessKey,
         public int $establishmentId,
     ) {
@@ -52,7 +52,7 @@ class ReconsultNfeAfterManifestationJob implements ShouldQueue
 
         // Já tem full?
         if (NfeDocument::query()
-            ->where('office_id', $this->officeId)
+            ->where('tenant_id', $this->tenantId)
             ->where('access_key', $this->accessKey)
             ->where('is_summary', false)
             ->exists()
@@ -126,7 +126,7 @@ class ReconsultNfeAfterManifestationJob implements ShouldQueue
                 'channel' => CaptureChannel::NfeDistDfe->value,
             ],
             [
-                'office_id' => $this->officeId,
+                'tenant_id' => $this->tenantId,
                 'last_nsu' => 0,
                 'status' => SyncCursorStatus::Idle,
             ]
@@ -135,7 +135,7 @@ class ReconsultNfeAfterManifestationJob implements ShouldQueue
         $processor->ingestDocuments($cursor, $establishment, $page);
 
         $hasFull = NfeDocument::query()
-            ->where('office_id', $this->officeId)
+            ->where('tenant_id', $this->tenantId)
             ->where('access_key', $this->accessKey)
             ->where('is_summary', false)
             ->exists();

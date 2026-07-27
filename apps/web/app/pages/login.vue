@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import * as z from 'zod'
 import type { AuthFormField, FormSubmitEvent } from '@nuxt/ui'
-import type { LoginResponse } from '~/types/api'
 import type { MeIdentity } from '~/utils/permissions'
 import { homeForIdentity, safeRedirectForIdentity } from '~/utils/auth-redirect'
 
@@ -53,9 +52,8 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
     await login({
       email: event.data.email,
       password: event.data.password
-    }, false) as LoginResponse
+    }, false)
 
-    // TOTP/2FA descontinuado: login e-mail+senha entra direto no painel.
     await refreshIdentity()
     const identity = unwrapMeUser(user.value as MeIdentity)
     const redirect = safeRedirectForIdentity(route.query.redirect, identity)

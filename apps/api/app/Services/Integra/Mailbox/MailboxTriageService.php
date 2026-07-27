@@ -4,7 +4,7 @@ namespace App\Services\Integra\Mailbox;
 
 use App\Enums\MailboxTriageStatus;
 use App\Models\MailboxMessage;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use Carbon\CarbonImmutable;
@@ -21,13 +21,13 @@ final class MailboxTriageService
     ) {}
 
     public function update(
-        Office $office,
+        Tenant $tenant,
         MailboxMessage $message,
         MailboxTriageStatus $status,
         User $actor,
         ?string $note = null,
     ): MailboxMessage {
-        if ((int) $message->office_id !== (int) $office->id) {
+        if ((int) $message->tenant_id !== (int) $tenant->id) {
             throw new RuntimeException('Mensagem não pertence ao escritório ativo.');
         }
 
@@ -54,7 +54,7 @@ final class MailboxTriageService
             'message_id' => $fresh->id,
             'client_id' => $fresh->client_id,
             // sem subject/body
-        ], userId: $actor->id, officeId: (int) $office->id);
+        ], userId: $actor->id, tenantId: (int) $tenant->id);
 
         return $fresh;
     }

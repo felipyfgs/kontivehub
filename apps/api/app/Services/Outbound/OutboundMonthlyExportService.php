@@ -8,9 +8,9 @@ use App\Enums\OutboundRetrievalOrigin;
 use App\Enums\OutboundUrgencyBand;
 use App\Enums\SvrsNfceRecoveryStatus;
 use App\Jobs\BuildExportZipJob;
-use App\Models\Export;
-use App\Models\MaOutboundRetrievalRequest;
+use App\Models\DocumentExport;
 use App\Models\OutboundMonthlyReadiness;
+use App\Models\OutboundRetrievalRequest;
 use App\Services\Audit\AuditLogger;
 use Illuminate\Support\Facades\File;
 use InvalidArgumentException;
@@ -18,7 +18,7 @@ use RuntimeException;
 
 /**
  * Exportação mensal de saídas com prontidão explícita e manifesto de ausências.
- * ZIP/manifesto ficam sob storage privado por office_id; não inventa XML.
+ * ZIP/manifesto ficam sob storage privado por tenant_id; não inventa XML.
  */
 final class OutboundMonthlyExportService
 {
@@ -29,16 +29,16 @@ final class OutboundMonthlyExportService
     ) {}
 
     /**
-     * @return array{export: Export, readiness: OutboundMonthlyReadiness, manifest_path: ?string}
+     * @return array{export: DocumentExport, readiness: OutboundMonthlyReadiness, manifest_path: ?string}
      */
     public function createMonthlyExport(
-        int $officeId,
+        int $tenantId,
         int $userId,
         string $competence,
         bool $includeEvents = false,
         ?string $notes = null,
     ): array {
-        $ready = $this->readiness->refresh($officeId, $competence);
+        $ready = $this->readiness->refresh($tenantId, $competence);
         $status = $ready->status;
 
         if ($status === OutboundMonthlyReadinessStatus::NotReady) {
@@ -51,11 +51,11 @@ final class OutboundMonthlyExportService
             // partial já confirmado — manifesto será embutido no ZIP
         }
 
-        $manifest = $this->buildAbsenceManifest($officeId, $competence, $ready);
-        $manifestPath = $this->persistManifestFile($officeId, $competence, $manifest);
+        $manifest = $this->buildAbsenceManifest($tenantId, $competence, $ready);
+        $manifestPath = $this->persistManifestFile($tenantId, $competence, $manifest);
 
-        $export = Export::query()->create([
-            'office_id' => $officeId,
+        $export = DocumentExport::query()->create([
+            'tenant_id' => $tenantId,
             'user_id' => $userId,
             'status' => 'PENDING',
             'filters' => [
@@ -85,7 +85,7 @@ final class OutboundMonthlyExportService
             'pending_total' => $ready->pending_total,
             'has_manifest' => $manifestPath !== null,
             'completeness_scope' => 'known_documents_only',
-        ], $userId, $officeId);
+        ], $userId, $tenantId);
 
         return [
             'export' => $export,
@@ -97,7 +97,7 @@ final class OutboundMonthlyExportService
     /**
      * @return array{
      *   competence: string,
-     *   office_id: int,
+     *   tenant_id: int,
      *   readiness_status: string,
      *   completeness_scope: string,
      *   generated_at: string,
@@ -107,14 +107,14 @@ final class OutboundMonthlyExportService
      *   absences: list<array<string, mixed>>
      * }
      */
-    public function buildAbsenceManifest(int $officeId, string $competence, ?OutboundMonthlyReadiness $ready = null): array
+    public function buildAbsenceManifest(int $tenantId, string $competence, ?OutboundMonthlyReadiness $ready = null): array
     {
-        $ready ??= $this->readiness->refresh($officeId, $competence);
-        $batch = $this->satisfaction->contingencyBatch($officeId, $competence);
+        $ready ??= $this->readiness->refresh($tenantId, $competence);
+        $batch = $this->satisfaction->contingencyBatch($tenantId, $competence);
 
         // Inclui pendências PLANNED/ATTENTION que não estão no lote de contingência
-        $pending = MaOutboundRetrievalRequest::query()
-            ->where('office_id', $officeId)
+        $pending = OutboundRetrievalRequest::query()
+            ->where('tenant_id', $tenantId)
             ->where('origin', OutboundRetrievalOrigin::SvrsPortalByKey)
             ->where('competence', $competence)
             ->whereNotIn('recovery_status', [
@@ -171,7 +171,7 @@ final class OutboundMonthlyExportService
 
         return [
             'competence' => $competence,
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'readiness_status' => $ready->status->value,
             'completeness_scope' => 'known_documents_only',
             'sla_note' => 'SLA operacional interno — não é prazo legal nem universo fiscal absoluto.',
@@ -186,13 +186,13 @@ final class OutboundMonthlyExportService
     /**
      * @param  array<string, mixed>  $manifest
      */
-    public function persistManifestFile(int $officeId, string $competence, array $manifest): ?string
+    public function persistManifestFile(int $tenantId, string $competence, array $manifest): ?string
     {
         if (($manifest['pending_total'] ?? 0) <= 0 && ($manifest['absences'] ?? []) === []) {
             return null;
         }
 
-        $dir = storage_path('app/private/exports/'.$officeId.'/manifests');
+        $dir = storage_path('app/private/exports/'.$tenantId.'/manifests');
         File::ensureDirectoryExists($dir, 0700);
         $safeComp = preg_replace('/[^0-9-]/', '', $competence) ?: 'unknown';
         $path = $dir.'/manifest-'.$safeComp.'-'.now()->format('YmdHis').'.json';
@@ -206,14 +206,14 @@ final class OutboundMonthlyExportService
     }
 
     /**
-     * Remove manifesto temporário associado a export expirado (mesmo office).
+     * Remove manifesto temporário associado a export expirado (mesmo tenant).
      */
-    public function purgeManifestIfOwned(int $officeId, ?string $path): void
+    public function purgeManifestIfOwned(int $tenantId, ?string $path): void
     {
         if ($path === null || $path === '') {
             return;
         }
-        $root = realpath(storage_path('app/private/exports/'.$officeId));
+        $root = realpath(storage_path('app/private/exports/'.$tenantId));
         $real = realpath($path);
         if ($root === false || $real === false) {
             return;

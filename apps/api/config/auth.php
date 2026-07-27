@@ -120,7 +120,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | Minutes during which a PLATFORM_ADMIN password reconfirmation remains
-    | valid for A1 replace/remove and privileged fiscal mutations.
+    | valid for certificado replace/remove and privileged fiscal mutations.
     |
     */
 

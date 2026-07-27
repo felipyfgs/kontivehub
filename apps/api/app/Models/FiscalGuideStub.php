@@ -4,7 +4,7 @@ namespace App\Models;
 
 use App\Enums\FiscalGuideEmissionStatus;
 use App\Enums\FiscalGuidePaymentStatus;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * Task 11 migrará para o modelo pleno de tax-guide-management.
  */
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'client_id',
     'run_id',
     'system_code',
@@ -36,7 +36,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class FiscalGuideStub extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {
@@ -75,7 +75,7 @@ class FiscalGuideStub extends Model
     {
         return [
             'id' => $this->id,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'client_id' => $this->client_id,
             'run_id' => $this->run_id,
             'system_code' => $this->system_code,

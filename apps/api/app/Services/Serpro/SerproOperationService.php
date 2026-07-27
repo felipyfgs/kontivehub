@@ -15,9 +15,9 @@ use App\Enums\SerproEnvironment;
 use App\Enums\SerproFunctionalRoute;
 use App\Enums\SerproUsageResult;
 use App\Models\Client;
-use App\Models\Office;
-use App\Models\OfficeSerproAuthorization;
 use App\Models\SerproOperationAttempt;
+use App\Models\Tenant;
+use App\Models\TenantSerproAuthorization;
 use App\Services\Fiscal\Availability\FiscalModuleAvailabilityService;
 use App\Services\Fiscal\Availability\FiscalOperationClassifier;
 use App\Services\Fiscal\Guides\PagtowebEphemeralResponseRedactor;
@@ -27,7 +27,7 @@ use App\Services\Integra\ContributorCnpjResolver;
 use App\Services\Integra\FixtureIntegraContadorClient;
 use App\Services\Integra\IntegraEligibilityService;
 use App\Services\Integra\SerproTechnicalParameterGuard;
-use App\Services\Platform\OfficeSubscriptionGate;
+use App\Services\Platform\TenantSubscriptionGate;
 use App\Services\Serpro\Catalog\OperationCoordinateResolver;
 use App\Services\Serpro\Catalog\OperationCoverageMatrix;
 use App\Services\Serpro\Usage\UsageLedgerService;
@@ -61,7 +61,7 @@ final class SerproOperationService implements SerproOperationExecutor
         private readonly SerproCircuitBreaker $breaker,
         private readonly SerproRateLimiter $rateLimiter,
         private readonly CapabilityDriverResolver $drivers,
-        private readonly OfficeSubscriptionGate $subscriptionGate,
+        private readonly TenantSubscriptionGate $subscriptionGate,
         private readonly IntegraEligibilityService $eligibility,
         private readonly SerproOperationAttemptStore $attempts,
         private readonly SerproRequestTagGenerator $requestTags,
@@ -85,7 +85,7 @@ final class SerproOperationService implements SerproOperationExecutor
 
     public function run(SerproOperationCommand $command): IntegraResponse
     {
-        $office = $command->office;
+        $tenant = $command->tenant;
         $client = $command->client;
         $operationKey = trim($command->operationKey);
         $correlationId = $command->correlationId ?? (string) Str::uuid();
@@ -96,7 +96,7 @@ final class SerproOperationService implements SerproOperationExecutor
             return $this->blocked($operationKey, 'OPERATION_KEY_REQUIRED', 'operation_key é obrigatório.', $correlationId);
         }
 
-        if ($client !== null && (int) $client->office_id !== (int) $office->id) {
+        if ($client !== null && (int) $client->tenant_id !== (int) $tenant->id) {
             return $this->blocked($operationKey, 'CONTRIBUTOR_CROSS_TENANT', 'Cliente não pertence ao escritório ativo.', $correlationId);
         }
 
@@ -165,7 +165,7 @@ final class SerproOperationService implements SerproOperationExecutor
             try {
                 $decision = $this->moduleAvailability->resolve(
                     FiscalControlModule::fromRuntimeKey($module),
-                    $office,
+                    $tenant,
                     FiscalOperationClassifier::forSerpro($operationKey, $coords),
                 );
                 if (! $decision->allowed) {
@@ -190,7 +190,7 @@ final class SerproOperationService implements SerproOperationExecutor
 
         if ($driver->value === 'fixture') {
             return $this->fixtureClient->execute(new IntegraRequest(
-                officeId: (int) $office->id,
+                tenantId: (int) $tenant->id,
                 clientId: (int) ($client?->id ?? 0),
                 environment: 'DEV',
                 contractorCnpj: '11222333000181',
@@ -206,7 +206,7 @@ final class SerproOperationService implements SerproOperationExecutor
         }
 
         // 7. Subscription — egress real fail-closed (simulado/tests sem assinatura não bloqueiam)
-        if ($driver->value === 'real' && ! $this->subscriptionGate->allowsExternalCalls($office)) {
+        if ($driver->value === 'real' && ! $this->subscriptionGate->allowsExternalCalls($tenant)) {
             return $this->blocked($operationKey, 'SUBSCRIPTION_BLOCKED', 'Assinatura do escritório não permite chamadas externas.', $correlationId, 423);
         }
 
@@ -216,12 +216,12 @@ final class SerproOperationService implements SerproOperationExecutor
             return $this->blocked($operationKey, 'CONTRACT_UNAVAILABLE', 'Contrato SERPRO indisponível.', $correlationId, 503);
         }
 
-        // 8b. Egress faturável — somente driver real (simulado/fake não precisa cutover de credencial)
+        // 8b. Egress faturável — somente driver real (simulado/fake não precisa ativação de credencial)
         $isBillableRoute = $route instanceof SerproFunctionalRoute && ! $route->isNonBillableByRoute();
         if ($driver->value === 'real' && $isBillableRoute) {
             $billableGate = $this->egressGate->evaluateBillableEgress(
                 route: $route instanceof SerproFunctionalRoute ? $route : null,
-                office: $office,
+                tenant: $tenant,
                 environment: $environment,
             );
             if (! $billableGate['allowed']) {
@@ -246,7 +246,6 @@ final class SerproOperationService implements SerproOperationExecutor
         $requestHeaders = $command->headers;
         try {
             $this->technicalParams->assertClean($command->businessData, 'businessData');
-            $this->technicalParams->assertClean($command->payload, 'payload');
             if ($operationKey === 'autentica_procurador.envio_xml_assinado') {
                 $requestHeaders = $this->validatedAutenticaHeaders($requestHeaders);
             } else {
@@ -262,10 +261,10 @@ final class SerproOperationService implements SerproOperationExecutor
             );
         }
 
-        // 11. Autor / contribuinte — derivados do Office (CurrentOffice no HTTP layer)
+        // 11. Autor / contribuinte — derivados do Tenant (CurrentTenant no HTTP layer)
         $contractOnly = (string) ($coords['auth_mode'] ?? '') === 'CONTRACT_ONLY';
-        $authorization = OfficeSerproAuthorization::query()
-            ->where('office_id', $office->id)
+        $authorization = TenantSerproAuthorization::query()
+            ->where('tenant_id', $tenant->id)
             ->where('environment', $environment->value)
             ->first();
 
@@ -283,7 +282,7 @@ final class SerproOperationService implements SerproOperationExecutor
             }
             $author = strtoupper(trim((string) ($authorization->author_identity ?? '')));
 
-            // Override interno só se coincidir com o autor do office (ignora tentativa tenant-facing).
+            // Override interno só se coincidir com o autor do tenant (ignora tentativa tenant-facing).
             if ($command->authorIdentityOverride !== null && $command->authorIdentityOverride !== '') {
                 $override = strtoupper(trim($command->authorIdentityOverride));
                 if ($override !== $author && $override !== '' && $override !== '00000000000000') {
@@ -304,7 +303,7 @@ final class SerproOperationService implements SerproOperationExecutor
 
         if ($client !== null) {
             try {
-                // Contributor vem do cadastro do cliente; override só se idêntico (legado interno).
+                // Contributor vem do cadastro do cliente; o valor recebido só pode confirmá-lo.
                 $resolvedContributor = $this->contributors->resolve($client);
                 if (
                     $command->contributorIdentityOverride !== null
@@ -345,7 +344,7 @@ final class SerproOperationService implements SerproOperationExecutor
                 // autor = contribuinte: poder não se aplica
             } else {
                 $gate = $this->procuracaoGate->gateForOperation(
-                    $office,
+                    $tenant,
                     $client,
                     $environment,
                     array_values(array_filter(array_map('strval', $requiredPowers))),
@@ -371,7 +370,7 @@ final class SerproOperationService implements SerproOperationExecutor
             && $driver->value === 'real'
         ) {
             $elig = $this->eligibility->evaluate(
-                $office,
+                $tenant,
                 $client,
                 $idSistema,
                 (string) ($coords['id_servico'] ?? ''),
@@ -396,7 +395,7 @@ final class SerproOperationService implements SerproOperationExecutor
         // 12. Rate limiter local (egress real: fail-closed se limites zero/ausentes)
         try {
             $this->rateLimiter->attempt(
-                (int) $office->id,
+                (int) $tenant->id,
                 $operationKey,
                 productiveEgress: $driver->value === 'real',
             );
@@ -408,16 +407,16 @@ final class SerproOperationService implements SerproOperationExecutor
             return $this->blocked($operationKey, $code, $e->getMessage(), $correlationId, 429);
         }
 
-        // 13. Idempotency namespaced: Office/env/op/entity + key lógica
+        // 13. Idempotency namespaced: Tenant/env/op/entity + key lógica
         $logicalKey = $command->idempotencyKey ?? hash('sha256', implode('|', [
-            (string) $office->id,
+            (string) $tenant->id,
             (string) ($client?->id ?? 0),
             $operationKey,
             json_encode($command->businessData, JSON_THROW_ON_ERROR),
         ]));
         $idempotencyKey = $this->namespaceIdempotencyKey(
             $environment->value,
-            (int) $office->id,
+            (int) $tenant->id,
             $operationKey,
             $entityKey,
             $logicalKey,
@@ -425,7 +424,7 @@ final class SerproOperationService implements SerproOperationExecutor
 
         // 14. Request tag opaca (≠ idempotency; ≤32; sem PII)
         $requestTag = $this->requestTags->generate([
-            'office' => (string) $office->id,
+            'tenant' => (string) $tenant->id,
             'env' => $environment->value,
             'op' => $operationKey,
             'entity' => $entityKey,
@@ -436,7 +435,7 @@ final class SerproOperationService implements SerproOperationExecutor
 
         // 15. Attempt store — replay/wait/dispatch
         $begin = $this->attempts->beginOrReplay(
-            officeId: (int) $office->id,
+            tenantId: (int) $tenant->id,
             environment: $environment->value,
             operationKey: $operationKey,
             entityKey: $entityKey,
@@ -456,7 +455,7 @@ final class SerproOperationService implements SerproOperationExecutor
         $attempt = $begin['attempt'];
 
         $request = new IntegraRequest(
-            officeId: (int) $office->id,
+            tenantId: (int) $tenant->id,
             clientId: $client !== null ? (int) $client->id : 0,
             environment: $environment->value,
             contractorCnpj: (string) $contract->contractor_cnpj,
@@ -464,23 +463,17 @@ final class SerproOperationService implements SerproOperationExecutor
             contributorCnpj: $contributor,
             operationKey: $operationKey,
             businessData: $command->businessData,
-            payload: $command->payload,
             headers: $requestHeaders,
             idempotencyKey: $idempotencyKey,
             correlationId: $correlationId,
             requestTag: $requestTag,
             isMutating: $isMutating,
-            // Coordenadas oficiais preservadas no DTO para o transporte e testes de contrato.
-            solutionCode: $idSistema !== '' ? $idSistema : null,
-            serviceCode: isset($coords['id_servico']) ? (string) $coords['id_servico'] : null,
-            operationCode: isset($coords['id_servico'])
-                ? (string) ($coords['operation_code'] ?? $coords['id_servico'] ?? '')
-                : null,
+            mutationOperationId: $command->mutationOperationId,
             eventosBatchContributor: $command->eventosBatchContributor,
         );
 
         $reservation = $this->ledger->reserve(new UsageReserveRequest(
-            officeId: (int) $office->id,
+            tenantId: (int) $tenant->id,
             idempotencyKey: $idempotencyKey,
             systemCode: $idSistema,
             serviceCode: (string) ($coords['id_servico'] ?? ''),
@@ -507,7 +500,7 @@ final class SerproOperationService implements SerproOperationExecutor
             return $this->blocked($operationKey, 'BUDGET_EXCEEDED', 'Orçamento SERPRO bloqueou a operação.', $correlationId, 429, $requestTag);
         }
 
-        // Replay de reserva finalizada com attempt ausente (legado): não re-HTTP
+        // Reserva terminal em replay nunca autoriza uma nova chamada HTTP.
         if ($reservation->replayed && $reservation->reservation->status->isTerminal()) {
             if ($attempt !== null && $attempt->isTerminal()) {
                 return $this->attempts->toResponse($attempt);
@@ -539,8 +532,8 @@ final class SerproOperationService implements SerproOperationExecutor
         }
 
         // Nenhuma resposta marcada como sintética pode atravessar a fronteira
-        // operacional, mesmo se vier de dado legado ou de um double instalado
-        // incorretamente. Trial oficial não possui essa marca e continua distinto.
+        // operacional, inclusive quando um double foi instalado incorretamente.
+        // Trial oficial não possui essa marca e continua distinto.
         if ($response->hasSimulatedSource()) {
             $response = $response->rejectSimulatedSource();
         }
@@ -603,7 +596,7 @@ final class SerproOperationService implements SerproOperationExecutor
                     operationKey: $operationKey,
                     entityKey: $entityKey,
                     response: $response,
-                    officeId: (int) $office->id,
+                    tenantId: (int) $tenant->id,
                     clientId: (int) $client->id,
                 );
             } catch (Throwable) {
@@ -668,7 +661,7 @@ final class SerproOperationService implements SerproOperationExecutor
      * @param  array<string, mixed>  $businessData
      */
     public function execute(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $operationKey,
         array $businessData = [],
@@ -679,7 +672,7 @@ final class SerproOperationService implements SerproOperationExecutor
         ?string $module = null,
     ): IntegraResponse {
         return $this->run(new SerproOperationCommand(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             operationKey: $operationKey,
             businessData: $businessData,
@@ -692,17 +685,16 @@ final class SerproOperationService implements SerproOperationExecutor
     }
 
     /**
-     * Executa a partir de um IntegraRequest já montado (migração de adapters).
-     * Preferir run()/execute() com command; este método evita rebuild de identidades.
+     * Executa a partir de um IntegraRequest já montado.
      */
     public function executeRequest(IntegraRequest $request, ?MutationAuthorization $mutationAuth = null, ?string $module = null): IntegraResponse
     {
-        $office = Office::query()->withoutGlobalScopes()->find($request->officeId);
-        if ($office === null) {
+        $tenant = Tenant::query()->withoutGlobalScopes()->find($request->tenantId);
+        if ($tenant === null) {
             return $this->blocked(
                 $request->operationKey,
-                'OFFICE_NOT_FOUND',
-                'Office não encontrado para a operação.',
+                'TENANT_NOT_FOUND',
+                'Tenant não encontrado para a operação.',
                 $request->correlationId,
             );
         }
@@ -710,7 +702,7 @@ final class SerproOperationService implements SerproOperationExecutor
         $client = null;
         if ($request->clientId > 0) {
             $client = Client::query()->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->whereKey($request->clientId)
                 ->first();
             if ($client === null) {
@@ -724,21 +716,21 @@ final class SerproOperationService implements SerproOperationExecutor
         }
 
         return $this->run(new SerproOperationCommand(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             operationKey: $request->operationKey,
-            businessData: $request->businessData !== [] ? $request->businessData : $request->payload,
+            businessData: $request->businessData,
             idempotencyKey: $request->idempotencyKey,
             correlationId: $request->correlationId,
             mutationAuth: $mutationAuth ?? (
                 $request->isMutating ? MutationAuthorization::none() : MutationAuthorization::none()
             ),
             environment: $request->environment,
-            payload: $request->payload,
             headers: $request->headers,
             module: $module,
             contributorIdentityOverride: $request->contributorCnpj,
             authorIdentityOverride: $request->authorIdentity,
+            mutationOperationId: $request->mutationOperationId,
         ));
     }
 
@@ -765,7 +757,7 @@ final class SerproOperationService implements SerproOperationExecutor
 
     private function namespaceIdempotencyKey(
         string $environment,
-        int $officeId,
+        int $tenantId,
         string $operationKey,
         string $entityKey,
         string $logicalKey,
@@ -774,7 +766,7 @@ final class SerproOperationService implements SerproOperationExecutor
         $raw = implode('|', [
             'ic',
             strtoupper($environment),
-            (string) $officeId,
+            (string) $tenantId,
             $operationKey,
             $entityKey,
             $logicalKey,
@@ -801,46 +793,14 @@ final class SerproOperationService implements SerproOperationExecutor
     {
         $fromMeta = $coords['monitoring_module'] ?? null;
         if (is_string($fromMeta) && $fromMeta !== '' && $fromMeta !== 'authorization') {
-            return $this->normalizeFeatureModule($fromMeta);
+            return $fromMeta;
         }
 
         $capability = $this->drivers->capabilityForOperationKey($operationKey);
 
-        return $this->normalizeFeatureModule(match ($capability) {
-            'sitfis' => 'sitfis',
-            'mailbox' => 'mailbox',
-            'dctfweb' => 'dctfweb_mit',
-            'simples_mei' => 'simples_mei',
-            'installments' => 'parcelamentos',
-            'guides' => 'guias',
-            'registrations' => 'cadastros',
-            'tax_processes' => 'processos_fiscais',
-            'authorization' => null,
-            default => null,
-        });
-    }
-
-    /**
-     * Normaliza aliases do catálogo para as dez chaves provider-neutral.
-     */
-    private function normalizeFeatureModule(?string $module): ?string
-    {
-        if ($module === null || $module === '' || $module === 'authorization' || $module === 'inventory') {
-            return null;
-        }
-
-        return match ($module) {
-            'dctfweb', 'dctfweb_mit', 'mit' => 'dctfweb',
-            'installments', 'parcelamentos', 'parcelamento' => 'parcelamentos',
-            'guides', 'guias', 'sicalc', 'pagtoweb' => 'guias',
-            'simples_mei', 'pgdasd', 'pgmei', 'defis', 'regimeapuracao', 'ccmei' => 'simples_mei',
-            'sitfis', 'situacao_fiscal' => 'situacao_fiscal',
-            'mailbox', 'caixa_postal', 'dte' => 'caixa_postal',
-            'declaracoes' => 'declaracoes',
-            'fgts' => 'fgts',
-            'tax_processes', 'eprocesso' => 'processos_fiscais',
-            'registrations', 'pnr_contador' => 'cadastros',
-            default => FiscalControlModule::tryFrom($module)?->value,
+        return match ($capability) {
+            'authorization', 'inventory', null => null,
+            default => $capability,
         };
     }
 

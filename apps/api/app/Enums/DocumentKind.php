@@ -4,17 +4,13 @@ namespace App\Enums;
 
 use Illuminate\Http\Request;
 
-/**
- * Tipos DF-e reconhecidos pelo domínio.
- * MDF-e permanece apenas para compatibilidade com valores legados persistidos.
- */
+/** Tipos DF-e reconhecidos pelo domínio. */
 enum DocumentKind: string
 {
     case Nfse = 'NFSE';
     case Nfe = 'NFE';
     case Nfce = 'NFCE';
     case Cte = 'CTE';
-    case Mdfe = 'MDFE';
 
     public function label(): string
     {
@@ -23,7 +19,6 @@ enum DocumentKind: string
             self::Nfe => 'NF-e',
             self::Nfce => 'NFC-e',
             self::Cte => 'CT-e',
-            self::Mdfe => 'MDF-e',
         };
     }
 
@@ -34,14 +29,13 @@ enum DocumentKind: string
             self::Nfe => '55',
             self::Nfce => '65',
             self::Cte => '57',
-            self::Mdfe => '58',
             default => null,
         };
     }
 
     /**
      * Captura habilitada na instância (feature flag + implementação).
-     * NFS-e: sempre via ADN. MDF-e: invariavelmente fora do escopo escritural.
+     * NFS-e: sempre via ADN.
      */
     public function captureAvailable(): bool
     {
@@ -51,7 +45,6 @@ enum DocumentKind: string
                 || (bool) config('sefaz.ma_outbound.enabled', false)
                 || (bool) config('sefaz.svrs_nfe55_xml.retrieval_enabled', false),
             self::Cte => (bool) config('sefaz.cte_enabled', false),
-            self::Mdfe => false,
             // NFC-e: não DistDFe de entrada; saída MA / recovery SVRS / import.
             self::Nfce => (bool) config('sefaz.nfce_enabled', false)
                 || (bool) config('sefaz.ma_outbound.enabled', false)
@@ -86,17 +79,7 @@ enum DocumentKind: string
             return null;
         }
 
-        $normalized = strtoupper(str_replace(['-', ' '], ['_', ''], trim($value)));
-        $aliases = [
-            'NFS_E' => 'NFSE',
-            'NF_E' => 'NFE',
-            'NFC_E' => 'NFCE',
-            'CT_E' => 'CTE',
-            'MDF_E' => 'MDFE',
-        ];
-        $code = $aliases[$normalized] ?? $normalized;
-
-        return self::tryFrom($code);
+        return self::tryFrom(trim($value));
     }
 
     /**

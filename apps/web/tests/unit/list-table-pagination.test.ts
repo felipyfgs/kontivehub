@@ -54,11 +54,11 @@ describe('list-table-pagination', () => {
 
   it('listas in-memory usam useLocalTablePagination (não fingem length como per-page)', () => {
     for (const rel of [
-      'app/pages/admin/offices/index.vue',
+      'app/pages/admin/tenants/index.vue',
       'app/pages/admin/serpro/catalog.vue',
       'app/pages/admin/serpro/contracts.vue',
       'app/pages/admin/serpro/usage.vue',
-      'app/pages/settings/usage.vue'
+      'app/components/settings/TenantUsagePage.vue'
     ]) {
       const source = readFileSync(root(rel), 'utf8')
       expect(source, rel).toContain('useLocalTablePagination')

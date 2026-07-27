@@ -4,7 +4,7 @@ namespace Database\Factories;
 
 use App\Models\Client;
 use App\Models\ClientContact;
-use App\Models\Office;
+use App\Models\Tenant;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -17,7 +17,7 @@ class ClientContactFactory extends Factory
     public function definition(): array
     {
         return [
-            'office_id' => Office::factory(),
+            'tenant_id' => Tenant::factory(),
             'client_id' => Client::factory(),
             'name' => fake()->name(),
             'role' => fake()->optional()->jobTitle(),
@@ -34,7 +34,7 @@ class ClientContactFactory extends Factory
     public function forClient(Client $client): static
     {
         return $this->state(fn () => [
-            'office_id' => $client->office_id,
+            'tenant_id' => $client->tenant_id,
             'client_id' => $client->id,
         ]);
     }

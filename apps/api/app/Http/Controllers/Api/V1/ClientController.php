@@ -16,11 +16,11 @@ use App\Models\Establishment;
 use App\Models\SyncCursor;
 use App\Services\Audit\AuditLogger;
 use App\Services\Clients\CaptureEligibilityService;
-use App\Services\Clients\ClientRootConflictException;
 use App\Services\Clients\CreateClientWithEstablishment;
+use App\Services\Clients\DuplicateEstablishmentException;
 use App\Services\Clients\RefreshClientRegistration;
 use App\Services\Integra\ClientProcuracaoValidityResolver;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -37,9 +37,7 @@ class ClientController extends Controller
     {
         $this->authorize('viewAny', Client::class);
 
-        // Lista canônica: apenas Cliente-raiz (matrix_client_id null). Filiais legadas
-        // colapsadas/soft-deleted não entram; estabelecimentos cobrem as filiais.
-        $base = Client::query()->whereNull('matrix_client_id');
+        $base = Client::query();
 
         if ($search = $request->string('q')->toString()) {
             $needle = '%'.mb_strtolower($search).'%';
@@ -160,19 +158,7 @@ class ClientController extends Controller
 
         $taxRegimes = $this->taxRegimeCsv($request->query('tax_regimes'));
         if ($taxRegimes !== []) {
-            $includeNotInformed = in_array('NOT_INFORMED', $taxRegimes, true);
-            $canonical = array_values(array_diff($taxRegimes, ['NOT_INFORMED']));
-            $storageValues = $this->taxRegimeStorageValues($canonical);
-            $base->where(function (Builder $query) use ($storageValues, $includeNotInformed): void {
-                if ($storageValues !== []) {
-                    $query->whereIn('tax_regime', $storageValues);
-                }
-                if ($includeNotInformed) {
-                    $storageValues !== []
-                        ? $query->orWhereNull('tax_regime')
-                        : $query->whereNull('tax_regime');
-                }
-            });
+            $base->whereIn('tax_regime', $taxRegimes);
         }
 
         $procuracaoStatuses = $this->procuracaoStatusCsv($request->query('procuracao_statuses'));
@@ -187,8 +173,7 @@ class ClientController extends Controller
             'tax_regime' => 'tax_regime',
             default => 'legal_name',
         };
-        // LFU-07: aceita `sort_direction` ou `direction`.
-        $directionRaw = $request->query('sort_direction', $request->query('direction', 'asc'));
+        $directionRaw = $request->query('sort_direction', 'asc');
         $direction = is_string($directionRaw) && strtolower($directionRaw) === 'desc' ? 'desc' : 'asc';
 
         $perPage = min(max((int) $request->input('per_page', 20), 1), 100);
@@ -196,8 +181,7 @@ class ClientController extends Controller
             ->withCount('establishments')
             ->with([
                 'credential',
-                'procuracaoSync',
-                'procuracaoSnapshots' => fn ($q) => $q->where(
+                'procuracaoSyncs' => fn ($q) => $q->where(
                     'environment',
                     (string) config('serpro.default_environment', 'TRIAL'),
                 ),
@@ -258,10 +242,7 @@ class ClientController extends Controller
     private function clientGrowthLastTwelveMonths(Builder $query): array
     {
         $start = now()->startOfMonth()->subMonths(11);
-        $driver = $query->getConnection()->getDriverName();
-        $monthExpression = $driver === 'sqlite'
-            ? "strftime('%Y-%m', created_at)"
-            : "to_char(created_at, 'YYYY-MM')";
+        $monthExpression = "to_char(created_at, 'YYYY-MM')";
 
         $counts = (clone $query)
             ->where('created_at', '>=', $start)
@@ -282,16 +263,16 @@ class ClientController extends Controller
 
     public function store(
         StoreClientRequest $request,
-        CurrentOffice $currentOffice,
+        CurrentTenant $currentTenant,
         CreateClientWithEstablishment $creator,
     ): JsonResponse {
         $this->authorize('create', Client::class);
 
-        $officeId = $currentOffice->office()->id;
+        $tenantId = $currentTenant->tenant()->id;
 
         try {
-            $result = $creator->handle($officeId, $request->validated());
-        } catch (ClientRootConflictException $e) {
+            $result = $creator->handle($tenantId, $request->validated());
+        } catch (DuplicateEstablishmentException $e) {
             $payload = [
                 'message' => $e->getMessage(),
                 'errors' => ['cnpj' => ['CNPJ já cadastrado neste escritório.']],
@@ -309,7 +290,7 @@ class ClientController extends Controller
 
             return response()->json($payload, 409);
         } catch (UniqueConstraintViolationException $e) {
-            // Corrida / unique físico (office_id, cnpj) — 409 genérico do escritório.
+            // Corrida / unique físico (tenant_id, cnpj) — 409 genérico do escritório.
             return response()->json([
                 'message' => 'CNPJ já cadastrado neste escritório.',
                 'errors' => ['cnpj' => ['CNPJ já cadastrado neste escritório.']],
@@ -365,8 +346,7 @@ class ClientController extends Controller
 
         $client->load([
             'credential',
-            'procuracaoSync',
-            'procuracaoSnapshots' => fn ($q) => $q->where(
+            'procuracaoSyncs' => fn ($q) => $q->where(
                 'environment',
                 (string) config('serpro.default_environment', 'TRIAL'),
             ),
@@ -375,9 +355,6 @@ class ClientController extends Controller
             'customFields' => fn ($q) => $q->orderBy('id'),
             'categories' => fn ($q) => $q->orderBy('name')->orderBy('id'),
             'workDepartment',
-            'matrix.establishments' => fn ($q) => $q->orderBy('id')->limit(1),
-            'branches' => fn ($q) => $q->orderBy('legal_name')
-                ->with(['establishments' => fn ($eq) => $eq->orderBy('id')->limit(1), 'credential']),
         ]);
 
         $establishments = $client->establishments->map(function ($est) use ($eligibility) {
@@ -389,23 +366,15 @@ class ClientController extends Controller
         });
 
         $data = $this->serializeClient($client, $procuracoes);
-        $primary = $client->establishments->firstWhere('is_matrix', true)
+        $primary = $client->establishments->firstWhere('is_headquarters', true)
             ?? $client->establishments->first();
         $data['cnpj'] = $primary?->cnpj;
         $data['trade_name'] = $primary?->trade_name;
         $data['establishments'] = $establishments;
-        $data['canonical_aggregate'] = true;
-        // matrix/branches: compat UI legada. Autoridade de filiais = establishments.
-        $data['matrix'] = $client->matrix !== null
-            ? $this->serializeLinkedClient($client->matrix)
-            : null;
-        $data['branches'] = $client->branches
-            ->map(fn (Client $branch) => $this->serializeLinkedClient($branch))
-            ->values();
         $data['contacts'] = $client->contacts->map(fn ($c) => $this->serializeContact($c))->values();
         $data['custom_fields'] = $client->customFields->map(fn ($field) => $field->toPublicArray())->values();
-        // Resumo seguro do A1 (status/validade/alertas) — sem vault/PFX — para OPERATOR/VIEWER.
-        // Espelha o payload da listagem; detalhe completo continua em GET /credential (ADMIN+2FA).
+        // Resumo seguro do certificado (status/validade/alertas), sem vault/PFX.
+        // Espelha o payload da listagem; o detalhe completo exige admin com senha recente.
         $credential = $client->credential;
         $data['credential_summary'] = $credential === null
             ? null
@@ -490,7 +459,6 @@ class ClientController extends Controller
         /** @var Collection<int, Client> $clients */
         $clients = DB::transaction(function () use ($clientIds, $isActive, $inactiveReason): Collection {
             $clients = Client::query()
-                ->whereNull('matrix_client_id')
                 ->whereKey($clientIds)
                 ->lockForUpdate()
                 ->get()
@@ -532,12 +500,12 @@ class ClientController extends Controller
     }
 
     /**
-     * Detecta violação de unique (PostgreSQL 23505 / SQLite) quando a exceção tipada não for lançada.
+     * Detecta violação de unicidade no PostgreSQL quando a exceção tipada não for lançada.
      */
     private function isUniqueConstraintViolation(QueryException $e): bool
     {
         $sqlState = (string) ($e->errorInfo[0] ?? '');
-        if ($sqlState === '23505' || $sqlState === '23000') {
+        if ($sqlState === '23505') {
             return true;
         }
 
@@ -554,17 +522,15 @@ class ClientController extends Controller
         Client $client,
         ?ClientProcuracaoValidityResolver $procuracoes = null,
     ): array {
-        $taxRegime = TaxRegimeCode::fromInput(
-            is_string($client->tax_regime) ? $client->tax_regime : null
-        );
+        $taxRegime = is_string($client->tax_regime)
+            ? TaxRegimeCode::tryFrom($client->tax_regime)
+            : null;
         $payload = [
             'id' => $client->id,
-            'office_id' => $client->office_id,
+            'tenant_id' => $client->tenant_id,
             'legal_name' => $client->legal_name,
             'display_name' => $client->display_name,
-            'name' => $client->displayLabel(), // compat UI legada
             'root_cnpj' => $client->root_cnpj,
-            'matrix_client_id' => $client->matrix_client_id,
             'legal_nature_code' => $client->legal_nature_code,
             'legal_nature_name' => $client->legal_nature_name,
             'company_size_code' => $client->company_size_code,
@@ -603,8 +569,7 @@ class ClientController extends Controller
 
         if ($procuracoes !== null) {
             $projection = $procuracoes->resolve(
-                $client->relationLoaded('procuracaoSync') ? $client->procuracaoSync : null,
-                $client->relationLoaded('procuracaoSnapshots') ? $client->procuracaoSnapshots->first() : null,
+                $client->relationLoaded('procuracaoSyncs') ? $client->procuracaoSyncs->first() : null,
             );
             $payload['procuracao_status'] = $projection['status'];
             $payload['procuracao_valid_to'] = $projection['valid_to'];
@@ -712,10 +677,10 @@ class ClientController extends Controller
                         'unverified' => $branch->where(function (Builder $unverified) use ($environment): void {
                             $unverified
                                 ->where(function (Builder $absent) use ($environment): void {
-                                    $absent->whereDoesntHave('procuracaoSync')
-                                        ->whereDoesntHave('procuracaoSnapshots', function (Builder $snap) use ($environment): void {
-                                            $snap->where('environment', $environment);
-                                        });
+                                    $absent->whereDoesntHave(
+                                        'procuracaoSyncs',
+                                        fn (Builder $sync) => $sync->where('environment', $environment),
+                                    );
                                 })
                                 ->orWhere(function (Builder $explicit) use ($environment): void {
                                     $this->whereProjectedProcuracao(
@@ -752,23 +717,14 @@ class ClientController extends Controller
     }
 
     /**
-     * Preferência: procuracaoSync; sem sync, usa snapshot do environment default.
-     *
      * @param  Builder<Client>  $branch
      * @param  callable(Builder): void  $constrain
      */
     private function whereProjectedProcuracao(Builder $branch, string $environment, callable $constrain): void
     {
-        $branch->where(function (Builder $outer) use ($environment, $constrain): void {
-            $outer->whereHas('procuracaoSync', function (Builder $sync) use ($constrain): void {
-                $constrain($sync);
-            })->orWhere(function (Builder $fallback) use ($environment, $constrain): void {
-                $fallback->whereDoesntHave('procuracaoSync')
-                    ->whereHas('procuracaoSnapshots', function (Builder $snap) use ($environment, $constrain): void {
-                        $snap->where('environment', $environment);
-                        $constrain($snap);
-                    });
-            });
+        $branch->whereHas('procuracaoSyncs', function (Builder $sync) use ($environment, $constrain): void {
+            $sync->where('environment', $environment);
+            $constrain($sync);
         });
     }
 
@@ -776,7 +732,7 @@ class ClientController extends Controller
     private function taxRegimeCsv(mixed $raw): array
     {
         $parts = is_array($raw) ? $raw : explode(',', is_scalar($raw) ? (string) $raw : '');
-        $allowed = [...TaxRegimeCode::currentProjectionValues(), 'NOT_INFORMED'];
+        $allowed = TaxRegimeCode::currentProjectionValues();
         $values = [];
         foreach ($parts as $part) {
             $value = strtoupper(trim((string) $part));
@@ -789,77 +745,17 @@ class ClientController extends Controller
     }
 
     /**
-     * Expande códigos canônicos para formas legadas ainda possíveis em clients.tax_regime.
-     *
-     * @param  list<string>  $canonical
-     * @return list<string>
-     */
-    private function taxRegimeStorageValues(array $canonical): array
-    {
-        $values = [];
-        foreach ($canonical as $code) {
-            $regime = TaxRegimeCode::tryFrom($code);
-            if ($regime === null) {
-                $values[$code] = $code;
-
-                continue;
-            }
-
-            foreach ($regime->storageFilterValues() as $value) {
-                $values[$value] = $value;
-            }
-        }
-
-        return array_values($values);
-    }
-
-    /**
-     * Resumo de cliente vinculado (matriz ou filial) para a aba Estabelecimentos.
-     *
-     * @return array<string, mixed>
-     */
-    private function serializeLinkedClient(Client $client): array
-    {
-        $primary = $client->relationLoaded('establishments')
-            ? $client->establishments->first()
-            : $client->establishments()->orderBy('id')->first();
-
-        $credential = $client->relationLoaded('credential')
-            ? $client->credential
-            : null;
-
-        return [
-            'id' => $client->id,
-            'legal_name' => $client->legal_name,
-            'display_name' => $client->display_name,
-            'name' => $client->displayLabel(),
-            'root_cnpj' => $client->root_cnpj,
-            'matrix_client_id' => $client->matrix_client_id,
-            'cnpj' => $primary?->cnpj,
-            'trade_name' => $primary?->trade_name,
-            'is_matrix' => (bool) ($primary?->is_matrix ?? $client->matrix_client_id === null),
-            'is_active' => $client->is_active,
-            'credential_summary' => $credential === null
-                ? null
-                : [
-                    'status' => $credential->status?->value ?? $credential->status,
-                    'valid_to' => $credential->valid_to?->toIso8601String(),
-                ],
-        ];
-    }
-
-    /**
      * @return array<string, mixed>
      */
     private function serializeEstablishment(Establishment $est): array
     {
         return [
             'id' => $est->id,
-            'office_id' => $est->office_id,
+            'tenant_id' => $est->tenant_id,
             'client_id' => $est->client_id,
             'cnpj' => $est->cnpj,
             'trade_name' => $est->trade_name,
-            'is_matrix' => $est->is_matrix,
+            'is_headquarters' => $est->is_headquarters,
             'is_active' => $est->is_active,
             'registration_status' => $est->registration_status?->value ?? $est->registration_status,
             'registration_status_at' => $est->registration_status_at?->toDateString(),
@@ -904,7 +800,7 @@ class ClientController extends Controller
         /** @var array<string, mixed>|null $lookupPayload */
         $result = $refresher->handle($client, is_array($lookupPayload) ? $lookupPayload : null);
         $fresh = $result['client']->load([
-            'establishments' => fn ($q) => $q->orderByDesc('is_matrix')->orderBy('id'),
+            'establishments' => fn ($q) => $q->orderByDesc('is_headquarters')->orderBy('id'),
             'contacts',
             'categories',
         ]);

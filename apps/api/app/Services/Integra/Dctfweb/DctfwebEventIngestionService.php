@@ -6,7 +6,7 @@ use App\Models\Client;
 use App\Models\FiscalCategory;
 use App\Models\FiscalLastUpdateEvent;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\FiscalMonitoring\FiscalLastUpdateEventService;
 use Carbon\CarbonImmutable;
 use InvalidArgumentException;
@@ -33,7 +33,7 @@ final class DctfwebEventIngestionService
      * }
      */
     public function ingestAndDirect(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $periodKey,
         string $eventType = DctfwebCodes::EVENT_ULTIMA_ATUALIZACAO,
@@ -44,20 +44,20 @@ final class DctfwebEventIngestionService
         bool $enqueue = true,
         string $operationCode = DctfwebCodes::OP_MONITOR,
     ): array {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new InvalidArgumentException('Cliente não pertence ao escritório ativo.');
         }
 
         $periodKey = $this->competences->normalizePeriodKey($periodKey);
         $competence = $this->competences->resolve(
-            $office,
+            $tenant,
             $client,
             $periodKey,
             DctfwebCodes::CATEGORY_DCTFWEB,
         );
 
         // Garante projeção local mínima antes da reconciliação
-        $this->declarations->findOrCreate($office, $client, $periodKey);
+        $this->declarations->findOrCreate($tenant, $client, $periodKey);
 
         $meta = array_merge($metadata ?? [], [
             'period_key' => $periodKey,
@@ -69,7 +69,7 @@ final class DctfwebEventIngestionService
         $external = $externalId ?? sprintf('%s:%s:%s', $client->id, $periodKey, strtoupper($eventType));
 
         $result = $this->events->ingestAndDirect(
-            office: $office,
+            tenant: $tenant,
             systemCode: DctfwebCodes::SYSTEM_DCTFWEB,
             eventType: $eventType,
             client: $client,

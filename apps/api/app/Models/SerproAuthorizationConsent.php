@@ -2,14 +2,14 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'office_id',
-    'office_serpro_authorization_id',
+    'tenant_id',
+    'tenant_serpro_authorization_id',
     'consent_type',
     'version_code',
     'actor_user_id',
@@ -20,15 +20,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class SerproAuthorizationConsent extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
-    public const TYPE_MANAGED_A1 = 'MANAGED_A1_SIGN';
-
-    public const TYPE_MANAGED_A1_CUSTODY = 'MANAGED_A1_CUSTODY';
+    public const TYPE_CERTIFICATE_SIGN = 'CERTIFICATE_SIGN';
 
     public const TYPE_PRODUCTION_ONBOARDING = 'PRODUCTION_ONBOARDING';
 
-    public const VERSION_MANAGED_A1_V1 = 'managed-a1-sign.v1';
+    public const VERSION_CERTIFICATE_SIGN_V1 = 'certificate-sign.v1';
 
     public const VERSION_PRODUCTION_ONBOARDING_V1 = 'serpro-prod-onboarding.v1';
 
@@ -43,7 +41,7 @@ class SerproAuthorizationConsent extends Model
 
     public function authorization(): BelongsTo
     {
-        return $this->belongsTo(OfficeSerproAuthorization::class, 'office_serpro_authorization_id');
+        return $this->belongsTo(TenantSerproAuthorization::class, 'tenant_serpro_authorization_id');
     }
 
     public function isActive(): bool

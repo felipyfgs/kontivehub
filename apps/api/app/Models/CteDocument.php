@@ -5,14 +5,14 @@ namespace App\Models;
 use App\Enums\CteCoverageStatus;
 use App\Enums\DocumentDirection;
 use App\Enums\FiscalRole;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
-    'office_id', 'dfe_document_id', 'access_key', 'number', 'series', 'model',
+    'tenant_id', 'dfe_document_id', 'access_key', 'number', 'series', 'model',
     'issuer_cnpj', 'issuer_name', 'taker_cnpj', 'taker_name', 'effective_taker_cnpj',
     'sender_cnpj', 'recipient_cnpj', 'expeditor_cnpj', 'expeditor_name',
     'receiver_cnpj', 'receiver_name', 'fiscal_role', 'direction',
@@ -21,7 +21,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 ])]
 class CteDocument extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {

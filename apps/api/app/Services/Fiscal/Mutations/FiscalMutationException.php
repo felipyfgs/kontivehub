@@ -21,8 +21,8 @@ final class FiscalMutationException extends RuntimeException
         return match ($this->denialCode) {
             FiscalMutationDenialCode::NotFound => 404,
             FiscalMutationDenialCode::RoleForbidden,
-            FiscalMutationDenialCode::TotpRequired,
-            FiscalMutationDenialCode::TotpExpired,
+            FiscalMutationDenialCode::PasswordConfirmationRequired,
+            FiscalMutationDenialCode::PasswordConfirmationExpired,
             FiscalMutationDenialCode::SubscriptionBlocked,
             FiscalMutationDenialCode::DemoMode,
             FiscalMutationDenialCode::KillSwitch => 403,

@@ -4,7 +4,7 @@ namespace App\Models;
 
 use App\Enums\SerproConsumptionClass;
 use App\Enums\SerproUsageResult;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * Sem updated_at; proibido update de valores após insert.
  */
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'reservation_id',
     'idempotency_key',
     'client_id',
@@ -48,7 +48,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class SerproApiUsageEntry extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     public $timestamps = false;
 
@@ -74,7 +74,7 @@ class SerproApiUsageEntry extends Model
         // Imutabilidade: bloquear updates de colunas de valor após create.
         static::updating(function (self $entry): bool {
             $protected = [
-                'office_id',
+                'tenant_id',
                 'reservation_id',
                 'idempotency_key',
                 'client_id',
@@ -131,7 +131,7 @@ class SerproApiUsageEntry extends Model
     {
         return [
             'id' => $this->id,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'client_id' => $this->client_id,
             'system_code' => $this->system_code,
             'service_code' => $this->service_code,

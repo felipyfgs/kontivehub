@@ -166,7 +166,7 @@ return [
     */
     'kill_switch' => filter_var(env('SERPRO_KILL_SWITCH', false), FILTER_VALIDATE_BOOL),
 
-    /** TTL (minutos) da evidência de test-connection OAuth para cutover. */
+    /** TTL (minutos) da evidência de test-connection OAuth para ativação. */
     'credential_connection_test_ttl_minutes' => (int) env('SERPRO_CREDENTIAL_CONNECTION_TEST_TTL_MINUTES', 15),
     'solution_kill_switches' => [
         // 'INTEGRA_SN' => true,
@@ -178,7 +178,6 @@ return [
     |--------------------------------------------------------------------------
     */
     'retention' => [
-        'pfx_days' => (int) env('SERPRO_RETENTION_PFX_DAYS', 2555),
         'token_days' => (int) env('SERPRO_RETENTION_TOKEN_DAYS', 0),
         'termo_days' => (int) env('SERPRO_RETENTION_TERMO_DAYS', 2555),
         'power_days' => (int) env('SERPRO_RETENTION_POWER_DAYS', 2555),
@@ -193,7 +192,7 @@ return [
     | PENDING_VALIDATION | REUSE_STORED_TERM | REQUIRE_NEW_SIGNATURE
     */
     'term_representation' => [
-        // TRIAL: reuso do Termo para renovação automática do token do office.
+        // TRIAL: reuso do Termo para renovação automática do token do tenant.
         'TRIAL' => env('SERPRO_TERM_REPRESENTATION_TRIAL', 'REUSE_STORED_TERM'),
         // PRODUCTION: fail-closed até validação explícita em ops.
         'PRODUCTION' => env('SERPRO_TERM_REPRESENTATION_PRODUCTION', 'PENDING_VALIDATION'),
@@ -207,19 +206,14 @@ return [
     */
     /*
     |--------------------------------------------------------------------------
-    | PFX do contratante (e-CNPJ A1)
+    | PFX do contratante (certificado)
     |--------------------------------------------------------------------------
     */
     'contractor_pfx' => [
-        /** Dias mínimos de validade residual para promoção/cutover. */
+        /** Dias mínimos de validade residual para promoção/ativação. */
         'min_horizon_days' => (int) env('SERPRO_CONTRACTOR_PFX_MIN_HORIZON_DAYS', 7),
         /** Exigir extracerts no PFX (cadeia). */
         'require_chain' => filter_var(env('SERPRO_CONTRACTOR_PFX_REQUIRE_CHAIN', false), FILTER_VALIDATE_BOOL),
-        /**
-         * Legado: contagem de olhos para cutover. Cutover usa OWNER_CONFIRMATION
-         * vinculada (SerproRolloutApproval); este valor não autoriza cutover sozinho.
-         */
-        'cutover_approvals_required' => (int) env('SERPRO_CREDENTIAL_CUTOVER_APPROVALS', 1),
     ],
 
     /*
@@ -284,7 +278,7 @@ return [
     'rate_limit' => [
         'version' => (string) env('SERPRO_RATE_LIMIT_VERSION', 'v1'),
         'global_per_minute' => (int) env('SERPRO_RATE_LIMIT_GLOBAL_PER_MINUTE', 0),
-        'per_office_per_minute' => (int) env('SERPRO_RATE_LIMIT_OFFICE_PER_MINUTE', 0),
+        'per_tenant_per_minute' => (int) env('SERPRO_RATE_LIMIT_TENANT_PER_MINUTE', 0),
         'default_operation_per_minute' => (int) env('SERPRO_RATE_LIMIT_OPERATION_PER_MINUTE', 0),
         /** @var array<string, array{per_minute?: int}> */
         'operations' => [],
@@ -408,9 +402,9 @@ return [
     'procuracoes_scheduler' => [
         'enabled' => env('SERPRO_PROCURACOES_SCHEDULER_ENABLED', false),
         'environment' => env('SERPRO_PROCURACOES_SCHEDULER_ENVIRONMENT', 'TRIAL'),
-        'office_allowlist' => array_values(array_filter(array_map(
+        'tenant_allowlist' => array_values(array_filter(array_map(
             'intval',
-            explode(',', (string) env('SERPRO_PROCURACOES_SCHEDULER_OFFICE_ALLOWLIST', '')),
+            explode(',', (string) env('SERPRO_PROCURACOES_SCHEDULER_TENANT_ALLOWLIST', '')),
         ))),
         'max_age_hours' => max(1, (int) env('SERPRO_PROCURACOES_SCHEDULER_MAX_AGE_HOURS', 168)),
         'batch_size' => max(1, min(100, (int) env('SERPRO_PROCURACOES_SCHEDULER_BATCH_SIZE', 20))),
@@ -429,7 +423,7 @@ return [
         'flag_capabilities' => [
             'RefreshRegistrationLinksJob' => 'registrations',
             'RefreshTaxProcessesJob' => 'tax_processes',
-            'SignTermoWithManagedA1Job' => 'autentica_procurador',
+            'SignTermoWithManagedCertificateJob' => 'autentica_procurador',
             'PollEventosAtualizacaoJob' => 'authorization',
             'SyncClientProcuracaoJob' => 'authorization',
         ],

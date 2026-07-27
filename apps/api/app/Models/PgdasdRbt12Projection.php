@@ -3,13 +3,13 @@
 namespace App\Models;
 
 use App\Enums\PgdasdRbt12Status;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'client_id',
     'projection_id',
     'source_reference_key',
@@ -30,7 +30,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class PgdasdRbt12Projection extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {
@@ -81,7 +81,6 @@ class PgdasdRbt12Projection extends Model
             'period_key' => $this->relationLoaded('projection')
                 ? $this->projection?->period_key
                 : (is_array($this->metadata) ? ($this->metadata['period_key'] ?? null) : null),
-            'periodo_apuracao' => is_array($this->metadata) ? ($this->metadata['periodo_apuracao'] ?? null) : null,
             'status' => $this->status?->value ?? $this->getRawOriginal('status'),
             'rbt12_value' => $value,
             'total_cents' => $this->total_cents,
@@ -102,9 +101,6 @@ class PgdasdRbt12Projection extends Model
             ],
             'parser_version' => $this->parser_version,
             'unavailable_reason' => $this->sanitized_error,
-            'numero_das' => $this->source_das_number,
-            'numero_declaracao' => $this->source_declaration_number,
-            'resolved_at' => $this->extracted_at?->toIso8601String(),
             'extracted_at' => $this->extracted_at?->toIso8601String(),
         ];
     }

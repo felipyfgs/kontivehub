@@ -5,7 +5,7 @@ namespace App\Enums;
 /**
  * Papel fiscal do estabelecimento/cliente no documento.
  * CT-e: ISSUER, SENDER, RECIPIENT, EXPEDITOR, RECEIVER, TAKER (+ AUTXML só comprova autorização).
- * NFS-e / legados: ISSUER, TAKER, INTERMEDIARY.
+ * Participação do contribuinte no documento fiscal.
  */
 enum FiscalRole: string
 {

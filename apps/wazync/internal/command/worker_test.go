@@ -20,19 +20,26 @@ type fakeTransport struct {
 	mimeType          string
 }
 
-func (f *fakeTransport) Connect(string) error { f.connected = true; return nil }
-func (f *fakeTransport) Disconnect(string)    { f.connected = false }
-func (f *fakeTransport) SendText(_ context.Context, _, _, text, providerMessageID string) error {
-	f.text = text
-	f.providerMessageID = providerMessageID
+func (f *fakeTransport) ConnectContext(context.Context, string) error {
+	f.connected = true
 	return nil
 }
-func (f *fakeTransport) SendMedia(
-	_ context.Context, _, _, caption, filename, mimeType string, providerMessageID string, content []byte,
+func (f *fakeTransport) Disconnect(string) { f.connected = false }
+func (f *fakeTransport) SendTypedMessage(
+	_ context.Context,
+	_ string,
+	payload domain.MessageSendPayload,
+	providerMessageID string,
+	content []byte,
 ) error {
-	f.text = caption
-	f.filename = filename
-	f.mimeType = mimeType
+	f.text = payload.Text
+	if payload.Caption != "" {
+		f.text = payload.Caption
+	}
+	if payload.Media != nil {
+		f.filename = payload.Media.Filename
+		f.mimeType = payload.Media.MIMEType
+	}
 	f.media = append([]byte(nil), content...)
 	f.providerMessageID = providerMessageID
 	return nil
@@ -55,7 +62,7 @@ type lifecycleTransport struct {
 	logoutCalls  int
 }
 
-func (f *lifecycleTransport) Connect(string) error {
+func (f *lifecycleTransport) ConnectContext(context.Context, string) error {
 	f.connectCalls++
 	f.connected = true
 	return nil
@@ -224,7 +231,9 @@ func TestWorkerProvisionsAndSendsOnlyWithOwnedLease(t *testing.T) {
 		t.Fatalf("claim session: %v", err)
 	}
 
-	messagePayload, _ := json.Marshal(map[string]string{"to": "+5511999991234", "text": "Olá"})
+	messagePayload, _ := json.Marshal(map[string]string{
+		"to": "+5511999991234", "kind": "TEXT", "text": "Olá",
+	})
 	_, err = persistence.AcceptCommand(t.Context(), domain.Command{
 		ContractVersion: "v1", CommandID: "command-message-0001", SessionID: "session-worker-0001",
 		Type: domain.CommandSendMessage, ProviderMessageID: "provider-message-0001",
@@ -433,7 +442,7 @@ func TestWorkerFetchesAndSendsDocumentForMediaCommand(t *testing.T) {
 		t.Fatalf("claim session: %v", err)
 	}
 	payload, _ := json.Marshal(map[string]any{
-		"to": "+5511999991234", "text": "Segue a guia",
+		"to": "+5511999991234", "kind": "DOCUMENT", "caption": "Segue a guia",
 		"media": map[string]any{
 			"filename": "guia.pdf", "mime_type": "application/pdf", "size_bytes": 13,
 			"sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",

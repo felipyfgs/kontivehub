@@ -19,7 +19,7 @@ describe('FiscalClientCell CNPJ', () => {
     expect(source).toContain('navigator.clipboard.writeText')
     expect(source).toContain('CNPJ copiado')
     expect(source).toContain('event.stopPropagation()')
-    expect(source).toContain('cnpjMasked')
+    expect(source).not.toContain('cnpjMasked')
     expect(source).toMatch(/cnpj\?:/)
   })
 

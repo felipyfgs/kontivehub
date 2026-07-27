@@ -8,7 +8,7 @@ use App\Enums\FiscalTrigger;
 use App\Enums\MeiProvider;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Fiscal\SimplesMei\SimplesMeiCatalog;
 use App\Services\MeiAutomation\MeiAutomationAttemptRepository;
 use App\Services\MeiAutomation\MeiAutomationMetadataSanitizer;
@@ -97,7 +97,7 @@ class MeiProviderRouterTest extends TestCase
             'mei_automation.enabled' => $enabled,
             'mei_automation.kill_switch' => false,
             'mei_automation.live_egress_enabled' => true,
-            'mei_automation.allow_all_offices' => true,
+            'mei_automation.allow_all_tenants' => true,
             'mei_automation.provider_policy.default' => 'portal_then_serpro',
             'mei_automation.provider_policy.operations' => [],
         ]);
@@ -118,15 +118,15 @@ class MeiProviderRouterTest extends TestCase
 
     private function request(): FiscalAdapterRequest
     {
-        $office = new Office;
-        $office->id = 7;
+        $tenant = new Tenant;
+        $tenant->id = 7;
         $client = new Client;
         $client->id = 11;
-        $client->office_id = 7;
+        $client->tenant_id = 7;
         $run = new FiscalMonitoringRun;
         $run->forceFill([
             'id' => 13,
-            'office_id' => 7,
+            'tenant_id' => 7,
             'client_id' => 11,
             'system_code' => 'INTEGRA_MEI',
             'service_code' => 'PGMEI',
@@ -136,7 +136,7 @@ class MeiProviderRouterTest extends TestCase
         ]);
 
         return new FiscalAdapterRequest(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             run: $run,
             systemCode: 'INTEGRA_MEI',

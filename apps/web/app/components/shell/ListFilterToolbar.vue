@@ -7,7 +7,7 @@
  * sm+: busca flexível (max-w-sm) + ações à direita (customers.vue).
  */
 import type { DataTableFilterDefinition, DataTableFilterModel } from '~/types/data-table-filter'
-import type { SavedListFilterPayload } from '~/types/saved-list-filters'
+import type { SavedListFilterPayload, SavedListSurface } from '~/types/saved-list-filters'
 import { useSavedListPresets } from '~/composables/useSavedListPresets'
 import {
   COMPACT_BUTTON_LABEL_UI,
@@ -33,7 +33,7 @@ const props = withDefaults(defineProps<{
   showExport?: boolean
   canExport?: boolean
   resetKey?: string | number | null
-  surface?: string | null
+  surface?: SavedListSurface | null
   canShareFilters?: boolean
   getPayload?: () => SavedListFilterPayload
   canSave?: () => boolean
@@ -121,7 +121,10 @@ const {
   surface: () => props.surface,
   canShare: () => props.canShareFilters,
   resetKey: () => props.resetKey,
-  getPayload: () => props.getPayload?.() ?? { schema_version: 1 },
+  getPayload: () => {
+    if (!props.getPayload) throw new Error('Serializador do filtro salvo não configurado.')
+    return props.getPayload()
+  },
   canSave: () => (props.canSave ? props.canSave() : hasActive.value),
   onApply: payload => emit('apply-preset', payload)
 })

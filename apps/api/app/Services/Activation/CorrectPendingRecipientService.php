@@ -4,11 +4,11 @@ namespace App\Services\Activation;
 
 use App\Enums\ActivationMethod;
 use App\Enums\ActivationPurpose;
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Models\AccountActivation;
-use App\Models\Office;
-use App\Models\OfficeMembership;
 use App\Models\PlatformMembership;
+use App\Models\Tenant;
+use App\Models\TenantMembership;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use Illuminate\Support\Facades\DB;
@@ -24,19 +24,19 @@ final class CorrectPendingRecipientService
     ) {}
 
     /**
-     * Corrige primeiro ADMIN de Office pendente.
+     * Corrige primeiro ADMIN de Tenant pendente.
      *
      * @return array<string, mixed>
      */
-    public function correctOfficeFirstAdmin(
-        Office $office,
+    public function correctTenantFirstAdmin(
+        Tenant $tenant,
         string $name,
         string $email,
         ActivationMethod $method,
         User $actor,
     ): array {
-        if (! $office->isPendingActivation()) {
-            throw ActivationException::forbidden('Correção disponível somente enquanto o Office está pendente.');
+        if (! $tenant->isPendingActivation()) {
+            throw ActivationException::forbidden('Correção disponível somente enquanto o Tenant está pendente.');
         }
 
         $issued = $this->credentials->issueSecret($method);
@@ -44,16 +44,16 @@ final class CorrectPendingRecipientService
         $newEmail = $this->credentials->normalizeEmail($email);
         $newName = trim($name);
 
-        return DB::transaction(function () use ($office, $newName, $newEmail, $method, $issued, $expiresAt, $actor) {
-            $office = Office::query()->whereKey($office->id)->lockForUpdate()->firstOrFail();
+        return DB::transaction(function () use ($tenant, $newName, $newEmail, $method, $issued, $expiresAt, $actor) {
+            $tenant = Tenant::query()->whereKey($tenant->id)->lockForUpdate()->firstOrFail();
 
-            if (! $office->isPendingActivation()) {
-                throw ActivationException::forbidden('Correção disponível somente enquanto o Office está pendente.');
+            if (! $tenant->isPendingActivation()) {
+                throw ActivationException::forbidden('Correção disponível somente enquanto o Tenant está pendente.');
             }
 
-            $membership = OfficeMembership::query()
-                ->where('office_id', $office->id)
-                ->where('role', OfficeRole::Admin)
+            $membership = TenantMembership::query()
+                ->where('tenant_id', $tenant->id)
+                ->where('role', TenantRole::TenantAdmin)
                 ->orderBy('id')
                 ->lockForUpdate()
                 ->first();
@@ -65,18 +65,18 @@ final class CorrectPendingRecipientService
             /** @var User $oldUser */
             $oldUser = User::query()->whereKey($membership->user_id)->lockForUpdate()->firstOrFail();
 
-            $this->assertNeverActivated($oldUser, ActivationPurpose::OfficeFirstAdmin);
+            $this->assertNeverActivated($oldUser, ActivationPurpose::TenantFirstAdmin);
 
             if ($newEmail !== $this->credentials->normalizeEmail($oldUser->email)
                 && User::query()->where('email', $newEmail)->exists()) {
                 throw ActivationException::emailTaken();
             }
 
-            $this->revokeAllForUserPurpose($oldUser->id, ActivationPurpose::OfficeFirstAdmin, $membership->id, null);
+            $this->revokeAllForUserPurpose($oldUser->id, ActivationPurpose::TenantFirstAdmin, $membership->id, null);
 
-            $oldEmailMasked = AccountActivation::maskEmail($oldUser->email);
-            $oldUserId = $oldUser->id;
-            $oldMembershipId = $membership->id;
+            $previousEmailMasked = AccountActivation::maskEmail($oldUser->email);
+            $previousUserId = $oldUser->id;
+            $previousMembershipId = $membership->id;
 
             // Remove membership e usuário exclusivos nunca ativados.
             $membership->delete();
@@ -90,19 +90,19 @@ final class CorrectPendingRecipientService
                 'password_change_required' => true,
             ]);
 
-            $newMembership = OfficeMembership::query()->create([
-                'office_id' => $office->id,
+            $newMembership = TenantMembership::query()->create([
+                'tenant_id' => $tenant->id,
                 'user_id' => $user->id,
-                'role' => OfficeRole::Admin,
+                'role' => TenantRole::TenantAdmin,
                 'is_active' => false,
             ]);
 
             $activation = AccountActivation::query()->create([
-                'purpose' => ActivationPurpose::OfficeFirstAdmin,
+                'purpose' => ActivationPurpose::TenantFirstAdmin,
                 'method' => $method,
                 'user_id' => $user->id,
-                'office_id' => $office->id,
-                'office_membership_id' => $newMembership->id,
+                'tenant_id' => $tenant->id,
+                'tenant_membership_id' => $newMembership->id,
                 'platform_membership_id' => null,
                 'email_normalized' => $newEmail,
                 'secret_hash' => $issued['hash'],
@@ -112,19 +112,19 @@ final class CorrectPendingRecipientService
             ]);
 
             $this->audit->record(
-                action: 'office.first_admin_corrected',
+                action: 'tenant.first_admin_corrected',
                 result: 'SUCCESS',
-                subject: $office,
+                subject: $tenant,
                 context: [
-                    'old_user_id' => $oldUserId,
-                    'old_membership_id' => $oldMembershipId,
-                    'old_email_masked' => $oldEmailMasked,
+                    'previous_user_id' => $previousUserId,
+                    'previous_membership_id' => $previousMembershipId,
+                    'previous_email_masked' => $previousEmailMasked,
                     'new_user_id' => $user->id,
                     'new_email_masked' => AccountActivation::maskEmail($newEmail),
                     'method' => $method->value,
                 ],
                 userId: $actor->id,
-                officeId: $office->id,
+                tenantId: $tenant->id,
             );
 
             return $this->secretPayload($activation, $issued, $expiresAt->toIso8601String(), [
@@ -150,7 +150,7 @@ final class CorrectPendingRecipientService
         string $email,
         ActivationMethod $method,
         User $actor,
-        ?int $defaultOfficeId = null,
+        ?int $defaultTenantId = null,
     ): array {
         throw ActivationException::forbidden(
             'Correção de administrador global pendente foi descontinuada. '
@@ -159,12 +159,12 @@ final class CorrectPendingRecipientService
     }
 
     /**
-     * Corrige membro de equipe pendente (Office ADMIN real).
+     * Corrige membro de equipe pendente (Tenant ADMIN real).
      *
      * @return array<string, mixed>
      */
-    public function correctOfficeMember(
-        OfficeMembership $membership,
+    public function correctTenantMember(
+        TenantMembership $membership,
         string $name,
         string $email,
         ActivationMethod $method,
@@ -176,8 +176,8 @@ final class CorrectPendingRecipientService
         $newName = trim($name);
 
         return DB::transaction(function () use ($membership, $newName, $newEmail, $method, $issued, $expiresAt, $actor) {
-            /** @var OfficeMembership $locked */
-            $locked = OfficeMembership::query()->whereKey($membership->id)->lockForUpdate()->firstOrFail();
+            /** @var TenantMembership $locked */
+            $locked = TenantMembership::query()->whereKey($membership->id)->lockForUpdate()->firstOrFail();
 
             if ($locked->is_active) {
                 throw ActivationException::forbidden('Correção disponível somente enquanto o membro está pendente.');
@@ -185,7 +185,7 @@ final class CorrectPendingRecipientService
 
             /** @var User $oldUser */
             $oldUser = User::query()->whereKey($locked->user_id)->lockForUpdate()->firstOrFail();
-            $this->assertNeverActivated($oldUser, ActivationPurpose::OfficeMember);
+            $this->assertNeverActivated($oldUser, ActivationPurpose::TenantMember);
 
             if ($newEmail !== $this->credentials->normalizeEmail($oldUser->email)
                 && User::query()->where('email', $newEmail)->exists()) {
@@ -193,13 +193,13 @@ final class CorrectPendingRecipientService
             }
 
             $role = $locked->role;
-            $officeId = $locked->office_id;
+            $tenantId = $locked->tenant_id;
 
-            $this->revokeAllForUserPurpose($oldUser->id, ActivationPurpose::OfficeMember, $locked->id, null);
+            $this->revokeAllForUserPurpose($oldUser->id, ActivationPurpose::TenantMember, $locked->id, null);
 
-            $oldEmailMasked = AccountActivation::maskEmail($oldUser->email);
-            $oldUserId = $oldUser->id;
-            $oldMembershipId = $locked->id;
+            $previousEmailMasked = AccountActivation::maskEmail($oldUser->email);
+            $previousUserId = $oldUser->id;
+            $previousMembershipId = $locked->id;
 
             $locked->delete();
             $this->deleteExclusiveNeverActivatedUser($oldUser);
@@ -212,19 +212,19 @@ final class CorrectPendingRecipientService
                 'password_change_required' => true,
             ]);
 
-            $newMembership = OfficeMembership::query()->create([
-                'office_id' => $officeId,
+            $newMembership = TenantMembership::query()->create([
+                'tenant_id' => $tenantId,
                 'user_id' => $user->id,
                 'role' => $role,
                 'is_active' => false,
             ]);
 
             $activation = AccountActivation::query()->create([
-                'purpose' => ActivationPurpose::OfficeMember,
+                'purpose' => ActivationPurpose::TenantMember,
                 'method' => $method,
                 'user_id' => $user->id,
-                'office_id' => $officeId,
-                'office_membership_id' => $newMembership->id,
+                'tenant_id' => $tenantId,
+                'tenant_membership_id' => $newMembership->id,
                 'platform_membership_id' => null,
                 'email_normalized' => $newEmail,
                 'secret_hash' => $issued['hash'],
@@ -234,19 +234,19 @@ final class CorrectPendingRecipientService
             ]);
 
             $this->audit->record(
-                action: 'office.member_recipient_corrected',
+                action: 'tenant.member_recipient_corrected',
                 result: 'SUCCESS',
                 subject: $newMembership,
                 context: [
-                    'old_user_id' => $oldUserId,
-                    'old_membership_id' => $oldMembershipId,
-                    'old_email_masked' => $oldEmailMasked,
+                    'previous_user_id' => $previousUserId,
+                    'previous_membership_id' => $previousMembershipId,
+                    'previous_email_masked' => $previousEmailMasked,
                     'new_user_id' => $user->id,
                     'new_email_masked' => AccountActivation::maskEmail($newEmail),
                     'method' => $method->value,
                 ],
                 userId: $actor->id,
-                officeId: $officeId,
+                tenantId: $tenantId,
             );
 
             return $this->secretPayload($activation, $issued, $expiresAt->toIso8601String(), [
@@ -278,7 +278,7 @@ final class CorrectPendingRecipientService
     private function revokeAllForUserPurpose(
         int $userId,
         ActivationPurpose $purpose,
-        ?int $officeMembershipId,
+        ?int $tenantMembershipId,
         ?int $platformMembershipId,
     ): void {
         $q = AccountActivation::query()
@@ -287,8 +287,8 @@ final class CorrectPendingRecipientService
             ->whereNull('consumed_at')
             ->whereNull('revoked_at');
 
-        if ($officeMembershipId !== null) {
-            $q->where('office_membership_id', $officeMembershipId);
+        if ($tenantMembershipId !== null) {
+            $q->where('tenant_membership_id', $tenantMembershipId);
         }
         if ($platformMembershipId !== null) {
             $q->where('platform_membership_id', $platformMembershipId);
@@ -301,7 +301,7 @@ final class CorrectPendingRecipientService
 
     private function deleteExclusiveNeverActivatedUser(User $user): void
     {
-        $hasOtherMembership = OfficeMembership::query()->where('user_id', $user->id)->exists();
+        $hasOtherMembership = TenantMembership::query()->where('user_id', $user->id)->exists();
         $hasPlatform = PlatformMembership::query()->where('user_id', $user->id)->exists();
 
         if ($hasOtherMembership || $hasPlatform) {

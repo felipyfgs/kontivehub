@@ -8,11 +8,11 @@ use App\Enums\TaxPeriodGranularity;
 use App\Enums\TaxRegimeCode;
 use App\Models\Client;
 use App\Models\FiscalCompetence;
-use App\Models\Office;
 use App\Models\TaxObligationDefinition;
 use App\Models\TaxObligationProjection;
 use App\Models\TaxObligationRegimeRule;
 use App\Models\TaxObligationVersion;
+use App\Models\Tenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -92,7 +92,7 @@ final class TaxObligationProjectionService
      * NÃO cria pendência presumida quando applicability = UNKNOWN.
      */
     public function project(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         TaxObligationDefinition $obligation,
         string $periodKey,
@@ -101,7 +101,7 @@ final class TaxObligationProjectionService
         ?int $competenceId = null,
         bool $computeDue = true,
     ): TaxObligationProjection {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new RuntimeException('Cliente não pertence ao escritório ativo.');
         }
         if (! $obligation->is_active) {
@@ -111,7 +111,7 @@ final class TaxObligationProjectionService
         [$year, $month] = $this->parsePeriod($periodKey, $periodYear, $periodMonth, $obligation);
 
         return DB::transaction(function () use (
-            $office,
+            $tenant,
             $client,
             $obligation,
             $periodKey,
@@ -143,7 +143,7 @@ final class TaxObligationProjectionService
 
             $existing = TaxObligationProjection::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('client_id', $client->id)
                 ->where('obligation_definition_id', $obligation->id)
                 ->where('period_key', $periodKey)
@@ -174,7 +174,7 @@ final class TaxObligationProjectionService
             }
 
             $payload = [
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'client_id' => $client->id,
                 'obligation_definition_id' => $obligation->id,
                 'obligation_version_id' => $version?->id,
@@ -225,7 +225,7 @@ final class TaxObligationProjectionService
      * @return list<TaxObligationProjection>
      */
     public function projectAllForClient(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $periodKey,
         ?int $periodYear = null,
@@ -234,7 +234,7 @@ final class TaxObligationProjectionService
         $out = [];
         foreach ($this->catalog->listDefinitions(true) as $definition) {
             $out[] = $this->project(
-                $office,
+                $tenant,
                 $client,
                 $definition,
                 $periodKey,
@@ -251,7 +251,7 @@ final class TaxObligationProjectionService
      */
     public function attachCompetence(TaxObligationProjection $projection, FiscalCompetence $competence): TaxObligationProjection
     {
-        if ((int) $projection->office_id !== (int) $competence->office_id) {
+        if ((int) $projection->tenant_id !== (int) $competence->tenant_id) {
             throw new RuntimeException('Competência de outro tenant.');
         }
         if ((int) $projection->client_id !== (int) $competence->client_id) {

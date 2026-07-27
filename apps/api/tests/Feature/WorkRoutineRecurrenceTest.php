@@ -3,22 +3,22 @@
 namespace Tests\Feature;
 
 use App\Domain\Work\ReferencePeriod;
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Enums\Work\DueRuleType;
 use App\Enums\Work\GenerationBatchStatus;
 use App\Enums\Work\GenerationItemStatus;
 use App\Enums\Work\RecurrenceFrequency;
 use App\Enums\Work\RecurrencePeriodOffset;
 use App\Models\Client;
-use App\Models\Office;
-use App\Models\OfficeMembership;
-use App\Models\OperationalProcess;
-use App\Models\ProcessGenerationBatch;
-use App\Models\ProcessTemplate;
-use App\Models\ProcessTemplateTask;
+use App\Models\Tenant;
+use App\Models\TenantMembership;
 use App\Models\User;
+use App\Models\WorkProcess;
+use App\Models\WorkProcessGenerationBatch;
+use App\Models\WorkProcessTemplate;
+use App\Models\WorkProcessTemplateTask;
 use App\Services\Work\WorkRoutineRecurrenceDispatcher;
-use App\Support\FiscalDataModel\PrivilegedOfficeContext;
+use App\Support\FiscalDataModel\PrivilegedTenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -33,13 +33,13 @@ class WorkRoutineRecurrenceTest extends TestCase
     {
         parent::setUp();
         Http::fake();
-        PrivilegedOfficeContext::reset();
+        PrivilegedTenantContext::reset();
     }
 
     public function test_patch_recurrence_applies_defaults_and_rejects_invalid_day(): void
     {
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
-        $template = $this->template($office);
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $template = $this->template($tenant);
         Sanctum::actingAs($admin);
 
         $this->patchJson('/api/v1/work/templates/'.$template->id.'/recurrence', [
@@ -66,19 +66,19 @@ class WorkRoutineRecurrenceTest extends TestCase
             ->assertJsonPath('data.generation_day', 1);
     }
 
-    public function test_viewer_cannot_update_recurrence_and_office_id_is_stripped(): void
+    public function test_viewer_cannot_update_recurrence_and_tenant_id_is_stripped(): void
     {
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
-        $other = Office::factory()->create();
-        $template = $this->template($office);
-        $viewer = User::factory()->forOffice($office, OfficeRole::Viewer)->create();
-        $viewer->forceFill(['selected_office_id' => $office->id])->saveQuietly();
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $other = Tenant::factory()->create();
+        $template = $this->template($tenant);
+        $viewer = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $viewer->forceFill(['selected_tenant_id' => $tenant->id])->saveQuietly();
 
         Sanctum::actingAs($viewer);
         $this->patchJson('/api/v1/work/templates/'.$template->id.'/recurrence', [
             'recurrence_enabled' => true,
             'recurrence_frequency' => RecurrenceFrequency::Monthly->value,
-            'office_id' => $other->id,
+            'tenant_id' => $other->id,
             'lock_version' => $template->lock_version,
         ])->assertForbidden();
 
@@ -86,9 +86,9 @@ class WorkRoutineRecurrenceTest extends TestCase
         $this->patchJson('/api/v1/work/templates/'.$template->id.'/recurrence', [
             'recurrence_enabled' => true,
             'recurrence_frequency' => RecurrenceFrequency::Monthly->value,
-            'office_id' => $other->id,
-            'recurrence_owner_membership_id' => OfficeMembership::factory()->create([
-                'office_id' => $other->id,
+            'tenant_id' => $other->id,
+            'recurrence_owner_membership_id' => TenantMembership::factory()->create([
+                'tenant_id' => $other->id,
             ])->id,
             'lock_version' => $template->lock_version,
         ])->assertUnprocessable();
@@ -96,14 +96,14 @@ class WorkRoutineRecurrenceTest extends TestCase
 
     public function test_dispatcher_creates_idempotent_batch_for_previous_period(): void
     {
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
-        $client = $this->client($office, 'Cliente recorrente');
-        $template = $this->template($office, [
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $client = $this->client($tenant, 'Cliente recorrente');
+        $template = $this->template($tenant, [
             'tax_regimes' => ['SIMPLES_NACIONAL'],
         ]);
-        ProcessTemplateTask::factory()->create([
-            'office_id' => $office->id,
-            'process_template_id' => $template->id,
+        WorkProcessTemplateTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_template_id' => $template->id,
             'sort_order' => 1,
             'title' => 'Apurar',
         ]);
@@ -127,40 +127,40 @@ class WorkRoutineRecurrenceTest extends TestCase
         $result = $dispatcher->dispatchDue($runAt->addMinute());
 
         $this->assertSame(1, $result['dispatched']);
-        $this->assertDatabaseHas('process_generation_batches', [
-            'office_id' => $office->id,
-            'process_template_id' => $template->id,
+        $this->assertDatabaseHas('work_process_generation_batches', [
+            'tenant_id' => $tenant->id,
+            'work_process_template_id' => $template->id,
             'competence' => '2026-06',
             'idempotency_key' => WorkRoutineRecurrenceDispatcher::idempotencyKey(
-                (int) $office->id,
+                (int) $tenant->id,
                 (int) $template->id,
                 ReferencePeriod::fromString('2026-06'),
             ),
         ]);
-        $this->assertDatabaseHas('operational_processes', [
-            'office_id' => $office->id,
+        $this->assertDatabaseHas('work_processes', [
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
-            'process_template_id' => $template->id,
+            'work_process_template_id' => $template->id,
             'competence' => '2026-06',
         ]);
 
         $second = $dispatcher->dispatchTemplate($template->fresh(), $runAt->addMinute());
         $this->assertSame(0, $second['dispatched']);
-        $this->assertDatabaseCount('operational_processes', 1);
-        $this->assertDatabaseCount('process_generation_batches', 1);
+        $this->assertDatabaseCount('work_processes', 1);
+        $this->assertDatabaseCount('work_process_generation_batches', 1);
         unset($admin);
     }
 
     public function test_catch_up_processes_missed_periods_in_order(): void
     {
-        [, $office] = $this->actor(OfficeRole::Admin);
-        $this->client($office, 'Cliente catch-up');
-        $template = $this->template($office, [
+        [, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $this->client($tenant, 'Cliente catch-up');
+        $template = $this->template($tenant, [
             'tax_regimes' => ['SIMPLES_NACIONAL'],
         ]);
-        ProcessTemplateTask::factory()->create([
-            'office_id' => $office->id,
-            'process_template_id' => $template->id,
+        WorkProcessTemplateTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_template_id' => $template->id,
             'sort_order' => 1,
             'title' => 'Apurar',
         ]);
@@ -183,8 +183,8 @@ class WorkRoutineRecurrenceTest extends TestCase
         $result = app(WorkRoutineRecurrenceDispatcher::class)->dispatchDue($now);
 
         $this->assertGreaterThanOrEqual(2, $result['dispatched']);
-        $competences = ProcessGenerationBatch::query()
-            ->where('process_template_id', $template->id)
+        $competences = WorkProcessGenerationBatch::query()
+            ->where('work_process_template_id', $template->id)
             ->orderBy('competence')
             ->pluck('competence')
             ->all();
@@ -199,15 +199,15 @@ class WorkRoutineRecurrenceTest extends TestCase
 
     public function test_retry_partial_failures_without_duplicating_successes(): void
     {
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
-        $ok = $this->client($office, 'Ok');
-        $fail = $this->client($office, 'Fail');
-        $template = $this->template($office, [
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $ok = $this->client($tenant, 'Ok');
+        $fail = $this->client($tenant, 'Fail');
+        $template = $this->template($tenant, [
             'tax_regimes' => ['SIMPLES_NACIONAL'],
         ]);
-        ProcessTemplateTask::factory()->create([
-            'office_id' => $office->id,
-            'process_template_id' => $template->id,
+        WorkProcessTemplateTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_template_id' => $template->id,
             'sort_order' => 1,
             'title' => 'Apurar',
         ]);
@@ -225,15 +225,15 @@ class WorkRoutineRecurrenceTest extends TestCase
         $this->postJson('/api/v1/work/generation-batches/'.$batchId.'/confirm')
             ->assertOk();
 
-        $batch = ProcessGenerationBatch::query()->findOrFail($batchId);
+        $batch = WorkProcessGenerationBatch::query()->findOrFail($batchId);
         $failItem = $batch->items()->where('client_id', $fail->id)->firstOrFail();
-        $okProcess = OperationalProcess::query()
+        $okProcess = WorkProcess::query()
             ->where('client_id', $ok->id)
             ->where('competence', '2026-03')
             ->firstOrFail();
 
         // Simula falha parcial: remove processo do fail (se criado) e marca item FAILED.
-        OperationalProcess::query()
+        WorkProcess::query()
             ->where('client_id', $fail->id)
             ->where('competence', '2026-03')
             ->delete();
@@ -252,33 +252,33 @@ class WorkRoutineRecurrenceTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.status', 'COMPLETED');
 
-        $this->assertDatabaseCount('operational_processes', 2);
+        $this->assertDatabaseCount('work_processes', 2);
         $this->assertSame(
             $okProcess->id,
-            OperationalProcess::query()->where('client_id', $ok->id)->value('id'),
+            WorkProcess::query()->where('client_id', $ok->id)->value('id'),
         );
-        $this->assertDatabaseHas('operational_processes', [
+        $this->assertDatabaseHas('work_processes', [
             'client_id' => $fail->id,
             'competence' => '2026-03',
         ]);
     }
 
-    public function test_list_batches_is_office_scoped(): void
+    public function test_list_batches_is_tenant_scoped(): void
     {
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
-        $other = Office::factory()->create();
-        $template = $this->template($office);
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $other = Tenant::factory()->create();
+        $template = $this->template($tenant);
         $foreignTemplate = $this->template($other);
 
-        ProcessGenerationBatch::factory()->create([
-            'office_id' => $office->id,
-            'process_template_id' => $template->id,
+        WorkProcessGenerationBatch::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_template_id' => $template->id,
             'competence' => '2026-01',
             'status' => GenerationBatchStatus::Completed,
         ]);
-        ProcessGenerationBatch::factory()->create([
-            'office_id' => $other->id,
-            'process_template_id' => $foreignTemplate->id,
+        WorkProcessGenerationBatch::factory()->create([
+            'tenant_id' => $other->id,
+            'work_process_template_id' => $foreignTemplate->id,
             'competence' => '2026-01',
             'status' => GenerationBatchStatus::Completed,
         ]);
@@ -295,14 +295,14 @@ class WorkRoutineRecurrenceTest extends TestCase
 
     public function test_disabled_recurrence_skips_future_dispatch(): void
     {
-        [, $office] = $this->actor(OfficeRole::Admin);
-        $this->client($office, 'Cliente');
-        $template = $this->template($office, [
+        [, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $this->client($tenant, 'Cliente');
+        $template = $this->template($tenant, [
             'tax_regimes' => ['SIMPLES_NACIONAL'],
         ]);
-        ProcessTemplateTask::factory()->create([
-            'office_id' => $office->id,
-            'process_template_id' => $template->id,
+        WorkProcessTemplateTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_template_id' => $template->id,
             'sort_order' => 1,
             'title' => 'Apurar',
         ]);
@@ -323,19 +323,19 @@ class WorkRoutineRecurrenceTest extends TestCase
             ->dispatchDue(CarbonImmutable::parse('2026-07-01 12:00:00', 'UTC'));
 
         $this->assertSame(0, $result['dispatched']);
-        $this->assertDatabaseCount('process_generation_batches', 0);
+        $this->assertDatabaseCount('work_process_generation_batches', 0);
     }
 
     public function test_quarterly_dispatcher_persists_variable_period_key(): void
     {
-        [, $office] = $this->actor(OfficeRole::Admin);
-        $client = $this->client($office, 'Cliente trimestral');
-        $template = $this->template($office, [
+        [, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $client = $this->client($tenant, 'Cliente trimestral');
+        $template = $this->template($tenant, [
             'tax_regimes' => ['SIMPLES_NACIONAL'],
         ]);
-        ProcessTemplateTask::factory()->create([
-            'office_id' => $office->id,
-            'process_template_id' => $template->id,
+        WorkProcessTemplateTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_template_id' => $template->id,
             'sort_order' => 1,
             'title' => 'Apurar T',
         ]);
@@ -360,34 +360,34 @@ class WorkRoutineRecurrenceTest extends TestCase
         $result = app(WorkRoutineRecurrenceDispatcher::class)->dispatchDue($runAt->addMinute());
 
         $this->assertSame(1, $result['dispatched']);
-        $this->assertDatabaseHas('process_generation_batches', [
-            'office_id' => $office->id,
-            'process_template_id' => $template->id,
+        $this->assertDatabaseHas('work_process_generation_batches', [
+            'tenant_id' => $tenant->id,
+            'work_process_template_id' => $template->id,
             'competence' => '2026-T1',
         ]);
-        $this->assertDatabaseHas('operational_processes', [
-            'office_id' => $office->id,
+        $this->assertDatabaseHas('work_processes', [
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
-            'process_template_id' => $template->id,
+            'work_process_template_id' => $template->id,
             'competence' => '2026-T1',
         ]);
     }
 
-    /** @return array{User, Office} */
-    private function actor(OfficeRole $role): array
+    /** @return array{User, Tenant} */
+    private function actor(TenantRole $role): array
     {
-        $office = Office::factory()->create(['timezone' => 'America/Sao_Paulo']);
-        $user = User::factory()->forOffice($office, $role)->create();
-        $user->forceFill(['selected_office_id' => $office->id])->saveQuietly();
+        $tenant = Tenant::factory()->create(['timezone' => 'America/Sao_Paulo']);
+        $user = User::factory()->forTenant($tenant, $role)->create();
+        $user->forceFill(['selected_tenant_id' => $tenant->id])->saveQuietly();
 
-        return [$user, $office];
+        return [$user, $tenant];
     }
 
     /** @param  array<string, mixed>  $rules */
-    private function template(Office $office, array $rules = []): ProcessTemplate
+    private function template(Tenant $tenant, array $rules = []): WorkProcessTemplate
     {
-        return ProcessTemplate::factory()->create([
-            'office_id' => $office->id,
+        return WorkProcessTemplate::factory()->create([
+            'tenant_id' => $tenant->id,
             'name' => 'Rotina recorrência '.fake()->unique()->numerify('####'),
             'monitoring_module_key' => 'PGDASD',
             'audience_rules' => $rules + [
@@ -405,9 +405,9 @@ class WorkRoutineRecurrenceTest extends TestCase
         ]);
     }
 
-    private function client(Office $office, string $name): Client
+    private function client(Tenant $tenant, string $name): Client
     {
-        return Client::factory()->forOffice($office)->create([
+        return Client::factory()->forTenant($tenant)->create([
             'legal_name' => $name,
             'tax_regime' => 'SIMPLES_NACIONAL',
             'is_active' => true,

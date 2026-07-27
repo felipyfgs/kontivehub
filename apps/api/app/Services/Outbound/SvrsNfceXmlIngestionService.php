@@ -17,10 +17,10 @@ use App\Enums\SvrsNfceRecoveryStatus;
 use App\Models\DfeDocument;
 use App\Models\DocumentAcquisition;
 use App\Models\Establishment;
-use App\Models\MaOutboundRetrievalRequest;
 use App\Models\NfeDocument;
 use App\Models\OutboundCaptureProfile;
 use App\Models\OutboundNumberState;
+use App\Models\OutboundRetrievalRequest;
 use App\Services\Audit\AuditLogger;
 use App\Services\Sefaz\NfeXmlProjectionParser;
 use Illuminate\Support\Facades\DB;
@@ -52,7 +52,7 @@ final class SvrsNfceXmlIngestionService
         OutboundCaptureProfile $profile,
         Establishment $establishment,
         OutboundNumberState $number,
-        MaOutboundRetrievalRequest $request,
+        OutboundRetrievalRequest $request,
         string $xmlBytes,
         string $expectedAccessKey,
         string $correlationId,
@@ -84,15 +84,15 @@ final class SvrsNfceXmlIngestionService
 
         $sha = $validated['sha256'];
         $key = $validated['access_key'];
-        $officeId = (int) $profile->office_id;
+        $tenantId = (int) $profile->tenant_id;
 
         return DB::transaction(function () use (
-            $profile, $establishment, $number, $request, $xmlBytes, $sha, $key, $officeId, $validated, $correlationId,
+            $profile, $establishment, $number, $request, $xmlBytes, $sha, $key, $tenantId, $validated, $correlationId,
             $source, $expectedModel,
         ) {
             // Idempotência: mesma chave+hash
             $existingSame = DfeDocument::query()
-                ->where('office_id', $officeId)
+                ->where('tenant_id', $tenantId)
                 ->where('access_key', $key)
                 ->where('sha256', $sha)
                 ->first();
@@ -105,12 +105,12 @@ final class SvrsNfceXmlIngestionService
                         'sha256' => $sha,
                     ],
                     [
-                        'office_id' => $officeId,
+                        'tenant_id' => $tenantId,
                         'access_key' => $key,
                         'channel' => CaptureChannel::MaOutbound->value,
                         'is_canonical' => true,
                         'establishment_id' => $establishment->id,
-                        'ma_outbound_retrieval_request_id' => $request->id,
+                        'outbound_retrieval_request_id' => $request->id,
                         'outbound_number_state_id' => $number->id,
                         'metadata' => [
                             'correlation_id' => $correlationId,
@@ -131,20 +131,20 @@ final class SvrsNfceXmlIngestionService
 
             // Divergência de bytes
             $other = DfeDocument::query()
-                ->where('office_id', $officeId)
+                ->where('tenant_id', $tenantId)
                 ->where('access_key', $key)
                 ->where('sha256', '!=', $sha)
                 ->first();
 
             // Vault primeiro
-            // AAD canônico de DF-e: office_id + sha256 (mesma chave do export/download).
+            // AAD canônico de DF-e: tenant_id + sha256 (mesma chave do export/download).
             $objectId = $this->store->put($xmlBytes, [
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'sha256' => $sha,
             ]);
 
             $doc = DfeDocument::query()->create([
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'sha256' => $sha,
                 'document_type' => AdnDocumentType::Nfe,
                 'schema_version' => 'procNFe_v4.00.xsd',
@@ -158,7 +158,7 @@ final class SvrsNfceXmlIngestionService
             $isCanonical = $other === null;
 
             DocumentAcquisition::query()->create([
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'dfe_document_id' => $doc->id,
                 'access_key' => $key,
                 'source' => $source,
@@ -168,7 +168,7 @@ final class SvrsNfceXmlIngestionService
                 'bytes_diverge_from_canonical' => ! $isCanonical,
                 'quarantine_reason' => $isCanonical ? null : 'DIVERGENT_BYTES',
                 'establishment_id' => $establishment->id,
-                'ma_outbound_retrieval_request_id' => $request->id,
+                'outbound_retrieval_request_id' => $request->id,
                 'outbound_number_state_id' => $number->id,
                 'metadata' => [
                     'correlation_id' => $correlationId,
@@ -193,7 +193,7 @@ final class SvrsNfceXmlIngestionService
                     'profile_id' => $profile->id,
                     'correlation_id' => $correlationId,
                     'sha256' => $sha,
-                ], null, $officeId);
+                ], null, $tenantId);
 
                 return [
                     'status' => 'divergent',
@@ -208,7 +208,7 @@ final class SvrsNfceXmlIngestionService
 
             NfeDocument::query()->updateOrCreate(
                 [
-                    'office_id' => $officeId,
+                    'tenant_id' => $tenantId,
                     'access_key' => $key,
                     'is_summary' => false,
                 ],
@@ -239,7 +239,7 @@ final class SvrsNfceXmlIngestionService
             // Prazo + cancelamento de slots concorrentes (fonte SVRS)
             try {
                 app(OutboundDeadlineSatisfactionService::class)->markCapturedBySource(
-                    $officeId,
+                    $tenantId,
                     $key,
                     $expectedModel === '55' ? 'SVRS_NFE55' : 'SVRS_NFCE',
                     $sha,
@@ -254,10 +254,10 @@ final class SvrsNfceXmlIngestionService
                 'correlation_id' => $correlationId,
                 'sha256' => $sha,
                 'dfe_document_id' => $doc->id,
-            ], null, $officeId);
+            ], null, $tenantId);
 
             Log::info('svrs_nfce.ingest.captured', [
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'profile_id' => $profile->id,
                 'correlation_id' => $correlationId,
                 'sha256' => $sha,
@@ -273,7 +273,7 @@ final class SvrsNfceXmlIngestionService
 
     private function markCaptured(
         OutboundNumberState $number,
-        MaOutboundRetrievalRequest $request,
+        OutboundRetrievalRequest $request,
         string $key,
         string $sha,
         int $dfeId,

@@ -5,7 +5,6 @@ namespace App\Services\Serpro\Catalog;
 use App\Models\SerproServiceCatalogEntry;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * Importa o manifesto versionado para a projeção consultável.
@@ -108,7 +107,6 @@ final class OfficialServiceCatalogImporter
      */
     private function mapEntry(array $entry, int $version, array $manifest, mixed $now): array
     {
-        $hasNewColumns = Schema::hasColumn('serpro_service_catalog_entries', 'operation_key');
         $isProduction = ($entry['official_state'] ?? '') === 'PRODUCTION';
         $support = (string) ($entry['platform_support'] ?? 'INVENTORIED');
 
@@ -151,18 +149,15 @@ final class OfficialServiceCatalogImporter
             'metadata' => $metadata,
             'effective_from' => CarbonImmutable::parse((string) $manifest['verified_at'])->startOfDay(),
             'effective_to' => null,
+            'operation_key' => $entry['operation_key'],
+            'id_sistema' => $entry['id_sistema'],
+            'id_servico' => $entry['id_servico'],
+            'versao_sistema' => $entry['versao_sistema'],
+            'functional_route' => $entry['route'],
+            'official_state' => $entry['official_state'],
+            'platform_support' => $support,
+            'dados_mode' => $entry['dados_mode'],
         ];
-
-        if ($hasNewColumns) {
-            $base['operation_key'] = $entry['operation_key'];
-            $base['id_sistema'] = $entry['id_sistema'];
-            $base['id_servico'] = $entry['id_servico'];
-            $base['versao_sistema'] = $entry['versao_sistema'];
-            $base['functional_route'] = $entry['route'];
-            $base['official_state'] = $entry['official_state'];
-            $base['platform_support'] = $support;
-            $base['dados_mode'] = $entry['dados_mode'];
-        }
 
         return $base;
     }
@@ -179,10 +174,6 @@ final class OfficialServiceCatalogImporter
         array $manifest,
         mixed $now,
     ): void {
-        if (! Schema::hasTable('serpro_operations') || ! Schema::hasTable('serpro_operation_versions')) {
-            return;
-        }
-
         $key = (string) $entry['operation_key'];
         $opId = DB::table('serpro_operations')->where('operation_key', $key)->value('id');
         $sanitizedMeta = [
@@ -345,11 +336,5 @@ final class OfficialServiceCatalogImporter
         }
 
         return true;
-    }
-
-    /** @deprecated use nextCatalogRevision */
-    private function resolveCatalogVersion(string $manifestVersion): int
-    {
-        return $this->nextCatalogRevision($manifestVersion);
     }
 }

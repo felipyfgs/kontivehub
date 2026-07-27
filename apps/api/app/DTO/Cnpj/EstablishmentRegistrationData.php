@@ -44,7 +44,7 @@ final class EstablishmentRegistrationData
         return [
             'cnpj' => $this->cnpj,
             'trade_name' => $this->tradeName,
-            'is_matrix' => $this->isMatrix,
+            'is_headquarters' => $this->isMatrix,
             'registration_status' => $this->registrationStatus->value,
             'registration_status_at' => $this->registrationStatusAt,
             'registration_status_reason' => $this->registrationStatusReason,
@@ -122,7 +122,7 @@ final class EstablishmentRegistrationData
         return new self(
             cnpj: (string) ($data['cnpj'] ?? ''),
             tradeName: self::nullableString($data['trade_name'] ?? null),
-            isMatrix: (bool) ($data['is_matrix'] ?? false),
+            isMatrix: (bool) ($data['is_headquarters'] ?? false),
             registrationStatus: $status,
             registrationStatusAt: self::nullableString($data['registration_status_at'] ?? null),
             registrationStatusReason: self::nullableString($data['registration_status_reason'] ?? null),

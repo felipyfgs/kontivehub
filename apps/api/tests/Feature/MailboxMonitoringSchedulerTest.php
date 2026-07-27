@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use App\Jobs\Mailbox\DispatchMailboxMonitoringJob;
 use App\Models\MailboxMonitoringSetting;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Integra\Mailbox\MailboxMonitoringScheduler;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -19,9 +19,9 @@ class MailboxMonitoringSchedulerTest extends TestCase
     {
         Queue::fake();
         config(['fiscal_monitoring.mailbox.economic_monitoring.enabled' => true]);
-        $office = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
         $setting = MailboxMonitoringSetting::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'enabled' => true,
             'daily_time' => '00:30',
             'timezone' => 'America/Sao_Paulo',

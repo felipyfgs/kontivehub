@@ -3,14 +3,14 @@
 namespace App\Models;
 
 use App\Enums\CredentialStatus;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'client_id',
     'status',
     'subject_name',
@@ -28,7 +28,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Hidden(['vault_object_id'])]
 class ClientCredential extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {

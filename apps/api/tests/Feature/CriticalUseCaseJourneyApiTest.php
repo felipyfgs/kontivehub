@@ -5,13 +5,14 @@ namespace Tests\Feature;
 use App\Enums\FiscalFindingSeverity;
 use App\Enums\FiscalPendingStatus;
 use App\Enums\FiscalSituation;
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Models\Client;
 use App\Models\FiscalPendingItem;
-use App\Models\Office;
-use App\Models\OperationalProcess;
-use App\Models\OperationalTask;
+use App\Models\Tenant;
 use App\Models\User;
+use App\Models\WorkProcess;
+use App\Models\WorkTask;
+use App\Services\Authorization\SystemTenantPermissionProfiles;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Laravel\Sanctum\Sanctum;
@@ -27,29 +28,31 @@ class CriticalUseCaseJourneyApiTest extends TestCase
         Http::fake();
     }
 
-    public function test_identity_and_tenant_switch_preserve_office_isolation(): void
+    public function test_identity_and_tenant_switch_preserve_tenant_isolation(): void
     {
-        $primary = Office::factory()->create(['name' => 'Office Primário']);
-        $secondary = Office::factory()->create(['name' => 'Office Secundário']);
-        $user = User::factory()->forOffice($primary, OfficeRole::Operator)->create();
+        $primary = Tenant::factory()->create(['name' => 'Tenant Primário']);
+        $secondary = Tenant::factory()->create(['name' => 'Tenant Secundário']);
+        $user = User::factory()->forTenant($primary, TenantRole::TenantUser)->create();
+        $profiles = app(SystemTenantPermissionProfiles::class)->ensure($secondary);
         $secondary->users()->attach($user->id, [
-            'role' => OfficeRole::Operator->value,
+            'role' => TenantRole::TenantUser->value,
+            'permission_profile_id' => $profiles['operator']->id,
             'is_active' => true,
         ]);
-        $user->forceFill(['selected_office_id' => $primary->id])->saveQuietly();
+        $user->forceFill(['selected_tenant_id' => $primary->id])->saveQuietly();
 
-        $primaryClient = Client::factory()->forOffice($primary)->create(['legal_name' => 'Cliente Primário']);
-        $secondaryClient = Client::factory()->forOffice($secondary)->create(['legal_name' => 'Cliente Secundário']);
+        $primaryClient = Client::factory()->forTenant($primary)->create(['legal_name' => 'Cliente Primário']);
+        $secondaryClient = Client::factory()->forTenant($secondary)->create(['legal_name' => 'Cliente Secundário']);
         Sanctum::actingAs($user);
 
         $this->getJson('/api/v1/tenants/memberships')
             ->assertOk()
-            ->assertJsonPath('data.current_office_id', $primary->id)
+            ->assertJsonPath('data.current_tenant_id', $primary->id)
             ->assertJsonCount(2, 'data.memberships');
 
-        $this->postJson('/api/v1/tenants/switch', ['office_id' => $secondary->id])
+        $this->postJson('/api/v1/tenants/switch', ['tenant_id' => $secondary->id])
             ->assertOk()
-            ->assertJsonPath('data.office.id', $secondary->id);
+            ->assertJsonPath('data.tenant.id', $secondary->id);
 
         $ids = $this->getJson('/api/v1/clients?per_page=50')
             ->assertOk()
@@ -61,13 +64,13 @@ class CriticalUseCaseJourneyApiTest extends TestCase
 
     public function test_client_catalog_is_tenant_scoped_and_viewer_cannot_mutate(): void
     {
-        [$viewer, $office] = $this->actor(OfficeRole::Viewer);
-        $otherOffice = Office::factory()->create();
-        $own = Client::factory()->forOffice($office)->create(['legal_name' => 'Cliente Próprio']);
-        $other = Client::factory()->forOffice($otherOffice)->create(['legal_name' => 'Cliente Externo']);
+        [$viewer, $tenant] = $this->actor(TenantRole::TenantUser);
+        $otherTenant = Tenant::factory()->create();
+        $own = Client::factory()->forTenant($tenant)->create(['legal_name' => 'Cliente Próprio']);
+        $other = Client::factory()->forTenant($otherTenant)->create(['legal_name' => 'Cliente Externo']);
         Sanctum::actingAs($viewer);
 
-        $ids = $this->getJson('/api/v1/clients?office_id='.$otherOffice->id.'&per_page=50')
+        $ids = $this->getJson('/api/v1/clients?tenant_id='.$otherTenant->id.'&per_page=50')
             ->assertOk()
             ->json('data.*.id');
         $this->assertContains($own->id, $ids);
@@ -83,33 +86,33 @@ class CriticalUseCaseJourneyApiTest extends TestCase
 
     public function test_work_queue_is_tenant_scoped_and_viewer_cannot_create_process(): void
     {
-        [$viewer, $office] = $this->actor(OfficeRole::Viewer);
-        $otherOffice = Office::factory()->create();
-        $ownClient = Client::factory()->forOffice($office)->create();
-        $otherClient = Client::factory()->forOffice($otherOffice)->create();
-        $own = OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        [$viewer, $tenant] = $this->actor(TenantRole::TenantUser);
+        $otherTenant = Tenant::factory()->create();
+        $ownClient = Client::factory()->forTenant($tenant)->create();
+        $otherClient = Client::factory()->forTenant($otherTenant)->create();
+        $own = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $ownClient->id,
             'title' => 'Processo Próprio',
         ]);
-        OperationalTask::factory()->create([
-            'office_id' => $office->id,
-            'operational_process_id' => $own->id,
+        WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $own->id,
             'title' => 'Tarefa Própria',
         ]);
-        $other = OperationalProcess::factory()->create([
-            'office_id' => $otherOffice->id,
+        $other = WorkProcess::factory()->create([
+            'tenant_id' => $otherTenant->id,
             'client_id' => $otherClient->id,
             'title' => 'Processo Externo',
         ]);
-        OperationalTask::factory()->create([
-            'office_id' => $otherOffice->id,
-            'operational_process_id' => $other->id,
+        WorkTask::factory()->create([
+            'tenant_id' => $otherTenant->id,
+            'work_process_id' => $other->id,
             'title' => 'Tarefa Externa',
         ]);
         Sanctum::actingAs($viewer);
 
-        $ids = $this->getJson('/api/v1/work/processes?office_id='.$otherOffice->id)
+        $ids = $this->getJson('/api/v1/work/processes?tenant_id='.$otherTenant->id)
             ->assertOk()
             ->json('data.*.id');
         $this->assertContains($own->id, $ids);
@@ -126,12 +129,12 @@ class CriticalUseCaseJourneyApiTest extends TestCase
 
     public function test_fiscal_monitoring_is_tenant_scoped_and_does_not_egress(): void
     {
-        [$viewer, $office] = $this->actor(OfficeRole::Viewer);
-        $otherOffice = Office::factory()->create();
-        $ownClient = Client::factory()->forOffice($office)->create();
-        $otherClient = Client::factory()->forOffice($otherOffice)->create();
-        $this->pending($office, $ownClient, 'OWN', 'Pendência própria');
-        $this->pending($otherOffice, $otherClient, 'OTHER', 'Pendência externa');
+        [$viewer, $tenant] = $this->actor(TenantRole::TenantUser);
+        $otherTenant = Tenant::factory()->create();
+        $ownClient = Client::factory()->forTenant($tenant)->create();
+        $otherClient = Client::factory()->forTenant($otherTenant)->create();
+        $this->pending($tenant, $ownClient, 'OWN', 'Pendência própria');
+        $this->pending($otherTenant, $otherClient, 'OTHER', 'Pendência externa');
         Sanctum::actingAs($viewer);
 
         $this->getJson('/api/v1/fiscal/monitoring/insights')
@@ -141,20 +144,20 @@ class CriticalUseCaseJourneyApiTest extends TestCase
         Http::assertNothingSent();
     }
 
-    /** @return array{User, Office} */
-    private function actor(OfficeRole $role): array
+    /** @return array{User, Tenant} */
+    private function actor(TenantRole $role): array
     {
-        $office = Office::factory()->create();
-        $user = User::factory()->forOffice($office, $role)->create();
-        $user->forceFill(['selected_office_id' => $office->id])->saveQuietly();
+        $tenant = Tenant::factory()->create();
+        $user = User::factory()->forTenant($tenant, $role, 'viewer')->create();
+        $user->forceFill(['selected_tenant_id' => $tenant->id])->saveQuietly();
 
-        return [$user, $office];
+        return [$user, $tenant];
     }
 
-    private function pending(Office $office, Client $client, string $code, string $title): void
+    private function pending(Tenant $tenant, Client $client, string $code, string $title): void
     {
         FiscalPendingItem::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'code' => $code,
             'title' => $title,

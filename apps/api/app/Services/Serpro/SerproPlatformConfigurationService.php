@@ -2,13 +2,13 @@
 
 namespace App\Services\Serpro;
 
-use App\Enums\OfficeSerproOnboardingStatus;
 use App\Enums\SerproCredentialVersionStatus;
 use App\Enums\SerproEnvironment;
-use App\Models\OfficeSerproOnboardingState;
+use App\Enums\TenantSerproOnboardingStatus;
 use App\Models\SerproContract;
 use App\Models\SerproCredentialVersion;
 use App\Models\SerproRuntimeControl;
+use App\Models\TenantSerproOnboardingState;
 
 /**
  * Read model sanitizado da configuração global SERPRO por ambiente.
@@ -81,7 +81,7 @@ final class SerproPlatformConfigurationService
         );
         $readinessArr = is_array($readiness) ? $readiness : $readiness->toSanitizedArray();
 
-        $pendingOffices = $this->pendingOfficesSummary($environment);
+        $pendingTenants = $this->pendingTenantsSummary($environment);
 
         $hasActiveCredential = $activeVersion !== null;
         $hasRecentTest = $activeVersion?->latestValidConnectionEvidence() !== null
@@ -103,13 +103,13 @@ final class SerproPlatformConfigurationService
             'external_gates_blocking' => $gatesBlocking,
             'usage_limits' => [
                 'config' => $quantity->toSanitizedArray(),
-                'office_limits' => $this->quantityLimits->listOfficeLimits($environment),
+                'tenant_limits' => $this->quantityLimits->listTenantLimits($environment),
                 'usage' => $quantityEval,
             ],
             'runtime_controls' => $runtime,
             'kill_switch' => $kill,
             'readiness' => $readinessArr,
-            'pending_offices' => $pendingOffices,
+            'pending_tenants' => $pendingTenants,
             'summary' => [
                 'has_active_credential' => $hasActiveCredential,
                 'has_pending_credential' => $pendingVersions !== [],
@@ -156,40 +156,40 @@ final class SerproPlatformConfigurationService
     }
 
     /**
-     * Resumo sanitizado de Offices com onboarding não pronto (sem dump fiscal).
+     * Resumo sanitizado de Tenants com onboarding não pronto (sem dump fiscal).
      *
      * @return array{count: int, items: list<array<string, mixed>>}
      */
-    private function pendingOfficesSummary(SerproEnvironment $environment): array
+    private function pendingTenantsSummary(SerproEnvironment $environment): array
     {
-        if (! class_exists(OfficeSerproOnboardingState::class)) {
+        if (! class_exists(TenantSerproOnboardingState::class)) {
             return ['count' => 0, 'items' => []];
         }
 
         $readyStatuses = [];
-        foreach (OfficeSerproOnboardingStatus::cases() as $case) {
+        foreach (TenantSerproOnboardingStatus::cases() as $case) {
             if (str_contains($case->value, 'READY') || $case->value === 'AUTHORIZED') {
                 $readyStatuses[] = $case->value;
             }
         }
 
-        $q = OfficeSerproOnboardingState::query()
-            ->with('office:id,name,slug')
+        $q = TenantSerproOnboardingState::query()
+            ->with('tenant:id,name,slug')
             ->where('environment', $environment->value)
             ->when($readyStatuses !== [], fn ($query) => $query->whereNotIn('status', $readyStatuses))
             ->orderByDesc('updated_at')
             ->limit(25);
 
-        $items = $q->get()->map(function (OfficeSerproOnboardingState $row): array {
+        $items = $q->get()->map(function (TenantSerproOnboardingState $row): array {
             return [
-                'office_id' => $row->office_id,
-                'office_name' => $row->office?->name,
-                'office_slug' => $row->office?->slug,
-                'status' => $row->status instanceof OfficeSerproOnboardingStatus
+                'tenant_id' => $row->tenant_id,
+                'tenant_name' => $row->tenant?->name,
+                'tenant_slug' => $row->tenant?->slug,
+                'status' => $row->status instanceof TenantSerproOnboardingStatus
                     ? $row->status->value
                     : (string) $row->status,
                 'actionable_code' => $row->actionable_code,
-                'settings_path' => '/settings',
+                'settings_path' => '/conta/escritorio',
                 'updated_at' => $row->updated_at?->toIso8601String(),
             ];
         })->all();

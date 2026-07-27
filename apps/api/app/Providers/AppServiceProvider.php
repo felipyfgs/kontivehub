@@ -49,30 +49,30 @@ use App\Models\ClientCategory;
 use App\Models\ClientContact;
 use App\Models\ClientCredential;
 use App\Models\Establishment;
-use App\Models\OfficeCredential;
-use App\Models\OfficeFiscalIdentity;
-use App\Models\OperationalExport;
-use App\Models\OperationalProcess;
-use App\Models\OperationalTask;
 use App\Models\OutboundCaptureProfile;
-use App\Models\ProcessTemplate;
 use App\Models\SavedListFilter;
+use App\Models\TenantCredential;
+use App\Models\TenantFiscalIdentity;
 use App\Models\User;
 use App\Models\WorkDepartment;
+use App\Models\WorkExport;
+use App\Models\WorkProcess;
+use App\Models\WorkProcessTemplate;
+use App\Models\WorkTask;
 use App\Policies\ClientCategoryPolicy;
 use App\Policies\ClientContactPolicy;
 use App\Policies\ClientCredentialPolicy;
 use App\Policies\ClientPolicy;
 use App\Policies\EstablishmentPolicy;
-use App\Policies\OfficeFiscalCredentialPolicy;
-use App\Policies\OfficeSettingsPolicy;
 use App\Policies\OutboundCaptureProfilePolicy;
 use App\Policies\SavedListFilterPolicy;
-use App\Policies\Work\OperationalExportPolicy;
-use App\Policies\Work\OperationalProcessPolicy;
-use App\Policies\Work\OperationalTaskPolicy;
-use App\Policies\Work\ProcessTemplatePolicy;
+use App\Policies\TenantFiscalCredentialPolicy;
+use App\Policies\TenantSettingsPolicy;
 use App\Policies\Work\WorkDepartmentPolicy;
+use App\Policies\Work\WorkExportPolicy;
+use App\Policies\Work\WorkProcessPolicy;
+use App\Policies\Work\WorkProcessTemplatePolicy;
+use App\Policies\Work\WorkTaskPolicy;
 use App\Services\Adn\CurlMtlsTransport;
 use App\Services\Adn\HttpAdnContributorClient;
 use App\Services\Assistant\OpenAiAssistantLlmGateway;
@@ -137,7 +137,6 @@ use App\Services\Integra\Mailbox\DteIndicatorAdapter;
 use App\Services\Integra\Mailbox\SerproCaixaPostalClient;
 use App\Services\Integra\Mailbox\SerproCaixaPostalIndicatorClient;
 use App\Services\Integra\Mailbox\SerproDteIndicatorClient;
-use App\Services\Integra\OfficeSerproAuthorizationService;
 use App\Services\Integra\Parcelamento\ParcelamentoEmitDocumentAdapter;
 use App\Services\Integra\Parcelamento\ParcelamentoMutatingAdapter;
 use App\Services\Integra\Parcelamento\ParcelamentoReadAdapter;
@@ -146,6 +145,7 @@ use App\Services\Integra\Parcelamento\StubTaxGuideEnrollment;
 use App\Services\Integra\Sitfis\SitfisIdentityResolver;
 use App\Services\Integra\Sitfis\SitfisSourceAdapter;
 use App\Services\Integra\Sitfis\SmalotSitfisPdfTextExtractor;
+use App\Services\Integra\TenantSerproAuthorizationService;
 use App\Services\MeiAutomation\MeiAutomationAttemptRepository;
 use App\Services\MeiAutomation\MeiPortalFiscalMutationTransport;
 use App\Services\MeiAutomation\MeiProviderPolicy;
@@ -168,7 +168,7 @@ use App\Services\Outbound\SvrsNfceKillSwitchService;
 use App\Services\Outbound\SvrsNfe55Config;
 use App\Services\Outbound\SvrsNfe55KillSwitchService;
 use App\Services\Outbound\SvrsPortalEgressConfig;
-use App\Services\Platform\OfficeSubscriptionGate;
+use App\Services\Platform\TenantSubscriptionGate;
 use App\Services\Sefaz\DistDfeResponseParser;
 use App\Services\Sefaz\HttpSefazCteDistDfeClient;
 use App\Services\Sefaz\HttpSefazDistDfeClient;
@@ -186,8 +186,8 @@ use App\Services\Serpro\SerproOperationService;
 use App\Services\Serpro\SerproProductionBootGuard;
 use App\Services\Vault\EnvelopeCrypto;
 use App\Services\Vault\FilesystemSecureObjectStore;
-use App\Support\CurrentOffice;
-use App\Support\FiscalDataModel\PrivilegedOfficeContext;
+use App\Support\CurrentTenant;
+use App\Support\FiscalDataModel\PrivilegedTenantContext;
 use App\Support\MultitenantRbac\EffectivePermissionsResolver;
 use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Console\Events\CommandStarting;
@@ -202,11 +202,11 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->app->scoped(CurrentOffice::class, fn () => new CurrentOffice);
+        $this->app->scoped(CurrentTenant::class, fn () => new CurrentTenant);
         $this->app->scoped(
             TenantAuthorization::class,
             fn ($app) => new TenantAuthorization(
-                $app->make(CurrentOffice::class),
+                $app->make(CurrentTenant::class),
                 $app->make(EffectivePermissionsResolver::class),
             ),
         );
@@ -431,13 +431,10 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        $this->registerPrivilegedOfficeContextListeners();
+        $this->registerPrivilegedTenantContextListeners();
 
         // Preflight: simulated proibido em production
         if ($this->app->environment('production')) {
-            // Isolamento de tenant: fail-closed não desligável via env em produção.
-            config(['fiscal_data_model.fail_closed_scopes' => true]);
-
             try {
                 $this->app->make(CapabilityDriverResolver::class)->assertProductionSafe();
                 $this->app->make(SerproProductionBootGuard::class)->assertSafeOrFail();
@@ -453,40 +450,40 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(ClientCredential::class, ClientCredentialPolicy::class);
         Gate::policy(ClientContact::class, ClientContactPolicy::class);
         Gate::policy(OutboundCaptureProfile::class, OutboundCaptureProfilePolicy::class);
-        Gate::policy(OfficeFiscalIdentity::class, OfficeFiscalCredentialPolicy::class);
-        Gate::policy(OfficeCredential::class, OfficeFiscalCredentialPolicy::class);
+        Gate::policy(TenantFiscalIdentity::class, TenantFiscalCredentialPolicy::class);
+        Gate::policy(TenantCredential::class, TenantFiscalCredentialPolicy::class);
         Gate::policy(SavedListFilter::class, SavedListFilterPolicy::class);
-        Gate::define('office-settings.view', [OfficeSettingsPolicy::class, 'view']);
-        Gate::define('office-settings.manage', [OfficeSettingsPolicy::class, 'manage']);
+        Gate::define('tenant-settings.view', [TenantSettingsPolicy::class, 'view']);
+        Gate::define('tenant-settings.manage', [TenantSettingsPolicy::class, 'manage']);
 
         // Módulo operacional (Work) — plano de dados tenant-scoped
         Gate::policy(WorkDepartment::class, WorkDepartmentPolicy::class);
-        Gate::policy(ProcessTemplate::class, ProcessTemplatePolicy::class);
-        Gate::policy(OperationalProcess::class, OperationalProcessPolicy::class);
-        Gate::policy(OperationalTask::class, OperationalTaskPolicy::class);
-        Gate::policy(OperationalExport::class, OperationalExportPolicy::class);
+        Gate::policy(WorkProcessTemplate::class, WorkProcessTemplatePolicy::class);
+        Gate::policy(WorkProcess::class, WorkProcessPolicy::class);
+        Gate::policy(WorkTask::class, WorkTaskPolicy::class);
+        Gate::policy(WorkExport::class, WorkExportPolicy::class);
 
-        // PLATFORM_ADMIN é global e separado dos papéis do tenant (ADMIN/OPERATOR/VIEWER).
+        // PLATFORM_ADMIN é global e separado do papel e das permissões do tenant.
         // NÃO concede leitura fiscal implícita.
         Gate::define('platform-admin', function (User $user): bool {
             return $user->is_active && $user->isPlatformAdmin();
         });
 
-        // Mutações no office atual exigem assinatura operacional (TRIAL/ACTIVE/PAST_DUE).
-        Gate::define('office-subscription-writable', function (User $user): bool {
+        // Mutações no tenant atual exigem assinatura operacional (TRIAL/ACTIVE/PAST_DUE).
+        Gate::define('tenant-subscription-writable', function (User $user): bool {
             if (! $user->is_active) {
                 return false;
             }
 
-            return app(OfficeSubscriptionGate::class)->allowsMutations();
+            return app(TenantSubscriptionGate::class)->allowsMutations();
         });
 
-        Gate::define('office-subscription-external', function (User $user): bool {
+        Gate::define('tenant-subscription-external', function (User $user): bool {
             if (! $user->is_active) {
                 return false;
             }
 
-            return app(OfficeSubscriptionGate::class)->allowsExternalCalls();
+            return app(TenantSubscriptionGate::class)->allowsExternalCalls();
         });
 
         // Adapters de módulos fiscais no registry do núcleo
@@ -510,7 +507,7 @@ class AppServiceProvider extends ServiceProvider
                 operations: $this->app->make(SerproOperationService::class),
                 mapper: $this->app->make(SimplesMeiResponseMapper::class),
                 contracts: $this->app->make(SerproContractService::class),
-                authorizations: $this->app->make(OfficeSerproAuthorizationService::class),
+                authorizations: $this->app->make(TenantSerproAuthorizationService::class),
                 regimeApplicability: $this->app->make(RegimeApplicabilityService::class),
                 contributors: $this->app->make(ContributorCnpjResolver::class),
                 pgdasdCodec13: $this->app->make(PgdasdConsDeclaracao13Codec::class),
@@ -554,19 +551,19 @@ class AppServiceProvider extends ServiceProvider
      * Jobs e console operam sem membership HTTP: abrem contexto privilegiado tipado
      * para não reativar o anti-padrão "scope nulo = todos os tenants".
      */
-    private function registerPrivilegedOfficeContextListeners(): void
+    private function registerPrivilegedTenantContextListeners(): void
     {
         Event::listen(JobProcessing::class, function (JobProcessing $event): void {
             $name = $event->job->resolveName();
-            PrivilegedOfficeContext::enter('queue:'.$name);
+            PrivilegedTenantContext::enter('queue:'.$name);
         });
 
         Event::listen(JobProcessed::class, function (): void {
-            PrivilegedOfficeContext::leave();
+            PrivilegedTenantContext::leave();
         });
 
         Event::listen(JobFailed::class, function (): void {
-            PrivilegedOfficeContext::leave();
+            PrivilegedTenantContext::leave();
         });
 
         // JobExceptionOccurred não faz leave: JobFailed/JobProcessed fecham o ciclo.
@@ -574,17 +571,17 @@ class AppServiceProvider extends ServiceProvider
 
         Event::listen(CommandStarting::class, function (CommandStarting $event): void {
             $command = (string) ($event->command ?? 'unknown');
-            // Jobs e console multi-tenant devem filtrar office_id explicitamente
+            // Jobs e console multi-tenant devem filtrar tenant_id explicitamente
             // mesmo com contexto privilegiado aberto.
-            if (PrivilegedOfficeContext::isOpen()) {
+            if (PrivilegedTenantContext::isOpen()) {
                 return;
             }
-            PrivilegedOfficeContext::enter('console:'.$command);
+            PrivilegedTenantContext::enter('console:'.$command);
         });
 
         Event::listen(CommandFinished::class, function (): void {
-            if (PrivilegedOfficeContext::isOpen()) {
-                PrivilegedOfficeContext::leave();
+            if (PrivilegedTenantContext::isOpen()) {
+                PrivilegedTenantContext::leave();
             }
         });
     }

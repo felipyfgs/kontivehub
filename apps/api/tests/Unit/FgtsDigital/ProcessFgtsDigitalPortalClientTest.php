@@ -61,7 +61,7 @@ class ProcessFgtsDigitalPortalClientTest extends TestCase
         try {
             app(ProcessFgtsDigitalPortalClient::class)->execute(new FgtsDigitalPortalRequest(
                 operation: FgtsDigitalOperation::EmitGuide,
-                officeId: 1,
+                tenantId: 1,
                 clientId: 2,
                 targetIdentifier: '00000000000000',
             ));
@@ -123,7 +123,7 @@ SH);
     {
         return new FgtsDigitalPortalRequest(
             operation: FgtsDigitalOperation::QueryGuides,
-            officeId: 1,
+            tenantId: 1,
             clientId: 2,
             targetIdentifier: '00000000000000',
         );

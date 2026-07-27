@@ -5,7 +5,7 @@ namespace App\Services\Fiscal\Guides;
 use App\DTO\Serpro\IntegraResponse;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
+use App\Models\Tenant;
 use RuntimeException;
 
 /** Fecha a janela HTTP → ACK do comprovante 7.2 sem persistir o PDF no attempt. */
@@ -13,7 +13,7 @@ final class PagtowebArrecadacaoReceiptPreAckStore
 {
     public function __construct(private readonly PagtowebArrecadacaoReceiptProjector $projector) {}
 
-    public function capture(string $operationKey, string $entityKey, IntegraResponse $response, int $officeId, int $clientId): IntegraResponse
+    public function capture(string $operationKey, string $entityKey, IntegraResponse $response, int $tenantId, int $clientId): IntegraResponse
     {
         if ($operationKey !== 'pagtoweb.comparrecadacao' || ! $response->success) {
             return $response;
@@ -25,7 +25,7 @@ final class PagtowebArrecadacaoReceiptPreAckStore
         $run = FiscalMonitoringRun::query()
             ->withoutGlobalScopes()
             ->whereKey((int) $matches[1])
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('client_id', $clientId)
             ->where('system_code', 'PAGTOWEB')
             ->first();
@@ -33,10 +33,10 @@ final class PagtowebArrecadacaoReceiptPreAckStore
             throw new RuntimeException('Run fiscal PAGTOWEB inválida para captura documental pré-ACK.');
         }
 
-        $office = Office::query()->findOrFail($officeId);
+        $tenant = Tenant::query()->findOrFail($tenantId);
         $client = Client::query()->withoutGlobalScopes()->whereKey($clientId)->firstOrFail();
         $receipt = $this->projector->project(
-            $office,
+            $tenant,
             $client,
             (string) $response->sourceProvenance,
             $response->dados ?? ($response->body['dados'] ?? null),

@@ -23,8 +23,6 @@ final readonly class MonitoringQueryProjectionDto
     {
         return [
             'state' => $this->state->value,
-            // Alias transitório: o valor já usa exclusivamente o estado comum.
-            'status' => $this->state->value,
             'state_label' => $this->state->label(),
             'observed_at' => $this->observedAt,
             'source_provenance' => $this->sourceProvenance,

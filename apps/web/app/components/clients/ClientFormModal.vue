@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Client } from '~/types/api'
+import type { ClientDetailTab } from '~/utils/client-detail-tabs'
 import { formatCnpj } from '~/utils/format'
 
 const open = defineModel<boolean>('open', { default: false })
@@ -9,13 +10,10 @@ const props = defineProps<{
   client?: Client | null
   canManageCredentials?: boolean
   canManageClients?: boolean
-  /** Pré-vínculo matriz ao criar filial */
-  matrixClientId?: number | null
-  matrixLabel?: string | null
 }>()
 
 const emit = defineEmits<{
-  saved: [payload: { id: number, mode: 'create' | 'edit', section?: 'resumo' | 'certificado' }]
+  saved: [payload: { id: number, mode: 'create' | 'edit', section?: ClientDetailTab }]
   openExisting: [id: number]
 }>()
 
@@ -24,12 +22,11 @@ const formRef = ref<{ reset: () => void, clearSensitive: () => void } | null>(nu
 const isEdit = computed(() => !!props.client?.id)
 
 const editLegalName = computed(() =>
-  props.client?.legal_name || props.client?.display_name || props.client?.name || null
+  props.client?.display_name || props.client?.legal_name || null
 )
 
 const editCnpjLabel = computed(() => {
-  const raw = props.client?.cnpj
-    || props.client?.establishments?.find(e => e.is_matrix)?.cnpj
+  const raw = props.client?.establishments?.find(e => e.is_headquarters)?.cnpj
     || props.client?.establishments?.[0]?.cnpj
     || props.client?.root_cnpj
   return raw ? formatCnpj(raw) : null
@@ -39,7 +36,7 @@ const title = computed(() => {
   if (isEdit.value) {
     return 'Editar cliente'
   }
-  return props.matrixClientId ? 'Nova filial (cliente próprio)' : 'Novo cliente'
+  return 'Novo cliente'
 })
 
 const description = computed(() => {
@@ -47,13 +44,10 @@ const description = computed(() => {
     const parts = [editLegalName.value, editCnpjLabel.value].filter(Boolean)
     return parts.length ? parts.join(' · ') : 'Atualize o cadastro. CNPJ não pode ser alterado.'
   }
-  if (props.matrixClientId) {
-    return 'Cadastre a filial com CNPJ completo. Ela terá cadastro, certificado e sync próprios e aparecerá na matriz.'
-  }
-  return 'Cadastre os dados essenciais. A consulta do CNPJ preenche sugestões editáveis.'
+  return 'Cadastre os dados essenciais. A consulta do CNPJ preenche sugestões editáveis e reúne estabelecimentos da mesma raiz.'
 })
 
-function onSaved(payload: { id: number, mode: 'create' | 'edit', section?: 'resumo' | 'certificado' }) {
+function onSaved(payload: { id: number, mode: 'create' | 'edit', section?: ClientDetailTab }) {
   open.value = false
   emit('saved', payload)
 }
@@ -95,8 +89,6 @@ watch(open, (value) => {
         :client="client"
         :can-manage-credentials="canManageCredentials"
         :can-manage-clients="canManageClients === true"
-        :matrix-client-id="matrixClientId"
-        :matrix-label="matrixLabel"
         @saved="onSaved"
         @cancel="onCancel"
         @open-existing="onOpenExisting"

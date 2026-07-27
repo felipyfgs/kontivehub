@@ -61,7 +61,7 @@ final class PollEventosAtualizacaoJob implements ShouldQueue
             return;
         }
 
-        $check = $flags->assertAllowed('PollEventosAtualizacaoJob', (int) $run->office_id);
+        $check = $flags->assertAllowed('PollEventosAtualizacaoJob', (int) $run->tenant_id);
         if (! $check['allowed']) {
             $run->forceFill([
                 'status' => SerproEventosRun::STATUS_BLOCKED,

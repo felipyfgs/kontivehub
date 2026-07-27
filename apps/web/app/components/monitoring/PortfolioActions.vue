@@ -2,7 +2,7 @@
 /**
  * Ações reais da carteira (não decorativas):
  * Adicionar cliente · Associar categorias · Solicitar consulta · Exportar
- * Visibilidade por papel (ADMIN/OPERATOR/VIEWER).
+ * Visibilidade por permissões efetivas.
  */
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type { FiscalModuleKey } from '~/types/fiscal-modules'

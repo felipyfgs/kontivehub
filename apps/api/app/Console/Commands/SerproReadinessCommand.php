@@ -4,7 +4,7 @@ namespace App\Console\Commands;
 
 use App\Enums\SerproEnvironment;
 use App\Models\Client;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Serpro\SerproReadinessService;
 use Illuminate\Console\Command;
 
@@ -15,9 +15,9 @@ class SerproReadinessCommand extends Command
 {
     protected $signature = 'serpro:readiness
         {--serpro-env= : Ambiente SERPRO}
-        {--office= : ID do Office (avaliação tenant)}
-        {--client= : ID do Cliente (com --office e opcional --operation)}
-        {--operation= : operation_key (com --office)}
+        {--tenant= : ID do Tenant (avaliação tenant)}
+        {--client= : ID do Cliente (com --tenant e opcional --operation)}
+        {--operation= : operation_key (com --tenant)}
         {--no-persist : Não grava serpro_readiness_runs}
         {--json : Saída JSON sanitizada}';
 
@@ -32,10 +32,10 @@ class SerproReadinessCommand extends Command
 
         $persist = ! $this->option('no-persist');
 
-        if ($this->option('office')) {
-            $office = Office::query()->find((int) $this->option('office'));
-            if ($office === null) {
-                $this->error('Office não encontrado.');
+        if ($this->option('tenant')) {
+            $tenant = Tenant::query()->find((int) $this->option('tenant'));
+            if ($tenant === null) {
+                $this->error('Tenant não encontrado.');
 
                 return self::FAILURE;
             }
@@ -43,11 +43,11 @@ class SerproReadinessCommand extends Command
             $client = null;
             if ($this->option('client')) {
                 $client = Client::query()->withoutGlobalScopes()
-                    ->where('office_id', $office->id)
+                    ->where('tenant_id', $tenant->id)
                     ->whereKey((int) $this->option('client'))
                     ->first();
                 if ($client === null) {
-                    $this->error('Cliente não encontrado no office.');
+                    $this->error('Cliente não encontrado no tenant.');
 
                     return self::FAILURE;
                 }
@@ -55,14 +55,14 @@ class SerproReadinessCommand extends Command
 
             if ($this->option('operation')) {
                 $run = $readiness->evaluateOperation(
-                    $office,
+                    $tenant,
                     (string) $this->option('operation'),
                     $client,
                     $environment,
                     persist: $persist,
                 );
             } else {
-                $run = $readiness->evaluateOffice($office, $environment, persist: $persist);
+                $run = $readiness->evaluateTenant($tenant, $environment, persist: $persist);
             }
             $payload = is_array($run) ? $run : $run->toSanitizedArray();
         } else {

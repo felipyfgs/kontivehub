@@ -10,8 +10,8 @@ use App\Enums\SerproAuthorizationStatus;
 use App\Enums\SerproEnvironment;
 use App\Models\FiscalModuleControl;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
-use App\Models\OfficeSerproAuthorization;
+use App\Models\Tenant;
+use App\Models\TenantSerproAuthorization;
 use App\Models\User;
 use App\Services\Serpro\SerproInitialMailboxSyncDispatcher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -21,23 +21,20 @@ class SerproInitialMailboxSyncDispatcherTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_office_restriction_cannot_be_reopened_by_legacy_flags(): void
+    public function test_tenant_restriction_blocks_initial_sync(): void
     {
         config([
             'fiscal.profile' => 'dev',
             'fiscal.kill_switch' => false,
-            'features.global_enabled' => true,
-            'features.modules.mailbox.enabled' => true,
-            'features.modules.mailbox.allow_all_offices' => true,
             'fiscal_monitoring.enabled' => true,
         ]);
-        $office = Office::factory()->create();
-        $authorization = $this->authorizationFor($office);
-        $this->restrictMailbox($office);
+        $tenant = Tenant::factory()->create();
+        $authorization = $this->authorizationFor($tenant);
+        $this->restrictMailbox($tenant);
 
         $before = FiscalMonitoringRun::query()->count();
         $result = app(SerproInitialMailboxSyncDispatcher::class)->dispatchIfAllowed(
-            office: $office,
+            tenant: $tenant,
             authorization: $authorization,
             idempotencyKey: 'mailbox-restriction-test',
             actorUserId: null,
@@ -45,7 +42,7 @@ class SerproInitialMailboxSyncDispatcherTest extends TestCase
         );
 
         $this->assertSame('action_required', $result['state']);
-        $this->assertSame('OFFICE_RESTRICTION', $result['code']);
+        $this->assertSame('TENANT_RESTRICTION', $result['code']);
         $this->assertStringContainsString('Pausa Caixa Postal de teste', (string) $result['message']);
         $this->assertNull($result['run']);
         $this->assertSame($before, FiscalMonitoringRun::query()->count());
@@ -57,13 +54,13 @@ class SerproInitialMailboxSyncDispatcherTest extends TestCase
             'fiscal.profile' => 'dev',
             'fiscal.kill_switch' => false,
         ]);
-        $office = Office::factory()->create();
-        $otherOffice = Office::factory()->create();
-        $authorization = $this->authorizationFor($otherOffice);
+        $tenant = Tenant::factory()->create();
+        $otherTenant = Tenant::factory()->create();
+        $authorization = $this->authorizationFor($otherTenant);
 
         $before = FiscalMonitoringRun::query()->count();
         $result = app(SerproInitialMailboxSyncDispatcher::class)->dispatchIfAllowed(
-            office: $office,
+            tenant: $tenant,
             authorization: $authorization,
             idempotencyKey: 'mailbox-cross-tenant-test',
             actorUserId: null,
@@ -76,28 +73,27 @@ class SerproInitialMailboxSyncDispatcherTest extends TestCase
         $this->assertSame($before, FiscalMonitoringRun::query()->count());
     }
 
-    private function authorizationFor(Office $office): OfficeSerproAuthorization
+    private function authorizationFor(Tenant $tenant): TenantSerproAuthorization
     {
-        return OfficeSerproAuthorization::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+        return TenantSerproAuthorization::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
             'environment' => SerproEnvironment::Production,
             'status' => SerproAuthorizationStatus::TokenActive,
             'author_identity_type' => AuthorIdentityType::Cnpj,
             'author_identity' => '12345678000195',
             'author_name' => 'Autor de teste',
             'certificate_mode' => AuthorCertificateMode::ExternalSignature,
-            'managed_a1_consent' => false,
             'termo_vault_object_id' => 'vault-termo-test',
             'procurador_token_expires_at' => now()->addHour(),
         ]);
     }
 
-    private function restrictMailbox(Office $office): void
+    private function restrictMailbox(Tenant $tenant): void
     {
         FiscalModuleControl::query()->create([
             'module_key' => FiscalControlModule::Mailbox,
-            'scope' => FiscalModuleControlScope::Office,
-            'office_id' => $office->id,
+            'scope' => FiscalModuleControlScope::Tenant,
+            'tenant_id' => $tenant->id,
             'restricted' => true,
             'reason' => 'Pausa Caixa Postal de teste',
             'updated_by_user_id' => User::factory()->create()->id,

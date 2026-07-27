@@ -19,10 +19,10 @@ final class QuarantineItemsCollector
     /**
      * @return Collection<int, array<string, mixed>>
      */
-    public function collect(int $officeId, InboxCapabilities $capabilities): Collection
+    public function collect(int $tenantId, InboxCapabilities $capabilities): Collection
     {
         $rows = FiscalDocumentQuarantine::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('resolution_status', QuarantineResolutionStatus::Open)
             ->orderByDesc('id')
             ->limit(40)

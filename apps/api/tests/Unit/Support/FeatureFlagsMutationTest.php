@@ -16,8 +16,8 @@ final class FeatureFlagsMutationTest extends TestCase
             'features.mutating.kill_switch' => false,
             'features.modules.simples_mei.enabled' => true,
             'features.modules.simples_mei.mutating_enabled' => true,
-            'features.modules.simples_mei.office_allowlist' => [41],
-            'features.modules.simples_mei.allow_all_offices' => false,
+            'features.modules.simples_mei.tenant_allowlist' => [41],
+            'features.modules.simples_mei.allow_all_tenants' => false,
         ]);
 
         self::assertTrue(FeatureFlags::isMutatingEnabled('simples_mei', 41));

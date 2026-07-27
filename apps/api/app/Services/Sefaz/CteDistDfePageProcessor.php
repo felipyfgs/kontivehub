@@ -186,7 +186,7 @@ final class CteDistDfePageProcessor
             } elseif ($e instanceof DocumentDecodeException) {
                 Log::warning('sefaz.cte.repair.decode_failed', [
                     'channel_sync_cursor_id' => $cursor->id,
-                    'office_id' => $cursor->office_id,
+                    'tenant_id' => $cursor->tenant_id,
                     'establishment_id' => $cursor->establishment_id,
                     'error' => mb_substr($e->getMessage(), 0, 200),
                 ]);
@@ -308,7 +308,7 @@ final class CteDistDfePageProcessor
                     'channel' => CaptureChannel::CteDistDfe->value,
                 ],
                 [
-                    'office_id' => $cursor->office_id,
+                    'tenant_id' => $cursor->tenant_id,
                     'environment' => $cursor->environment,
                     'nsu' => $doc->nsu,
                     'direction' => DocumentDirection::fromFiscalRole($role)->value,
@@ -374,7 +374,7 @@ final class CteDistDfePageProcessor
                 'fiscal_role' => null,
             ],
             [
-                'office_id' => $cursor->office_id,
+                'tenant_id' => $cursor->tenant_id,
                 'dfe_document_id' => $dfe->id,
                 'direction' => DocumentDirection::Unknown->value,
             ]
@@ -383,7 +383,7 @@ final class CteDistDfePageProcessor
         $parent = null;
         if ($accessKey) {
             $parent = CteDocument::query()
-                ->where('office_id', $cursor->office_id)
+                ->where('tenant_id', $cursor->tenant_id)
                 ->where('access_key', $accessKey)
                 ->where('is_summary', false)
                 ->first();
@@ -410,7 +410,7 @@ final class CteDistDfePageProcessor
 
             CteEvent::query()->updateOrCreate(
                 [
-                    'office_id' => $cursor->office_id,
+                    'tenant_id' => $cursor->tenant_id,
                     'access_key' => $accessKey,
                     'event_type' => $parsed['event_type'] ?? 'UNKNOWN',
                     'sequence' => $parsed['event_sequence'] ?? 0,
@@ -448,7 +448,7 @@ final class CteDistDfePageProcessor
 
         CteDocument::query()->updateOrCreate(
             [
-                'office_id' => $cursor->office_id,
+                'tenant_id' => $cursor->tenant_id,
                 'access_key' => $parsed['access_key'],
                 'is_summary' => $isSummary,
             ],
@@ -496,7 +496,7 @@ final class CteDistDfePageProcessor
                 'sha256' => $sha256,
             ],
             [
-                'office_id' => $cursor->office_id,
+                'tenant_id' => $cursor->tenant_id,
                 'access_key' => $dfe->access_key,
                 'channel' => CaptureChannel::CteDistDfe,
                 'nsu' => $doc->nsu,
@@ -524,19 +524,19 @@ final class CteDistDfePageProcessor
         ?DfeDocument $existingDfe = null,
     ): void {
         $identity = [
-            'office_id' => $cursor->office_id,
+            'tenant_id' => $cursor->tenant_id,
             'sha256' => $decoded['sha256'],
         ];
 
         $objectId = $existingDfe?->vault_object_id;
         if ($objectId === null) {
-            $objectId = $this->store->put($decoded['bytes'], $identity + ['purpose' => 'quarantine']);
+            $objectId = $this->store->put($decoded['bytes'], $identity);
             $storedObjectIds[] = $objectId;
         }
 
         FiscalDocumentQuarantine::query()->firstOrCreate(
             [
-                'office_id' => $cursor->office_id,
+                'tenant_id' => $cursor->tenant_id,
                 'sha256' => $decoded['sha256'],
                 'source' => DocumentAcquisitionSource::CteDistNsu->value,
                 'nsu' => $doc->nsu,
@@ -572,7 +572,7 @@ final class CteDistDfePageProcessor
         array &$storedObjectIds,
     ): DfeDocument {
         $identity = [
-            'office_id' => $cursor->office_id,
+            'tenant_id' => $cursor->tenant_id,
             'sha256' => $decoded['sha256'],
         ];
 

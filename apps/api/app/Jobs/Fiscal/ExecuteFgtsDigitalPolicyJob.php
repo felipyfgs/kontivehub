@@ -6,7 +6,7 @@ use App\Enums\FgtsDigitalGuideType;
 use App\Enums\FiscalRunResult;
 use App\Models\Client;
 use App\Models\FiscalMonitoringSchedule;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\FgtsDigital\Exceptions\FgtsDigitalException;
 use App\Services\FgtsDigital\FgtsDigitalPortalService;
@@ -25,7 +25,7 @@ final class ExecuteFgtsDigitalPolicyJob implements ShouldQueue
     public int $timeout = 180;
 
     public function __construct(
-        public readonly int $officeId,
+        public readonly int $tenantId,
         public readonly int $scheduleId,
     ) {
         $this->onQueue((string) config('fgts_digital.queue', 'default'));
@@ -37,21 +37,21 @@ final class ExecuteFgtsDigitalPolicyJob implements ShouldQueue
         FgtsDigitalPortalService $portal,
     ): void {
         $schedule = FiscalMonitoringSchedule::query()->withoutGlobalScopes()
-            ->where('office_id', $this->officeId)
+            ->where('tenant_id', $this->tenantId)
             ->whereKey($this->scheduleId)
             ->first();
-        $office = Office::query()->find($this->officeId);
+        $tenant = Tenant::query()->find($this->tenantId);
         $client = $schedule === null ? null : Client::query()->withoutGlobalScopes()
-            ->where('office_id', $this->officeId)
+            ->where('tenant_id', $this->tenantId)
             ->whereKey($schedule->client_id)
             ->first();
-        if ($schedule === null || $office === null || $client === null
-            || ($blocker = $dispatcher->policyBlocker($schedule, $office)) !== null) {
+        if ($schedule === null || $tenant === null || $client === null
+            || ($blocker = $dispatcher->policyBlocker($schedule, $tenant)) !== null) {
             $this->block($schedule, $blocker ?? 'FGTS_DIGITAL_TENANT_NOT_FOUND');
 
             return;
         }
-        $ready = $readiness->check($office, $client);
+        $ready = $readiness->check($tenant, $client);
         if (! $ready['ready_for_mutation']) {
             $this->block($schedule, (string) ($ready['blockers'][0]['code'] ?? 'FGTS_DIGITAL_NOT_READY'));
 
@@ -63,21 +63,21 @@ final class ExecuteFgtsDigitalPolicyJob implements ShouldQueue
         $parameters = $dispatcher->policyParameters($schedule);
         $guideType = FgtsDigitalGuideType::from((string) $parameters['guide_type']);
         try {
-            $preview = $portal->preview($office, $client, $user, $guideType, $parameters);
+            $preview = $portal->preview($tenant, $client, $user, $guideType, $parameters);
             if ($preview['preview_token'] === null) {
                 $this->block($schedule, (string) ($preview['run']->code ?? 'FGTS_DIGITAL_PREVIEW_BLOCKED'));
 
                 return;
             }
             $authorized = $portal->authorizeEmission(
-                $office,
+                $tenant,
                 $preview['run'],
                 $user,
                 $preview['preview_token'],
                 (string) $preview['run']->confirmation_phrase,
             );
             if (! $authorized['reused']) {
-                ExecuteFgtsDigitalRunJob::dispatch((int) $office->id, (int) $authorized['run']->id);
+                ExecuteFgtsDigitalRunJob::dispatch((int) $tenant->id, (int) $authorized['run']->id);
             }
         } catch (FgtsDigitalException $e) {
             $this->block($schedule, $e->codeKey);
@@ -91,7 +91,7 @@ final class ExecuteFgtsDigitalPolicyJob implements ShouldQueue
             'last_skip_reason' => $code,
         ])->save();
         Log::notice('fgts_digital.policy_blocked', [
-            'office_id' => $this->officeId,
+            'tenant_id' => $this->tenantId,
             'schedule_id' => $this->scheduleId,
             'code' => $code,
         ]);

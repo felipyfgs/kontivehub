@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 #[Fillable([
     'scope',
-    'office_id',
+    'tenant_id',
     'environment',
     'budget_kind',
     'limit_micros',

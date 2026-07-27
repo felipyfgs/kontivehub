@@ -2,7 +2,6 @@
 
 namespace App\Enums;
 
-use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 
 enum FiscalProfile: string
@@ -13,13 +12,6 @@ enum FiscalProfile: string
 
     public static function configured(): self
     {
-        static $warned = false;
-        $deprecated = (array) config('fiscal.deprecated_activation_keys_present', []);
-        if (! $warned && $deprecated !== []) {
-            $warned = true;
-            Log::warning('fiscal.activation_flags_deprecated', ['keys' => array_values($deprecated)]);
-        }
-
         $value = strtolower(trim((string) config('fiscal.profile', self::Dev->value)));
 
         return self::tryFrom($value)

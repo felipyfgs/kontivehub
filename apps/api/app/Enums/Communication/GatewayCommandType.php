@@ -11,7 +11,6 @@ enum GatewayCommandType: string
     case ConfirmPasskey = 'SESSION_PASSKEY_CONFIRM';
     case ConnectSession = 'SESSION_CONNECT';
     case DisconnectSession = 'SESSION_DISCONNECT';
-    case ResetSession = 'SESSION_RESET';
     case SetPassive = 'SESSION_SET_PASSIVE';
     case SendMessage = 'MESSAGE_SEND';
     case EditMessage = 'MESSAGE_EDIT';

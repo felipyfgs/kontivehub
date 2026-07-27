@@ -18,13 +18,12 @@ use RuntimeException;
 
 /**
  * Admissão e metadados de lotes de importação assíncrona.
- * Processamento pesado fica nos jobs (quando IMPORT_ASYNC_BATCHES_ENABLED).
+ * Processamento pesado fica sempre nos jobs.
  */
 final class DocumentImportBatchService
 {
     public function __construct(
         private readonly SecureObjectStore $store,
-        private readonly OutboundXmlIngestionService $syncIngestion,
     ) {}
 
     /**
@@ -32,7 +31,7 @@ final class DocumentImportBatchService
      * @return array{batch: DocumentImportBatch, created: bool}
      */
     public function admit(
-        int $officeId,
+        int $tenantId,
         User $actor,
         array $files,
         ?int $clientId = null,
@@ -40,13 +39,13 @@ final class DocumentImportBatchService
         ?string $idempotencyKey = null,
     ): array {
         $this->assertAdmissionLimits($files);
-        $this->assertTenancyScope($officeId, $clientId, $establishmentId);
+        $this->assertTenancyScope($tenantId, $clientId, $establishmentId);
 
         $digest = $this->selectionDigest($files, $clientId, $establishmentId);
 
         if ($idempotencyKey !== null && $idempotencyKey !== '') {
             $existing = DocumentImportBatch::query()
-                ->where('office_id', $officeId)
+                ->where('tenant_id', $tenantId)
                 ->where('idempotency_key', $idempotencyKey)
                 ->first();
             if ($existing !== null) {
@@ -55,7 +54,7 @@ final class DocumentImportBatchService
         }
 
         $byDigest = DocumentImportBatch::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('selection_digest', $digest)
             ->where('created_at', '>=', now()->subMinutes(30))
             ->whereNotIn('status', [ImportBatchStatus::Failed->value])
@@ -71,7 +70,7 @@ final class DocumentImportBatchService
             $compressed += strlen($bytes);
             $name = $this->sanitizeName($file->getClientOriginalName() ?: "file-{$i}.bin");
             $objectId = $this->store->put($bytes, [
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'purpose' => 'import-spool',
                 'sha256' => hash('sha256', $bytes),
             ]);
@@ -86,10 +85,8 @@ final class DocumentImportBatchService
             unset($bytes);
         }
 
-        $async = (bool) config('import.async_batches_enabled', false);
-
         $batch = DB::transaction(function () use (
-            $officeId,
+            $tenantId,
             $actor,
             $clientId,
             $establishmentId,
@@ -97,15 +94,14 @@ final class DocumentImportBatchService
             $digest,
             $fileMeta,
             $compressed,
-            $async,
         ): DocumentImportBatch {
             $batch = DocumentImportBatch::query()->create([
                 'public_id' => (string) Str::uuid(),
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'created_by' => $actor->id,
                 'client_id' => $clientId,
                 'establishment_id' => $establishmentId,
-                'status' => $async ? ImportBatchStatus::Queued : ImportBatchStatus::Processing,
+                'status' => ImportBatchStatus::Queued,
                 'idempotency_key' => $idempotencyKey ?: null,
                 'selection_digest' => $digest,
                 'file_count' => count($fileMeta),
@@ -122,7 +118,7 @@ final class DocumentImportBatchService
             $index = 0;
             foreach ($fileMeta as $meta) {
                 DocumentImportBatchItem::query()->create([
-                    'office_id' => $officeId,
+                    'tenant_id' => $tenantId,
                     'document_import_batch_id' => $batch->id,
                     'item_index' => $index++,
                     'source_name' => $meta['name'],
@@ -139,11 +135,7 @@ final class DocumentImportBatchService
             return $batch;
         });
 
-        if (! $async) {
-            $this->processSynchronously($batch, $fileMeta, $clientId);
-        } else {
-            ProcessDocumentImportBatchJob::dispatch($batch->id);
-        }
+        ProcessDocumentImportBatchJob::dispatch($batch->id);
 
         return ['batch' => $batch->fresh(), 'created' => true];
     }
@@ -278,7 +270,7 @@ final class DocumentImportBatchService
         $invalid = $resultItems->where('status', ImportBatchItemStatus::Invalid)->count();
         $quarantined = $resultItems->where('status', ImportBatchItemStatus::Quarantined)->count();
         $unmatched = $resultItems->where('status', ImportBatchItemStatus::Unmatched)->count();
-        // failed_count não inclui INVALID (campo próprio) — evita double-count no report legado
+        // INVALID possui contador próprio e não compõe failed_count.
         $failed = $resultItems->whereIn('status', [
             ImportBatchItemStatus::Failed,
             ImportBatchItemStatus::Unsupported,
@@ -357,48 +349,6 @@ final class DocumentImportBatchService
     }
 
     /**
-     * @param  list<array{name: string, bytes: string, size: int, sha256: string, object_id: string, is_zip: bool}>  $fileMeta
-     */
-    private function processSynchronously(DocumentImportBatch $batch, array $fileMeta, ?int $clientId): void
-    {
-        $batch->status = ImportBatchStatus::Processing;
-        $batch->processing_started_at = now();
-        $batch->save();
-
-        // Snapshot dos itens de topo na admissão (antes de expansões).
-        $topLevel = DocumentImportBatchItem::query()
-            ->where('document_import_batch_id', $batch->id)
-            ->orderBy('item_index')
-            ->get()
-            ->values();
-
-        foreach ($topLevel as $idx => $item) {
-            $meta = $fileMeta[$idx] ?? null;
-            if ($meta === null) {
-                $item->status = ImportBatchItemStatus::Failed;
-                $item->result_code = 'FAILED';
-                $item->result_message = 'Metadado de upload ausente.';
-                $item->attempts = (int) $item->attempts + 1;
-                $item->processed_at = now();
-                $item->save();
-
-                continue;
-            }
-
-            $fresh = DocumentImportBatchItem::query()->find($item->id);
-            if ($fresh === null) {
-                continue;
-            }
-
-            $upload = UploadedFile::fake()->createWithContent($meta['name'], $meta['bytes']);
-            $report = $this->syncIngestion->ingestUploads((int) $batch->office_id, $clientId, [$upload]);
-            $this->applyReportToTopLevelItem($batch, $fresh, $report['items']);
-        }
-
-        $this->recomputeBatchCounters($batch);
-    }
-
-    /**
      * Parent mantém spool do ZIP (resumo ZIP_EXPANDED); N filhos sem spool com resultados.
      *
      * @param  list<array<string, mixed>>  $reportItems
@@ -436,7 +386,7 @@ final class DocumentImportBatchService
             foreach (array_values($reportItems) as $i => $row) {
                 $entryName = $this->sanitizeEntryName((string) ($row['filename'] ?? "entry-{$i}"));
                 DocumentImportBatchItem::query()->create([
-                    'office_id' => $batch->office_id,
+                    'tenant_id' => $batch->tenant_id,
                     'document_import_batch_id' => $batch->id,
                     'item_index' => $startIndex + 1 + $i,
                     'source_name' => $parent->source_name,
@@ -489,7 +439,7 @@ final class DocumentImportBatchService
     {
         return DocumentImportBatchItem::query()
             ->where('document_import_batch_id', $item->document_import_batch_id)
-            ->where('office_id', $item->office_id)
+            ->where('tenant_id', $item->tenant_id)
             ->where('source_name', $item->source_name)
             ->whereNull('entry_name')
             ->where('result_code', 'ZIP_EXPANDED')
@@ -502,10 +452,10 @@ final class DocumentImportBatchService
         return $this->findZipParentItem($item)?->spool_vault_object_id;
     }
 
-    private function assertTenancyScope(int $officeId, ?int $clientId, ?int $establishmentId): void
+    private function assertTenancyScope(int $tenantId, ?int $clientId, ?int $establishmentId): void
     {
         if ($clientId !== null) {
-            $ok = Client::query()->where('office_id', $officeId)->whereKey($clientId)->exists();
+            $ok = Client::query()->where('tenant_id', $tenantId)->whereKey($clientId)->exists();
             if (! $ok) {
                 throw new RuntimeException('Cliente não encontrado neste escritório.');
             }
@@ -513,7 +463,7 @@ final class DocumentImportBatchService
 
         if ($establishmentId !== null) {
             $q = Establishment::query()
-                ->where('office_id', $officeId)
+                ->where('tenant_id', $tenantId)
                 ->whereKey($establishmentId);
             if ($clientId !== null) {
                 $q->where('client_id', $clientId);

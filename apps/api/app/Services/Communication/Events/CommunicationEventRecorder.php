@@ -11,7 +11,7 @@ final class CommunicationEventRecorder
 {
     /** @param array<string, mixed> $payload */
     public function record(
-        int $officeId,
+        int $tenantId,
         string $type,
         array $payload = [],
         ?int $inboxId = null,
@@ -23,7 +23,7 @@ final class CommunicationEventRecorder
         mixed $occurredAt = null,
     ): CommunicationEvent {
         $event = CommunicationEvent::query()->withoutGlobalScopes()->create([
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'inbox_id' => $inboxId,
             'conversation_id' => $conversationId,
             'message_id' => $messageId,

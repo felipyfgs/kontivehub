@@ -24,7 +24,6 @@ use App\Http\Controllers\Api\V1\Communication\CommunicationInboxGatewayControlle
 use App\Http\Controllers\Api\V1\CteEmitterPushController;
 use App\Http\Controllers\Api\V1\CteOperationsController;
 use App\Http\Controllers\Api\V1\DocumentImportBatchController;
-use App\Http\Controllers\Api\V1\DocumentImportController;
 use App\Http\Controllers\Api\V1\DteCanaryTenantController;
 use App\Http\Controllers\Api\V1\EstablishmentController;
 use App\Http\Controllers\Api\V1\ExportController;
@@ -67,25 +66,18 @@ use App\Http\Controllers\Api\V1\Fiscal\SitfisSituationController;
 use App\Http\Controllers\Api\V1\Fiscal\TaxGuideController;
 use App\Http\Controllers\Api\V1\Fiscal\TaxInstallmentController;
 use App\Http\Controllers\Api\V1\Fiscal\TaxProcessController;
+use App\Http\Controllers\Api\V1\FiscalDocumentController;
 use App\Http\Controllers\Api\V1\FiscalDocumentQuarantineController;
 use App\Http\Controllers\Api\V1\MeController;
-use App\Http\Controllers\Api\V1\NoteController;
-use App\Http\Controllers\Api\V1\Office\OfficeMemberController;
-use App\Http\Controllers\Api\V1\OfficeAutXmlController;
-use App\Http\Controllers\Api\V1\OfficeFiscalCredentialController;
-use App\Http\Controllers\Api\V1\OfficeSerproAuthorizationController;
-use App\Http\Controllers\Api\V1\OfficeSerproUsageController;
-use App\Http\Controllers\Api\V1\OfficeSettingsController;
-use App\Http\Controllers\Api\V1\OfficeSubscriptionController;
 use App\Http\Controllers\Api\V1\OperationsInboxController;
 use App\Http\Controllers\Api\V1\OperationsSummaryController;
 use App\Http\Controllers\Api\V1\OutboundCaptureController;
 use App\Http\Controllers\Api\V1\OutboundDeadlineController;
 use App\Http\Controllers\Api\V1\Platform\FiscalModuleControlController;
 use App\Http\Controllers\Api\V1\Platform\InitialOnboardingController;
-use App\Http\Controllers\Api\V1\Platform\PlatformOfficeController;
-use App\Http\Controllers\Api\V1\Platform\PlatformOfficeSelectController;
 use App\Http\Controllers\Api\V1\Platform\PlatformOwnerController;
+use App\Http\Controllers\Api\V1\Platform\PlatformTenantController;
+use App\Http\Controllers\Api\V1\Platform\PlatformTenantSelectController;
 use App\Http\Controllers\Api\V1\Platform\SerproContractController;
 use App\Http\Controllers\Api\V1\Platform\SerproDteCanaryController;
 use App\Http\Controllers\Api\V1\Platform\SerproPlatformConfigurationController;
@@ -97,22 +89,29 @@ use App\Http\Controllers\Api\V1\SavedListFilterController;
 use App\Http\Controllers\Api\V1\SerproTenantController;
 use App\Http\Controllers\Api\V1\SvrsNfceRecoveryController;
 use App\Http\Controllers\Api\V1\SyncController;
+use App\Http\Controllers\Api\V1\Tenant\TenantMemberController;
+use App\Http\Controllers\Api\V1\TenantAutXmlController;
+use App\Http\Controllers\Api\V1\TenantFiscalCredentialController;
+use App\Http\Controllers\Api\V1\TenantSerproAuthorizationController;
+use App\Http\Controllers\Api\V1\TenantSerproUsageController;
+use App\Http\Controllers\Api\V1\TenantSettingsController;
+use App\Http\Controllers\Api\V1\TenantSubscriptionController;
 use App\Http\Controllers\Api\V1\TenantSwitchController;
-use App\Http\Controllers\Api\V1\Work\OperationalDashboardController;
-use App\Http\Controllers\Api\V1\Work\OperationalProcessController;
-use App\Http\Controllers\Api\V1\Work\OperationalProcessGroupController;
-use App\Http\Controllers\Api\V1\Work\OperationalTaskController;
-use App\Http\Controllers\Api\V1\Work\ProcessGenerationController;
-use App\Http\Controllers\Api\V1\Work\ProcessTemplateCatalogController;
-use App\Http\Controllers\Api\V1\Work\ProcessTemplateController;
+use App\Http\Controllers\Api\V1\Work\WorkDashboardController;
 use App\Http\Controllers\Api\V1\Work\WorkDepartmentController;
+use App\Http\Controllers\Api\V1\Work\WorkProcessController;
+use App\Http\Controllers\Api\V1\Work\WorkProcessGenerationController;
+use App\Http\Controllers\Api\V1\Work\WorkProcessGroupController;
+use App\Http\Controllers\Api\V1\Work\WorkProcessTemplateCatalogController;
+use App\Http\Controllers\Api\V1\Work\WorkProcessTemplateController;
+use App\Http\Controllers\Api\V1\Work\WorkTaskController;
 use App\Http\Controllers\Internal\CommunicationGatewayEventController;
 use App\Http\Controllers\Internal\CommunicationGatewayMediaController;
 use App\Http\Middleware\EnsureActiveUser;
-use App\Http\Middleware\EnsureOfficeContext;
-use App\Http\Middleware\EnsureOfficeSubscriptionWritable;
 use App\Http\Middleware\EnsurePlatformAdmin;
 use App\Http\Middleware\EnsureRecentPasswordConfirmation;
+use App\Http\Middleware\EnsureTenantContext;
+use App\Http\Middleware\EnsureTenantSubscriptionWritable;
 use App\Http\Middleware\EnsureWorkRealMembership;
 use Illuminate\Support\Facades\Route;
 
@@ -142,7 +141,7 @@ Route::prefix('v1')->group(function (): void {
     Route::middleware(['auth:sanctum', EnsureActiveUser::class])->group(function (): void {
         Route::get('/me', MeController::class);
 
-        // Troca explícita de tenant (fora de EnsureOfficeContext — office_id de destino é validado por membership)
+        // Troca explícita de tenant (fora de EnsureTenantContext — tenant_id de destino é validado por membership)
         Route::get('/tenants/memberships', [TenantSwitchController::class, 'memberships']);
         Route::post('/tenants/switch', [TenantSwitchController::class, 'switch'])
             ->middleware('throttle:30,1');
@@ -151,37 +150,34 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/auth/confirm-password', ConfirmPasswordController::class)
             ->middleware('throttle:10,1');
 
-        // Identidade global do próprio usuário (independe de Office/papel).
+        // Identidade global do próprio usuário (independe de Tenant/papel).
         Route::patch('/account', UpdateAccountController::class)
             ->middleware(['throttle:20,1', EnsureRecentPasswordConfirmation::class]);
 
-        // Administração global da plataforma (SEM office context de membership).
-        // Navegação comum NÃO exige TOTP (spec acesso-global-platform-admin).
+        // Administração global da plataforma (SEM tenant context de membership).
+        // Navegação comum não exige reconfirmação; ações sensíveis exigem senha recente.
         // Ações sensíveis privilegiadas: reconfirmação de senha + demais gates fail-closed.
         Route::middleware([
             EnsurePlatformAdmin::class,
         ])->prefix('platform')->group(function (): void {
-            // Seletor global de office (platform_privileged; flag default OFF)
-            // Rotas estáticas antes de /offices/{office}
-            Route::get('/offices/current', [PlatformOfficeSelectController::class, 'current']);
-            Route::post('/offices/select', [PlatformOfficeSelectController::class, 'select'])
+            // Seletor global de tenant (platform_privileged; flag default OFF)
+            // Rotas estáticas antes de /tenants/{tenant}
+            Route::get('/tenants/current', [PlatformTenantSelectController::class, 'current']);
+            Route::post('/tenants/select', [PlatformTenantSelectController::class, 'select'])
                 ->middleware('throttle:30,1');
-            Route::delete('/offices/select', [PlatformOfficeSelectController::class, 'clear'])
+            Route::delete('/tenants/select', [PlatformTenantSelectController::class, 'clear'])
                 ->middleware('throttle:30,1');
 
             // Lista do seletor privilegiado (envelope com selected/default)
-            Route::get('/offices/selector', [PlatformOfficeSelectController::class, 'index']);
-            // Compat: GET /offices permanece o seletor (testes existentes)
-            Route::get('/offices', [PlatformOfficeSelectController::class, 'index']);
-
-            // Administração de Offices (criação pendente, detalhe, ativação)
-            Route::get('/offices/admin', [PlatformOfficeController::class, 'index']);
-            Route::post('/offices', [PlatformOfficeController::class, 'store'])
+            Route::get('/tenants/selector', [PlatformTenantSelectController::class, 'index']);
+            // Administração de Tenants (criação pendente, detalhe, ativação)
+            Route::get('/tenants/admin', [PlatformTenantController::class, 'index']);
+            Route::post('/tenants', [PlatformTenantController::class, 'store'])
                 ->middleware(['throttle:20,1', EnsureRecentPasswordConfirmation::class]);
-            Route::get('/offices/{office}', [PlatformOfficeController::class, 'show']);
-            Route::post('/offices/{office}/activation/regenerate', [PlatformOfficeController::class, 'regenerateActivation'])
+            Route::get('/tenants/{tenant}', [PlatformTenantController::class, 'show']);
+            Route::post('/tenants/{tenant}/activation/regenerate', [PlatformTenantController::class, 'regenerateActivation'])
                 ->middleware(['throttle:20,1', EnsureRecentPasswordConfirmation::class]);
-            Route::patch('/offices/{office}/first-admin', [PlatformOfficeController::class, 'updateFirstAdmin'])
+            Route::patch('/tenants/{tenant}/first-admin', [PlatformTenantController::class, 'updateFirstAdmin'])
                 ->middleware(['throttle:20,1', EnsureRecentPasswordConfirmation::class]);
 
             // Proprietário singleton (PLATFORM_ADMIN)
@@ -190,26 +186,22 @@ Route::prefix('v1')->group(function (): void {
                 ->middleware(['throttle:20,1', EnsureRecentPasswordConfirmation::class]);
 
             Route::get('/tenants', [TenantAdminController::class, 'index']);
-            Route::get('/tenants/{office}', [TenantAdminController::class, 'show']);
-            Route::patch('/tenants/{office}/subscription', [TenantAdminController::class, 'updateSubscription']);
+            Route::get('/tenants/{tenant}', [TenantAdminController::class, 'show']);
+            Route::patch('/tenants/{tenant}/subscription', [TenantAdminController::class, 'updateSubscription']);
 
             Route::get('/fiscal/modules', [FiscalModuleControlController::class, 'globalIndex']);
             Route::patch('/fiscal/modules/{module}/restriction', [FiscalModuleControlController::class, 'updateGlobal']);
-            Route::get('/tenants/{office}/fiscal/modules', [FiscalModuleControlController::class, 'officeIndex']);
-            Route::patch('/tenants/{office}/fiscal/modules/{module}/restriction', [FiscalModuleControlController::class, 'updateOffice']);
+            Route::get('/tenants/{tenant}/fiscal/modules', [FiscalModuleControlController::class, 'tenantIndex']);
+            Route::patch('/tenants/{tenant}/fiscal/modules/{module}/restriction', [FiscalModuleControlController::class, 'updateTenant']);
 
             // Consolidação e conciliação de consumo SERPRO (ledger)
             Route::get('/serpro-usage/consolidation', [SerproUsageAdminController::class, 'consolidation']);
             Route::post('/serpro-usage/recompute', [SerproUsageAdminController::class, 'recompute']);
             Route::post('/serpro-usage/reconciliations', [SerproUsageAdminController::class, 'registerReconciliation']);
 
-            // Contrato SERPRO global — leitura sanitizada; mutações legadas removidas (410)
+            // Contrato SERPRO global — leitura sanitizada.
             Route::get('/serpro/contracts', [SerproContractController::class, 'index']);
             Route::get('/serpro/contracts/{serproContract}', [SerproContractController::class, 'show']);
-            Route::post('/serpro/contracts', [SerproPlatformConfigurationController::class, 'legacyMutationRemoved']);
-            Route::post('/serpro/contracts/{serproContract}/activate', [SerproPlatformConfigurationController::class, 'legacyMutationRemoved']);
-            Route::post('/serpro/contracts/{serproContract}/deactivate', [SerproPlatformConfigurationController::class, 'legacyMutationRemoved']);
-            Route::post('/serpro/contracts/{serproContract}/block', [SerproPlatformConfigurationController::class, 'legacyMutationRemoved']);
             Route::get('/serpro/health', [SerproContractController::class, 'health']);
             Route::get('/serpro/catalog', [SerproContractController::class, 'catalog']);
             Route::get('/serpro/kill-switch', [SerproContractController::class, 'killSwitchStatus']);
@@ -224,14 +216,13 @@ Route::prefix('v1')->group(function (): void {
             Route::post('/serpro/credential-versions', [SerproPlatformConfigurationController::class, 'storeCredentialVersion']);
             Route::post('/serpro/credential-versions/{serproCredentialVersion}/verify', [SerproPlatformConfigurationController::class, 'verifyCredentialVersion']);
             Route::post('/serpro/credential-versions/{serproCredentialVersion}/test-connection', [SerproPlatformConfigurationController::class, 'testConnection']);
-            Route::post('/serpro/credential-versions/{serproCredentialVersion}/cutover', [SerproPlatformConfigurationController::class, 'cutoverCredentialVersion']);
+            Route::post('/serpro/credential-versions/{serproCredentialVersion}/activation', [SerproPlatformConfigurationController::class, 'activateCredentialVersion']);
             Route::patch('/serpro/external-gates/{gate}', [SerproPlatformConfigurationController::class, 'updateExternalGate']);
             Route::put('/serpro/usage-limits', [SerproPlatformConfigurationController::class, 'updateUsageLimits']);
 
             // Credenciais versionadas (leitura), readiness, orçamento e rollout
             Route::get('/serpro/credential-versions', [SerproPlatformOpsController::class, 'listCredentialVersions']);
             Route::get('/serpro/credential-versions/{serproCredentialVersion}', [SerproPlatformOpsController::class, 'showCredentialVersion']);
-            Route::post('/serpro/credential-versions/{serproCredentialVersion}/approvals', [SerproPlatformOpsController::class, 'approveCredentialVersion']);
             Route::get('/serpro/readiness', [SerproPlatformOpsController::class, 'readiness']);
             Route::get('/serpro/metrics', [SerproPlatformOpsController::class, 'metrics']);
             Route::get('/serpro/budgets', [SerproPlatformOpsController::class, 'listBudgets']);
@@ -260,11 +251,11 @@ Route::prefix('v1')->group(function (): void {
         });
 
         Route::middleware([
-            EnsureOfficeContext::class,
-            EnsureOfficeSubscriptionWritable::class,
+            EnsureTenantContext::class,
+            EnsureTenantSubscriptionWritable::class,
         ])->group(function (): void {
-            // Assinatura/limites do office atual (leitura liberada mesmo suspenso — middleware só bloqueia mutações)
-            Route::get('/office/subscription', [OfficeSubscriptionController::class, 'show']);
+            // Assinatura/limites do tenant atual (leitura liberada mesmo suspenso — middleware só bloqueia mutações)
+            Route::get('/tenant/subscription', [TenantSubscriptionController::class, 'show']);
 
             Route::prefix('communication')->group(function (): void {
                 Route::get('/inboxes', [CommunicationInboxController::class, 'index']);
@@ -273,17 +264,12 @@ Route::prefix('v1')->group(function (): void {
                 Route::delete('/inboxes/{inbox}', [CommunicationInboxController::class, 'destroy'])
                     ->middleware('throttle:10,1');
                 Route::put('/inboxes/{inbox}/members', [CommunicationInboxController::class, 'replaceMembers']);
-                Route::post('/inboxes/{inbox}/pairing', [CommunicationInboxController::class, 'startPairing'])
-                    ->middleware('throttle:10,1');
-                Route::get('/inboxes/{inbox}/pairing', [CommunicationInboxController::class, 'pairing']);
-                Route::delete('/inboxes/{inbox}/session', [CommunicationInboxController::class, 'revoke'])
-                    ->middleware('throttle:10,1');
                 Route::post('/inboxes/{inbox}/session/logout', [CommunicationInboxController::class, 'revoke'])
                     ->middleware('throttle:10,1');
                 Route::get('/inboxes/{inbox}/session/status', [CommunicationInboxGatewayController::class, 'sessionStatus']);
-                Route::post('/inboxes/{inbox}/session/connect', [CommunicationInboxController::class, 'startPairing']);
+                Route::post('/inboxes/{inbox}/session/connect', [CommunicationInboxController::class, 'startPairing'])
+                    ->middleware('throttle:10,1');
                 Route::post('/inboxes/{inbox}/session/disconnect', [CommunicationInboxGatewayController::class, 'disconnect']);
-                Route::post('/inboxes/{inbox}/session/reset', [CommunicationInboxGatewayController::class, 'reset']);
                 Route::put('/inboxes/{inbox}/session/passive', [CommunicationInboxGatewayController::class, 'passive']);
                 Route::post('/inboxes/{inbox}/session/pair-phone', [CommunicationInboxGatewayController::class, 'pairPhone'])
                     ->middleware('throttle:10,1');
@@ -306,7 +292,7 @@ Route::prefix('v1')->group(function (): void {
                 Route::post('/inboxes/{inbox}/contacts/qr-link', [CommunicationInboxGatewayController::class, 'contactQrLink']);
                 Route::post('/inboxes/{inbox}/contacts/qr-resolve', [CommunicationInboxGatewayController::class, 'resolveContactQr']);
                 Route::post('/inboxes/{inbox}/contacts/business-link-resolve', [CommunicationInboxGatewayController::class, 'resolveBusinessLink']);
-                Route::patch('/settings', [CommunicationInboxController::class, 'updateOfficeSettings']);
+                Route::patch('/settings', [CommunicationInboxController::class, 'updateTenantSettings']);
 
                 Route::get('/automation-policies', [CommunicationAutomationController::class, 'index']);
                 Route::put('/automation-policies', [CommunicationAutomationController::class, 'upsert']);
@@ -386,7 +372,7 @@ Route::prefix('v1')->group(function (): void {
                 Route::delete('/contacts/{contact}/personal-data', [CommunicationDataController::class, 'purgeContact']);
             });
 
-            // Tenant SERPRO namespace canônico (/api/v1/serpro/*) — office_id só via CurrentOffice
+            // Tenant SERPRO namespace canônico (/api/v1/serpro/*) — tenant_id só via CurrentTenant
             Route::get('/serpro/authorization', [SerproTenantController::class, 'authorization']);
             Route::get('/serpro/readiness', [SerproTenantController::class, 'readiness']);
             Route::get('/serpro/health', [SerproTenantController::class, 'health']);
@@ -394,25 +380,24 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/serpro/usage/entries', [SerproTenantController::class, 'usageEntries']);
 
             // Onboarding Integra: Autor, Termo, procurações (sem XML/PFX/tokens na resposta)
-            Route::get('/office/serpro-authorization', [OfficeSerproAuthorizationController::class, 'show']);
-            Route::post('/office/serpro-authorization/author', [OfficeSerproAuthorizationController::class, 'configureAuthor']);
-            Route::post('/office/serpro-authorization/termo/draft', [OfficeSerproAuthorizationController::class, 'generateTermoDraft']);
-            Route::get('/office/serpro-authorization/termo/draft', [OfficeSerproAuthorizationController::class, 'downloadTermoDraft']);
-            Route::post('/office/serpro-authorization/termo', [OfficeSerproAuthorizationController::class, 'uploadTermo']);
-            Route::post('/office/serpro-authorization/termo/sign-managed-a1', [OfficeSerproAuthorizationController::class, 'signTermoManagedA1']);
-            Route::post('/office/serpro-authorization/author-a1', [OfficeSerproAuthorizationController::class, 'storeAuthorA1']);
-            Route::post('/office/serpro-authorization/refresh-token', [OfficeSerproAuthorizationController::class, 'refreshToken']);
-            Route::get('/office/serpro-authorization/proxy-powers', [OfficeSerproAuthorizationController::class, 'listProxyPowers']);
-            Route::post('/office/serpro-authorization/proxy-powers', [OfficeSerproAuthorizationController::class, 'importProxyPower']);
-            Route::post('/office/serpro-authorization/proxy-powers/sync', [OfficeSerproAuthorizationController::class, 'syncProxyPowers']);
-            Route::post('/office/serpro-authorization/eligibility', [OfficeSerproAuthorizationController::class, 'eligibility']);
-            Route::get('/office/serpro-authorization/health', [OfficeSerproAuthorizationController::class, 'platformHealth']);
+            Route::get('/tenant/serpro-authorization', [TenantSerproAuthorizationController::class, 'show']);
+            Route::post('/tenant/serpro-authorization/author', [TenantSerproAuthorizationController::class, 'configureAuthor']);
+            Route::post('/tenant/serpro-authorization/termo/draft', [TenantSerproAuthorizationController::class, 'generateTermoDraft']);
+            Route::get('/tenant/serpro-authorization/termo/draft', [TenantSerproAuthorizationController::class, 'downloadTermoDraft']);
+            Route::post('/tenant/serpro-authorization/termo', [TenantSerproAuthorizationController::class, 'uploadTermo']);
+            Route::post('/tenant/serpro-authorization/termo/sign-with-certificate', [TenantSerproAuthorizationController::class, 'signTermoManagedCertificate']);
+            Route::post('/tenant/serpro-authorization/refresh-token', [TenantSerproAuthorizationController::class, 'refreshToken']);
+            Route::get('/tenant/serpro-authorization/proxy-powers', [TenantSerproAuthorizationController::class, 'listProxyPowers']);
+            Route::post('/tenant/serpro-authorization/proxy-powers', [TenantSerproAuthorizationController::class, 'importProxyPower']);
+            Route::post('/tenant/serpro-authorization/proxy-powers/sync', [TenantSerproAuthorizationController::class, 'syncProxyPowers']);
+            Route::post('/tenant/serpro-authorization/eligibility', [TenantSerproAuthorizationController::class, 'eligibility']);
+            Route::get('/tenant/serpro-authorization/health', [TenantSerproAuthorizationController::class, 'platformHealth']);
 
-            // Consumo/franquia SERPRO do tenant (sem orçamento global nem outros offices)
-            Route::get('/office/serpro-usage', [OfficeSerproUsageController::class, 'summary']);
-            Route::get('/office/serpro-usage/entries', [OfficeSerproUsageController::class, 'entries']);
+            // Consumo/franquia SERPRO do tenant (sem orçamento global nem outros tenants)
+            Route::get('/tenant/serpro-usage', [TenantSerproUsageController::class, 'summary']);
+            Route::get('/tenant/serpro-usage/entries', [TenantSerproUsageController::class, 'entries']);
 
-            // Canário DTE — confirmação Office ADMIN + resultado fiscal (membership)
+            // Canário DTE — confirmação Tenant ADMIN + resultado fiscal (membership)
             Route::get('/serpro/dte-canary/pending', [DteCanaryTenantController::class, 'pending']);
             Route::post('/serpro/dte-canary/{serproDteCanaryRequest}/confirm', [DteCanaryTenantController::class, 'confirmParticipation'])
                 ->middleware(['throttle:20,1', EnsureRecentPasswordConfirmation::class]);
@@ -441,7 +426,7 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/fiscal/monitoring/coverage', MonitoringCoverageController::class);
             Route::get('/fiscal/monitoring/insights', MonitoringInsightsController::class);
 
-            // Read model de carteira por módulo (overview + clients; office_id só via membership)
+            // Read model de carteira por módulo (overview + clients; tenant_id só via membership)
             Route::get('/fiscal/modules/{module}/overview', [FiscalModulePortfolioController::class, 'overview']);
             Route::get('/fiscal/modules/{module}/clients', [FiscalModulePortfolioController::class, 'clients']);
 
@@ -470,8 +455,6 @@ Route::prefix('v1')->group(function (): void {
             Route::post('/fiscal/installments/runs', [TaxInstallmentController::class, 'enqueue']);
 
             // Operações fiscais mutantes (OFF por default; senha recente + confirmação + idempotência)
-            Route::post('/auth/confirm-totp', [FiscalMutationController::class, 'confirmTotp'])
-                ->middleware('throttle:10,1'); // legado: redireciona mentalmente a confirm-password
             Route::post('/fiscal/mutations/preflight', [FiscalMutationController::class, 'preflight'])
                 ->middleware('throttle:30,1');
             Route::post('/fiscal/mutations', [FiscalMutationController::class, 'execute'])
@@ -554,8 +537,6 @@ Route::prefix('v1')->group(function (): void {
             // Central de guias (mutações OFF por default — FeatureFlags guias)
             Route::get('/fiscal/guides', [TaxGuideController::class, 'index']);
             Route::post('/fiscal/guides/preflight', [TaxGuideController::class, 'preflight']);
-            Route::post('/fiscal/guides/challenge', [TaxGuideController::class, 'challenge'])
-                ->middleware('throttle:10,1');
             Route::post('/fiscal/guides', [TaxGuideController::class, 'store'])
                 ->middleware('throttle:20,1');
             Route::get('/fiscal/guides/downloads/{token}', [TaxGuideController::class, 'download']);
@@ -583,12 +564,9 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/fiscal/simples-mei/clients/{client}/regime-calendar', [SimplesMeiController::class, 'regimeCalendar']);
             Route::get('/fiscal/simples-mei/clients/{client}/regime-options', [SimplesMeiController::class, 'regimeOptions']);
             Route::get('/fiscal/simples-mei/clients/{client}/regime-resolutions', [SimplesMeiController::class, 'regimeResolutions']);
-            Route::post('/fiscal/simples-mei/consult', [SimplesMeiController::class, 'consult']);
             Route::post('/fiscal/simples-mei/regime-calendar/consult', [SimplesMeiController::class, 'consultRegimeCalendar']);
             Route::post('/fiscal/simples-mei/regime-option/consult', [SimplesMeiController::class, 'consultRegimeOption']);
             Route::post('/fiscal/simples-mei/regime-resolution/consult', [SimplesMeiController::class, 'consultRegimeResolution']);
-            Route::post('/fiscal/simples-mei/das', [SimplesMeiController::class, 'generateDas']);
-            Route::post('/fiscal/simples-mei/transmit', [SimplesMeiController::class, 'transmit']);
 
             // PGDAS-D: histórico local, documentos, comunicação TEMPLATE_ONLY
             // Contrato canônico do SPA: /fiscal/simples-mei/pgdasd/...
@@ -707,58 +685,54 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/clients/{client}/credential', [ClientCredentialController::class, 'show']);
             Route::post('/clients/{client}/credential', [ClientCredentialController::class, 'store']);
 
-            // Identidade fiscal e A1 do escritório (sem rota de recuperação/download)
-            Route::get('/office/fiscal-identity', [OfficeFiscalCredentialController::class, 'showIdentity']);
-            Route::post('/office/fiscal-identity', [OfficeFiscalCredentialController::class, 'storeIdentity']);
-            Route::post('/office/fiscal-identity/credential', [OfficeFiscalCredentialController::class, 'storeCredential'])
-                ->middleware(EnsureRecentPasswordConfirmation::class);
-            Route::post('/office/fiscal-identity/credentials/{credential}/revoke', [OfficeFiscalCredentialController::class, 'revokeCredential'])
-                ->middleware(EnsureRecentPasswordConfirmation::class);
+            // Identidade fiscal usada pelo canal autXML.
+            Route::get('/tenant/fiscal-identity', [TenantFiscalCredentialController::class, 'showIdentity']);
+            Route::post('/tenant/fiscal-identity', [TenantFiscalCredentialController::class, 'storeIdentity']);
 
-            // Configuração unificada /settings: perfil, consentimento, A1 canônico (sem download)
-            Route::get('/office/settings', [OfficeSettingsController::class, 'show']);
-            Route::patch('/office/settings/profile', [OfficeSettingsController::class, 'updateProfile']);
-            Route::get('/office/settings/consent', [OfficeSettingsController::class, 'showConsent']);
-            Route::post('/office/settings/consent', [OfficeSettingsController::class, 'grantConsent']);
-            Route::post('/office/settings/consent/revoke', [OfficeSettingsController::class, 'revokeConsent']);
-            // A1 canônico: só ADMIN (policy) + senha do PFX. Sem reconfirmação de senha de
+            // Configuração unificada /settings: perfil, consentimento, certificado (sem download)
+            Route::get('/tenant/settings', [TenantSettingsController::class, 'show']);
+            Route::patch('/tenant/settings/profile', [TenantSettingsController::class, 'updateProfile']);
+            Route::get('/tenant/settings/consent', [TenantSettingsController::class, 'showConsent']);
+            Route::post('/tenant/settings/consent', [TenantSettingsController::class, 'grantConsent']);
+            Route::post('/tenant/settings/consent/revoke', [TenantSettingsController::class, 'revokeConsent']);
+            // certificado: só ADMIN (policy) + senha do PFX. Sem reconfirmação de senha de
             // login no formulário — o material sensível é a senha do certificado, não a da conta.
-            Route::get('/office/settings/credential', [OfficeSettingsController::class, 'showCredential']);
-            Route::post('/office/settings/credential', [OfficeSettingsController::class, 'storeCredential']);
-            Route::post('/office/settings/credential/replace', [OfficeSettingsController::class, 'replaceCredential']);
-            Route::post('/office/settings/credential/remove', [OfficeSettingsController::class, 'removeCredential']);
-            Route::post('/office/settings/refresh-integration', [OfficeSettingsController::class, 'refreshIntegration']);
-            Route::get('/office/settings/monitor-schedules', [OfficeSettingsController::class, 'listMonitorSchedules']);
-            Route::put('/office/settings/monitor-schedules/{monitorKey}', [OfficeSettingsController::class, 'updateMonitorSchedule']);
-            Route::get('/office/settings/onboarding-status', [OfficeSettingsController::class, 'onboardingStatus']);
+            Route::get('/tenant/settings/certificate', [TenantSettingsController::class, 'showCertificate']);
+            Route::post('/tenant/settings/certificate', [TenantSettingsController::class, 'storeCertificate']);
+            Route::post('/tenant/settings/certificate/replace', [TenantSettingsController::class, 'replaceCertificate']);
+            Route::post('/tenant/settings/certificate/remove', [TenantSettingsController::class, 'removeCertificate']);
+            Route::post('/tenant/settings/refresh-integration', [TenantSettingsController::class, 'refreshIntegration']);
+            Route::get('/tenant/settings/monitor-schedules', [TenantSettingsController::class, 'listMonitorSchedules']);
+            Route::put('/tenant/settings/monitor-schedules/{monitorKey}', [TenantSettingsController::class, 'updateMonitorSchedule']);
+            Route::get('/tenant/settings/onboarding-status', [TenantSettingsController::class, 'onboardingStatus']);
 
             // Equipe do escritório — exige membership ADMIN real (checado no serviço)
-            Route::get('/office/members', [OfficeMemberController::class, 'index']);
-            Route::post('/office/members', [OfficeMemberController::class, 'store'])
+            Route::get('/tenant/members', [TenantMemberController::class, 'index']);
+            Route::post('/tenant/members', [TenantMemberController::class, 'store'])
                 ->middleware(['throttle:30,1', EnsureRecentPasswordConfirmation::class]);
-            Route::patch('/office/members/{membership}', [OfficeMemberController::class, 'update'])
+            Route::patch('/tenant/members/{membership}', [TenantMemberController::class, 'update'])
                 ->middleware(EnsureRecentPasswordConfirmation::class);
-            Route::patch('/office/members/{membership}/recipient', [OfficeMemberController::class, 'updateRecipient'])
+            Route::patch('/tenant/members/{membership}/recipient', [TenantMemberController::class, 'updateRecipient'])
                 ->middleware(['throttle:20,1', EnsureRecentPasswordConfirmation::class]);
-            Route::post('/office/members/{membership}/deactivate', [OfficeMemberController::class, 'deactivate'])
+            Route::post('/tenant/members/{membership}/deactivate', [TenantMemberController::class, 'deactivate'])
                 ->middleware(EnsureRecentPasswordConfirmation::class);
-            Route::post('/office/members/{membership}/reactivate', [OfficeMemberController::class, 'reactivate'])
+            Route::post('/tenant/members/{membership}/reactivate', [TenantMemberController::class, 'reactivate'])
                 ->middleware(['throttle:20,1', EnsureRecentPasswordConfirmation::class]);
-            Route::post('/office/members/{membership}/activation/regenerate', [OfficeMemberController::class, 'regenerateActivation'])
+            Route::post('/tenant/members/{membership}/activation/regenerate', [TenantMemberController::class, 'regenerateActivation'])
                 ->middleware(['throttle:20,1', EnsureRecentPasswordConfirmation::class]);
 
             // Onboarding autXML + cursor central (sem reset de NSU)
-            Route::get('/office/autxml', [OfficeAutXmlController::class, 'overview']);
-            Route::get('/office/autxml/cursor', [OfficeAutXmlController::class, 'cursor']);
-            Route::post('/office/autxml/enrollments', [OfficeAutXmlController::class, 'enroll']);
-            Route::post('/office/autxml/enrollments/{enrollment}/confirm', [OfficeAutXmlController::class, 'confirm']);
-            Route::post('/office/autxml/enrollments/{enrollment}/inactivate', [OfficeAutXmlController::class, 'inactivate']);
+            Route::get('/tenant/autxml', [TenantAutXmlController::class, 'overview']);
+            Route::get('/tenant/autxml/cursor', [TenantAutXmlController::class, 'cursor']);
+            Route::post('/tenant/autxml/enrollments', [TenantAutXmlController::class, 'enroll']);
+            Route::post('/tenant/autxml/enrollments/{enrollment}/confirm', [TenantAutXmlController::class, 'confirm']);
+            Route::post('/tenant/autxml/enrollments/{enrollment}/inactivate', [TenantAutXmlController::class, 'inactivate']);
 
-            // Tokens de integração CT-e (EMITTER_PUSH) — ADMIN+2FA emite/revoga; sem recuperação
-            Route::get('/office/integration-tokens', [CteEmitterPushController::class, 'listTokens']);
-            Route::post('/office/integration-tokens', [CteEmitterPushController::class, 'issueToken'])
+            // Tokens de integração CT-e (EMITTER_PUSH) — admin com senha recente emite/revoga; sem recuperação
+            Route::get('/tenant/integration-tokens', [CteEmitterPushController::class, 'listTokens']);
+            Route::post('/tenant/integration-tokens', [CteEmitterPushController::class, 'issueToken'])
                 ->middleware('throttle:'.(int) config('sefaz.cte_emitter_push.admin_token_rate_limit_per_minute', 10).',1');
-            Route::post('/office/integration-tokens/{token}/revoke', [CteEmitterPushController::class, 'revokeToken'])
+            Route::post('/tenant/integration-tokens/{token}/revoke', [CteEmitterPushController::class, 'revokeToken'])
                 ->middleware('throttle:'.(int) config('sefaz.cte_emitter_push.admin_token_rate_limit_per_minute', 10).',1');
 
             // Operação CT-e: onboarding, dois streams, cobertura e pendências sanitizadas
@@ -769,27 +743,19 @@ Route::prefix('v1')->group(function (): void {
             Route::post('/cte/repairs', [CteOperationsController::class, 'repairKnownNsu']);
 
             // Catálogo unificado Documentos (canônico)
-            Route::get('/documents', [NoteController::class, 'index']);
-            Route::get('/documents/by-client', [NoteController::class, 'byClient']);
-            Route::get('/documents/insights', [NoteController::class, 'insights']);
-            Route::post('/documents/import', [DocumentImportController::class, 'store']);
+            Route::get('/documents', [FiscalDocumentController::class, 'index']);
+            Route::get('/documents/by-client', [FiscalDocumentController::class, 'byClient']);
+            Route::get('/documents/insights', [FiscalDocumentController::class, 'insights']);
             Route::get('/documents/import-batches', [DocumentImportBatchController::class, 'index']);
             Route::post('/documents/import-batches', [DocumentImportBatchController::class, 'store']);
             Route::get('/documents/import-batches/{batch}', [DocumentImportBatchController::class, 'show']);
             Route::get('/documents/import-batches/{batch}/items', [DocumentImportBatchController::class, 'items']);
             Route::post('/documents/import-batches/{batch}/items/{item}/retry', [DocumentImportBatchController::class, 'retryItem']);
             Route::get('/documents/import-batches/{batch}/export.csv', [DocumentImportBatchController::class, 'exportCsv']);
-            Route::get('/documents/{accessKey}', [NoteController::class, 'show']);
-            Route::get('/documents/{accessKey}/xml', [NoteController::class, 'downloadXml']);
-            Route::post('/documents/{accessKey}/unlock-xml', [NoteController::class, 'unlockXml']);
-            Route::post('/documents/{accessKey}/manifestations', [NoteController::class, 'manifest']);
-
-            // Alias compatível (legado "notes")
-            Route::get('/notes', [NoteController::class, 'index']);
-            Route::get('/notes/by-client', [NoteController::class, 'byClient']);
-            Route::get('/notes/insights', [NoteController::class, 'insights']);
-            Route::get('/notes/{accessKey}', [NoteController::class, 'show']);
-            Route::get('/notes/{accessKey}/xml', [NoteController::class, 'downloadXml']);
+            Route::get('/documents/{accessKey}', [FiscalDocumentController::class, 'show']);
+            Route::get('/documents/{accessKey}/xml', [FiscalDocumentController::class, 'downloadXml']);
+            Route::post('/documents/{accessKey}/unlock-xml', [FiscalDocumentController::class, 'unlockXml']);
+            Route::post('/documents/{accessKey}/manifestations', [FiscalDocumentController::class, 'manifest']);
 
             Route::get('/sync-runs', [SyncController::class, 'history']);
             Route::post('/sync-runs', [SyncController::class, 'trigger']);
@@ -798,7 +764,7 @@ Route::prefix('v1')->group(function (): void {
             Route::post('/exports', [ExportController::class, 'store']);
             Route::get('/exports/{export}/download', [ExportController::class, 'download']);
 
-            // Filtros salvos de lista (personal | office; office_id só via CurrentOffice)
+            // Filtros salvos de lista (personal | tenant; tenant_id só via CurrentTenant)
             Route::get('/list-filters', [SavedListFilterController::class, 'index']);
             Route::post('/list-filters', [SavedListFilterController::class, 'store']);
             Route::patch('/list-filters/{listFilter}', [SavedListFilterController::class, 'update']);
@@ -825,61 +791,61 @@ Route::prefix('v1')->group(function (): void {
             // @see config/work_route_matrix.php
             Route::prefix('work')->group(function (): void {
                 Route::get('/departments', [WorkDepartmentController::class, 'index']);
-                Route::get('/template-catalog', [ProcessTemplateCatalogController::class, 'index']);
-                Route::get('/templates', [ProcessTemplateController::class, 'index']);
-                Route::get('/templates/{template}', [ProcessTemplateController::class, 'show']);
-                Route::get('/templates/{template}/recurrence', [ProcessTemplateController::class, 'showRecurrence']);
-                Route::get('/templates/{template}/generation-batches', [ProcessTemplateController::class, 'generationBatches']);
-                Route::get('/generation-batches/{batch}', [ProcessGenerationController::class, 'show']);
-                Route::get('/queue', [OperationalTaskController::class, 'queue']);
-                Route::get('/process-groups', [OperationalProcessGroupController::class, 'index']);
-                Route::get('/processes', [OperationalProcessController::class, 'index']);
-                Route::get('/processes/{process}', [OperationalProcessController::class, 'show']);
-                Route::get('/processes/{process}/timeline', [OperationalProcessController::class, 'timeline']);
-                Route::get('/tasks/{task}', [OperationalTaskController::class, 'show']);
-                Route::get('/tasks/{task}/evidences/{evidence}/download', [OperationalTaskController::class, 'downloadEvidence']);
-                Route::get('/kpis', [OperationalDashboardController::class, 'kpis']);
-                Route::get('/calendar', [OperationalDashboardController::class, 'calendar']);
-                Route::get('/calendar/day', [OperationalDashboardController::class, 'calendarDay']);
-                Route::get('/exports/{export}', [OperationalDashboardController::class, 'showExport']);
-                Route::get('/exports/{export}/download', [OperationalDashboardController::class, 'downloadExport']);
+                Route::get('/template-catalog', [WorkProcessTemplateCatalogController::class, 'index']);
+                Route::get('/templates', [WorkProcessTemplateController::class, 'index']);
+                Route::get('/templates/{template}', [WorkProcessTemplateController::class, 'show']);
+                Route::get('/templates/{template}/recurrence', [WorkProcessTemplateController::class, 'showRecurrence']);
+                Route::get('/templates/{template}/generation-batches', [WorkProcessTemplateController::class, 'generationBatches']);
+                Route::get('/generation-batches/{batch}', [WorkProcessGenerationController::class, 'show']);
+                Route::get('/queue', [WorkTaskController::class, 'queue']);
+                Route::get('/process-groups', [WorkProcessGroupController::class, 'index']);
+                Route::get('/processes', [WorkProcessController::class, 'index']);
+                Route::get('/processes/{process}', [WorkProcessController::class, 'show']);
+                Route::get('/processes/{process}/timeline', [WorkProcessController::class, 'timeline']);
+                Route::get('/tasks/{task}', [WorkTaskController::class, 'show']);
+                Route::get('/tasks/{task}/evidences/{evidence}/download', [WorkTaskController::class, 'downloadEvidence']);
+                Route::get('/kpis', [WorkDashboardController::class, 'kpis']);
+                Route::get('/calendar', [WorkDashboardController::class, 'calendar']);
+                Route::get('/calendar/day', [WorkDashboardController::class, 'calendarDay']);
+                Route::get('/exports/{export}', [WorkDashboardController::class, 'showExport']);
+                Route::get('/exports/{export}/download', [WorkDashboardController::class, 'downloadExport']);
 
                 Route::middleware([EnsureWorkRealMembership::class])->group(function (): void {
                     Route::post('/departments', [WorkDepartmentController::class, 'store']);
                     Route::patch('/departments/{department}', [WorkDepartmentController::class, 'update']);
                     Route::post('/departments/{department}/assign-membership', [WorkDepartmentController::class, 'assignMembership']);
 
-                    Route::post('/templates', [ProcessTemplateController::class, 'store']);
-                    Route::post('/template-catalog/{catalogKey}/install', [ProcessTemplateCatalogController::class, 'install']);
-                    Route::patch('/templates/{template}', [ProcessTemplateController::class, 'update']);
-                    Route::patch('/templates/{template}/recurrence', [ProcessTemplateController::class, 'updateRecurrence']);
-                    Route::post('/templates/{template}/preview', [ProcessGenerationController::class, 'preview']);
-                    Route::post('/generation-batches/{batch}/confirm', [ProcessGenerationController::class, 'confirm']);
-                    Route::post('/generation-batches/{batch}/retry', [ProcessGenerationController::class, 'retry']);
+                    Route::post('/templates', [WorkProcessTemplateController::class, 'store']);
+                    Route::post('/template-catalog/{catalogKey}/install', [WorkProcessTemplateCatalogController::class, 'install']);
+                    Route::patch('/templates/{template}', [WorkProcessTemplateController::class, 'update']);
+                    Route::patch('/templates/{template}/recurrence', [WorkProcessTemplateController::class, 'updateRecurrence']);
+                    Route::post('/templates/{template}/preview', [WorkProcessGenerationController::class, 'preview']);
+                    Route::post('/generation-batches/{batch}/confirm', [WorkProcessGenerationController::class, 'confirm']);
+                    Route::post('/generation-batches/{batch}/retry', [WorkProcessGenerationController::class, 'retry']);
 
-                    Route::post('/processes', [OperationalProcessController::class, 'store']);
-                    Route::patch('/processes/{process}', [OperationalProcessController::class, 'update']);
-                    Route::post('/processes/bulk', [OperationalProcessController::class, 'bulk']);
-                    Route::post('/processes/{process}/archive', [OperationalProcessController::class, 'archive']);
-                    Route::post('/processes/{process}/comments', [OperationalProcessController::class, 'comment']);
+                    Route::post('/processes', [WorkProcessController::class, 'store']);
+                    Route::patch('/processes/{process}', [WorkProcessController::class, 'update']);
+                    Route::post('/processes/bulk', [WorkProcessController::class, 'bulk']);
+                    Route::post('/processes/{process}/archive', [WorkProcessController::class, 'archive']);
+                    Route::post('/processes/{process}/comments', [WorkProcessController::class, 'comment']);
 
-                    Route::post('/processes/{process}/tasks', [OperationalTaskController::class, 'storeOnProcess']);
-                    Route::post('/processes/{process}/tasks/reorder', [OperationalTaskController::class, 'reorder']);
-                    Route::patch('/tasks/{task}/structure', [OperationalTaskController::class, 'updateStructure']);
-                    Route::post('/tasks/{task}/start', [OperationalTaskController::class, 'start']);
-                    Route::post('/tasks/{task}/block', [OperationalTaskController::class, 'block']);
-                    Route::post('/tasks/{task}/resume', [OperationalTaskController::class, 'resume']);
-                    Route::post('/tasks/{task}/complete', [OperationalTaskController::class, 'complete']);
-                    Route::post('/tasks/{task}/dispense', [OperationalTaskController::class, 'dispense']);
-                    Route::post('/tasks/{task}/reopen', [OperationalTaskController::class, 'reopen']);
-                    Route::post('/tasks/{task}/claim', [OperationalTaskController::class, 'claim']);
-                    Route::post('/tasks/{task}/assign', [OperationalTaskController::class, 'assign']);
-                    Route::post('/tasks/{task}/comments', [OperationalTaskController::class, 'comment']);
-                    Route::post('/tasks/{task}/evidences', [OperationalTaskController::class, 'uploadEvidence']);
-                    Route::delete('/tasks/{task}/evidences/{evidence}', [OperationalTaskController::class, 'removeEvidence']);
-                    Route::post('/tasks/bulk', [OperationalTaskController::class, 'bulk']);
+                    Route::post('/processes/{process}/tasks', [WorkTaskController::class, 'storeOnProcess']);
+                    Route::post('/processes/{process}/tasks/reorder', [WorkTaskController::class, 'reorder']);
+                    Route::patch('/tasks/{task}/structure', [WorkTaskController::class, 'updateStructure']);
+                    Route::post('/tasks/{task}/start', [WorkTaskController::class, 'start']);
+                    Route::post('/tasks/{task}/block', [WorkTaskController::class, 'block']);
+                    Route::post('/tasks/{task}/resume', [WorkTaskController::class, 'resume']);
+                    Route::post('/tasks/{task}/complete', [WorkTaskController::class, 'complete']);
+                    Route::post('/tasks/{task}/dispense', [WorkTaskController::class, 'dispense']);
+                    Route::post('/tasks/{task}/reopen', [WorkTaskController::class, 'reopen']);
+                    Route::post('/tasks/{task}/claim', [WorkTaskController::class, 'claim']);
+                    Route::post('/tasks/{task}/assign', [WorkTaskController::class, 'assign']);
+                    Route::post('/tasks/{task}/comments', [WorkTaskController::class, 'comment']);
+                    Route::post('/tasks/{task}/evidences', [WorkTaskController::class, 'uploadEvidence']);
+                    Route::delete('/tasks/{task}/evidences/{evidence}', [WorkTaskController::class, 'removeEvidence']);
+                    Route::post('/tasks/bulk', [WorkTaskController::class, 'bulk']);
 
-                    Route::post('/exports', [OperationalDashboardController::class, 'createExport']);
+                    Route::post('/exports', [WorkDashboardController::class, 'createExport']);
                 });
             });
 
@@ -921,7 +887,6 @@ Route::prefix('v1')->group(function (): void {
             Route::post('/outbound/svrs-portal/egress/elevate-budget', [SvrsNfceRecoveryController::class, 'refuseBudgetElevation']);
             Route::get('/outbound/svrs-nfce/recoveries', [SvrsNfceRecoveryController::class, 'index']);
             Route::post('/outbound/svrs-nfce/recoveries', [SvrsNfceRecoveryController::class, 'enqueue']);
-            Route::get('/outbound/svrs-nfce/recoveries/{recovery}', [SvrsNfceRecoveryController::class, 'attempts']);
             Route::get('/outbound/svrs-nfce/recoveries/{recovery}/attempts', [SvrsNfceRecoveryController::class, 'attempts']);
             Route::post('/outbound/svrs-nfce/recoveries/{recovery}/retry', [SvrsNfceRecoveryController::class, 'retry']);
             Route::get('/outbound/svrs-nfce/profiles/{profile}/summary', [SvrsNfceRecoveryController::class, 'profileSummary']);

@@ -5,9 +5,9 @@ namespace App\Services\Fiscal\Guides;
 use App\Contracts\GuideEmissionClient;
 use App\Enums\TaxGuideEmissionStatus;
 use App\Enums\TaxGuidePaymentStatus;
-use App\Models\Office;
 use App\Models\TaxGuide;
 use App\Models\TaxGuideVersion;
+use App\Models\Tenant;
 use App\Services\Audit\AuditLogger;
 use App\Services\Fiscal\Guides\DTO\GuideReconcileRequest;
 use App\Services\Fiscal\Guides\Exceptions\GuideException;
@@ -29,9 +29,9 @@ final class GuideReconciliationService
     /**
      * @return array{guide:TaxGuide,version:TaxGuideVersion,outcome:string}
      */
-    public function reconcile(Office $office, TaxGuideVersion $version): array
+    public function reconcile(Tenant $tenant, TaxGuideVersion $version): array
     {
-        if ((int) $version->office_id !== (int) $office->id) {
+        if ((int) $version->tenant_id !== (int) $tenant->id) {
             throw GuideException::notFound();
         }
 
@@ -55,7 +55,7 @@ final class GuideReconciliationService
 
         $guide = TaxGuide::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($version->tax_guide_id)
             ->firstOrFail();
 
@@ -64,7 +64,7 @@ final class GuideReconciliationService
         $version->save();
 
         $result = $this->client->reconcile(new GuideReconcileRequest(
-            officeId: (int) $office->id,
+            tenantId: (int) $tenant->id,
             clientId: (int) $guide->client_id,
             systemCode: $guide->system_code,
             serviceCode: $guide->service_code,
@@ -76,7 +76,7 @@ final class GuideReconciliationService
             debitRef: $guide->debit_ref,
         ));
 
-        return DB::transaction(function () use ($office, $guide, $version, $result): array {
+        return DB::transaction(function () use ($tenant, $guide, $version, $result): array {
             $version = TaxGuideVersion::query()
                 ->withoutGlobalScopes()
                 ->whereKey($version->id)
@@ -85,7 +85,7 @@ final class GuideReconciliationService
 
             if ($result->outcome === 'FOUND' && $result->emission !== null) {
                 $stored = $this->storage->storeDocument(
-                    (int) $office->id,
+                    (int) $tenant->id,
                     $result->emission->documentBytes,
                     $result->emission->contentType,
                 );
@@ -127,7 +127,7 @@ final class GuideReconciliationService
                     result: 'SUCCESS',
                     subject: $version,
                     context: ['tax_guide_id' => $guide->id],
-                    officeId: (int) $office->id,
+                    tenantId: (int) $tenant->id,
                 );
 
                 return ['guide' => $guide->fresh(), 'version' => $version->fresh(), 'outcome' => 'FOUND'];
@@ -145,7 +145,7 @@ final class GuideReconciliationService
                     result: 'REJECTED',
                     subject: $version,
                     context: ['tax_guide_id' => $guide->id],
-                    officeId: (int) $office->id,
+                    tenantId: (int) $tenant->id,
                 );
 
                 return ['guide' => $guide->fresh(), 'version' => $version->fresh(), 'outcome' => 'REJECTED'];
@@ -167,7 +167,7 @@ final class GuideReconciliationService
                     'attempts' => $version->reconcile_attempts,
                     'outcome' => $result->outcome,
                 ],
-                officeId: (int) $office->id,
+                tenantId: (int) $tenant->id,
             );
 
             return ['guide' => $guide->fresh(), 'version' => $version->fresh(), 'outcome' => $result->outcome];

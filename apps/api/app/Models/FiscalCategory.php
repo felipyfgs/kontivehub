@@ -9,8 +9,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Catálogo tipado global de categorias fiscais (sem office_id).
- * Vínculos por tenant vivem em OfficeFiscalCategoryLink.
+ * Catálogo tipado global de categorias fiscais (sem tenant_id).
+ * Vínculos por tenant vivem em TenantFiscalCategoryLink.
  */
 #[Fillable([
     'code',
@@ -40,7 +40,7 @@ class FiscalCategory extends Model
 
     public function links(): HasMany
     {
-        return $this->hasMany(OfficeFiscalCategoryLink::class, 'fiscal_category_id');
+        return $this->hasMany(TenantFiscalCategoryLink::class, 'fiscal_category_id');
     }
 
     /**

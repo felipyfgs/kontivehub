@@ -2,12 +2,12 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 
 #[Fillable([
-    'office_id', 'competence', 'scope', 'root_cnpj', 'model',
+    'tenant_id', 'competence', 'scope', 'root_cnpj', 'model',
     'demand_exchanges', 'safe_capacity_exchanges', 'nominal_capacity_exchanges',
     'slack_exchanges', 'slack_ratio', 'items_total', 'items_planned', 'items_attention',
     'items_contingency', 'items_overdue', 'items_captured', 'items_capacity_at_risk',
@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Model;
 ])]
 class OutboundCapacitySnapshot extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {

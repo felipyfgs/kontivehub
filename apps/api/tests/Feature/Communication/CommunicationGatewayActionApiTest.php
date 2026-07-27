@@ -13,7 +13,6 @@ use App\Enums\Communication\MessageDirection;
 use App\Enums\Communication\MessageKind;
 use App\Enums\Communication\MessageSource;
 use App\Enums\Communication\MessageStatus;
-use App\Enums\OfficeRole;
 use App\Enums\TenantPermission;
 use App\Enums\TenantRole;
 use App\Exceptions\CommunicationTransportException;
@@ -24,13 +23,12 @@ use App\Models\CommunicationInbox;
 use App\Models\CommunicationInboxMember;
 use App\Models\CommunicationMessage;
 use App\Models\CommunicationOutboxEntry;
-use App\Models\Office;
-use App\Models\OfficeMembership;
+use App\Models\Tenant;
+use App\Models\TenantMembership;
 use App\Models\TenantPermissionProfile;
 use App\Models\User;
 use App\Services\Communication\Outbox\CommunicationOutboxDispatcher;
-use App\Support\CurrentOffice;
-use App\Support\MultitenantRbac\EffectivePermissionsResolver;
+use App\Support\CurrentTenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
@@ -58,11 +56,11 @@ final class CommunicationGatewayActionApiTest extends TestCase
 
     public function test_member_with_reply_can_enqueue_typed_conversation_actions_from_domain_ids(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $operator = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $inbox = $this->inbox($office);
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $operator = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $inbox = $this->inbox($tenant);
         $this->member($inbox, $operator);
-        [$conversation, $inbound, $outbound, $poll] = $this->conversation($office, $inbox);
+        [$conversation, $inbound, $outbound, $poll] = $this->conversation($tenant, $inbox);
         $this->authenticate($operator);
         $base = '/api/v1/communication/conversations/'.$conversation->id;
 
@@ -113,12 +111,12 @@ final class CommunicationGatewayActionApiTest extends TestCase
 
     public function test_history_and_recovery_apply_manage_and_reply_boundaries(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $operator = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
-        $inbox = $this->inbox($office);
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $operator = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $inbox = $this->inbox($tenant);
         $this->member($inbox, $operator);
-        [$conversation, $inbound] = $this->conversation($office, $inbox);
+        [$conversation, $inbound] = $this->conversation($tenant, $inbox);
         $base = '/api/v1/communication/conversations/'.$conversation->id.'/messages/'.$inbound->id;
 
         $this->authenticate($operator);
@@ -141,18 +139,33 @@ final class CommunicationGatewayActionApiTest extends TestCase
             ->assertJsonPath('data.type', GatewayCommandType::UpdateChatState->value);
     }
 
-    public function test_permission_membership_and_office_are_rejected_before_outbox_or_query(): void
+    public function test_permission_membership_and_tenant_are_rejected_before_outbox_or_query(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $foreignOffice = Office::factory()->create(['communication_enabled' => true]);
-        $member = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $notMember = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $viewer = User::factory()->forOffice($office, OfficeRole::Viewer)->create();
-        $foreignAdmin = User::factory()->forOffice($foreignOffice, OfficeRole::Admin)->create();
-        $inbox = $this->inbox($office);
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $foreignTenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $member = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $notMember = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $viewer = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $foreignAdmin = User::factory()->forTenant($foreignTenant, TenantRole::TenantAdmin)->create();
+        $replyProfile = TenantPermissionProfile::factory()->forTenant($tenant)->create();
+        $replyProfile->syncPermissionKeys([
+            TenantPermission::CommunicationView,
+            TenantPermission::CommunicationReply,
+        ]);
+        $viewerProfile = TenantPermissionProfile::factory()->forTenant($tenant)->create();
+        $viewerProfile->syncPermissionKeys([TenantPermission::CommunicationView]);
+        TenantMembership::query()->withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->whereIn('user_id', [$member->id, $notMember->id])
+            ->update(['permission_profile_id' => $replyProfile->id]);
+        TenantMembership::query()->withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('user_id', $viewer->id)
+            ->update(['permission_profile_id' => $viewerProfile->id]);
+        $inbox = $this->inbox($tenant);
         $this->member($inbox, $member);
         $this->member($inbox, $viewer);
-        [$conversation, $inbound] = $this->conversation($office, $inbox);
+        [$conversation, $inbound] = $this->conversation($tenant, $inbox);
         $reaction = '/api/v1/communication/conversations/'.$conversation->id.'/messages/'.$inbound->id.'/reaction';
 
         $this->authenticate($notMember);
@@ -177,11 +190,13 @@ final class CommunicationGatewayActionApiTest extends TestCase
 
     public function test_admin_controls_use_the_current_inbox_session_and_sanitized_queries(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
-        $inbox = $this->inbox($office, 'session-admin-actions-0001');
-        [$conversation] = $this->conversation($office, $inbox);
-        $identity = $conversation->identity;
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $inbox = $this->inbox($tenant, 'session-admin-actions-0001');
+        [$conversation] = $this->conversation($tenant, $inbox);
+        $identity = CommunicationIdentity::query()
+            ->withoutGlobalScopes()
+            ->findOrFail($conversation->identity_id);
         $this->authenticate($admin);
 
         $this->putJson('/api/v1/communication/inboxes/'.$inbox->id.'/privacy', [
@@ -193,8 +208,6 @@ final class CommunicationGatewayActionApiTest extends TestCase
         $this->putJson('/api/v1/communication/inboxes/'.$inbox->id.'/presence', [
             'presence' => 'AVAILABLE', 'force_active_delivery_receipts' => true,
         ])->assertStatus(202)->assertJsonPath('data.type', GatewayCommandType::SetPresence->value);
-        $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/session/reset')
-            ->assertStatus(202)->assertJsonPath('data.type', GatewayCommandType::ResetSession->value);
         $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/session/connect')
             ->assertStatus(202)->assertJsonPath('data.type', GatewayCommandType::ConnectSession->value);
         $this->putJson('/api/v1/communication/inboxes/'.$inbox->id.'/session/passive', ['passive' => true])
@@ -263,47 +276,20 @@ final class CommunicationGatewayActionApiTest extends TestCase
         $block = CommunicationOutboxEntry::query()->withoutGlobalScopes()
             ->where('type', GatewayCommandType::UpdateBlocklist->value)->firstOrFail();
         $this->assertSame('+5511999997001', $block->payload_encrypted['to']);
-        $this->assertArrayNotHasKey('office_id', $block->payload_encrypted);
+        $this->assertArrayNotHasKey('tenant_id', $block->payload_encrypted);
         $this->assertArrayNotHasKey('session_id', $block->payload_encrypted);
-    }
-
-    public function test_legacy_manage_permission_still_authorizes_the_new_canonical_boundary(): void
-    {
-        config(['features.canonical_multitenant_rbac.enabled' => true]);
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $user = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $profile = TenantPermissionProfile::factory()->forOffice($office)->create();
-        $profile->syncPermissionKeys([TenantPermission::CommunicationManage]);
-        $membership = OfficeMembership::query()->withoutGlobalScopes()
-            ->where('office_id', $office->id)->where('user_id', $user->id)->firstOrFail();
-        $membership->forceFill([
-            'tenant_role' => TenantRole::TenantUser,
-            'permission_profile_id' => $profile->id,
-            'authorization_version' => (int) $membership->authorization_version + 1,
-        ])->save();
-        $inbox = $this->inbox($office);
-        $this->authenticate($user);
-
-        $this->getJson('/api/v1/communication/inboxes/'.$inbox->id.'/privacy')
-            ->assertOk()
-            ->assertJsonPath('data.type', 'PRIVACY_SETTINGS');
-        $this->assertSame('communication.manage_inboxes', TenantPermission::CommunicationManageInboxes->value);
-        $this->assertContains(
-            TenantPermission::CommunicationManageInboxes->value,
-            app(EffectivePermissionsResolver::class)->forCurrentContext($user),
-        );
     }
 
     private function authenticate(User $user): void
     {
         Sanctum::actingAs($user);
-        app(CurrentOffice::class)->clear();
+        app(CurrentTenant::class)->clear();
     }
 
-    private function inbox(Office $office, ?string $sessionId = null): CommunicationInbox
+    private function inbox(Tenant $tenant, ?string $sessionId = null): CommunicationInbox
     {
         return CommunicationInbox::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => 'Inbox '.Str::random(6),
             'session_id' => $sessionId ?? 'session-'.strtolower((string) Str::ulid()),
             'status' => InboxStatus::Connected,
@@ -313,24 +299,24 @@ final class CommunicationGatewayActionApiTest extends TestCase
 
     private function member(CommunicationInbox $inbox, User $user): void
     {
-        $membership = OfficeMembership::query()->withoutGlobalScopes()
-            ->where('office_id', $inbox->office_id)->where('user_id', $user->id)->firstOrFail();
+        $membership = TenantMembership::query()->withoutGlobalScopes()
+            ->where('tenant_id', $inbox->tenant_id)->where('user_id', $user->id)->firstOrFail();
         CommunicationInboxMember::query()->withoutGlobalScopes()->create([
-            'office_id' => $inbox->office_id,
+            'tenant_id' => $inbox->tenant_id,
             'inbox_id' => $inbox->id,
-            'office_membership_id' => $membership->id,
+            'tenant_membership_id' => $membership->id,
             'is_active' => true,
         ]);
     }
 
     /** @return array{CommunicationConversation,CommunicationMessage,CommunicationMessage,CommunicationMessage} */
-    private function conversation(Office $office, CommunicationInbox $inbox): array
+    private function conversation(Tenant $tenant, CommunicationInbox $inbox): array
     {
         $contact = CommunicationContact::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id, 'name' => 'Contato', 'is_active' => true,
+            'tenant_id' => $tenant->id, 'name' => 'Contato', 'is_active' => true,
         ]);
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'contact_id' => $contact->id,
             'channel' => 'WHATSAPP',
             'address_encrypted' => '+5511999997001',
@@ -339,21 +325,21 @@ final class CommunicationGatewayActionApiTest extends TestCase
             'is_active' => true,
         ]);
         $conversation = CommunicationConversation::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'inbox_id' => $inbox->id,
             'identity_id' => $identity->id,
             'status' => ConversationStatus::Open,
             'last_message_at' => now(),
         ]);
-        $inbound = $this->message($office, $inbox, $conversation, MessageDirection::Inbound, MessageKind::Text, 'provider-inbound-0001');
-        $outbound = $this->message($office, $inbox, $conversation, MessageDirection::Outbound, MessageKind::Text, 'provider-outbound-0001');
-        $poll = $this->message($office, $inbox, $conversation, MessageDirection::Inbound, MessageKind::Poll, 'provider-poll-0001');
+        $inbound = $this->message($tenant, $inbox, $conversation, MessageDirection::Inbound, MessageKind::Text, 'provider-inbound-0001');
+        $outbound = $this->message($tenant, $inbox, $conversation, MessageDirection::Outbound, MessageKind::Text, 'provider-outbound-0001');
+        $poll = $this->message($tenant, $inbox, $conversation, MessageDirection::Inbound, MessageKind::Poll, 'provider-poll-0001');
 
         return [$conversation->load('identity'), $inbound, $outbound, $poll];
     }
 
     private function message(
-        Office $office,
+        Tenant $tenant,
         CommunicationInbox $inbox,
         CommunicationConversation $conversation,
         MessageDirection $direction,
@@ -361,7 +347,7 @@ final class CommunicationGatewayActionApiTest extends TestCase
         string $providerId,
     ): CommunicationMessage {
         return CommunicationMessage::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'inbox_id' => $inbox->id,
             'conversation_id' => $conversation->id,
             'identity_id' => $conversation->identity_id,

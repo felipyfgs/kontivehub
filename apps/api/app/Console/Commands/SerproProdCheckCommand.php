@@ -3,8 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Enums\SerproEnvironment;
-use App\Models\SerproContract;
-use App\Services\Serpro\SerproCredentialVersionService;
 use App\Services\Serpro\SerproDocumentRegistry;
 use App\Services\Serpro\SerproExternalGateService;
 use App\Services\Serpro\SerproProductionEgressGate;
@@ -20,7 +18,6 @@ class SerproProdCheckCommand extends Command
 {
     protected $signature = 'serpro:prod-check
         {--serpro-env= : Ambiente SERPRO (default: config serpro.default_environment)}
-        {--mark-exposed : Marca contratos ACTIVE/PENDING legados como credencial exposta}
         {--allow-containment : Permite contenção fiscal explícita sem liberar egress faturável}
         {--json : Saída JSON sanitizada}';
 
@@ -30,7 +27,6 @@ class SerproProdCheckCommand extends Command
         SerproProductionEgressGate $gate,
         SerproExternalGateService $externalGates,
         SerproDocumentRegistry $documents,
-        SerproCredentialVersionService $versions,
     ): int {
         $envRaw = $this->option('serpro-env')
             ?: (string) config('serpro.default_environment', 'TRIAL');
@@ -38,20 +34,6 @@ class SerproProdCheckCommand extends Command
             ?? SerproEnvironment::Trial;
 
         $externalGates->ensureBaselineGates();
-
-        if ($this->option('mark-exposed')) {
-            $reason = 'Contenção go-live: material exposto durante configuração; rotação obrigatória.';
-            $count = 0;
-            SerproContract::query()
-                ->where('environment', $environment->value)
-                ->whereIn('status', ['ACTIVE', 'PENDING', 'BLOCKED'])
-                ->orderBy('id')
-                ->each(function (SerproContract $contract) use ($versions, $reason, &$count): void {
-                    $versions->markContractCredentialsExposed($contract, $reason);
-                    $count++;
-                });
-            $this->warn("Marcadas {$count} versão(ões)/contrato(s) como expostas (sem apagar histórico).");
-        }
 
         try {
             $documents->syncFromManifest();
@@ -103,9 +85,8 @@ class SerproProdCheckCommand extends Command
             return self::FAILURE;
         }
 
-        // Contrato legado com flag exposta sem versão terminal.
         foreach ($snapshot['issues'] as $issue) {
-            if (str_contains($issue, 'credentials_exposed') || str_contains($issue, 'exposta')) {
+            if (str_contains($issue, 'exposta')) {
                 $this->error('FAIL: '.$issue);
 
                 return self::FAILURE;

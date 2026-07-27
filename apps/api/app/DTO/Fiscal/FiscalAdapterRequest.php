@@ -6,7 +6,7 @@ use App\Enums\FiscalTrigger;
 use App\Models\Client;
 use App\Models\FiscalCompetence;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
+use App\Models\Tenant;
 use InvalidArgumentException;
 
 final readonly class FiscalAdapterRequest
@@ -16,7 +16,7 @@ final readonly class FiscalAdapterRequest
      * @param  array<string, mixed>  $context
      */
     public function __construct(
-        public Office $office,
+        public Tenant $tenant,
         public Client $client,
         public FiscalMonitoringRun $run,
         public string $systemCode,
@@ -28,12 +28,12 @@ final readonly class FiscalAdapterRequest
         public array $progress = [],
         public array $context = [],
     ) {
-        self::assertPositiveId($office->getKey(), 'office.id');
+        self::assertPositiveId($tenant->getKey(), 'tenant.id');
         self::assertPositiveId($client->getKey(), 'client.id');
         self::assertPositiveId($run->getKey(), 'run.id');
 
-        self::assertSameId($client->office_id, $office->getKey(), 'client.office_id');
-        self::assertSameId($run->office_id, $office->getKey(), 'run.office_id');
+        self::assertSameId($client->tenant_id, $tenant->getKey(), 'client.tenant_id');
+        self::assertSameId($run->tenant_id, $tenant->getKey(), 'run.tenant_id');
         self::assertSameId($run->client_id, $client->getKey(), 'run.client_id');
 
         self::assertCoordinate($systemCode, $run->system_code, 'system_code');
@@ -47,7 +47,7 @@ final readonly class FiscalAdapterRequest
             throw new InvalidArgumentException('FiscalAdapterRequest exige trigger coerente com a run.');
         }
 
-        self::assertCompetence($office, $client, $run, $competence);
+        self::assertCompetence($tenant, $client, $run, $competence);
     }
 
     private static function assertPositiveId(mixed $value, string $field): void
@@ -77,7 +77,7 @@ final readonly class FiscalAdapterRequest
     }
 
     private static function assertCompetence(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         FiscalMonitoringRun $run,
         ?FiscalCompetence $competence,
@@ -96,7 +96,7 @@ final readonly class FiscalAdapterRequest
         self::assertPositiveId($runCompetenceId, 'run.competence_id');
         self::assertPositiveId($competence->getKey(), 'competence.id');
         self::assertSameId($competence->getKey(), $runCompetenceId, 'competence.id');
-        self::assertSameId($competence->office_id, $office->getKey(), 'competence.office_id');
+        self::assertSameId($competence->tenant_id, $tenant->getKey(), 'competence.tenant_id');
         self::assertSameId($competence->client_id, $client->getKey(), 'competence.client_id');
     }
 }

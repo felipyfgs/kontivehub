@@ -32,14 +32,14 @@ describe('section-navigation mappers', () => {
   })
 
   it('Conta escritório: folha ativa sem subtabs', () => {
-    const path = ACCOUNT_NAVIGATION.office.to
+    const path = ACCOUNT_NAVIGATION.tenant.to
     const selection = resolveNavSelection(ACCOUNT_NAV_ITEMS, path)
     const tabs = toDesktopTabItems(selection, path)
     const subtabs = toDesktopSubtabItems(selection, path)
 
-    expect(tabs.find(item => item.id === 'account-office')).toMatchObject({
+    expect(tabs.find(item => item.id === 'account-tenant')).toMatchObject({
       active: true,
-      to: ACCOUNT_NAVIGATION.office.to
+      to: ACCOUNT_NAVIGATION.tenant.to
     })
     expect(subtabs).toEqual([])
   })

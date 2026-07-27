@@ -10,7 +10,7 @@ use App\Enums\FiscalTrigger;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
 use App\Models\MailboxContributorState;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\FiscalMonitoring\FiscalAdapterRegistry;
 use App\Services\Integra\Mailbox\CaixaPostalIndicatorAdapter;
 use App\Services\Integra\Mailbox\MailboxStateService;
@@ -23,10 +23,10 @@ class CaixaPostalIndicatorAdapterTest extends TestCase
 
     public function test_zero_is_persisted_as_unopened_diagnostic_without_reconciliation(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->for($office)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->for($tenant)->create();
         $run = FiscalMonitoringRun::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'system_code' => 'INTEGRA_CAIXAPOSTAL',
             'service_code' => 'CAIXA_POSTAL',
@@ -50,7 +50,7 @@ class CaixaPostalIndicatorAdapterTest extends TestCase
         };
         $adapter = new CaixaPostalIndicatorAdapter($clientFake, app(MailboxStateService::class));
         $result = $adapter->execute(new FiscalAdapterRequest(
-            $office,
+            $tenant,
             $client,
             $run,
             'INTEGRA_CAIXAPOSTAL',
@@ -60,7 +60,11 @@ class CaixaPostalIndicatorAdapterTest extends TestCase
         ));
 
         $this->assertSame(FiscalCoverage::Partial, $result->coverage);
-        $state = MailboxContributorState::query()->where('office_id', $office->id)->where('client_id', $client->id)->firstOrFail();
+        $state = MailboxContributorState::query()
+            ->withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('client_id', $client->id)
+            ->firstOrFail();
         $this->assertSame(0, $state->new_messages_indicator);
         $this->assertNull($state->messages_observed_at);
         $this->assertFalse($state->toPublicArray()['new_messages_indicator']['reconciles_mailbox']);
@@ -69,10 +73,10 @@ class CaixaPostalIndicatorAdapterTest extends TestCase
     public function test_registry_contains_real_mailbox_indicator_adapter(): void
     {
         $registry = app(FiscalAdapterRegistry::class);
-        $office = Office::factory()->create();
-        $client = Client::factory()->for($office)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->for($tenant)->create();
         $run = FiscalMonitoringRun::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'system_code' => 'INTEGRA_CAIXAPOSTAL',
             'service_code' => 'CAIXA_POSTAL',
@@ -84,7 +88,7 @@ class CaixaPostalIndicatorAdapterTest extends TestCase
             'coverage' => 'UNKNOWN',
             'mutability' => 'READ_ONLY',
         ]);
-        $request = new FiscalAdapterRequest($office, $client, $run, 'INTEGRA_CAIXAPOSTAL', 'CAIXA_POSTAL', 'INDICADOR', FiscalTrigger::Manual);
+        $request = new FiscalAdapterRequest($tenant, $client, $run, 'INTEGRA_CAIXAPOSTAL', 'CAIXA_POSTAL', 'INDICADOR', FiscalTrigger::Manual);
 
         $this->assertInstanceOf(CaixaPostalIndicatorAdapter::class, $registry->resolve($request));
     }

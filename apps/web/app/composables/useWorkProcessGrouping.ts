@@ -6,13 +6,11 @@
  * - `group` omitido → grupos por rotina (`GET /work/process-groups?group_by=routine`)
  * - Tarefa → navega para `/work/tasks?view=lista` (não renderiza Lista em Processos)
  *
- * A lista flat (`buildFlatProcessesListParams` / `GET /work/processes`) não é o path
- * principal do modo Processo; permanece só como helper legado/lazy-load de filhos.
+ * `GET /work/processes` é usado somente para carregar os filhos dos grupos.
  */
 import type {
-  OperationalProcessGroup,
+  WorkProcessGroup,
   WorkEntityLevel,
-  WorkProcessFlatSort,
   WorkProcessGroupBy,
   WorkProcessGroupMode,
   WorkProcessGroupSort
@@ -23,7 +21,7 @@ import type {
   WorkProcessesListParams
 } from '~/composables/api/createWorkApi'
 
-export type WorkProcessListSort = WorkProcessFlatSort | WorkProcessGroupSort
+export type WorkProcessListSort = WorkProcessGroupSort
 
 export interface WorkProcessGroupingFilters {
   /** Persistido na URL só quando `client`. */
@@ -45,13 +43,6 @@ export const WORK_PROCESS_GROUP_SORT_WHITELIST: readonly WorkProcessGroupSort[] 
   'open_task_count',
   'next_due_date',
   'progress_percent'
-] as const
-
-export const WORK_PROCESS_FLAT_SORT_WHITELIST: readonly WorkProcessFlatSort[] = [
-  'title',
-  'status',
-  'due_date',
-  'competence'
 ] as const
 
 const EMPTY: WorkProcessGroupingFilters = {
@@ -92,13 +83,6 @@ export function parseWorkProcessGroupSort(value: unknown): WorkProcessGroupSort 
   const sort = queryScalar(value).trim()
   return (WORK_PROCESS_GROUP_SORT_WHITELIST as readonly string[]).includes(sort)
     ? sort as WorkProcessGroupSort
-    : null
-}
-
-export function parseWorkProcessFlatSort(value: unknown): WorkProcessFlatSort | null {
-  const sort = queryScalar(value).trim()
-  return (WORK_PROCESS_FLAT_SORT_WHITELIST as readonly string[]).includes(sort)
-    ? sort as WorkProcessFlatSort
     : null
 }
 
@@ -153,8 +137,8 @@ export function entityLevelForTasksSurface(): WorkEntityLevel {
   return 'task'
 }
 
-/** Filtros compatíveis preservados ao trocar Cliente ↔ Processo ↔ Tarefa. */
-export function compatibleFiltersForEntityNav(
+/** Filtros compartilhados ao trocar Cliente ↔ Processo ↔ Tarefa. */
+export function entityNavigationFilters(
   filters: Pick<WorkProcessGroupingFilters, 'q' | 'client_id' | 'department_id'>
 ): { q?: string, client_id?: string, department_id?: string } {
   return {
@@ -168,11 +152,11 @@ export function processesPathForEntityLevel(
   level: Exclude<WorkEntityLevel, 'task'>,
   filters: Pick<WorkProcessGroupingFilters, 'q' | 'client_id' | 'department_id'>
 ): { path: string, query: Record<string, string | undefined> } {
-  const compatible = compatibleFiltersForEntityNav(filters)
+  const sharedFilters = entityNavigationFilters(filters)
   return {
     path: '/work/processes',
     query: {
-      ...compatible,
+      ...sharedFilters,
       group: level === 'client' ? 'client' : undefined
     }
   }
@@ -185,7 +169,7 @@ export function tasksListaPathForEntityLevel(
     path: '/work/tasks',
     query: {
       view: 'lista',
-      ...compatibleFiltersForEntityNav(filters)
+      ...entityNavigationFilters(filters)
     }
   }
 }
@@ -212,35 +196,11 @@ export function buildProcessGroupsListParams(
 }
 
 /**
- * Params da lista flat de processos (helper legado).
- * Não é o path principal do modo Processo — filhos usam `buildGroupChildrenListParams`.
- */
-export function buildFlatProcessesListParams(
-  filters: WorkProcessGroupingFilters
-): WorkProcessesListParams {
-  const params: WorkProcessesListParams = {
-    include_tasks: 1,
-    page: filters.page,
-    per_page: filters.per_page
-  }
-  if (filters.q.trim()) params.q = filters.q.trim()
-  if (filters.competence.trim()) params.competence = filters.competence.trim()
-  if (filters.status && filters.status !== 'all') params.status = filters.status
-  if (filters.client_id) params.client_id = filters.client_id
-  if (filters.department_id) params.department_id = filters.department_id
-  if (filters.sort && (WORK_PROCESS_FLAT_SORT_WHITELIST as readonly string[]).includes(filters.sort)) {
-    params.sort = filters.sort
-    params.direction = filters.direction || 'asc'
-  }
-  return params
-}
-
-/**
  * Params de lazy-load dos processos filhos do grupo
  * (`include_tasks=1` + filtro do grupo + toolbar).
  */
 export function buildGroupChildrenListParams(
-  group: Pick<OperationalProcessGroup, 'key'>,
+  group: Pick<WorkProcessGroup, 'key'>,
   groupBy: WorkProcessGroupBy,
   filters: Pick<
     WorkProcessGroupingFilters,
@@ -269,7 +229,7 @@ export function buildGroupChildrenListParams(
   } else {
     const templateId = Number(group.key)
     if (Number.isInteger(templateId) && templateId > 0) {
-      params.process_template_id = templateId
+      params.work_process_template_id = templateId
     }
     if (filters.client_id) params.client_id = filters.client_id
   }
@@ -343,19 +303,19 @@ export function useWorkProcessGrouping() {
 
   async function navigateEntityLevel(level: WorkEntityLevel) {
     const current = filters.value
-    const compatible = {
+    const sharedFilters = {
       q: current.q,
       client_id: current.client_id,
       department_id: current.department_id
     }
     if (level === 'task') {
-      const target = tasksListaPathForEntityLevel(compatible)
+      const target = tasksListaPathForEntityLevel(sharedFilters)
       await navigateTo(target)
       return
     }
     if (level === 'client' && current.group === 'client') return
     if (level === 'process' && current.group === 'process') return
-    const target = processesPathForEntityLevel(level, compatible)
+    const target = processesPathForEntityLevel(level, sharedFilters)
     await navigateTo(target)
   }
 

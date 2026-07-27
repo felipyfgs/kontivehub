@@ -10,12 +10,12 @@
  */
 import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
 import type { Row } from '@tanstack/table-core'
-import type { NfseNote } from '~/types/api'
+import type { FiscalDocument } from '~/types/api'
 import ShellDataTable from '~/components/shell/DataTable.vue'
 import { documentKindLabel } from '~/utils/document-kinds'
 
 const props = withDefaults(defineProps<{
-  notes: NfseNote[]
+  notes: FiscalDocument[]
   loading?: boolean
   error?: string | null
   selectedAccessKey?: string | null
@@ -31,7 +31,7 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
-  'select': [note: NfseNote]
+  'select': [note: FiscalDocument]
   'update:pageSize': [size: number]
   'loadMore': []
   'retry': []
@@ -90,14 +90,14 @@ function shortKey(accessKey: string) {
 }
 
 /** Rótulo acessível completo (tipo + número). */
-function noteTitle(note: NfseNote) {
+function noteTitle(note: FiscalDocument) {
   const kind = documentKindLabel(note.kind || 'NFSE')
   if (note.number) return `${kind} nº ${note.number}`
   return shortKey(note.access_key)
 }
 
 /** Célula Documento: só número (ou chave curta). */
-function documentCellLabel(note: NfseNote) {
+function documentCellLabel(note: FiscalDocument) {
   if (note.number) return String(note.number)
   return shortKey(note.access_key)
 }
@@ -110,7 +110,7 @@ function partyCell(name?: string | null, cnpj?: string | null): { name: string, 
 }
 
 /** Situação fiscal na grade — nunca usar “XML completo” como situação. */
-function documentSituationLabel(note: NfseNote): string {
+function documentSituationLabel(note: FiscalDocument): string {
   const raw = (note.status_label || '').trim()
   if (raw && !/^XML\b/i.test(raw) && !/resumo/i.test(raw) && !/completo/i.test(raw)) {
     return raw
@@ -118,14 +118,14 @@ function documentSituationLabel(note: NfseNote): string {
   return statusLabel(note.status)
 }
 
-function xmlCompletenessHint(note: NfseNote): string | null {
+function xmlCompletenessHint(note: FiscalDocument): string | null {
   if (note.has_full_xml === false || note.is_summary === true || note.xml_completeness === 'SUMMARY_ONLY') {
     return 'Somente resumo'
   }
   return null
 }
 
-async function copyAccessKey(note: NfseNote) {
+async function copyAccessKey(note: FiscalDocument) {
   try {
     await navigator.clipboard.writeText(note.access_key)
     toast.add({
@@ -141,7 +141,7 @@ async function copyAccessKey(note: NfseNote) {
   }
 }
 
-function getRowItems(row: Row<NfseNote>): DropdownMenuItem[][] {
+function getRowItems(row: Row<FiscalDocument>): DropdownMenuItem[][] {
   const note = row.original
   return [
     [
@@ -165,8 +165,8 @@ function getRowItems(row: Row<NfseNote>): DropdownMenuItem[][] {
   ]
 }
 
-const columns = computed<TableColumn<NfseNote>[]>(() => {
-  const cols: TableColumn<NfseNote>[] = []
+const columns = computed<TableColumn<FiscalDocument>[]>(() => {
+  const cols: TableColumn<FiscalDocument>[] = []
 
   if (props.selectable) {
     cols.push({
@@ -378,7 +378,7 @@ const columns = computed<TableColumn<NfseNote>[]>(() => {
       :total="total || notes.length"
       :items-per-page="pageSize"
       :show-footer="false"
-      :get-row-id="(row: NfseNote) => row.access_key"
+      :get-row-id="(row: FiscalDocument) => row.access_key"
       @retry="emit('retry')"
     >
       <template #kind-cell="{ row }">

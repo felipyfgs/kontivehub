@@ -58,7 +58,7 @@ describe('home-cockpit fail-closed mapping', () => {
         available: true,
         global_enabled: true,
         gateway_enabled: true,
-        office_enabled: true,
+        tenant_enabled: true,
         inboxes_by_status: { CONNECTED: 2, CONNECTING: 1, DISCONNECTED: 2 },
         conversations_open: 4,
         conversations_pending: 1,
@@ -72,12 +72,12 @@ describe('home-cockpit fail-closed mapping', () => {
     expect(byKey.wa_outbox_dead?.critical).toBe(true)
   })
 
-  it('normaliza deep_link legado de uso para /conta/consumo', () => {
+  it('usa o deep_link canônico de consumo', () => {
     const items = buildHomeSerproKpis(baseSummary({
       usage: {
         available: true,
         remaining: 10,
-        deep_link: '/settings/consumo'
+        deep_link: '/conta/consumo'
       }
     }))
     const usage = items.find(i => i.key === 'usage_remaining')

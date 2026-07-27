@@ -19,7 +19,7 @@ import DataTableFilterSelector from '~/components/data-table-filter/Selector.vue
 const props = withDefaults(defineProps<{
   definitions: DataTableFilterDefinition[]
   modelValue?: DataTableFilterModel[]
-  /** sessionEpoch / office — limpa rascunho e rótulos de cliente. */
+  /** sessionEpoch / tenant — limpa rascunho e rótulos de cliente. */
   resetKey?: string | number | null
   addLabel?: string
   clearLabel?: string

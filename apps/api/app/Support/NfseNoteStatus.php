@@ -24,11 +24,6 @@ final class NfseNoteStatus
 
     public const UNKNOWN = 'UNKNOWN';
 
-    /**
-     * @deprecated legado — usar SUPERSEDED ou JUDICIAL
-     */
-    public const REPLACED = 'REPLACED';
-
     /** Grupo operacional: nota válida para escrituração. */
     public const GROUP_AUTHORIZED = 'AUTHORIZED';
 
@@ -83,7 +78,7 @@ final class NfseNoteStatus
     {
         return match (strtoupper(trim($status))) {
             self::ACTIVE, self::SUBSTITUTE, self::JUDICIAL => self::GROUP_AUTHORIZED,
-            self::CANCELLED, self::SUPERSEDED, self::REPLACED => self::GROUP_CANCELLED,
+            self::CANCELLED, self::SUPERSEDED => self::GROUP_CANCELLED,
             self::UNKNOWN => self::GROUP_REVIEW,
             default => self::GROUP_REVIEW,
         };
@@ -105,7 +100,6 @@ final class NfseNoteStatus
             self::GROUP_CANCELLED, 'CANCELADA' => [
                 self::CANCELLED,
                 self::SUPERSEDED,
-                self::REPLACED,
             ],
             self::GROUP_REVIEW, 'UNKNOWN', 'EM_REVISAO', 'EM-REVISAO' => [
                 self::UNKNOWN,
@@ -118,7 +112,7 @@ final class NfseNoteStatus
      * Resolve parâmetro de filtro `status` da API: grupo operacional ou enum único.
      *
      * - AUTHORIZED / AUTORIZADA → ACTIVE + SUBSTITUTE + JUDICIAL
-     * - CANCELLED / CANCELADA (filtro UI) → CANCELLED + SUPERSEDED (+ REPLACED)
+     * - CANCELLED / CANCELADA (filtro UI) → CANCELLED + SUPERSEDED
      * - REVIEW / UNKNOWN → UNKNOWN
      * - enum granular (ACTIVE, SUBSTITUTE, SUPERSEDED, …) → match exato
      *
@@ -167,7 +161,7 @@ final class NfseNoteStatus
             self::ACTIVE => 'NFS-e Gerada',
             self::SUBSTITUTE => 'NFS-e de Substituição',
             self::CANCELLED => 'Cancelada por evento',
-            self::SUPERSEDED, self::REPLACED => 'Substituída',
+            self::SUPERSEDED => 'Substituída',
             self::JUDICIAL => 'Decisão judicial',
             self::UNKNOWN => 'Situação indefinida',
             default => $status,

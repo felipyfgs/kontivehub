@@ -3,21 +3,21 @@
 namespace App\Models;
 
 use App\Enums\OutboundMonthlyReadinessStatus;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'office_id', 'competence', 'status', 'known_total', 'captured_total', 'pending_total',
+    'tenant_id', 'competence', 'status', 'known_total', 'captured_total', 'pending_total',
     'export_id', 'manifest_vault_object_id', 'confirmed_by', 'confirmed_at',
     'confirmation_notes', 'summary',
 ])]
 #[Hidden(['manifest_vault_object_id'])]
 class OutboundMonthlyReadiness extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected $table = 'outbound_monthly_readiness';
 
@@ -35,7 +35,7 @@ class OutboundMonthlyReadiness extends Model
 
     public function export(): BelongsTo
     {
-        return $this->belongsTo(Export::class);
+        return $this->belongsTo(DocumentExport::class);
     }
 
     /**

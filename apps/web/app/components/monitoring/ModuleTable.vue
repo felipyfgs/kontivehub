@@ -14,6 +14,7 @@ import {
   fiscalSituationToKpiKey,
   isSurfaceUnavailable
 } from '~/types/fiscal-modules'
+import type { SavedListSurface } from '~/types/saved-list-filters'
 import { resolveMonitoringSurface } from '~/types/saved-list-filters'
 import { monitoringFilterSignature } from '~/utils/monitoring-filters'
 import { monitoringSelectionScope } from '~/utils/monitoring-selection'
@@ -74,7 +75,7 @@ const props = withDefaults(defineProps<{
    * (ex. installments → monitoring.installments). Páginas sem moduleKey
    * (registrations, tax_processes) devem passar explicitamente.
    */
-  surface?: string | null
+  surface?: SavedListSurface | null
   /**
    * Resumo público da superfície do overview (result_kind / allows_document).
    * Distinto de `surface` (preset de filtros salvos).
@@ -143,7 +144,7 @@ const resolvedSelectionEnabled = computed(() => {
   return Boolean(props.moduleKey && props.getClientId && bulkAvailable.value)
 })
 const selectionScope = computed(() => monitoringSelectionScope({
-  officeEpoch: sessionEpoch.value,
+  tenantEpoch: sessionEpoch.value,
   route: route.fullPath,
   page: props.page,
   filters: monitoringFilterSignature(props.filters),

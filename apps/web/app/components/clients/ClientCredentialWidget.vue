@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Widget compacto: Certificado A1 | Procuração e-CAC.
+ * Widget compacto: certificado | Procuração e-CAC.
  */
 import type { Client, ClientCredential } from '~/types/api'
 import { formatDate } from '~/utils/format'

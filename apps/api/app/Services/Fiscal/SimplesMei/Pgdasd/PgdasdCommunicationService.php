@@ -12,8 +12,8 @@ use App\Models\ClientCommunicationDispatch;
 use App\Models\ClientCommunicationPreference;
 use App\Models\ClientContact;
 use App\Models\CommunicationAutomationPolicy;
-use App\Models\Office;
 use App\Models\PgdasdArtifact;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use App\Services\Authorization\TenantAuthorization;
@@ -61,18 +61,18 @@ final class PgdasdCommunicationService
     /**
      * Leitura sem efeito colateral: preferência ausente vira default somente em memória.
      */
-    public function getPreferences(Office $office, Client $client): ClientCommunicationPreference
+    public function getPreferences(Tenant $tenant, Client $client): ClientCommunicationPreference
     {
-        $this->assertClient($office, $client);
+        $this->assertClient($tenant, $client);
 
         return ClientCommunicationPreference::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('module_key', $this->moduleKey)
             ->where('submodule_key', $this->submoduleKey)
             ->first() ?? new ClientCommunicationPreference([
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'client_id' => $client->id,
                 'module_key' => $this->moduleKey,
                 'submodule_key' => $this->submoduleKey,
@@ -89,11 +89,11 @@ final class PgdasdCommunicationService
      *
      * @return array<string, mixed>
      */
-    public function summary(Office $office, Client $client): array
+    public function summary(Tenant $tenant, Client $client): array
     {
-        $this->assertClient($office, $client);
+        $this->assertClient($tenant, $client);
 
-        return $this->summariesForClients($office, [(int) $client->id])[(int) $client->id];
+        return $this->summariesForClients($tenant, [(int) $client->id])[(int) $client->id];
     }
 
     /**
@@ -102,7 +102,7 @@ final class PgdasdCommunicationService
      * @param  list<int>  $clientIds
      * @return array<int, array<string, mixed>>
      */
-    public function summariesForClients(Office $office, array $clientIds): array
+    public function summariesForClients(Tenant $tenant, array $clientIds): array
     {
         $clientIds = array_values(array_unique(array_map('intval', $clientIds)));
         if ($clientIds === []) {
@@ -111,29 +111,29 @@ final class PgdasdCommunicationService
 
         $preferences = ClientCommunicationPreference::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->where('module_key', $this->moduleKey)
             ->where('submodule_key', $this->submoduleKey)
             ->get()
             ->keyBy('client_id');
-        $eligible = $this->eligibleChannelsForClients($office, $clientIds);
+        $eligible = $this->eligibleChannelsForClients($tenant, $clientIds);
         $dispatches = ClientCommunicationDispatch::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->where('module_key', $this->moduleKey)
             ->where('submodule_key', $this->submoduleKey)
             ->get(['id', 'client_id', 'status'])
             ->groupBy('client_id');
-        $docsByClient = $this->clientsWithLocalDocumentsMap($office, $clientIds);
+        $docsByClient = $this->clientsWithLocalDocumentsMap($tenant, $clientIds);
 
         $result = [];
         foreach ($clientIds as $clientId) {
             /** @var ClientCommunicationPreference|null $persisted */
             $persisted = $preferences->get($clientId);
             $preference = $persisted ?? new ClientCommunicationPreference([
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'client_id' => $clientId,
                 'module_key' => $this->moduleKey,
                 'submodule_key' => $this->submoduleKey,
@@ -165,12 +165,12 @@ final class PgdasdCommunicationService
      * @param  array{email_enabled: bool, whatsapp_enabled: bool, automatic_requested: bool, lock_version: int}  $input
      */
     public function updatePreferences(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         User $actor,
         array $input,
     ): ClientCommunicationPreference {
-        $this->assertClient($office, $client);
+        $this->assertClient($tenant, $client);
         $this->assertCanWrite($actor, $client);
 
         $expectedVersion = (int) $input['lock_version'];
@@ -179,12 +179,12 @@ final class PgdasdCommunicationService
         $whatsapp = (bool) $input['whatsapp_enabled'];
 
         if ($automatic) {
-            $this->assertEligibleForAutomatic($office, $client, $email, $whatsapp);
+            $this->assertEligibleForAutomatic($tenant, $client, $email, $whatsapp);
         }
 
         try {
             $preference = DB::transaction(function () use (
-                $office,
+                $tenant,
                 $client,
                 $actor,
                 $expectedVersion,
@@ -194,7 +194,7 @@ final class PgdasdCommunicationService
             ): ClientCommunicationPreference {
                 $current = ClientCommunicationPreference::query()
                     ->withoutGlobalScopes()
-                    ->where('office_id', $office->id)
+                    ->where('tenant_id', $tenant->id)
                     ->where('client_id', $client->id)
                     ->where('module_key', $this->moduleKey)
                     ->where('submodule_key', $this->submoduleKey)
@@ -207,7 +207,7 @@ final class PgdasdCommunicationService
                     }
 
                     return ClientCommunicationPreference::query()->create([
-                        'office_id' => $office->id,
+                        'tenant_id' => $tenant->id,
                         'client_id' => $client->id,
                         'module_key' => $this->moduleKey,
                         'submodule_key' => $this->submoduleKey,
@@ -225,7 +225,7 @@ final class PgdasdCommunicationService
 
                 $affected = DB::table('client_communication_preferences')
                     ->where('id', $current->id)
-                    ->where('office_id', $office->id)
+                    ->where('tenant_id', $tenant->id)
                     ->where('lock_version', $expectedVersion)
                     ->update([
                         'automatic_requested' => $automatic,
@@ -262,7 +262,7 @@ final class PgdasdCommunicationService
                 'lock_version' => $preference->lock_version,
             ],
             userId: $actor->id,
-            officeId: (int) $office->id,
+            tenantId: (int) $tenant->id,
         );
 
         return $preference;
@@ -275,7 +275,7 @@ final class PgdasdCommunicationService
      * @return list<ClientCommunicationPreference>
      */
     public function batchSetAutomatic(
-        Office $office,
+        Tenant $tenant,
         User $actor,
         array $clientIds,
         bool $automaticRequested,
@@ -289,7 +289,7 @@ final class PgdasdCommunicationService
 
         $clients = Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('id', $clientIds)
             ->get()
             ->keyBy('id');
@@ -298,11 +298,11 @@ final class PgdasdCommunicationService
         }
 
         $eligible = $automaticRequested
-            ? $this->eligibleChannelsForClients($office, $clientIds)
+            ? $this->eligibleChannelsForClients($tenant, $clientIds)
             : [];
 
         $updated = DB::transaction(function () use (
-            $office,
+            $tenant,
             $actor,
             $clientIds,
             $clients,
@@ -311,7 +311,7 @@ final class PgdasdCommunicationService
         ): array {
             $preferences = ClientCommunicationPreference::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->whereIn('client_id', $clientIds)
                 ->where('module_key', $this->moduleKey)
                 ->where('submodule_key', $this->submoduleKey)
@@ -344,7 +344,7 @@ final class PgdasdCommunicationService
                 $preference = $preferences->get($clientId);
                 if ($preference === null) {
                     $preference = ClientCommunicationPreference::query()->create([
-                        'office_id' => $office->id,
+                        'tenant_id' => $tenant->id,
                         'client_id' => $clientId,
                         'module_key' => $this->moduleKey,
                         'submodule_key' => $this->submoduleKey,
@@ -371,14 +371,14 @@ final class PgdasdCommunicationService
         $this->audit->record(
             action: $this->auditPrefix.'.preference.bulk_update',
             result: 'SUCCESS',
-            subject: $office,
+            subject: $tenant,
             context: [
                 'client_ids' => $clientIds,
                 'automatic_requested' => $automaticRequested,
                 'count' => count($updated),
             ],
             userId: $actor->id,
-            officeId: (int) $office->id,
+            tenantId: (int) $tenant->id,
         );
 
         return $updated;
@@ -389,15 +389,15 @@ final class PgdasdCommunicationService
      *
      * @return array<string, mixed>
      */
-    public function preview(Office $office, Client $client): array
+    public function preview(Tenant $tenant, Client $client): array
     {
-        $this->assertClient($office, $client);
-        $preference = $this->getPreferences($office, $client);
-        $contacts = $this->eligibleContacts($office, $client);
+        $this->assertClient($tenant, $client);
+        $preference = $this->getPreferences($tenant, $client);
+        $contacts = $this->eligibleContacts($tenant, $client);
         $eligibleChannels = $this->channelNames($contacts);
-        $trackingStatus = $this->trackingStatusForClient($office, $client, $preference, $eligibleChannels);
-        $timezone = is_string($office->timezone) && $office->timezone !== ''
-            ? $office->timezone
+        $trackingStatus = $this->trackingStatusForClient($tenant, $client, $preference, $eligibleChannels);
+        $timezone = is_string($tenant->timezone) && $tenant->timezone !== ''
+            ? $tenant->timezone
             : 'America/Sao_Paulo';
         $periodKey = match ($this->submoduleKey) {
             'pgmei' => (string) CarbonImmutable::now($timezone)->year,
@@ -411,7 +411,7 @@ final class PgdasdCommunicationService
         if ($this->submoduleKey === self::SUBMODULE && $this->moduleKey === self::MODULE) {
             $documents = PgdasdArtifact::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('client_id', $client->id)
                 ->orderByDesc('observed_at')
                 ->limit(20)
@@ -480,12 +480,12 @@ final class PgdasdCommunicationService
      *
      * @return array{queued:int, provider_enabled:bool, dispatches:list<array<string, mixed>>}
      */
-    public function requestSend(Office $office, Client $client, User $actor, ?string $periodKey = null): array
+    public function requestSend(Tenant $tenant, Client $client, User $actor, ?string $periodKey = null): array
     {
-        $this->assertClient($office, $client);
+        $this->assertClient($tenant, $client);
         $this->assertCanWrite($actor, $client);
 
-        $preference = $this->getPreferences($office, $client);
+        $preference = $this->getPreferences($tenant, $client);
         if (! $preference->exists) {
             throw new HttpException(422, 'Configure canais de comunicação antes de enviar.');
         }
@@ -493,11 +493,11 @@ final class PgdasdCommunicationService
         if (config('communication.enabled') && config('communication.gateway.enabled')) {
             try {
                 $dispatches = app(FiscalCommunicationAutomationService::class)->sendManual(
-                    $office,
+                    $tenant,
                     $client,
                     $this->moduleKey,
                     $this->submoduleKey,
-                    $periodKey ?? $this->defaultPeriodKey($office),
+                    $periodKey ?? $this->defaultPeriodKey($tenant),
                     (int) $actor->id,
                 );
             } catch (\DomainException $error) {
@@ -513,7 +513,7 @@ final class PgdasdCommunicationService
             ];
         }
 
-        $contacts = $this->eligibleContacts($office, $client);
+        $contacts = $this->eligibleContacts($tenant, $client);
         $eligibleChannels = $this->channelNames($contacts);
         $this->assertEligibleChannels(
             $client,
@@ -522,7 +522,7 @@ final class PgdasdCommunicationService
             $eligibleChannels,
         );
 
-        $hasLocalDocuments = $this->clientHasLocalDocuments($office, (int) $client->id);
+        $hasLocalDocuments = $this->clientHasLocalDocuments($tenant, (int) $client->id);
         if (! $this->resolveCanSend($preference, $eligibleChannels, $hasLocalDocuments)) {
             throw new HttpException(
                 422,
@@ -534,7 +534,7 @@ final class PgdasdCommunicationService
 
         $providerEnabled = (bool) config('fiscal_monitoring.communication.provider_enabled', false);
         $created = $this->queueDispatches(
-            $office,
+            $tenant,
             $client,
             $preference,
             $contacts,
@@ -557,7 +557,7 @@ final class PgdasdCommunicationService
                 'provider_enabled' => $providerEnabled,
             ],
             userId: $actor->id,
-            officeId: (int) $office->id,
+            tenantId: (int) $tenant->id,
         );
 
         return [
@@ -570,13 +570,13 @@ final class PgdasdCommunicationService
     /**
      * Hook pós-consulta agendada: enfileira se automatic_requested e elegível.
      */
-    public function maybeQueueAutomaticAfterConsult(Office $office, Client $client, ?string $periodKey = null): void
+    public function maybeQueueAutomaticAfterConsult(Tenant $tenant, Client $client, ?string $periodKey = null): void
     {
         try {
             if (config('communication.enabled') && config('communication.gateway.enabled')) {
                 if ($periodKey !== null && preg_match('/^\d{4}-\d{2}$/', $periodKey)) {
                     app(FiscalCommunicationAutomationService::class)->scheduleAutomatic(
-                        $office,
+                        $tenant,
                         $client,
                         $this->moduleKey,
                         $this->submoduleKey,
@@ -589,7 +589,7 @@ final class PgdasdCommunicationService
 
             $preference = ClientCommunicationPreference::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('client_id', $client->id)
                 ->where('module_key', $this->moduleKey)
                 ->where('submodule_key', $this->submoduleKey)
@@ -598,24 +598,24 @@ final class PgdasdCommunicationService
                 return;
             }
 
-            $contacts = $this->eligibleContacts($office, $client);
+            $contacts = $this->eligibleContacts($tenant, $client);
             $eligibleChannels = $this->channelNames($contacts);
-            $hasLocalDocuments = $this->clientHasLocalDocuments($office, (int) $client->id);
+            $hasLocalDocuments = $this->clientHasLocalDocuments($tenant, (int) $client->id);
             if (! $this->resolveAutomaticEffective($preference, $eligibleChannels, $hasLocalDocuments)) {
                 return;
             }
 
             $actorId = (int) ($preference->updated_by_user_id ?: 0);
-            $this->queueDispatches($office, $client, $preference, $contacts, $eligibleChannels, $actorId, 'scheduled_consult');
+            $this->queueDispatches($tenant, $client, $preference, $contacts, $eligibleChannels, $actorId, 'scheduled_consult');
         } catch (\Throwable) {
             // Fail-soft: consulta já concluiu; envio automático não deve derrubar a run.
         }
     }
 
-    private function defaultPeriodKey(Office $office): string
+    private function defaultPeriodKey(Tenant $tenant): string
     {
-        $timezone = is_string($office->timezone) && $office->timezone !== ''
-            ? $office->timezone
+        $timezone = is_string($tenant->timezone) && $tenant->timezone !== ''
+            ? $tenant->timezone
             : 'America/Sao_Paulo';
 
         return match ($this->submoduleKey) {
@@ -630,7 +630,7 @@ final class PgdasdCommunicationService
      * @return list<array<string, mixed>>
      */
     private function queueDispatches(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         ClientCommunicationPreference $preference,
         array $contacts,
@@ -638,8 +638,8 @@ final class PgdasdCommunicationService
         int $actorId,
         string $trigger,
     ): array {
-        $timezone = is_string($office->timezone) && $office->timezone !== ''
-            ? $office->timezone
+        $timezone = is_string($tenant->timezone) && $tenant->timezone !== ''
+            ? $tenant->timezone
             : 'America/Sao_Paulo';
         $periodKey = match ($this->submoduleKey) {
             'pgmei' => (string) CarbonImmutable::now($timezone)->year,
@@ -676,7 +676,7 @@ final class PgdasdCommunicationService
             if ($trigger === 'scheduled_consult') {
                 $alreadyQueued = ClientCommunicationDispatch::query()
                     ->withoutGlobalScopes()
-                    ->where('office_id', $office->id)
+                    ->where('tenant_id', $tenant->id)
                     ->where('idempotency_key', $idempotencyKey)
                     ->exists();
                 if ($alreadyQueued) {
@@ -686,7 +686,7 @@ final class PgdasdCommunicationService
 
             try {
                 $dispatch = ClientCommunicationDispatch::query()->create([
-                    'office_id' => $office->id,
+                    'tenant_id' => $tenant->id,
                     'client_id' => $client->id,
                     'preference_id' => $preference->id,
                     'module_key' => $this->moduleKey,
@@ -710,7 +710,7 @@ final class PgdasdCommunicationService
                     ],
                 ]);
             } catch (QueryException $e) {
-                // Corrida entre runs agendadas: unique (office_id, idempotency_key).
+                // Corrida entre runs agendadas: unique (tenant_id, idempotency_key).
                 if ($trigger === 'scheduled_consult') {
                     continue;
                 }
@@ -795,15 +795,15 @@ final class PgdasdCommunicationService
         }
 
         if (config('communication.enabled') && config('communication.gateway.enabled')) {
-            $office = Office::query()->find($preference->office_id);
+            $tenant = Tenant::query()->find($preference->tenant_id);
             $policy = CommunicationAutomationPolicy::query()->withoutGlobalScopes()
                 ->with('inbox')
-                ->where('office_id', $preference->office_id)
+                ->where('tenant_id', $preference->tenant_id)
                 ->where('module_key', $preference->module_key)
                 ->where('submodule_key', $preference->submodule_key)
                 ->where('is_enabled', true)
                 ->first();
-            if (! $office?->communication_enabled
+            if (! $tenant?->communication_enabled
                 || ! $preference->whatsapp_enabled
                 || $policy?->inbox === null
                 || ! $policy->inbox->is_enabled
@@ -827,7 +827,7 @@ final class PgdasdCommunicationService
         return $this->moduleKey === self::MODULE && $this->submoduleKey === self::SUBMODULE;
     }
 
-    private function clientHasLocalDocuments(Office $office, int $clientId): bool
+    private function clientHasLocalDocuments(Tenant $tenant, int $clientId): bool
     {
         if (! $this->requiresLocalDocuments()) {
             return true;
@@ -835,7 +835,7 @@ final class PgdasdCommunicationService
 
         return PgdasdArtifact::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $clientId)
             ->exists();
     }
@@ -844,7 +844,7 @@ final class PgdasdCommunicationService
      * @param  list<int>  $clientIds
      * @return array<int, bool>
      */
-    private function clientsWithLocalDocumentsMap(Office $office, array $clientIds): array
+    private function clientsWithLocalDocumentsMap(Tenant $tenant, array $clientIds): array
     {
         if (! $this->requiresLocalDocuments()) {
             $map = [];
@@ -857,7 +857,7 @@ final class PgdasdCommunicationService
 
         $present = PgdasdArtifact::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->distinct()
             ->pluck('client_id')
@@ -877,15 +877,15 @@ final class PgdasdCommunicationService
      *
      * @return array<string, mixed>
      */
-    public function tracking(Office $office, Client $client): array
+    public function tracking(Tenant $tenant, Client $client): array
     {
-        $this->assertClient($office, $client);
-        $preference = $this->getPreferences($office, $client);
-        $eligibleChannels = $this->channelNames($this->eligibleContacts($office, $client));
+        $this->assertClient($tenant, $client);
+        $preference = $this->getPreferences($tenant, $client);
+        $eligibleChannels = $this->channelNames($this->eligibleContacts($tenant, $client));
         $dispatches = ClientCommunicationDispatch::query()
             ->withoutGlobalScopes()
             ->with('events')
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('module_key', $this->moduleKey)
             ->where('submodule_key', $this->submoduleKey)
@@ -925,7 +925,7 @@ final class PgdasdCommunicationService
     }
 
     private function assertEligibleForAutomatic(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         bool $emailEnabled,
         bool $whatsappEnabled,
@@ -934,7 +934,7 @@ final class PgdasdCommunicationService
             $client,
             $emailEnabled,
             $whatsappEnabled,
-            $this->channelNames($this->eligibleContacts($office, $client)),
+            $this->channelNames($this->eligibleContacts($tenant, $client)),
         );
     }
 
@@ -961,11 +961,11 @@ final class PgdasdCommunicationService
     /**
      * @return array{email: list<ClientContact>, whatsapp: list<ClientContact>}
      */
-    private function eligibleContacts(Office $office, Client $client): array
+    private function eligibleContacts(Tenant $tenant, Client $client): array
     {
         $contacts = ClientContact::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('is_active', true)
             ->where('receives_alerts', true)
@@ -991,11 +991,11 @@ final class PgdasdCommunicationService
      * @param  list<int>  $clientIds
      * @return array<int, list<string>>
      */
-    private function eligibleChannelsForClients(Office $office, array $clientIds): array
+    private function eligibleChannelsForClients(Tenant $tenant, array $clientIds): array
     {
         $contacts = ClientContact::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->where('is_active', true)
             ->where('receives_alerts', true)
@@ -1072,14 +1072,14 @@ final class PgdasdCommunicationService
      * @param  list<string>  $eligibleChannels
      */
     private function trackingStatusForClient(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         ClientCommunicationPreference $preference,
         array $eligibleChannels,
     ): CommunicationDispatchStatus {
         $dispatches = ClientCommunicationDispatch::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('module_key', $this->moduleKey)
             ->where('submodule_key', $this->submoduleKey)
@@ -1141,9 +1141,9 @@ final class PgdasdCommunicationService
         }
     }
 
-    private function assertClient(Office $office, Client $client): void
+    private function assertClient(Tenant $tenant, Client $client): void
     {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new RuntimeException('Cliente não pertence ao escritório ativo.');
         }
     }

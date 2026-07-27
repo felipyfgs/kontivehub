@@ -14,7 +14,7 @@ use App\Services\Fiscal\Declarations\DeclarationOperationRegistry;
 use App\Services\Fiscal\ManualConsult\ManualConsultNotReadyException;
 use App\Services\Fiscal\Mutations\FiscalMutationException;
 use App\Services\Fiscal\Mutations\FiscalMutationService;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -26,7 +26,7 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 final class DeclarationOperationController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly TenantAuthorization $authorization,
         private readonly DeclarationOperationRegistry $registry,
         private readonly DeclarationOperationReadService $reads,
@@ -46,7 +46,7 @@ final class DeclarationOperationController extends Controller
 
         try {
             $payload = $this->reads->execute(
-                office: $this->currentOffice->office(),
+                tenant: $this->currentTenant->tenant(),
                 client: $client,
                 actionId: $action,
                 params: (array) ($data['params'] ?? []),
@@ -78,7 +78,7 @@ final class DeclarationOperationController extends Controller
 
         try {
             $result = $this->declarationMutations->preflight(
-                $this->currentOffice->office(),
+                $this->currentTenant->tenant(),
                 $client,
                 $actor,
                 $action,
@@ -115,7 +115,7 @@ final class DeclarationOperationController extends Controller
 
         try {
             $operation = $this->declarationMutations->execute(
-                $this->currentOffice->office(),
+                $this->currentTenant->tenant(),
                 $client,
                 $actor,
                 $action,
@@ -141,13 +141,13 @@ final class DeclarationOperationController extends Controller
     public function show(Request $request, int $mutation): JsonResponse
     {
         $this->assertPermission($request, TenantPermission::FiscalMonitoringView);
-        $operation = $this->mutations->findForOffice($this->currentOffice->office(), $mutation);
-        if ($operation === null || $operation->provider_operation_key === null) {
+        $operation = $this->mutations->findForTenant($this->currentTenant->tenant(), $mutation);
+        if ($operation === null) {
             return $this->error('Operação não encontrada.', 'OPERATION_NOT_FOUND', 404);
         }
 
         try {
-            $action = $this->registry->actionIdFor($operation->provider_operation_key);
+            $action = $this->registry->actionIdFor($operation->operation_key);
         } catch (InvalidArgumentException) {
             return $this->error('Operação não encontrada.', 'OPERATION_NOT_FOUND', 404);
         }
@@ -158,14 +158,14 @@ final class DeclarationOperationController extends Controller
     public function reconcile(Request $request, int $mutation): JsonResponse
     {
         $actor = $this->assertPermission($request, TenantPermission::FiscalMutationsExecute);
-        $operation = $this->mutations->findForOffice($this->currentOffice->office(), $mutation);
-        if ($operation === null || $operation->provider_operation_key === null) {
+        $operation = $this->mutations->findForTenant($this->currentTenant->tenant(), $mutation);
+        if ($operation === null) {
             return $this->error('Operação não encontrada.', 'OPERATION_NOT_FOUND', 404);
         }
 
         try {
-            $action = $this->registry->actionIdFor($operation->provider_operation_key);
-            $result = $this->mutations->reconcile($this->currentOffice->office(), $operation, $actor);
+            $action = $this->registry->actionIdFor($operation->operation_key);
+            $result = $this->mutations->reconcile($this->currentTenant->tenant(), $operation, $actor);
         } catch (InvalidArgumentException) {
             return $this->error('Operação não encontrada.', 'OPERATION_NOT_FOUND', 404);
         } catch (FiscalMutationException $e) {
@@ -192,7 +192,7 @@ final class DeclarationOperationController extends Controller
     {
         $client = Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $this->currentOffice->id())
+            ->where('tenant_id', $this->currentTenant->id())
             ->whereKey($id)
             ->first();
         if ($client === null) {
@@ -219,7 +219,7 @@ final class DeclarationOperationController extends Controller
     private function publicMutation(FiscalMutationOperation $operation, string $action): array
     {
         $payload = $operation->toPublicArray();
-        foreach (['office_id', 'solution_code', 'service_code', 'operation_code', 'module_key', 'pre_operation_snapshot'] as $field) {
+        foreach (['tenant_id', 'solution_code', 'service_code', 'operation_code', 'module_key', 'pre_operation_snapshot'] as $field) {
             unset($payload[$field]);
         }
         if (is_array($payload['eligibility'] ?? null)) {
@@ -271,7 +271,7 @@ final class DeclarationOperationController extends Controller
             'primary_code',
             'messages',
             'confirmation_required',
-            'totp_required',
+            'password_confirmation_required',
         ]));
     }
 
@@ -279,13 +279,12 @@ final class DeclarationOperationController extends Controller
     private function withoutTechnicalFields(array $payload): array
     {
         $blocked = [
-            'office_id',
+            'tenant_id',
             'system_code',
             'solution_code',
             'service_code',
             'operation_code',
             'operation_key',
-            'provider_operation_key',
             'id_sistema',
             'id_servico',
             'versao_sistema',

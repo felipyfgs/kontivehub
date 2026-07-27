@@ -92,7 +92,7 @@ final class EnvelopeCrypto
     }
 
     /**
-     * @param  array<string, scalar|null>  $metadata  AAD de negócio (purpose, office_id, …) — NÃO é key_version
+     * @param  array<string, scalar|null>  $metadata  AAD de negócio (purpose, tenant_id, …) — NÃO é key_version
      * @return array{ciphertext: string, wrapped_dek: string, nonce: string, wrap_nonce: string, key_version: int}
      */
     public function seal(string $plaintext, array $metadata = []): array

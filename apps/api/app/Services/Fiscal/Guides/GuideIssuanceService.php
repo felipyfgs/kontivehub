@@ -7,16 +7,15 @@ use App\Enums\SerproUsageResult;
 use App\Enums\TaxGuideEmissionStatus;
 use App\Enums\TaxGuidePaymentStatus;
 use App\Models\Client;
-use App\Models\Office;
 use App\Models\TaxGuide;
 use App\Models\TaxGuideVersion;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use App\Services\Fiscal\Guides\DTO\GuideEmissionRequest;
 use App\Services\Fiscal\Guides\Exceptions\GuideException;
 use App\Services\Fiscal\Guides\Exceptions\GuideTransportTimeoutException;
 use App\Services\Serpro\Catalog\OperationCoordinateResolver;
-use App\Services\Serpro\Catalog\OperationKeyMap;
 use App\Services\Serpro\Usage\UsageLedgerService;
 use App\Services\Serpro\Usage\UsageReserveRequest;
 use Carbon\CarbonImmutable;
@@ -45,22 +44,20 @@ final class GuideIssuanceService
      * @return array<string, mixed>
      */
     public function preflight(
-        Office $office,
+        Tenant $tenant,
         Client $client,
-        string $systemCode,
-        string $serviceCode,
-        string $operationCode,
+        string $operationKey,
         ?string $competencePeriodKey,
         ?string $debitRef,
         ?int $amountCents,
         ?User $user,
     ): array {
-        $this->assertClientTenant($office, $client);
-        $op = $this->catalog->resolve($systemCode, $serviceCode, $operationCode);
+        $this->assertClientTenant($tenant, $client);
+        $op = $this->catalog->resolve($operationKey);
         $risk = $this->highRisk->resolveRisk($op['risk'], $amountCents);
 
         $idem = GuideIdempotency::emissionKey(
-            (int) $office->id,
+            (int) $tenant->id,
             (int) $client->id,
             $op['system'],
             $op['service'],
@@ -71,7 +68,7 @@ final class GuideIssuanceService
 
         $existing = TaxGuideVersion::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('idempotency_key', $idem)
             ->first();
 
@@ -92,9 +89,7 @@ final class GuideIssuanceService
 
         return [
             'operation' => [
-                'system_code' => $op['system'],
-                'service_code' => $op['service'],
-                'operation_code' => $op['operation'],
+                'operation_key' => $op['operation_key'],
                 'label' => $op['label'],
             ],
             'client_id' => $client->id,
@@ -103,7 +98,7 @@ final class GuideIssuanceService
             'amount_cents' => $amountCents,
             'risk_level' => $risk->value,
             'requires_reinforced_confirmation' => $risk->requiresReinforcedConfirmation(),
-            'requires_recent_2fa' => $risk->requiresReinforcedConfirmation(),
+            'requires_recent_password' => $risk->requiresReinforcedConfirmation(),
             'has_recent_challenge' => $this->highRisk->hasRecentChallenge(),
             'idempotency_key' => $idem,
             'existing_version_id' => $existing?->id,
@@ -113,7 +108,6 @@ final class GuideIssuanceService
                 'would_allow_with_confirmation' => ! in_array('mutating_disabled', $gate['codes'], true)
                     && ! in_array('module_disabled', $gate['codes'], true)
                     && ! in_array('role_required', $gate['codes'], true)
-                    && ! in_array('two_factor_required', $gate['codes'], true)
                     && ! in_array('password_confirmation_required', $gate['codes'], true),
                 'codes' => $gate['codes'],
                 'reasons' => $gate['reasons'],
@@ -133,11 +127,9 @@ final class GuideIssuanceService
      * @return array{guide:TaxGuide,version:TaxGuideVersion,reused:bool,substituted:bool}
      */
     public function issue(
-        Office $office,
+        Tenant $tenant,
         Client $client,
-        string $systemCode,
-        string $serviceCode,
-        string $operationCode,
+        string $operationKey,
         ?string $competencePeriodKey,
         ?string $debitRef,
         ?int $amountCents,
@@ -150,17 +142,9 @@ final class GuideIssuanceService
         bool $forceReissue = false,
         array $operationData = [],
     ): array {
-        $this->assertClientTenant($office, $client);
-        $op = $this->catalog->resolve($systemCode, $serviceCode, $operationCode);
-        $operationKey = OperationKeyMap::resolve(
-            null,
-            $op['system'],
-            $op['service'],
-            $op['operation'],
-        );
-        $official = $operationKey !== null
-            ? $this->coordinates->resolveExecutable($operationKey)
-            : null;
+        $this->assertClientTenant($tenant, $client);
+        $op = $this->catalog->resolve($operationKey);
+        $official = $this->coordinates->resolveExecutable($operationKey);
 
         if (! $this->catalog->isEmissionOperation($op['operation'])) {
             throw new GuideException('Operação não é de emissão de guia.', 'not_emission_operation');
@@ -178,7 +162,7 @@ final class GuideIssuanceService
         );
 
         $idem = $idempotencyKey ?: GuideIdempotency::emissionKey(
-            (int) $office->id,
+            (int) $tenant->id,
             (int) $client->id,
             $op['system'],
             $op['service'],
@@ -192,12 +176,12 @@ final class GuideIssuanceService
         // Idempotência: mesma chave já processada
         $existingVersion = TaxGuideVersion::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('idempotency_key', $idem)
             ->first();
 
         if ($existingVersion !== null) {
-            if ($existingVersion->emission_status->blocksRetry()) {
+            if ($existingVersion->emission_status->blocksImmediateRetry()) {
                 throw GuideException::retryBlocked(
                     'Emissão com resultado incerto ou em voo — reconcilie antes de repetir.',
                 );
@@ -209,7 +193,7 @@ final class GuideIssuanceService
             ) {
                 $guide = TaxGuide::query()
                     ->withoutGlobalScopes()
-                    ->where('office_id', $office->id)
+                    ->where('tenant_id', $tenant->id)
                     ->whereKey($existingVersion->tax_guide_id)
                     ->firstOrFail();
 
@@ -219,7 +203,7 @@ final class GuideIssuanceService
                     subject: $existingVersion,
                     context: ['idempotency_key_hash' => substr(hash('sha256', $idem), 0, 16)],
                     userId: $user->id,
-                    officeId: (int) $office->id,
+                    tenantId: (int) $tenant->id,
                 );
 
                 return ['guide' => $guide, 'version' => $existingVersion, 'reused' => true, 'substituted' => false];
@@ -237,7 +221,7 @@ final class GuideIssuanceService
 
         $guide = TaxGuide::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('logical_key', $logical)
             ->first();
 
@@ -257,13 +241,13 @@ final class GuideIssuanceService
             }
 
             // Bloqueio se versão atual está em estado incerto
-            if ($current !== null && $current->emission_status->blocksRetry()) {
+            if ($current !== null && $current->emission_status->blocksImmediateRetry()) {
                 throw GuideException::retryBlocked();
             }
         }
 
         return DB::transaction(function () use (
-            $office,
+            $tenant,
             $client,
             $op,
             $competencePeriodKey,
@@ -283,8 +267,9 @@ final class GuideIssuanceService
             $official,
         ): array {
             $guide = $guide ?? TaxGuide::query()->create([
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'client_id' => $client->id,
+                'operation_key' => $operationKey,
                 'system_code' => $op['system'],
                 'service_code' => $op['service'],
                 'operation_code' => $op['operation'],
@@ -297,7 +282,7 @@ final class GuideIssuanceService
 
             $previous = TaxGuideVersion::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('tax_guide_id', $guide->id)
                 ->where('is_current', true)
                 ->lockForUpdate()
@@ -312,7 +297,7 @@ final class GuideIssuanceService
             $versionIdem = $idem;
             if ($previous !== null && ($forceReissue || $substituted)) {
                 $versionIdem = GuideIdempotency::emissionKey(
-                    (int) $office->id,
+                    (int) $tenant->id,
                     (int) $client->id,
                     $op['system'],
                     $op['service'],
@@ -325,7 +310,7 @@ final class GuideIssuanceService
 
             // Reserva de uso com a mesma chave da versão (idempotente)
             $reserve = $this->usage->reserve(new UsageReserveRequest(
-                officeId: (int) $office->id,
+                tenantId: (int) $tenant->id,
                 idempotencyKey: $versionIdem,
                 systemCode: $op['system'],
                 serviceCode: $op['service'],
@@ -334,14 +319,14 @@ final class GuideIssuanceService
                 clientId: (int) $client->id,
                 correlationId: $correlationId,
                 operationKey: $operationKey,
-                functionalRoute: $official !== null ? $official['route']->value : null,
-                requestTag: $operationKey !== null ? substr(hash('sha256', implode('|', [
-                    (string) $office->id,
+                functionalRoute: $official['route']->value,
+                requestTag: substr(hash('sha256', implode('|', [
+                    (string) $tenant->id,
                     (string) $client->id,
                     $operationKey,
                     $versionIdem,
                     $correlationId,
-                ])), 0, 32) : null,
+                ])), 0, 32),
             ));
 
             if (! $reserve->allowed) {
@@ -354,7 +339,7 @@ final class GuideIssuanceService
             }
 
             $version = TaxGuideVersion::query()->create([
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'tax_guide_id' => $guide->id,
                 'version_number' => $nextVersion,
                 'is_current' => false,
@@ -378,11 +363,12 @@ final class GuideIssuanceService
 
             try {
                 $result = $this->client->emit(new GuideEmissionRequest(
-                    officeId: (int) $office->id,
+                    tenantId: (int) $tenant->id,
                     clientId: (int) $client->id,
                     systemCode: $op['system'],
                     serviceCode: $op['service'],
                     operationCode: $op['operation'],
+                    operationKey: $operationKey,
                     competencePeriodKey: $competencePeriodKey,
                     debitRef: $debitRef,
                     amountCents: $amountCents,
@@ -423,7 +409,7 @@ final class GuideIssuanceService
             }
 
             $stored = $this->storage->storeDocument(
-                (int) $office->id,
+                (int) $tenant->id,
                 $result->documentBytes,
                 $result->contentType,
             );
@@ -488,7 +474,7 @@ final class GuideIssuanceService
                     // sem bytes, vault path, CNPJ
                 ],
                 userId: $user->id,
-                officeId: (int) $office->id,
+                tenantId: (int) $tenant->id,
             );
 
             return [
@@ -554,7 +540,7 @@ final class GuideIssuanceService
                 'reconcile_after' => $version->reconcile_after?->toIso8601String(),
             ],
             userId: $user->id,
-            officeId: (int) $guide->office_id,
+            tenantId: (int) $guide->tenant_id,
         );
 
         return [
@@ -589,9 +575,9 @@ final class GuideIssuanceService
         return false;
     }
 
-    private function assertClientTenant(Office $office, Client $client): void
+    private function assertClientTenant(Tenant $tenant, Client $client): void
     {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw GuideException::notFound('Cliente não encontrado.');
         }
     }

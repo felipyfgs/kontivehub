@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import type { OperationalProcess } from '../../app/types/work'
+import type { WorkProcess } from '../../app/types/work'
 import {
   cascadeProcessTaskSelection,
   cascadeSelectAllProcessesOnPage,
@@ -13,7 +13,7 @@ import {
 } from '../../app/utils/work-process-selection'
 import { mergeMaterialisedProcesses } from '../../app/composables/useWorkProcessGroupTree'
 
-function processFixture(id: number, taskIds: number[]): OperationalProcess {
+function processFixture(id: number, taskIds: number[]): WorkProcess {
   return {
     id,
     title: `Processo ${id}`,

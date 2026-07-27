@@ -3,8 +3,8 @@
 namespace App\Services\Platform;
 
 use App\Enums\PlatformRole;
-use App\Models\Office;
 use App\Models\PlatformMembership;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use Illuminate\Database\QueryException;
@@ -39,7 +39,7 @@ final class PlatformOwnerService
     public function findMembership(): ?PlatformMembership
     {
         return PlatformMembership::query()
-            ->with(['user', 'defaultOffice'])
+            ->with(['user', 'defaultTenant'])
             ->where('role', PlatformRole::PlatformAdmin)
             ->orderBy('id')
             ->first();
@@ -76,10 +76,10 @@ final class PlatformOwnerService
     public function createOwner(
         User $user,
         bool $isActive = true,
-        ?int $defaultOfficeId = null,
+        ?int $defaultTenantId = null,
     ): PlatformMembership {
         try {
-            return DB::transaction(function () use ($user, $isActive, $defaultOfficeId): PlatformMembership {
+            return DB::transaction(function () use ($user, $isActive, $defaultTenantId): PlatformMembership {
                 // Serializa criação: trava qualquer linha PLATFORM_ADMIN existente.
                 $existing = PlatformMembership::query()
                     ->where('role', PlatformRole::PlatformAdmin)
@@ -90,15 +90,15 @@ final class PlatformOwnerService
                     throw PlatformOwnerException::alreadyExists();
                 }
 
-                if ($defaultOfficeId !== null) {
-                    $this->assertActiveOffice($defaultOfficeId);
+                if ($defaultTenantId !== null) {
+                    $this->assertActiveTenant($defaultTenantId);
                 }
 
                 return PlatformMembership::query()->create([
                     'user_id' => $user->id,
                     'role' => PlatformRole::PlatformAdmin,
                     'is_active' => $isActive,
-                    'default_office_id' => $defaultOfficeId,
+                    'default_tenant_id' => $defaultTenantId,
                 ]);
             }, 3);
         } catch (QueryException $e) {
@@ -111,9 +111,9 @@ final class PlatformOwnerService
     }
 
     /**
-     * Atualiza identidade e/ou Office padrão do titular existente — nunca cria outro vínculo.
+     * Atualiza identidade e/ou Tenant padrão do titular existente — nunca cria outro vínculo.
      *
-     * @param  array{name?: string, email?: string, default_office_id?: int|null}  $input
+     * @param  array{name?: string, email?: string, default_tenant_id?: int|null}  $input
      * @return array{membership: PlatformMembership, user: User}
      *
      * @throws PlatformOwnerException
@@ -156,13 +156,13 @@ final class PlatformOwnerService
                 $user->email = $email;
             }
 
-            if (array_key_exists('default_office_id', $input)) {
-                $officeId = $input['default_office_id'];
-                if ($officeId !== null) {
-                    $this->assertActiveOffice((int) $officeId);
-                    $pm->default_office_id = (int) $officeId;
+            if (array_key_exists('default_tenant_id', $input)) {
+                $tenantId = $input['default_tenant_id'];
+                if ($tenantId !== null) {
+                    $this->assertActiveTenant((int) $tenantId);
+                    $pm->default_tenant_id = (int) $tenantId;
                 } else {
-                    $pm->default_office_id = null;
+                    $pm->default_tenant_id = null;
                 }
             }
 
@@ -176,13 +176,13 @@ final class PlatformOwnerService
                 context: [
                     'user_id' => $user->id,
                     'email_masked' => $this->maskEmail((string) $user->email),
-                    'default_office_id' => $pm->default_office_id,
+                    'default_tenant_id' => $pm->default_tenant_id,
                     'fields' => array_keys($input),
                 ],
                 userId: $actor?->id ?? $user->id,
             );
 
-            $pm->load(['user', 'defaultOffice']);
+            $pm->load(['user', 'defaultTenant']);
 
             return ['membership' => $pm, 'user' => $user->fresh()];
         });
@@ -248,7 +248,7 @@ final class PlatformOwnerService
                 userId: null,
             );
 
-            return $pm->fresh(['user', 'defaultOffice']);
+            return $pm->fresh(['user', 'defaultTenant']);
         });
     }
 
@@ -315,81 +315,7 @@ final class PlatformOwnerService
                 userId: null,
             );
 
-            return $pm->fresh(['user', 'defaultOffice']);
-        });
-    }
-
-    /**
-     * Remove vínculos PLATFORM_ADMIN excedentes, mantendo --keep.
-     * Preserva usuários e OfficeMembership dos afetados.
-     *
-     * @return array{kept_user_id: int, removed_membership_ids: list<int>, revoked_user_ids: list<int>}
-     *
-     * @throws PlatformOwnerException
-     */
-    public function consolidate(int $keepUserId): array
-    {
-        return DB::transaction(function () use ($keepUserId): array {
-            $rows = PlatformMembership::query()
-                ->where('role', PlatformRole::PlatformAdmin)
-                ->lockForUpdate()
-                ->orderBy('id')
-                ->get();
-
-            if ($rows->isEmpty()) {
-                throw PlatformOwnerException::notFound('Nenhum PLATFORM_ADMIN para consolidar.');
-            }
-
-            $keep = $rows->firstWhere('user_id', $keepUserId);
-            if ($keep === null) {
-                throw PlatformOwnerException::invalid(
-                    "user-id={$keepUserId} não possui PlatformMembership PLATFORM_ADMIN.",
-                    'platform_owner_keep_not_found',
-                    422,
-                );
-            }
-
-            $removedIds = [];
-            $revokedUserIds = [];
-
-            foreach ($rows as $row) {
-                if ((int) $row->id === (int) $keep->id) {
-                    continue;
-                }
-
-                $userId = (int) $row->user_id;
-                $removedIds[] = (int) $row->id;
-
-                // Bypass do guard de exclusão do singleton (operação host explícita).
-                PlatformMembership::withoutEvents(function () use ($row): void {
-                    $row->delete();
-                });
-
-                $user = User::query()->find($userId);
-                if ($user !== null) {
-                    $this->revokeSessions($user);
-                    $revokedUserIds[] = $userId;
-                }
-            }
-
-            $this->audit->record(
-                action: 'platform_owner.consolidated',
-                result: 'SUCCESS',
-                subject: User::query()->find($keepUserId),
-                context: [
-                    'kept_user_id' => $keepUserId,
-                    'removed_membership_ids' => $removedIds,
-                    'revoked_user_ids' => $revokedUserIds,
-                    'final_count' => 1,
-                ],
-                userId: null,
-            );
-
-            return [
-                'kept_user_id' => $keepUserId,
-                'removed_membership_ids' => $removedIds,
-                'revoked_user_ids' => $revokedUserIds,
-            ];
+            return $pm->fresh(['user', 'defaultTenant']);
         });
     }
 
@@ -436,7 +362,7 @@ final class PlatformOwnerService
      */
     public function sanitize(PlatformMembership $pm): array
     {
-        $pm->loadMissing(['user', 'defaultOffice']);
+        $pm->loadMissing(['user', 'defaultTenant']);
         $user = $pm->user;
 
         return [
@@ -446,25 +372,25 @@ final class PlatformOwnerService
             'is_active' => (bool) ($user?->is_active && $pm->is_active),
             'membership_active' => (bool) $pm->is_active,
             'password_change_required' => (bool) $user?->password_change_required,
-            'default_office_id' => $pm->default_office_id,
-            'default_office' => $pm->defaultOffice === null ? null : [
-                'id' => $pm->defaultOffice->id,
-                'name' => $pm->defaultOffice->name,
-                'slug' => $pm->defaultOffice->slug,
+            'default_tenant_id' => $pm->default_tenant_id,
+            'default_tenant' => $pm->defaultTenant === null ? null : [
+                'id' => $pm->defaultTenant->id,
+                'name' => $pm->defaultTenant->name,
+                'slug' => $pm->defaultTenant->slug,
             ],
             'created_at' => $pm->created_at?->toIso8601String(),
         ];
     }
 
-    private function assertActiveOffice(int $officeId): void
+    private function assertActiveTenant(int $tenantId): void
     {
-        $ok = Office::query()
-            ->whereKey($officeId)
+        $ok = Tenant::query()
+            ->whereKey($tenantId)
             ->where('is_active', true)
             ->exists();
 
         if (! $ok) {
-            throw PlatformOwnerException::invalid('Office padrão inválido ou inativo.');
+            throw PlatformOwnerException::invalid('Tenant padrão inválido ou inativo.');
         }
     }
 

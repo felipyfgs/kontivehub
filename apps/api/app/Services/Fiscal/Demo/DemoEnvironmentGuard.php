@@ -2,7 +2,7 @@
 
 namespace App\Services\Fiscal\Demo;
 
-use App\Models\Office;
+use App\Models\Tenant;
 use LogicException;
 use RuntimeException;
 
@@ -15,7 +15,7 @@ final class DemoEnvironmentGuard
     /**
      * @throws LogicException|RuntimeException
      */
-    public function assertCanSeed(?Office $office = null): Office
+    public function assertCanSeed(?Tenant $tenant = null): Tenant
     {
         if (! $this->isAllowedEnvironment()) {
             throw new LogicException(
@@ -30,18 +30,18 @@ final class DemoEnvironmentGuard
             );
         }
 
-        $slug = $this->demoOfficeSlug();
-        $resolved = $office ?? Office::query()->where('slug', $slug)->first();
+        $slug = $this->demoTenantSlug();
+        $resolved = $tenant ?? Tenant::query()->where('slug', $slug)->first();
 
         if ($resolved === null) {
             throw new RuntimeException(
-                "Office demo com slug \"{$slug}\" não encontrado. Execute o DatabaseSeeder base antes."
+                "Tenant demo com slug \"{$slug}\" não encontrado. Execute o DatabaseSeeder base antes."
             );
         }
 
         if ($resolved->slug !== $slug) {
             throw new LogicException(
-                'FiscalMonitoringDemoSeeder recusado: office "'.$resolved->slug
+                'FiscalMonitoringDemoSeeder recusado: tenant "'.$resolved->slug
                 ."\" não é o tenant demo configurado (\"{$slug}\")."
             );
         }
@@ -56,9 +56,9 @@ final class DemoEnvironmentGuard
         return app()->environment(is_array($allowed) ? $allowed : ['local', 'testing']);
     }
 
-    public function isDemoOffice(Office $office): bool
+    public function isDemoTenant(Tenant $tenant): bool
     {
-        return $office->slug === $this->demoOfficeSlug();
+        return $tenant->slug === $this->demoTenantSlug();
     }
 
     public function isProductionLike(): bool
@@ -83,14 +83,14 @@ final class DemoEnvironmentGuard
         }
     }
 
-    public function demoOfficeSlug(): string
+    public function demoTenantSlug(): string
     {
-        return (string) config('fiscal_demo.office_slug', 'demo');
+        return (string) config('fiscal_demo.tenant_slug', 'demo');
     }
 
-    public function sentinelOfficeSlug(): string
+    public function sentinelTenantSlug(): string
     {
-        return (string) config('fiscal_demo.sentinel_office_slug', 'demo-sentinel');
+        return (string) config('fiscal_demo.sentinel_tenant_slug', 'demo-sentinel');
     }
 
     public function fixtureMarker(): string

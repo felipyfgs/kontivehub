@@ -2,7 +2,7 @@
 /**
  * Linha da fila — anatomia de InboxList.vue (borda esquerda, densidade, foco).
  */
-import type { OperationalTaskSummary } from '~/types/work'
+import type { WorkTaskSummary } from '~/types/work'
 import {
   formatDueDate,
   highestRiskColor,
@@ -12,7 +12,7 @@ import {
 } from '~/utils/work-labels'
 
 const props = defineProps<{
-  item: OperationalTaskSummary
+  item: WorkTaskSummary
   selected: boolean
 }>()
 

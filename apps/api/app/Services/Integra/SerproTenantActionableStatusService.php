@@ -2,10 +2,10 @@
 
 namespace App\Services\Integra;
 
-use App\Enums\OfficeSerproOnboardingStatus;
 use App\Enums\SerproEnvironment;
-use App\Models\Office;
-use App\Models\OfficeSerproOnboardingState;
+use App\Enums\TenantSerproOnboardingStatus;
+use App\Models\Tenant;
+use App\Models\TenantSerproOnboardingState;
 use App\Services\Serpro\SerproHealthService;
 
 /**
@@ -14,7 +14,7 @@ use App\Services\Serpro\SerproHealthService;
 final class SerproTenantActionableStatusService
 {
     public function __construct(
-        private readonly OfficeSerproOnboardingService $onboarding,
+        private readonly TenantSerproOnboardingService $onboarding,
         private readonly TenantIntegraHealthService $tenantHealth,
         private readonly SerproHealthService $platformHealth,
     ) {}
@@ -27,14 +27,14 @@ final class SerproTenantActionableStatusService
      *   correlation_id: ?string
      * }
      */
-    public function forOffice(Office $office, ?SerproEnvironment $environment = null): array
+    public function forTenant(Tenant $tenant, ?SerproEnvironment $environment = null): array
     {
         $env = $environment ?? SerproEnvironment::from(
             (string) config('serpro.default_environment', 'TRIAL'),
         );
 
-        $state = $this->onboarding->getOrCreateState($office, $env);
-        $prereq = $this->onboarding->evaluatePrerequisites($office, $env);
+        $state = $this->onboarding->getOrCreateState($tenant, $env);
+        $prereq = $this->onboarding->evaluatePrerequisites($tenant, $env);
         $health = $this->tenantHealth->forEnvironment($env);
 
         $actionable = [];
@@ -50,7 +50,7 @@ final class SerproTenantActionableStatusService
             ];
         }
 
-        if ($state->status === OfficeSerproOnboardingStatus::TechnicalError) {
+        if ($state->status === TenantSerproOnboardingStatus::TechnicalError) {
             // Não vazar OAuth/mTLS — só estado acionável genérico + correlation
             $actionable = [[
                 'code' => 'PLATFORM_UNAVAILABLE',
@@ -70,7 +70,7 @@ final class SerproTenantActionableStatusService
             'prerequisites' => [
                 'profile' => $prereq['profile'],
                 'consent' => $prereq['consent'],
-                'a1' => $prereq['a1'],
+                'certificate' => $prereq['certificate'],
                 'author' => $prereq['author'],
                 'complete' => $prereq['complete'],
             ],
@@ -101,7 +101,7 @@ final class SerproTenantActionableStatusService
     /**
      * @return array<string, mixed>
      */
-    public function forOnboardingState(OfficeSerproOnboardingState $state): array
+    public function forOnboardingState(TenantSerproOnboardingState $state): array
     {
         return [
             'tenant' => $state->toTenantArray(),

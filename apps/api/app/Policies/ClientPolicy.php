@@ -33,7 +33,7 @@ class ClientPolicy
 
     public function delete(User $user, Client $client): bool
     {
-        // Delete permanece baseline admin / credentials-level (legado: Admin only).
+        // Exclusão exige a permissão administrativa de credenciais.
         return $this->allows($user, TenantPermission::CredentialsManage, $client);
     }
 }

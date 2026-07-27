@@ -4,12 +4,12 @@ namespace App\Http\Controllers\Api\V1\Fiscal;
 
 use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
-use App\Http\Middleware\EnsureOfficeContext;
+use App\Http\Middleware\EnsureTenantContext;
 use App\Models\Client;
 use App\Models\User;
 use App\Services\Authorization\TenantAuthorization;
 use App\Services\Fiscal\Guides\PagtowebPaymentCountQueryService;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use App\Support\FeatureFlags;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,11 +18,11 @@ use RuntimeException;
 
 final class PagtowebPaymentCountController extends Controller
 {
-    public function __construct(private readonly CurrentOffice $currentOffice, private readonly PagtowebPaymentCountQueryService $queries, private readonly TenantAuthorization $authorization) {}
+    public function __construct(private readonly CurrentTenant $currentTenant, private readonly PagtowebPaymentCountQueryService $queries, private readonly TenantAuthorization $authorization) {}
 
     public function history(Request $request, int $client): JsonResponse
     {
-        if ($rejection = $this->rejectClientOfficeId($request)) {
+        if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
         $model = $this->client($client);
@@ -30,7 +30,7 @@ final class PagtowebPaymentCountController extends Controller
             return $this->notFound();
         } $this->read($request, $model);
         try {
-            return response()->json(['data' => $this->queries->history($this->currentOffice->office(), $model)]);
+            return response()->json(['data' => $this->queries->history($this->currentTenant->tenant(), $model)]);
         } catch (RuntimeException) {
             return response()->json(['message' => 'Histórico de contagem indisponível.', 'code' => 'HISTORY_ERROR'], 422);
         }
@@ -39,7 +39,7 @@ final class PagtowebPaymentCountController extends Controller
     public function consult(Request $request, int $client): JsonResponse
     {
         $this->enabled();
-        if ($rejection = $this->rejectClientOfficeId($request)) {
+        if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
         $validated = $request->validate([
@@ -55,7 +55,7 @@ final class PagtowebPaymentCountController extends Controller
             return $this->notFound();
         } $this->write($request, $model);
         try {
-            $run = $this->queries->enqueueManualConsult($this->currentOffice->office(), $model, (array) $request->input('filters', []), $request->user()?->id);
+            $run = $this->queries->enqueueManualConsult($this->currentTenant->tenant(), $model, (array) $request->input('filters', []), $request->user()?->id);
         } catch (InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage(), 'code' => 'INVALID_PAYMENT_COUNT_FILTERS'], 422);
         } catch (RuntimeException) {
@@ -67,7 +67,7 @@ final class PagtowebPaymentCountController extends Controller
 
     private function client(int $id): ?Client
     {
-        return Client::query()->withoutGlobalScopes()->where('office_id', $this->currentOffice->office()->id)->whereKey($id)->first();
+        return Client::query()->withoutGlobalScopes()->where('tenant_id', $this->currentTenant->tenant()->id)->whereKey($id)->first();
     }
 
     private function notFound(): JsonResponse
@@ -93,26 +93,26 @@ final class PagtowebPaymentCountController extends Controller
 
     private function enabled(): void
     {
-        $office = $this->currentOffice->office();
-        if (! FeatureFlags::isModuleEnabled('guias', $office->id) && ! (bool) config('fiscal_monitoring.enabled', false)) {
+        $tenant = $this->currentTenant->tenant();
+        if (! FeatureFlags::isModuleEnabled('guides', $tenant->id) && ! (bool) config('fiscal_monitoring.enabled', false)) {
             abort(403, 'Módulo guias desabilitado.');
         }
     }
 
-    private function rejectClientOfficeId(Request $request): ?JsonResponse
+    private function rejectClientTenantId(Request $request): ?JsonResponse
     {
-        $supplied = $request->attributes->get(EnsureOfficeContext::CLIENT_OFFICE_ID_SUPPLIED) === true || $this->hasOfficeId($request->query->all()) || $this->hasOfficeId($request->request->all()) || ($request->isJson() && $request->json() !== null && $this->hasOfficeId($request->json()->all()));
+        $supplied = $request->attributes->get(EnsureTenantContext::CLIENT_TENANT_ID_SUPPLIED) === true || $this->hasTenantId($request->query->all()) || $this->hasTenantId($request->request->all()) || ($request->isJson() && $request->json() !== null && $this->hasTenantId($request->json()->all()));
 
-        return $supplied ? response()->json(['message' => 'office_id não é aceito; o escritório é obtido do contexto autenticado.', 'code' => 'CLIENT_OFFICE_ID_REJECTED'], 422) : null;
+        return $supplied ? response()->json(['message' => 'tenant_id não é aceito; o escritório é obtido do contexto autenticado.', 'code' => 'CLIENT_TENANT_ID_REJECTED'], 422) : null;
     }
 
     /** @param array<array-key,mixed> $values */
-    private function hasOfficeId(array $values): bool
+    private function hasTenantId(array $values): bool
     {
         foreach ($values as $key => $value) {
-            if (is_string($key) && strtolower($key) === 'office_id') {
+            if (is_string($key) && strtolower($key) === 'tenant_id') {
                 return true;
-            } if (is_array($value) && $this->hasOfficeId($value)) {
+            } if (is_array($value) && $this->hasTenantId($value)) {
                 return true;
             }
         }

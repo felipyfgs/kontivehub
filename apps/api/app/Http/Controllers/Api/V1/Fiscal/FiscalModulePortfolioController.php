@@ -5,11 +5,11 @@ namespace App\Http\Controllers\Api\V1\Fiscal;
 use App\DTO\Fiscal\Module\ModulePortfolioFilters;
 use App\Enums\FiscalModuleKey;
 use App\Http\Controllers\Controller;
-use App\Http\Middleware\EnsureOfficeContext;
+use App\Http\Middleware\EnsureTenantContext;
 use App\Http\Resources\Fiscal\FiscalModuleClientRowResource;
 use App\Http\Resources\Fiscal\FiscalModuleOverviewResource;
 use App\Services\FiscalMonitoring\ModulePortfolio\ModulePortfolioQueryService;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use App\Support\FeatureFlags;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,12 +17,12 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Read model de overview + carteira por módulo (tenant-scoped).
- * office_id só via CurrentOffice; query office_id é stripada pelo EnsureOfficeContext.
+ * tenant_id só via CurrentTenant; query tenant_id é stripada pelo EnsureTenantContext.
  */
 class FiscalModulePortfolioController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly ModulePortfolioQueryService $portfolio,
     ) {}
 
@@ -30,20 +30,20 @@ class FiscalModulePortfolioController extends Controller
     {
         $this->assertCanRead();
         $moduleKey = $this->resolveModule($module);
-        $office = $this->currentOffice->office();
-        $this->assertModuleEnabled($moduleKey, (int) $office->id);
+        $tenant = $this->currentTenant->tenant();
+        $this->assertModuleEnabled($moduleKey, (int) $tenant->id);
 
-        if ($rejection = $this->rejectSimplesMeiClientOfficeId($request, $moduleKey)) {
+        if ($rejection = $this->rejectSimplesMeiClientTenantId($request, $moduleKey)) {
             return $rejection;
         }
 
-        // Nunca confiar em office_id do client (já stripado; reafirma).
-        $request->query->remove('office_id');
-        $request->request->remove('office_id');
+        // Nunca confiar em tenant_id do client (já stripado; reafirma).
+        $request->query->remove('tenant_id');
+        $request->request->remove('tenant_id');
 
         $this->assertSubmoduleAllowed($request, $moduleKey);
         $filters = ModulePortfolioFilters::fromRequest($request->query->all());
-        $dto = $this->portfolio->overview($office, $moduleKey, $filters);
+        $dto = $this->portfolio->overview($tenant, $moduleKey, $filters);
 
         return (new FiscalModuleOverviewResource($dto))->response();
     }
@@ -52,19 +52,19 @@ class FiscalModulePortfolioController extends Controller
     {
         $this->assertCanRead();
         $moduleKey = $this->resolveModule($module);
-        $office = $this->currentOffice->office();
-        $this->assertModuleEnabled($moduleKey, (int) $office->id);
+        $tenant = $this->currentTenant->tenant();
+        $this->assertModuleEnabled($moduleKey, (int) $tenant->id);
 
-        if ($rejection = $this->rejectSimplesMeiClientOfficeId($request, $moduleKey)) {
+        if ($rejection = $this->rejectSimplesMeiClientTenantId($request, $moduleKey)) {
             return $rejection;
         }
 
-        $request->query->remove('office_id');
-        $request->request->remove('office_id');
+        $request->query->remove('tenant_id');
+        $request->request->remove('tenant_id');
 
         $this->assertSubmoduleAllowed($request, $moduleKey);
         $filters = ModulePortfolioFilters::fromRequest($request->query->all());
-        $page = $this->portfolio->clients($office, $moduleKey, $filters);
+        $page = $this->portfolio->clients($tenant, $moduleKey, $filters);
 
         return FiscalModuleClientRowResource::collection($page)->response();
     }
@@ -79,17 +79,17 @@ class FiscalModulePortfolioController extends Controller
         return $key;
     }
 
-    private function assertModuleEnabled(FiscalModuleKey $module, int $officeId): void
+    private function assertModuleEnabled(FiscalModuleKey $module, int $tenantId): void
     {
         $flag = $module->featureFlagKey();
-        if ($flag === null || ! FeatureFlags::isModuleEnabled($flag, $officeId)) {
+        if ($flag === null || ! FeatureFlags::isModuleEnabled($flag, $tenantId)) {
             abort(403, 'Módulo fiscal desabilitado para este escritório.');
         }
     }
 
     private function assertCanRead(): void
     {
-        if ($this->currentOffice->role() === null) {
+        if ($this->currentTenant->role() === null) {
             abort(403, 'Perfil não resolvido.');
         }
     }
@@ -99,7 +99,7 @@ class FiscalModulePortfolioController extends Controller
      * de escritório, inclusive em filtros aninhados. O valor nunca é lido nem
      * usado para resolver o tenant.
      */
-    private function rejectSimplesMeiClientOfficeId(
+    private function rejectSimplesMeiClientTenantId(
         Request $request,
         FiscalModuleKey $module,
     ): ?JsonResponse {
@@ -108,12 +108,12 @@ class FiscalModulePortfolioController extends Controller
         }
 
         $suppliedAtTopLevel = $request->attributes->get(
-            EnsureOfficeContext::CLIENT_OFFICE_ID_SUPPLIED,
+            EnsureTenantContext::CLIENT_TENANT_ID_SUPPLIED,
         ) === true;
-        $suppliedNested = $this->containsOfficeIdKey($request->query->all())
-            || $this->containsOfficeIdKey($request->request->all())
+        $suppliedNested = $this->containsTenantIdKey($request->query->all())
+            || $this->containsTenantIdKey($request->request->all())
             || ($request->isJson() && $request->json() !== null
-                && $this->containsOfficeIdKey($request->json()->all()));
+                && $this->containsTenantIdKey($request->json()->all()));
 
         if (! $suppliedAtTopLevel && ! $suppliedNested) {
             return null;
@@ -121,18 +121,18 @@ class FiscalModulePortfolioController extends Controller
 
         return response()->json([
             'message' => 'O escritório é definido pela sessão e não pode ser informado pelo cliente.',
-            'code' => 'CLIENT_OFFICE_ID_REJECTED',
+            'code' => 'CLIENT_TENANT_ID_REJECTED',
         ], 422);
     }
 
     /** @param array<array-key, mixed> $values */
-    private function containsOfficeIdKey(array $values): bool
+    private function containsTenantIdKey(array $values): bool
     {
         foreach ($values as $key => $value) {
-            if (is_string($key) && strtolower($key) === 'office_id') {
+            if (is_string($key) && strtolower($key) === 'tenant_id') {
                 return true;
             }
-            if (is_array($value) && $this->containsOfficeIdKey($value)) {
+            if (is_array($value) && $this->containsTenantIdKey($value)) {
                 return true;
             }
         }

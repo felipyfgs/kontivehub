@@ -487,7 +487,7 @@ func (s *Memory) Close() {}
 func isLeaseBootstrapCommand(commandType domain.CommandType) bool {
 	switch commandType {
 	case domain.CommandPairSession, domain.CommandConnectSession, domain.CommandDisconnectSession,
-		domain.CommandResetSession, domain.CommandLogoutSession:
+		domain.CommandLogoutSession:
 		return true
 	default:
 		return false

@@ -116,8 +116,6 @@ final class RecentPasswordConfirmationGate
         $user ??= auth()->user();
         if ($user instanceof User) {
             Cache::forget($this->cacheKey($user, $request));
-            // Limpa chave de teste legada
-            Cache::forget('auth.password_confirmed.'.$user->id.'.test');
         }
     }
 

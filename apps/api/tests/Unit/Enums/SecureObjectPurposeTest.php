@@ -12,10 +12,10 @@ final class SecureObjectPurposeTest extends TestCase
     {
         self::assertSame([
             'purpose' => 'FISCAL_EVIDENCE',
-            'office_id' => 41,
+            'tenant_id' => 41,
             'sha256' => 'evidence-digest',
         ], SecureObjectPurpose::FiscalEvidence->aadBase([
-            'office_id' => 41,
+            'tenant_id' => 41,
             'sha256' => 'evidence-digest',
         ]));
     }
@@ -27,7 +27,7 @@ final class SecureObjectPurposeTest extends TestCase
 
         SecureObjectPurpose::FiscalEvidence->aadBase([
             'purpose' => SecureObjectPurpose::SerproOauthSecrets->value,
-            'office_id' => 41,
+            'tenant_id' => 41,
         ]);
     }
 }

@@ -6,7 +6,7 @@ use App\Models\CcmeiCertificateObservation;
 use App\Models\CcmeiCertificateProjection;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
+use App\Models\Tenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -21,14 +21,14 @@ final class CcmeiCertificateProjector
      * @return array{observation:CcmeiCertificateObservation,projection:CcmeiCertificateProjection,created:bool}
      */
     public function project(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         array $summary,
         ?int $sourceRunId,
         string $sourceProvenance,
         ?CarbonImmutable $observedAt = null,
     ): array {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new RuntimeException('Cliente não pertence ao escritório da projeção CCMEI.');
         }
 
@@ -46,7 +46,7 @@ final class CcmeiCertificateProjector
         ], JSON_THROW_ON_ERROR));
 
         return DB::transaction(function () use (
-            $office,
+            $tenant,
             $client,
             $status,
             $situation,
@@ -60,7 +60,7 @@ final class CcmeiCertificateProjector
                 && ! FiscalMonitoringRun::query()
                     ->withoutGlobalScopes()
                     ->whereKey($sourceRunId)
-                    ->where('office_id', $office->id)
+                    ->where('tenant_id', $tenant->id)
                     ->where('client_id', $client->id)
                     ->exists()
             ) {
@@ -69,7 +69,7 @@ final class CcmeiCertificateProjector
 
             $existing = CcmeiCertificateObservation::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('client_id', $client->id)
                 ->where('digest', $digest)
                 ->lockForUpdate()
@@ -77,7 +77,7 @@ final class CcmeiCertificateProjector
 
             $created = $existing === null;
             $observation = $existing ?? CcmeiCertificateObservation::query()->create([
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'client_id' => $client->id,
                 'status' => $status,
                 'situation' => $situation,
@@ -90,7 +90,7 @@ final class CcmeiCertificateProjector
 
             $projection = CcmeiCertificateProjection::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('client_id', $client->id)
                 ->lockForUpdate()
                 ->first();
@@ -106,7 +106,7 @@ final class CcmeiCertificateProjector
 
             if ($projection === null) {
                 $projection = CcmeiCertificateProjection::query()->create([
-                    'office_id' => $office->id,
+                    'tenant_id' => $tenant->id,
                     'client_id' => $client->id,
                     ...$payload,
                 ]);

@@ -18,7 +18,7 @@ final class MutationPolicyResult
         public readonly array $codes = [],
         public readonly array $context = [],
         public readonly bool $confirmationRequired = true,
-        public readonly bool $totpRequired = true,
+        public readonly bool $passwordConfirmationRequired = true,
     ) {}
 
     public static function allow(array $context = [], bool $confirmationRequired = true): self
@@ -28,7 +28,7 @@ final class MutationPolicyResult
             codes: [],
             context: $context,
             confirmationRequired: $confirmationRequired,
-            totpRequired: true,
+            passwordConfirmationRequired: true,
         );
     }
 
@@ -48,7 +48,7 @@ final class MutationPolicyResult
             codes: $list,
             context: $context,
             confirmationRequired: true,
-            totpRequired: true,
+            passwordConfirmationRequired: true,
         );
     }
 
@@ -68,7 +68,7 @@ final class MutationPolicyResult
             'primary_code' => $this->primaryCode()?->value,
             'messages' => array_map(fn (FiscalMutationDenialCode $c) => $c->message(), $this->codes),
             'confirmation_required' => $this->confirmationRequired,
-            'totp_required' => $this->totpRequired,
+            'password_confirmation_required' => $this->passwordConfirmationRequired,
             'context' => $this->context,
         ];
     }

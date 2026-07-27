@@ -14,10 +14,10 @@ use App\Enums\OutboundRetrievalStatus;
 use App\Models\DfeDocument;
 use App\Models\DocumentAcquisition;
 use App\Models\Establishment;
-use App\Models\MaOutboundRetrievalRequest;
 use App\Models\NfeDocument;
 use App\Models\OutboundCaptureProfile;
 use App\Models\OutboundNumberState;
+use App\Models\OutboundRetrievalRequest;
 use App\Services\Audit\AuditLogger;
 use App\Services\Sefaz\NfeXmlProjectionParser;
 use Illuminate\Http\UploadedFile;
@@ -56,7 +56,7 @@ final class MaOfficialPackageIngestionService
         Establishment $establishment,
         array $files,
         int $userId,
-        ?MaOutboundRetrievalRequest $request = null,
+        ?OutboundRetrievalRequest $request = null,
     ): array {
         $items = [];
         $imported = $skipped = $quarantined = $errors = 0;
@@ -129,7 +129,7 @@ final class MaOfficialPackageIngestionService
                 // sem payload fiscal / XML
             ],
             $userId,
-            $profile->office_id,
+            $profile->tenant_id,
         );
 
         Log::info('outbound.package.ingest', [
@@ -150,7 +150,7 @@ final class MaOfficialPackageIngestionService
         Establishment $establishment,
         string $xml,
         string $filename,
-        ?MaOutboundRetrievalRequest $request,
+        ?OutboundRetrievalRequest $request,
     ): array {
         try {
             $meta = $this->validator->validateXml($xml, $establishment, $profile->environment);
@@ -167,14 +167,14 @@ final class MaOfficialPackageIngestionService
         }
 
         $sha = hash('sha256', $xml);
-        $officeId = $profile->office_id;
+        $tenantId = $profile->tenant_id;
         $key = $meta['access_key'];
 
         return DB::transaction(function () use (
-            $profile, $establishment, $xml, $filename, $request, $meta, $sha, $officeId, $key
+            $profile, $establishment, $xml, $filename, $request, $meta, $sha, $tenantId, $key
         ) {
             $existing = DfeDocument::query()
-                ->where('office_id', $officeId)
+                ->where('tenant_id', $tenantId)
                 ->where('access_key', $key)
                 ->where('sha256', $sha)
                 ->first();
@@ -187,12 +187,12 @@ final class MaOfficialPackageIngestionService
                         'sha256' => $sha,
                     ],
                     [
-                        'office_id' => $officeId,
+                        'tenant_id' => $tenantId,
                         'access_key' => $key,
                         'channel' => CaptureChannel::MaOutbound->value,
                         'is_canonical' => true,
                         'establishment_id' => $establishment->id,
-                        'ma_outbound_retrieval_request_id' => $request?->id,
+                        'outbound_retrieval_request_id' => $request?->id,
                     ]
                 );
 
@@ -206,19 +206,19 @@ final class MaOfficialPackageIngestionService
 
             // Mesma chave, bytes diferentes → quarentena
             $other = DfeDocument::query()
-                ->where('office_id', $officeId)
+                ->where('tenant_id', $tenantId)
                 ->where('access_key', $key)
                 ->where('sha256', '!=', $sha)
                 ->first();
 
-            // AAD canônico de DF-e: office_id + sha256 (mesma chave do export/download).
+            // AAD canônico de DF-e: tenant_id + sha256 (mesma chave do export/download).
             $objectId = $this->store->put($xml, [
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'sha256' => $sha,
             ]);
 
             $doc = DfeDocument::query()->create([
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'sha256' => $sha,
                 'document_type' => AdnDocumentType::Nfe,
                 'schema_version' => 'procNFe_v4.00.xsd',
@@ -232,7 +232,7 @@ final class MaOfficialPackageIngestionService
             $isCanonical = $other === null;
 
             DocumentAcquisition::query()->create([
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'dfe_document_id' => $doc->id,
                 'access_key' => $key,
                 'source' => DocumentAcquisitionSource::MaOfficialPackage,
@@ -242,17 +242,17 @@ final class MaOfficialPackageIngestionService
                 'bytes_diverge_from_canonical' => ! $isCanonical,
                 'quarantine_reason' => $isCanonical ? null : 'SHA divergente para a mesma chave',
                 'establishment_id' => $establishment->id,
-                'ma_outbound_retrieval_request_id' => $request?->id,
+                'outbound_retrieval_request_id' => $request?->id,
             ]);
 
             if ($isCanonical) {
                 // Encerra recovery SVRS pendente da mesma chave (fallback assistido)
                 try {
                     app(OutboundXmlRecoveryOrchestrator::class)
-                        ->resolveByOtherSource($officeId, $key, 'MA_OFFICIAL_PACKAGE');
+                        ->resolveByOtherSource($tenantId, $key, 'MA_OFFICIAL_PACKAGE');
                     try {
                         app(OutboundDeadlineSatisfactionService::class)
-                            ->markCapturedBySource($officeId, $key, 'MA_OFFICIAL_PACKAGE');
+                            ->markCapturedBySource($tenantId, $key, 'MA_OFFICIAL_PACKAGE');
                     } catch (\Throwable) {
                     }
                 } catch (\Throwable) {
@@ -262,7 +262,7 @@ final class MaOfficialPackageIngestionService
                 $parsed = $this->parser->parse($xml, 'procNFe');
                 NfeDocument::query()->updateOrCreate(
                     [
-                        'office_id' => $officeId,
+                        'tenant_id' => $tenantId,
                         'access_key' => $key,
                         'is_summary' => false,
                     ],

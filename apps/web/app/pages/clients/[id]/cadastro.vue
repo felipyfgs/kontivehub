@@ -20,8 +20,7 @@ const refreshLookup = ref<CnpjLookupResult | null>(null)
 
 function clientCnpj(): string | null {
   if (!item.value) return null
-  const raw = item.value.cnpj
-    || item.value.establishments?.find(e => e.is_matrix)?.cnpj
+  const raw = item.value.establishments?.find(e => e.is_headquarters)?.cnpj
     || item.value.establishments?.[0]?.cnpj
     || null
   if (!raw) return null

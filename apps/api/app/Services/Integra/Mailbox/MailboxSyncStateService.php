@@ -4,14 +4,14 @@ namespace App\Services\Integra\Mailbox;
 
 use App\Models\Client;
 use App\Models\MailboxClientSyncState;
-use App\Models\Office;
+use App\Models\Tenant;
 
 final class MailboxSyncStateService
 {
-    public function markListSucceeded(Office $office, Client $client, bool $fullReconciliation = false): MailboxClientSyncState
+    public function markListSucceeded(Tenant $tenant, Client $client, bool $fullReconciliation = false): MailboxClientSyncState
     {
         $state = MailboxClientSyncState::query()->withoutGlobalScopes()->firstOrCreate([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
         ]);
         $pending = $state->pending_event_date;
@@ -30,10 +30,10 @@ final class MailboxSyncStateService
         return $state->fresh() ?? $state;
     }
 
-    public function markListFailed(Office $office, Client $client, string $code): MailboxClientSyncState
+    public function markListFailed(Tenant $tenant, Client $client, string $code): MailboxClientSyncState
     {
         $state = MailboxClientSyncState::query()->withoutGlobalScopes()->firstOrCreate([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
         ]);
         $state->forceFill([

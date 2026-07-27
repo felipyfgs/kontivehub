@@ -2,11 +2,11 @@
 
 namespace App\Models;
 
-use App\Casts\FiscalSourceProvenanceCast;
+use App\Enums\FiscalSourceProvenance;
 use App\Enums\FiscalVerificationKind;
 use App\Enums\MeiAutomationStatus;
 use App\Enums\MeiProvider;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use App\Services\MeiAutomation\MeiAutomationMetadataSanitizer;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'client_id',
     'fiscal_monitoring_run_id',
     'fiscal_mutation_operation_id',
@@ -57,14 +57,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class MeiAutomationAttempt extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {
         return [
             'provider' => MeiProvider::class,
             'status' => MeiAutomationStatus::class,
-            'source_provenance' => FiscalSourceProvenanceCast::class,
+            'source_provenance' => FiscalSourceProvenance::class,
             'verification_kind' => FiscalVerificationKind::class,
             'attempt_number' => 'integer',
             'captcha_cost_micros' => 'integer',

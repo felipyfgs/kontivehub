@@ -32,7 +32,7 @@ use App\Models\CommunicationIdentity;
 use App\Models\CommunicationInbox;
 use App\Models\CommunicationMessage;
 use App\Models\CommunicationOutboxEntry;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Communication\Media\CommunicationMediaStore;
 use App\Services\Communication\Outbox\CommunicationOutboxDispatcher;
 use App\Services\Communication\Security\CommunicationHmacSigner;
@@ -107,8 +107,8 @@ final class CommunicationGatewayFlowTest extends TestCase
 
     public function test_live_outbound_from_device_creates_message_reopens_pending_and_deduplicates_provider_id(): void
     {
-        [$office, $inbox] = $this->context();
-        [, $conversation] = $this->identityAndConversation($office, $inbox, ConversationStatus::Pending);
+        [$tenant, $inbox] = $this->context();
+        [, $conversation] = $this->identityAndConversation($tenant, $inbox, ConversationStatus::Pending);
 
         $event = $this->event($inbox, GatewayEventType::MessageReceived, 'gateway-device-outbound-0001', [
             'provider_message_id' => 'provider-device-outbound-0001',
@@ -136,8 +136,8 @@ final class CommunicationGatewayFlowTest extends TestCase
 
     public function test_inbound_reopens_pending_conversation_and_receipts_never_regress_message_or_dispatch(): void
     {
-        [$office, $inbox] = $this->context();
-        [$identity, $conversation] = $this->identityAndConversation($office, $inbox, ConversationStatus::Pending);
+        [$tenant, $inbox] = $this->context();
+        [$identity, $conversation] = $this->identityAndConversation($tenant, $inbox, ConversationStatus::Pending);
 
         $this->postSignedEvent($this->event($inbox, GatewayEventType::MessageReceived, 'gateway-reply-0001', [
             'provider_message_id' => 'provider-reply-0001',
@@ -152,9 +152,9 @@ final class CommunicationGatewayFlowTest extends TestCase
         $this->assertSame(ConversationStatus::Open, $conversation->refresh()->status);
         $this->assertNull($conversation->assignee_membership_id);
 
-        $client = Client::factory()->create(['office_id' => $office->id]);
+        $client = Client::factory()->create(['tenant_id' => $tenant->id]);
         $outbound = CommunicationMessage::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'inbox_id' => $inbox->id,
             'conversation_id' => $conversation->id,
             'identity_id' => $identity->id,
@@ -168,7 +168,7 @@ final class CommunicationGatewayFlowTest extends TestCase
             'occurred_at' => now(),
         ]);
         $dispatch = ClientCommunicationDispatch::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'inbox_id' => $inbox->id,
             'identity_id' => $identity->id,
@@ -220,18 +220,18 @@ final class CommunicationGatewayFlowTest extends TestCase
 
     public function test_outbox_accepts_retries_and_terminally_classifies_failures(): void
     {
-        [$office, $inbox] = $this->context();
-        [$identity, $conversation] = $this->identityAndConversation($office, $inbox);
-        $acceptedMessage = $this->outboundMessage($office, $inbox, $identity, $conversation, 'accepted');
-        $accepted = $this->outbox($office, $inbox, $acceptedMessage, 'command-accepted-0001');
+        [$tenant, $inbox] = $this->context();
+        [$identity, $conversation] = $this->identityAndConversation($tenant, $inbox);
+        $acceptedMessage = $this->outboundMessage($tenant, $inbox, $identity, $conversation, 'accepted');
+        $accepted = $this->outbox($tenant, $inbox, $acceptedMessage, 'command-accepted-0001');
         $dispatcher = app(CommunicationOutboxDispatcher::class);
 
         $dispatcher->dispatch((int) $accepted->id);
         $this->assertSame(OutboxStatus::Accepted, $accepted->refresh()->status);
         $this->assertSame(MessageStatus::Accepted, $acceptedMessage->refresh()->status);
 
-        $retryMessage = $this->outboundMessage($office, $inbox, $identity, $conversation, 'retry');
-        $retry = $this->outbox($office, $inbox, $retryMessage, 'command-retry-0001');
+        $retryMessage = $this->outboundMessage($tenant, $inbox, $identity, $conversation, 'retry');
+        $retry = $this->outbox($tenant, $inbox, $retryMessage, 'command-retry-0001');
         $this->transport->failures['command-retry-0001'] = new CommunicationTransportException('GATEWAY_TEMPORARY', true);
         $dispatcher->dispatch((int) $retry->id);
         $this->assertSame(OutboxStatus::Retry, $retry->refresh()->status);
@@ -243,8 +243,8 @@ final class CommunicationGatewayFlowTest extends TestCase
         $this->assertSame(OutboxStatus::Dead, $retry->refresh()->status);
         $this->assertSame(MessageStatus::Unknown, $retryMessage->refresh()->status);
 
-        $failedMessage = $this->outboundMessage($office, $inbox, $identity, $conversation, 'failed');
-        $failed = $this->outbox($office, $inbox, $failedMessage, 'command-failed-0001');
+        $failedMessage = $this->outboundMessage($tenant, $inbox, $identity, $conversation, 'failed');
+        $failed = $this->outbox($tenant, $inbox, $failedMessage, 'command-failed-0001');
         $this->transport->failures['command-failed-0001'] = new CommunicationTransportException('INVALID_DESTINATION', false);
         $dispatcher->dispatch((int) $failed->id);
         $this->assertSame(OutboxStatus::Dead, $failed->refresh()->status);
@@ -254,18 +254,18 @@ final class CommunicationGatewayFlowTest extends TestCase
     public function test_media_retry_rehydrates_original_attachment_and_schedules_durable_cleanup(): void
     {
         Queue::fake();
-        [$office, $inbox] = $this->context();
-        [$identity, $conversation] = $this->identityAndConversation($office, $inbox);
-        $message = $this->outboundMessage($office, $inbox, $identity, $conversation, 'media-retry');
+        [$tenant, $inbox] = $this->context();
+        [$identity, $conversation] = $this->identityAndConversation($tenant, $inbox);
+        $message = $this->outboundMessage($tenant, $inbox, $identity, $conversation, 'media-retry');
         $oldContext = [
-            'office_id' => (int) $office->id,
+            'tenant_id' => (int) $tenant->id,
             'inbox_id' => (int) $inbox->id,
             'gateway_event_id' => 'gateway-old-media-0001',
             'sha256' => hash('sha256', 'old'),
         ];
         $old = app(CommunicationMediaStore::class)->putStream(Utils::streamFor('old'), $oldContext);
         $attachment = CommunicationAttachment::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'message_id' => $message->id,
             'object_id' => $old['object_id'],
             'original_name_encrypted' => 'old.png',
@@ -305,9 +305,9 @@ final class CommunicationGatewayFlowTest extends TestCase
 
     public function test_logout_outbox_remains_dispatchable_after_inbox_is_soft_deleted(): void
     {
-        [$office, $inbox] = $this->context();
+        [$tenant, $inbox] = $this->context();
         $entry = CommunicationOutboxEntry::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'inbox_id' => $inbox->id,
             'command_id' => 'command-logout-deleted-0001',
             'session_id' => $inbox->session_id,
@@ -357,12 +357,12 @@ final class CommunicationGatewayFlowTest extends TestCase
         $this->assertDatabaseCount('communication_events', 0);
     }
 
-    /** @return array{Office,CommunicationInbox} */
+    /** @return array{Tenant,CommunicationInbox} */
     private function context(): array
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
         $inbox = CommunicationInbox::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => 'Atendimento',
             'session_id' => 'session-'.Str::ulid(),
             'status' => InboxStatus::Connected,
@@ -370,23 +370,23 @@ final class CommunicationGatewayFlowTest extends TestCase
             'is_default' => true,
         ]);
 
-        return [$office, $inbox];
+        return [$tenant, $inbox];
     }
 
     /** @return array{CommunicationIdentity,CommunicationConversation} */
     private function identityAndConversation(
-        Office $office,
+        Tenant $tenant,
         CommunicationInbox $inbox,
         ConversationStatus $status = ConversationStatus::Open,
     ): array {
         $contact = CommunicationContact::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => 'Cliente',
             'is_active' => true,
         ]);
         $address = '+5511999990002';
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'contact_id' => $contact->id,
             'channel' => CommunicationChannel::Whatsapp,
             'address_encrypted' => $address,
@@ -395,7 +395,7 @@ final class CommunicationGatewayFlowTest extends TestCase
             'is_active' => true,
         ]);
         $conversation = CommunicationConversation::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'inbox_id' => $inbox->id,
             'identity_id' => $identity->id,
             'status' => $status,
@@ -406,14 +406,14 @@ final class CommunicationGatewayFlowTest extends TestCase
     }
 
     private function outboundMessage(
-        Office $office,
+        Tenant $tenant,
         CommunicationInbox $inbox,
         CommunicationIdentity $identity,
         CommunicationConversation $conversation,
         string $suffix,
     ): CommunicationMessage {
         return CommunicationMessage::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'inbox_id' => $inbox->id,
             'conversation_id' => $conversation->id,
             'identity_id' => $identity->id,
@@ -429,7 +429,7 @@ final class CommunicationGatewayFlowTest extends TestCase
     }
 
     private function outbox(
-        Office $office,
+        Tenant $tenant,
         CommunicationInbox $inbox,
         CommunicationMessage $message,
         string $commandId,
@@ -442,7 +442,7 @@ final class CommunicationGatewayFlowTest extends TestCase
         ];
 
         return CommunicationOutboxEntry::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'inbox_id' => $inbox->id,
             'message_id' => $message->id,
             'command_id' => $commandId,

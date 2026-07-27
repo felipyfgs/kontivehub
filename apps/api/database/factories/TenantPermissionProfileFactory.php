@@ -3,7 +3,7 @@
 namespace Database\Factories;
 
 use App\Enums\TenantPermission;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\TenantPermissionProfile;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -19,7 +19,7 @@ class TenantPermissionProfileFactory extends Factory
         $suffix = fake()->unique()->bothify('custom-##??');
 
         return [
-            'office_id' => Office::factory(),
+            'tenant_id' => Tenant::factory(),
             'key' => $suffix,
             'name' => 'Perfil '.$suffix,
             'description' => null,
@@ -32,24 +32,24 @@ class TenantPermissionProfileFactory extends Factory
     public function systemOperator(): static
     {
         return $this->state(fn () => [
-            'key' => TenantPermissionProfile::SYSTEM_LEGACY_OPERATOR,
+            'key' => TenantPermissionProfile::SYSTEM_OPERATOR,
             'name' => 'Operador (sistema)',
             'is_system' => true,
             'is_active' => true,
         ])->afterCreating(function (TenantPermissionProfile $profile): void {
-            $profile->syncPermissionKeys(TenantPermission::legacyOperatorSet(), allowSystem: true);
+            $profile->syncPermissionKeys(TenantPermission::operatorSet(), allowSystem: true);
         });
     }
 
     public function systemViewer(): static
     {
         return $this->state(fn () => [
-            'key' => TenantPermissionProfile::SYSTEM_LEGACY_VIEWER,
+            'key' => TenantPermissionProfile::SYSTEM_VIEWER,
             'name' => 'Visualizador (sistema)',
             'is_system' => true,
             'is_active' => true,
         ])->afterCreating(function (TenantPermissionProfile $profile): void {
-            $profile->syncPermissionKeys(TenantPermission::legacyViewerSet(), allowSystem: true);
+            $profile->syncPermissionKeys(TenantPermission::viewerSet(), allowSystem: true);
         });
     }
 
@@ -58,8 +58,8 @@ class TenantPermissionProfileFactory extends Factory
         return $this->state(fn () => ['is_active' => false]);
     }
 
-    public function forOffice(Office $office): static
+    public function forTenant(Tenant $tenant): static
     {
-        return $this->state(fn () => ['office_id' => $office->id]);
+        return $this->state(fn () => ['tenant_id' => $tenant->id]);
     }
 }

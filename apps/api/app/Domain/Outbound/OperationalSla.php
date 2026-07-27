@@ -34,9 +34,9 @@ final readonly class OperationalSla
         }
     }
 
-    public static function fromConfig(?string $officeTimezone = null): self
+    public static function fromConfig(?string $tenantTimezone = null): self
     {
-        $tz = $officeTimezone ?: (string) config('outbound_deadline.timezone', 'America/Sao_Paulo');
+        $tz = $tenantTimezone ?: (string) config('outbound_deadline.timezone', 'America/Sao_Paulo');
         $buffer = (int) config('outbound_deadline.target_buffer_hours', 48);
         if ($buffer < 24) {
             $buffer = 24;

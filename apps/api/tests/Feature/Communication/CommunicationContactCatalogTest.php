@@ -3,7 +3,6 @@
 namespace Tests\Feature\Communication;
 
 use App\Enums\CommunicationChannel;
-use App\Enums\OfficeRole;
 use App\Enums\TenantPermission;
 use App\Enums\TenantRole;
 use App\Events\CommunicationEventCommitted;
@@ -12,11 +11,11 @@ use App\Models\ClientContact;
 use App\Models\CommunicationContact;
 use App\Models\CommunicationIdentity;
 use App\Models\CommunicationIdentityLink;
-use App\Models\Office;
-use App\Models\OfficeMembership;
+use App\Models\Tenant;
+use App\Models\TenantMembership;
 use App\Models\TenantPermissionProfile;
 use App\Models\User;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
@@ -40,26 +39,26 @@ final class CommunicationContactCatalogTest extends TestCase
 
     public function test_index_filters_sort_and_includes_client_names_without_clear_address(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $foreignOffice = Office::factory()->create(['communication_enabled' => true]);
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
-        $foreignAdmin = User::factory()->forOffice($foreignOffice, OfficeRole::Admin)->create();
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $foreignTenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $foreignAdmin = User::factory()->forTenant($foreignTenant, TenantRole::TenantAdmin)->create();
 
         $client = Client::factory()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'display_name' => 'Cliente Alpha',
             'legal_name' => 'Alpha Ltda',
         ]);
         $clientContact = ClientContact::factory()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'name' => 'Maria Contato',
         ]);
 
-        $linked = $this->contact($office, 'Zebra Linked', provisional: false, active: true);
-        $linkedIdentity = $this->identity($office, $linked, '+5511999900001');
+        $linked = $this->contact($tenant, 'Zebra Linked', provisional: false, active: true);
+        $linkedIdentity = $this->identity($tenant, $linked, '+5511999900001');
         CommunicationIdentityLink::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'identity_id' => $linkedIdentity->id,
             'client_id' => $client->id,
             'client_contact_id' => $clientContact->id,
@@ -67,17 +66,17 @@ final class CommunicationContactCatalogTest extends TestCase
             'receives_automatic' => true,
         ]);
 
-        $provisional = $this->contact($office, null, provisional: true, active: true);
-        $this->identity($office, $provisional, '+5511999900002');
+        $provisional = $this->contact($tenant, null, provisional: true, active: true);
+        $this->identity($tenant, $provisional, '+5511999900002');
 
-        $inactive = $this->contact($office, 'Inativo', provisional: false, active: false);
-        $this->identity($office, $inactive, '+5511999900003');
+        $inactive = $this->contact($tenant, 'Inativo', provisional: false, active: false);
+        $this->identity($tenant, $inactive, '+5511999900003');
 
-        $unlinked = $this->contact($office, 'Alpha Unlinked', provisional: false, active: true);
-        $this->identity($office, $unlinked, '+5511999900004');
+        $unlinked = $this->contact($tenant, 'Alpha Unlinked', provisional: false, active: true);
+        $this->identity($tenant, $unlinked, '+5511999900004');
 
-        $foreign = $this->contact($foreignOffice, 'Estrangeiro', provisional: false, active: true);
-        $this->identity($foreignOffice, $foreign, '+5511999900099');
+        $foreign = $this->contact($foreignTenant, 'Estrangeiro', provisional: false, active: true);
+        $this->identity($foreignTenant, $foreign, '+5511999900099');
 
         $this->authenticate($admin);
 
@@ -130,27 +129,26 @@ final class CommunicationContactCatalogTest extends TestCase
 
     public function test_mutations_require_manage_contacts_not_only_manage_inboxes(): void
     {
-        config(['features.canonical_multitenant_rbac.enabled' => true]);
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $viewer = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $inboxManager = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $contactManager = User::factory()->forOffice($office, OfficeRole::Operator)->create();
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $viewer = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $inboxManager = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $contactManager = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
 
-        $this->assignProfile($viewer, $office, [
+        $this->assignProfile($viewer, $tenant, [
             TenantPermission::CommunicationView,
         ]);
-        $this->assignProfile($inboxManager, $office, [
+        $this->assignProfile($inboxManager, $tenant, [
             TenantPermission::CommunicationView,
             TenantPermission::CommunicationManageInboxes,
         ]);
-        $this->assignProfile($contactManager, $office, [
+        $this->assignProfile($contactManager, $tenant, [
             TenantPermission::CommunicationView,
             TenantPermission::CommunicationManageContacts,
         ]);
 
-        $contact = $this->contact($office, 'Alvo', provisional: false, active: true);
-        $identity = $this->identity($office, $contact, '+5511999911111');
-        $client = Client::factory()->create(['office_id' => $office->id]);
+        $contact = $this->contact($tenant, 'Alvo', provisional: false, active: true);
+        $identity = $this->identity($tenant, $contact, '+5511999911111');
+        $client = Client::factory()->create(['tenant_id' => $tenant->id]);
 
         $mutations = [
             fn () => $this->postJson('/api/v1/communication/contacts', [
@@ -208,16 +206,16 @@ final class CommunicationContactCatalogTest extends TestCase
     }
 
     /** @param list<TenantPermission> $permissions */
-    private function assignProfile(User $user, Office $office, array $permissions): void
+    private function assignProfile(User $user, Tenant $tenant, array $permissions): void
     {
-        $profile = TenantPermissionProfile::factory()->forOffice($office)->create();
+        $profile = TenantPermissionProfile::factory()->forTenant($tenant)->create();
         $profile->syncPermissionKeys($permissions);
-        $membership = OfficeMembership::query()->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+        $membership = TenantMembership::query()->withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
             ->where('user_id', $user->id)
             ->firstOrFail();
         $membership->forceFill([
-            'tenant_role' => TenantRole::TenantUser,
+            'role' => TenantRole::TenantUser,
             'permission_profile_id' => $profile->id,
             'authorization_version' => (int) $membership->authorization_version + 1,
         ])->save();
@@ -226,23 +224,23 @@ final class CommunicationContactCatalogTest extends TestCase
     private function authenticate(User $user): void
     {
         Sanctum::actingAs($user);
-        app(CurrentOffice::class)->clear();
+        app(CurrentTenant::class)->clear();
     }
 
-    private function contact(Office $office, ?string $name, bool $provisional, bool $active): CommunicationContact
+    private function contact(Tenant $tenant, ?string $name, bool $provisional, bool $active): CommunicationContact
     {
         return CommunicationContact::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => $name,
             'is_provisional' => $provisional,
             'is_active' => $active,
         ]);
     }
 
-    private function identity(Office $office, CommunicationContact $contact, string $address): CommunicationIdentity
+    private function identity(Tenant $tenant, CommunicationContact $contact, string $address): CommunicationIdentity
     {
         return CommunicationIdentity::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'contact_id' => $contact->id,
             'channel' => CommunicationChannel::Whatsapp,
             'address_encrypted' => $address,

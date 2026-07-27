@@ -36,7 +36,7 @@ final class DefisSpecificDeclarationPostConsultService
                 throw new \RuntimeException('Referência DEFIS ausente.');
             }
             $reference = DefisDeclarationReference::query()->withoutGlobalScopes()
-                ->where('office_id', $request->office->id)->where('client_id', $request->client->id)->find((int) $referenceId);
+                ->where('tenant_id', $request->tenant->id)->where('client_id', $request->client->id)->find((int) $referenceId);
             if ($reference === null) {
                 throw new \RuntimeException('Referência DEFIS indisponível.');
             }
@@ -53,7 +53,7 @@ final class DefisSpecificDeclarationPostConsultService
                 );
                 $digest = hash('sha256', $reference->id.'|'.$document['kind'].'|'.$evidence->content_sha256);
                 $artifact = DefisSpecificDeclarationArtifact::query()->firstOrCreate([
-                    'office_id' => $request->office->id,
+                    'tenant_id' => $request->tenant->id,
                     'client_id' => $request->client->id,
                     'defis_declaration_reference_id' => $reference->id,
                     'kind' => $document['kind'],
@@ -87,7 +87,7 @@ final class DefisSpecificDeclarationPostConsultService
             )];
         } catch (Throwable $e) {
             Log::warning('defis.consdecrec.decode_failed', [
-                'office_id' => $request->office->id,
+                'tenant_id' => $request->tenant->id,
                 'client_id' => $request->client->id,
                 'run_id' => $request->run->id,
                 'code' => 'DEFIS_144_INVALID_RESPONSE',

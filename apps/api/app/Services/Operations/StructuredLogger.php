@@ -19,29 +19,29 @@ final class StructuredLogger
     /**
      * @param  array<string, mixed>  $context
      */
-    public function info(string $event, array $context = [], ?int $officeId = null): void
+    public function info(string $event, array $context = [], ?int $tenantId = null): void
     {
-        $this->write('info', $event, $context, $officeId);
+        $this->write('info', $event, $context, $tenantId);
     }
 
     /**
      * @param  array<string, mixed>  $context
      */
-    public function warning(string $event, array $context = [], ?int $officeId = null): void
+    public function warning(string $event, array $context = [], ?int $tenantId = null): void
     {
-        $this->write('warning', $event, $context, $officeId);
+        $this->write('warning', $event, $context, $tenantId);
     }
 
     /**
      * @param  array<string, mixed>  $context
      */
-    public function error(string $event, array $context = [], ?int $officeId = null, ?Throwable $e = null): void
+    public function error(string $event, array $context = [], ?int $tenantId = null, ?Throwable $e = null): void
     {
         if ($e !== null) {
             $context['exception_class'] = $e::class;
             $context['exception_message'] = LogSanitizer::scrubString($e->getMessage());
         }
-        $this->write('error', $event, $context, $officeId);
+        $this->write('error', $event, $context, $tenantId);
     }
 
     /**
@@ -55,7 +55,7 @@ final class StructuredLogger
         ?int $latencyMs = null,
         ?int $httpStatus = null,
         array $context = [],
-        ?int $officeId = null,
+        ?int $tenantId = null,
     ): void {
         $payload = array_merge($context, [
             'channel' => $channel,
@@ -64,7 +64,7 @@ final class StructuredLogger
             'http_class' => $httpStatus !== null ? $this->httpClass($httpStatus) : null,
         ]);
 
-        $this->write('info', 'ops.external_call', $payload, $officeId);
+        $this->write('info', 'ops.external_call', $payload, $tenantId);
 
         app(OperationsMetrics::class)->increment(
             'ops.external_call',
@@ -92,7 +92,7 @@ final class StructuredLogger
     /**
      * @param  array<string, mixed>  $context
      */
-    private function write(string $level, string $event, array $context, ?int $officeId): void
+    private function write(string $level, string $event, array $context, ?int $tenantId): void
     {
         $safe = LogSanitizer::redact($context);
         $correlationId = $this->audit->correlationId();
@@ -100,7 +100,7 @@ final class StructuredLogger
         $payload = array_merge($safe, [
             'event' => $event,
             'correlation_id' => $correlationId,
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
         ]);
 
         Log::log($level, $event, $payload);

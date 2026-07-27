@@ -7,7 +7,6 @@ use App\DTO\Fiscal\FiscalAdapterRequest;
 use App\DTO\Integra\MitListaApuracoesRequest;
 use App\DTO\Serpro\IntegraResponse;
 use App\Enums\SerproEnvironment;
-use App\Services\Serpro\Catalog\OperationKeyMap;
 
 /**
  * Monta chamada DCTF/MIT via executor central.
@@ -25,25 +24,16 @@ final class DctfwebIntegraCaller
      */
     public function call(
         FiscalAdapterRequest $request,
-        string $solutionCode,
-        string $serviceCode,
-        string $operationCode,
+        string $operationKey,
         array $payload = [],
         ?string $idempotencyKey = null,
     ): IntegraResponse {
-        $operationKey = OperationKeyMap::require(
-            null,
-            $solutionCode,
-            $serviceCode,
-            $operationCode,
-        );
-
         $correlationId = $request->run->correlation_id;
         $idem = $idempotencyKey ?? $request->run->idempotency_key;
-        $idem = 'dctf:'.$idem.':'.$operationCode;
+        $idem = 'dctf:'.$idem.':'.$operationKey;
 
         return $this->operations->execute(
-            office: $request->office,
+            tenant: $request->tenant,
             client: $request->client,
             operationKey: $operationKey,
             businessData: $payload,
@@ -71,9 +61,7 @@ final class DctfwebIntegraCaller
     ): IntegraResponse {
         return $this->call(
             request: $request,
-            solutionCode: DctfwebCodes::SYSTEM_MIT,
-            serviceCode: DctfwebCodes::SERVICE_MIT,
-            operationCode: DctfwebCodes::OP_MIT_LISTAR_APURACOES,
+            operationKey: DctfwebCodes::OPERATION_KEY_MIT_LISTA_APURACOES,
             payload: $filters->toPayload(),
         );
     }

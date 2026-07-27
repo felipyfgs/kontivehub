@@ -11,14 +11,13 @@ import type {
 } from '~/types/api'
 import { CLIENT_TAX_REGIME_ITEMS } from '~/utils/clients-tax-regime'
 import { registrationStatusLabel } from '~/utils/registration-labels'
+import type { ClientDetailTab } from '~/utils/client-detail-tabs'
 
 const props = defineProps<{
   client?: Client | null
   canManageCredentials?: boolean
   canManageClients?: boolean
   formId?: string
-  matrixClientId?: number | null
-  matrixLabel?: string | null
   locked?: boolean
   hideActions?: boolean
   /** Revisão de consulta RFB antes de gravar (campos RFB editáveis). */
@@ -30,7 +29,7 @@ const emit = defineEmits<{
   saved: [payload: {
     id: number
     mode: 'create' | 'edit'
-    section?: 'resumo' | 'certificado'
+    section?: ClientDetailTab
     tax_regime?: string | null
   }]
   cancel: []
@@ -369,11 +368,11 @@ function emptyState() {
 }
 
 function hydrateFromClient(client: Client) {
-  const est = client.establishments?.find(e => e.is_matrix) || client.establishments?.[0]
-  state.legal_name = client.legal_name || client.name || ''
+  const est = client.establishments?.find(e => e.is_headquarters) || client.establishments?.[0]
+  state.legal_name = client.legal_name || ''
   state.display_name = client.display_name || ''
-  state.cnpj = client.cnpj || est?.cnpj || client.root_cnpj || ''
-  state.trade_name = client.trade_name || est?.trade_name || ''
+  state.cnpj = est?.cnpj || client.root_cnpj || ''
+  state.trade_name = est?.trade_name || ''
   state.notes = client.notes || ''
   state.is_active = client.is_active
   state.inactive_reason = client.inactive_reason || ''
@@ -610,10 +609,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
       cnpj: normalizeCnpj(event.data.cnpj || ''),
       trade_name: event.data.trade_name?.trim() || null,
       notes: event.data.notes?.trim() || null,
-      matrix_client_id: props.matrixClientId || null,
-      is_matrix: props.matrixClientId
-        ? false
-        : (establishment?.is_matrix ?? true),
+      is_headquarters: establishment?.is_headquarters ?? true,
       registration_status: establishment?.registration_status ?? registrationStatus.value ?? 'UNKNOWN',
       registration_status_at: establishment?.registration_status_at ?? registrationStatusAt.value,
       registration_status_reason: establishment?.registration_status_reason ?? registrationStatusReason.value,
@@ -662,17 +658,17 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
     })
 
     const clientId = response.data.client.id
-    let section: 'resumo' | 'certificado' = 'resumo'
+    let section: ClientDetailTab = 'cadastro'
 
     if (credentialFile.value) {
       try {
         await api.credentials.activate(clientId, credentialFile.value, event.data.credential_password || '')
-        toast.add({ title: 'Cliente e certificado A1 cadastrados.', color: 'success' })
+        toast.add({ title: 'Cliente e certificado cadastrados.', color: 'success' })
       } catch (caught) {
-        section = 'certificado'
+        section = 'dados-adicionais'
         toast.add({
           title: 'Cliente criado, mas o certificado não foi ativado.',
-          description: apiErrorMessage(caught, 'Revise o PFX e tente novamente na seção Certificado A1.'),
+          description: apiErrorMessage(caught, 'Revise o PFX e tente novamente na seção certificado.'),
           color: 'warning'
         })
       }
@@ -743,14 +739,6 @@ defineExpose({ reset, clearSensitive, saving })
     @submit="onSubmit"
   >
     <div class="min-h-0 flex-1 space-y-4 overflow-y-auto px-0.5 pr-1">
-      <UAlert
-        v-if="!isEdit && matrixClientId"
-        color="primary"
-        variant="subtle"
-        icon="i-lucide-link"
-        title="Filial vinculada à matriz"
-      />
-
       <ShellPanelAccordion
         v-model="formSectionsOpen"
         :items="formSectionItems"
@@ -1297,7 +1285,7 @@ defineExpose({ reset, clearSensitive, saving })
             <template v-if="canManageCredentials">
               <USeparator
                 class="my-4"
-                label="Certificado A1 (opcional)"
+                label="certificado (opcional)"
               />
               <div class="grid gap-4 sm:grid-cols-2">
                 <UFormField

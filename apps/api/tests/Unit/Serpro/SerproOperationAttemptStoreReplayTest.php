@@ -4,8 +4,8 @@ namespace Tests\Unit\Serpro;
 
 use App\DTO\Serpro\IntegraResponse;
 use App\Enums\SerproAttemptState;
-use App\Models\Office;
 use App\Models\SerproOperationAttempt;
+use App\Models\Tenant;
 use App\Services\Serpro\SerproAttemptReplayPolicy;
 use App\Services\Serpro\SerproOperationAttemptStore;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -27,11 +27,11 @@ class SerproOperationAttemptStoreReplayTest extends TestCase
 
     public function test_token_missing_terminal_is_reclaimed_for_dispatch(): void
     {
-        $office = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
         $key = 'idem-token-missing-'.uniqid();
 
         SerproOperationAttempt::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'environment' => 'PRODUCTION',
             'operation_key' => 'procuracoes.obter',
             'entity_key' => 'client:5',
@@ -48,7 +48,7 @@ class SerproOperationAttemptStoreReplayTest extends TestCase
         ]);
 
         $result = app(SerproOperationAttemptStore::class)->beginOrReplay(
-            officeId: (int) $office->id,
+            tenantId: (int) $tenant->id,
             environment: 'PRODUCTION',
             operationKey: 'procuracoes.obter',
             entityKey: 'client:5',
@@ -68,11 +68,11 @@ class SerproOperationAttemptStoreReplayTest extends TestCase
 
     public function test_request_failed_terminal_stays_sticky_replay(): void
     {
-        $office = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
         $key = 'idem-request-failed-'.uniqid();
 
         SerproOperationAttempt::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'environment' => 'PRODUCTION',
             'operation_key' => 'procuracoes.obter',
             'entity_key' => 'client:5',
@@ -89,7 +89,7 @@ class SerproOperationAttemptStoreReplayTest extends TestCase
         ]);
 
         $result = app(SerproOperationAttemptStore::class)->beginOrReplay(
-            officeId: (int) $office->id,
+            tenantId: (int) $tenant->id,
             environment: 'PRODUCTION',
             operationKey: 'procuracoes.obter',
             entityKey: 'client:5',
@@ -107,11 +107,11 @@ class SerproOperationAttemptStoreReplayTest extends TestCase
 
     public function test_rate_limit_local_is_reclaimed(): void
     {
-        $office = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
         $key = 'idem-rate-limit-'.uniqid();
 
         SerproOperationAttempt::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'environment' => 'PRODUCTION',
             'operation_key' => 'procuracoes.obter',
             'entity_key' => 'client:5',
@@ -126,7 +126,7 @@ class SerproOperationAttemptStoreReplayTest extends TestCase
         ]);
 
         $result = app(SerproOperationAttemptStore::class)->beginOrReplay(
-            officeId: (int) $office->id,
+            tenantId: (int) $tenant->id,
             environment: 'PRODUCTION',
             operationKey: 'procuracoes.obter',
             entityKey: 'client:5',
@@ -141,12 +141,12 @@ class SerproOperationAttemptStoreReplayTest extends TestCase
 
     public function test_cross_tenant_idempotency_still_blocked(): void
     {
-        $owner = Office::factory()->create();
-        $other = Office::factory()->create();
+        $owner = Tenant::factory()->create();
+        $other = Tenant::factory()->create();
         $key = 'idem-cross-tenant-'.uniqid();
 
         SerproOperationAttempt::query()->create([
-            'office_id' => $owner->id,
+            'tenant_id' => $owner->id,
             'environment' => 'PRODUCTION',
             'operation_key' => 'procuracoes.obter',
             'entity_key' => 'client:5',
@@ -160,7 +160,7 @@ class SerproOperationAttemptStoreReplayTest extends TestCase
         ]);
 
         $result = app(SerproOperationAttemptStore::class)->beginOrReplay(
-            officeId: (int) $other->id,
+            tenantId: (int) $other->id,
             environment: 'PRODUCTION',
             operationKey: 'procuracoes.obter',
             entityKey: 'client:5',
@@ -176,9 +176,9 @@ class SerproOperationAttemptStoreReplayTest extends TestCase
 
     public function test_abandon_local_precondition_deletes_attempt(): void
     {
-        $office = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
         $attempt = SerproOperationAttempt::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'environment' => 'PRODUCTION',
             'operation_key' => 'procuracoes.obter',
             'entity_key' => 'client:3',
@@ -193,11 +193,11 @@ class SerproOperationAttemptStoreReplayTest extends TestCase
         $this->assertNull(SerproOperationAttempt::query()->withoutGlobalScopes()->find($attempt->id));
     }
 
-    public function test_purge_non_sticky_token_failures_for_office(): void
+    public function test_purge_non_sticky_token_failures_for_tenant(): void
     {
-        $office = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
         SerproOperationAttempt::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'environment' => 'PRODUCTION',
             'operation_key' => 'procuracoes.obter',
             'entity_key' => 'client:3',
@@ -209,7 +209,7 @@ class SerproOperationAttemptStoreReplayTest extends TestCase
             'acknowledged_at' => now(),
         ]);
         SerproOperationAttempt::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'environment' => 'PRODUCTION',
             'operation_key' => 'pgdasd.consultar',
             'entity_key' => 'client:3',
@@ -222,22 +222,22 @@ class SerproOperationAttemptStoreReplayTest extends TestCase
         ]);
 
         $deleted = app(SerproOperationAttemptStore::class)
-            ->purgeNonStickyTokenFailures((int) $office->id, 'PRODUCTION');
+            ->purgeNonStickyTokenFailures((int) $tenant->id, 'PRODUCTION');
 
         $this->assertSame(1, $deleted);
         $this->assertSame(
             1,
-            SerproOperationAttempt::query()->withoutGlobalScopes()->where('office_id', $office->id)->count(),
+            SerproOperationAttempt::query()->withoutGlobalScopes()->where('tenant_id', $tenant->id)->count(),
         );
     }
 
     public function test_sitfis_success_with_omitted_protocol_is_reclaimed(): void
     {
-        $office = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
         $key = 'idem-sitfis-omitted-'.uniqid();
 
         SerproOperationAttempt::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'environment' => 'TRIAL',
             'operation_key' => 'sitfis.solicitar_protocolo',
             'entity_key' => 'client:1',
@@ -268,7 +268,7 @@ class SerproOperationAttemptStoreReplayTest extends TestCase
         ]);
 
         $result = app(SerproOperationAttemptStore::class)->beginOrReplay(
-            officeId: (int) $office->id,
+            tenantId: (int) $tenant->id,
             environment: 'TRIAL',
             operationKey: 'sitfis.solicitar_protocolo',
             entityKey: 'client:1',
@@ -284,10 +284,10 @@ class SerproOperationAttemptStoreReplayTest extends TestCase
 
     public function test_sitfis_acknowledge_preserves_long_protocol_scalar(): void
     {
-        $office = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
         $protocol = str_repeat('A', 128);
         $attempt = SerproOperationAttempt::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'environment' => 'TRIAL',
             'operation_key' => 'sitfis.solicitar_protocolo',
             'entity_key' => 'client:1',
@@ -326,11 +326,11 @@ class SerproOperationAttemptStoreReplayTest extends TestCase
 
     public function test_sitfis_304_ack_canonicalizes_protocol_from_etag_into_dados(): void
     {
-        $office = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
         $protocol = str_repeat('C', 140);
         $expires = 'Tue, 21 Jul 2026 23:59:59 GMT';
         $attempt = SerproOperationAttempt::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'environment' => 'TRIAL',
             'operation_key' => 'sitfis.solicitar_protocolo',
             'entity_key' => 'client:1',
@@ -368,10 +368,10 @@ class SerproOperationAttemptStoreReplayTest extends TestCase
 
     public function test_sitfis_to_response_restores_etag_from_dados_without_header(): void
     {
-        $office = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
         $protocol = str_repeat('D', 96);
         $attempt = SerproOperationAttempt::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'environment' => 'TRIAL',
             'operation_key' => 'sitfis.solicitar_protocolo',
             'entity_key' => 'client:1',

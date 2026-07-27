@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { OperationalTaskSummary, TaskStatus } from '../../app/types/work'
+import type { WorkTaskSummary, TaskStatus } from '../../app/types/work'
 import {
   WORK_KANBAN_COLUMNS,
   actionForKanbanDrop,
@@ -11,7 +11,7 @@ import {
   kanbanTruncationMessage
 } from '../../app/utils/work-kanban-transition'
 
-function task(partial: Partial<OperationalTaskSummary> & { id: number, status: TaskStatus }): OperationalTaskSummary {
+function task(partial: Partial<WorkTaskSummary> & { id: number, status: TaskStatus }): WorkTaskSummary {
   return {
     title: `Tarefa ${partial.id}`,
     is_critical: false,

@@ -2,15 +2,15 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['office_id', 'inbox_id', 'office_membership_id', 'is_active'])]
+#[Fillable(['tenant_id', 'inbox_id', 'tenant_membership_id', 'is_active'])]
 class CommunicationInboxMember extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {
@@ -24,6 +24,6 @@ class CommunicationInboxMember extends Model
 
     public function membership(): BelongsTo
     {
-        return $this->belongsTo(OfficeMembership::class, 'office_membership_id');
+        return $this->belongsTo(TenantMembership::class, 'tenant_membership_id');
     }
 }

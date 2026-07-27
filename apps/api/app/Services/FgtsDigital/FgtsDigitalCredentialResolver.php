@@ -5,26 +5,25 @@ namespace App\Services\FgtsDigital;
 use App\Enums\CredentialStatus;
 use App\Enums\FgtsDigitalCredentialSource;
 use App\Enums\FgtsDigitalRepresentationStatus;
-use App\Enums\OfficeCredentialPurpose;
 use App\Models\Client;
 use App\Models\ClientCredential;
 use App\Models\FgtsDigitalRepresentation;
-use App\Models\Office;
-use App\Models\OfficeCredential;
+use App\Models\Tenant;
+use App\Models\TenantCredential;
 use App\Services\Certificates\CredentialService;
-use App\Services\Certificates\OfficeCredentialService;
+use App\Services\Certificates\TenantCredentialService;
 
 final class FgtsDigitalCredentialResolver
 {
     public function __construct(
         private readonly CredentialService $clientCredentials,
-        private readonly OfficeCredentialService $officeCredentials,
+        private readonly TenantCredentialService $tenantCredentials,
     ) {}
 
     /**
      * @return array{source:FgtsDigitalCredentialSource,fingerprint:string,profile_type:string,pfx:?string,password:?string,representation_id:?int}|null
      */
-    public function resolve(Office $office, Client $client, bool $includeMaterial = true): ?array
+    public function resolve(Tenant $tenant, Client $client, bool $includeMaterial = true): ?array
     {
         if ((string) config('fgts_digital.driver') === 'fixture') {
             return [
@@ -39,7 +38,7 @@ final class FgtsDigitalCredentialResolver
 
         $direct = ClientCredential::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('status', CredentialStatus::Active->value)
             ->first();
@@ -57,15 +56,15 @@ final class FgtsDigitalCredentialResolver
             }
         }
 
-        if (! (bool) config('fgts_digital.office_credential_enabled', false)) {
+        if (! (bool) config('fgts_digital.tenant_credential_enabled', false)) {
             return null;
         }
 
         $representation = FgtsDigitalRepresentation::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
-            ->where('credential_source', FgtsDigitalCredentialSource::Office->value)
+            ->where('credential_source', FgtsDigitalCredentialSource::Tenant->value)
             ->where('target_identifier_hash', self::identifierHash((string) $client->root_cnpj))
             ->where('status', FgtsDigitalRepresentationStatus::Active->value)
             ->orderByDesc('id')
@@ -74,26 +73,25 @@ final class FgtsDigitalCredentialResolver
             return null;
         }
 
-        $credential = OfficeCredential::query()
+        $credential = TenantCredential::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
-            ->where('purpose', OfficeCredentialPurpose::CanonicalECnpjA1->value)
+            ->where('tenant_id', $tenant->id)
             ->where('status', CredentialStatus::Active->value)
             ->first();
         if ($credential === null
-            || ($representation->office_credential_id !== null
-                && (int) $representation->office_credential_id !== (int) $credential->id)
+            || ($representation->tenant_credential_id !== null
+                && (int) $representation->tenant_credential_id !== (int) $credential->id)
         ) {
             return null;
         }
 
-        $material = $includeMaterial ? $this->officeCredentials->loadPfxMaterial($credential) : null;
+        $material = $includeMaterial ? $this->tenantCredentials->loadPfxMaterial($credential) : null;
         if ($includeMaterial && $material === null) {
             return null;
         }
 
         return [
-            'source' => FgtsDigitalCredentialSource::Office,
+            'source' => FgtsDigitalCredentialSource::Tenant,
             'fingerprint' => (string) $credential->fingerprint_sha256,
             'profile_type' => (string) $representation->profile_type,
             'pfx' => $material['pfx'] ?? null,

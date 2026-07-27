@@ -3,7 +3,7 @@
 namespace App\Services\Integra\Parcelamento;
 
 use App\Models\Client;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\FiscalMonitoring\FiscalMonitoringRunService;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -21,13 +21,13 @@ final class ParcelamentoMonitorAllService
      * }
      */
     public function enqueueClient(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         ?int $actorId = null,
         ?string $correlationId = null,
         bool $dispatch = true,
     ): array {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new RuntimeException('Cliente não pertence ao escritório ativo.');
         }
 
@@ -40,7 +40,7 @@ final class ParcelamentoMonitorAllService
         foreach (ParcelamentoServiceCatalog::supportedModalities() as $modality) {
             try {
                 $run = $this->runs->enqueueManual(
-                    office: $office,
+                    tenant: $tenant,
                     client: $client,
                     systemCode: ParcelamentoServiceCatalog::SOLUTION,
                     serviceCode: $modality->value,

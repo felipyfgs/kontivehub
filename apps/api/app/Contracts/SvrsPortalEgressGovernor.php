@@ -39,18 +39,18 @@ interface SvrsPortalEgressGovernor
         ?string $templateFingerprint = null,
         ?int $retryAfterSeconds = null,
         ?int $userId = null,
-        ?int $officeId = null,
+        ?int $tenantId = null,
     ): void;
 
     /**
      * Fecha breaker somente após canário válido (ou desligamento admin explícito com motivo).
      */
-    public function closeBreakerAfterCanarySuccess(?int $userId = null, ?int $officeId = null): void;
+    public function closeBreakerAfterCanarySuccess(?int $userId = null, ?int $tenantId = null): void;
 
     /**
      * Estende cooldown (ADMIN) — nunca antecipa next_probe_at.
      */
-    public function extendCooldown(int $additionalSeconds, int $userId, ?int $officeId = null): void;
+    public function extendCooldown(int $additionalSeconds, int $userId, ?int $tenantId = null): void;
 
     /**
      * @return array{
@@ -75,7 +75,7 @@ interface SvrsPortalEgressGovernor
     /**
      * @return array{ok: bool, reason: string}
      */
-    public function selectCanary(string $accessKeyMask, string $accessKeyHash, int $userId, ?int $officeId = null): array;
+    public function selectCanary(string $accessKeyMask, string $accessKeyHash, int $userId, ?int $tenantId = null): array;
 
     public function assertChannelMayEnable(): void;
 }

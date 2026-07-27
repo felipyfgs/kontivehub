@@ -2,11 +2,11 @@
 
 namespace App\Http\Requests\Clients;
 
-use App\Enums\OfficeRole;
 use App\Enums\RegistrationStatus;
 use App\Enums\TaxRegimeCode;
+use App\Enums\TenantRole;
 use App\Rules\ValidCnpj;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -15,16 +15,6 @@ class StoreClientRequest extends FormRequest
     public function authorize(): bool
     {
         return true; // policy no controller
-    }
-
-    protected function prepareForValidation(): void
-    {
-        if (array_key_exists('tax_regime', $this->all())) {
-            $raw = $this->input('tax_regime');
-            if ($raw === null || is_string($raw)) {
-                $this->merge(['tax_regime' => TaxRegimeCode::fromInput($raw)?->value]);
-            }
-        }
     }
 
     /**
@@ -47,11 +37,9 @@ class StoreClientRequest extends FormRequest
             'responsible_qualification_code' => ['nullable', 'string', 'max:16'],
             'responsible_qualification_name' => ['nullable', 'string', 'max:255'],
             'tax_regime' => ['nullable', 'string', Rule::in(TaxRegimeCode::currentProjectionValues())],
-            // vínculo matriz → filial (cadastro próprio; só o link)
-            'matrix_client_id' => ['nullable', 'integer', 'min:1'],
-            // primeiro estabelecimento (1:1 com o cliente)
+            // primeiro estabelecimento
             'trade_name' => ['nullable', 'string', 'max:255'],
-            'is_matrix' => ['sometimes', 'boolean'],
+            'is_headquarters' => ['sometimes', 'boolean'],
             'establishment_is_active' => ['sometimes', 'boolean'],
             'registration_status' => ['nullable', 'string', Rule::enum(RegistrationStatus::class)],
             'registration_status_at' => ['nullable', 'date'],
@@ -103,17 +91,17 @@ class StoreClientRequest extends FormRequest
             'initial_contact.is_primary' => ['sometimes', 'boolean'],
             'initial_contact.receives_alerts' => ['sometimes', 'boolean'],
             'initial_contact.notes' => ['nullable', 'string'],
-            'initial_contact.office_id' => ['prohibited'],
+            'initial_contact.tenant_id' => ['prohibited'],
             'initial_contact.client_id' => ['prohibited'],
             'custom_fields' => ['nullable', 'array', 'max:20'],
             'custom_fields.*.label' => ['required', 'string', 'max:100'],
             'custom_fields.*.type' => ['required', 'string', Rule::in(['TEXT', 'SECRET'])],
             'custom_fields.*.value' => ['nullable', 'string', 'max:10000'],
-            'custom_fields.*.office_id' => ['prohibited'],
+            'custom_fields.*.tenant_id' => ['prohibited'],
             'custom_fields.*.client_id' => ['prohibited'],
-            // office_id / proveniência do cliente nunca são autoridade do navegador
+            // tenant_id / proveniência do cliente nunca são autoridade do navegador
             // (campos ausentes em validated() → ignorados; proibidos se enviados como autoridade)
-            'office_id' => ['prohibited'],
+            'tenant_id' => ['prohibited'],
             'root_cnpj' => ['prohibited'],
             'registration_source' => ['prohibited'],
             'source' => ['prohibited'],
@@ -139,7 +127,7 @@ class StoreClientRequest extends FormRequest
             $hasSecret = collect($this->input('custom_fields', []))
                 ->contains(fn ($field): bool => is_array($field) && ($field['type'] ?? null) === 'SECRET');
 
-            if ($hasSecret && app(CurrentOffice::class)->role() !== OfficeRole::Admin) {
+            if ($hasSecret && app(CurrentTenant::class)->role() !== TenantRole::TenantAdmin) {
                 $validator->errors()->add(
                     'custom_fields',
                     'Somente administradores podem cadastrar campos secretos.'

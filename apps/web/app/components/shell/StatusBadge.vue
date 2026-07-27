@@ -16,7 +16,7 @@ const color = computed(() => {
   if (['ACTIVE', 'SUBSTITUTE', 'JUDICIAL', 'AUTHORIZED'].includes(s)) {
     return 'success' as const
   }
-  if (['CANCELLED', 'CANCELED', 'SUPERSEDED', 'REPLACED', 'DENIED', 'DENEGADA'].includes(s)) {
+  if (['CANCELLED', 'CANCELED', 'SUPERSEDED', 'DENIED', 'DENEGADA'].includes(s)) {
     return 'error' as const
   }
   if (['UNKNOWN', 'REVIEW'].includes(s)) {

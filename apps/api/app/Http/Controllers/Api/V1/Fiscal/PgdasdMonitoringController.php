@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api\V1\Fiscal;
 
 use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
-use App\Http\Middleware\EnsureOfficeContext;
+use App\Http\Middleware\EnsureTenantContext;
 use App\Models\Client;
 use App\Models\PgdasdArtifact;
 use App\Models\User;
@@ -12,7 +12,7 @@ use App\Services\Authorization\TenantAuthorization;
 use App\Services\Fiscal\SimplesMei\Pgdasd\PgdasdCommunicationService;
 use App\Services\Fiscal\SimplesMei\Pgdasd\PgdasdMonitoringQueryService;
 use App\Services\FiscalMonitoring\FiscalEvidenceStore;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use App\Support\FeatureFlags;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,7 +24,7 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 class PgdasdMonitoringController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly PgdasdMonitoringQueryService $queries,
         private readonly PgdasdCommunicationService $communication,
         private readonly FiscalEvidenceStore $evidenceStore,
@@ -34,11 +34,11 @@ class PgdasdMonitoringController extends Controller
     public function history(Request $request, int $client): JsonResponse
     {
         $this->assertCanRead();
-        if ($rejection = $this->rejectClientOfficeId($request)) {
+        if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
-        $office = $this->currentOffice->office();
-        $model = $this->findClient($office->id, $client);
+        $tenant = $this->currentTenant->tenant();
+        $model = $this->findClient($tenant->id, $client);
         if ($model === null) {
             // 404 sem revelar existência em outro tenant
             return response()->json([
@@ -53,7 +53,7 @@ class PgdasdMonitoringController extends Controller
         $yearInt = isset($validated['year']) ? (int) $validated['year'] : null;
 
         try {
-            $data = $this->queries->history($office, $model, $yearInt);
+            $data = $this->queries->history($tenant, $model, $yearInt);
         } catch (RuntimeException $e) {
             return response()->json(['message' => $e->getMessage(), 'code' => 'HISTORY_ERROR'], 422);
         }
@@ -64,12 +64,12 @@ class PgdasdMonitoringController extends Controller
     public function collectDocuments(Request $request, int $client): JsonResponse
     {
         $this->assertCanSync();
-        if ($rejection = $this->rejectClientOfficeId($request)) {
+        if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
         $this->assertModuleEnabled();
-        $office = $this->currentOffice->office();
-        $model = $this->findClient($office->id, $client);
+        $tenant = $this->currentTenant->tenant();
+        $model = $this->findClient($tenant->id, $client);
         if ($model === null) {
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
@@ -92,7 +92,7 @@ class PgdasdMonitoringController extends Controller
 
         try {
             $run = $this->queries->enqueueDocumentCollect(
-                $office,
+                $tenant,
                 $model,
                 $operation,
                 $params,
@@ -111,18 +111,18 @@ class PgdasdMonitoringController extends Controller
     public function downloadArtifact(Request $request, int $client, int $artifact): Response|JsonResponse
     {
         $this->assertCanRead();
-        if ($rejection = $this->rejectClientOfficeId($request)) {
+        if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
-        $office = $this->currentOffice->office();
-        $model = $this->findClient($office->id, $client);
+        $tenant = $this->currentTenant->tenant();
+        $model = $this->findClient($tenant->id, $client);
         if ($model === null) {
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
 
-        $pgArtifact = $this->queries->findArtifact($office, $model, $artifact);
+        $pgArtifact = $this->queries->findArtifact($tenant, $model, $artifact);
 
-        return $this->streamArtifact($office->id, $pgArtifact);
+        return $this->streamArtifact($tenant->id, $pgArtifact);
     }
 
     /**
@@ -131,16 +131,16 @@ class PgdasdMonitoringController extends Controller
     public function downloadArtifactById(Request $request, int $artifact): Response|JsonResponse
     {
         $this->assertCanRead();
-        if ($rejection = $this->rejectClientOfficeId($request)) {
+        if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
-        $office = $this->currentOffice->office();
-        $pgArtifact = $this->queries->findArtifactForOffice($office, $artifact);
+        $tenant = $this->currentTenant->tenant();
+        $pgArtifact = $this->queries->findArtifactForTenant($tenant, $artifact);
 
-        return $this->streamArtifact((int) $office->id, $pgArtifact);
+        return $this->streamArtifact((int) $tenant->id, $pgArtifact);
     }
 
-    private function streamArtifact(int $officeId, ?PgdasdArtifact $pgArtifact): Response|JsonResponse
+    private function streamArtifact(int $tenantId, ?PgdasdArtifact $pgArtifact): Response|JsonResponse
     {
         if ($pgArtifact === null) {
             return response()->json(['message' => 'Artefato não encontrado.'], 404);
@@ -154,7 +154,7 @@ class PgdasdMonitoringController extends Controller
         try {
             $bytes = $this->evidenceStore->readAuthorized(
                 $pgArtifact->evidenceArtifact,
-                $officeId,
+                $tenantId,
             );
         } catch (\Throwable) {
             return response()->json(['message' => 'Artefato não encontrado.'], 404);
@@ -206,13 +206,13 @@ class PgdasdMonitoringController extends Controller
 
     public function updatePreferences(Request $request, int $client): JsonResponse
     {
-        // Papel antes da validação — VIEWER deve receber 403, não 422 de campos.
+        // Autorização antes da validação: ausência de permissão deve retornar 403.
         $this->assertCanManageCommunications();
-        if ($rejection = $this->rejectClientOfficeId($request)) {
+        if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
-        $office = $this->currentOffice->office();
-        $model = $this->findClient($office->id, $client);
+        $tenant = $this->currentTenant->tenant();
+        $model = $this->findClient($tenant->id, $client);
         if ($model === null) {
             return response()->json([
                 'message' => 'Cliente não encontrado no escritório atual.',
@@ -234,7 +234,7 @@ class PgdasdMonitoringController extends Controller
 
         try {
             $this->communication->updatePreferences(
-                $office,
+                $tenant,
                 $model,
                 $user,
                 $data,
@@ -251,17 +251,17 @@ class PgdasdMonitoringController extends Controller
         }
 
         return response()->json([
-            'data' => $this->communication->summary($office, $model),
+            'data' => $this->communication->summary($tenant, $model),
         ]);
     }
 
     public function batchPreferences(Request $request): JsonResponse
     {
         $this->assertCanManageCommunications();
-        if ($rejection = $this->rejectClientOfficeId($request)) {
+        if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
         $data = $request->validate([
             'client_ids' => ['required', 'array', 'min:1', 'max:100'],
             'client_ids.*' => ['integer', 'distinct'],
@@ -275,7 +275,7 @@ class PgdasdMonitoringController extends Controller
 
         try {
             $prefs = $this->communication->batchSetAutomatic(
-                $office,
+                $tenant,
                 $user,
                 $data['client_ids'],
                 (bool) $data['automatic_requested'],
@@ -287,7 +287,7 @@ class PgdasdMonitoringController extends Controller
         }
 
         $summaries = $this->communication->summariesForClients(
-            $office,
+            $tenant,
             array_map(static fn ($preference): int => (int) $preference->client_id, $prefs),
         );
 
@@ -300,45 +300,45 @@ class PgdasdMonitoringController extends Controller
     public function preview(Request $request, int $client): JsonResponse
     {
         $this->assertCanRead();
-        if ($rejection = $this->rejectClientOfficeId($request)) {
+        if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
-        $office = $this->currentOffice->office();
-        $model = $this->findClient($office->id, $client);
+        $tenant = $this->currentTenant->tenant();
+        $model = $this->findClient($tenant->id, $client);
         if ($model === null) {
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
 
         return response()->json([
-            'data' => $this->communication->preview($office, $model),
+            'data' => $this->communication->preview($tenant, $model),
         ]);
     }
 
     public function tracking(Request $request, int $client): JsonResponse
     {
         $this->assertCanRead();
-        if ($rejection = $this->rejectClientOfficeId($request)) {
+        if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
-        $office = $this->currentOffice->office();
-        $model = $this->findClient($office->id, $client);
+        $tenant = $this->currentTenant->tenant();
+        $model = $this->findClient($tenant->id, $client);
         if ($model === null) {
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
 
         return response()->json([
-            'data' => $this->communication->tracking($office, $model),
+            'data' => $this->communication->tracking($tenant, $model),
         ]);
     }
 
     public function send(Request $request, int $client): JsonResponse
     {
         $this->assertCanSync();
-        if ($rejection = $this->rejectClientOfficeId($request)) {
+        if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
-        $office = $this->currentOffice->office();
-        $model = $this->findClient($office->id, $client);
+        $tenant = $this->currentTenant->tenant();
+        $model = $this->findClient($tenant->id, $client);
         if ($model === null) {
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
@@ -346,7 +346,7 @@ class PgdasdMonitoringController extends Controller
         $actor = $request->user();
         $input = $request->validate(['period_key' => ['sometimes', 'string', 'regex:/^\d{4}-\d{2}$/']]);
         try {
-            $data = $this->communication->requestSend($office, $model, $actor, $input['period_key'] ?? null);
+            $data = $this->communication->requestSend($tenant, $model, $actor, $input['period_key'] ?? null);
         } catch (HttpException $e) {
             return response()->json(['message' => $e->getMessage()], $e->getStatusCode());
         }
@@ -354,43 +354,43 @@ class PgdasdMonitoringController extends Controller
         return response()->json(['data' => $data]);
     }
 
-    private function findClient(int $officeId, int $clientId): ?Client
+    private function findClient(int $tenantId, int $clientId): ?Client
     {
         return Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereKey($clientId)
             ->first();
     }
 
-    private function rejectClientOfficeId(Request $request): ?JsonResponse
+    private function rejectClientTenantId(Request $request): ?JsonResponse
     {
         $suppliedAtTopLevel = $request->attributes->get(
-            EnsureOfficeContext::CLIENT_OFFICE_ID_SUPPLIED,
+            EnsureTenantContext::CLIENT_TENANT_ID_SUPPLIED,
         ) === true;
-        $suppliedNested = $this->containsOfficeIdKey($request->query->all())
-            || $this->containsOfficeIdKey($request->request->all())
+        $suppliedNested = $this->containsTenantIdKey($request->query->all())
+            || $this->containsTenantIdKey($request->request->all())
             || ($request->isJson() && $request->json() !== null
-                && $this->containsOfficeIdKey($request->json()->all()));
+                && $this->containsTenantIdKey($request->json()->all()));
 
         if (! $suppliedAtTopLevel && ! $suppliedNested) {
             return null;
         }
 
         return response()->json([
-            'message' => 'office_id não é aceito; o escritório é obtido do contexto autenticado.',
-            'code' => 'CLIENT_OFFICE_ID_REJECTED',
+            'message' => 'tenant_id não é aceito; o escritório é obtido do contexto autenticado.',
+            'code' => 'CLIENT_TENANT_ID_REJECTED',
         ], 422);
     }
 
     /** @param array<array-key, mixed> $values */
-    private function containsOfficeIdKey(array $values): bool
+    private function containsTenantIdKey(array $values): bool
     {
         foreach ($values as $key => $value) {
-            if (is_string($key) && strtolower($key) === 'office_id') {
+            if (is_string($key) && strtolower($key) === 'tenant_id') {
                 return true;
             }
-            if (is_array($value) && $this->containsOfficeIdKey($value)) {
+            if (is_array($value) && $this->containsTenantIdKey($value)) {
                 return true;
             }
         }
@@ -423,8 +423,8 @@ class PgdasdMonitoringController extends Controller
 
     private function assertModuleEnabled(): void
     {
-        $office = $this->currentOffice->office();
-        if (! FeatureFlags::isModuleEnabled('simples_mei', $office->id)
+        $tenant = $this->currentTenant->tenant();
+        if (! FeatureFlags::isModuleEnabled('simples_mei', $tenant->id)
             && ! (bool) config('fiscal_monitoring.enabled', false)) {
             abort(403, 'Módulo simples_mei desabilitado.');
         }

@@ -8,7 +8,7 @@ use App\Models\User;
 use App\Services\Authorization\TenantAuthorization;
 use App\Services\Operations\Inbox\InboxCapabilities;
 use App\Services\Operations\OperationsInboxBuilder;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -16,13 +16,13 @@ class OperationsInboxController extends Controller
 {
     public function __invoke(
         Request $request,
-        CurrentOffice $currentOffice,
+        CurrentTenant $currentTenant,
         TenantAuthorization $authorization,
         OperationsInboxBuilder $inbox,
     ): JsonResponse {
-        // office_id do cliente é ignorado; sempre o escritório da sessão.
-        $officeId = $currentOffice->id();
-        abort_if($officeId === null, 403);
+        // tenant_id do cliente é ignorado; sempre o escritório da sessão.
+        $tenantId = $currentTenant->id();
+        abort_if($tenantId === null, 403);
 
         $severity = $request->query('severity');
         $type = $request->query('type');
@@ -41,7 +41,7 @@ class OperationsInboxController extends Controller
         $cursor = is_string($cursor) ? $cursor : null;
 
         $payload = $inbox->build(
-            officeId: $officeId,
+            tenantId: $tenantId,
             capabilities: $this->capabilities($request, $authorization),
             severity: $severity,
             type: $type,

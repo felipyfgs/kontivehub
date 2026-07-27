@@ -2,7 +2,6 @@
 
 namespace App\Services\FiscalMonitoring;
 
-use App\Enums\DctfwebCategory;
 use App\Enums\FiscalControlModule;
 use App\Enums\FiscalOperationClass;
 use App\Enums\FiscalRunStatus;
@@ -18,9 +17,9 @@ use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
 use App\Models\FiscalMonitoringSchedule;
 use App\Models\MonitorCommercialLedgerEntry;
-use App\Models\Office;
-use App\Models\OfficeMonitorSchedulePolicy;
-use App\Models\OfficeSubscription;
+use App\Models\Tenant;
+use App\Models\TenantMonitorSchedulePolicy;
+use App\Models\TenantSubscription;
 use App\Services\Esocial\EsocialBxReadinessService;
 use App\Services\Fiscal\Availability\FiscalModuleAvailabilityService;
 use App\Services\Fiscal\Dctfweb\DctfwebPeriod;
@@ -33,7 +32,6 @@ use App\Services\Usage\MonitorCommercialLedgerService;
 use App\Services\Usage\SubscriptionPeriodService;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Cache\LockTimeoutException;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -41,7 +39,7 @@ use Illuminate\Support\Facades\DB;
  * Espalhamento determinístico, fila justa, limites global/tenant.
  * Revalidação completa ocorre no job imediatamente antes da chamada.
  *
- * Evolução comercial (flag): política mensal office+monitor (dia 1–28),
+ * Política mensal tenant+monitor (dia 1–28),
  * um item por cliente+monitor+período, spillover nos dias seguintes via Horizon.
  */
 final class FiscalMonitoringScheduler
@@ -63,19 +61,13 @@ final class FiscalMonitoringScheduler
             || (bool) config('fiscal_monitoring.enabled', false);
     }
 
-    public function isCommercialMonthlyEnabled(): bool
-    {
-        return $this->isCoreEnabled()
-            && (bool) config('fiscal_monitoring.scheduler.commercial_monthly_enabled', false);
-    }
-
     /**
-     * Minuto preferencial determinístico 0–59 (office + client + system + service).
+     * Minuto preferencial determinístico 0–59 (tenant + client + system + service).
      */
-    public function preferredMinute(int $officeId, int $clientId, string $systemCode, string $serviceCode): int
+    public function preferredMinute(int $tenantId, int $clientId, string $systemCode, string $serviceCode): int
     {
         $spread = max(1, (int) config('fiscal_monitoring.scheduler.spread_minutes', 60));
-        $material = "{$officeId}|{$clientId}|{$systemCode}|{$serviceCode}";
+        $material = "{$tenantId}|{$clientId}|{$systemCode}|{$serviceCode}";
         $hash = crc32($material);
 
         return (int) ($hash % $spread);
@@ -112,8 +104,8 @@ final class FiscalMonitoringScheduler
     }
 
     /**
-     * Dispara agendas devidas com fairness round-robin por office.
-     * Quando commercial_monthly_enabled: prioriza política mensal + spillover.
+     * Dispara agendas devidas com fairness round-robin por tenant.
+     * Usa política mensal + spillover.
      *
      * @return array{dispatched:int,skipped:int,blocked:int,commercial_created:int}
      */
@@ -134,29 +126,22 @@ final class FiscalMonitoringScheduler
             ];
         }
 
-        if ($this->isCommercialMonthlyEnabled()) {
-            $commercial = $this->dispatchCommercialMonthlyDue($now);
-            $dispatched += $commercial['dispatched'];
-            $skipped += $commercial['skipped'];
-            $blocked += $commercial['blocked'];
-            $commercialCreated += $commercial['commercial_created'];
-        }
-
-        $legacy = $this->dispatchLegacyIntervalDue($now);
-        $dispatched += $legacy['dispatched'];
-        $skipped += $legacy['skipped'];
-        $blocked += $legacy['blocked'];
+        $monthly = $this->dispatchMonthlyDue($now);
+        $dispatched += $monthly['dispatched'];
+        $skipped += $monthly['skipped'];
+        $blocked += $monthly['blocked'];
+        $commercialCreated += $monthly['commercial_created'];
 
         return compact('dispatched', 'skipped', 'blocked') + ['commercial_created' => $commercialCreated];
     }
 
     /**
-     * Política mensal: dia 1–28 por office+monitor, default hash estável, spillover nos dias seguintes.
+     * Política mensal: dia 1–28 por tenant+monitor, default hash estável, spillover nos dias seguintes.
      * Um item comercial scheduled por cliente+monitor+período; consumo só no despacho remoto real.
      *
      * @return array{dispatched:int,skipped:int,blocked:int,commercial_created:int}
      */
-    public function dispatchCommercialMonthlyDue(?CarbonImmutable $now = null): array
+    public function dispatchMonthlyDue(?CarbonImmutable $now = null): array
     {
         $now ??= CarbonImmutable::now();
         $dispatched = 0;
@@ -164,7 +149,7 @@ final class FiscalMonitoringScheduler
         $blocked = 0;
         $commercialCreated = 0;
 
-        if (! $this->isCommercialMonthlyEnabled()) {
+        if (! $this->isCoreEnabled()) {
             return [
                 'dispatched' => 0,
                 'skipped' => 0,
@@ -176,12 +161,12 @@ final class FiscalMonitoringScheduler
         $max = max(1, (int) config('fiscal_monitoring.scheduler.max_dispatch_per_tick', 40));
         $monitorKeys = CommercialMonitorCatalog::all();
 
-        $subscriptions = OfficeSubscription::query()
-            ->orderBy('office_id')
+        $subscriptions = TenantSubscription::query()
+            ->orderBy('tenant_id')
             ->get()
-            ->keyBy('office_id');
+            ->keyBy('tenant_id');
 
-        foreach ($subscriptions as $officeId => $subscription) {
+        foreach ($subscriptions as $tenantId => $subscription) {
             if ($dispatched >= $max) {
                 break;
             }
@@ -190,12 +175,12 @@ final class FiscalMonitoringScheduler
                 continue;
             }
 
-            $office = Office::query()->find($officeId);
-            if ($office === null || ! $office->is_active) {
+            $tenant = Tenant::query()->find($tenantId);
+            if ($tenant === null || ! $tenant->is_active) {
                 continue;
             }
 
-            $tz = $office->timezone ?: $office->deadline_timezone ?: 'America/Sao_Paulo';
+            $tz = $tenant->timezone ?: $tenant->deadline_timezone ?: 'America/Sao_Paulo';
             $local = $now->timezone($tz);
             $localDay = (int) $local->day;
 
@@ -208,7 +193,7 @@ final class FiscalMonitoringScheduler
 
                 $decision = $this->availability->resolve(
                     FiscalControlModule::fromRuntimeKey($monitorKey),
-                    $office,
+                    $tenant,
                     FiscalOperationClass::Read,
                 );
                 if (! $decision->allowed) {
@@ -217,7 +202,7 @@ final class FiscalMonitoringScheduler
                     continue;
                 }
 
-                $policy = OfficeMonitorSchedulePolicy::ensureDefault((int) $officeId, $monitorKey);
+                $policy = TenantMonitorSchedulePolicy::ensureDefault((int) $tenantId, $monitorKey);
                 $dueDay = (int) $policy->day_of_month;
 
                 // Due no dia configurado ou spillover (dias posteriores até 28+resto do mês).
@@ -226,7 +211,7 @@ final class FiscalMonitoringScheduler
                     // Ainda permite spillover de itens pending já criados no período.
                     $hasPending = MonitorCommercialLedgerEntry::query()
                         ->withoutGlobalScopes()
-                        ->where('office_id', $officeId)
+                        ->where('tenant_id', $tenantId)
                         ->where('monitor_key', $monitorKey)
                         ->whereIn('origin', [
                             MonitorCommercialOrigin::Scheduled->value,
@@ -239,7 +224,7 @@ final class FiscalMonitoringScheduler
                     }
                 }
 
-                $clients = $this->eligibleClientsForMonitor((int) $officeId, $monitorKey);
+                $clients = $this->eligibleClientsForMonitor((int) $tenantId, $monitorKey);
                 foreach ($clients as $clientId) {
                     if ($dispatched >= $max) {
                         break;
@@ -247,7 +232,7 @@ final class FiscalMonitoringScheduler
 
                     $beforeId = MonitorCommercialLedgerEntry::query()
                         ->withoutGlobalScopes()
-                        ->where('office_id', $officeId)
+                        ->where('tenant_id', $tenantId)
                         ->where('client_id', $clientId)
                         ->where('monitor_key', $monitorKey)
                         ->whereIn('origin', [
@@ -258,7 +243,7 @@ final class FiscalMonitoringScheduler
                         ->value('id');
 
                     $entry = $this->commercialLedger->ensureScheduledItem(
-                        (int) $officeId,
+                        (int) $tenantId,
                         (int) $clientId,
                         $monitorKey,
                         $subscription,
@@ -277,7 +262,7 @@ final class FiscalMonitoringScheduler
 
                     // Saldo esgotado por manuais → bloqueia sem SERPRO (inaugural ainda free).
                     $balance = $this->commercialLedger->balance(
-                        (int) $officeId,
+                        (int) $tenantId,
                         (int) $clientId,
                         $monitorKey,
                         $subscription,
@@ -293,7 +278,7 @@ final class FiscalMonitoringScheduler
                     }
 
                     $outcome = $this->enqueueCommercialScheduledRun(
-                        (int) $officeId,
+                        (int) $tenantId,
                         (int) $clientId,
                         $monitorKey,
                         $entry,
@@ -315,131 +300,12 @@ final class FiscalMonitoringScheduler
     }
 
     /**
-     * Path legado: interval_minutes + preferred_minute por cliente.
-     *
-     * @return array{dispatched:int,skipped:int,blocked:int}
-     */
-    public function dispatchLegacyIntervalDue(?CarbonImmutable $now = null): array
-    {
-        $now ??= CarbonImmutable::now();
-        $dispatched = 0;
-        $skipped = 0;
-        $blocked = 0;
-
-        if (! $this->isCoreEnabled()) {
-            return compact('dispatched', 'skipped', 'blocked');
-        }
-
-        // Com mensal comercial ativo, agendas intervalares de monitores comerciais ficam pausadas
-        // (evita segunda execução no mesmo período).
-        $pauseCommercialLegacy = $this->isCommercialMonthlyEnabled();
-
-        $max = max(1, (int) config('fiscal_monitoring.scheduler.max_dispatch_per_tick', 40));
-        $minute = (int) $now->format('i');
-
-        $byOffice = FiscalMonitoringSchedule::query()
-            ->withoutGlobalScopes()
-            ->where('is_enabled', true)
-            ->where(function ($q) use ($now): void {
-                $q->whereNull('next_run_at')->orWhere('next_run_at', '<=', $now);
-            })
-            ->orderBy('office_id')
-            ->orderBy('id')
-            ->get()
-            ->groupBy('office_id');
-
-        if ($byOffice->isEmpty()) {
-            return compact('dispatched', 'skipped', 'blocked');
-        }
-
-        $officeIds = $byOffice->keys()->values()->all();
-        $pointers = array_fill_keys($officeIds, 0);
-        $exhausted = [];
-
-        while ($dispatched < $max && count($exhausted) < count($officeIds)) {
-            foreach ($officeIds as $officeId) {
-                if ($dispatched >= $max) {
-                    break;
-                }
-                if (isset($exhausted[$officeId])) {
-                    continue;
-                }
-
-                /** @var Collection<int, FiscalMonitoringSchedule> $schedules */
-                $schedules = $byOffice[$officeId];
-                $idx = $pointers[$officeId];
-                if ($idx >= $schedules->count()) {
-                    $exhausted[$officeId] = true;
-
-                    continue;
-                }
-
-                /** @var FiscalMonitoringSchedule $schedule */
-                $schedule = $schedules[$idx];
-                $pointers[$officeId] = $idx + 1;
-
-                if ($pauseCommercialLegacy) {
-                    $monitorKey = CommercialMonitorCatalog::resolveMonitorKey(
-                        $schedule->system_code,
-                        $schedule->service_code,
-                    );
-                    if ($monitorKey !== null) {
-                        $skipped++;
-
-                        continue;
-                    }
-                }
-
-                if ($schedule->next_run_at === null && (int) $schedule->preferred_minute !== $minute) {
-                    $skipped++;
-
-                    continue;
-                }
-
-                if (! $this->officeAllowsExternal((int) $officeId)) {
-                    $blocked++;
-                    $schedule->forceFill([
-                        'last_skip_reason' => 'SUBSCRIPTION_BLOCKED',
-                        'next_run_at' => $this->nextRunAfter($schedule, $now),
-                    ])->save();
-
-                    continue;
-                }
-
-                $module = $this->moduleForSchedule($schedule);
-                $office = Office::query()->find((int) $officeId);
-                if ($module !== null && ($office === null || ! $this->availability
-                    ->resolve($module, $office, FiscalOperationClass::Read)->allowed)) {
-                    $blocked++;
-                    $schedule->forceFill([
-                        'last_skip_reason' => 'MODULE_UNAVAILABLE',
-                        'next_run_at' => $this->nextRunAfter($schedule, $now),
-                    ])->save();
-
-                    continue;
-                }
-
-                $outcome = $this->claimAndEnqueue($schedule, $now);
-                if ($outcome === 'dispatched') {
-                    $dispatched++;
-                } elseif ($outcome === 'blocked') {
-                    $blocked++;
-                } else {
-                    $skipped++;
-                }
-            }
-        }
-
-        return compact('dispatched', 'skipped', 'blocked');
-    }
-
-    /**
      * Clientes elegíveis ao monitor: apenas carteira com agenda habilitada para o serviço
      * (ativação explícita do monitor). Sem schedule → lista vazia (fail-closed).
      *
      * @return list<int>
      */
-    private function eligibleClientsForMonitor(int $officeId, string $monitorKey): array
+    private function eligibleClientsForMonitor(int $tenantId, string $monitorKey): array
     {
         $serviceCodes = match ($monitorKey) {
             'sitfis' => ['SITFIS'],
@@ -457,7 +323,7 @@ final class FiscalMonitoringScheduler
 
         return FiscalMonitoringSchedule::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('is_enabled', true)
             ->whereIn('service_code', $serviceCodes)
             ->orderBy('client_id')
@@ -472,32 +338,32 @@ final class FiscalMonitoringScheduler
      * @return 'dispatched'|'skipped'|'blocked'
      */
     private function enqueueCommercialScheduledRun(
-        int $officeId,
+        int $tenantId,
         int $clientId,
         string $monitorKey,
         MonitorCommercialLedgerEntry $entry,
         CarbonImmutable $now,
     ): string {
-        $office = Office::query()->find($officeId);
-        if ($office === null || ! $this->availability->resolve(
+        $tenant = Tenant::query()->find($tenantId);
+        if ($tenant === null || ! $this->availability->resolve(
             FiscalControlModule::fromRuntimeKey($monitorKey),
-            $office,
+            $tenant,
             FiscalOperationClass::Read,
         )->allowed) {
             return 'blocked';
         }
 
-        if ($monitorKey === 'fgts' && $this->esocialReadinessBlocker($office, $clientId) !== null) {
+        if ($monitorKey === 'fgts' && $this->esocialReadinessBlocker($tenant, $clientId) !== null) {
             return 'blocked';
         }
 
         if ($monitorKey === 'installments') {
-            return $this->enqueueCommercialInstallmentRuns($officeId, $clientId, $entry);
+            return $this->enqueueCommercialInstallmentRuns($tenantId, $clientId, $entry);
         }
 
         $systemService = match ($monitorKey) {
             'sitfis' => ['INTEGRA_SITFIS', 'SITFIS', 'MONITOR'],
-            'simples_mei' => $this->simplesMeiSystemServiceForClient($officeId, $clientId),
+            'simples_mei' => $this->simplesMeiSystemServiceForClient($tenantId, $clientId),
             'dctfweb' => ['DCTFWEB', 'DCTFWEB', 'MONITOR'],
             'mailbox' => ['CAIXA_POSTAL', 'CAIXA_POSTAL', 'MONITOR'],
             'fgts' => ['ESOCIAL', 'FGTS', 'MONITOR'],
@@ -508,7 +374,7 @@ final class FiscalMonitoringScheduler
 
         $slot = 'commercial-period:'.$entry->period_key.':'.$entry->id;
         $key = FiscalIdempotency::runKey(
-            $officeId,
+            $tenantId,
             $clientId,
             $systemCode,
             $serviceCode,
@@ -520,7 +386,7 @@ final class FiscalMonitoringScheduler
 
         $existing = FiscalMonitoringRun::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('idempotency_key', $key)
             ->first();
 
@@ -537,7 +403,7 @@ final class FiscalMonitoringScheduler
         }
 
         $run = FiscalMonitoringRun::query()->create([
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'client_id' => $clientId,
             'system_code' => $systemCode,
             'service_code' => $serviceCode,
@@ -559,7 +425,7 @@ final class FiscalMonitoringScheduler
             // PGDAS primeiro; period_key comercial por cima — não sobrescrever o ledger
             // (assinatura = data YYYY-MM-DD) com o PA fiscal (YYYY-MM).
             'progress' => array_merge(
-                $this->monitorProgressForCodes($systemCode, $serviceCode, $officeId, $now),
+                $this->monitorProgressForCodes($systemCode, $serviceCode, $tenantId, $now),
                 [
                     'commercial_ledger_entry_id' => $entry->id,
                     'monitor_key' => $monitorKey,
@@ -587,7 +453,7 @@ final class FiscalMonitoringScheduler
      * @return 'dispatched'|'skipped'
      */
     private function enqueueCommercialInstallmentRuns(
-        int $officeId,
+        int $tenantId,
         int $clientId,
         MonitorCommercialLedgerEntry $entry,
     ): string {
@@ -598,7 +464,7 @@ final class FiscalMonitoringScheduler
 
         foreach (ParcelamentoServiceCatalog::supportedModalities() as $modality) {
             $key = FiscalIdempotency::runKey(
-                $officeId,
+                $tenantId,
                 $clientId,
                 ParcelamentoServiceCatalog::SOLUTION,
                 $modality->value,
@@ -610,13 +476,13 @@ final class FiscalMonitoringScheduler
 
             $run = FiscalMonitoringRun::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $officeId)
+                ->where('tenant_id', $tenantId)
                 ->where('idempotency_key', $key)
                 ->first();
 
             if ($run === null) {
                 $run = FiscalMonitoringRun::query()->create([
-                    'office_id' => $officeId,
+                    'tenant_id' => $tenantId,
                     'client_id' => $clientId,
                     'system_code' => ParcelamentoServiceCatalog::SOLUTION,
                     'service_code' => $modality->value,
@@ -658,9 +524,9 @@ final class FiscalMonitoringScheduler
         return 'dispatched';
     }
 
-    public function officeAllowsExternal(int $officeId): bool
+    public function tenantAllowsExternal(int $tenantId): bool
     {
-        $sub = OfficeSubscription::query()->where('office_id', $officeId)->first();
+        $sub = TenantSubscription::query()->where('tenant_id', $tenantId)->first();
         if ($sub === null) {
             return false;
         }
@@ -673,10 +539,10 @@ final class FiscalMonitoringScheduler
      */
     public function claimAndEnqueue(FiscalMonitoringSchedule $schedule, CarbonImmutable $now): string
     {
-        $office = Office::query()->find((int) $schedule->office_id);
+        $tenant = Tenant::query()->find((int) $schedule->tenant_id);
         $module = $this->moduleForSchedule($schedule);
-        if ($module !== null && ($office === null || ! $this->availability
-            ->resolve($module, $office, FiscalOperationClass::Read)->allowed)) {
+        if ($module !== null && ($tenant === null || ! $this->availability
+            ->resolve($module, $tenant, FiscalOperationClass::Read)->allowed)) {
             $schedule->forceFill([
                 'last_skip_reason' => 'MODULE_UNAVAILABLE',
                 'next_run_at' => $this->nextRunAfter($schedule, $now),
@@ -685,8 +551,8 @@ final class FiscalMonitoringScheduler
             return 'blocked';
         }
 
-        if ($module === FiscalControlModule::Fgts && $office !== null) {
-            $blocker = $this->esocialReadinessBlocker($office, (int) $schedule->client_id);
+        if ($module === FiscalControlModule::Fgts && $tenant !== null) {
+            $blocker = $this->esocialReadinessBlocker($tenant, (int) $schedule->client_id);
             if ($blocker !== null) {
                 $schedule->forceFill([
                     'last_skip_reason' => $blocker,
@@ -743,7 +609,7 @@ final class FiscalMonitoringScheduler
 
             $slot = $this->scheduledSlot($locked, $now);
             $key = FiscalIdempotency::runKey(
-                (int) $locked->office_id,
+                (int) $locked->tenant_id,
                 (int) $locked->client_id,
                 $idempotencyCodes[0],
                 $idempotencyCodes[1],
@@ -755,7 +621,7 @@ final class FiscalMonitoringScheduler
 
             $existing = FiscalMonitoringRun::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $locked->office_id)
+                ->where('tenant_id', $locked->tenant_id)
                 ->where('idempotency_key', $key)
                 ->first();
 
@@ -769,7 +635,7 @@ final class FiscalMonitoringScheduler
             }
 
             $run = FiscalMonitoringRun::query()->create([
-                'office_id' => $locked->office_id,
+                'tenant_id' => $locked->tenant_id,
                 'client_id' => $locked->client_id,
                 'fiscal_category_id' => $locked->fiscal_category_id,
                 'schedule_id' => $locked->id,
@@ -793,7 +659,7 @@ final class FiscalMonitoringScheduler
                 'progress' => $this->monitorProgressForCodes(
                     (string) $locked->system_code,
                     (string) $locked->service_code,
-                    (int) $locked->office_id,
+                    (int) $locked->tenant_id,
                     $now,
                 ) ?: null,
             ]);
@@ -825,11 +691,11 @@ final class FiscalMonitoringScheduler
         return $monitorKey === null ? null : FiscalControlModule::fromRuntimeKey($monitorKey);
     }
 
-    private function esocialReadinessBlocker(Office $office, int $clientId): ?string
+    private function esocialReadinessBlocker(Tenant $tenant, int $clientId): ?string
     {
         $client = Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($clientId)
             ->first();
 
@@ -837,7 +703,7 @@ final class FiscalMonitoringScheduler
             return 'ESOCIAL_BX_CLIENT_NOT_FOUND';
         }
 
-        $readiness = $this->esocialReadiness->check($office, $client);
+        $readiness = $this->esocialReadiness->check($tenant, $client);
 
         return $readiness->ready
             ? null
@@ -849,14 +715,14 @@ final class FiscalMonitoringScheduler
      *
      * @return array<string, mixed>
      */
-    private function progressForCodes(string $systemCode, string $serviceCode, int $officeId, CarbonImmutable $now): array
+    private function progressForCodes(string $systemCode, string $serviceCode, int $tenantId, CarbonImmutable $now): array
     {
         $svc = strtoupper($serviceCode);
         $sys = strtoupper($systemCode);
 
-        $office = Office::query()->find($officeId);
-        $tz = is_string($office?->timezone) && $office->timezone !== ''
-            ? $office->timezone
+        $tenant = Tenant::query()->find($tenantId);
+        $tz = is_string($tenant?->timezone) && $tenant->timezone !== ''
+            ? $tenant->timezone
             : 'America/Sao_Paulo';
 
         if ($svc === 'PGMEI' || $sys === 'PGMEI' || ($sys === 'INTEGRA_MEI' && $svc === 'PGMEI')) {
@@ -879,13 +745,7 @@ final class FiscalMonitoringScheduler
             $pa = DctfwebPeriod::expectedPa($now, $tz);
 
             return [
-                'expected_period_key' => DctfwebPeriod::toPeriodKey($pa),
-                'expected_periodo_apuracao' => DctfwebPeriod::toPeriodoApuracao($pa),
                 'period_key' => DctfwebPeriod::toPeriodKey($pa),
-                'anoPA' => DctfwebPeriod::toAnoPa($pa),
-                'mesPA' => DctfwebPeriod::toMesPa($pa),
-                'categoria' => DctfwebCategory::default()->officialCode(),
-                'category' => DctfwebCategory::default()->value,
                 'operation_key' => 'dctfweb.consrecibo',
                 'dctfweb_pa_frozen_at' => $now->toIso8601String(),
             ];
@@ -911,12 +771,6 @@ final class FiscalMonitoringScheduler
         ];
     }
 
-    /** @deprecated use progressForCodes */
-    private function pgdasdProgressForCodes(string $systemCode, string $serviceCode, int $officeId, CarbonImmutable $now): array
-    {
-        return $this->progressForCodes($systemCode, $serviceCode, $officeId, $now);
-    }
-
     /**
      * Congela o contexto fiscal antes de enfileirar. Cada execução PGMEI observa
      * exatamente um dos cinco anos-calendário mais recentes.
@@ -926,13 +780,13 @@ final class FiscalMonitoringScheduler
     private function monitorProgressForCodes(
         string $systemCode,
         string $serviceCode,
-        int $officeId,
+        int $tenantId,
         CarbonImmutable $now,
     ): array {
         if ($this->isPgmeiCodes($systemCode, $serviceCode)) {
-            $office = Office::query()->find($officeId);
-            $tz = is_string($office?->timezone) && $office->timezone !== ''
-                ? $office->timezone
+            $tenant = Tenant::query()->find($tenantId);
+            $tz = is_string($tenant?->timezone) && $tenant->timezone !== ''
+                ? $tenant->timezone
                 : 'America/Sao_Paulo';
             $local = $now->timezone($tz);
             $year = ((int) $local->format('Y')) - (((int) $local->format('z')) % 5);
@@ -946,7 +800,7 @@ final class FiscalMonitoringScheduler
         }
 
         // DCTFWeb e PGDAS-D: progressForCodes já congela PA sem sobrescrita comercial.
-        return $this->progressForCodes($systemCode, $serviceCode, $officeId, $now);
+        return $this->progressForCodes($systemCode, $serviceCode, $tenantId, $now);
     }
 
     /**
@@ -959,9 +813,9 @@ final class FiscalMonitoringScheduler
             return FiscalIdempotency::scheduledSlot($now);
         }
 
-        $office = Office::query()->find((int) $schedule->office_id);
-        $tz = is_string($office?->timezone) && $office->timezone !== ''
-            ? $office->timezone
+        $tenant = Tenant::query()->find((int) $schedule->tenant_id);
+        $tz = is_string($tenant?->timezone) && $tenant->timezone !== ''
+            ? $tenant->timezone
             : 'America/Sao_Paulo';
 
         return 'pgmei-day:'.$now->timezone($tz)->format('Ymd');
@@ -984,11 +838,11 @@ final class FiscalMonitoringScheduler
      *
      * @return array{0:string,1:string,2:string}
      */
-    private function simplesMeiSystemServiceForClient(int $officeId, int $clientId): array
+    private function simplesMeiSystemServiceForClient(int $tenantId, int $clientId): array
     {
         $rawRegime = Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereKey($clientId)
             ->value('tax_regime');
 
@@ -1031,10 +885,10 @@ final class FiscalMonitoringScheduler
         return $current < $limit;
     }
 
-    public function tenantSlotAvailable(int $officeId): bool
+    public function tenantSlotAvailable(int $tenantId): bool
     {
         $limit = max(1, (int) config('fiscal_monitoring.scheduler.tenant_concurrent_limit', 2));
-        $key = FiscalIdempotency::cacheKey($officeId, 'tenant-slots');
+        $key = FiscalIdempotency::cacheKey($tenantId, 'tenant-slots');
         $current = (int) Cache::get($key, 0);
 
         return $current < $limit;
@@ -1045,16 +899,16 @@ final class FiscalMonitoringScheduler
      *
      * @return array{global:string,tenant:string}|null
      */
-    public function acquireSlots(int $officeId, int $ttlSeconds): ?array
+    public function acquireSlots(int $tenantId, int $ttlSeconds): ?array
     {
         $lock = Cache::lock('fiscal-monitoring:slot-claim', 10);
 
         try {
-            return $lock->block(5, function () use ($officeId, $ttlSeconds) {
+            return $lock->block(5, function () use ($tenantId, $ttlSeconds) {
                 $globalLimit = max(1, (int) config('fiscal_monitoring.scheduler.global_concurrent_limit', 8));
                 $tenantLimit = max(1, (int) config('fiscal_monitoring.scheduler.tenant_concurrent_limit', 2));
                 $globalKey = FiscalIdempotency::cacheKey(0, 'global-slots');
-                $tenantKey = FiscalIdempotency::cacheKey($officeId, 'tenant-slots');
+                $tenantKey = FiscalIdempotency::cacheKey($tenantId, 'tenant-slots');
 
                 $globalCurrent = (int) Cache::get($globalKey, 0);
                 $tenantCurrent = (int) Cache::get($tenantKey, 0);

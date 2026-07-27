@@ -82,16 +82,6 @@ final class DistDfeResponseParser
         if (str_starts_with($s, 'proceventocte') || str_starts_with($s, 'reteventocte')) {
             return 'procEventoCTe';
         }
-        // MDF-e
-        if (str_starts_with($s, 'resmdfe')) {
-            return 'resMDFe';
-        }
-        if (str_starts_with($s, 'procmdfe') || str_starts_with($s, 'mdfe_')) {
-            return 'procMDFe';
-        }
-        if (str_starts_with($s, 'proceventomdfe') || str_starts_with($s, 'reteventomdfe')) {
-            return 'procEventoMDFe';
-        }
 
         return 'unknown';
     }

@@ -3,9 +3,9 @@
 namespace App\Services\Platform;
 
 use App\Enums\PlatformRole;
-use App\Models\Office;
 use App\Models\PlatformMembership;
 use App\Models\PlatformSetting;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use Illuminate\Database\QueryException;
@@ -52,7 +52,7 @@ final class InitialOnboardingService
 
                 // A linha singleton foi reivindicada; nenhuma outra conclusão pode prosseguir.
                 if (User::query()->exists()
-                    || Office::query()->exists()
+                    || Tenant::query()->exists()
                     || PlatformMembership::query()->exists()) {
                     throw InitialOnboardingException::unavailable();
                 }
@@ -66,12 +66,12 @@ final class InitialOnboardingService
                     'email_verified_at' => now(),
                     'is_active' => true,
                     'password_change_required' => false,
-                    'selected_office_id' => null,
+                    'selected_tenant_id' => null,
                 ]);
                 $user->save();
 
                 try {
-                    $this->owners->createOwner($user, isActive: true, defaultOfficeId: null);
+                    $this->owners->createOwner($user, isActive: true, defaultTenantId: null);
                 } catch (PlatformOwnerException) {
                     throw InitialOnboardingException::unavailable();
                 }
@@ -100,8 +100,8 @@ final class InitialOnboardingService
             context: [
                 'organization_name' => $result['settings']->organization_name,
                 'platform_role' => PlatformRole::PlatformAdmin->value,
-                'office_created' => false,
-                'office_membership_created' => false,
+                'tenant_created' => false,
+                'tenant_membership_created' => false,
             ],
             userId: $result['user']->id,
         );
@@ -121,7 +121,7 @@ final class InitialOnboardingService
     {
         return ! PlatformSetting::query()->exists()
             && ! User::query()->exists()
-            && ! Office::query()->exists()
+            && ! Tenant::query()->exists()
             && ! PlatformMembership::query()->exists();
     }
 

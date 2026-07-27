@@ -3,7 +3,7 @@
 namespace App\Http\Requests\Clients;
 
 use App\Enums\TaxRegimeCode;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -14,22 +14,12 @@ class UpdateClientRequest extends FormRequest
         return true;
     }
 
-    protected function prepareForValidation(): void
-    {
-        if (array_key_exists('tax_regime', $this->all())) {
-            $raw = $this->input('tax_regime');
-            if ($raw === null || is_string($raw)) {
-                $this->merge(['tax_regime' => TaxRegimeCode::fromInput($raw)?->value]);
-            }
-        }
-    }
-
     /**
      * @return array<string, mixed>
      */
     public function rules(): array
     {
-        $officeId = app(CurrentOffice::class)->resolve()?->id;
+        $tenantId = app(CurrentTenant::class)->resolve()?->id;
 
         return [
             'legal_name' => ['sometimes', 'string', 'max:255'],
@@ -46,16 +36,15 @@ class UpdateClientRequest extends FormRequest
                 'nullable',
                 'integer',
                 Rule::exists('work_departments', 'id')->where(
-                    fn ($query) => $officeId
-                        ? $query->where('office_id', $officeId)->where('is_active', true)
+                    fn ($query) => $tenantId
+                        ? $query->where('tenant_id', $tenantId)->where('is_active', true)
                         : $query->whereRaw('1 = 0')
                 ),
             ],
             // imutáveis / proibidos
             'root_cnpj' => ['prohibited'],
             'cnpj' => ['prohibited'],
-            'office_id' => ['prohibited'],
-            'matrix_client_id' => ['prohibited'],
+            'tenant_id' => ['prohibited'],
             'registration_source' => ['prohibited'],
             'registration_refreshed_at' => ['prohibited'],
         ];

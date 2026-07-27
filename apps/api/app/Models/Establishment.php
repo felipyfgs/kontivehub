@@ -4,7 +4,7 @@ namespace App\Models;
 
 use App\Enums\RegistrationSource;
 use App\Enums\RegistrationStatus;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Database\Factories\EstablishmentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -13,11 +13,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'client_id',
     'cnpj',
     'trade_name',
-    'is_matrix',
+    'is_headquarters',
     'is_active',
     'registration_status',
     'registration_status_at',
@@ -53,12 +53,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Establishment extends Model
 {
     /** @use HasFactory<EstablishmentFactory> */
-    use BelongsToOffice, HasFactory;
+    use BelongsToTenant, HasFactory;
 
     protected function casts(): array
     {
         return [
-            'is_matrix' => 'boolean',
+            'is_headquarters' => 'boolean',
             'is_active' => 'boolean',
             'capture_enabled' => 'boolean',
             'simples_optant' => 'boolean',

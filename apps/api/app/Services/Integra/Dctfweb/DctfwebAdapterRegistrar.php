@@ -9,7 +9,7 @@ use App\Services\Integra\Dctfweb\Adapters\DctfwebReciboAdapter;
 use App\Services\Integra\Dctfweb\Adapters\DctfwebRelatorioAdapter;
 use App\Services\Integra\Dctfweb\Adapters\DctfwebTransmitirAdapter;
 use App\Services\Integra\Dctfweb\Adapters\DctfwebXmlAdapter;
-use App\Services\Integra\Dctfweb\Adapters\MitApuracaoAdapter;
+use App\Services\Integra\Dctfweb\Adapters\MitAssessmentAdapter;
 use App\Services\Integra\Dctfweb\Adapters\MitEncerrarAdapter;
 use App\Services\Integra\Dctfweb\Adapters\MitListaApuracoesAdapter;
 use App\Services\Integra\Dctfweb\Adapters\MitSituacaoAdapter;
@@ -32,7 +32,7 @@ final class DctfwebAdapterRegistrar
             DctfwebDarfAdapter::class,
             DctfwebTransmitirAdapter::class,
             MitSituacaoAdapter::class,
-            MitApuracaoAdapter::class,
+            MitAssessmentAdapter::class,
             MitListaApuracoesAdapter::class,
             MitEncerrarAdapter::class,
         ];

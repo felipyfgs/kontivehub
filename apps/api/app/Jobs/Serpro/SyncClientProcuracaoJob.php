@@ -4,7 +4,7 @@ namespace App\Jobs\Serpro;
 
 use App\Enums\SerproEnvironment;
 use App\Models\Client;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Audit\AuditLogger;
 use App\Services\Integra\ClientProcuracaoAutoSyncPolicy;
 use App\Services\Integra\ClientProcuracaoSyncService;
@@ -29,7 +29,7 @@ final class SyncClientProcuracaoJob implements ShouldBeUnique, ShouldQueue
     public int $uniqueFor = 180;
 
     public function __construct(
-        public readonly int $officeId,
+        public readonly int $tenantId,
         public readonly int $clientId,
         public readonly string $environment,
         public readonly ?int $actorUserId = null,
@@ -41,7 +41,7 @@ final class SyncClientProcuracaoJob implements ShouldBeUnique, ShouldQueue
 
     public function uniqueId(): string
     {
-        return 'serpro-procuracao:'.$this->officeId.':'.$this->clientId.':'.$this->environment;
+        return 'serpro-procuracao:'.$this->tenantId.':'.$this->clientId.':'.$this->environment;
     }
 
     public function handle(
@@ -53,41 +53,41 @@ final class SyncClientProcuracaoJob implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        $office = Office::query()->findOrFail($this->officeId);
+        $tenant = Tenant::query()->findOrFail($this->tenantId);
         $client = Client::query()
-            ->where('office_id', $this->officeId)
+            ->where('tenant_id', $this->tenantId)
             ->whereKey($this->clientId)
             ->firstOrFail();
         $env = SerproEnvironment::from(strtoupper($this->environment));
 
         if ($this->automatic) {
-            $decision = $automaticPolicy->check($office, $env);
+            $decision = $automaticPolicy->check($tenant, $env);
             if (! $decision['allowed']) {
                 $audit->record('serpro.procuracao.job', 'BLOCKED', null, [
                     'environment' => $env->value,
                     'client_id' => $this->clientId,
                     'automatic' => true,
                     'block_code' => $decision['code'],
-                ], $this->actorUserId, $office->id);
+                ], $this->actorUserId, $tenant->id);
 
                 return;
             }
         }
 
         try {
-            $result = $sync->syncOfficial($office, $client, $env, $this->actorUserId);
-            $audit->record('serpro.procuracao.job', 'SUCCESS', $result['snapshot'], [
+            $result = $sync->syncOfficial($tenant, $client, $env, $this->actorUserId);
+            $audit->record('serpro.procuracao.job', 'SUCCESS', $result['sync'], [
                 'environment' => $env->value,
-                'status' => $result['snapshot']->status->value,
+                'status' => $result['sync']->status->value,
                 'client_id' => $this->clientId,
                 'automatic' => $this->automatic,
-            ], $this->actorUserId, $office->id);
+            ], $this->actorUserId, $tenant->id);
         } catch (Throwable $e) {
             $audit->record('serpro.procuracao.job', 'FAILED', null, [
                 'environment' => $env->value,
                 'client_id' => $this->clientId,
                 'error' => mb_substr($e->getMessage(), 0, 200),
-            ], $this->actorUserId, $this->officeId);
+            ], $this->actorUserId, $this->tenantId);
 
             throw $e;
         }

@@ -16,10 +16,10 @@ import { monitoringModuleBasePath } from '~/utils/monitoring-nav'
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8')
 
 describe('simples-nacional-portfolio e2e wiring', () => {
-  it('rota canônica é /monitoring/simples e legado redireciona', () => {
+  it('usa somente as rotas canônicas de Simples Nacional e MEI', () => {
     expect(monitoringModuleBasePath('simples_mei')).toBe('/monitoring/simples')
     expect(read('app/pages/monitoring/simples/index.vue')).toContain('submodule="PGDASD"')
-    expect(read('app/pages/monitoring/simples-mei/index.vue')).toContain('navigateTo(\'/monitoring/simples\'')
+    expect(read('app/pages/monitoring/mei/index.vue')).toContain('submodule="PGMEI"')
   })
 
   it('payload de consulta PGDAS-D da UI usa códigos oficiais MONITOR', () => {
@@ -32,13 +32,14 @@ describe('simples-nacional-portfolio e2e wiring', () => {
 
   it('filtros da carteira ficam em estado local com URL Nuxt path-only', () => {
     const portfolio = read('app/composables/useFiscalModulePortfolio.ts')
-    for (const token of ['situation', 'competence', 'send_status', 'client_id', 'buildFilters', 'router.replace']) {
+    for (const token of ['situation', 'competence', 'send_status', 'client_id', 'buildFilters']) {
       expect(portfolio).toContain(token)
     }
     expect(portfolio).not.toContain('serializeListFilterQuery')
     expect(portfolio).not.toContain('useListFilterQuery')
     expect(portfolio).not.toContain('MONITORING_LIST_QUERY_SCHEMA')
-    expect(portfolio).toContain('Object.keys(route.query).length > 0')
+    expect(portfolio).not.toContain('route.query')
+    expect(portfolio).not.toContain('router.replace')
 
     const page = read('app/components/monitoring/simples-mei/Portfolio.vue')
     expect(page).toContain('key: \'situation\'')

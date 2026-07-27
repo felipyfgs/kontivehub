@@ -11,7 +11,7 @@ use App\Models\OutboundCaptureProfile;
 use App\Models\OutboundNumberState;
 
 /**
- * Elegibilidade NF-e 55: UF 21, modelo 55, OUT, ambiente, perfil, allowlist e A1.
+ * Elegibilidade NF-e 55: UF 21, modelo 55, OUT, ambiente, perfil, allowlist e certificado.
  * Canal separado da NFC-e 65, mesmo governador de egress.
  */
 final class SvrsNfe55RetrievalEligibility
@@ -24,7 +24,7 @@ final class SvrsNfe55RetrievalEligibility
     public function evaluate(
         OutboundNumberState $number,
         OutboundCaptureProfile $profile,
-        bool $a1Available = true,
+        bool $certificateAvailable = true,
     ): SvrsNfceEligibilityResult {
         if (! $this->config->retrievalEnabled()) {
             return SvrsNfceEligibilityResult::no(
@@ -130,10 +130,10 @@ final class SvrsNfe55RetrievalEligibility
             );
         }
 
-        if (! $a1Available) {
+        if (! $certificateAvailable) {
             return SvrsNfceEligibilityResult::no(
-                SvrsNfceFailureReason::A1Unavailable,
-                'Credencial A1 da raiz indisponível.',
+                SvrsNfceFailureReason::CertificateUnavailable,
+                'certificado da raiz indisponível.',
             );
         }
 

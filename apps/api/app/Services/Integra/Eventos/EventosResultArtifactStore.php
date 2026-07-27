@@ -55,7 +55,7 @@ final class EventosResultArtifactStore
     {
         return [
             'purpose' => 'serpro_eventos_result',
-            'office_id' => (int) $run->office_id,
+            'tenant_id' => (int) $run->tenant_id,
             'eventos_run_id' => (int) $run->id,
         ];
     }

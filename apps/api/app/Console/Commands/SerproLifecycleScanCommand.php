@@ -6,7 +6,7 @@ use App\Services\Serpro\SerproLifecycleMonitor;
 use Illuminate\Console\Command;
 
 /**
- * Scan read-only de expiração (PFX, A1, Termo, token, procurações).
+ * Scan read-only de expiração (PFX, certificado, Termo, token, procurações).
  * Não assina, não renova procuração e não executa mutação fiscal.
  */
 class SerproLifecycleScanCommand extends Command
@@ -35,11 +35,11 @@ class SerproLifecycleScanCommand extends Command
 
         foreach ($result['alerts'] as $alert) {
             $this->line(sprintf(
-                '  [%s] %s subject=%s office=%s days_left=%s',
+                '  [%s] %s subject=%s tenant=%s days_left=%s',
                 $alert['severity'],
                 $alert['kind'],
                 $alert['subject_id'],
-                $alert['office_id'] ?? '—',
+                $alert['tenant_id'] ?? '—',
                 $alert['days_left'],
             ));
         }

@@ -181,7 +181,6 @@ export function buildPgmeiColumns(options: {
         name: row.original.legal_name,
         legalName: row.original.legal_name,
         cnpj: row.original.cnpj,
-        cnpjMasked: row.original.cnpj_masked,
         to: `/monitoring/clients/${row.original.client_id}`
       })
     },

@@ -9,8 +9,8 @@ use App\Enums\SerproEnvironment;
 use App\Enums\SerproFunctionalRoute;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
-use App\Models\OfficeSerproAuthorization;
+use App\Models\Tenant;
+use App\Models\TenantSerproAuthorization;
 use App\Services\Fiscal\Availability\FiscalModuleAvailabilityService;
 use App\Services\FiscalMonitoring\FiscalMonitoringRunService;
 use RuntimeException;
@@ -34,13 +34,13 @@ final class SerproInitialMailboxSyncDispatcher
      * }
      */
     public function dispatchIfAllowed(
-        Office $office,
-        OfficeSerproAuthorization $authorization,
+        Tenant $tenant,
+        TenantSerproAuthorization $authorization,
         string $idempotencyKey,
         ?int $actorUserId,
         ?string $correlationId,
     ): array {
-        if ((int) $authorization->office_id !== (int) $office->id) {
+        if ((int) $authorization->tenant_id !== (int) $tenant->id) {
             return $this->blocked(
                 'AUTHORIZATION_CROSS_TENANT',
                 'A autorização SERPRO não pertence ao escritório informado.',
@@ -49,7 +49,7 @@ final class SerproInitialMailboxSyncDispatcher
 
         $availability = $this->availability->resolve(
             FiscalControlModule::Mailbox,
-            $office,
+            $tenant,
             FiscalOperationClass::Read,
         );
         if (! $availability->allowed) {
@@ -71,7 +71,7 @@ final class SerproInitialMailboxSyncDispatcher
 
         $egress = $this->egressGate->evaluateBillableEgress(
             route: SerproFunctionalRoute::Consultar,
-            office: $office,
+            tenant: $tenant,
             environment: SerproEnvironment::Production,
         );
         if (! $egress['allowed']) {
@@ -97,7 +97,7 @@ final class SerproInitialMailboxSyncDispatcher
 
         $client = Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('is_active', true)
             ->orderBy('id')
             ->first();
@@ -108,7 +108,7 @@ final class SerproInitialMailboxSyncDispatcher
 
         try {
             $run = $this->runs->enqueueManual(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 systemCode: 'INTEGRA_CAIXAPOSTAL',
                 serviceCode: 'CAIXA_POSTAL',

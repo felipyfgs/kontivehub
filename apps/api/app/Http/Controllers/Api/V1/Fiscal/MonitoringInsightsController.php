@@ -4,26 +4,26 @@ namespace App\Http\Controllers\Api\V1\Fiscal;
 
 use App\Http\Controllers\Controller;
 use App\Services\FiscalMonitoring\MonitoringInsightsQueryService;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 
 final class MonitoringInsightsController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly MonitoringInsightsQueryService $insights,
     ) {}
 
     public function __invoke(): JsonResponse
     {
-        if ($this->currentOffice->role() === null) {
+        if ($this->currentTenant->role() === null) {
             abort(403, 'Perfil não resolvido.');
         }
 
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
         return response()->json([
-            'data' => $this->insights->forOffice($office),
+            'data' => $this->insights->forTenant($tenant),
         ]);
     }
 }

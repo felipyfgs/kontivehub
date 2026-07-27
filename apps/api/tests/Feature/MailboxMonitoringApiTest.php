@@ -5,20 +5,20 @@ namespace Tests\Feature;
 use App\Enums\FiscalProfile;
 use App\Enums\MailboxSource;
 use App\Enums\MailboxTriageStatus;
-use App\Enums\OfficeRole;
 use App\Enums\SerproConsumptionClass;
+use App\Enums\TenantRole;
 use App\Jobs\Fiscal\ExecuteFiscalMonitoringRunJob;
 use App\Models\Client;
 use App\Models\ClientProcuracaoSync;
 use App\Models\Establishment;
 use App\Models\MailboxMessage;
 use App\Models\MailboxMonitoringSetting;
-use App\Models\Office;
 use App\Models\SerproPriceTier;
 use App\Models\SerproPriceVersion;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Integra\Mailbox\MailboxIdempotency;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
@@ -34,29 +34,29 @@ class MailboxMonitoringApiTest extends TestCase
         config(['fiscal.profile' => FiscalProfile::Dev->value, 'fiscal.kill_switch' => false]);
     }
 
-    public function test_configuration_is_tenant_scoped_and_rejects_office_id(): void
+    public function test_configuration_is_tenant_scoped_and_rejects_tenant_id(): void
     {
-        [$office] = $this->tenant();
-        $other = Office::factory()->create();
-        MailboxMonitoringSetting::query()->create(['office_id' => $other->id, 'enabled' => false]);
+        [$tenant] = $this->tenant();
+        $other = Tenant::factory()->create();
+        MailboxMonitoringSetting::query()->create(['tenant_id' => $other->id, 'enabled' => false]);
 
         $this->getJson('/api/v1/fiscal/mailbox/monitoring')
             ->assertOk()
             ->assertJsonPath('data.mode', 'ECONOMICO')
-            ->assertJsonMissingPath('data.office_id');
+            ->assertJsonMissingPath('data.tenant_id');
 
         $this->patchJson('/api/v1/fiscal/mailbox/monitoring', [
-            'office_id' => $other->id,
+            'tenant_id' => $other->id,
             'enabled' => true,
         ])->assertUnprocessable();
-        $this->assertDatabaseMissing('mailbox_monitoring_settings', ['office_id' => $office->id]);
-        $this->assertDatabaseHas('mailbox_monitoring_settings', ['office_id' => $other->id, 'enabled' => false]);
+        $this->assertDatabaseMissing('mailbox_monitoring_settings', ['tenant_id' => $tenant->id]);
+        $this->assertDatabaseHas('mailbox_monitoring_settings', ['tenant_id' => $other->id, 'enabled' => false]);
     }
 
     public function test_preview_and_confirm_update_now_are_costed_sanitized_and_idempotent(): void
     {
         Queue::fake();
-        [$office, $client] = $this->tenant();
+        [$tenant, $client] = $this->tenant();
         Establishment::factory()->forClient($client, '11222333000181')->create();
         ClientProcuracaoSync::factory()->forClient($client)->authorized()->create();
         $this->price('LISTAR', 250_000);
@@ -79,7 +79,7 @@ class MailboxMonitoringApiTest extends TestCase
 
         Queue::assertPushed(ExecuteFiscalMonitoringRunJob::class, 1);
         $this->assertDatabaseHas('fiscal_monitoring_runs', [
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'operation_code' => 'LISTAR',
         ]);
@@ -88,14 +88,14 @@ class MailboxMonitoringApiTest extends TestCase
     public function test_detail_on_demand_requires_cost_preview_and_creates_one_run_per_isn(): void
     {
         Queue::fake();
-        [$office, $client] = $this->tenant();
+        [$tenant, $client] = $this->tenant();
         $this->price('DETALHE', 100_000);
         $externalId = 'ISN-DETAIL-1';
         $message = MailboxMessage::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'external_id' => $externalId,
-            'message_hash' => MailboxIdempotency::messageHash($office->id, $client->id, $externalId),
+            'message_hash' => MailboxIdempotency::messageHash($tenant->id, $client->id, $externalId),
             'source' => MailboxSource::CaixaPostal,
             'sensitivity_class' => 'FISCAL_RESTRICTED',
             'subject_preview' => 'Sem corpo',
@@ -118,17 +118,17 @@ class MailboxMonitoringApiTest extends TestCase
         Queue::assertPushed(ExecuteFiscalMonitoringRunJob::class, 1);
     }
 
-    /** @return array{Office,Client} */
+    /** @return array{Tenant,Client} */
     private function tenant(): array
     {
-        $office = Office::factory()->create();
-        $user = User::factory()->forOffice($office, OfficeRole::Admin)->create();
-        $client = Client::factory()->for($office)->create();
+        $tenant = Tenant::factory()->create();
+        $user = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $client = Client::factory()->for($tenant)->create();
         Sanctum::actingAs($user);
-        app(CurrentOffice::class)->clear();
-        app(CurrentOffice::class)->resolve($user);
+        app(CurrentTenant::class)->clear();
+        app(CurrentTenant::class)->resolve($user);
 
-        return [$office, $client];
+        return [$tenant, $client];
     }
 
     private function price(string $operation, int $micros): void

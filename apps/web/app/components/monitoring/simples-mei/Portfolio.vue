@@ -13,6 +13,7 @@ import { MONITORING_SHARED_COLUMN_LABELS } from '~/utils/monitoring-table-column
 import { extractConsultRunRef } from '~/utils/fiscal-monitoring-run'
 import { apiErrorMessage } from '~/utils/api-error'
 import { COMPACT_BUTTON_LABEL_UI } from '~/utils/list-filter-layout'
+import { formatCnpj } from '~/utils/format'
 
 const props = defineProps<{
   submodule: 'PGDASD' | 'PGMEI'
@@ -270,8 +271,8 @@ async function confirmExcludeFromMonitoring() {
 
 function openFor(row: SimplesMeiClientRow, kind: 'history' | 'preview' | 'tracking' | 'prefs') {
   modalClientId.value = row.client_id
-  modalClientName.value = row.legal_name || row.name || null
-  modalCnpjMasked.value = row.cnpj_masked || null
+  modalClientName.value = row.display_name || row.legal_name || null
+  modalCnpjMasked.value = row.cnpj ? formatCnpj(row.cnpj) : null
   if (isPgmei.value) {
     modalPreference.value = pgmeiSummary(row, pgmeiYear.value)?.communication || null
   } else {
@@ -290,7 +291,7 @@ function openPgdasdHistory(row: SimplesMeiClientRow) {
 function openConsultConfirm(row: SimplesMeiClientRow, kind: 'pgdasd' | 'pgmei' = 'pgmei') {
   consultKind.value = kind
   consultClientId.value = row.client_id
-  consultClientName.value = row.legal_name || row.name || `Cliente #${row.client_id}`
+  consultClientName.value = row.display_name || row.legal_name || `Cliente #${row.client_id}`
   consultOpen.value = true
 }
 
@@ -322,8 +323,8 @@ function openMeiPublicServices(clientId: number) {
   const row = rows.value.find(item => item.client_id === clientId)
   if (!row) return
   publicServicesClientId.value = row.client_id
-  publicServicesClientName.value = row.legal_name || row.name || `Cliente #${row.client_id}`
-  publicServicesCnpjMasked.value = row.cnpj_masked || null
+  publicServicesClientName.value = row.display_name || row.legal_name || `Cliente #${row.client_id}`
+  publicServicesCnpjMasked.value = row.cnpj ? formatCnpj(row.cnpj) : null
   publicServicesOpen.value = true
 }
 

@@ -37,7 +37,7 @@ function dasDocuments(row: PgdasdHistoryOperationRow): PgdasdArtifactDescriptor[
 }
 
 function artifactDownloadPath(artifact: PgdasdArtifactDescriptor): string {
-  const path = artifact.download_path?.trim() || artifact.download_href?.trim()
+  const path = artifact.download_path?.trim()
   if (path) return resolveApiUrl(path, apiBase)
   return artifactDownloadUrl(artifact.id)
 }

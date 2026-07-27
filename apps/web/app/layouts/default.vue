@@ -18,7 +18,7 @@ import {
  * - SEM v-model / modelValue / remount / handlers de “nudge”
  * - type padrão = multiple (como o template e o default do componente)
  *
- * Só adaptamos: OfficeIdentity, destinos/permissões, command palette.
+ * Só adaptamos: TenantIdentity, destinos/permissões, command palette.
  * Slot direto no UDashboardGroup (sem wrapper) — obrigatório para
  * master–detalhe (work, communication, mailbox) com UDashboardPanel irmãos.
  *
@@ -56,14 +56,14 @@ watch(
   () => [
     route.path,
     me.value?.id,
-    me.value?.role,
+    me.value?.tenant_role,
     me.value?.access_mode,
-    me.value?.is_platform_admin,
+    me.value?.platform_role,
     me.value?.has_real_membership,
-    me.value?.real_office_role,
-    // lacksOfficeContext / quickActions dependem destes campos
+    me.value?.real_tenant_role,
+    // lacksTenantContext / quickActions dependem destes campos
     me.value?.context_status,
-    me.value?.current_office?.id ?? me.value?.office?.id ?? null
+    me.value?.current_tenant?.id ?? null
   ] as const,
   () => {
     rebuildNav()
@@ -121,7 +121,7 @@ const groups = computed(() => {
       :ui="{ footer: 'lg:border-t lg:border-default' }"
     >
       <template #header="{ collapsed }">
-        <OfficeIdentity :collapsed="collapsed" />
+        <TenantIdentity :collapsed="collapsed" />
       </template>
 
       <template #default="{ collapsed }">

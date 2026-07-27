@@ -68,7 +68,7 @@ final readonly class CommunicationOutboxService
 
         $entry = DB::transaction(function () use ($inbox, $message, $commandId, $effectKey, $type, $payload, $command): CommunicationOutboxEntry {
             return CommunicationOutboxEntry::query()->create([
-                'office_id' => $inbox->office_id,
+                'tenant_id' => $inbox->tenant_id,
                 'inbox_id' => $inbox->id,
                 'message_id' => $message?->id,
                 'command_id' => $commandId,
@@ -97,7 +97,7 @@ final readonly class CommunicationOutboxService
 
         if ($message !== null && (
             ! $message->exists
-            || (int) $message->office_id !== (int) $inbox->office_id
+            || (int) $message->tenant_id !== (int) $inbox->tenant_id
             || (int) $message->inbox_id !== (int) $inbox->id
         )) {
             throw new DomainException('OUTBOX_TENANT_SCOPE_INVALID');

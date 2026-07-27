@@ -15,6 +15,10 @@ class SpaLoginResponse implements LoginResponseContract
 {
     public function toResponse($request): JsonResponse
     {
-        return response()->json(['two_factor' => false]);
+        return response()->json([
+            'data' => [
+                'authenticated' => true,
+            ],
+        ]);
     }
 }

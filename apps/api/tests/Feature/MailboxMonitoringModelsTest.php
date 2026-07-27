@@ -9,9 +9,9 @@ use App\Enums\SerproEnvironment;
 use App\Models\Client;
 use App\Models\MailboxClientSyncState;
 use App\Models\MailboxMonitoringSetting;
-use App\Models\Office;
 use App\Models\SerproEventosRun;
 use App\Models\SerproEventosRunItem;
+use App\Models\Tenant;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -20,10 +20,10 @@ class MailboxMonitoringModelsTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_casts_defaults_and_unique_office_setting(): void
+    public function test_casts_defaults_and_unique_tenant_setting(): void
     {
-        $office = Office::factory()->create();
-        $setting = MailboxMonitoringSetting::query()->create(['office_id' => $office->id]);
+        $tenant = Tenant::factory()->create();
+        $setting = MailboxMonitoringSetting::query()->create(['tenant_id' => $tenant->id]);
 
         $this->assertFalse($setting->enabled);
         $this->assertSame(MailboxMonitoringMode::Economic, $setting->mode);
@@ -31,22 +31,22 @@ class MailboxMonitoringModelsTest extends TestCase
         $this->assertSame(0, $setting->auto_detail_limit);
 
         $this->expectException(QueryException::class);
-        MailboxMonitoringSetting::query()->create(['office_id' => $office->id]);
+        MailboxMonitoringSetting::query()->create(['tenant_id' => $tenant->id]);
     }
 
-    public function test_sync_and_event_items_are_office_scoped_and_unique(): void
+    public function test_sync_and_event_items_are_tenant_scoped_and_unique(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->for($office)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->for($tenant)->create();
         $state = MailboxClientSyncState::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'pending_event_date' => '2026-07-20',
         ]);
         $this->assertSame('2026-07-20', $state->pending_event_date?->toDateString());
 
         $run = SerproEventosRun::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'environment' => SerproEnvironment::Trial,
             'person_type' => 'PJ',
             'phase' => SerproEventosRun::PHASE_CONSUMED,
@@ -55,7 +55,7 @@ class MailboxMonitoringModelsTest extends TestCase
         ]);
         $item = SerproEventosRunItem::query()->create([
             'serpro_eventos_run_id' => $run->id,
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'ni_fingerprint' => hash('sha256', 'ni'),
             'classification' => MailboxEventItemClassification::EventDate,
@@ -64,6 +64,6 @@ class MailboxMonitoringModelsTest extends TestCase
         ]);
 
         $this->assertSame(MailboxEventItemClassification::EventDate, $item->classification);
-        $this->assertSame($office->id, $item->office_id);
+        $this->assertSame($tenant->id, $item->tenant_id);
     }
 }

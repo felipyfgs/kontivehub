@@ -10,7 +10,7 @@ use App\Enums\FiscalTrigger;
 use App\Jobs\Fiscal\ExecuteFiscalMonitoringRunJob;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\FiscalMonitoring\FiscalIdempotency;
 use Illuminate\Support\Str;
 
@@ -19,21 +19,21 @@ final class MailboxListRunDispatcher
     public function __construct(private readonly MailboxCostPolicy $cost) {}
 
     /** @param list<Client> $clients @return list<FiscalMonitoringRun> */
-    public function dispatch(Office $office, array $clients, string $reason, bool $fullReconciliation = false): array
+    public function dispatch(Tenant $tenant, array $clients, string $reason, bool $fullReconciliation = false): array
     {
         if ($clients === []) {
             return [];
         }
-        $this->cost->assertAllowed((int) $office->id, 'LISTAR', count($clients));
+        $this->cost->assertAllowed((int) $tenant->id, 'LISTAR', count($clients));
 
         $runs = [];
         foreach ($clients as $client) {
-            if ((int) $client->office_id !== (int) $office->id || ! $client->is_active) {
+            if ((int) $client->tenant_id !== (int) $tenant->id || ! $client->is_active) {
                 continue;
             }
             $slot = sprintf('mailbox:%s:%s', strtolower($reason), now($this->timezone())->format('Y-m-d'));
             $key = FiscalIdempotency::runKey(
-                (int) $office->id,
+                (int) $tenant->id,
                 (int) $client->id,
                 'INTEGRA_CAIXAPOSTAL',
                 'CAIXA_POSTAL',
@@ -43,7 +43,7 @@ final class MailboxListRunDispatcher
                 $slot,
             );
             $run = FiscalMonitoringRun::query()->withoutGlobalScopes()->firstOrCreate(
-                ['office_id' => $office->id, 'idempotency_key' => $key],
+                ['tenant_id' => $tenant->id, 'idempotency_key' => $key],
                 [
                     'client_id' => $client->id,
                     'system_code' => 'INTEGRA_CAIXAPOSTAL',

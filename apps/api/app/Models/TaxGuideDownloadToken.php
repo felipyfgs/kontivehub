@@ -2,14 +2,14 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'tax_guide_version_id',
     'user_id',
     'token_hash',
@@ -20,7 +20,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Hidden(['token_hash'])]
 class TaxGuideDownloadToken extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     public $timestamps = false;
 

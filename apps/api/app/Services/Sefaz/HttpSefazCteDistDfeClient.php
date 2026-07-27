@@ -33,15 +33,6 @@ final class HttpSefazCteDistDfeClient implements SefazCteDistDfeClient
         return $this->call($certificate, $inner);
     }
 
-    public function distByNsu(
-        array $certificate,
-        string $cnpjConsulta,
-        int $ultNsu,
-        string $cUfAutor,
-    ): DistDfePageDto {
-        return $this->distByLastNsu($certificate, $cnpjConsulta, $ultNsu, $cUfAutor);
-    }
-
     public function findByNsu(
         array $certificate,
         string $cnpjConsulta,
@@ -147,10 +138,10 @@ XML;
     private function assertCertificateMaterial(array $certificate): void
     {
         if (! isset($certificate['pfx'], $certificate['password'])) {
-            throw new AdnPermanentException('Certificado A1 ausente para CT-e DistDFe.');
+            throw new AdnPermanentException('certificado ausente para CT-e DistDFe.');
         }
         if ($certificate['pfx'] === '' || $certificate['password'] === '') {
-            throw new AdnPermanentException('Certificado A1 inválido para CT-e DistDFe.');
+            throw new AdnPermanentException('certificado inválido para CT-e DistDFe.');
         }
     }
 

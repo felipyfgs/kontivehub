@@ -76,7 +76,7 @@ final class ParcelamentoEmitDocumentAdapter implements FiscalSourceAdapter
             return FiscalAdapterResult::unsupported("Modalidade inválida: {$request->serviceCode}");
         }
 
-        if (! FeatureFlags::isModuleEnabled(ParcelamentoServiceCatalog::MODULE_KEY, $request->office->id)
+        if (! FeatureFlags::isModuleEnabled(ParcelamentoServiceCatalog::MODULE_KEY, $request->tenant->id)
             && ! (bool) config('fiscal_monitoring.enabled', false)) {
             return FiscalAdapterResult::blocked('Módulo parcelamentos desabilitado.', 'FEATURE_DISABLED');
         }
@@ -84,7 +84,7 @@ final class ParcelamentoEmitDocumentAdapter implements FiscalSourceAdapter
         $author = (string) ($request->context['author_identity'] ?? '');
         if ($author !== '') {
             $power = $this->proxyPowers->findUsablePower(
-                (int) $request->office->id,
+                (int) $request->tenant->id,
                 (int) $request->client->id,
                 $modality->requiredPowerCode(),
                 $author,
@@ -121,7 +121,7 @@ final class ParcelamentoEmitDocumentAdapter implements FiscalSourceAdapter
         if ($orderExternalId !== '') {
             $order = TaxInstallmentOrder::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $request->office->id)
+                ->where('tenant_id', $request->tenant->id)
                 ->where('client_id', $request->client->id)
                 ->where('modality', $modality->value)
                 ->where('external_order_id', $orderExternalId)
@@ -131,7 +131,7 @@ final class ParcelamentoEmitDocumentAdapter implements FiscalSourceAdapter
         if ($order !== null) {
             $parcel = TaxInstallmentParcel::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $request->office->id)
+                ->where('tenant_id', $request->tenant->id)
                 ->where('order_id', $order->id)
                 ->where('parcel_key', $parcelKey)
                 ->first();
@@ -227,7 +227,7 @@ final class ParcelamentoEmitDocumentAdapter implements FiscalSourceAdapter
         if ($order === null) {
             $order = TaxInstallmentOrder::query()->updateOrCreate(
                 [
-                    'office_id' => $request->office->id,
+                    'tenant_id' => $request->tenant->id,
                     'client_id' => $request->client->id,
                     'modality' => $modality->value,
                     'external_order_id' => $orderExternalId !== '' ? $orderExternalId : 'UNKNOWN',
@@ -247,7 +247,7 @@ final class ParcelamentoEmitDocumentAdapter implements FiscalSourceAdapter
             $logical = implode(':', ['PARC', $modality->value, $order->external_order_id, $parcelKey]);
             $parcel = TaxInstallmentParcel::query()->updateOrCreate(
                 [
-                    'office_id' => $request->office->id,
+                    'tenant_id' => $request->tenant->id,
                     'order_id' => $order->id,
                     'parcel_key' => $parcelKey,
                 ],
@@ -266,7 +266,7 @@ final class ParcelamentoEmitDocumentAdapter implements FiscalSourceAdapter
         }
 
         $enroll = $this->guides->enrollFromInstallmentDocument(
-            $request->office,
+            $request->tenant,
             $request->client,
             $parcel,
             [
@@ -283,6 +283,7 @@ final class ParcelamentoEmitDocumentAdapter implements FiscalSourceAdapter
                 'source_system' => ParcelamentoServiceCatalog::SOLUTION,
                 'source_service' => $modality->value,
                 'source_operation' => 'EMITIR_DOCUMENTO',
+                'operation_key' => (string) $request->run->operation_key,
                 'correlation_id' => $request->run->correlation_id,
                 'run_id' => $request->run->id,
             ],

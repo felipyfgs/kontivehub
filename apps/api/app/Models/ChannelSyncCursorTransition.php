@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use App\Enums\CaptureChannel;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use App\Support\LogSanitizer;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
@@ -14,13 +14,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * Metadados sempre sanitizados — sem material fiscal bruto.
  */
 #[Fillable([
-    'office_id', 'channel_sync_cursor_id', 'channel', 'event',
+    'tenant_id', 'channel_sync_cursor_id', 'channel', 'event',
     'from_status', 'to_status', 'from_last_nsu', 'to_last_nsu',
     'last_cstat', 'correlation_id', 'metadata', 'occurred_at',
 ])]
 class ChannelSyncCursorTransition extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {
@@ -52,7 +52,7 @@ class ChannelSyncCursorTransition extends Model
         $safeMeta = LogSanitizer::redact($metadata);
 
         return self::query()->create([
-            'office_id' => $cursor->office_id,
+            'tenant_id' => $cursor->tenant_id,
             'channel_sync_cursor_id' => $cursor->id,
             'channel' => $cursor->channel instanceof CaptureChannel
                 ? $cursor->channel->value

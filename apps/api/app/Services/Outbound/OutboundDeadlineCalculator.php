@@ -17,15 +17,15 @@ final class OutboundDeadlineCalculator
 {
     public function planFromAuthorizationDate(
         DateTimeInterface $authorizedAt,
-        ?string $officeTimezone = null,
+        ?string $tenantTimezone = null,
         ?CarbonImmutable $now = null,
         bool $captured = false,
         bool $capacityAtRisk = false,
     ): DeadlinePlan {
-        $localTz = $officeTimezone ?: (string) config('outbound_deadline.timezone', 'America/Sao_Paulo');
+        $localTz = $tenantTimezone ?: (string) config('outbound_deadline.timezone', 'America/Sao_Paulo');
         $authLocal = CarbonImmutable::instance($authorizedAt)->timezone($localTz);
         $competence = Competence::fromYearMonth($authLocal->year, $authLocal->month);
-        $sla = OperationalSla::fromConfig($officeTimezone);
+        $sla = OperationalSla::fromConfig($tenantTimezone);
         $deadlines = $sla->deadlinesFor($competence);
         $now = $now?->utc() ?? CarbonImmutable::now('UTC');
 
@@ -41,7 +41,7 @@ final class OutboundDeadlineCalculator
 
     public function planFromAccessKey(
         string $accessKey,
-        ?string $officeTimezone = null,
+        ?string $tenantTimezone = null,
         ?CarbonImmutable $now = null,
         bool $captured = false,
         bool $capacityAtRisk = false,
@@ -50,7 +50,7 @@ final class OutboundDeadlineCalculator
         if ($competence === null) {
             return null;
         }
-        $sla = OperationalSla::fromConfig($officeTimezone);
+        $sla = OperationalSla::fromConfig($tenantTimezone);
         $deadlines = $sla->deadlinesFor($competence);
         $now = $now?->utc() ?? CarbonImmutable::now('UTC');
 

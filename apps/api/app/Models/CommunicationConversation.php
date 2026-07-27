@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use App\Enums\Communication\ConversationStatus;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'inbox_id',
     'identity_id',
     'status',
@@ -28,7 +28,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 ])]
 class CommunicationConversation extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {
@@ -60,7 +60,7 @@ class CommunicationConversation extends Model
 
     public function assignee(): BelongsTo
     {
-        return $this->belongsTo(OfficeMembership::class, 'assignee_membership_id');
+        return $this->belongsTo(TenantMembership::class, 'assignee_membership_id');
     }
 
     public function messages(): HasMany
@@ -82,14 +82,14 @@ class CommunicationConversation extends Model
     public function clients(): BelongsToMany
     {
         return $this->belongsToMany(Client::class, 'communication_conversation_clients', 'conversation_id', 'client_id')
-            ->withPivot('office_id')
+            ->withPivot('tenant_id')
             ->withTimestamps();
     }
 
     public function labels(): BelongsToMany
     {
         return $this->belongsToMany(CommunicationLabel::class, 'communication_conversation_labels', 'conversation_id', 'label_id')
-            ->withPivot(['office_id', 'assigned_by_membership_id'])
+            ->withPivot(['tenant_id', 'assigned_by_membership_id'])
             ->withTimestamps();
     }
 }

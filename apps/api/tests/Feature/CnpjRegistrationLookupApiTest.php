@@ -3,10 +3,10 @@
 namespace Tests\Feature;
 
 use App\DTO\Cnpj\DocumentMask;
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Models\Client;
 use App\Models\Establishment;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -33,7 +33,7 @@ class CnpjRegistrationLookupApiTest extends TestCase
 
     public function test_lookup_maps_expanded_cartao_cnpj_fields_without_raw_cpf(): void
     {
-        [$user] = $this->actor(OfficeRole::Operator);
+        [$user] = $this->actor(TenantRole::TenantUser);
         Sanctum::actingAs($user);
 
         Http::fake([
@@ -78,7 +78,7 @@ class CnpjRegistrationLookupApiTest extends TestCase
 
     public function test_lookup_merges_serpro_qsa_when_enabled(): void
     {
-        [$user] = $this->actor(OfficeRole::Operator);
+        [$user] = $this->actor(TenantRole::TenantUser);
         Sanctum::actingAs($user);
 
         config([
@@ -111,7 +111,7 @@ class CnpjRegistrationLookupApiTest extends TestCase
 
     public function test_lookup_falls_back_to_cnpj_ws_when_serpro_fails(): void
     {
-        [$user] = $this->actor(OfficeRole::Operator);
+        [$user] = $this->actor(TenantRole::TenantUser);
         Sanctum::actingAs($user);
 
         config([
@@ -140,7 +140,7 @@ class CnpjRegistrationLookupApiTest extends TestCase
 
     public function test_store_persists_expanded_snapshot_from_lookup_cache(): void
     {
-        [$user, $office] = $this->actor(OfficeRole::Admin);
+        [$user, $tenant] = $this->actor(TenantRole::TenantAdmin);
         Sanctum::actingAs($user);
 
         Http::fake([
@@ -175,7 +175,7 @@ class CnpjRegistrationLookupApiTest extends TestCase
             ->assertCreated()
             ->json('data.client');
 
-        $client = Client::query()->where('office_id', $office->id)->findOrFail($created['id']);
+        $client = Client::query()->where('tenant_id', $tenant->id)->findOrFail($created['id']);
         $this->assertNotNull($client->capital_social);
 
         $est = Establishment::query()->where('client_id', $client->id)->firstOrFail();
@@ -189,12 +189,42 @@ class CnpjRegistrationLookupApiTest extends TestCase
         }
     }
 
-    public function test_refresh_registration_updates_rfb_without_touching_internal_fields(): void
+    public function test_store_groups_establishments_with_the_same_root_under_one_client(): void
     {
-        [$user, $office] = $this->actor(OfficeRole::Admin);
+        [$user, $tenant] = $this->actor(TenantRole::TenantAdmin);
         Sanctum::actingAs($user);
 
-        $client = Client::factory()->forOffice($office)->create([
+        $headquarters = $this->postJson('/api/v1/clients', [
+            'legal_name' => 'EMPRESA RAIZ LTDA',
+            'cnpj' => self::CNPJ,
+            'is_headquarters' => true,
+        ])->assertCreated();
+
+        $branch = $this->postJson('/api/v1/clients', [
+            'legal_name' => 'EMPRESA RAIZ LTDA',
+            'cnpj' => '27865757000285',
+            'is_headquarters' => false,
+        ])->assertCreated();
+
+        $clientId = $headquarters->json('data.client.id');
+        $this->assertSame($clientId, $branch->json('data.client.id'));
+        $this->assertSame(1, Client::query()->where('tenant_id', $tenant->id)->count());
+        $this->assertSame(2, Establishment::query()->where('client_id', $clientId)->count());
+        $this->assertSame(
+            1,
+            Establishment::query()
+                ->where('client_id', $clientId)
+                ->where('is_headquarters', true)
+                ->count(),
+        );
+    }
+
+    public function test_refresh_registration_updates_rfb_without_touching_internal_fields(): void
+    {
+        [$user, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        Sanctum::actingAs($user);
+
+        $client = Client::factory()->forTenant($tenant)->create([
             'legal_name' => 'ANTIGA RAZAO',
             'display_name' => 'Apelido Interno',
             'tax_regime' => 'SIMPLES_NACIONAL',
@@ -204,7 +234,7 @@ class CnpjRegistrationLookupApiTest extends TestCase
         Establishment::factory()->forClient($client)->create([
             'cnpj' => self::CNPJ,
             'trade_name' => 'VELHO',
-            'is_matrix' => true,
+            'is_headquarters' => true,
         ]);
 
         Http::fake([
@@ -224,10 +254,10 @@ class CnpjRegistrationLookupApiTest extends TestCase
 
     public function test_refresh_registration_applies_confirmed_lookup_snapshot(): void
     {
-        [$user, $office] = $this->actor(OfficeRole::Admin);
+        [$user, $tenant] = $this->actor(TenantRole::TenantAdmin);
         Sanctum::actingAs($user);
 
-        $client = Client::factory()->forOffice($office)->create([
+        $client = Client::factory()->forTenant($tenant)->create([
             'legal_name' => 'ANTIGA RAZAO',
             'display_name' => 'Apelido Interno',
             'tax_regime' => 'SIMPLES_NACIONAL',
@@ -237,7 +267,7 @@ class CnpjRegistrationLookupApiTest extends TestCase
         Establishment::factory()->forClient($client)->create([
             'cnpj' => self::CNPJ,
             'trade_name' => 'VELHO',
-            'is_matrix' => true,
+            'is_headquarters' => true,
         ]);
 
         Http::fake([
@@ -264,15 +294,15 @@ class CnpjRegistrationLookupApiTest extends TestCase
 
     public function test_refresh_registration_rejects_confirmed_snapshot_with_mismatched_cnpj(): void
     {
-        [$user, $office] = $this->actor(OfficeRole::Admin);
+        [$user, $tenant] = $this->actor(TenantRole::TenantAdmin);
         Sanctum::actingAs($user);
 
-        $client = Client::factory()->forOffice($office)->create([
+        $client = Client::factory()->forTenant($tenant)->create([
             'root_cnpj' => '27865757',
         ]);
         Establishment::factory()->forClient($client)->create([
             'cnpj' => self::CNPJ,
-            'is_matrix' => true,
+            'is_headquarters' => true,
         ]);
 
         Http::fake([
@@ -297,13 +327,13 @@ class CnpjRegistrationLookupApiTest extends TestCase
         $this->assertNull(DocumentMask::ensureMasked(null));
     }
 
-    /** @return array{User, Office} */
-    private function actor(OfficeRole $role): array
+    /** @return array{User, Tenant} */
+    private function actor(TenantRole $role): array
     {
-        $office = Office::factory()->create();
-        $user = User::factory()->forOffice($office, $role)->create();
+        $tenant = Tenant::factory()->create();
+        $user = User::factory()->forTenant($tenant, $role)->create();
 
-        return [$user, $office];
+        return [$user, $tenant];
     }
 
     /**

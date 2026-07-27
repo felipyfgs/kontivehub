@@ -1,13 +1,11 @@
 <script setup lang="ts">
-import type { LocationQueryRaw } from 'vue-router'
 import type { WorkDepartment, WorkKpis } from '~/types/work'
 import { apiErrorMessage } from '~/utils/api-error'
 import {
   buildWorkDashboardKpis,
   buildWorkDepartmentRows,
   workCompletionPercent,
-  workOperationalLevel,
-  workQueueLegacyTarget
+  workOperationalLevel
 } from '~/utils/work-strategic-dashboard'
 import type { DashboardKpiItem } from '~/utils/kpi-ui'
 import {
@@ -17,16 +15,6 @@ import {
   workRiskLabel,
   type SemanticColor
 } from '~/utils/work-labels'
-
-const route = useRoute()
-const legacyTarget = workQueueLegacyTarget(route.query as Record<string, unknown>)
-
-if (legacyTarget) {
-  await navigateTo({
-    path: legacyTarget.path,
-    query: legacyTarget.query as LocationQueryRaw
-  }, { replace: true })
-}
 
 const api = useApi()
 const toast = useToast()
@@ -81,7 +69,7 @@ async function load() {
 }
 
 onMounted(() => {
-  if (!legacyTarget) void load()
+  void load()
 })
 
 watch(sessionEpoch, () => {
@@ -90,7 +78,7 @@ watch(sessionEpoch, () => {
   departments.value = []
   error.value = null
   stale.value = false
-  if (!legacyTarget) void load()
+  void load()
 })
 
 const kpiCards = computed(() => data.value ? buildWorkDashboardKpis(data.value) : [])
@@ -166,7 +154,7 @@ const lastUpdated = computed(() => {
       month: '2-digit',
       hour: '2-digit',
       minute: '2-digit',
-      timeZone: data.value.office_timezone
+      timeZone: data.value.tenant_timezone
     }).format(new Date(data.value.generated_at))
   } catch {
     return null
@@ -206,424 +194,422 @@ function departmentProgressColor(row: { fine: number, overdue: number }): Semant
     </template>
 
     <template #body>
-      <template v-if="!legacyTarget">
-        <section
-          class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"
-          aria-labelledby="work-strategic-heading"
+      <section
+        class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"
+        aria-labelledby="work-strategic-heading"
+      >
+        <div class="min-w-0">
+          <h1
+            id="work-strategic-heading"
+            class="text-xl font-semibold text-highlighted"
+          >
+            Visão estratégica
+          </h1>
+          <p class="mt-1 max-w-3xl text-sm text-muted">
+            Compare carga, risco e responsabilidade para direcionar a operação do escritório.
+          </p>
+        </div>
+
+        <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+          <UBadge
+            v-if="data?.today"
+            color="neutral"
+            variant="subtle"
+            icon="i-lucide-calendar-check"
+            :label="`Posição em ${formatDueDate(data.today)}`"
+          />
+          <span v-if="lastUpdated">Atualizado {{ lastUpdated }}</span>
+        </div>
+      </section>
+
+      <UAlert
+        v-if="stale && error"
+        color="warning"
+        variant="subtle"
+        icon="i-lucide-wifi-off"
+        title="Mostrando o último snapshot disponível"
+        :description="error"
+        :actions="[{
+          label: 'Tentar novamente',
+          color: 'neutral',
+          variant: 'subtle',
+          onClick: () => load()
+        }]"
+        data-testid="work-dashboard-stale"
+      />
+
+      <template v-if="loading && !data">
+        <div
+          class="grid min-w-0 grid-cols-2 gap-2 lg:grid-cols-6"
+          data-testid="work-dashboard-loading"
+          role="status"
+          aria-busy="true"
+          aria-label="Carregando indicadores estratégicos"
         >
-          <div class="min-w-0">
-            <h1
-              id="work-strategic-heading"
-              class="text-xl font-semibold text-highlighted"
-            >
-              Visão estratégica
-            </h1>
-            <p class="mt-1 max-w-3xl text-sm text-muted">
-              Compare carga, risco e responsabilidade para direcionar a operação do escritório.
+          <USkeleton
+            v-for="index in 6"
+            :key="index"
+            class="h-24 rounded-lg"
+          />
+        </div>
+        <div class="grid min-w-0 gap-5 lg:grid-cols-2">
+          <USkeleton class="h-72 rounded-lg" />
+          <USkeleton class="h-72 rounded-lg" />
+        </div>
+      </template>
+
+      <UAlert
+        v-else-if="error && !data"
+        color="error"
+        variant="subtle"
+        icon="i-lucide-circle-x"
+        title="Visão estratégica indisponível"
+        :description="error"
+        :actions="[{
+          label: 'Tentar novamente',
+          color: 'neutral',
+          variant: 'subtle',
+          onClick: () => load()
+        }]"
+        data-testid="work-dashboard-error"
+      />
+
+      <template v-else-if="data">
+        <section class="min-w-0" data-testid="work-dashboard-performance" aria-labelledby="work-performance-heading">
+          <div class="mb-3">
+            <h2 id="work-performance-heading" class="text-sm font-semibold text-highlighted">
+              Carga consolidada
+            </h2>
+            <p class="mt-0.5 text-xs text-muted">
+              Posição dos processos e tarefas neste snapshot.
+            </p>
+          </div>
+          <ShellKpiStrip
+            :items="performanceKpis"
+            :loading="loading"
+            :columns="6"
+            legend="Situação das tarefas"
+            test-id="work-dashboard-kpis"
+          />
+        </section>
+
+        <section
+          class="grid min-w-0 divide-y divide-default border-y border-default md:grid-cols-2 md:divide-x md:divide-y-0"
+          aria-label="Leitura do desempenho"
+        >
+          <div class="min-w-0 py-3 md:pe-5" data-testid="work-dashboard-completion">
+            <div class="flex items-baseline justify-between gap-3">
+              <h2 class="text-sm font-medium text-highlighted">
+                Conclusão da carga
+              </h2>
+              <strong class="text-lg font-semibold tabular-nums text-highlighted">{{ completionPercent }}%</strong>
+            </div>
+            <p class="mt-1 text-xs text-muted">
+              {{ data.kpis.concluidas }} de {{ relevantTaskTotal }} tarefas no consolidado.
             </p>
           </div>
 
-          <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-            <UBadge
-              v-if="data?.today"
-              color="neutral"
-              variant="subtle"
-              icon="i-lucide-calendar-check"
-              :label="`Posição em ${formatDueDate(data.today)}`"
-            />
-            <span v-if="lastUpdated">Atualizado {{ lastUpdated }}</span>
+          <div
+            v-if="operationalLevel"
+            class="min-w-0 py-3 md:ps-5"
+            data-testid="work-dashboard-level"
+          >
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <h2 class="text-sm font-medium text-highlighted">
+                Nível operacional
+              </h2>
+              <UBadge :color="operationalLevel.tone" variant="subtle" :label="operationalLevel.label" />
+            </div>
+            <p class="mt-1 text-xs leading-5 text-muted">
+              {{ operationalLevel.description }}
+            </p>
+            <p v-if="relevantTaskTotal === 0" class="mt-1 text-xs font-medium text-muted">
+              Sem carga no snapshot
+            </p>
+            <p v-else-if="operationalLevel.nextLabel" class="mt-1 text-xs font-medium text-toned">
+              Faltam {{ operationalLevel.remainingToNext }} conclusões para {{ operationalLevel.nextLabel }}.
+            </p>
+            <p v-else class="mt-1 text-xs font-medium text-success">
+              Faixa mais alta alcançada.
+            </p>
           </div>
         </section>
 
-        <UAlert
-          v-if="stale && error"
-          color="warning"
-          variant="subtle"
-          icon="i-lucide-wifi-off"
-          title="Mostrando o último snapshot disponível"
-          :description="error"
-          :actions="[{
-            label: 'Tentar novamente',
-            color: 'neutral',
-            variant: 'subtle',
-            onClick: () => load()
-          }]"
-          data-testid="work-dashboard-stale"
-        />
-
-        <template v-if="loading && !data">
-          <div
-            class="grid min-w-0 grid-cols-2 gap-2 lg:grid-cols-6"
-            data-testid="work-dashboard-loading"
-            role="status"
-            aria-busy="true"
-            aria-label="Carregando indicadores estratégicos"
-          >
-            <USkeleton
-              v-for="index in 6"
-              :key="index"
-              class="h-24 rounded-lg"
-            />
-          </div>
-          <div class="grid min-w-0 gap-5 lg:grid-cols-2">
-            <USkeleton class="h-72 rounded-lg" />
-            <USkeleton class="h-72 rounded-lg" />
-          </div>
-        </template>
-
-        <UAlert
-          v-else-if="error && !data"
-          color="error"
-          variant="subtle"
-          icon="i-lucide-circle-x"
-          title="Visão estratégica indisponível"
-          :description="error"
-          :actions="[{
-            label: 'Tentar novamente',
-            color: 'neutral',
-            variant: 'subtle',
-            onClick: () => load()
-          }]"
-          data-testid="work-dashboard-error"
-        />
-
-        <template v-else-if="data">
-          <section class="min-w-0" data-testid="work-dashboard-performance" aria-labelledby="work-performance-heading">
+        <div class="grid min-w-0 gap-x-8 gap-y-6 xl:grid-cols-[minmax(0,2fr)_minmax(16rem,0.8fr)]">
+          <section class="min-w-0" data-testid="work-dashboard-departments" aria-labelledby="work-departments-heading">
             <div class="mb-3">
-              <h2 id="work-performance-heading" class="text-sm font-semibold text-highlighted">
-                Carga consolidada
+              <h2 id="work-departments-heading" class="text-sm font-semibold text-highlighted">
+                Carga por departamento
               </h2>
               <p class="mt-0.5 text-xs text-muted">
-                Posição dos processos e tarefas neste snapshot.
+                Volume, risco e avanço agrupados por área.
               </p>
             </div>
-            <ShellKpiStrip
-              :items="performanceKpis"
-              :loading="loading"
-              :columns="6"
-              legend="Situação das tarefas"
-              test-id="work-dashboard-kpis"
+
+            <template v-if="departmentRows.length">
+              <div class="hidden md:block" data-testid="work-dashboard-departments-table">
+                <table class="w-full table-fixed text-left text-sm">
+                  <caption class="sr-only">
+                    Carga operacional dos departamentos no snapshot atual
+                  </caption>
+                  <thead class="border-y border-default text-xs text-muted">
+                    <tr>
+                      <th scope="col" class="w-[28%] px-3 py-2 font-medium">
+                        Departamento
+                      </th>
+                      <th scope="col" class="w-[34%] px-3 py-2 font-medium">
+                        Carga e risco
+                      </th>
+                      <th scope="col" class="w-[28%] px-3 py-2 font-medium">
+                        Conclusão
+                      </th>
+                      <th scope="col" class="w-[10%] px-3 py-2 text-right font-medium">
+                        Ação
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-default">
+                    <tr v-for="row in departmentRows" :key="String(row.id)">
+                      <th scope="row" class="min-w-0 px-3 py-2.5 font-normal">
+                        <NuxtLink :to="row.to" class="block truncate font-medium text-highlighted hover:text-primary hover:underline">
+                          {{ row.name }}
+                        </NuxtLink>
+                        <span class="mt-0.5 block text-xs text-muted">{{ row.open }} abertas · {{ row.completed }} concluídas</span>
+                      </th>
+                      <td class="px-3 py-2.5">
+                        <div class="flex flex-wrap gap-1">
+                          <UBadge
+                            v-if="row.overdue"
+                            color="warning"
+                            variant="subtle"
+                            size="sm"
+                            :label="`${row.overdue} atrasadas`"
+                          />
+                          <UBadge
+                            v-if="row.fine"
+                            color="error"
+                            variant="subtle"
+                            size="sm"
+                            :label="`${row.fine} em multa`"
+                          />
+                          <UBadge
+                            v-if="row.unassigned"
+                            color="info"
+                            variant="subtle"
+                            size="sm"
+                            :label="`${row.unassigned} sem responsável`"
+                          />
+                          <span v-if="!row.overdue && !row.fine && !row.unassigned" class="text-xs text-muted">Sem exceções</span>
+                        </div>
+                      </td>
+                      <td class="px-3 py-2.5">
+                        <div class="flex items-center gap-2">
+                          <UProgress
+                            :model-value="row.completedPercent"
+                            :color="departmentProgressColor(row)"
+                            size="sm"
+                            :aria-label="`${row.name}: ${row.completedPercent}% concluído`"
+                          />
+                          <span class="w-10 shrink-0 text-right text-xs font-semibold tabular-nums text-highlighted">{{ row.completedPercent }}%</span>
+                        </div>
+                      </td>
+                      <td class="px-3 py-2.5 text-right">
+                        <UButton
+                          :to="row.to"
+                          color="neutral"
+                          variant="ghost"
+                          icon="i-lucide-arrow-up-right"
+                          square
+                          :aria-label="`Abrir fila de ${row.name}`"
+                        />
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <ul
+                class="divide-y divide-default border-y border-default md:hidden"
+                aria-label="Carga dos departamentos"
+                data-testid="work-dashboard-departments-mobile"
+              >
+                <li v-for="row in departmentRows" :key="String(row.id)" class="min-w-0 py-3">
+                  <div class="flex min-w-0 items-start justify-between gap-3">
+                    <div class="min-w-0">
+                      <NuxtLink :to="row.to" class="block truncate font-medium text-highlighted hover:text-primary hover:underline">
+                        {{ row.name }}
+                      </NuxtLink>
+                      <p class="mt-0.5 text-xs text-muted">
+                        {{ row.open }} abertas · {{ row.completed }} concluídas
+                      </p>
+                    </div>
+                    <span class="shrink-0 text-sm font-semibold tabular-nums text-highlighted">{{ row.completedPercent }}%</span>
+                  </div>
+                  <UProgress
+                    class="mt-2"
+                    :model-value="row.completedPercent"
+                    :color="departmentProgressColor(row)"
+                    size="sm"
+                    :aria-label="`${row.name}: ${row.completedPercent}% concluído`"
+                  />
+                  <div class="mt-2 flex min-w-0 flex-wrap items-center gap-1.5">
+                    <UBadge
+                      v-if="row.overdue"
+                      color="warning"
+                      variant="subtle"
+                      size="sm"
+                      :label="`${row.overdue} atrasadas`"
+                    />
+                    <UBadge
+                      v-if="row.fine"
+                      color="error"
+                      variant="subtle"
+                      size="sm"
+                      :label="`${row.fine} em multa`"
+                    />
+                    <UBadge
+                      v-if="row.unassigned"
+                      color="info"
+                      variant="subtle"
+                      size="sm"
+                      :label="`${row.unassigned} sem responsável`"
+                    />
+                    <UButton
+                      :to="row.to"
+                      color="neutral"
+                      variant="link"
+                      size="xs"
+                      label="Abrir fila"
+                      trailing-icon="i-lucide-arrow-right"
+                      class="ms-auto"
+                    />
+                  </div>
+                </li>
+              </ul>
+            </template>
+
+            <ShellListEmpty
+              v-else
+              title="Sem atividade por departamento"
+              description="As áreas aparecerão aqui quando houver tarefas operacionais no escritório."
+              test-id="work-dashboard-departments-empty"
+            />
+          </section>
+
+          <aside class="min-w-0" aria-labelledby="work-summary-heading" data-testid="work-dashboard-operational-summary">
+            <div class="mb-3">
+              <h2 id="work-summary-heading" class="text-sm font-semibold text-highlighted">
+                Situação operacional
+              </h2>
+              <p class="mt-0.5 text-xs text-muted">
+                Atalhos para comparar o estoque de tarefas.
+              </p>
+            </div>
+            <ul class="divide-y divide-default border-y border-default">
+              <li v-for="item in operationalSummary" :key="item.key">
+                <NuxtLink
+                  :to="item.to"
+                  class="flex min-w-0 items-center justify-between gap-3 py-2.5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <span class="text-sm font-medium text-highlighted">{{ item.label }}</span>
+                  <UBadge :color="item.color" variant="subtle" :label="String(item.value)" />
+                </NuxtLink>
+              </li>
+            </ul>
+          </aside>
+        </div>
+
+        <div class="grid min-w-0 gap-x-8 gap-y-6 lg:grid-cols-2" aria-label="Exceções operacionais">
+          <section class="min-w-0" data-testid="work-dashboard-risks" aria-labelledby="work-risks-heading">
+            <div class="mb-3 flex min-w-0 items-end justify-between gap-3">
+              <div class="min-w-0">
+                <h2 id="work-risks-heading" class="text-sm font-semibold text-highlighted">
+                  Prioridades
+                </h2>
+                <p class="mt-0.5 text-xs text-muted">
+                  Tarefas com os sinais de risco mais relevantes.
+                </p>
+              </div>
+              <UButton
+                to="/work/tasks?tab=atrasadas"
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                label="Ver fila"
+                trailing-icon="i-lucide-arrow-right"
+              />
+            </div>
+
+            <ul v-if="data.top_risks.length" class="divide-y divide-default border-y border-default">
+              <li v-for="risk in data.top_risks.slice(0, 6)" :key="risk.task_id">
+                <NuxtLink :to="`/work/tasks/${risk.task_id}`" class="group block min-w-0 py-2.5">
+                  <span class="block truncate text-sm font-medium text-highlighted group-hover:text-primary group-hover:underline">{{ risk.title }}</span>
+                  <span class="mt-1 flex min-w-0 flex-wrap items-center gap-1">
+                    <UBadge
+                      v-for="item in risk.risks"
+                      :key="item"
+                      :color="workRiskColor(item)"
+                      variant="subtle"
+                      size="xs"
+                      :label="workRiskLabel(item)"
+                    />
+                    <span class="text-xs text-muted">Prazo {{ formatDueDate(risk.effective_due_date) }}</span>
+                  </span>
+                </NuxtLink>
+              </li>
+            </ul>
+
+            <ShellListEmpty
+              v-else
+              title="Nenhum risco ativo"
+              description="Não há tarefas sinalizadas com risco neste snapshot."
+              test-id="work-dashboard-risks-empty"
             />
           </section>
 
           <section
-            class="grid min-w-0 divide-y divide-default border-y border-default md:grid-cols-2 md:divide-x md:divide-y-0"
-            aria-label="Leitura do desempenho"
+            class="min-w-0"
+            data-testid="work-dashboard-unassigned-processes"
+            aria-labelledby="work-unassigned-heading"
           >
-            <div class="min-w-0 py-3 md:pe-5" data-testid="work-dashboard-completion">
-              <div class="flex items-baseline justify-between gap-3">
-                <h2 class="text-sm font-medium text-highlighted">
-                  Conclusão da carga
+            <div class="mb-3 flex min-w-0 items-end justify-between gap-3">
+              <div class="min-w-0">
+                <h2 id="work-unassigned-heading" class="text-sm font-semibold text-highlighted">
+                  Processos sem responsável
                 </h2>
-                <strong class="text-lg font-semibold tabular-nums text-highlighted">{{ completionPercent }}%</strong>
+                <p class="mt-0.5 text-xs text-muted">
+                  Pendências que precisam de atribuição.
+                </p>
               </div>
-              <p class="mt-1 text-xs text-muted">
-                {{ data.kpis.concluidas }} de {{ relevantTaskTotal }} tarefas no consolidado.
-              </p>
+              <UButton
+                to="/work/processes"
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                label="Ver todos"
+                trailing-icon="i-lucide-arrow-right"
+              />
             </div>
 
-            <div
-              v-if="operationalLevel"
-              class="min-w-0 py-3 md:ps-5"
-              data-testid="work-dashboard-level"
-            >
-              <div class="flex flex-wrap items-center justify-between gap-2">
-                <h2 class="text-sm font-medium text-highlighted">
-                  Nível operacional
-                </h2>
-                <UBadge :color="operationalLevel.tone" variant="subtle" :label="operationalLevel.label" />
-              </div>
-              <p class="mt-1 text-xs leading-5 text-muted">
-                {{ operationalLevel.description }}
-              </p>
-              <p v-if="relevantTaskTotal === 0" class="mt-1 text-xs font-medium text-muted">
-                Sem carga no snapshot
-              </p>
-              <p v-else-if="operationalLevel.nextLabel" class="mt-1 text-xs font-medium text-toned">
-                Faltam {{ operationalLevel.remainingToNext }} conclusões para {{ operationalLevel.nextLabel }}.
-              </p>
-              <p v-else class="mt-1 text-xs font-medium text-success">
-                Faixa mais alta alcançada.
-              </p>
-            </div>
+            <ul v-if="data.processes_without_owner.length" class="divide-y divide-default border-y border-default">
+              <li v-for="process in data.processes_without_owner.slice(0, 5)" :key="process.id">
+                <NuxtLink :to="`/work/processes/${process.id}`" class="group block min-w-0 py-2.5">
+                  <span class="block truncate text-sm font-medium text-highlighted group-hover:text-primary group-hover:underline">{{ process.title }}</span>
+                  <span class="mt-0.5 block text-xs text-muted">
+                    {{ formatCompetence(process.competence) }} · {{ formatDueDate(process.due_date) }}
+                  </span>
+                </NuxtLink>
+              </li>
+            </ul>
+
+            <ShellListEmpty
+              v-else
+              title="Responsabilidade definida"
+              description="Não há processos abertos sem responsável."
+              test-id="work-dashboard-processes-empty"
+            />
           </section>
-
-          <div class="grid min-w-0 gap-x-8 gap-y-6 xl:grid-cols-[minmax(0,2fr)_minmax(16rem,0.8fr)]">
-            <section class="min-w-0" data-testid="work-dashboard-departments" aria-labelledby="work-departments-heading">
-              <div class="mb-3">
-                <h2 id="work-departments-heading" class="text-sm font-semibold text-highlighted">
-                  Carga por departamento
-                </h2>
-                <p class="mt-0.5 text-xs text-muted">
-                  Volume, risco e avanço agrupados por área.
-                </p>
-              </div>
-
-              <template v-if="departmentRows.length">
-                <div class="hidden md:block" data-testid="work-dashboard-departments-table">
-                  <table class="w-full table-fixed text-left text-sm">
-                    <caption class="sr-only">
-                      Carga operacional dos departamentos no snapshot atual
-                    </caption>
-                    <thead class="border-y border-default text-xs text-muted">
-                      <tr>
-                        <th scope="col" class="w-[28%] px-3 py-2 font-medium">
-                          Departamento
-                        </th>
-                        <th scope="col" class="w-[34%] px-3 py-2 font-medium">
-                          Carga e risco
-                        </th>
-                        <th scope="col" class="w-[28%] px-3 py-2 font-medium">
-                          Conclusão
-                        </th>
-                        <th scope="col" class="w-[10%] px-3 py-2 text-right font-medium">
-                          Ação
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody class="divide-y divide-default">
-                      <tr v-for="row in departmentRows" :key="String(row.id)">
-                        <th scope="row" class="min-w-0 px-3 py-2.5 font-normal">
-                          <NuxtLink :to="row.to" class="block truncate font-medium text-highlighted hover:text-primary hover:underline">
-                            {{ row.name }}
-                          </NuxtLink>
-                          <span class="mt-0.5 block text-xs text-muted">{{ row.open }} abertas · {{ row.completed }} concluídas</span>
-                        </th>
-                        <td class="px-3 py-2.5">
-                          <div class="flex flex-wrap gap-1">
-                            <UBadge
-                              v-if="row.overdue"
-                              color="warning"
-                              variant="subtle"
-                              size="sm"
-                              :label="`${row.overdue} atrasadas`"
-                            />
-                            <UBadge
-                              v-if="row.fine"
-                              color="error"
-                              variant="subtle"
-                              size="sm"
-                              :label="`${row.fine} em multa`"
-                            />
-                            <UBadge
-                              v-if="row.unassigned"
-                              color="info"
-                              variant="subtle"
-                              size="sm"
-                              :label="`${row.unassigned} sem responsável`"
-                            />
-                            <span v-if="!row.overdue && !row.fine && !row.unassigned" class="text-xs text-muted">Sem exceções</span>
-                          </div>
-                        </td>
-                        <td class="px-3 py-2.5">
-                          <div class="flex items-center gap-2">
-                            <UProgress
-                              :model-value="row.completedPercent"
-                              :color="departmentProgressColor(row)"
-                              size="sm"
-                              :aria-label="`${row.name}: ${row.completedPercent}% concluído`"
-                            />
-                            <span class="w-10 shrink-0 text-right text-xs font-semibold tabular-nums text-highlighted">{{ row.completedPercent }}%</span>
-                          </div>
-                        </td>
-                        <td class="px-3 py-2.5 text-right">
-                          <UButton
-                            :to="row.to"
-                            color="neutral"
-                            variant="ghost"
-                            icon="i-lucide-arrow-up-right"
-                            square
-                            :aria-label="`Abrir fila de ${row.name}`"
-                          />
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-
-                <ul
-                  class="divide-y divide-default border-y border-default md:hidden"
-                  aria-label="Carga dos departamentos"
-                  data-testid="work-dashboard-departments-mobile"
-                >
-                  <li v-for="row in departmentRows" :key="String(row.id)" class="min-w-0 py-3">
-                    <div class="flex min-w-0 items-start justify-between gap-3">
-                      <div class="min-w-0">
-                        <NuxtLink :to="row.to" class="block truncate font-medium text-highlighted hover:text-primary hover:underline">
-                          {{ row.name }}
-                        </NuxtLink>
-                        <p class="mt-0.5 text-xs text-muted">
-                          {{ row.open }} abertas · {{ row.completed }} concluídas
-                        </p>
-                      </div>
-                      <span class="shrink-0 text-sm font-semibold tabular-nums text-highlighted">{{ row.completedPercent }}%</span>
-                    </div>
-                    <UProgress
-                      class="mt-2"
-                      :model-value="row.completedPercent"
-                      :color="departmentProgressColor(row)"
-                      size="sm"
-                      :aria-label="`${row.name}: ${row.completedPercent}% concluído`"
-                    />
-                    <div class="mt-2 flex min-w-0 flex-wrap items-center gap-1.5">
-                      <UBadge
-                        v-if="row.overdue"
-                        color="warning"
-                        variant="subtle"
-                        size="sm"
-                        :label="`${row.overdue} atrasadas`"
-                      />
-                      <UBadge
-                        v-if="row.fine"
-                        color="error"
-                        variant="subtle"
-                        size="sm"
-                        :label="`${row.fine} em multa`"
-                      />
-                      <UBadge
-                        v-if="row.unassigned"
-                        color="info"
-                        variant="subtle"
-                        size="sm"
-                        :label="`${row.unassigned} sem responsável`"
-                      />
-                      <UButton
-                        :to="row.to"
-                        color="neutral"
-                        variant="link"
-                        size="xs"
-                        label="Abrir fila"
-                        trailing-icon="i-lucide-arrow-right"
-                        class="ms-auto"
-                      />
-                    </div>
-                  </li>
-                </ul>
-              </template>
-
-              <ShellListEmpty
-                v-else
-                title="Sem atividade por departamento"
-                description="As áreas aparecerão aqui quando houver tarefas operacionais no escritório."
-                test-id="work-dashboard-departments-empty"
-              />
-            </section>
-
-            <aside class="min-w-0" aria-labelledby="work-summary-heading" data-testid="work-dashboard-operational-summary">
-              <div class="mb-3">
-                <h2 id="work-summary-heading" class="text-sm font-semibold text-highlighted">
-                  Situação operacional
-                </h2>
-                <p class="mt-0.5 text-xs text-muted">
-                  Atalhos para comparar o estoque de tarefas.
-                </p>
-              </div>
-              <ul class="divide-y divide-default border-y border-default">
-                <li v-for="item in operationalSummary" :key="item.key">
-                  <NuxtLink
-                    :to="item.to"
-                    class="flex min-w-0 items-center justify-between gap-3 py-2.5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                  >
-                    <span class="text-sm font-medium text-highlighted">{{ item.label }}</span>
-                    <UBadge :color="item.color" variant="subtle" :label="String(item.value)" />
-                  </NuxtLink>
-                </li>
-              </ul>
-            </aside>
-          </div>
-
-          <div class="grid min-w-0 gap-x-8 gap-y-6 lg:grid-cols-2" aria-label="Exceções operacionais">
-            <section class="min-w-0" data-testid="work-dashboard-risks" aria-labelledby="work-risks-heading">
-              <div class="mb-3 flex min-w-0 items-end justify-between gap-3">
-                <div class="min-w-0">
-                  <h2 id="work-risks-heading" class="text-sm font-semibold text-highlighted">
-                    Prioridades
-                  </h2>
-                  <p class="mt-0.5 text-xs text-muted">
-                    Tarefas com os sinais de risco mais relevantes.
-                  </p>
-                </div>
-                <UButton
-                  to="/work/tasks?tab=atrasadas"
-                  color="neutral"
-                  variant="ghost"
-                  size="xs"
-                  label="Ver fila"
-                  trailing-icon="i-lucide-arrow-right"
-                />
-              </div>
-
-              <ul v-if="data.top_risks.length" class="divide-y divide-default border-y border-default">
-                <li v-for="risk in data.top_risks.slice(0, 6)" :key="risk.task_id">
-                  <NuxtLink :to="`/work/tasks/${risk.task_id}`" class="group block min-w-0 py-2.5">
-                    <span class="block truncate text-sm font-medium text-highlighted group-hover:text-primary group-hover:underline">{{ risk.title }}</span>
-                    <span class="mt-1 flex min-w-0 flex-wrap items-center gap-1">
-                      <UBadge
-                        v-for="item in risk.risks"
-                        :key="item"
-                        :color="workRiskColor(item)"
-                        variant="subtle"
-                        size="xs"
-                        :label="workRiskLabel(item)"
-                      />
-                      <span class="text-xs text-muted">Prazo {{ formatDueDate(risk.effective_due_date) }}</span>
-                    </span>
-                  </NuxtLink>
-                </li>
-              </ul>
-
-              <ShellListEmpty
-                v-else
-                title="Nenhum risco ativo"
-                description="Não há tarefas sinalizadas com risco neste snapshot."
-                test-id="work-dashboard-risks-empty"
-              />
-            </section>
-
-            <section
-              class="min-w-0"
-              data-testid="work-dashboard-unassigned-processes"
-              aria-labelledby="work-unassigned-heading"
-            >
-              <div class="mb-3 flex min-w-0 items-end justify-between gap-3">
-                <div class="min-w-0">
-                  <h2 id="work-unassigned-heading" class="text-sm font-semibold text-highlighted">
-                    Processos sem responsável
-                  </h2>
-                  <p class="mt-0.5 text-xs text-muted">
-                    Pendências que precisam de atribuição.
-                  </p>
-                </div>
-                <UButton
-                  to="/work/processes"
-                  color="neutral"
-                  variant="ghost"
-                  size="xs"
-                  label="Ver todos"
-                  trailing-icon="i-lucide-arrow-right"
-                />
-              </div>
-
-              <ul v-if="data.processes_without_owner.length" class="divide-y divide-default border-y border-default">
-                <li v-for="process in data.processes_without_owner.slice(0, 5)" :key="process.id">
-                  <NuxtLink :to="`/work/processes/${process.id}`" class="group block min-w-0 py-2.5">
-                    <span class="block truncate text-sm font-medium text-highlighted group-hover:text-primary group-hover:underline">{{ process.title }}</span>
-                    <span class="mt-0.5 block text-xs text-muted">
-                      {{ formatCompetence(process.competence) }} · {{ formatDueDate(process.due_date) }}
-                    </span>
-                  </NuxtLink>
-                </li>
-              </ul>
-
-              <ShellListEmpty
-                v-else
-                title="Responsabilidade definida"
-                description="Não há processos abertos sem responsável."
-                test-id="work-dashboard-processes-empty"
-              />
-            </section>
-          </div>
-        </template>
+        </div>
       </template>
     </template>
   </ShellPagePanel>

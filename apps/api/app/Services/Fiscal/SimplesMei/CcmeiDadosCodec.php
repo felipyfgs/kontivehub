@@ -16,7 +16,7 @@ final class CcmeiDadosCodec
 {
     /**
      * @param  array<string, mixed>  $payload
-     * @return array{status:string,certificate_number:?string,issued_at:?string,situation:FiscalSituation}
+     * @return array{status:string,situation:FiscalSituation}
      */
     public function decode(array $payload): array
     {
@@ -29,11 +29,6 @@ final class CcmeiDadosCodec
 
         return [
             'status' => $status,
-            // Compatibilidade com fixtures simuladas; esses campos não vêm da
-            // resposta oficial e são mantidos somente quando explicitamente
-            // presentes, sem reter o restante do payload.
-            'certificate_number' => $this->optionalString($data['certificate_number'] ?? $data['numero_certificado'] ?? null),
-            'issued_at' => $this->optionalString($data['issued_at'] ?? $data['data_emissao'] ?? null),
             'situation' => $this->situation($status),
         ];
     }
@@ -43,14 +38,9 @@ final class CcmeiDadosCodec
      */
     private function status(array $data): ?string
     {
-        foreach (['situacaoCadastralVigente', 'situacao_cadastral_vigente', 'status', 'situacao'] as $field) {
-            $value = $this->optionalString($data[$field] ?? null);
-            if ($value !== null) {
-                return mb_strtoupper($value);
-            }
-        }
+        $value = $this->optionalString($data['situacaoCadastralVigente'] ?? null);
 
-        return null;
+        return $value === null ? null : mb_strtoupper($value);
     }
 
     private function optionalString(mixed $value): ?string

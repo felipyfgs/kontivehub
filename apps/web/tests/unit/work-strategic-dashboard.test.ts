@@ -7,14 +7,13 @@ import {
   buildWorkDashboardKpis,
   buildWorkDepartmentRows,
   workCompletionPercent,
-  workOperationalLevel,
-  workQueueLegacyTarget
+  workOperationalLevel
 } from '../../app/utils/work-strategic-dashboard'
 
 function fixture(): WorkKpis {
   return {
     generated_at: '2026-07-22T12:00:00-03:00',
-    office_timezone: 'America/Sao_Paulo',
+    tenant_timezone: 'America/Sao_Paulo',
     today: '2026-07-22',
     kpis: {
       total_open: 30,
@@ -137,23 +136,6 @@ describe('work strategic dashboard', () => {
     })
   })
 
-  it('migra filtros e seleção legados sem transformar /work limpo em fila', () => {
-    expect(workQueueLegacyTarget({})).toBeNull()
-    expect(workQueueLegacyTarget({ campaign: 'work-overview' })).toBeNull()
-    expect(workQueueLegacyTarget({ tab: 'atrasadas', department_id: '4' })).toEqual({
-      path: '/work/tasks',
-      query: { tab: 'atrasadas', department_id: '4' }
-    })
-    expect(workQueueLegacyTarget({ task: ['27'], view: 'lista' })).toEqual({
-      path: '/work/tasks/27',
-      query: { view: 'lista' }
-    })
-    expect(workQueueLegacyTarget({ task: 'inválida', q: 'folha' })).toEqual({
-      path: '/work/tasks',
-      query: { q: 'folha' }
-    })
-  })
-
   it('expõe /work/tasks como path-base da fila', () => {
     expect(workQueuePath()).toBe('/work/tasks')
   })
@@ -166,7 +148,6 @@ describe('work strategic dashboard', () => {
       'Promise.allSettled',
       'lastGood',
       'sessionEpoch',
-      'workQueueLegacyTarget',
       'ShellPagePanel',
       'ShellKpiStrip',
       'workOperationalLevel',

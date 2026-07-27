@@ -6,7 +6,7 @@ use App\Enums\MeiAutomationStatus;
 use App\Enums\MeiProvider;
 use App\Models\Client;
 use App\Models\MeiAutomationAttempt;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\MeiAutomation\MeiAutomationAttemptService;
 use App\Services\MeiAutomation\MeiAutomationSyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -83,10 +83,10 @@ class MeiAutomationSyncServiceTest extends TestCase
         config()->set('mei_automation.hmac.secret', 'shared-test-secret');
         config()->set('mei_automation.poll_interval_seconds', 10);
         config()->set('mei_automation.result_ttl_seconds', 900);
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
         $attempt = app(MeiAutomationAttemptService::class)->start(
-            $office,
+            $tenant,
             $client,
             'pgmei.dividaativa',
             MeiProvider::ReceitaPortal,

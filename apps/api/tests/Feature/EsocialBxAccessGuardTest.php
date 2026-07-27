@@ -7,7 +7,7 @@ namespace Tests\Feature;
 use App\Exceptions\EsocialBxException;
 use App\Models\Client;
 use App\Models\EsocialBxAccessLedger;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Esocial\EsocialBxAccessGuard;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -44,23 +44,23 @@ class EsocialBxAccessGuardTest extends TestCase
     public function test_reservation_is_atomic_conservative_and_shared_by_employer(): void
     {
         $guard = app(EsocialBxAccessGuard::class);
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create(['root_cnpj' => '48123272']);
-        $otherOffice = Office::factory()->create();
-        $sameEmployer = Client::factory()->forOffice($otherOffice)->create(['root_cnpj' => '48123272']);
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create(['root_cnpj' => '48123272']);
+        $otherTenant = Tenant::factory()->create();
+        $sameEmployer = Client::factory()->forTenant($otherTenant)->create(['root_cnpj' => '48123272']);
         $now = CarbonImmutable::parse('2026-07-15 12:00:00 America/Sao_Paulo');
 
         for ($index = 0; $index < 9; $index++) {
-            $guard->reserve($office, $client, 'restricted', 'IDENTIFIERS_S-1299', "run-{$index}", $now);
+            $guard->reserve($tenant, $client, 'restricted', 'IDENTIFIERS_S-1299', "run-{$index}", $now);
         }
-        $guard->reserve($otherOffice, $sameEmployer, 'restricted', 'DOWNLOADS_S-1299', 'run-9', $now);
+        $guard->reserve($otherTenant, $sameEmployer, 'restricted', 'DOWNLOADS_S-1299', 'run-9', $now);
 
         $this->assertSame(10, $guard->consumedToday($client, 'restricted', $now));
         $this->assertSame(10, $guard->consumedToday($sameEmployer, 'restricted', $now));
         $this->assertSame(10, EsocialBxAccessLedger::query()->withoutGlobalScopes()->count());
 
         try {
-            $guard->reserve($office, $client, 'restricted', 'IDENTIFIERS_S-5013', 'run-10', $now);
+            $guard->reserve($tenant, $client, 'restricted', 'IDENTIFIERS_S-5013', 'run-10', $now);
             $this->fail('Décimo primeiro acesso deveria falhar antes do egress.');
         } catch (EsocialBxException $exception) {
             $this->assertSame('ESOCIAL_BX_QUOTA_EXHAUSTED', $exception->stableCode);
@@ -72,8 +72,8 @@ class EsocialBxAccessGuardTest extends TestCase
     public function test_employer_lock_covers_callback_and_is_released_afterwards(): void
     {
         $guard = app(EsocialBxAccessGuard::class);
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
         $key = 'esocial-bx:restricted:'.$guard->employerHash($client);
 
         $result = $guard->withEmployerLock($client, 'restricted', function () use ($key): string {
@@ -92,9 +92,9 @@ class EsocialBxAccessGuardTest extends TestCase
     public function test_existing_lock_tenant_mismatch_and_finish_are_fail_closed(): void
     {
         $guard = app(EsocialBxAccessGuard::class);
-        $office = Office::factory()->create();
-        $otherOffice = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
+        $tenant = Tenant::factory()->create();
+        $otherTenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
         $key = 'esocial-bx:restricted:'.$guard->employerHash($client);
         $held = Cache::lock($key, 30);
         $this->assertTrue($held->get());
@@ -110,21 +110,21 @@ class EsocialBxAccessGuardTest extends TestCase
 
         try {
             $guard->reserve(
-                $otherOffice,
+                $otherTenant,
                 $client,
                 'restricted',
                 'IDENTIFIERS_S-1299',
                 'tenant-mismatch',
                 CarbonImmutable::parse('2026-07-15 12:00:00 America/Sao_Paulo'),
             );
-            $this->fail('Office divergente deveria falhar.');
+            $this->fail('Tenant divergente deveria falhar.');
         } catch (EsocialBxException $exception) {
             $this->assertSame('ESOCIAL_BX_TENANT_MISMATCH', $exception->stableCode);
             $this->assertTrue($exception->blocked);
         }
 
         $entry = $guard->reserve(
-            $office,
+            $tenant,
             $client,
             'restricted',
             'IDENTIFIERS_S-1299',

@@ -45,7 +45,7 @@ final class FiscalMutationPayloadTest extends TestCase
             'confirmed_by_user' => true,
             'confirmed_at' => Carbon::parse('2026-07-21T12:00:00-03:00'),
             'eligibility_snapshot' => ['allowed' => true],
-            'provider_operation_key' => 'pgdasd.transdeclaracao',
+            'operation_key' => 'pgdasd.transdeclaracao',
             'request_payload_digest' => str_repeat('a', 64),
         ]);
 
@@ -69,7 +69,7 @@ final class FiscalMutationPayloadTest extends TestCase
             'confirmed_by_user' => false,
             'confirmed_at' => Carbon::now(),
             'eligibility_snapshot' => ['allowed' => true],
-            'provider_operation_key' => 'pgdasd.transdeclaracao',
+            'operation_key' => 'pgdasd.transdeclaracao',
             'request_payload_digest' => null,
         ]);
 

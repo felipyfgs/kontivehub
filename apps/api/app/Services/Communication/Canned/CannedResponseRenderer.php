@@ -5,7 +5,7 @@ namespace App\Services\Communication\Canned;
 use App\Models\CommunicationCannedResponse;
 use App\Models\CommunicationConversation;
 use App\Models\User;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use InvalidArgumentException;
 
 final class CannedResponseRenderer
@@ -19,7 +19,7 @@ final class CannedResponseRenderer
     ];
 
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
     ) {}
 
     /**
@@ -60,10 +60,10 @@ final class CannedResponseRenderer
         CommunicationConversation $conversation,
         User $actor,
     ): string {
-        $office = $this->currentOffice->office();
-        if ((int) $canned->office_id !== (int) $office->id
-            || (int) $conversation->office_id !== (int) $office->id) {
-            throw new InvalidArgumentException('cross_office');
+        $tenant = $this->currentTenant->tenant();
+        if ((int) $canned->tenant_id !== (int) $tenant->id
+            || (int) $conversation->tenant_id !== (int) $tenant->id) {
+            throw new InvalidArgumentException('cross_tenant');
         }
 
         $conversation->loadMissing([

@@ -4,7 +4,7 @@ namespace App\Models;
 
 use App\Enums\TaxGuideEmissionStatus;
 use App\Enums\TaxGuideRiskLevel;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use LogicException;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'tax_guide_id',
     'version_number',
     'is_current',
@@ -47,7 +47,7 @@ use LogicException;
 ])]
 class TaxGuideVersion extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {
@@ -128,7 +128,7 @@ class TaxGuideVersion extends Model
     {
         return [
             'id' => $this->id,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'tax_guide_id' => $this->tax_guide_id,
             'version_number' => $this->version_number,
             'is_current' => $this->is_current,

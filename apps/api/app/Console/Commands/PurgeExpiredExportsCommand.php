@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Export;
+use App\Models\DocumentExport;
 use Illuminate\Console\Command;
 
 class PurgeExpiredExportsCommand extends Command
@@ -14,7 +14,7 @@ class PurgeExpiredExportsCommand extends Command
     public function handle(): int
     {
         $count = 0;
-        Export::query()
+        DocumentExport::query()
             ->where('status', 'READY')
             ->whereNotNull('expires_at')
             ->where('expires_at', '<=', now())
@@ -24,12 +24,12 @@ class PurgeExpiredExportsCommand extends Command
                     if ($export->storage_path && is_file($export->storage_path)) {
                         @unlink($export->storage_path);
                     }
-                    // Manifesto de ausências (export mensal) — só se sob o office do export
+                    // Manifesto de ausências (export mensal) — só se sob o tenant do export
                     $manifest = is_array($export->filters)
                         ? ($export->filters['absence_manifest_path'] ?? null)
                         : null;
                     if (is_string($manifest) && $manifest !== '') {
-                        $root = realpath(storage_path('app/private/exports/'.$export->office_id));
+                        $root = realpath(storage_path('app/private/exports/'.$export->tenant_id));
                         $real = realpath($manifest);
                         if ($root !== false && $real !== false
                             && (str_starts_with($real, $root.DIRECTORY_SEPARATOR) || $real === $root)

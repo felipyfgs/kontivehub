@@ -19,7 +19,7 @@ final class OutboundDeadlineFairQueue
     ];
 
     /**
-     * @param  Collection<int, object>  $items  objetos com office_id, root_cnpj, model, due_at, urgency_band, access_key, authorized_at?, svrs_transaction_count
+     * @param  Collection<int, object>  $items  objetos com tenant_id, root_cnpj, model, due_at, urgency_band, access_key, authorized_at?, svrs_transaction_count
      * @return list<object>
      */
     public function order(Collection $items): array
@@ -72,7 +72,7 @@ final class OutboundDeadlineFairQueue
                     continue;
                 }
                 $root = $this->scalar($item->root_cnpj ?? null)
-                    .'|'.$this->scalar($item->office_id ?? null)
+                    .'|'.$this->scalar($item->tenant_id ?? null)
                     .'|'.$this->scalar($item->model ?? null);
                 if (isset($seenRoots[$root])) {
                     $nextRemaining[] = $item;

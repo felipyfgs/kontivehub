@@ -8,7 +8,7 @@ namespace App\Services\Integra\Dctfweb;
  */
 final class DctfwebCodes
 {
-    public const MODULE = 'dctfweb_mit';
+    public const MODULE = 'dctfweb';
 
     public const SYSTEM_DCTFWEB = 'INTEGRA_DCTFWEB';
 
@@ -55,7 +55,37 @@ final class DctfwebCodes
 
     public const OPERATION_KEY_CONSRECIBO = 'dctfweb.consrecibo';
 
+    public const OPERATION_KEY_CONSDECCOMPLETA = 'dctfweb.consdeccompleta';
+
+    public const OPERATION_KEY_CONSXMLDECLARACAO = 'dctfweb.consxmldeclaracao';
+
+    public const OPERATION_KEY_GERARGUIA = 'dctfweb.gerarguia';
+
+    public const OPERATION_KEY_TRANSDECLARACAO = 'dctfweb.transdeclaracao';
+
+    public const OPERATION_KEY_MIT_SITUACAO = 'mit.situacaoenc';
+
+    public const OPERATION_KEY_MIT_APURACAO = 'mit.consapuracao';
+
     public const OPERATION_KEY_MIT_LISTA_APURACOES = 'mit.listaapuracoes';
+
+    public const OPERATION_KEY_MIT_ENCERRAR = 'mit.encapuracao';
+
+    public static function operationKey(string $operationCode): string
+    {
+        return match (strtoupper($operationCode)) {
+            self::OP_MONITOR, self::OP_CONSULTAR_RECIBO => self::OPERATION_KEY_CONSRECIBO,
+            self::OP_CONSULTAR_DECLARACAO, self::OP_CONSULTAR_RELATORIO => self::OPERATION_KEY_CONSDECCOMPLETA,
+            self::OP_CONSULTAR_XML => self::OPERATION_KEY_CONSXMLDECLARACAO,
+            self::OP_EMITIR_DARF => self::OPERATION_KEY_GERARGUIA,
+            self::OP_TRANSMITIR => self::OPERATION_KEY_TRANSDECLARACAO,
+            self::OP_MIT_SITUACAO => self::OPERATION_KEY_MIT_SITUACAO,
+            self::OP_MIT_APURACAO => self::OPERATION_KEY_MIT_APURACAO,
+            self::OP_MIT_LISTAR_APURACOES => self::OPERATION_KEY_MIT_LISTA_APURACOES,
+            self::OP_MIT_ENCERRAR => self::OPERATION_KEY_MIT_ENCERRAR,
+            default => throw new \InvalidArgumentException("Operação DCTFWeb/MIT não catalogada: {$operationCode}."),
+        };
+    }
 
     /** @return list<string> */
     public static function readOnlyOperationsDctfweb(): array

@@ -7,19 +7,19 @@ use App\Enums\FiscalSituation;
 use App\Models\Client;
 use App\Models\FiscalCategory;
 use App\Models\FiscalCompetence;
-use App\Models\Office;
+use App\Models\Tenant;
 use InvalidArgumentException;
 
 /** Resolve ou cria competência mensal (YYYY-MM) para DCTFWeb/MIT. */
 final class DctfwebCompetenceResolver
 {
     public function resolve(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $periodKey,
         string $categoryCode = DctfwebCodes::CATEGORY_DCTFWEB,
     ): FiscalCompetence {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new InvalidArgumentException('Cliente não pertence ao escritório ativo.');
         }
 
@@ -32,7 +32,7 @@ final class DctfwebCompetenceResolver
 
         $existing = FiscalCompetence::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('period_key', $periodKey)
             ->when(
@@ -47,7 +47,7 @@ final class DctfwebCompetenceResolver
         }
 
         return FiscalCompetence::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'fiscal_category_id' => $category?->id,
             'period_key' => $periodKey,

@@ -13,9 +13,8 @@ use App\Enums\FiscalSourceProvenance;
 use App\Enums\SecureObjectPurpose;
 use App\Enums\SerproEnvironment;
 use App\Enums\SerproFunctionalRoute;
-use App\Models\ClientProcuracaoSnapshot;
-use App\Models\OfficeSerproAuthorization;
-use App\Models\TaxProxyPower;
+use App\Models\ClientProcuracaoSync;
+use App\Models\TenantSerproAuthorization;
 use App\Services\Serpro\Catalog\OperationCoordinateResolver;
 use App\Services\Serpro\SerproCircuitBreaker;
 use App\Services\Serpro\SerproContractService;
@@ -94,7 +93,7 @@ final class HttpIntegraContadorClient implements IntegraContadorClient
         }
 
         try {
-            ($this->rateLimiter ?? app(SerproRateLimiter::class))->attempt($request->officeId, $operationKey);
+            ($this->rateLimiter ?? app(SerproRateLimiter::class))->attempt($request->tenantId, $operationKey);
         } catch (RuntimeException $e) {
             return $this->fail($request, 429, 'RATE_LIMIT_LOCAL', $e->getMessage());
         }
@@ -343,11 +342,10 @@ final class HttpIntegraContadorClient implements IntegraContadorClient
         }
 
         /** @var list<string> $powers */
-        $powers = $coords['required_proxy_powers'] ?? [];
-        if ($powers === [] && ! empty($coords['required_proxy_power'])) {
-            $powers = preg_split('/[\s,]+/', (string) $coords['required_proxy_power']) ?: [];
-        }
-        $powers = array_values(array_filter(array_map('strval', $powers)));
+        $powers = array_values(array_filter(array_map(
+            static fn (mixed $power): string => strtoupper(trim((string) $power)),
+            $coords['required_proxy_powers'] ?? [],
+        )));
         if ($powers === []) {
             return null;
         }
@@ -359,61 +357,70 @@ final class HttpIntegraContadorClient implements IntegraContadorClient
             return null;
         }
 
-        // Preferir projeção oficial ClientProcuracaoSnapshot quando existir.
         try {
-            $snapshot = ClientProcuracaoSnapshot::query()
-                ->where('office_id', $request->officeId)
+            $sync = ClientProcuracaoSync::query()
+                ->where('tenant_id', $request->tenantId)
                 ->where('client_id', $request->clientId)
                 ->where('environment', $request->environment)
                 ->first();
 
-            if ($snapshot !== null) {
-                if ($snapshot->status === ClientProcuracaoSyncStatus::Expired) {
-                    return $this->fail(
-                        $request,
-                        422,
-                        'PROXY_POWER_EXPIRED',
-                        'Procuração vencida para a operação.',
-                    );
-                }
-                if ($snapshot->status === ClientProcuracaoSyncStatus::Missing) {
-                    return $this->fail(
-                        $request,
-                        422,
-                        'PROXY_POWER_MISSING',
-                        'Poder e-CAC obrigatório ausente: '.implode(',', $powers),
-                    );
-                }
-                if ($snapshot->status === ClientProcuracaoSyncStatus::Authorized
-                    && $snapshot->isUsableForRequiredPower()
-                ) {
-                    return null;
-                }
+            if ($sync === null) {
+                return $this->fail(
+                    $request,
+                    422,
+                    'PROXY_POWER_UNVERIFIED',
+                    'Procuração não verificada para a operação.',
+                );
             }
 
-            $has = TaxProxyPower::query()
-                ->where('office_id', $request->officeId)
-                ->where('client_id', $request->clientId)
-                ->whereIn('power_code', $powers)
-                ->where(function ($q): void {
-                    $q->whereNull('valid_to')->orWhere('valid_to', '>', now());
-                })
-                ->exists();
+            if ($sync->status === ClientProcuracaoSyncStatus::Missing) {
+                return $this->fail(
+                    $request,
+                    422,
+                    'PROXY_POWER_MISSING',
+                    'Procuração não encontrada para a operação.',
+                );
+            }
+
+            if ($sync->status === ClientProcuracaoSyncStatus::Expired
+                || ($sync->valid_to !== null && $sync->valid_to->isPast())
+            ) {
+                return $this->fail(
+                    $request,
+                    422,
+                    'PROXY_POWER_EXPIRED',
+                    'Procuração vencida para a operação.',
+                );
+            }
+
+            if (! $sync->isAuthorized()) {
+                return $this->fail(
+                    $request,
+                    422,
+                    'PROXY_POWER_UNVERIFIED',
+                    'Procuração não verificada para a operação.',
+                );
+            }
+
+            $availablePowers = array_map(
+                static fn (mixed $power): string => strtoupper(trim((string) $power)),
+                $sync->power_codes ?? [],
+            );
+            $missingPowers = array_values(array_diff($powers, $availablePowers));
+            if ($missingPowers !== []) {
+                return $this->fail(
+                    $request,
+                    422,
+                    'PROXY_POWER_MISSING',
+                    'Poder e-CAC obrigatório ausente: '.implode(',', $missingPowers),
+                );
+            }
         } catch (Throwable) {
             return $this->fail(
                 $request,
                 503,
                 'PROXY_POWER_UNAVAILABLE',
                 'Não foi possível validar o poder e-CAC obrigatório.',
-            );
-        }
-
-        if (! $has) {
-            return $this->fail(
-                $request,
-                422,
-                'PROXY_POWER_MISSING',
-                'Poder e-CAC obrigatório ausente: '.implode(',', $powers),
             );
         }
 
@@ -470,34 +477,14 @@ final class HttpIntegraContadorClient implements IntegraContadorClient
             return '';
         }
 
-        // Preferir businessData — serializado exatamente uma vez
-        if ($request->businessData !== []) {
-            $data = $request->businessData;
-            unset($data['__scenario']);
-
-            return json_encode($data, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
-        }
-
-        if (isset($request->payload['dados']) && is_string($request->payload['dados'])) {
-            // Já serializado uma vez — não re-escapar
-            return $request->payload['dados'];
-        }
-
-        if (isset($request->payload['pedidoDados']['dados']) && is_string($request->payload['pedidoDados']['dados'])) {
-            return $request->payload['pedidoDados']['dados'];
-        }
-
-        $legacy = $request->payload;
-        unset($legacy['idSistema'], $legacy['idServico'], $legacy['versaoSistema'], $legacy['dados']);
-        if ($legacy === [] && isset($request->payload['dados']) && is_array($request->payload['dados'])) {
-            $legacy = $request->payload['dados'];
-        }
-
-        if ($legacy === []) {
+        if ($request->businessData === []) {
             return '';
         }
 
-        return json_encode($legacy, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
+        $data = $request->businessData;
+        unset($data['__scenario']);
+
+        return json_encode($data, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
     }
 
     /**
@@ -557,9 +544,9 @@ final class HttpIntegraContadorClient implements IntegraContadorClient
      */
     private function resolveProcuradorToken(IntegraRequest $request, SerproEnvironment $env): array
     {
-        $auth = OfficeSerproAuthorization::query()
+        $auth = TenantSerproAuthorization::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $request->officeId)
+            ->where('tenant_id', $request->tenantId)
             ->where('environment', $env->value)
             ->first();
 
@@ -616,7 +603,7 @@ final class HttpIntegraContadorClient implements IntegraContadorClient
         }
 
         $aad = SecureObjectPurpose::SerproProcuradorToken->aadBase([
-            'office_id' => $auth->office_id,
+            'tenant_id' => $auth->tenant_id,
             'environment' => $env->value,
             'author_identity' => $auth->author_identity,
         ]);
@@ -648,11 +635,5 @@ final class HttpIntegraContadorClient implements IntegraContadorClient
     private function tokenFailure(string $code, string $message): array
     {
         return ['token' => null, 'code' => $code, 'message' => $message];
-    }
-
-    /** @deprecated Use resolveProcuradorToken(); mantido para testes legados. */
-    private function loadProcuradorToken(IntegraRequest $request, SerproEnvironment $env): ?string
-    {
-        return $this->resolveProcuradorToken($request, $env)['token'];
     }
 }

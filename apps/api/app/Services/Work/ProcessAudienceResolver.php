@@ -7,8 +7,8 @@ use App\Enums\TaxRegimeCode;
 use App\Models\Client;
 use App\Models\ClientCategory;
 use App\Models\ClientTaxRegimePeriod;
-use App\Models\ProcessTemplate;
-use App\Support\CurrentOffice;
+use App\Models\WorkProcessTemplate;
+use App\Support\CurrentTenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -21,12 +21,11 @@ final class ProcessAudienceResolver
     private const MAX_CLIENTS = 1000;
 
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
     ) {}
 
     /**
      * @param  array<string, mixed>  $selection
-     * @param  list<int>  $legacyClientIds
      * @return array{
      *   rules: array<string, mixed>,
      *   include_client_ids: list<int>,
@@ -38,13 +37,12 @@ final class ProcessAudienceResolver
      * }
      */
     public function resolve(
-        ProcessTemplate $template,
+        WorkProcessTemplate $template,
         string $competence,
         array $selection = [],
-        array $legacyClientIds = [],
     ): array {
-        $officeId = $this->currentOffice->id();
-        if ($officeId === null) {
+        $tenantId = $this->currentTenant->id();
+        if ($tenantId === null) {
             abort(404);
         }
 
@@ -65,15 +63,12 @@ final class ProcessAudienceResolver
             : ($template->audience_rules ?? []);
         $rules = $this->normalizeRules(is_array($rulesInput) ? $rulesInput : []);
 
-        $includeIds = $this->positiveIds([
-            ...$legacyClientIds,
-            ...($this->arrayValue($selection, 'include_client_ids')),
-        ]);
+        $includeIds = $this->positiveIds($this->arrayValue($selection, 'include_client_ids'));
         $excludeIds = $this->positiveIds($this->arrayValue($selection, 'exclude_client_ids'));
         $excludeMap = array_fill_keys($excludeIds, true);
 
         $ruleQuery = Client::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->with($this->clientRelations());
 
@@ -90,7 +85,7 @@ final class ProcessAudienceResolver
         $includedClients = $includeIds === []
             ? collect()
             : Client::query()
-                ->where('office_id', $officeId)
+                ->where('tenant_id', $tenantId)
                 ->whereKey($includeIds)
                 ->with($this->clientRelations())
                 ->get()
@@ -240,8 +235,8 @@ final class ProcessAudienceResolver
                 'id',
                 'client_id',
                 'cnpj',
-                'is_matrix',
-            ])->orderByDesc('is_matrix')->orderBy('id'),
+                'is_headquarters',
+            ])->orderByDesc('is_headquarters')->orderBy('id'),
             'taxRegimePeriods' => fn ($query) => $query->orderByDesc('observed_at')->orderByDesc('id'),
         ];
     }
@@ -403,7 +398,7 @@ final class ProcessAudienceResolver
         }
 
         $count = ClientCategory::query()
-            ->where('office_id', $this->currentOffice->id())
+            ->where('tenant_id', $this->currentTenant->id())
             ->where('is_active', true)
             ->whereKey($categoryIds)
             ->count();

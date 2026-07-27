@@ -10,7 +10,7 @@ use App\Enums\SyncCursorStatus;
 use App\Models\ChannelSyncCursor;
 use App\Models\ClientCredential;
 use App\Models\FiscalDocumentQuarantine;
-use App\Models\OfficeDistributionCursor;
+use App\Models\TenantDistributionCursor;
 use Illuminate\Support\Collection;
 
 /**
@@ -26,13 +26,13 @@ final class CteItemsCollector
     /**
      * @return Collection<int, array<string, mixed>>
      */
-    public function collect(int $officeId, InboxCapabilities $capabilities): Collection
+    public function collect(int $tenantId, InboxCapabilities $capabilities): Collection
     {
         $items = collect();
         $threshold = (int) config('sefaz.decode_failure_threshold', 5);
 
         $clientCursors = ChannelSyncCursor::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('channel', CaptureChannel::CteDistDfe->value)
             ->with(['establishment.client'])
             ->orderBy('id')
@@ -67,7 +67,7 @@ final class CteItemsCollector
                 $items->push($this->items->cteItem(
                     type: 'cte_593',
                     title: 'CT-e rejeição 593: '.$label,
-                    body: 'Certificado/CNPJ divergente no DistDFe CT-e. Corrija A1 ou cadastro antes de retomar.',
+                    body: 'Certificado/CNPJ divergente no DistDFe CT-e. Corrija certificado ou cadastro antes de retomar.',
                     reasons: ['cte_593', 'cstat:593', 'chcur'.$cursor->id],
                     clientId: $client?->id,
                     establishmentId: $est?->id,
@@ -94,21 +94,21 @@ final class CteItemsCollector
             }
         }
 
-        // A1 ausente para clientes com cursor CT-e ativo
+        // certificado ausente para clientes com cursor CT-e ativo
         $clientIdsWithCte = $clientCursors->pluck('establishment.client_id')->filter()->unique();
         if ($clientIdsWithCte->isNotEmpty()) {
-            $withA1 = ClientCredential::query()
-                ->where('office_id', $officeId)
+            $withCertificate = ClientCredential::query()
+                ->where('tenant_id', $tenantId)
                 ->whereIn('client_id', $clientIdsWithCte)
                 ->where('status', CredentialStatus::Active)
                 ->pluck('client_id')
                 ->unique();
-            foreach ($clientIdsWithCte->diff($withA1) as $clientId) {
+            foreach ($clientIdsWithCte->diff($withCertificate) as $clientId) {
                 $items->push($this->items->cteItem(
-                    type: 'cte_a1_missing',
-                    title: 'CT-e sem A1 ativo',
-                    body: 'Cursor CT-e existe mas não há credencial A1 ACTIVE do cliente. Sem portal automático.',
-                    reasons: ['cte_a1_missing', 'c'.$clientId],
+                    type: 'cte_certificate_missing',
+                    title: 'CT-e sem certificado ativo',
+                    body: 'Cursor CT-e existe mas não há certificado ACTIVE do cliente. Sem portal automático.',
+                    reasons: ['cte_certificate_missing', 'c'.$clientId],
                     clientId: (int) $clientId,
                     establishmentId: null,
                     occurredAt: now()->toIso8601String(),
@@ -119,14 +119,14 @@ final class CteItemsCollector
             }
         }
 
-        $officeCursors = OfficeDistributionCursor::query()
-            ->where('office_id', $officeId)
+        $tenantCursors = TenantDistributionCursor::query()
+            ->where('tenant_id', $tenantId)
             ->where('channel', CaptureChannel::CteAutXmlDistDfe->value)
             ->orderBy('id')
             ->limit(40)
             ->get();
 
-        foreach ($officeCursors as $oc) {
+        foreach ($tenantCursors as $oc) {
             if ($oc->external_consumer_status === 'EXTERNAL_CONSUMER_CONFLICT') {
                 $items->push($this->items->cteItem(
                     type: 'cte_external_consumer',
@@ -175,7 +175,7 @@ final class CteItemsCollector
 
         // Quarentenas CT-e tipadas (além do agrupamento genérico)
         $cteQuarantines = FiscalDocumentQuarantine::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('resolution_status', QuarantineResolutionStatus::Open)
             ->where(function ($q): void {
                 $q->where('model', '57')->orWhere('schema_family', 'like', '%CTe%')

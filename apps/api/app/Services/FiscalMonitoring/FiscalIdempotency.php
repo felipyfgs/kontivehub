@@ -6,12 +6,12 @@ use App\Enums\FiscalTrigger;
 
 /**
  * Chaves idempotentes canônicas do núcleo fiscal.
- * Formato estável: office|client|system|service|operation|competence|trigger|slot
+ * Formato estável: tenant|client|system|service|operation|competence|trigger|slot
  */
 final class FiscalIdempotency
 {
     public static function runKey(
-        int $officeId,
+        int $tenantId,
         int $clientId,
         string $systemCode,
         string $serviceCode,
@@ -21,7 +21,7 @@ final class FiscalIdempotency
         string $slot,
     ): string {
         $parts = [
-            (string) $officeId,
+            (string) $tenantId,
             (string) $clientId,
             strtoupper($systemCode),
             strtoupper($serviceCode),
@@ -62,14 +62,14 @@ final class FiscalIdempotency
     }
 
     public static function eventHash(
-        int $officeId,
+        int $tenantId,
         string $systemCode,
         string $eventType,
         ?string $externalId,
         ?string $payloadDigest,
     ): string {
         $material = implode('|', [
-            (string) $officeId,
+            (string) $tenantId,
             strtoupper($systemCode),
             strtoupper($eventType),
             $externalId ?? '',
@@ -94,20 +94,20 @@ final class FiscalIdempotency
     }
 
     /**
-     * Chave de cache tenant-aware (nunca compartilhar entre offices).
+     * Chave de cache tenant-aware (nunca compartilhar entre tenants).
      */
-    public static function cacheKey(int $officeId, string $namespace, string ...$parts): string
+    public static function cacheKey(int $tenantId, string $namespace, string ...$parts): string
     {
         $prefix = (string) config('fiscal_monitoring.cache.key_prefix', 'fiscal');
 
-        return implode(':', array_merge([$prefix, (string) $officeId, $namespace], $parts));
+        return implode(':', array_merge([$prefix, (string) $tenantId, $namespace], $parts));
     }
 
     /**
      * Lock de execução por identidade lógica (tenant incluso).
      */
-    public static function runLockKey(int $officeId, string $idempotencyKey): string
+    public static function runLockKey(int $tenantId, string $idempotencyKey): string
     {
-        return self::cacheKey($officeId, 'run-lock', hash('sha256', $idempotencyKey));
+        return self::cacheKey($tenantId, 'run-lock', hash('sha256', $idempotencyKey));
     }
 }

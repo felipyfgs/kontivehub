@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
- * Catálogo global de obrigações declaratórias (sem office_id).
+ * Catálogo global de obrigações declaratórias (sem tenant_id).
  */
 #[Fillable([
     'code',

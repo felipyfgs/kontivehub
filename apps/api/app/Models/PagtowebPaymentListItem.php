@@ -2,14 +2,14 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 
-#[Fillable(['observation_id', 'office_id', 'client_id', 'document_digest', 'document_masked', 'document_type', 'revenue_code', 'revenue_description', 'paid_on', 'due_on', 'total_amount', 'created_at'])]
+#[Fillable(['observation_id', 'tenant_id', 'client_id', 'document_digest', 'document_masked', 'document_type', 'revenue_code', 'revenue_description', 'paid_on', 'due_on', 'total_amount', 'created_at'])]
 class PagtowebPaymentListItem extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     public $timestamps = false;
 

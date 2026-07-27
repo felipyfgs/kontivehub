@@ -7,11 +7,11 @@ use App\Enums\SerproEnvironment;
 use App\Enums\SerproReadinessGate;
 use App\Enums\SerproReadinessScope;
 use App\Models\Client;
-use App\Models\Office;
-use App\Models\OfficeSerproAuthorization;
 use App\Models\SerproReadinessEvidence;
 use App\Models\SerproReadinessRun;
 use App\Models\TaxProxyPower;
+use App\Models\Tenant;
+use App\Models\TenantSerproAuthorization;
 use App\Services\Serpro\Catalog\OperationCoverageMatrix;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -208,7 +208,7 @@ final class SerproReadinessService
                 $liveAny,
                 $evidences,
                 $summary,
-                officeId: null,
+                tenantId: null,
                 clientId: null,
                 operationKey: null,
                 contractId: $contractId,
@@ -228,7 +228,7 @@ final class SerproReadinessService
             summary: $summary,
             evidences: $evidences,
             contractId: $contractId,
-            officeId: null,
+            tenantId: null,
             clientId: null,
             operationKey: null,
         );
@@ -237,8 +237,8 @@ final class SerproReadinessService
     /**
      * @return SerproReadinessRun|array<string, mixed>
      */
-    public function evaluateOffice(
-        Office $office,
+    public function evaluateTenant(
+        Tenant $tenant,
         ?SerproEnvironment $environment = null,
         bool $persist = true,
         ?int $actorUserId = null,
@@ -265,7 +265,7 @@ final class SerproReadinessService
             }
             $evidences[] = [
                 'gate' => $gate,
-                'scope' => SerproReadinessScope::Office,
+                'scope' => SerproReadinessScope::Tenant,
                 'status' => $status,
                 'reason' => mb_substr($reason, 0, 500),
                 'live' => $live,
@@ -279,18 +279,18 @@ final class SerproReadinessService
             }
         };
 
-        $seg = $office->serpro_segregation_class;
-        $demoBlocked = $seg === 'DEMO' || str_contains(strtolower((string) $office->slug), 'demo');
+        $seg = $tenant->serpro_segregation_class;
+        $demoBlocked = $seg === 'DEMO' || str_contains(strtolower((string) $tenant->slug), 'demo');
         $add(
             SerproReadinessGate::Configured,
             $demoBlocked ? 'FAIL' : 'PASS',
             $demoBlocked
-                ? 'Office demo/segregado não pode usar endpoint real.'
-                : 'Office elegível para avaliação tenant (não-demo).',
+                ? 'Tenant demo/segregado não pode usar endpoint real.'
+                : 'Tenant elegível para avaliação tenant (não-demo).',
         );
 
-        $auth = OfficeSerproAuthorization::query()
-            ->where('office_id', $office->id)
+        $auth = TenantSerproAuthorization::query()
+            ->where('tenant_id', $tenant->id)
             ->where('environment', $environment->value)
             ->first();
 
@@ -336,8 +336,8 @@ final class SerproReadinessService
         $ttlHours = max(1, (int) config('serpro.readiness.default_ttl_hours', 24));
         $summary = [
             'environment' => $environment->value,
-            'office_id' => $office->id,
-            'office_segregation_class' => $seg,
+            'tenant_id' => $tenant->id,
+            'tenant_segregation_class' => $seg,
             'demo_blocked_for_real' => $demoBlocked,
             'serpro_contract_id' => $contract?->id,
             'authorization_status' => isset($auth) && $auth !== null
@@ -352,14 +352,14 @@ final class SerproReadinessService
 
         if (! $persist) {
             $payload = $this->arrayPayload(
-                SerproReadinessScope::Office,
+                SerproReadinessScope::Tenant,
                 $environment,
                 $highest,
                 $result,
                 $liveAny,
                 $evidences,
                 $summary,
-                officeId: $office->id,
+                tenantId: $tenant->id,
                 clientId: null,
                 operationKey: null,
                 contractId: $contract?->id,
@@ -380,7 +380,7 @@ final class SerproReadinessService
         }
 
         return $this->persistRun(
-            scope: SerproReadinessScope::Office,
+            scope: SerproReadinessScope::Tenant,
             environment: $environment,
             highest: $highest,
             result: $result,
@@ -392,7 +392,7 @@ final class SerproReadinessService
             summary: $summary,
             evidences: $evidences,
             contractId: $contract?->id,
-            officeId: $office->id,
+            tenantId: $tenant->id,
             clientId: null,
             operationKey: null,
         );
@@ -402,7 +402,7 @@ final class SerproReadinessService
      * @return SerproReadinessRun|array<string, mixed>
      */
     public function evaluateOperation(
-        Office $office,
+        Tenant $tenant,
         string $operationKey,
         ?Client $client = null,
         ?SerproEnvironment $environment = null,
@@ -412,11 +412,11 @@ final class SerproReadinessService
     ): SerproReadinessRun|array {
         $environment ??= $this->defaultEnvironment();
         $started = CarbonImmutable::now();
-        $officeEval = $this->evaluateOffice($office, $environment, persist: false, actorUserId: $actorUserId, trigger: $trigger);
-        $officeArr = is_array($officeEval) ? $officeEval : $officeEval->toSanitizedArray();
+        $tenantEval = $this->evaluateTenant($tenant, $environment, persist: false, actorUserId: $actorUserId, trigger: $trigger);
+        $tenantArr = is_array($tenantEval) ? $tenantEval : $tenantEval->toSanitizedArray();
 
         $evidences = [];
-        $highest = SerproReadinessGate::tryFrom((string) ($officeArr['highest_gate'] ?? '')) ?? null;
+        $highest = SerproReadinessGate::tryFrom((string) ($tenantArr['highest_gate'] ?? '')) ?? null;
         $liveAny = false;
 
         $add = function (
@@ -441,8 +441,8 @@ final class SerproReadinessService
             }
         };
 
-        if ($client !== null && (int) $client->office_id !== (int) $office->id) {
-            $add(SerproReadinessGate::Configured, 'FAIL', 'Cliente não pertence ao office.');
+        if ($client !== null && (int) $client->tenant_id !== (int) $tenant->id) {
+            $add(SerproReadinessGate::Configured, 'FAIL', 'Cliente não pertence ao tenant.');
         }
 
         $coverage = $this->coverage->evaluate($operationKey);
@@ -459,7 +459,7 @@ final class SerproReadinessService
         $powerOk = false;
         if ($client !== null) {
             $powerOk = TaxProxyPower::query()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('client_id', $client->id)
                 ->whereNull('closed_at')
                 ->exists();
@@ -480,13 +480,13 @@ final class SerproReadinessService
 
         $contract = $this->contracts->activeFor($environment);
         $result = $this->mergeResults(
-            (string) ($officeArr['result'] ?? 'PARTIAL'),
+            (string) ($tenantArr['result'] ?? 'PARTIAL'),
             $this->computeResult($evidences),
         );
         $ttlHours = max(1, (int) config('serpro.readiness.default_ttl_hours', 24));
         $summary = [
             'environment' => $environment->value,
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client?->id,
             'operation_key' => $operationKey,
             'coverage_class' => $coverage['platform_support'] ?? null,
@@ -506,7 +506,7 @@ final class SerproReadinessService
                 false,
                 $evidences,
                 $summary,
-                officeId: $office->id,
+                tenantId: $tenant->id,
                 clientId: $client?->id,
                 operationKey: $operationKey,
                 contractId: $contract?->id,
@@ -526,7 +526,7 @@ final class SerproReadinessService
             summary: $summary,
             evidences: $evidences,
             contractId: $contract?->id,
-            officeId: $office->id,
+            tenantId: $tenant->id,
             clientId: $client?->id,
             operationKey: $operationKey,
         );
@@ -594,7 +594,7 @@ final class SerproReadinessService
         bool $liveEvidence,
         array $evidences,
         array $summary,
-        ?int $officeId,
+        ?int $tenantId,
         ?int $clientId,
         ?string $operationKey,
         ?int $contractId,
@@ -603,7 +603,7 @@ final class SerproReadinessService
             'scope' => $scope->value,
             'environment' => $environment->value,
             'serpro_contract_id' => $contractId,
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'client_id' => $clientId,
             'operation_key' => $operationKey,
             'highest_gate' => $highest?->value,
@@ -639,7 +639,7 @@ final class SerproReadinessService
         array $summary,
         array $evidences,
         ?int $contractId,
-        ?int $officeId,
+        ?int $tenantId,
         ?int $clientId,
         ?string $operationKey,
     ): SerproReadinessRun {
@@ -656,7 +656,7 @@ final class SerproReadinessService
             $summary,
             $evidences,
             $contractId,
-            $officeId,
+            $tenantId,
             $clientId,
             $operationKey,
         ) {
@@ -664,7 +664,7 @@ final class SerproReadinessService
                 'scope' => $scope,
                 'environment' => $environment,
                 'serpro_contract_id' => $contractId,
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'client_id' => $clientId,
                 'operation_key' => $operationKey,
                 'highest_gate' => $highest,

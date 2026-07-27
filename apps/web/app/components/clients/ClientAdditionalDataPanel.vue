@@ -23,7 +23,7 @@ const savingCapture = ref(false)
 const savingFieldId = ref<number | null>(null)
 
 const primaryEstablishment = computed(() =>
-  props.client.establishments?.find(e => e.is_matrix)
+  props.client.establishments?.find(e => e.is_headquarters)
   || props.client.establishments?.[0]
   || null
 )
@@ -104,7 +104,7 @@ async function toggleFieldActive(field: ClientCustomField, active: boolean) {
           />
         </UFormField>
         <p class="text-sm text-muted">
-          Certificado A1 e procuração e-CAC ficam no painel lateral.
+          certificado e procuração e-CAC ficam no painel lateral.
         </p>
       </div>
     </template>

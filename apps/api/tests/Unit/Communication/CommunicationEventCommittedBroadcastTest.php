@@ -13,7 +13,7 @@ class CommunicationEventCommittedBroadcastTest extends TestCase
         $this->assertTrue(is_subclass_of(CommunicationEventCommitted::class, ShouldBroadcastNow::class));
 
         $event = new CommunicationEventCommitted(
-            officeId: 1,
+            tenantId: 1,
             cursor: 42,
             eventType: 'MESSAGE_QUEUED',
             inboxId: 7,

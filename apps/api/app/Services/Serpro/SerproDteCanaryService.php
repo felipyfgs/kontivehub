@@ -3,25 +3,25 @@
 namespace App\Services\Serpro;
 
 use App\Enums\CredentialStatus;
-use App\Enums\OfficeRole;
 use App\Enums\SerproCredentialVersionStatus;
 use App\Enums\SerproDataSegregationClass;
 use App\Enums\SerproDteCanaryRequestStatus;
 use App\Enums\SerproDteControlMode;
 use App\Enums\SerproEnvironment;
 use App\Enums\SerproExternalGateStatus;
+use App\Enums\TenantRole;
 use App\Models\Client;
-use App\Models\Office;
-use App\Models\OfficeCredential;
-use App\Models\OfficeMembership;
-use App\Models\OfficeSerproAuthorization;
 use App\Models\SerproCredentialConnectionEvidence;
 use App\Models\SerproCredentialVersion;
 use App\Models\SerproDteCanaryRequest;
 use App\Models\SerproDteControl;
 use App\Models\SerproExternalGate;
-use App\Models\SerproOfficeQuantityUsageLimit;
 use App\Models\SerproQuantityUsageLimit;
+use App\Models\SerproTenantQuantityUsageLimit;
+use App\Models\Tenant;
+use App\Models\TenantCredential;
+use App\Models\TenantMembership;
+use App\Models\TenantSerproAuthorization;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use App\Services\Integra\TaxProxyPowerService;
@@ -30,16 +30,15 @@ use App\Support\Serpro\DteCanaryCoordinates;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
 
 /**
- * Canário DTE unitário e promoção LIMITED no Office piloto.
+ * Canário DTE unitário e promoção LIMITED no Tenant piloto.
  *
- * - Alvo server-side (Office Production + cliente do Office)
- * - Dual approval (Proprietário + Office ADMIN distintos)
+ * - Alvo server-side (Tenant Production + cliente do Tenant)
+ * - Dual approval (Proprietário + Tenant ADMIN distintos)
  * - Gate pré-transporte recalculado
  * - Uma reserva/dispatch via executor central
  * - Resultado fiscal só no tenant; global sanitizado
@@ -103,35 +102,35 @@ final class SerproDteCanaryService
     }
 
     /**
-     * Seleciona Office Production ativo + cliente pertencente (server-side).
-     * Rejeita office_id/operação/coordenadas livres do client — caller passa ids validados.
+     * Seleciona Tenant Production ativo + cliente pertencente (server-side).
+     * Rejeita tenant_id/operação/coordenadas livres do client — caller passa ids validados.
      */
     public function selectTarget(
         SerproDteCanaryRequest $request,
-        int $officeId,
+        int $tenantId,
         int $clientId,
         int $actorUserId,
     ): SerproDteCanaryRequest {
         $this->assertMutableTarget($request);
 
-        $office = Office::query()->withoutGlobalScopes()->find($officeId);
-        if ($office === null || ! $office->is_active) {
-            throw new RuntimeException('Office inválido ou inativo.');
+        $tenant = Tenant::query()->withoutGlobalScopes()->find($tenantId);
+        if ($tenant === null || ! $tenant->is_active) {
+            throw new RuntimeException('Tenant inválido ou inativo.');
         }
 
-        $seg = strtoupper((string) ($office->serpro_segregation_class ?? ''));
+        $seg = strtoupper((string) ($tenant->serpro_segregation_class ?? ''));
         if ($seg !== '' && $seg !== SerproDataSegregationClass::Production->value) {
-            throw new RuntimeException('Office deve ser classificado Production (não demo/shadow/fake).');
+            throw new RuntimeException('Tenant deve ser classificado Production (não demo/shadow/fake).');
         }
         if ($seg === '' || $seg === SerproDataSegregationClass::Demo->value) {
             // default sem classificação explícita Production bloqueia em produção
             if ($seg === SerproDataSegregationClass::Demo->value
-                || str_contains(strtolower((string) $office->slug), 'demo')) {
-                throw new RuntimeException('Office demo não pode ser alvo do canário DTE.');
+                || str_contains(strtolower((string) $tenant->slug), 'demo')) {
+                throw new RuntimeException('Tenant demo não pode ser alvo do canário DTE.');
             }
             // Exigir Production explícito
             if ($seg !== SerproDataSegregationClass::Production->value) {
-                throw new RuntimeException('Office deve ser classificado Production.');
+                throw new RuntimeException('Tenant deve ser classificado Production.');
             }
         }
 
@@ -139,8 +138,8 @@ final class SerproDteCanaryService
             ->whereKey($clientId)
             ->first();
 
-        if ($client === null || (int) $client->office_id !== (int) $office->id) {
-            throw new RuntimeException('Cliente não pertence ao Office selecionado.');
+        if ($client === null || (int) $client->tenant_id !== (int) $tenant->id) {
+            throw new RuntimeException('Cliente não pertence ao Tenant selecionado.');
         }
 
         $coords = DteCanaryCoordinates::asArray();
@@ -151,8 +150,8 @@ final class SerproDteCanaryService
 
         $control = $this->ensureControl();
         if ($control->mode === SerproDteControlMode::Canary
-            && ($control->pilot_office_id !== null || $control->pilot_client_id !== null)
-            && ((int) $control->pilot_office_id !== (int) $office->id
+            && ($control->pilot_tenant_id !== null || $control->pilot_client_id !== null)
+            && ((int) $control->pilot_tenant_id !== (int) $tenant->id
                 || (int) $control->pilot_client_id !== (int) $client->id)
         ) {
             throw new RuntimeException('Alvo piloto do canário DTE já foi fixado e não pode ser trocado.');
@@ -162,7 +161,7 @@ final class SerproDteCanaryService
             'dte-canary',
             substr(hash('sha256', $installation), 0, 16),
             $env,
-            (string) $office->id,
+            (string) $tenant->id,
             (string) $client->id,
             $coords['operation_key'],
         ];
@@ -172,7 +171,7 @@ final class SerproDteCanaryService
         $idempotencyKey = hash('sha256', implode('|', $idempotencyParts));
 
         $request->forceFill([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'selected_by_user_id' => $actorUserId,
             'selected_at' => now(),
@@ -191,7 +190,7 @@ final class SerproDteCanaryService
         ) {
             $control->forceFill([
                 'mode' => SerproDteControlMode::Canary,
-                'pilot_office_id' => $office->id,
+                'pilot_tenant_id' => $tenant->id,
                 'pilot_client_id' => $client->id,
                 'disabled_at' => null,
                 'disable_reason' => null,
@@ -199,9 +198,9 @@ final class SerproDteCanaryService
         }
 
         $this->audit->record('serpro.dte_canary.select_target', 'SUCCESS', $request, [
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
-        ], $actorUserId, $office->id);
+        ], $actorUserId, $tenant->id);
 
         return $request->fresh();
     }
@@ -223,15 +222,15 @@ final class SerproDteCanaryService
         }
 
         $this->assertNotExpired($request);
-        if ($request->office_id === null || $request->client_id === null) {
+        if ($request->tenant_id === null || $request->client_id === null) {
             throw new RuntimeException('Alvo do canário ainda não foi selecionado.');
         }
 
-        if ($request->hasOfficeAdminApproval()
-            && (int) $request->office_admin_approver_user_id === (int) $owner->id
+        if ($request->hasTenantAdminApproval()
+            && (int) $request->tenant_admin_approver_user_id === (int) $owner->id
         ) {
             throw new RuntimeException(
-                'Conta dual: o mesmo usuário já aprovou como Office ADMIN; exige segundo usuário autorizado.'
+                'Conta dual: o mesmo usuário já aprovou como Tenant ADMIN; exige segundo usuário autorizado.'
             );
         }
 
@@ -248,49 +247,49 @@ final class SerproDteCanaryService
 
         $this->audit->record('serpro.dte_canary.owner_approve', 'SUCCESS', $request, [
             'status' => $request->status->value,
-        ], $owner->id, $request->office_id);
+        ], $owner->id, $request->tenant_id);
 
         return $request->fresh();
     }
 
     /**
-     * Confirmação do Office ADMIN no CurrentOffice (sem office_id do client).
+     * Confirmação do Tenant ADMIN no CurrentTenant (sem tenant_id do client).
      */
-    public function approveAsOfficeAdmin(
+    public function approveAsTenantAdmin(
         SerproDteCanaryRequest $request,
         User $admin,
-        Office $currentOffice,
+        Tenant $currentTenant,
         bool $passwordRecentlyConfirmed,
     ): SerproDteCanaryRequest {
         if (! $passwordRecentlyConfirmed) {
-            throw new RuntimeException('Reconfirmação de senha (15 min) obrigatória para confirmação do Office ADMIN.');
+            throw new RuntimeException('Reconfirmação de senha (15 min) obrigatória para confirmação do Tenant ADMIN.');
         }
 
         $this->assertNotExpired($request);
-        if ($request->office_id === null) {
+        if ($request->tenant_id === null) {
             throw new RuntimeException('Alvo do canário ainda não foi selecionado.');
         }
 
-        if ((int) $currentOffice->id !== (int) $request->office_id) {
-            throw new RuntimeException('Office corrente não corresponde ao Office piloto do canário.');
+        if ((int) $currentTenant->id !== (int) $request->tenant_id) {
+            throw new RuntimeException('Tenant corrente não corresponde ao Tenant piloto do canário.');
         }
 
-        $membership = OfficeMembership::query()
-            ->where('office_id', $currentOffice->id)
+        $membership = TenantMembership::query()
+            ->where('tenant_id', $currentTenant->id)
             ->where('user_id', $admin->id)
             ->where('is_active', true)
             ->first();
 
         if ($membership === null) {
-            throw new RuntimeException('Usuário sem membership ativa no Office corrente.');
+            throw new RuntimeException('Usuário sem membership ativa no Tenant corrente.');
         }
 
-        $role = $membership->role instanceof OfficeRole
+        $role = $membership->role instanceof TenantRole
             ? $membership->role
-            : OfficeRole::tryFrom((string) $membership->role);
+            : TenantRole::tryFrom((string) $membership->role);
 
-        if ($role !== OfficeRole::Admin) {
-            throw new RuntimeException('Somente Office ADMIN pode confirmar participação no canário DTE.');
+        if ($role !== TenantRole::TenantAdmin) {
+            throw new RuntimeException('Somente Tenant ADMIN pode confirmar participação no canário DTE.');
         }
 
         if ($request->hasOwnerApproval()
@@ -301,23 +300,23 @@ final class SerproDteCanaryService
             );
         }
 
-        if ($request->hasOfficeAdminApproval()
-            && (int) $request->office_admin_approver_user_id !== (int) $admin->id
+        if ($request->hasTenantAdminApproval()
+            && (int) $request->tenant_admin_approver_user_id !== (int) $admin->id
         ) {
-            throw new RuntimeException('Confirmação do Office ADMIN já registrada por outro usuário.');
+            throw new RuntimeException('Confirmação do Tenant ADMIN já registrada por outro usuário.');
         }
 
         $request->forceFill([
-            'office_admin_approver_user_id' => $admin->id,
-            'office_admin_approved_at' => now(),
+            'tenant_admin_approver_user_id' => $admin->id,
+            'tenant_admin_approved_at' => now(),
         ]);
         $this->refreshApprovalStatus($request);
         $request->save();
 
-        $this->audit->record('serpro.dte_canary.office_admin_approve', 'SUCCESS', $request, [
+        $this->audit->record('serpro.dte_canary.tenant_admin_approve', 'SUCCESS', $request, [
             'status' => $request->status->value,
-            'office_id' => $currentOffice->id,
-        ], $admin->id, $currentOffice->id);
+            'tenant_id' => $currentTenant->id,
+        ], $admin->id, $currentTenant->id);
 
         return $request->fresh();
     }
@@ -364,47 +363,44 @@ final class SerproDteCanaryService
         }
 
         // Target
-        $office = $request->office_id
-            ? Office::query()->withoutGlobalScopes()->find($request->office_id)
+        $tenant = $request->tenant_id
+            ? Tenant::query()->withoutGlobalScopes()->find($request->tenant_id)
             : null;
         $client = $request->client_id
             ? Client::query()->withoutGlobalScopes()->find($request->client_id)
             : null;
 
-        $checks['target_present'] = $office !== null && $client !== null;
+        $checks['target_present'] = $tenant !== null && $client !== null;
         if (! $checks['target_present']) {
             $blockers[] = 'TARGET_MISSING';
         }
 
-        $checks['client_belongs_to_office'] = $client !== null
-            && $office !== null
-            && (int) $client->office_id === (int) $office->id;
-        if ($checks['target_present'] && ! $checks['client_belongs_to_office']) {
+        $checks['client_belongs_to_tenant'] = $client !== null
+            && $tenant !== null
+            && (int) $client->tenant_id === (int) $tenant->id;
+        if ($checks['target_present'] && ! $checks['client_belongs_to_tenant']) {
             $blockers[] = 'CLIENT_CROSS_TENANT';
         }
 
-        $checks['office_production'] = $office !== null
-            && strtoupper((string) ($office->serpro_segregation_class ?? '')) === SerproDataSegregationClass::Production->value
-            && $office->is_active;
-        if ($checks['target_present'] && ! $checks['office_production']) {
-            $blockers[] = 'OFFICE_NOT_PRODUCTION';
+        $checks['tenant_production'] = $tenant !== null
+            && strtoupper((string) ($tenant->serpro_segregation_class ?? '')) === SerproDataSegregationClass::Production->value
+            && $tenant->is_active;
+        if ($checks['target_present'] && ! $checks['tenant_production']) {
+            $blockers[] = 'TENANT_NOT_PRODUCTION';
         }
 
-        $checks['pilot_matches_control'] = $control->pilot_office_id === null
-            || ($office !== null && (int) $control->pilot_office_id === (int) $office->id);
+        $checks['pilot_matches_control'] = $control->pilot_tenant_id === null
+            || ($tenant !== null && (int) $control->pilot_tenant_id === (int) $tenant->id);
         if (! $checks['pilot_matches_control']) {
-            $blockers[] = 'OFFICE_NOT_PILOT';
+            $blockers[] = 'TENANT_NOT_PILOT';
         }
 
         // Credencial ACTIVE Production
-        $credential = null;
-        if (Schema::hasTable('serpro_credential_versions')) {
-            $credential = SerproCredentialVersion::query()
-                ->where('environment', SerproEnvironment::Production->value)
-                ->where('status', SerproCredentialVersionStatus::Active->value)
-                ->orderByDesc('id')
-                ->first();
-        }
+        $credential = SerproCredentialVersion::query()
+            ->where('environment', SerproEnvironment::Production->value)
+            ->where('status', SerproCredentialVersionStatus::Active->value)
+            ->orderByDesc('id')
+            ->first();
         $checks['credential_active'] = $credential !== null
             && ! $credential->blocksBillableEgress();
         if (! $checks['credential_active']) {
@@ -413,7 +409,7 @@ final class SerproDteCanaryService
 
         // OAuth recente na mesma versão
         $checks['oauth_recent'] = false;
-        if ($credential !== null && Schema::hasTable('serpro_credential_connection_evidences')) {
+        if ($credential !== null) {
             $evidence = SerproCredentialConnectionEvidence::query()
                 ->where('serpro_credential_version_id', $credential->id)
                 ->where('success', true)
@@ -421,9 +417,6 @@ final class SerproDteCanaryService
                 ->orderByDesc('id')
                 ->first();
             $checks['oauth_recent'] = $evidence !== null && $evidence->isValidFor($credential);
-        } elseif ($credential !== null && $credential->token_expires_at !== null && $credential->token_expires_at->isFuture()) {
-            // Fallback: token ainda válido na versão ativa
-            $checks['oauth_recent'] = true;
         }
         if (! $checks['oauth_recent']) {
             $blockers[] = 'OAUTH_EVIDENCE_MISSING';
@@ -432,17 +425,17 @@ final class SerproDteCanaryService
         // Gates documentais são informativos (não bloqueiam canário na console simplificada).
         $checks['external_gates_accepted'] = $this->allExternalGatesAccepted();
 
-        // A1 do Office
-        $checks['a1_valid'] = $office !== null && $this->officeHasValidA1($office);
-        if ($checks['target_present'] && ! $checks['a1_valid']) {
-            $blockers[] = 'A1_INVALID';
+        // certificado do Tenant
+        $checks['certificate_valid'] = $tenant !== null && $this->tenantHasValidCertificate($tenant);
+        if ($checks['target_present'] && ! $checks['certificate_valid']) {
+            $blockers[] = 'CERTIFICATE_INVALID';
         }
 
         // Termo aceito
         $auth = null;
-        if ($office !== null) {
-            $auth = OfficeSerproAuthorization::query()
-                ->where('office_id', $office->id)
+        if ($tenant !== null) {
+            $auth = TenantSerproAuthorization::query()
+                ->where('tenant_id', $tenant->id)
                 ->where('environment', SerproEnvironment::Production->value)
                 ->first();
         }
@@ -456,11 +449,11 @@ final class SerproDteCanaryService
 
         // Procuração poder 00050
         $checks['power_00050'] = false;
-        if ($office !== null && $client !== null && $auth !== null) {
+        if ($tenant !== null && $client !== null && $auth !== null) {
             $author = strtoupper(trim((string) ($auth->author_identity ?? '')));
             if ($author !== '' && $author !== '00000000000000') {
                 $power = $this->proxyPowers->findUsablePower(
-                    officeId: (int) $office->id,
+                    tenantId: (int) $tenant->id,
                     clientId: (int) $client->id,
                     powerCode: DteCanaryCoordinates::REQUIRED_PROXY_POWER,
                     authorIdentity: $author,
@@ -473,9 +466,9 @@ final class SerproDteCanaryService
             $blockers[] = 'PROXY_POWER_00050_MISSING';
         }
 
-        // Limites quantitativos positivos (global + office)
+        // Limites quantitativos positivos (global + tenant)
         $checks['limits_positive'] = $this->quantityLimitsPositive(
-            $office?->id,
+            $tenant?->id,
             SerproEnvironment::Production,
         );
         if (! $checks['limits_positive']) {
@@ -520,7 +513,7 @@ final class SerproDteCanaryService
                 $alreadyReserved = SerproDteCanaryRequest::query()
                     ->where('operation_key', DteCanaryCoordinates::OPERATION_KEY)
                     ->where('environment', SerproEnvironment::Production->value)
-                    ->where('office_id', $control->pilot_office_id)
+                    ->where('tenant_id', $control->pilot_tenant_id)
                     ->where('client_id', $control->pilot_client_id)
                     ->where('id', '!=', $request->id)
                     ->whereNotNull('dispatched_at')
@@ -561,7 +554,7 @@ final class SerproDteCanaryService
                 // UNCERTAIN / in-flight: sem retry cego.
                 $this->audit->record('serpro.dte_canary.replay_uncertain', 'BLOCKED', $request, [
                     'result_status' => $request->result_status,
-                ], $actorUserId, $request->office_id);
+                ], $actorUserId, $request->tenant_id);
 
                 return [
                     'request' => $request->fresh(),
@@ -574,7 +567,7 @@ final class SerproDteCanaryService
                 $this->audit->record('serpro.dte_canary.replay', 'SUCCESS', $request, [
                     'result_status' => $request->result_status,
                     'consumption_quantity' => $request->consumption_quantity,
-                ], $actorUserId, $request->office_id);
+                ], $actorUserId, $request->tenant_id);
 
                 return [
                     'request' => $request->fresh(),
@@ -610,7 +603,7 @@ final class SerproDteCanaryService
                 $alreadyReserved = SerproDteCanaryRequest::query()
                     ->where('operation_key', DteCanaryCoordinates::OPERATION_KEY)
                     ->where('environment', SerproEnvironment::Production->value)
-                    ->where('office_id', $control->pilot_office_id)
+                    ->where('tenant_id', $control->pilot_tenant_id)
                     ->where('client_id', $control->pilot_client_id)
                     ->where('id', '!=', $locked->id)
                     ->whereNotNull('dispatched_at')
@@ -645,15 +638,15 @@ final class SerproDteCanaryService
             ];
         }
 
-        $office = Office::query()->withoutGlobalScopes()->findOrFail($request->office_id);
+        $tenant = Tenant::query()->withoutGlobalScopes()->findOrFail($request->tenant_id);
         $client = Client::query()->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($request->client_id)
             ->firstOrFail();
 
         try {
             $response = $this->operations->execute(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 operationKey: DteCanaryCoordinates::OPERATION_KEY,
                 businessData: [],
@@ -673,7 +666,7 @@ final class SerproDteCanaryService
             $this->audit->record('serpro.dte_canary.uncertain', 'FAILURE', $request, [
                 'error_code' => 'TRANSPORT_EXCEPTION',
                 'exception_type' => class_basename($e),
-            ], $actorUserId, $office->id);
+            ], $actorUserId, $tenant->id);
 
             $this->maybeEmitUsageAlerts($this->ensureControl()->fresh());
 
@@ -700,18 +693,15 @@ final class SerproDteCanaryService
         }
 
         // Vincular attempt se o executor expôs correlation
-        $attemptId = null;
-        if (Schema::hasTable('serpro_operation_attempts')) {
+        $attemptId = DB::table('serpro_operation_attempts')
+            ->where('idempotency_key', $request->idempotency_key)
+            ->value('id');
+        if ($attemptId === null && $correlationId !== '') {
             $attemptId = DB::table('serpro_operation_attempts')
-                ->where('idempotency_key', $request->idempotency_key)
+                ->where('correlation_id', $correlationId)
+                ->where('operation_key', DteCanaryCoordinates::OPERATION_KEY)
+                ->orderByDesc('id')
                 ->value('id');
-            if ($attemptId === null && $correlationId !== '') {
-                $attemptId = DB::table('serpro_operation_attempts')
-                    ->where('correlation_id', $correlationId)
-                    ->where('operation_key', DteCanaryCoordinates::OPERATION_KEY)
-                    ->orderByDesc('id')
-                    ->value('id');
-            }
         }
 
         $request->forceFill([
@@ -730,7 +720,7 @@ final class SerproDteCanaryService
             'http_status' => $response->httpStatus,
             'error_code' => $response->errorCode,
             // sem payload fiscal
-        ], $actorUserId, $office->id);
+        ], $actorUserId, $tenant->id);
 
         return [
             'request' => $request->fresh(),
@@ -777,13 +767,13 @@ final class SerproDteCanaryService
 
         $this->audit->record('serpro.dte_canary.reconcile', 'SUCCESS', $request, [
             'reference' => mb_substr($reference, 0, 80),
-        ], $actorUserId, $request->office_id);
+        ], $actorUserId, $request->tenant_id);
 
         return $request->fresh();
     }
 
     /**
-     * Promove DTE para LIMITED no mesmo Office piloto com teto 10.
+     * Promove DTE para LIMITED no mesmo Tenant piloto com teto 10.
      */
     public function promoteLimited(
         SerproDteCanaryRequest $request,
@@ -829,8 +819,8 @@ final class SerproDteCanaryService
             throw new RuntimeException('Promoção LIMITED só após canário com sucesso e reconciliação.');
         }
 
-        if ($request->office_id === null) {
-            throw new RuntimeException('Office piloto ausente no pedido.');
+        if ($request->tenant_id === null) {
+            throw new RuntimeException('Tenant piloto ausente no pedido.');
         }
 
         $maxQuantity = max(1, min(10, $maxQuantity));
@@ -838,7 +828,7 @@ final class SerproDteCanaryService
         $control = $this->ensureControl();
         $control->forceFill([
             'mode' => SerproDteControlMode::Limited,
-            'pilot_office_id' => $request->office_id,
+            'pilot_tenant_id' => $request->tenant_id,
             'pilot_client_id' => $request->client_id,
             'limited_max_quantity' => $maxQuantity,
             'limited_used_quantity' => 0,
@@ -857,10 +847,10 @@ final class SerproDteCanaryService
         ])->save();
 
         $this->audit->record('serpro.dte_canary.promote_limited', 'SUCCESS', $control, [
-            'office_id' => $request->office_id,
+            'tenant_id' => $request->tenant_id,
             'max_quantity' => $maxQuantity,
             'canary_request_id' => $request->id,
-        ], $owner->id, $request->office_id);
+        ], $owner->id, $request->tenant_id);
 
         return $control->fresh();
     }
@@ -897,7 +887,7 @@ final class SerproDteCanaryService
 
         $this->audit->record('serpro.dte_canary.disable', 'SUCCESS', $control, [
             'reason' => mb_substr($reason, 0, 200),
-        ], $owner->id, $control->pilot_office_id);
+        ], $owner->id, $control->pilot_tenant_id);
 
         return $control->fresh();
     }
@@ -925,24 +915,24 @@ final class SerproDteCanaryService
     }
 
     /**
-     * Resultado tenant — exige membership no Office do pedido.
+     * Resultado tenant — exige membership no Tenant do pedido.
      *
      * @return array<string, mixed>
      */
-    public function tenantResult(SerproDteCanaryRequest $request, User $user, Office $currentOffice): array
+    public function tenantResult(SerproDteCanaryRequest $request, User $user, Tenant $currentTenant): array
     {
-        if ((int) $currentOffice->id !== (int) $request->office_id) {
-            throw new RuntimeException('Resultado DTE indisponível para o Office corrente.');
+        if ((int) $currentTenant->id !== (int) $request->tenant_id) {
+            throw new RuntimeException('Resultado DTE indisponível para o Tenant corrente.');
         }
 
-        $membership = OfficeMembership::query()
-            ->where('office_id', $currentOffice->id)
+        $membership = TenantMembership::query()
+            ->where('tenant_id', $currentTenant->id)
             ->where('user_id', $user->id)
             ->where('is_active', true)
             ->exists();
 
         if (! $membership) {
-            throw new RuntimeException('Membership ativa no Office é obrigatória para ver resultado fiscal DTE.');
+            throw new RuntimeException('Membership ativa no Tenant é obrigatória para ver resultado fiscal DTE.');
         }
 
         $request->loadMissing('attempt');
@@ -957,19 +947,19 @@ final class SerproDteCanaryService
 
             return;
         }
-        if ($request->hasOwnerApproval() || $request->hasOfficeAdminApproval()) {
+        if ($request->hasOwnerApproval() || $request->hasTenantAdminApproval()) {
             $request->status = SerproDteCanaryRequestStatus::PartialApproved;
 
             return;
         }
-        if ($request->office_id !== null) {
+        if ($request->tenant_id !== null) {
             $request->status = SerproDteCanaryRequestStatus::TargetSet;
         }
     }
 
     private function approvalRolesRemainValid(SerproDteCanaryRequest $request): bool
     {
-        if (! $request->isFullyApproved() || $request->office_id === null) {
+        if (! $request->isFullyApproved() || $request->tenant_id === null) {
             return false;
         }
 
@@ -978,16 +968,16 @@ final class SerproDteCanaryService
             return false;
         }
 
-        $officeAdmin = User::query()->find($request->office_admin_approver_user_id);
-        if ($officeAdmin === null || ! $officeAdmin->is_active) {
+        $tenantAdmin = User::query()->find($request->tenant_admin_approver_user_id);
+        if ($tenantAdmin === null || ! $tenantAdmin->is_active) {
             return false;
         }
 
-        return OfficeMembership::query()
-            ->where('office_id', $request->office_id)
-            ->where('user_id', $officeAdmin->id)
+        return TenantMembership::query()
+            ->where('tenant_id', $request->tenant_id)
+            ->where('user_id', $tenantAdmin->id)
             ->where('is_active', true)
-            ->where('role', OfficeRole::Admin->value)
+            ->where('role', TenantRole::TenantAdmin->value)
             ->exists();
     }
 
@@ -1007,7 +997,7 @@ final class SerproDteCanaryService
         if ($status !== null && $status->isTerminalAttempt()) {
             throw new RuntimeException('Pedido já finalizado; alvo imutável.');
         }
-        if ($request->hasOwnerApproval() || $request->hasOfficeAdminApproval()) {
+        if ($request->hasOwnerApproval() || $request->hasTenantAdminApproval()) {
             throw new RuntimeException('Alvo imutável após início das aprovações.');
         }
         if ($status === SerproDteCanaryRequestStatus::Dispatched) {
@@ -1024,10 +1014,6 @@ final class SerproDteCanaryService
 
     private function allExternalGatesAccepted(): bool
     {
-        if (! Schema::hasTable('serpro_external_gates')) {
-            return false;
-        }
-
         $gates = SerproExternalGate::query()->get();
         if ($gates->count() < 6) {
             // ensure baseline may not have run
@@ -1055,14 +1041,10 @@ final class SerproDteCanaryService
         return true;
     }
 
-    private function officeHasValidA1(Office $office): bool
+    private function tenantHasValidCertificate(Tenant $tenant): bool
     {
-        if (! Schema::hasTable('office_credentials')) {
-            return false;
-        }
-
-        $credential = OfficeCredential::query()
-            ->where('office_id', $office->id)
+        $credential = TenantCredential::query()
+            ->where('tenant_id', $tenant->id)
             ->where('status', CredentialStatus::Active->value)
             ->orderByDesc('id')
             ->first();
@@ -1078,13 +1060,8 @@ final class SerproDteCanaryService
         return true;
     }
 
-    private function quantityLimitsPositive(?int $officeId, SerproEnvironment $environment): bool
+    private function quantityLimitsPositive(?int $tenantId, SerproEnvironment $environment): bool
     {
-        if (! Schema::hasTable('serpro_quantity_usage_limits')) {
-            // Sem tabela de limites quantitativos: exigir budget monetário global positivo como fallback
-            return true; // gate de budget do executor ainda aplica; não bloquear se infra irmã ausente em testes unitários parciais
-        }
-
         $global = SerproQuantityUsageLimit::query()
             ->where('environment', $environment->value)
             ->where('is_active', true)
@@ -1094,21 +1071,17 @@ final class SerproDteCanaryService
             return false;
         }
 
-        if ($officeId === null) {
+        if ($tenantId === null) {
             return false;
         }
 
-        if (! Schema::hasTable('serpro_office_quantity_usage_limits')) {
-            return false;
-        }
-
-        $officeLimit = SerproOfficeQuantityUsageLimit::query()
-            ->where('office_id', $officeId)
+        $tenantLimit = SerproTenantQuantityUsageLimit::query()
+            ->where('tenant_id', $tenantId)
             ->where('environment', $environment->value)
             ->where('is_active', true)
             ->first();
 
-        return $officeLimit !== null && $officeLimit->isConfiguredPositive();
+        return $tenantLimit !== null && $tenantLimit->isConfiguredPositive();
     }
 
     private function maybeEmitUsageAlerts(SerproDteControl $control): void
@@ -1123,7 +1096,7 @@ final class SerproDteCanaryService
         if ($ratio >= 1.0 && ! $control->alert_100_emitted) {
             Log::warning('serpro.dte_limited.quota_100', [
                 'operation_key' => DteCanaryCoordinates::OPERATION_KEY,
-                'office_id' => $control->pilot_office_id,
+                'tenant_id' => $control->pilot_tenant_id,
                 'used' => $control->limited_used_quantity,
                 'max' => $control->limited_max_quantity,
             ]);
@@ -1131,11 +1104,11 @@ final class SerproDteCanaryService
             $this->audit->record('serpro.dte_canary.alert_100', 'SUCCESS', $control, [
                 'used' => $control->limited_used_quantity,
                 'max' => $control->limited_max_quantity,
-            ], null, $control->pilot_office_id);
+            ], null, $control->pilot_tenant_id);
         } elseif ($ratio >= $alertAt && ! $control->alert_80_emitted) {
             Log::warning('serpro.dte_limited.quota_80', [
                 'operation_key' => DteCanaryCoordinates::OPERATION_KEY,
-                'office_id' => $control->pilot_office_id,
+                'tenant_id' => $control->pilot_tenant_id,
                 'used' => $control->limited_used_quantity,
                 'max' => $control->limited_max_quantity,
             ]);
@@ -1143,7 +1116,7 @@ final class SerproDteCanaryService
             $this->audit->record('serpro.dte_canary.alert_80', 'SUCCESS', $control, [
                 'used' => $control->limited_used_quantity,
                 'max' => $control->limited_max_quantity,
-            ], null, $control->pilot_office_id);
+            ], null, $control->pilot_tenant_id);
         }
     }
 }

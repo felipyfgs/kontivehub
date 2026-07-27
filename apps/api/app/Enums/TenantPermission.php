@@ -52,9 +52,6 @@ enum TenantPermission: string
     case CommunicationManageContacts = 'communication.manage_contacts';
     case CommunicationManageQuickReplies = 'communication.manage_quick_replies';
     case CommunicationManageFlows = 'communication.manage_flows';
-    /** @deprecated Compatibilidade de leitura para perfis persistidos antes da chave canônica. */
-    case CommunicationManage = 'communication.manage';
-
     // ── Work ─────────────────────────────────────────────────────────────
     case WorkView = 'work.view';
     case WorkCatalogManage = 'work.catalog.manage';
@@ -93,8 +90,7 @@ enum TenantPermission: string
             self::OperationsTriage => 'Triagem operacional',
             self::CommunicationView => 'Ver atendimento e conversas',
             self::CommunicationReply => 'Responder e triar conversas',
-            self::CommunicationManageInboxes,
-            self::CommunicationManage => 'Administrar canais e políticas de comunicação',
+            self::CommunicationManageInboxes => 'Administrar caixas de entrada',
             self::CommunicationManageContacts => 'Gerenciar contatos de comunicação',
             self::CommunicationManageQuickReplies => 'Gerenciar respostas rápidas de comunicação',
             self::CommunicationManageFlows => 'Gerenciar fluxos de comunicação',
@@ -143,8 +139,7 @@ enum TenantPermission: string
             self::CommunicationManageInboxes,
             self::CommunicationManageContacts,
             self::CommunicationManageQuickReplies,
-            self::CommunicationManageFlows,
-            self::CommunicationManage => 'communication',
+            self::CommunicationManageFlows => 'communication',
             self::WorkView,
             self::WorkCatalogManage,
             self::WorkProcessesCreate,
@@ -201,7 +196,6 @@ enum TenantPermission: string
             self::CommunicationManageContacts,
             self::CommunicationManageQuickReplies,
             self::CommunicationManageFlows,
-            self::CommunicationManage,
             self::WorkAdminister => 'high',
         };
     }
@@ -225,11 +219,11 @@ enum TenantPermission: string
     }
 
     /**
-     * Conjunto exato do perfil de sistema `legacy-operator` (paridade OPERATOR).
+     * Conjunto padrão do perfil de sistema `operator`.
      *
      * @return list<self>
      */
-    public static function legacyOperatorSet(): array
+    public static function operatorSet(): array
     {
         return [
             self::TenantDashboardView,
@@ -257,11 +251,11 @@ enum TenantPermission: string
     }
 
     /**
-     * Conjunto exato do perfil de sistema `legacy-viewer` (paridade VIEWER / somente leitura).
+     * Conjunto padrão do perfil de sistema `viewer`.
      *
      * @return list<self>
      */
-    public static function legacyViewerSet(): array
+    public static function viewerSet(): array
     {
         return [
             self::TenantDashboardView,
@@ -277,11 +271,11 @@ enum TenantPermission: string
     }
 
     /**
-     * Mapeamento estável OfficeRole::can* → chave canônica (baseline de migração).
+     * Mapeamento de capacidades para chaves canônicas.
      *
      * @return array<string, self>
      */
-    public static function officeRoleMethodMap(): array
+    public static function tenantRoleMethodMap(): array
     {
         return [
             'canManageClients' => self::ClientsManage,

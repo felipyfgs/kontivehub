@@ -5,7 +5,7 @@ namespace App\Jobs\Fiscal;
 use App\Exceptions\EsocialBxException;
 use App\Models\Client;
 use App\Models\Establishment;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Esocial\EsocialBxReadinessService;
 use App\Services\Esocial\FgtsEsocialMonitoringService;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -26,7 +26,7 @@ class SyncFgtsEsocialCompetenceJob implements ShouldQueue
     public int $timeout = 120;
 
     public function __construct(
-        public int $officeId,
+        public int $tenantId,
         public int $clientId,
         public string $competencePeriodKey,
         public ?int $establishmentId = null,
@@ -39,25 +39,25 @@ class SyncFgtsEsocialCompetenceJob implements ShouldQueue
         FgtsEsocialMonitoringService $monitoring,
         EsocialBxReadinessService $readinessService,
     ): void {
-        $office = Office::query()->find($this->officeId);
+        $tenant = Tenant::query()->find($this->tenantId);
         $client = Client::query()->withoutGlobalScopes()
-            ->where('office_id', $this->officeId)
+            ->where('tenant_id', $this->tenantId)
             ->whereKey($this->clientId)
             ->first();
 
-        if ($office === null || $client === null) {
+        if ($tenant === null || $client === null) {
             Log::warning('fgts_esocial.job_missing_tenant', [
-                'office_id' => $this->officeId,
+                'tenant_id' => $this->tenantId,
                 'client_id' => $this->clientId,
             ]);
 
             return;
         }
 
-        $readiness = $readinessService->check($office, $client);
+        $readiness = $readinessService->check($tenant, $client);
         if (! $readiness->ready) {
             Log::info('fgts_esocial.job_skipped_not_ready', [
-                'office_id' => $this->officeId,
+                'tenant_id' => $this->tenantId,
                 'client_id' => $this->clientId,
                 'reason' => $readiness->blockers[0]['code'] ?? 'ESOCIAL_BX_NOT_READY',
             ]);
@@ -68,7 +68,7 @@ class SyncFgtsEsocialCompetenceJob implements ShouldQueue
         $establishment = null;
         if ($this->establishmentId !== null) {
             $establishment = Establishment::query()->withoutGlobalScopes()
-                ->where('office_id', $this->officeId)
+                ->where('tenant_id', $this->tenantId)
                 ->where('client_id', $this->clientId)
                 ->whereKey($this->establishmentId)
                 ->first();
@@ -76,14 +76,14 @@ class SyncFgtsEsocialCompetenceJob implements ShouldQueue
 
         try {
             $monitoring->syncCompetence(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 competencePeriodKey: $this->competencePeriodKey,
                 establishment: $establishment,
             );
         } catch (EsocialBxException $exception) {
             Log::warning('fgts_esocial.job_failed', [
-                'office_id' => $this->officeId,
+                'tenant_id' => $this->tenantId,
                 'client_id' => $this->clientId,
                 'competence' => $this->competencePeriodKey,
                 ...$exception->toSanitizedArray(),
@@ -94,7 +94,7 @@ class SyncFgtsEsocialCompetenceJob implements ShouldQueue
             }
         } catch (Throwable $e) {
             Log::warning('fgts_esocial.job_failed', [
-                'office_id' => $this->officeId,
+                'tenant_id' => $this->tenantId,
                 'client_id' => $this->clientId,
                 'competence' => $this->competencePeriodKey,
                 'code' => 'ESOCIAL_BX_INTERNAL_ERROR',
@@ -121,7 +121,7 @@ class SyncFgtsEsocialCompetenceJob implements ShouldQueue
     {
         return [
             'fgts-esocial',
-            'office:'.$this->officeId,
+            'tenant:'.$this->tenantId,
             'client:'.$this->clientId,
         ];
     }

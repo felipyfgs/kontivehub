@@ -10,8 +10,8 @@ use App\Enums\OutboundSeriesStatus;
 use App\Enums\SvrsNfceFailureReason;
 use App\Enums\SvrsNfceRecoveryStatus;
 use App\Models\DocumentAcquisition;
-use App\Models\MaOutboundRetrievalRequest;
 use App\Models\OutboundNumberState;
+use App\Models\OutboundRetrievalRequest;
 use App\Models\OutboundSeriesCursor;
 use App\Services\Outbound\SvrsNfceCircuitBreaker;
 use Illuminate\Support\Collection;
@@ -28,10 +28,10 @@ final class OutboundSvrsItemsCollector
     /**
      * @return Collection<int, array<string, mixed>>
      */
-    public function collect(int $officeId, InboxCapabilities $role): Collection
+    public function collect(int $tenantId, InboxCapabilities $role): Collection
     {
-        return $this->outboundMaItems($officeId, $role)
-            ->merge($this->svrsNfceItems($officeId, $role))
+        return $this->outboundMaItems($tenantId, $role)
+            ->merge($this->svrsNfceItems($tenantId, $role))
             ->values();
     }
 
@@ -40,13 +40,13 @@ final class OutboundSvrsItemsCollector
      *
      * @return Collection<int, array<string, mixed>>
      */
-    private function outboundMaItems(int $officeId, InboxCapabilities $role): Collection
+    private function outboundMaItems(int $tenantId, InboxCapabilities $role): Collection
     {
         $items = collect();
 
         // Lacunas esgotadas
         $exhausted = OutboundNumberState::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('status', OutboundNumberStatus::ExhaustedVisible)
             ->with(['seriesCursor.establishment.client'])
             ->orderByDesc('id')
@@ -78,7 +78,7 @@ final class OutboundSvrsItemsCollector
 
         // 562 sem chave
         $noKey = OutboundNumberState::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('status', OutboundNumberStatus::LimitedNoKey)
             ->with(['seriesCursor.establishment.client'])
             ->orderByDesc('id')
@@ -110,7 +110,7 @@ final class OutboundSvrsItemsCollector
 
         // 656 / séries bloqueadas
         $blocked = OutboundSeriesCursor::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereIn('status', [OutboundSeriesStatus::Blocked, OutboundSeriesStatus::FiscalIncident])
             ->with(['establishment.client'])
             ->orderByDesc('id')
@@ -143,8 +143,8 @@ final class OutboundSvrsItemsCollector
         }
 
         // Recuperação expirada
-        $expired = MaOutboundRetrievalRequest::query()
-            ->where('office_id', $officeId)
+        $expired = OutboundRetrievalRequest::query()
+            ->where('tenant_id', $tenantId)
             ->where('status', OutboundRetrievalStatus::Expired)
             ->with(['establishment.client'])
             ->orderByDesc('id')
@@ -175,7 +175,7 @@ final class OutboundSvrsItemsCollector
 
         // XML divergente (quarentena)
         $divergent = DocumentAcquisition::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('bytes_diverge_from_canonical', true)
             ->whereIn('source', [
                 DocumentAcquisitionSource::MaOfficialPackage->value,
@@ -206,7 +206,7 @@ final class OutboundSvrsItemsCollector
 
         // Cancelamento falho / incidente
         $cancelFailed = OutboundNumberState::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereIn('status', [
                 OutboundNumberStatus::FiscalIncident,
                 OutboundNumberStatus::CancelPending,
@@ -250,13 +250,13 @@ final class OutboundSvrsItemsCollector
      *
      * @return Collection<int, array<string, mixed>>
      */
-    private function svrsNfceItems(int $officeId, InboxCapabilities $role): Collection
+    private function svrsNfceItems(int $tenantId, InboxCapabilities $role): Collection
     {
         $items = collect();
 
         $map = [
-            SvrsNfceFailureReason::A1Unavailable->value => 'svrs_nfce_a1',
-            SvrsNfceFailureReason::A1NotRelated->value => 'svrs_nfce_a1',
+            SvrsNfceFailureReason::CertificateUnavailable->value => 'svrs_nfce_certificate',
+            SvrsNfceFailureReason::CertificateNotRelated->value => 'svrs_nfce_certificate',
             SvrsNfceFailureReason::AuthForbidden->value => 'svrs_nfce_auth',
             SvrsNfceFailureReason::RateLimited->value => 'svrs_nfce_budget',
             SvrsNfceFailureReason::EgressBlockedMultipleQueries->value => 'svrs_nfce_multiple_queries',
@@ -269,8 +269,8 @@ final class OutboundSvrsItemsCollector
             SvrsNfceFailureReason::BreakerOpen->value => 'svrs_nfce_breaker',
         ];
 
-        $recoveries = MaOutboundRetrievalRequest::query()
-            ->where('office_id', $officeId)
+        $recoveries = OutboundRetrievalRequest::query()
+            ->where('tenant_id', $tenantId)
             ->where('origin', OutboundRetrievalOrigin::SvrsPortalByKey)
             ->whereIn('recovery_status', [
                 SvrsNfceRecoveryStatus::Blocked,
@@ -329,7 +329,7 @@ final class OutboundSvrsItemsCollector
                 $item = $this->items->item(
                     type: 'svrs_nfce_breaker',
                     title: 'Circuit breaker SVRS global aberto',
-                    body: 'Novos GET/POST bloqueados. Use fallback assistido; reset somente ADMIN+2FA após smoke.',
+                    body: 'Novos GET/POST bloqueados. Use fallback assistido; reset somente por admin com senha recente após smoke.',
                     reasons: ['svrs_nfce_breaker', 'scope:global'],
                     clientId: null,
                     establishmentId: null,
@@ -347,7 +347,7 @@ final class OutboundSvrsItemsCollector
 
         // Divergentes SVRS
         $divergent = DocumentAcquisition::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('bytes_diverge_from_canonical', true)
             ->whereIn('source', [
                 DocumentAcquisitionSource::SvrsNfceDownloadXmlDfe->value,

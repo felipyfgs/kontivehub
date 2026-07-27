@@ -2,22 +2,19 @@
 
 namespace App\Support\MultitenantRbac;
 
-use App\Enums\OfficeRole;
 use App\Enums\PlatformRole;
 use App\Enums\TenantRole;
 use App\Models\PlatformSetting;
 use App\Models\User;
 use App\Services\Assistant\AssistantAvailability;
 use App\Services\Platform\TenantSwitchService;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 
-/**
- * Payload aditivo de /api/v1/me (canônico + aliases legados).
- */
+/** Payload canônico de identidade para `/api/v1/me`. */
 final class MeIdentityPresenter
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly TenantSwitchService $tenantSwitch,
         private readonly EffectivePermissionsResolver $permissions,
         private readonly AssistantAvailability $assistantAvailability,
@@ -28,19 +25,19 @@ final class MeIdentityPresenter
      */
     public function present(User $user): array
     {
-        $office = $this->currentOffice->resolve($user);
-        $role = $this->currentOffice->role();
-        $realRole = $this->currentOffice->realOfficeRole();
-        $contextStatus = $this->currentOffice->contextStatus()
-            ?? ($office !== null ? CurrentOffice::CONTEXT_STATUS_OK : CurrentOffice::CONTEXT_STATUS_REQUIRED);
+        $tenant = $this->currentTenant->resolve($user);
+        $role = $this->currentTenant->role();
+        $realRole = $this->currentTenant->realTenantRole();
+        $contextStatus = $this->currentTenant->contextStatus()
+            ?? ($tenant !== null ? CurrentTenant::CONTEXT_STATUS_OK : CurrentTenant::CONTEXT_STATUS_REQUIRED);
 
         $organizationName = PlatformSetting::query()
             ->whereKey(PlatformSetting::SINGLETON_ID)
             ->value('organization_name');
 
-        $realMembership = $this->currentOffice->realMembership();
-        $tenantRole = $this->resolveTenantRoleForPayload($realMembership, $role);
-        $realTenantRole = $this->resolveTenantRoleForPayload($realMembership, $realRole);
+        $realMembership = $this->currentTenant->realMembership();
+        $tenantRole = $role instanceof TenantRole ? $role : null;
+        $realTenantRole = $realRole instanceof TenantRole ? $realRole : null;
         $effective = $this->permissions->forCurrentContext($user);
 
         $profileSummary = null;
@@ -59,45 +56,33 @@ final class MeIdentityPresenter
         }
 
         $platformRole = $user->isPlatformAdmin()
-            ? PlatformRole::PlatformAdmin->canonicalValue()
+            ? PlatformRole::PlatformAdmin->value
             : null;
 
-        $officePayload = $office === null ? null : [
-            'id' => $office->id,
-            'name' => $office->name,
-            'slug' => $office->slug,
+        $tenantPayload = $tenant === null ? null : [
+            'id' => $tenant->id,
+            'name' => $tenant->name,
+            'slug' => $tenant->slug,
         ];
 
         return [
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
-            'two_factor_confirmed' => false,
-            'two_factor_required' => false,
-            'requires_two_factor_setup' => false,
-
-            // Canônico
             'platform_role' => $platformRole,
             'tenant_role' => $tenantRole?->value,
             'real_tenant_role' => $realTenantRole?->value,
             'effective_permissions' => $effective,
             'permission_profile' => $profileSummary,
-            'access_mode' => $this->currentOffice->accessMode()?->value,
-            'has_real_membership' => $this->currentOffice->hasRealMembership(),
+            'access_mode' => $this->currentTenant->accessMode()?->value,
+            'has_real_membership' => $this->currentTenant->hasRealMembership(),
             'context_status' => $contextStatus,
-            'current_office' => $officePayload,
-
-            // Aliases legados (somente leitura; não são autoridade)
-            'is_platform_admin' => $user->isPlatformAdmin(),
-            'role' => $role?->value,
-            'real_office_role' => $realRole?->value,
-            'office' => $officePayload,
-
+            'current_tenant' => $tenantPayload,
             'platform_organization_name' => is_string($organizationName) && $organizationName !== ''
                 ? $organizationName
                 : null,
-            'default_office_id' => $user->isPlatformAdmin()
-                ? $this->currentOffice->defaultOfficeId($user)
+            'default_tenant_id' => $user->isPlatformAdmin()
+                ? $this->currentTenant->defaultTenantId($user)
                 : null,
             'memberships' => $this->tenantSwitch->listMemberships($user),
 
@@ -106,23 +91,5 @@ final class MeIdentityPresenter
                 'enabled' => $this->assistantAvailability->isEnabled(),
             ],
         ];
-    }
-
-    private function resolveTenantRoleForPayload(
-        mixed $membership,
-        mixed $officeRole,
-    ): ?TenantRole {
-        if ($membership !== null && method_exists($membership, 'resolvedTenantRole')) {
-            $resolved = $membership->resolvedTenantRole();
-            if ($resolved instanceof TenantRole) {
-                return $resolved;
-            }
-        }
-
-        if ($officeRole instanceof OfficeRole) {
-            return TenantRole::tryFromLegacyOfficeRole($officeRole);
-        }
-
-        return null;
     }
 }

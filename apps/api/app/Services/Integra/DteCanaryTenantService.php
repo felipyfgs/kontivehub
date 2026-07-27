@@ -2,8 +2,8 @@
 
 namespace App\Services\Integra;
 
-use App\Models\Office;
 use App\Models\SerproDteCanaryRequest;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Serpro\SerproDteCanaryService;
 
@@ -17,16 +17,16 @@ final class DteCanaryTenantService
         private readonly SerproDteCanaryService $canary,
     ) {}
 
-    public function approveAsOfficeAdmin(
+    public function approveAsTenantAdmin(
         SerproDteCanaryRequest $request,
         User $admin,
-        Office $currentOffice,
+        Tenant $currentTenant,
         bool $passwordRecentlyConfirmed,
     ): SerproDteCanaryRequest {
-        return $this->canary->approveAsOfficeAdmin(
+        return $this->canary->approveAsTenantAdmin(
             $request,
             $admin,
-            $currentOffice,
+            $currentTenant,
             $passwordRecentlyConfirmed,
         );
     }
@@ -37,15 +37,15 @@ final class DteCanaryTenantService
     public function tenantResult(
         SerproDteCanaryRequest $request,
         User $user,
-        Office $currentOffice,
+        Tenant $currentTenant,
     ): array {
-        return $this->canary->tenantResult($request, $user, $currentOffice);
+        return $this->canary->tenantResult($request, $user, $currentTenant);
     }
 
-    public function findPendingForOffice(int $officeId): ?SerproDteCanaryRequest
+    public function findPendingForTenant(int $tenantId): ?SerproDteCanaryRequest
     {
         return SerproDteCanaryRequest::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereIn('status', [
                 'TARGET_SET',
                 'PARTIAL_APPROVED',

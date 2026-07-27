@@ -2,15 +2,15 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['office_id', 'name', 'is_provisional', 'is_active', 'metadata', 'purged_at'])]
+#[Fillable(['tenant_id', 'name', 'is_provisional', 'is_active', 'metadata', 'purged_at'])]
 class CommunicationContact extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {

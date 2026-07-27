@@ -4,7 +4,7 @@ namespace App\Services\Integra\Registrations;
 
 use App\Contracts\SerproOperationExecutor;
 use App\Models\Client;
-use App\Models\Office;
+use App\Models\Tenant;
 use RuntimeException;
 
 /** Execuções manuais, tenant-scoped e não mutantes do ciclo PNR de renúncia. */
@@ -16,16 +16,16 @@ final class PnrRenunciationReadService
     ) {}
 
     /** @param array{dt_inicio?: string|null, dt_fim?: string|null, page?: int|null, page_size?: int|null} $filters */
-    public function history(Office $office, Client $client, array $filters, ?string $correlationId = null): array
+    public function history(Tenant $tenant, Client $client, array $filters, ?string $correlationId = null): array
     {
-        $this->assertClient($office, $client);
+        $this->assertClient($tenant, $client);
         $businessData = $this->historyBusinessData($filters);
         $response = $this->operations->execute(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             operationKey: PnrRenunciationProjectionService::HISTORY_OPERATION_KEY,
             businessData: $businessData,
-            idempotencyKey: $this->idempotencyKey('history', $office, $client, $businessData),
+            idempotencyKey: $this->idempotencyKey('history', $tenant, $client, $businessData),
             correlationId: $correlationId,
         );
 
@@ -37,7 +37,7 @@ final class PnrRenunciationReadService
         }
 
         try {
-            $rows = $this->projections->projectHistory($office, $client, (string) $response->sourceProvenance, $response->dados);
+            $rows = $this->projections->projectHistory($tenant, $client, (string) $response->sourceProvenance, $response->dados);
         } catch (RuntimeException $exception) {
             return $this->failure('RESPONSE_LAYOUT_INVALID', $exception->getMessage());
         }
@@ -45,19 +45,19 @@ final class PnrRenunciationReadService
         return ['success' => true, 'count' => count($rows)];
     }
 
-    public function status(Office $office, Client $client, string $requestId, ?string $correlationId = null): array
+    public function status(Tenant $tenant, Client $client, string $requestId, ?string $correlationId = null): array
     {
-        $this->assertClient($office, $client);
+        $this->assertClient($tenant, $client);
         $requestId = trim($requestId);
         if ($requestId === '') {
             throw new RuntimeException('Identificador da solicitação é obrigatório.');
         }
         $response = $this->operations->execute(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             operationKey: PnrRenunciationProjectionService::STATUS_OPERATION_KEY,
             businessData: ['idSolicitacao' => $requestId],
-            idempotencyKey: $this->idempotencyKey('status', $office, $client, ['idSolicitacao' => $requestId]),
+            idempotencyKey: $this->idempotencyKey('status', $tenant, $client, ['idSolicitacao' => $requestId]),
             correlationId: $correlationId,
         );
 
@@ -69,7 +69,7 @@ final class PnrRenunciationReadService
         }
 
         try {
-            $projection = $this->projections->projectStatus($office, $client, (string) $response->sourceProvenance, $response->dados);
+            $projection = $this->projections->projectStatus($tenant, $client, (string) $response->sourceProvenance, $response->dados);
         } catch (RuntimeException $exception) {
             return $this->failure('RESPONSE_LAYOUT_INVALID', $exception->getMessage());
         }
@@ -77,18 +77,18 @@ final class PnrRenunciationReadService
         return ['success' => true, 'renunciation_id' => $projection?->renunciation_id];
     }
 
-    public function receipt(Office $office, Client $client, int $renunciationId, ?string $correlationId = null): array
+    public function receipt(Tenant $tenant, Client $client, int $renunciationId, ?string $correlationId = null): array
     {
-        $this->assertClient($office, $client);
+        $this->assertClient($tenant, $client);
         if ($renunciationId < 1) {
             throw new RuntimeException('Identificador da renúncia deve ser positivo.');
         }
         $response = $this->operations->execute(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             operationKey: PnrRenunciationProjectionService::RECEIPT_OPERATION_KEY,
             businessData: ['idRenuncia' => $renunciationId],
-            idempotencyKey: $this->idempotencyKey('receipt', $office, $client, ['idRenuncia' => $renunciationId]),
+            idempotencyKey: $this->idempotencyKey('receipt', $tenant, $client, ['idRenuncia' => $renunciationId]),
             correlationId: $correlationId,
         );
 
@@ -100,7 +100,7 @@ final class PnrRenunciationReadService
         }
 
         try {
-            $projection = $this->projections->projectReceipt($office, $client, $renunciationId, (string) $response->sourceProvenance, $response->dados);
+            $projection = $this->projections->projectReceipt($tenant, $client, $renunciationId, (string) $response->sourceProvenance, $response->dados);
         } catch (RuntimeException $exception) {
             return $this->failure('RESPONSE_LAYOUT_INVALID', $exception->getMessage());
         }
@@ -131,9 +131,9 @@ final class PnrRenunciationReadService
         ], static fn (mixed $value): bool => $value !== null);
     }
 
-    private function assertClient(Office $office, Client $client): void
+    private function assertClient(Tenant $tenant, Client $client): void
     {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new RuntimeException('Cliente não pertence ao escritório ativo.');
         }
     }
@@ -146,9 +146,9 @@ final class PnrRenunciationReadService
     }
 
     /** @param array<string, int|string> $context */
-    private function idempotencyKey(string $action, Office $office, Client $client, array $context): string
+    private function idempotencyKey(string $action, Tenant $tenant, Client $client, array $context): string
     {
-        return sprintf('pnr:%s:%d:%d:%s', $action, $office->id, $client->id, substr(hash('sha256', json_encode($context, JSON_THROW_ON_ERROR)), 0, 20));
+        return sprintf('pnr:%s:%d:%d:%s', $action, $tenant->id, $client->id, substr(hash('sha256', json_encode($context, JSON_THROW_ON_ERROR)), 0, 20));
     }
 
     /** @return array{success: false, error_code: string|null, error_message: string|null} */

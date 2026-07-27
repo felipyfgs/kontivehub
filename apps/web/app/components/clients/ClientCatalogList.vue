@@ -27,7 +27,8 @@ import ShellKpiStrip from '~/components/shell/KpiStrip.vue'
 import ShellListFilterToolbar from '~/components/shell/ListFilterToolbar.vue'
 import { COMPACT_BUTTON_LABEL_UI } from '~/utils/list-filter-layout'
 import type { SavedListFilterPayload } from '~/types/saved-list-filters'
-import { clientSectionPath } from '~/composables/useClientDetail'
+import { clientDetailHref } from '~/utils/client-detail-tabs'
+import type { ClientDetailTab, ClientModalTab } from '~/utils/client-detail-tabs'
 import { normalizeCnpj } from '~/utils/format'
 import { apiErrorMessage } from '~/utils/api-error'
 import { CLIENT_TAX_REGIME_FILTER_ITEMS } from '~/utils/clients-tax-regime'
@@ -104,7 +105,7 @@ const formOpen = isClientFormOpen
 const formClient = ref<Client | null>(null)
 const detailOpen = ref(false)
 const detailClientId = ref<number | null>(null)
-const detailSection = ref<'resumo' | 'cadastro' | 'certificado' | 'sincronizacao'>('resumo')
+const detailSection = ref<ClientModalTab>('cadastro')
 const credentialModalOpen = ref(false)
 const credentialModalClient = ref<Client | null>(null)
 const deleteOpen = ref(false)
@@ -402,19 +403,13 @@ async function copyCnpj(value?: string | null) {
   }
 }
 
-function openPage(
-  client: Client,
-  section: 'resumo' | 'cadastro' | 'certificado' | 'sincronizacao' = 'resumo'
-) {
-  navigateTo(clientSectionPath(client.id, section))
+function openPage(client: Client) {
+  navigateTo(clientDetailHref(client.id))
 }
 
-function openModal(
-  client: Client,
-  section: 'resumo' | 'cadastro' | 'certificado' | 'sincronizacao' = 'resumo'
-) {
+function openModal(client: Client) {
   detailClientId.value = client.id
-  detailSection.value = section
+  detailSection.value = 'cadastro'
   detailOpen.value = true
 }
 
@@ -476,7 +471,7 @@ const selectColumn = computed<TableColumn<Client>>(() => ({
   cell: ({ row }) => h(UCheckbox, {
     'modelValue': row.getIsSelected(),
     'onUpdate:modelValue': (value: boolean | 'indeterminate') => row.toggleSelected(!!value),
-    'ariaLabel': `Selecionar ${row.original.legal_name || row.original.name}`
+    'ariaLabel': `Selecionar ${row.original.display_name || row.original.legal_name}`
   })
 }))
 
@@ -597,7 +592,7 @@ async function confirmDelete() {
     })
     toast.add({
       title: 'Cliente inativado',
-      description: deleteClient.value.legal_name || deleteClient.value.name,
+      description: deleteClient.value.display_name || deleteClient.value.legal_name,
       color: 'success'
     })
     deleteOpen.value = false
@@ -622,7 +617,7 @@ async function reactivateClient(client: Client) {
     })
     toast.add({
       title: 'Cliente reativado',
-      description: client.legal_name || client.name,
+      description: client.display_name || client.legal_name,
       color: 'success'
     })
     await load()
@@ -693,7 +688,7 @@ async function load() {
       tax_regimes: taxRegimesFilter.value || undefined,
       procuracao_statuses: procuracaoStatusesFilter.value || undefined,
       sort: sortId,
-      direction: sort?.desc ? 'desc' : 'asc'
+      sort_direction: sort?.desc ? 'desc' : 'asc'
     })
     if (sequence !== loadSequence || epoch !== sessionEpoch.value) return
     clients.value = response.data
@@ -752,7 +747,7 @@ function openEditForm(client: Client) {
 async function onFormSaved(payload: {
   id: number
   mode: 'create' | 'edit'
-  section?: 'resumo' | 'certificado'
+  section?: ClientDetailTab
   tax_regime?: string | null
 }) {
   formOpen.value = false
@@ -764,7 +759,7 @@ async function onFormSaved(payload: {
       await navigateTo(monitoring.path)
       return
     }
-    await navigateTo(clientSectionPath(payload.id, payload.section || 'resumo'))
+    await navigateTo(clientDetailHref(payload.id, payload.section))
   }
 }
 
@@ -1037,7 +1032,7 @@ onBeforeUnmount(() => {
     :can-manage-credentials="canManageCredentials"
     :can-manage-clients="canManageClients"
     @saved="onFormSaved"
-    @open-existing="(id) => navigateTo(clientSectionPath(id))"
+    @open-existing="(id) => navigateTo(clientDetailHref(id))"
   />
 
   <ClientsClientDetailModal
@@ -1050,7 +1045,7 @@ onBeforeUnmount(() => {
   <ClientsClientCredentialModal
     v-model:open="credentialModalOpen"
     :client-id="credentialModalClient?.id ?? null"
-    :client-label="credentialModalClient?.legal_name || credentialModalClient?.name"
+    :client-label="credentialModalClient?.display_name || credentialModalClient?.legal_name"
     :can-manage-credentials="canManageCredentials"
     @saved="load"
   />
@@ -1077,7 +1072,7 @@ onBeforeUnmount(() => {
     v-model:open="deleteOpen"
     title="Excluir cliente"
     :description="deleteClient
-      ? `Inativar ${deleteClient.legal_name || deleteClient.name}? O cadastro permanece no escritório.`
+      ? `Inativar ${deleteClient.display_name || deleteClient.legal_name}? O cadastro permanece no escritório.`
       : undefined"
     tone="danger"
     confirm-label="Excluir"

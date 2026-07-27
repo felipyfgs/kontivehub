@@ -20,7 +20,7 @@ final class SerproJobFlagGuard
     /**
      * @return array{allowed: bool, code: string|null, message: string|null, capability: string|null, driver: string|null}
      */
-    public function assertAllowed(string $jobShortName, ?int $officeId = null): array
+    public function assertAllowed(string $jobShortName, ?int $tenantId = null): array
     {
         /** @var array<string, string> $map */
         $map = config('serpro.jobs.flag_capabilities', []);
@@ -77,9 +77,9 @@ final class SerproJobFlagGuard
         ];
     }
 
-    public function assertOrThrow(string $jobShortName, ?int $officeId = null): void
+    public function assertOrThrow(string $jobShortName, ?int $tenantId = null): void
     {
-        $check = $this->assertAllowed($jobShortName, $officeId);
+        $check = $this->assertAllowed($jobShortName, $tenantId);
         if (! $check['allowed']) {
             throw new RuntimeException(($check['code'] ?? 'FLAG_BLOCKED').': '.($check['message'] ?? 'bloqueado'));
         }

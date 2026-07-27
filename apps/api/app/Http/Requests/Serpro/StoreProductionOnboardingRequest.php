@@ -11,7 +11,7 @@ class StoreProductionOnboardingRequest extends FormRequest
 {
     /** @var list<string> */
     private const TECHNICAL_FIELDS = [
-        'office_id',
+        'tenant_id',
         'environment',
         'version_number',
         'serpro_contract_id',
@@ -74,7 +74,7 @@ class StoreProductionOnboardingRequest extends FormRequest
 
         validator(
             ['idempotency_key' => $raw],
-            ['idempotency_key' => ['required', 'string', 'max:96', Rule::notIn(['office_id'])]],
+            ['idempotency_key' => ['required', 'string', 'max:96', Rule::notIn(['tenant_id'])]],
         )->validate();
 
         return $raw;

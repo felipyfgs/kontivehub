@@ -7,7 +7,7 @@ use App\Services\Audit\AuditLogger;
 use Illuminate\Support\Facades\Cache;
 
 /**
- * Breaker global (contrato sistêmico) e por raiz (A1/identidade).
+ * Breaker global (contrato sistêmico) e por raiz (certificado/identidade).
  * AuthForbidden conta threshold global; ResponseContractChanged trip imediato.
  * Estados: closed | open | half_open.
  */
@@ -72,37 +72,37 @@ final class SvrsNfceCircuitBreaker
         }
     }
 
-    public function recordFailure(SvrsNfceFailureReason $reason, ?int $clientId = null, ?int $userId = null, ?int $officeId = null): void
+    public function recordFailure(SvrsNfceFailureReason $reason, ?int $clientId = null, ?int $userId = null, ?int $tenantId = null): void
     {
         Cache::forget(self::PROBE_SLOT_KEY);
 
         if ($reason->opensGlobalBreaker()) {
-            $this->trip(self::GLOBAL_KEY, $reason->value, $userId, $officeId);
+            $this->trip(self::GLOBAL_KEY, $reason->value, $userId, $tenantId);
         } elseif ($reason->countsTowardGlobalThreshold()) {
-            $this->incrementTowardTrip(self::GLOBAL_KEY, $reason->value, $userId, $officeId);
+            $this->incrementTowardTrip(self::GLOBAL_KEY, $reason->value, $userId, $tenantId);
         }
 
         if ($clientId !== null && $reason->opensRootBreaker()) {
-            $this->trip(self::ROOT_PREFIX.$clientId, $reason->value, $userId, $officeId);
+            $this->trip(self::ROOT_PREFIX.$clientId, $reason->value, $userId, $tenantId);
         }
     }
 
-    public function resetGlobal(string $reason, int $userId, ?int $officeId = null): void
+    public function resetGlobal(string $reason, int $userId, ?int $tenantId = null): void
     {
         Cache::forget(self::PROBE_SLOT_KEY);
         $this->close(self::GLOBAL_KEY, $reason);
         $this->audit->record('svrs_nfce.breaker.global_reset', 'SUCCESS', null, [
             'reason' => mb_substr($reason, 0, 500),
-        ], $userId, $officeId);
+        ], $userId, $tenantId);
     }
 
-    public function resetRoot(int $clientId, string $reason, int $userId, ?int $officeId = null): void
+    public function resetRoot(int $clientId, string $reason, int $userId, ?int $tenantId = null): void
     {
         $this->close(self::ROOT_PREFIX.$clientId, $reason);
         $this->audit->record('svrs_nfce.breaker.root_reset', 'SUCCESS', null, [
             'client_id' => $clientId,
             'reason' => mb_substr($reason, 0, 500),
-        ], $userId, $officeId);
+        ], $userId, $tenantId);
     }
 
     /**
@@ -141,7 +141,7 @@ final class SvrsNfceCircuitBreaker
         return false;
     }
 
-    private function trip(string $key, string $reason, ?int $userId, ?int $officeId): void
+    private function trip(string $key, string $reason, ?int $userId, ?int $tenantId): void
     {
         $openUntil = time() + $this->config->breakerOpenSeconds();
         Cache::put($key, [
@@ -155,10 +155,10 @@ final class SvrsNfceCircuitBreaker
             'scope' => $key,
             'reason' => $reason,
             'open_until' => $openUntil,
-        ], $userId, $officeId);
+        ], $userId, $tenantId);
     }
 
-    private function incrementTowardTrip(string $key, string $reason, ?int $userId, ?int $officeId): void
+    private function incrementTowardTrip(string $key, string $reason, ?int $userId, ?int $tenantId): void
     {
         $data = Cache::get($key, ['state' => 'closed', 'open_until' => null, 'failures' => 0]);
         if (($data['state'] ?? 'closed') === 'open') {
@@ -166,7 +166,7 @@ final class SvrsNfceCircuitBreaker
         }
         $failures = (int) ($data['failures'] ?? 0) + 1;
         if ($failures >= $this->config->breakerFailureThreshold()) {
-            $this->trip($key, $reason, $userId, $officeId);
+            $this->trip($key, $reason, $userId, $tenantId);
 
             return;
         }

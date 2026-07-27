@@ -16,10 +16,10 @@ use App\Enums\FiscalMutability;
 use App\Enums\FiscalRunStatus;
 use App\Enums\FiscalSituation;
 use App\Enums\FiscalTrigger;
-use App\Enums\OfficeRole;
 use App\Enums\PgdasdDocumentKind;
 use App\Enums\TaxGuideEmissionStatus;
 use App\Enums\TaxObligationApplicability;
+use App\Enums\TenantRole;
 use App\Events\CommunicationEventCommitted;
 use App\Models\Client;
 use App\Models\ClientCommunicationDispatch;
@@ -35,13 +35,13 @@ use App\Models\CommunicationOutboxEntry;
 use App\Models\DctfwebDarfDocument;
 use App\Models\DctfwebDeclaration;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
-use App\Models\OfficeMembership;
 use App\Models\PgdasdArtifact;
 use App\Models\TaxGuide;
 use App\Models\TaxGuideVersion;
 use App\Models\TaxObligationDefinition;
 use App\Models\TaxObligationProjection;
+use App\Models\Tenant;
+use App\Models\TenantMembership;
 use App\Models\User;
 use App\Services\Communication\Automation\FiscalCommunicationArtifactResolver;
 use App\Services\Communication\Automation\FiscalCommunicationAutomationService;
@@ -49,7 +49,7 @@ use App\Services\Communication\Security\CommunicationHmacSigner;
 use App\Services\Fiscal\Guides\GuideStorageService;
 use App\Services\FiscalMonitoring\FiscalEvidenceStore;
 use App\Services\Integra\Dctfweb\DctfwebEvidenceVersioningService;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
@@ -79,15 +79,15 @@ final class FiscalCommunicationAutomationTest extends TestCase
 
     public function test_automatic_fanout_is_idempotent_and_queues_exact_document_per_identity(): void
     {
-        [$office, $client, $inbox, $preference] = $this->context(RecipientMode::AllEligible);
-        $first = $this->identity($office, $client, true);
-        $second = $this->identity($office, $client, false);
-        $this->pgdasdDocument($office, $client, '2026-06', CarbonImmutable::now()->subDay(), '%PDF-exact-period');
+        [$tenant, $client, $inbox, $preference] = $this->context(RecipientMode::AllEligible);
+        $first = $this->identity($tenant, $client, true);
+        $second = $this->identity($tenant, $client, false);
+        $this->pgdasdDocument($tenant, $client, '2026-06', CarbonImmutable::now()->subDay(), '%PDF-exact-period');
 
         $service = app(FiscalCommunicationAutomationService::class);
-        $created = $service->scheduleAutomatic($office, $client, 'simples_mei', 'pgdasd', '2026-06');
+        $created = $service->scheduleAutomatic($tenant, $client, 'simples_mei', 'pgdasd', '2026-06');
         $this->assertCount(2, $created);
-        $this->assertSame(0, $service->scheduleAutomatic($office, $client, 'simples_mei', 'pgdasd', '2026-06')->count());
+        $this->assertSame(0, $service->scheduleAutomatic($tenant, $client, 'simples_mei', 'pgdasd', '2026-06')->count());
         $this->assertSame([$first->id, $second->id], ClientCommunicationDispatch::query()->withoutGlobalScopes()
             ->orderBy('identity_id')->pluck('identity_id')->all());
 
@@ -115,9 +115,9 @@ final class FiscalCommunicationAutomationTest extends TestCase
     public function test_fake_end_to_end_runs_inbound_reply_receipt_and_automation_without_live_egress(): void
     {
         Http::preventStrayRequests();
-        [$office, $client, $inbox] = $this->context();
-        $identity = $this->identity($office, $client, true);
-        $this->pgdasdDocument($office, $client, '2026-06', CarbonImmutable::now()->subDay(), '%PDF-e2e-exact');
+        [$tenant, $client, $inbox] = $this->context();
+        $identity = $this->identity($tenant, $client, true);
+        $this->pgdasdDocument($tenant, $client, '2026-06', CarbonImmutable::now()->subDay(), '%PDF-e2e-exact');
 
         $this->postGatewayEvent($inbox, GatewayEventType::MessageReceived, 'gateway-e2e-inbound-0001', [
             'provider_message_id' => 'provider-e2e-inbound-0001',
@@ -133,19 +133,19 @@ final class FiscalCommunicationAutomationTest extends TestCase
             'source' => MessageSource::Gateway->value,
         ]);
 
-        $operator = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $membership = OfficeMembership::query()->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+        $operator = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $membership = TenantMembership::query()->withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
             ->where('user_id', $operator->id)
             ->firstOrFail();
         CommunicationInboxMember::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'inbox_id' => $inbox->id,
-            'office_membership_id' => $membership->id,
+            'tenant_membership_id' => $membership->id,
             'is_active' => true,
         ]);
         Sanctum::actingAs($operator);
-        app(CurrentOffice::class)->clear();
+        app(CurrentTenant::class)->clear();
 
         $reply = $this->postJson('/api/v1/communication/conversations/'.$conversation->id.'/messages', [
             'body' => 'Claro, vou encaminhar a guia.',
@@ -163,7 +163,7 @@ final class FiscalCommunicationAutomationTest extends TestCase
 
         $service = app(FiscalCommunicationAutomationService::class);
         $dispatch = $service->scheduleAutomatic(
-            $office,
+            $tenant,
             $client,
             'simples_mei',
             'pgdasd',
@@ -184,16 +184,16 @@ final class FiscalCommunicationAutomationTest extends TestCase
 
     public function test_wrong_or_late_document_is_terminally_skipped_and_never_reopened(): void
     {
-        [$office, $client] = $this->context();
-        $this->identity($office, $client, true);
-        $this->pgdasdDocument($office, $client, '2026-05', CarbonImmutable::now()->subMonth(), '%PDF-wrong-period');
+        [$tenant, $client] = $this->context();
+        $this->identity($tenant, $client, true);
+        $this->pgdasdDocument($tenant, $client, '2026-05', CarbonImmutable::now()->subMonth(), '%PDF-wrong-period');
         $service = app(FiscalCommunicationAutomationService::class);
-        $dispatch = $service->scheduleAutomatic($office, $client, 'simples_mei', 'pgdasd', '2026-06')->first();
+        $dispatch = $service->scheduleAutomatic($tenant, $client, 'simples_mei', 'pgdasd', '2026-06')->first();
         $dispatch->forceFill(['scheduled_at' => now()->subMinute()])->save();
 
         $processed = $service->process((int) $dispatch->id);
         $this->assertSame(CommunicationDispatchStatus::SkippedNoDocument, $processed?->status);
-        $this->pgdasdDocument($office, $client, '2026-06', CarbonImmutable::now(), '%PDF-arrived-late');
+        $this->pgdasdDocument($tenant, $client, '2026-06', CarbonImmutable::now(), '%PDF-arrived-late');
         $service->process((int) $dispatch->id);
 
         $this->assertSame(CommunicationDispatchStatus::SkippedNoDocument, $dispatch->refresh()->status);
@@ -203,14 +203,14 @@ final class FiscalCommunicationAutomationTest extends TestCase
 
     public function test_fgts_without_supported_guide_skips_without_text_or_attachment(): void
     {
-        [$office, $client, $inbox, $preference] = $this->context(
+        [$tenant, $client, $inbox, $preference] = $this->context(
             RecipientMode::Primary,
             'fgts',
             'fgts',
         );
-        $this->identity($office, $client, true);
+        $this->identity($tenant, $client, true);
         $dispatch = app(FiscalCommunicationAutomationService::class)
-            ->scheduleAutomatic($office, $client, 'fgts', 'fgts', '2026-06')->first();
+            ->scheduleAutomatic($tenant, $client, 'fgts', 'fgts', '2026-06')->first();
         $dispatch->forceFill(['scheduled_at' => now()])->save();
 
         $processed = app(FiscalCommunicationAutomationService::class)->process((int) $dispatch->id);
@@ -224,11 +224,11 @@ final class FiscalCommunicationAutomationTest extends TestCase
 
     public function test_gateway_downloads_outbound_media_only_with_valid_non_replayed_hmac(): void
     {
-        [$office, $client] = $this->context();
-        $this->identity($office, $client, true);
-        $this->pgdasdDocument($office, $client, '2026-06', CarbonImmutable::now()->subDay(), '%PDF-private-exact');
+        [$tenant, $client] = $this->context();
+        $this->identity($tenant, $client, true);
+        $this->pgdasdDocument($tenant, $client, '2026-06', CarbonImmutable::now()->subDay(), '%PDF-private-exact');
         $service = app(FiscalCommunicationAutomationService::class);
-        $dispatch = $service->scheduleAutomatic($office, $client, 'simples_mei', 'pgdasd', '2026-06')->first();
+        $dispatch = $service->scheduleAutomatic($tenant, $client, 'simples_mei', 'pgdasd', '2026-06')->first();
         $dispatch->forceFill(['scheduled_at' => now()])->save();
         $service->process((int) $dispatch->id);
         $command = CommunicationOutboxEntry::query()->withoutGlobalScopes()->firstOrFail()->command_id;
@@ -245,37 +245,37 @@ final class FiscalCommunicationAutomationTest extends TestCase
 
     public function test_pgmei_and_dctfweb_resolvers_choose_only_confirmed_exact_period_versions(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $client = Client::factory()->create(['office_id' => $office->id]);
-        $this->pgmeiGuide($office, $client, '2026-05', '%PDF-pgmei-old');
-        $pgmei = $this->pgmeiGuide($office, $client, '2026-06', '%PDF-pgmei-exact');
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $client = Client::factory()->create(['tenant_id' => $tenant->id]);
+        $this->pgmeiGuide($tenant, $client, '2026-05', '%PDF-pgmei-old');
+        $pgmei = $this->pgmeiGuide($tenant, $client, '2026-06', '%PDF-pgmei-exact');
 
         $resolver = app(FiscalCommunicationArtifactResolver::class);
-        $resolvedPgmei = $resolver->resolve($office, $client, 'simples_mei', 'pgmei', '2026-06');
+        $resolvedPgmei = $resolver->resolve($tenant, $client, 'simples_mei', 'pgmei', '2026-06');
         $this->assertSame($pgmei->id, $resolvedPgmei->artifact?->id);
-        $this->assertSame('%PDF-pgmei-exact', $resolver->read($resolvedPgmei->artifact, (int) $office->id));
+        $this->assertSame('%PDF-pgmei-exact', $resolver->read($resolvedPgmei->artifact, (int) $tenant->id));
 
-        $this->dctfwebDarf($office, $client, '2026-05', '%PDF-darf-old');
-        $darf = $this->dctfwebDarf($office, $client, '2026-06', '%PDF-darf-exact');
-        $resolvedDctfweb = $resolver->resolve($office, $client, 'dctfweb', 'dctfweb', '2026-06');
+        $this->dctfwebDarf($tenant, $client, '2026-05', '%PDF-darf-old');
+        $darf = $this->dctfwebDarf($tenant, $client, '2026-06', '%PDF-darf-exact');
+        $resolvedDctfweb = $resolver->resolve($tenant, $client, 'dctfweb', 'dctfweb', '2026-06');
         $this->assertSame($darf->id, $resolvedDctfweb->artifact?->id);
-        $this->assertSame('%PDF-darf-exact', $resolver->read($resolvedDctfweb->artifact, (int) $office->id));
-        $this->assertNull($resolver->resolve($office, $client, 'dctfweb', 'dctfweb', '2026-07')->artifact);
+        $this->assertSame('%PDF-darf-exact', $resolver->read($resolvedDctfweb->artifact, (int) $tenant->id));
+        $this->assertNull($resolver->resolve($tenant, $client, 'dctfweb', 'dctfweb', '2026-07')->artifact);
     }
 
-    /** @return array{Office,Client,CommunicationInbox,ClientCommunicationPreference} */
+    /** @return array{Tenant,Client,CommunicationInbox,ClientCommunicationPreference} */
     private function context(
         RecipientMode $mode = RecipientMode::Primary,
         string $module = 'simples_mei',
         string $submodule = 'pgdasd',
     ): array {
-        $office = Office::factory()->create([
+        $tenant = Tenant::factory()->create([
             'communication_enabled' => true,
             'timezone' => 'America/Sao_Paulo',
         ]);
-        $client = Client::factory()->create(['office_id' => $office->id]);
+        $client = Client::factory()->create(['tenant_id' => $tenant->id]);
         $inbox = CommunicationInbox::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => 'Fiscal',
             'session_id' => 'session-'.Str::ulid(),
             'status' => InboxStatus::Connected,
@@ -283,7 +283,7 @@ final class FiscalCommunicationAutomationTest extends TestCase
             'is_default' => true,
         ]);
         $preference = ClientCommunicationPreference::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'module_key' => $module,
             'submodule_key' => $submodule,
@@ -293,7 +293,7 @@ final class FiscalCommunicationAutomationTest extends TestCase
             'recipient_mode' => $mode,
         ]);
         CommunicationAutomationPolicy::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'module_key' => $module,
             'submodule_key' => $submodule,
             'inbox_id' => $inbox->id,
@@ -306,19 +306,19 @@ final class FiscalCommunicationAutomationTest extends TestCase
             'template_version' => '1',
         ]);
 
-        return [$office, $client, $inbox, $preference];
+        return [$tenant, $client, $inbox, $preference];
     }
 
-    private function identity(Office $office, Client $client, bool $primary): CommunicationIdentity
+    private function identity(Tenant $tenant, Client $client, bool $primary): CommunicationIdentity
     {
         $digits = $primary ? '5511999990001' : '5511999990002';
         $contact = CommunicationContact::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => $primary ? 'Contato principal' : 'Contato secundário',
             'is_active' => true,
         ]);
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'contact_id' => $contact->id,
             'channel' => CommunicationChannel::Whatsapp,
             'address_encrypted' => '+'.$digits,
@@ -327,7 +327,7 @@ final class FiscalCommunicationAutomationTest extends TestCase
             'is_active' => true,
         ]);
         CommunicationIdentityLink::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'identity_id' => $identity->id,
             'client_id' => $client->id,
             'is_primary' => $primary,
@@ -338,7 +338,7 @@ final class FiscalCommunicationAutomationTest extends TestCase
     }
 
     private function pgdasdDocument(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $period,
         CarbonImmutable $observedAt,
@@ -356,7 +356,7 @@ final class FiscalCommunicationAutomationTest extends TestCase
         );
         [$year, $month] = array_map('intval', explode('-', $period));
         $projection = TaxObligationProjection::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'obligation_definition_id' => $definition->id,
             'period_key' => $period,
@@ -368,7 +368,7 @@ final class FiscalCommunicationAutomationTest extends TestCase
             'applicability' => TaxObligationApplicability::Applicable,
         ]);
         $run = FiscalMonitoringRun::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'system_code' => 'INTEGRA_SN',
             'service_code' => 'PGDASD',
@@ -390,7 +390,7 @@ final class FiscalCommunicationAutomationTest extends TestCase
         );
 
         return PgdasdArtifact::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'projection_id' => $projection->id,
             'fiscal_evidence_artifact_id' => $evidence->id,
@@ -403,12 +403,13 @@ final class FiscalCommunicationAutomationTest extends TestCase
         ]);
     }
 
-    private function pgmeiGuide(Office $office, Client $client, string $period, string $bytes): TaxGuideVersion
+    private function pgmeiGuide(Tenant $tenant, Client $client, string $period, string $bytes): TaxGuideVersion
     {
-        $stored = app(GuideStorageService::class)->storeDocument((int) $office->id, $bytes, 'application/pdf');
+        $stored = app(GuideStorageService::class)->storeDocument((int) $tenant->id, $bytes, 'application/pdf');
         $guide = TaxGuide::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
+            'operation_key' => 'pgmei.gerardaspdf',
             'system_code' => 'INTEGRA_MEI',
             'service_code' => 'PGMEI',
             'operation_code' => 'GERAR_DAS',
@@ -416,7 +417,7 @@ final class FiscalCommunicationAutomationTest extends TestCase
             'logical_key' => 'pgmei|'.$client->id.'|'.$period,
         ]);
         $version = TaxGuideVersion::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'tax_guide_id' => $guide->id,
             'version_number' => 1,
             'is_current' => true,
@@ -433,10 +434,10 @@ final class FiscalCommunicationAutomationTest extends TestCase
         return $version;
     }
 
-    private function dctfwebDarf(Office $office, Client $client, string $period, string $bytes): DctfwebDarfDocument
+    private function dctfwebDarf(Tenant $tenant, Client $client, string $period, string $bytes): DctfwebDarfDocument
     {
         $run = FiscalMonitoringRun::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'system_code' => 'INTEGRA_DCTFWEB',
             'service_code' => 'DCTFWEB',
@@ -450,7 +451,7 @@ final class FiscalCommunicationAutomationTest extends TestCase
             'mutability' => FiscalMutability::ReadOnly,
         ]);
         $declaration = DctfwebDeclaration::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'period_key' => $period,
         ]);
@@ -463,7 +464,7 @@ final class FiscalCommunicationAutomationTest extends TestCase
         );
 
         return DctfwebDarfDocument::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'declaration_id' => $declaration->id,
             'evidence_version_id' => $stored['version']->id,

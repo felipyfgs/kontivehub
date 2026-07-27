@@ -2,37 +2,37 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Http\Controllers\Controller;
 use App\Models\SerproDteCanaryRequest;
 use App\Services\Auth\RecentPasswordConfirmationGate;
 use App\Services\Integra\DteCanaryTenantService;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use RuntimeException;
 
 /**
- * Confirmação Office ADMIN e leitura do resultado DTE no tenant.
+ * Confirmação Tenant ADMIN e leitura do resultado DTE no tenant.
  * NÃO importa App\Services\Serpro\* — usa fachada Integra.
- * NÃO aceita office_id do client.
+ * NÃO aceita tenant_id do client.
  */
 class DteCanaryTenantController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly DteCanaryTenantService $dteCanary,
         private readonly RecentPasswordConfirmationGate $passwordGate,
     ) {}
 
     public function pending(Request $request): JsonResponse
     {
-        $office = $this->currentOffice->office();
-        if ($office === null) {
+        $tenant = $this->currentTenant->tenant();
+        if ($tenant === null) {
             return response()->json(['message' => 'Usuário sem escritório ativo.'], 403);
         }
 
-        $row = $this->dteCanary->findPendingForOffice((int) $office->id);
+        $row = $this->dteCanary->findPendingForTenant((int) $tenant->id);
 
         return response()->json([
             'data' => $row?->toGlobalSanitizedArray(),
@@ -41,14 +41,14 @@ class DteCanaryTenantController extends Controller
 
     public function confirmParticipation(Request $request, SerproDteCanaryRequest $serproDteCanaryRequest): JsonResponse
     {
-        $office = $this->currentOffice->office();
-        if ($office === null) {
+        $tenant = $this->currentTenant->tenant();
+        if ($tenant === null) {
             return response()->json(['message' => 'Usuário sem escritório ativo.'], 403);
         }
 
-        if ($request->exists('office_id')) {
+        if ($request->exists('tenant_id')) {
             return response()->json([
-                'message' => 'office_id do client não é aceito; use o Office corrente.',
+                'message' => 'tenant_id do client não é aceito; use o Tenant corrente.',
                 'code' => 'forbidden_field',
             ], 422);
         }
@@ -62,14 +62,14 @@ class DteCanaryTenantController extends Controller
         }
 
         try {
-            $row = $this->dteCanary->approveAsOfficeAdmin(
+            $row = $this->dteCanary->approveAsTenantAdmin(
                 $serproDteCanaryRequest,
                 $request->user(),
-                $office,
+                $tenant,
                 true,
             );
         } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage(), 'code' => 'dte_office_confirm_error'], 422);
+            return response()->json(['message' => $e->getMessage(), 'code' => 'dte_tenant_confirm_error'], 422);
         }
 
         return response()->json(['data' => $row->toGlobalSanitizedArray()]);
@@ -77,24 +77,24 @@ class DteCanaryTenantController extends Controller
 
     public function result(Request $request, SerproDteCanaryRequest $serproDteCanaryRequest): JsonResponse
     {
-        $office = $this->currentOffice->office();
-        if ($office === null) {
+        $tenant = $this->currentTenant->tenant();
+        if ($tenant === null) {
             return response()->json(['message' => 'Usuário sem escritório ativo.'], 403);
         }
 
-        if ($request->exists('office_id')) {
+        if ($request->exists('tenant_id')) {
             return response()->json([
-                'message' => 'office_id do client não é aceito.',
+                'message' => 'tenant_id do client não é aceito.',
                 'code' => 'forbidden_field',
             ], 422);
         }
 
-        // Qualquer membership ativa (VIEWER+) no Office piloto
+        // Qualquer membership ativa no Tenant piloto.
         try {
             $data = $this->dteCanary->tenantResult(
                 $serproDteCanaryRequest,
                 $request->user(),
-                $office,
+                $tenant,
             );
         } catch (RuntimeException $e) {
             return response()->json(['message' => $e->getMessage(), 'code' => 'dte_result_forbidden'], 403);
@@ -105,9 +105,9 @@ class DteCanaryTenantController extends Controller
 
     private function assertAdmin(): void
     {
-        $role = $this->currentOffice->role();
-        if ($role !== OfficeRole::Admin) {
-            abort(403, 'Somente Office ADMIN.');
+        $role = $this->currentTenant->role();
+        if ($role !== TenantRole::TenantAdmin) {
+            abort(403, 'Somente Tenant ADMIN.');
         }
     }
 }

@@ -3,7 +3,7 @@
 namespace App\Services\Integra;
 
 use App\Models\Client;
-use App\Models\Office;
+use App\Models\Tenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 
@@ -35,12 +35,17 @@ final class ClientProcuracaoAutoSyncDispatcher
             $skipped = [];
 
             Client::query()
-                ->with('office')
+                ->with('tenant')
                 ->where(fn ($query) => $query
-                    ->whereDoesntHave('procuracaoSync')
-                    ->orWhereHas('procuracaoSync', fn ($sync) => $sync
-                        ->whereNull('last_verified_at')
-                        ->orWhere('last_verified_at', '<=', $threshold)))
+                    ->whereDoesntHave(
+                        'procuracaoSyncs',
+                        fn ($sync) => $sync->where('environment', $environment->value),
+                    )
+                    ->orWhereHas('procuracaoSyncs', fn ($sync) => $sync
+                        ->where('environment', $environment->value)
+                        ->where(fn ($stale) => $stale
+                            ->whereNull('last_verified_at')
+                            ->orWhere('last_verified_at', '<=', $threshold))))
                 ->orderBy('id')
                 ->cursor()
                 ->each(function (Client $client) use ($environment, $limit, &$dispatched, &$skipped): bool {
@@ -48,16 +53,16 @@ final class ClientProcuracaoAutoSyncDispatcher
                         return false;
                     }
 
-                    /** @var Office $office */
-                    $office = $client->office;
-                    $decision = $this->policy->check($office, $environment);
+                    /** @var Tenant $tenant */
+                    $tenant = $client->tenant;
+                    $decision = $this->policy->check($tenant, $environment);
                     if (! $decision['allowed']) {
                         $skipped[$decision['code']] = ($skipped[$decision['code']] ?? 0) + 1;
 
                         return true;
                     }
 
-                    $this->sync->enqueueSync($office, $client, $environment, automatic: true);
+                    $this->sync->enqueueSync($tenant, $client, $environment, automatic: true);
                     $dispatched++;
 
                     return true;

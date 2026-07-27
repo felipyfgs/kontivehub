@@ -32,7 +32,7 @@ return [
     ),
 
     /**
-     * Exige budgets monetários positivos (global + Office [+ canário]) para
+     * Exige budgets monetários positivos (global + Tenant [+ canário]) para
      * chamadas potencialmente faturáveis quando o bloqueio comercial está efetivo.
      */
     'require_positive_monetary_budgets' => filter_var(
@@ -53,22 +53,6 @@ return [
      * Limiar de alerta de franquia do tenant (0–1). Ex.: 0.8 = 80% da franquia.
      */
     'franchise_alert_threshold' => (float) env('SERPRO_USAGE_FRANCHISE_ALERT_THRESHOLD', 0.8),
-
-    /**
-     * Orçamento global mensal da plataforma (unidades faturáveis) — legado quantitativo.
-     * Preferir serpro_usage_budgets (MONETARY). null = sem teto quantitativo global.
-     */
-    'global_monthly_budget' => ($v = env('SERPRO_USAGE_GLOBAL_MONTHLY_BUDGET')) !== null && $v !== ''
-        ? (int) $v
-        : null,
-
-    /**
-     * Fração máxima do orçamento global que um único tenant pode consumir (0–1).
-     * Proteção contra tenant ruidoso. null = sem proteção de share.
-     */
-    'max_tenant_share_of_global' => ($v = env('SERPRO_USAGE_MAX_TENANT_SHARE')) !== null && $v !== ''
-        ? (float) $v
-        : 0.40,
 
     /**
      * Moeda de estimativa (apenas metadado; valores em micros).

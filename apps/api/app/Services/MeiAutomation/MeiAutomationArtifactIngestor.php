@@ -65,7 +65,7 @@ final class MeiAutomationArtifactIngestor
 
         $metadata = [
             'purpose' => 'MEI_PORTAL_ARTIFACT',
-            'office_id' => (int) $attempt->office_id,
+            'tenant_id' => (int) $attempt->tenant_id,
             'client_id' => (int) $attempt->client_id,
             'attempt_id' => (int) $attempt->id,
             'artifact_id' => $artifact['id'],

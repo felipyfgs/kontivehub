@@ -309,7 +309,7 @@ final class SerproSmokeService
                 metadata: [
                     'contract_id' => $contract->id,
                     'latency_ms' => $latencyMs,
-                    'has_jwt' => true,
+                    'has_jwt_token' => true,
                 ],
                 trigger: 'SMOKE_OAUTH',
             );

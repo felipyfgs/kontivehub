@@ -39,7 +39,7 @@ final class CscVaultService
         }
 
         $metadata = [
-            'office_id' => $profile->office_id,
+            'tenant_id' => $profile->tenant_id,
             'establishment_id' => $profile->establishment_id,
             'environment' => $profile->environment,
             'kind' => 'csc',
@@ -77,7 +77,7 @@ final class CscVaultService
                 'configured' => true,
             ],
             $userId,
-            $profile->office_id,
+            $profile->tenant_id,
         );
 
         return $this->revealCsc($profile->fresh() ?? $profile, $userId);
@@ -93,7 +93,7 @@ final class CscVaultService
         }
 
         $metadata = [
-            'office_id' => $profile->office_id,
+            'tenant_id' => $profile->tenant_id,
             'establishment_id' => $profile->establishment_id,
             'environment' => $profile->environment,
             'kind' => 'csc',
@@ -104,7 +104,7 @@ final class CscVaultService
 
     /**
      * Metadados + valor do CSC para ADMIN na UI (nunca logar o valor).
-     * Auditoria `outbound.csc.revealed` sem o token; autorização ADMIN+2FA no controller.
+     * Auditoria `outbound.csc.revealed` sem o token; autorização com senha recente no controller.
      *
      * @return array{configured: bool, csc_id: ?string, configured_at: ?string, csc: ?string}
      */
@@ -127,7 +127,7 @@ final class CscVaultService
                 'revealed' => $csc !== null,
             ],
             $userId,
-            $profile->office_id,
+            $profile->tenant_id,
         );
 
         return [

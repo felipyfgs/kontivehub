@@ -11,7 +11,7 @@ use App\Enums\FiscalSituation;
 use App\Services\Integra\Dctfweb\DctfwebCodes;
 use App\Services\Integra\Dctfweb\DctfwebCompetenceResolver;
 use App\Services\Integra\Dctfweb\DctfwebIntegraCaller;
-use App\Services\Integra\Dctfweb\MitApuracaoService;
+use App\Services\Integra\Dctfweb\MitAssessmentService;
 use App\Services\Integra\Dctfweb\MitListaApuracoesCodec;
 use InvalidArgumentException;
 
@@ -21,7 +21,7 @@ final class MitListaApuracoesAdapter extends AbstractDctfwebAdapter
     public function __construct(
         DctfwebIntegraCaller $caller,
         DctfwebCompetenceResolver $competences,
-        private readonly MitApuracaoService $mit,
+        private readonly MitAssessmentService $mit,
         private readonly MitListaApuracoesCodec $codec,
     ) {
         parent::__construct($caller, $competences);
@@ -70,7 +70,7 @@ final class MitListaApuracoesAdapter extends AbstractDctfwebAdapter
             return FiscalAdapterResult::failed($e->getMessage(), 'MIT_LISTA_APURACOES_RESPONSE_INVALID', $this->coverage());
         }
 
-        $this->mit->projectListaApuracoes($request->office, $request->client, $items);
+        $this->mit->projectListaApuracoes($request->tenant, $request->client, $items);
 
         return new FiscalAdapterResult(
             result: FiscalRunResult::Success,

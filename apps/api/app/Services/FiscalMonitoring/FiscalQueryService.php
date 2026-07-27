@@ -6,7 +6,7 @@ use App\Models\FiscalEvidenceArtifact;
 use App\Models\FiscalFinding;
 use App\Models\FiscalPendingItem;
 use App\Models\FiscalSnapshot;
-use App\Models\Office;
+use App\Models\Tenant;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 /** Leituras tenant-scoped de snapshots, findings e pendências. */
@@ -16,14 +16,14 @@ final class FiscalQueryService
      * @return LengthAwarePaginator<int, FiscalSnapshot>
      */
     public function snapshots(
-        Office $office,
+        Tenant $tenant,
         int $perPage = 50,
         ?int $clientId = null,
         ?bool $currentOnly = true,
     ): LengthAwarePaginator {
         $q = FiscalSnapshot::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->orderByDesc('id');
 
         if ($clientId !== null) {
@@ -36,11 +36,11 @@ final class FiscalQueryService
         return $q->paginate($perPage);
     }
 
-    public function snapshot(Office $office, int $id): ?FiscalSnapshot
+    public function snapshot(Tenant $tenant, int $id): ?FiscalSnapshot
     {
         return FiscalSnapshot::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($id)
             ->first();
     }
@@ -49,14 +49,14 @@ final class FiscalQueryService
      * @return LengthAwarePaginator<int, FiscalFinding>
      */
     public function findings(
-        Office $office,
+        Tenant $tenant,
         int $perPage = 50,
         ?int $clientId = null,
         ?bool $activeOnly = true,
     ): LengthAwarePaginator {
         $q = FiscalFinding::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->orderByDesc('id');
 
         if ($clientId !== null) {
@@ -73,14 +73,14 @@ final class FiscalQueryService
      * @return LengthAwarePaginator<int, FiscalPendingItem>
      */
     public function pendingItems(
-        Office $office,
+        Tenant $tenant,
         int $perPage = 50,
         ?int $clientId = null,
         ?string $status = 'OPEN',
     ): LengthAwarePaginator {
         $q = FiscalPendingItem::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->orderByDesc('id');
 
         if ($clientId !== null) {
@@ -93,12 +93,12 @@ final class FiscalQueryService
         return $q->paginate($perPage);
     }
 
-    public function evidence(Office $office, int $id): ?FiscalEvidenceArtifact
+    public function evidence(Tenant $tenant, int $id): ?FiscalEvidenceArtifact
     {
         return FiscalEvidenceArtifact::query()
             ->withoutGlobalScopes()
             ->operationallyEligible()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($id)
             ->first();
     }

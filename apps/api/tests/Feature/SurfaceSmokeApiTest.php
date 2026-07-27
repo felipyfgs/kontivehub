@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
-use App\Enums\OfficeRole;
-use App\Models\Office;
+use App\Enums\TenantRole;
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -24,10 +24,10 @@ class SurfaceSmokeApiTest extends TestCase
 
     public function test_serpro_cluster_smoke_does_not_500(): void
     {
-        $office = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
         $admin = User::factory()
-            ->forOffice($office, OfficeRole::Operator)
-            ->asPlatformAdmin($office->id)
+            ->forTenant($tenant, TenantRole::TenantUser)
+            ->asPlatformAdmin($tenant->id)
             ->create();
         Sanctum::actingAs($admin);
 
@@ -36,11 +36,11 @@ class SurfaceSmokeApiTest extends TestCase
         $this->assertLessThan(500, $response->status());
     }
 
-    public function test_office_cluster_smoke_does_not_500(): void
+    public function test_tenant_cluster_smoke_does_not_500(): void
     {
         $this->actingAsOperator();
 
-        $response = $this->getJson('/api/v1/office/settings');
+        $response = $this->getJson('/api/v1/tenant/settings');
 
         $this->assertLessThan(500, $response->status());
     }
@@ -74,8 +74,8 @@ class SurfaceSmokeApiTest extends TestCase
 
     private function actingAsOperator(): User
     {
-        $office = Office::factory()->create();
-        $user = User::factory()->forOffice($office, OfficeRole::Operator)->create();
+        $tenant = Tenant::factory()->create();
+        $user = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
         Sanctum::actingAs($user);
 
         return $user;

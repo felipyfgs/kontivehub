@@ -3,9 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\Client;
-use App\Models\Office;
-use App\Models\OperationalProcess;
-use App\Models\ProcessTemplate;
+use App\Models\Tenant;
+use App\Models\WorkProcess;
+use App\Models\WorkProcessTemplate;
+use App\Support\CurrentTenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -16,18 +17,19 @@ class WorkOrchestrationSchemaTest extends TestCase
 
     public function test_work_orchestration_metadata_is_additive_and_casted(): void
     {
-        $this->assertTrue(Schema::hasColumns('process_templates', [
+        $this->assertTrue(Schema::hasColumns('work_process_templates', [
             'catalog_key',
             'catalog_version',
             'monitoring_module_key',
             'audience_rules',
         ]));
-        $this->assertTrue(Schema::hasColumn('operational_processes', 'monitoring_module_key'));
+        $this->assertTrue(Schema::hasColumn('work_processes', 'monitoring_module_key'));
 
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
-        $template = ProcessTemplate::factory()->create([
-            'office_id' => $office->id,
+        $tenant = Tenant::factory()->create();
+        app(CurrentTenant::class)->bindSystem($tenant);
+        $client = Client::factory()->forTenant($tenant)->create();
+        $template = WorkProcessTemplate::factory()->create([
+            'tenant_id' => $tenant->id,
             'catalog_key' => 'PGDAS_MENSAL',
             'catalog_version' => 1,
             'monitoring_module_key' => 'PGDASD',
@@ -36,25 +38,26 @@ class WorkOrchestrationSchemaTest extends TestCase
                 'category_match' => 'ANY',
             ],
         ]);
-        $process = OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        $process = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
-            'process_template_id' => $template->id,
+            'work_process_template_id' => $template->id,
             'monitoring_module_key' => 'PGDASD',
         ]);
 
         $this->assertSame(1, $template->fresh()->catalog_version);
         $this->assertSame(['SIMPLES_NACIONAL'], $template->fresh()->audience_rules['tax_regimes']);
-        $this->assertTrue($client->operationalProcesses()->whereKey($process->id)->exists());
+        $this->assertTrue($client->workProcesses()->whereKey($process->id)->exists());
     }
 
     public function test_existing_manual_records_keep_nullable_defaults(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
-        $template = ProcessTemplate::factory()->create(['office_id' => $office->id]);
-        $process = OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        $tenant = Tenant::factory()->create();
+        app(CurrentTenant::class)->bindSystem($tenant);
+        $client = Client::factory()->forTenant($tenant)->create();
+        $template = WorkProcessTemplate::factory()->create(['tenant_id' => $tenant->id]);
+        $process = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
         ]);
 

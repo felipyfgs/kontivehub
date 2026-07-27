@@ -70,7 +70,7 @@ final class PgmeiPostConsultService
             }
             $decoded = $this->codec->decodeDados($dados, $year);
             $projected = $this->projector->projectValid(
-                $request->office,
+                $request->tenant,
                 $request->client,
                 $decoded,
                 $request->run->id,
@@ -94,7 +94,7 @@ final class PgmeiPostConsultService
             ];
         } catch (Throwable $e) {
             Log::warning('pgmei.dividaativa.decode_or_project_failed', [
-                'office_id' => $request->office->id,
+                'tenant_id' => $request->tenant->id,
                 'client_id' => $request->client->id,
                 'year' => $year,
                 'error' => $e->getMessage(),

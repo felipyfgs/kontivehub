@@ -85,7 +85,7 @@ final class CteXmlProjectionParser
         $matched = $this->matchRoles($parties, $establishmentCnpj);
         $parsed['matched_roles'] = $matched;
 
-        // Compat: um papel "primário" se houver exatamente um match; senão null (sem inventar TAKER)
+        // Papel primário determinístico, sem inventar TAKER.
         $primary = count($matched) === 1 ? $matched[0] : (count($matched) > 1 ? $this->preferRole($matched) : null);
         $parsed['fiscal_role'] = $primary;
         $parsed['direction'] = DocumentDirection::fromFiscalRole($primary);
@@ -313,18 +313,6 @@ final class CteXmlProjectionParser
                 '3' => $recipient,
                 default => ['cnpj' => null, 'name' => null],
             };
-        }
-
-        // Legado: nó toma genérico
-        $legacy = $this->cnpj($doc, [
-            '//*[local-name()="toma"]//*[local-name()="CNPJ"]',
-            '//*[local-name()="toma"]//*[local-name()="CPF"]',
-        ]);
-        if ($legacy !== null) {
-            return [
-                'cnpj' => $legacy,
-                'name' => $this->first($doc, ['//*[local-name()="toma"]/*[local-name()="xNome"]']),
-            ];
         }
 
         return ['cnpj' => null, 'name' => null];

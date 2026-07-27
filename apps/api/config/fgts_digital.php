@@ -9,7 +9,7 @@ return [
     'contract_version' => 1,
     'egress_enabled' => (bool) env('FGTS_DIGITAL_EGRESS_ENABLED', false),
     'mutations_enabled' => (bool) env('FGTS_DIGITAL_MUTATIONS_ENABLED', false),
-    'office_credential_enabled' => (bool) env('FGTS_DIGITAL_OFFICE_CREDENTIAL_ENABLED', false),
+    'tenant_credential_enabled' => (bool) env('FGTS_DIGITAL_TENANT_CREDENTIAL_ENABLED', false),
     'kill_switch' => (bool) env('FGTS_DIGITAL_KILL_SWITCH', false),
 
     'runtime' => [

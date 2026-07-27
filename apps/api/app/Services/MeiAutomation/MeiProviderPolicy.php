@@ -3,14 +3,14 @@
 namespace App\Services\MeiAutomation;
 
 use App\Enums\MeiProvider;
-use App\Models\Office;
+use App\Models\Tenant;
 
 final class MeiProviderPolicy
 {
     /** @return list<MeiProvider> */
-    public function providers(Office $office, string $operationKey): array
+    public function providers(Tenant $tenant, string $operationKey): array
     {
-        if (! $this->portalEnabledFor($office)) {
+        if (! $this->portalEnabledFor($tenant)) {
             return [MeiProvider::Serpro];
         }
 
@@ -27,7 +27,7 @@ final class MeiProviderPolicy
         };
     }
 
-    public function portalEnabledFor(Office $office): bool
+    public function portalEnabledFor(Tenant $tenant): bool
     {
         if (! (bool) config('mei_automation.enabled', false)
             || (bool) config('mei_automation.kill_switch', false)
@@ -36,10 +36,10 @@ final class MeiProviderPolicy
             return false;
         }
 
-        if ((bool) config('mei_automation.allow_all_offices', false)) {
+        if ((bool) config('mei_automation.allow_all_tenants', false)) {
             return true;
         }
 
-        return in_array((int) $office->id, (array) config('mei_automation.office_allowlist', []), true);
+        return in_array((int) $tenant->id, (array) config('mei_automation.tenant_allowlist', []), true);
     }
 }

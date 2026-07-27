@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Enums\OfficeRole;
 use App\Enums\OutboundProfileStatus;
 use App\Enums\OutboundSeriesStatus;
+use App\Enums\TenantRole;
 use App\Http\Controllers\Controller;
 use App\Jobs\QueryOutboundSequenceJob;
 use App\Models\Establishment;
@@ -19,7 +19,7 @@ use App\Services\Outbound\CscVaultService;
 use App\Services\Outbound\MaOfficialPackageIngestionService;
 use App\Services\Outbound\OutboundKillSwitchService;
 use App\Services\Outbound\OutboundSeedService;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -27,7 +27,7 @@ use Illuminate\Validation\Rule;
 class OutboundCaptureController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $office,
+        private readonly CurrentTenant $tenant,
         private readonly OutboundSeedService $seeds,
         private readonly CscVaultService $csc,
         private readonly MaOfficialPackageIngestionService $packages,
@@ -92,7 +92,7 @@ class OutboundCaptureController extends Controller
 
     public function storeCsc(Request $request, OutboundCaptureProfile $profile): JsonResponse
     {
-        $this->authorizeAdminWithTwoFactor();
+        $this->authorizeAdminWithRecentPassword();
         $this->ensureProfile($profile);
 
         $data = $request->validate([
@@ -107,13 +107,13 @@ class OutboundCaptureController extends Controller
             (int) $request->user()->id,
         );
 
-        // ADMIN+2FA: devolve valor para UI; audit outbound.csc.replaced + .revealed sem o token.
+        // Admin com senha recente: devolve valor para UI e audita sem incluir o token.
         return response()->json(['data' => $state]);
     }
 
     public function showCsc(Request $request, OutboundCaptureProfile $profile): JsonResponse
     {
-        $this->authorizeAdminWithTwoFactor();
+        $this->authorizeAdminWithRecentPassword();
         $this->ensureProfile($profile);
 
         return response()->json([
@@ -147,7 +147,7 @@ class OutboundCaptureController extends Controller
         $this->audit->record('outbound.profile.activated', 'SUCCESS', $profile, [
             'profile_id' => $profile->id,
             'mandate_reference' => $data['mandate_reference'],
-        ], (int) $request->user()->id, $profile->office_id);
+        ], (int) $request->user()->id, $profile->tenant_id);
 
         return response()->json(['data' => $profile->fresh()->toPublicArray()]);
     }
@@ -174,7 +174,7 @@ class OutboundCaptureController extends Controller
             'discovery_position' => (int) $data['discovery_position'],
             'reason' => $data['reason'],
             'position_kind' => 'nNF',
-        ], (int) $request->user()->id, $series->office_id);
+        ], (int) $request->user()->id, $series->tenant_id);
 
         return response()->json(['data' => $series->fresh()->toPublicArray()]);
     }
@@ -267,7 +267,7 @@ class OutboundCaptureController extends Controller
             'profile_id' => ['sometimes', 'integer', 'exists:outbound_capture_profiles,id'],
         ]);
 
-        $officeId = $this->office->id();
+        $tenantId = $this->tenant->id();
         $userId = (int) $request->user()->id;
 
         if (! empty($data['profile_id'])) {
@@ -283,9 +283,9 @@ class OutboundCaptureController extends Controller
         }
 
         if ($data['active']) {
-            $this->killSwitch->activateGlobal($data['reason'], $userId, $officeId);
+            $this->killSwitch->activateGlobal($data['reason'], $userId, $tenantId);
         } else {
-            $this->killSwitch->deactivateGlobal($data['reason'], $userId, $officeId);
+            $this->killSwitch->deactivateGlobal($data['reason'], $userId, $tenantId);
         }
 
         return response()->json([
@@ -314,26 +314,26 @@ class OutboundCaptureController extends Controller
 
     private function authorizeView(): void
     {
-        abort_unless($this->office->role() !== null, 403);
+        abort_unless($this->tenant->role() !== null, 403);
     }
 
     private function authorizeOperator(): void
     {
-        $role = $this->office->role();
-        abort_unless(in_array($role, [OfficeRole::Admin, OfficeRole::Operator], true), 403);
+        $role = $this->tenant->role();
+        abort_unless(in_array($role, [TenantRole::TenantAdmin, TenantRole::TenantUser], true), 403);
     }
 
     private function authorizeAdmin(): void
     {
-        abort_unless($this->office->role() === OfficeRole::Admin, 403);
+        abort_unless($this->tenant->role() === TenantRole::TenantAdmin, 403);
     }
 
     /**
      * ADMIN + senha recente (defesa em profundidade para materializar segredos fiscais).
      */
-    private function authorizeAdminWithTwoFactor(): void
+    private function authorizeAdminWithRecentPassword(): void
     {
-        abort_unless($this->office->role() === OfficeRole::Admin, 403);
+        abort_unless($this->tenant->role() === TenantRole::TenantAdmin, 403);
 
         $user = auth()->user();
         abort_unless($user instanceof User, 403);
@@ -348,16 +348,16 @@ class OutboundCaptureController extends Controller
 
     private function ensureProfile(OutboundCaptureProfile $profile): void
     {
-        abort_unless($profile->office_id === $this->office->id(), 404);
+        abort_unless($profile->tenant_id === $this->tenant->id(), 404);
     }
 
     private function ensureSeries(OutboundSeriesCursor $series): void
     {
-        abort_unless($series->office_id === $this->office->id(), 404);
+        abort_unless($series->tenant_id === $this->tenant->id(), 404);
     }
 
     private function ensureEstablishment(Establishment $establishment): void
     {
-        abort_unless($establishment->office_id === $this->office->id(), 404);
+        abort_unless($establishment->tenant_id === $this->tenant->id(), 404);
     }
 }

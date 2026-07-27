@@ -148,7 +148,7 @@ final class MonitoringSurfaceRegistry
             ),
             new MonitoringSurfaceContract(
                 surfaceKey: 'simples_mei_pgdasd',
-                routePattern: '/monitoring/simples-mei',
+                routePattern: '/monitoring/simples',
                 responsibility: 'Declarações PGDAS-D e seus documentos',
                 channel: MonitoringChannel::Integra,
                 operationKeys: [
@@ -174,7 +174,7 @@ final class MonitoringSurfaceRegistry
             ),
             new MonitoringSurfaceContract(
                 surfaceKey: 'simples_mei_pgmei',
-                routePattern: '/monitoring/simples-mei',
+                routePattern: '/monitoring/mei',
                 responsibility: 'Dívida ativa do MEI por ano-calendário, sem emitir DAS',
                 channel: MonitoringChannel::Integra,
                 operationKeys: [

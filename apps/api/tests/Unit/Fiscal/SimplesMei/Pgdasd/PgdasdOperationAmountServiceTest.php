@@ -8,10 +8,10 @@ use App\Enums\PgdasdOperationAmountSource;
 use App\Enums\PgdasdOperationKind;
 use App\Enums\TaxObligationApplicability;
 use App\Models\Client;
-use App\Models\Office;
 use App\Models\PgdasdOperation;
 use App\Models\TaxObligationDefinition;
 use App\Models\TaxObligationProjection;
+use App\Models\Tenant;
 use App\Services\Fiscal\SimplesMei\Pgdasd\PgdasdOperationAmountService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -27,8 +27,8 @@ class PgdasdOperationAmountServiceTest extends TestCase
     {
         config()->set('fiscal.profile', FiscalProfile::Dev->value);
 
-        $office = Office::factory()->create();
-        $client = Client::factory()->for($office)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->for($tenant)->create();
         $def = TaxObligationDefinition::query()->firstOrCreate(
             ['code' => 'PGDAS_D'],
             [
@@ -40,7 +40,7 @@ class PgdasdOperationAmountServiceTest extends TestCase
             ],
         );
         $projection = TaxObligationProjection::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'obligation_definition_id' => $def->id,
             'period_key' => '2026-06',
@@ -54,7 +54,7 @@ class PgdasdOperationAmountServiceTest extends TestCase
 
         $dasNumber = '07202619183811980';
         PgdasdOperation::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'projection_id' => $projection->id,
             'kind' => PgdasdOperationKind::Das,
@@ -69,7 +69,7 @@ class PgdasdOperationAmountServiceTest extends TestCase
         ]);
 
         $ok = app(PgdasdOperationAmountService::class)->applyFromGerarDasNormalized(
-            $office,
+            $tenant,
             (int) $client->id,
             [
                 'document_number' => $dasNumber,

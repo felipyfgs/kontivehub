@@ -7,9 +7,9 @@ use App\Domain\Cnpj;
 use App\Enums\SerproEnvironment;
 use App\Models\Client;
 use App\Models\Establishment;
-use App\Models\Office;
 use App\Models\SerproContract;
-use App\Services\Integra\OfficeSerproAuthorizationService;
+use App\Models\Tenant;
+use App\Services\Integra\TenantSerproAuthorizationService;
 use App\Services\Serpro\SerproContractService;
 use RuntimeException;
 
@@ -21,7 +21,7 @@ final class SitfisIdentityResolver implements SitfisIdentityResolving
 {
     public function __construct(
         private readonly SerproContractService $contracts,
-        private readonly OfficeSerproAuthorizationService $authorizations,
+        private readonly TenantSerproAuthorizationService $authorizations,
     ) {}
 
     /**
@@ -33,9 +33,9 @@ final class SitfisIdentityResolver implements SitfisIdentityResolving
      *     contributor_cnpj: string
      * }
      */
-    public function resolve(Office $office, Client $client): array
+    public function resolve(Tenant $tenant, Client $client): array
     {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new RuntimeException('Cliente não pertence ao escritório ativo.');
         }
 
@@ -47,7 +47,7 @@ final class SitfisIdentityResolver implements SitfisIdentityResolving
             throw new RuntimeException('Contrato SERPRO indisponível para SITFIS.');
         }
 
-        $auth = $this->authorizations->getOrCreate($office, $environment);
+        $auth = $this->authorizations->getOrCreate($tenant, $environment);
         $author = (string) ($auth->author_identity ?? '');
         if ($author === '' || $author === '00000000000000') {
             throw new RuntimeException('Autor do Pedido não configurado para o escritório.');
@@ -71,10 +71,10 @@ final class SitfisIdentityResolver implements SitfisIdentityResolving
     {
         $est = Establishment::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $client->office_id)
+            ->where('tenant_id', $client->tenant_id)
             ->where('client_id', $client->id)
             ->where('is_active', true)
-            ->orderByDesc('is_matrix')
+            ->orderByDesc('is_headquarters')
             ->orderBy('id')
             ->first();
 

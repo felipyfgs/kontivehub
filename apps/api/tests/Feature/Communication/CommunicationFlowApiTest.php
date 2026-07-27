@@ -4,7 +4,6 @@ namespace Tests\Feature\Communication;
 
 use App\Enums\Communication\FlowStatus;
 use App\Enums\Communication\InboxStatus;
-use App\Enums\OfficeRole;
 use App\Enums\TenantPermission;
 use App\Enums\TenantRole;
 use App\Events\CommunicationEventCommitted;
@@ -16,11 +15,11 @@ use App\Models\CommunicationFlowInboxBinding;
 use App\Models\CommunicationFlowRun;
 use App\Models\CommunicationFlowVersion;
 use App\Models\CommunicationInbox;
-use App\Models\Office;
-use App\Models\OfficeMembership;
+use App\Models\Tenant;
+use App\Models\TenantMembership;
 use App\Models\TenantPermissionProfile;
 use App\Models\User;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
@@ -62,8 +61,8 @@ final class CommunicationFlowApiTest extends TestCase
 
     public function test_create_flow_starts_paused_with_draft(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
         $this->authenticate($admin);
 
         $response = $this->postJson('/api/v1/communication/flows', ['name' => 'Triagem'])
@@ -83,18 +82,17 @@ final class CommunicationFlowApiTest extends TestCase
 
     public function test_mutations_require_manage_flows_not_view_or_inboxes(): void
     {
-        config(['features.canonical_multitenant_rbac.enabled' => true]);
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $viewer = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $inboxManager = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $flowManager = User::factory()->forOffice($office, OfficeRole::Operator)->create();
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $viewer = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $inboxManager = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $flowManager = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
 
-        $this->assignProfile($viewer, $office, [TenantPermission::CommunicationView]);
-        $this->assignProfile($inboxManager, $office, [
+        $this->assignProfile($viewer, $tenant, [TenantPermission::CommunicationView]);
+        $this->assignProfile($inboxManager, $tenant, [
             TenantPermission::CommunicationView,
             TenantPermission::CommunicationManageInboxes,
         ]);
-        $this->assignProfile($flowManager, $office, [
+        $this->assignProfile($flowManager, $tenant, [
             TenantPermission::CommunicationView,
             TenantPermission::CommunicationManageFlows,
         ]);
@@ -110,15 +108,15 @@ final class CommunicationFlowApiTest extends TestCase
             ->assertJsonPath('data.status', 'paused');
     }
 
-    public function test_cross_office_flow_is_not_found(): void
+    public function test_cross_tenant_flow_is_not_found(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $foreign = Office::factory()->create(['communication_enabled' => true]);
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
-        $foreignAdmin = User::factory()->forOffice($foreign, OfficeRole::Admin)->create();
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $foreign = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $foreignAdmin = User::factory()->forTenant($foreign, TenantRole::TenantAdmin)->create();
 
         $flow = CommunicationFlow::query()->withoutGlobalScopes()->create([
-            'office_id' => $foreign->id,
+            'tenant_id' => $foreign->id,
             'name' => 'Alien',
             'status' => FlowStatus::Paused,
             'lock_version' => 1,
@@ -137,8 +135,8 @@ final class CommunicationFlowApiTest extends TestCase
 
     public function test_draft_version_conflict_and_validate_publish_binding_invariants(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
         $this->authenticate($admin);
 
         $created = $this->postJson('/api/v1/communication/flows', ['name' => 'Robô'])->assertCreated()->json('data');
@@ -193,8 +191,8 @@ final class CommunicationFlowApiTest extends TestCase
         $this->assertSame('paused', CommunicationFlow::query()->findOrFail($flowId)->status->value);
         $this->assertSame(0, CommunicationFlowInboxBinding::query()->where('enabled', true)->count());
 
-        $inboxA = $this->inbox($office, 'A');
-        $inboxB = $this->inbox($office, 'B');
+        $inboxA = $this->inbox($tenant, 'A');
+        $inboxB = $this->inbox($tenant, 'B');
 
         $bindingA = $this->postJson('/api/v1/communication/flows/'.$flowId.'/bindings', [
             'inbox_id' => $inboxA->id,
@@ -236,8 +234,8 @@ final class CommunicationFlowApiTest extends TestCase
 
     public function test_flag_off_blocks_publish_and_enable(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
         $this->authenticate($admin);
 
         $flow = $this->postJson('/api/v1/communication/flows', ['name' => 'Flag'])->assertCreated()->json('data');
@@ -259,8 +257,8 @@ final class CommunicationFlowApiTest extends TestCase
 
     public function test_clone_from_published_version_creates_paused_draft(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
         $this->authenticate($admin);
 
         $flow = $this->postJson('/api/v1/communication/flows', ['name' => 'Origem'])->assertCreated()->json('data');
@@ -296,16 +294,16 @@ final class CommunicationFlowApiTest extends TestCase
     }
 
     /** @param list<TenantPermission> $permissions */
-    private function assignProfile(User $user, Office $office, array $permissions): void
+    private function assignProfile(User $user, Tenant $tenant, array $permissions): void
     {
-        $profile = TenantPermissionProfile::factory()->forOffice($office)->create();
+        $profile = TenantPermissionProfile::factory()->forTenant($tenant)->create();
         $profile->syncPermissionKeys($permissions);
-        $membership = OfficeMembership::query()->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+        $membership = TenantMembership::query()->withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
             ->where('user_id', $user->id)
             ->firstOrFail();
         $membership->forceFill([
-            'tenant_role' => TenantRole::TenantUser,
+            'role' => TenantRole::TenantUser,
             'permission_profile_id' => $profile->id,
             'authorization_version' => (int) $membership->authorization_version + 1,
         ])->save();
@@ -314,13 +312,13 @@ final class CommunicationFlowApiTest extends TestCase
     private function authenticate(User $user): void
     {
         Sanctum::actingAs($user);
-        app(CurrentOffice::class)->clear();
+        app(CurrentTenant::class)->clear();
     }
 
-    private function inbox(Office $office, string $suffix): CommunicationInbox
+    private function inbox(Tenant $tenant, string $suffix): CommunicationInbox
     {
         return CommunicationInbox::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => 'Inbox '.$suffix,
             'session_id' => 'session-'.Str::ulid(),
             'status' => InboxStatus::Connected,

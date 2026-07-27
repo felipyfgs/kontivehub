@@ -17,7 +17,7 @@ final class MailboxAlertService
     {
         $existing = MailboxAlert::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $message->office_id)
+            ->where('tenant_id', $message->tenant_id)
             ->where('mailbox_message_id', $message->id)
             ->first();
 
@@ -37,7 +37,7 @@ final class MailboxAlertService
         }
 
         return MailboxAlert::query()->create([
-            'office_id' => $message->office_id,
+            'tenant_id' => $message->tenant_id,
             'client_id' => $message->client_id,
             'mailbox_message_id' => $message->id,
             'severity' => $payload['severity'],

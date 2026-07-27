@@ -4,12 +4,12 @@ namespace App\Http\Controllers\Api\V1\Fiscal;
 
 use App\Enums\FiscalCoverage;
 use App\Enums\FiscalLinkStatus;
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Http\Controllers\Controller;
 use App\Models\Client;
 use App\Models\FiscalCategory;
 use App\Services\FiscalMonitoring\FiscalCategoryService;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -21,7 +21,7 @@ use RuntimeException;
 class FiscalCategoryController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly FiscalCategoryService $categories,
     ) {}
 
@@ -38,13 +38,13 @@ class FiscalCategoryController extends Controller
     public function indexLinks(Request $request): JsonResponse
     {
         $this->assertCanRead();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
         $clientId = $request->query('client_id');
         $status = $request->query('status');
 
         $links = $this->categories->listLinks(
-            $office,
+            $tenant,
             is_numeric($clientId) ? (int) $clientId : null,
             is_string($status) ? $status : null,
         );
@@ -57,7 +57,7 @@ class FiscalCategoryController extends Controller
     public function associate(Request $request): JsonResponse
     {
         $this->assertCanWrite();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
         $data = $request->validate([
             'client_id' => ['required', 'integer'],
@@ -69,7 +69,7 @@ class FiscalCategoryController extends Controller
 
         $client = Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($data['client_id'])
             ->first();
 
@@ -81,7 +81,7 @@ class FiscalCategoryController extends Controller
 
         try {
             $link = $this->categories->associate(
-                $office,
+                $tenant,
                 $client,
                 $category,
                 $request->user()?->id,
@@ -99,7 +99,7 @@ class FiscalCategoryController extends Controller
     public function associateBatch(Request $request): JsonResponse
     {
         $this->assertCanWrite();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
         $data = $request->validate([
             'fiscal_category_id' => ['required', 'integer', 'exists:fiscal_categories,id'],
@@ -111,7 +111,7 @@ class FiscalCategoryController extends Controller
         $category = FiscalCategory::query()->findOrFail($data['fiscal_category_id']);
 
         $result = $this->categories->associateBatch(
-            $office,
+            $tenant,
             $category,
             $data['client_ids'],
             $request->user()?->id,
@@ -123,7 +123,7 @@ class FiscalCategoryController extends Controller
 
     private function assertCanRead(): void
     {
-        $role = $this->currentOffice->role();
+        $role = $this->currentTenant->role();
         if ($role === null) {
             abort(403, 'Perfil não resolvido.');
         }
@@ -131,8 +131,8 @@ class FiscalCategoryController extends Controller
 
     private function assertCanWrite(): void
     {
-        $role = $this->currentOffice->role();
-        if ($role === null || ! in_array($role, [OfficeRole::Admin, OfficeRole::Operator], true)) {
+        $role = $this->currentTenant->role();
+        if ($role === null || ! in_array($role, [TenantRole::TenantAdmin, TenantRole::TenantUser], true)) {
             abort(403, 'Ação não autorizada para o perfil atual.');
         }
     }

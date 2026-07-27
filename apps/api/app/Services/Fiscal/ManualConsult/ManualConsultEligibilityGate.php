@@ -7,8 +7,8 @@ use App\Enums\SerproAuthorizationStatus;
 use App\Enums\SerproCapabilityDriver;
 use App\Enums\SerproEnvironment;
 use App\Models\Client;
-use App\Models\Office;
-use App\Models\OfficeSerproAuthorization;
+use App\Models\Tenant;
+use App\Models\TenantSerproAuthorization;
 use App\Services\Integra\TaxProxyPowerService;
 use App\Services\Serpro\CapabilityDriverResolver;
 use App\Support\FeatureFlags;
@@ -24,15 +24,15 @@ final class ManualConsultEligibilityGate
     ) {}
 
     public function evaluate(
-        Office $office,
+        Tenant $tenant,
         ManualConsultActionDefinition $def,
         ?Client $client = null,
     ): ManualConsultEligibility {
         $environment = $this->environment();
-        $auth = $this->authorizationFor($office, $environment);
+        $auth = $this->authorizationFor($tenant, $environment);
 
         return $this->evaluateWithContext(
-            $office,
+            $tenant,
             $def,
             $this->hasUsableToken($auth),
             $client,
@@ -42,11 +42,11 @@ final class ManualConsultEligibilityGate
     }
 
     public function evaluateWithContext(
-        Office $office,
+        Tenant $tenant,
         ManualConsultActionDefinition $def,
         bool $hasToken,
         ?Client $client,
-        ?OfficeSerproAuthorization $auth,
+        ?TenantSerproAuthorization $auth,
         SerproEnvironment $environment,
     ): ManualConsultEligibility {
         if (! $def->hasHandler) {
@@ -54,7 +54,7 @@ final class ManualConsultEligibilityGate
         }
 
         if ($def->featureModule !== null
-            && ! FeatureFlags::isModuleEnabled($def->featureModule, $office->id)
+            && ! FeatureFlags::isModuleEnabled($def->featureModule, $tenant->id)
         ) {
             return ManualConsultEligibility::ModuleOff;
         }
@@ -83,7 +83,7 @@ final class ManualConsultEligibilityGate
         }
 
         if ($client !== null && $def->requiredProxyPowers !== []) {
-            if (! $this->hasAnyRequiredPower($office, $client, $def->requiredProxyPowers, $auth, $environment)) {
+            if (! $this->hasAnyRequiredPower($tenant, $client, $def->requiredProxyPowers, $auth, $environment)) {
                 return ManualConsultEligibility::PowerMissing;
             }
         }
@@ -98,15 +98,15 @@ final class ManualConsultEligibilityGate
         return SerproEnvironment::tryFrom(strtoupper($raw)) ?? SerproEnvironment::Trial;
     }
 
-    public function authorizationFor(Office $office, SerproEnvironment $environment): ?OfficeSerproAuthorization
+    public function authorizationFor(Tenant $tenant, SerproEnvironment $environment): ?TenantSerproAuthorization
     {
-        return OfficeSerproAuthorization::query()
-            ->where('office_id', $office->id)
+        return TenantSerproAuthorization::query()
+            ->where('tenant_id', $tenant->id)
             ->where('environment', $environment->value)
             ->first();
     }
 
-    public function hasUsableToken(?OfficeSerproAuthorization $auth): bool
+    public function hasUsableToken(?TenantSerproAuthorization $auth): bool
     {
         if ($auth === null) {
             return false;
@@ -124,10 +124,10 @@ final class ManualConsultEligibilityGate
      * @param  list<string>  $powers
      */
     public function hasAnyRequiredPower(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         array $powers,
-        ?OfficeSerproAuthorization $auth,
+        ?TenantSerproAuthorization $auth,
         SerproEnvironment $environment,
     ): bool {
         if ($powers === []) {
@@ -141,7 +141,7 @@ final class ManualConsultEligibilityGate
 
         foreach ($powers as $code) {
             $usable = $this->proxyPowers->findUsablePower(
-                officeId: $office->id,
+                tenantId: $tenant->id,
                 clientId: $client->id,
                 powerCode: strtoupper($code),
                 authorIdentity: $author,

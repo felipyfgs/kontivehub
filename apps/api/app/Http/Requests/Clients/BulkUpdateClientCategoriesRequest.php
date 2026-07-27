@@ -21,7 +21,7 @@ class BulkUpdateClientCategoriesRequest extends FormRequest
             'client_ids.*' => ['required', 'integer', 'min:1', 'distinct'],
             'category_ids' => ['required', 'array', 'min:1', 'max:25'],
             'category_ids.*' => ['required', 'integer', 'min:1', 'distinct'],
-            'office_id' => ['prohibited'],
+            'tenant_id' => ['prohibited'],
         ];
     }
 }

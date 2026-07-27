@@ -74,15 +74,11 @@ export function serializeListFilterQuery(
   return query
 }
 
-/** Alias canônico: aceita direction ou sort_direction na leitura. */
 export function resolveSortDirection(
   query: LocationQuery | Record<string, unknown>,
   fallback: 'asc' | 'desc' = 'asc'
 ): 'asc' | 'desc' {
-  const raw = firstQueryValue(
-    (query as Record<string, unknown>).sort_direction
-    ?? (query as Record<string, unknown>).direction
-  )
+  const raw = firstQueryValue((query as Record<string, unknown>).sort_direction)
   if (!raw) return fallback
   const lower = raw.toLowerCase()
   return lower === 'desc' ? 'desc' : 'asc'

@@ -2,11 +2,11 @@
 
 namespace Tests\Feature;
 
-use App\Enums\OfficeRole;
 use App\Enums\TaxInstallmentModality;
+use App\Enums\TenantRole;
 use App\Models\Client;
-use App\Models\Office;
 use App\Models\TaxInstallmentOrder;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Integra\Parcelamento\ParcelamentoProjectionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -20,32 +20,31 @@ class ModulePortfolioInstallmentsTest extends TestCase
     public function test_portfolio_aggregates_all_modalities_and_scopes_filtered_enrichment(): void
     {
         config()->set('features.global_enabled', true);
-        config()->set('features.modules.parcelamentos.enabled', true);
+        config()->set('features.modules.installments.enabled', true);
 
-        $office = Office::factory()->create();
-        $user = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $client = Client::factory()->forOffice($office)->create([
+        $tenant = Tenant::factory()->create();
+        $user = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $client = Client::factory()->forTenant($tenant)->create([
             'is_active' => true,
-            'matrix_client_id' => null,
         ]);
         $projection = app(ParcelamentoProjectionService::class);
         $projection->projectFromMonitorBody(
-            $office,
+            $tenant,
             $client,
             TaxInstallmentModality::Parcsn,
             ['pedidos' => [$this->orderBody('SN-1', 10000, '202608', true)]],
         );
         $projection->projectFromMonitorBody(
-            $office,
+            $tenant,
             $client,
             TaxInstallmentModality::Parcmei,
             ['pedidos' => [$this->orderBody('MEI-1', 20000, '202609')]],
         );
 
-        $otherOffice = Office::factory()->create();
-        $otherClient = Client::factory()->forOffice($otherOffice)->create();
+        $otherTenant = Tenant::factory()->create();
+        $otherClient = Client::factory()->forTenant($otherTenant)->create();
         $projection->projectFromMonitorBody(
-            $otherOffice,
+            $otherTenant,
             $otherClient,
             TaxInstallmentModality::Pertsn,
             ['pedidos' => [$this->orderBody('OTHER-1', 99999, '202610')]],
@@ -90,16 +89,19 @@ class ModulePortfolioInstallmentsTest extends TestCase
 
     public function test_order_detail_returns_only_local_projected_parcels_and_payments(): void
     {
-        $office = Office::factory()->create();
-        $user = User::factory()->forOffice($office, OfficeRole::Viewer)->create();
-        $client = Client::factory()->forOffice($office)->create();
+        $tenant = Tenant::factory()->create();
+        $user = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $client = Client::factory()->forTenant($tenant)->create();
         app(ParcelamentoProjectionService::class)->projectFromMonitorBody(
-            $office,
+            $tenant,
             $client,
             TaxInstallmentModality::Parcsn,
             ['pedidos' => [$this->orderBody('SN-DETAIL', 10000, '202608', true)]],
         );
-        $order = TaxInstallmentOrder::query()->where('office_id', $office->id)->firstOrFail();
+        $order = TaxInstallmentOrder::query()
+            ->withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->firstOrFail();
 
         Sanctum::actingAs($user);
         $this->getJson('/api/v1/fiscal/installments/orders/'.$order->id)

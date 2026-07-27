@@ -26,25 +26,12 @@ class FiscalModelSecretScanCommand extends Command
     {
         $findings = [];
 
-        if (DB::getDriverName() === 'pgsql') {
-            $columns = DB::select(<<<'SQL'
-                SELECT table_name, column_name
-                FROM information_schema.columns
-                WHERE table_schema = 'public'
-                ORDER BY table_name, column_name
-                SQL);
-        } else {
-            $columns = [];
-            foreach (DB::select("SELECT name FROM sqlite_master WHERE type='table'") as $t) {
-                $table = $t->name;
-                foreach (DB::select("PRAGMA table_info('{$table}')") as $col) {
-                    $columns[] = (object) [
-                        'table_name' => $table,
-                        'column_name' => $col->name,
-                    ];
-                }
-            }
-        }
+        $columns = DB::select(<<<'SQL'
+            SELECT table_name, column_name
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+            ORDER BY table_name, column_name
+            SQL);
 
         foreach ($columns as $col) {
             $name = strtolower((string) $col->column_name);

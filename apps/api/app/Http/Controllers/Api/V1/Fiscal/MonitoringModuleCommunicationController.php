@@ -4,14 +4,14 @@ namespace App\Http\Controllers\Api\V1\Fiscal;
 
 use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
-use App\Http\Middleware\EnsureOfficeContext;
+use App\Http\Middleware\EnsureTenantContext;
 use App\Models\Client;
 use App\Models\User;
 use App\Services\Authorization\TenantAuthorization;
 use App\Services\Fiscal\Dctfweb\MitCommunicationService;
 use App\Services\Fiscal\Fgts\FgtsCommunicationService;
 use App\Services\Fiscal\Sitfis\SitfisCommunicationService;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -22,7 +22,7 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 class MonitoringModuleCommunicationController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly TenantAuthorization $authorization,
         private readonly SitfisCommunicationService $sitfis,
         private readonly FgtsCommunicationService $fgts,
@@ -32,11 +32,11 @@ class MonitoringModuleCommunicationController extends Controller
     public function updatePreferences(Request $request, string $module, int $client): JsonResponse
     {
         $this->assertCanManage();
-        if ($rejection = $this->rejectClientOfficeId($request)) {
+        if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
-        $office = $this->currentOffice->office();
-        $model = $this->findClient($office->id, $client);
+        $tenant = $this->currentTenant->tenant();
+        $model = $this->findClient($tenant->id, $client);
         if ($model === null) {
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
@@ -49,13 +49,13 @@ class MonitoringModuleCommunicationController extends Controller
         /** @var User $actor */
         $actor = $request->user();
         try {
-            $pref = $this->service($module)->updatePreferences($office, $model, $actor, $data);
+            $pref = $this->service($module)->updatePreferences($tenant, $model, $actor, $data);
         } catch (HttpException $e) {
             return response()->json(['message' => $e->getMessage()], $e->getStatusCode());
         }
 
         return response()->json([
-            'data' => $this->service($module)->summary($office, $model),
+            'data' => $this->service($module)->summary($tenant, $model),
             'preference_id' => $pref->id,
         ]);
     }
@@ -63,41 +63,41 @@ class MonitoringModuleCommunicationController extends Controller
     public function preview(Request $request, string $module, int $client): JsonResponse
     {
         $this->assertCanRead();
-        if ($rejection = $this->rejectClientOfficeId($request)) {
+        if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
-        $office = $this->currentOffice->office();
-        $model = $this->findClient($office->id, $client);
+        $tenant = $this->currentTenant->tenant();
+        $model = $this->findClient($tenant->id, $client);
         if ($model === null) {
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
 
-        return response()->json(['data' => $this->service($module)->preview($office, $model)]);
+        return response()->json(['data' => $this->service($module)->preview($tenant, $model)]);
     }
 
     public function tracking(Request $request, string $module, int $client): JsonResponse
     {
         $this->assertCanRead();
-        if ($rejection = $this->rejectClientOfficeId($request)) {
+        if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
-        $office = $this->currentOffice->office();
-        $model = $this->findClient($office->id, $client);
+        $tenant = $this->currentTenant->tenant();
+        $model = $this->findClient($tenant->id, $client);
         if ($model === null) {
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
 
-        return response()->json(['data' => $this->service($module)->tracking($office, $model)]);
+        return response()->json(['data' => $this->service($module)->tracking($tenant, $model)]);
     }
 
     public function send(Request $request, string $module, int $client): JsonResponse
     {
         $this->assertCanSync();
-        if ($rejection = $this->rejectClientOfficeId($request)) {
+        if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
-        $office = $this->currentOffice->office();
-        $model = $this->findClient($office->id, $client);
+        $tenant = $this->currentTenant->tenant();
+        $model = $this->findClient($tenant->id, $client);
         if ($model === null) {
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
@@ -105,7 +105,7 @@ class MonitoringModuleCommunicationController extends Controller
         $actor = $request->user();
         $input = $request->validate(['period_key' => ['sometimes', 'string', 'regex:/^\d{4}-\d{2}$/']]);
         try {
-            $data = $this->service($module)->requestSend($office, $model, $actor, $input['period_key'] ?? null);
+            $data = $this->service($module)->requestSend($tenant, $model, $actor, $input['period_key'] ?? null);
         } catch (HttpException $e) {
             return response()->json(['message' => $e->getMessage()], $e->getStatusCode());
         }
@@ -123,27 +123,27 @@ class MonitoringModuleCommunicationController extends Controller
         };
     }
 
-    private function findClient(int $officeId, int $clientId): ?Client
+    private function findClient(int $tenantId, int $clientId): ?Client
     {
         return Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereKey($clientId)
             ->first();
     }
 
-    private function rejectClientOfficeId(Request $request): ?JsonResponse
+    private function rejectClientTenantId(Request $request): ?JsonResponse
     {
         $suppliedAtTopLevel = $request->attributes->get(
-            EnsureOfficeContext::CLIENT_OFFICE_ID_SUPPLIED,
+            EnsureTenantContext::CLIENT_TENANT_ID_SUPPLIED,
         ) === true;
         if (! $suppliedAtTopLevel) {
             return null;
         }
 
         return response()->json([
-            'message' => 'office_id não é aceito; o escritório é obtido do contexto autenticado.',
-            'code' => 'CLIENT_OFFICE_ID_REJECTED',
+            'message' => 'tenant_id não é aceito; o escritório é obtido do contexto autenticado.',
+            'code' => 'CLIENT_TENANT_ID_REJECTED',
         ], 422);
     }
 

@@ -101,10 +101,7 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
           }),
         sessionStatus: (id: number) =>
           client<{ data: CommunicationSessionStatus }>(`${base}/inboxes/${id}/session/status`),
-        // Alias temporário somente para acompanhar eventos do gateway durante a transição.
-        pairing: (id: number) =>
-          client<{ data: CommunicationPairingState }>(`${base}/inboxes/${id}/pairing`),
-        updateOfficeSettings: (enabled: boolean) =>
+        updateTenantSettings: (enabled: boolean) =>
           client<{ data: { enabled: boolean } }>(`${base}/settings`, {
             method: 'PATCH',
             body: { enabled }

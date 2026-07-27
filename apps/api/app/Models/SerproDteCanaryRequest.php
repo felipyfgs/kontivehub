@@ -10,16 +10,14 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Canário DTE: orquestrado pela plataforma com office_id de piloto.
- * Acesso dual (Platform/* + tenant result/confirm) — sem BelongsToOffice;
+ * Canário DTE: orquestrado pela plataforma com tenant_id de piloto.
+ * Acesso dual (Platform/* + tenant result/confirm) — sem BelongsToTenant;
  * isolamento explícito nos services (DteCanaryTenantService / SerproDteCanaryService).
- *
- * @see config/schema_conventions.php belongs_to_office_exceptions
  */
 #[Fillable([
     'environment',
     'status',
-    'office_id',
+    'tenant_id',
     'client_id',
     'selected_by_user_id',
     'selected_at',
@@ -31,8 +29,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'required_proxy_power',
     'owner_approver_user_id',
     'owner_approved_at',
-    'office_admin_approver_user_id',
-    'office_admin_approved_at',
+    'tenant_admin_approver_user_id',
+    'tenant_admin_approved_at',
     'idempotency_key',
     'correlation_id',
     'request_tag',
@@ -58,7 +56,7 @@ class SerproDteCanaryRequest extends Model
             'status' => SerproDteCanaryRequestStatus::class,
             'selected_at' => 'immutable_datetime',
             'owner_approved_at' => 'immutable_datetime',
-            'office_admin_approved_at' => 'immutable_datetime',
+            'tenant_admin_approved_at' => 'immutable_datetime',
             'dispatched_at' => 'immutable_datetime',
             'finished_at' => 'immutable_datetime',
             'reconciled_at' => 'immutable_datetime',
@@ -67,9 +65,9 @@ class SerproDteCanaryRequest extends Model
         ];
     }
 
-    public function office(): BelongsTo
+    public function tenant(): BelongsTo
     {
-        return $this->belongsTo(Office::class);
+        return $this->belongsTo(Tenant::class);
     }
 
     public function client(): BelongsTo
@@ -87,18 +85,18 @@ class SerproDteCanaryRequest extends Model
         return $this->owner_approver_user_id !== null && $this->owner_approved_at !== null;
     }
 
-    public function hasOfficeAdminApproval(): bool
+    public function hasTenantAdminApproval(): bool
     {
-        return $this->office_admin_approver_user_id !== null && $this->office_admin_approved_at !== null;
+        return $this->tenant_admin_approver_user_id !== null && $this->tenant_admin_approved_at !== null;
     }
 
     public function isFullyApproved(): bool
     {
-        if (! $this->hasOwnerApproval() || ! $this->hasOfficeAdminApproval()) {
+        if (! $this->hasOwnerApproval() || ! $this->hasTenantAdminApproval()) {
             return false;
         }
 
-        return (int) $this->owner_approver_user_id !== (int) $this->office_admin_approver_user_id;
+        return (int) $this->owner_approver_user_id !== (int) $this->tenant_admin_approver_user_id;
     }
 
     /**
@@ -116,7 +114,7 @@ class SerproDteCanaryRequest extends Model
             'status' => $this->status instanceof SerproDteCanaryRequestStatus
                 ? $this->status->value
                 : (string) $this->status,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'client_id' => $this->client_id,
             'operation_key' => $this->operation_key ?? DteCanaryCoordinates::OPERATION_KEY,
             'id_sistema' => $this->id_sistema ?? DteCanaryCoordinates::ID_SISTEMA,
@@ -125,12 +123,12 @@ class SerproDteCanaryRequest extends Model
             'functional_route' => $this->functional_route ?? DteCanaryCoordinates::FUNCTIONAL_ROUTE,
             'required_proxy_power' => $this->required_proxy_power ?? DteCanaryCoordinates::REQUIRED_PROXY_POWER,
             'owner_approved' => $this->hasOwnerApproval(),
-            'office_admin_approved' => $this->hasOfficeAdminApproval(),
+            'tenant_admin_approved' => $this->hasTenantAdminApproval(),
             'fully_approved' => $this->isFullyApproved(),
             'owner_approver_user_id' => $this->owner_approver_user_id,
-            'office_admin_approver_user_id' => $this->office_admin_approver_user_id,
+            'tenant_admin_approver_user_id' => $this->tenant_admin_approver_user_id,
             'owner_approved_at' => $this->owner_approved_at?->toIso8601String(),
-            'office_admin_approved_at' => $this->office_admin_approved_at?->toIso8601String(),
+            'tenant_admin_approved_at' => $this->tenant_admin_approved_at?->toIso8601String(),
             'idempotency_key' => $this->idempotency_key,
             'correlation_id' => $this->correlation_id,
             'request_tag' => $this->request_tag,

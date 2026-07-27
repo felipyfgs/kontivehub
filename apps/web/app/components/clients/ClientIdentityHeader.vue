@@ -17,7 +17,6 @@ const emit = defineEmits<{
 const displayName = computed(() =>
   props.client.display_name
   || props.client.legal_name
-  || props.client.name
   || 'Cliente'
 )
 
@@ -33,8 +32,7 @@ const initials = computed(() => {
 })
 
 const cnpjLabel = computed(() => {
-  const raw = props.client.cnpj
-    || props.client.establishments?.find(e => e.is_matrix)?.cnpj
+  const raw = props.client.establishments?.find(e => e.is_headquarters)?.cnpj
     || props.client.establishments?.[0]?.cnpj
     || props.client.root_cnpj
   return raw ? formatCnpj(raw) : '—'

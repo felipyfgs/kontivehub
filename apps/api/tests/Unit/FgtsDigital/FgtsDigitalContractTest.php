@@ -23,7 +23,7 @@ class FgtsDigitalContractTest extends TestCase
     {
         $result = app(FixtureFgtsDigitalPortalClient::class)->execute(new FgtsDigitalPortalRequest(
             operation: FgtsDigitalOperation::QueryGuides,
-            officeId: 10,
+            tenantId: 10,
             clientId: 20,
             targetIdentifier: '12345678',
             pfx: 'sensitive-pfx',

@@ -2,14 +2,14 @@
 
 namespace Tests\Feature;
 
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Enums\Work\ProcessStatus;
 use App\Enums\Work\TaskStatus;
 use App\Models\Client;
-use App\Models\Office;
-use App\Models\OperationalProcess;
-use App\Models\OperationalTask;
+use App\Models\Tenant;
 use App\Models\User;
+use App\Models\WorkProcess;
+use App\Models\WorkTask;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -20,8 +20,8 @@ class WorkProcessDomainApiTest extends TestCase
 
     public function test_create_process_rejects_empty_tasks(): void
     {
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
-        $client = Client::factory()->forOffice($office)->create();
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $client = Client::factory()->forTenant($tenant)->create();
         Sanctum::actingAs($admin);
 
         $this->postJson('/api/v1/work/processes', [
@@ -35,8 +35,8 @@ class WorkProcessDomainApiTest extends TestCase
 
     public function test_create_accepts_quarterly_and_annual_periods(): void
     {
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
-        $client = Client::factory()->forOffice($office)->create();
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $client = Client::factory()->forTenant($tenant)->create();
         Sanctum::actingAs($admin);
 
         $quarterly = $this->postJson('/api/v1/work/processes', [
@@ -56,7 +56,7 @@ class WorkProcessDomainApiTest extends TestCase
             ->assertJsonPath('data.target_due_date', '2026-10-15')
             ->assertJsonPath('data.status', ProcessStatus::AFazer->value);
 
-        $this->assertDatabaseHas('operational_processes', [
+        $this->assertDatabaseHas('work_processes', [
             'id' => $quarterly->json('data.id'),
             'competence' => '2026-T3',
             'reference_period_type' => 'QUARTERLY',
@@ -74,8 +74,8 @@ class WorkProcessDomainApiTest extends TestCase
 
     public function test_rejects_invalid_period(): void
     {
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
-        $client = Client::factory()->forOffice($office)->create();
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $client = Client::factory()->forTenant($tenant)->create();
         Sanctum::actingAs($admin);
 
         $this->postJson('/api/v1/work/processes', [
@@ -89,8 +89,8 @@ class WorkProcessDomainApiTest extends TestCase
 
     public function test_status_derives_from_task_transitions(): void
     {
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
-        $client = Client::factory()->forOffice($office)->create();
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $client = Client::factory()->forTenant($tenant)->create();
         Sanctum::actingAs($admin);
 
         $created = $this->postJson('/api/v1/work/processes', [
@@ -111,25 +111,25 @@ class WorkProcessDomainApiTest extends TestCase
 
         $this->postJson("/api/v1/work/tasks/{$t1}/start", ['lock_version' => $t1Lock])
             ->assertOk();
-        $this->assertDatabaseHas('operational_processes', [
+        $this->assertDatabaseHas('work_processes', [
             'id' => $processId,
             'status' => ProcessStatus::EmProgresso->value,
         ]);
 
-        $t1Lock = (int) OperationalTask::query()->findOrFail($t1)->lock_version;
+        $t1Lock = (int) WorkTask::query()->findOrFail($t1)->lock_version;
         $this->postJson("/api/v1/work/tasks/{$t1}/block", [
             'lock_version' => $t1Lock,
             'reason' => 'Aguardando documento',
         ])->assertOk();
-        $this->assertDatabaseHas('operational_processes', [
+        $this->assertDatabaseHas('work_processes', [
             'id' => $processId,
             'status' => ProcessStatus::Impedido->value,
         ]);
 
-        $t1Lock = (int) OperationalTask::query()->findOrFail($t1)->lock_version;
+        $t1Lock = (int) WorkTask::query()->findOrFail($t1)->lock_version;
         $this->postJson("/api/v1/work/tasks/{$t1}/resume", ['lock_version' => $t1Lock])
             ->assertOk();
-        $t1Lock = (int) OperationalTask::query()->findOrFail($t1)->lock_version;
+        $t1Lock = (int) WorkTask::query()->findOrFail($t1)->lock_version;
         $this->postJson("/api/v1/work/tasks/{$t1}/complete", ['lock_version' => $t1Lock])
             ->assertOk();
         $this->postJson("/api/v1/work/tasks/{$t2}/dispense", [
@@ -137,7 +137,7 @@ class WorkProcessDomainApiTest extends TestCase
             'justification' => 'Não aplicável',
         ])->assertOk();
 
-        $this->assertDatabaseHas('operational_processes', [
+        $this->assertDatabaseHas('work_processes', [
             'id' => $processId,
             'status' => ProcessStatus::Concluido->value,
         ]);
@@ -145,19 +145,19 @@ class WorkProcessDomainApiTest extends TestCase
 
     public function test_archive_requires_terminal_status_and_listing_excludes_archived(): void
     {
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
-        $client = Client::factory()->forOffice($office)->create();
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $client = Client::factory()->forTenant($tenant)->create();
         Sanctum::actingAs($admin);
 
-        $open = OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        $open = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'status' => ProcessStatus::EmProgresso,
             'lock_version' => 1,
         ]);
-        OperationalTask::factory()->create([
-            'office_id' => $office->id,
-            'operational_process_id' => $open->id,
+        WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $open->id,
             'sort_order' => 1,
             'status' => TaskStatus::EmProgresso,
         ]);
@@ -166,16 +166,16 @@ class WorkProcessDomainApiTest extends TestCase
             'lock_version' => 1,
         ])->assertStatus(422);
 
-        $done = OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        $done = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'status' => ProcessStatus::Concluido,
             'lock_version' => 1,
             'title' => 'Concluído arquivável',
         ]);
-        OperationalTask::factory()->create([
-            'office_id' => $office->id,
-            'operational_process_id' => $done->id,
+        WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $done->id,
             'sort_order' => 1,
             'status' => TaskStatus::Concluida,
         ]);
@@ -201,10 +201,10 @@ class WorkProcessDomainApiTest extends TestCase
 
     public function test_coordinator_does_not_inherit_to_task_executor(): void
     {
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
-        $coordinator = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $coordMembership = $coordinator->memberships()->where('office_id', $office->id)->firstOrFail();
-        $client = Client::factory()->forOffice($office)->create();
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $coordinator = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $coordMembership = $coordinator->memberships()->where('tenant_id', $tenant->id)->firstOrFail();
+        $client = Client::factory()->forTenant($tenant)->create();
         Sanctum::actingAs($admin);
 
         $response = $this->postJson('/api/v1/work/processes', [
@@ -219,13 +219,13 @@ class WorkProcessDomainApiTest extends TestCase
         $this->assertNull($response->json('data.tasks.0.assignee_membership_id'));
     }
 
-    public function test_rejects_assignee_from_other_office(): void
+    public function test_rejects_assignee_from_other_tenant(): void
     {
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
-        $other = Office::factory()->create();
-        $foreign = User::factory()->forOffice($other, OfficeRole::Operator)->create();
-        $foreignMembership = $foreign->memberships()->where('office_id', $other->id)->firstOrFail();
-        $client = Client::factory()->forOffice($office)->create();
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $other = Tenant::factory()->create();
+        $foreign = User::factory()->forTenant($other, TenantRole::TenantUser)->create();
+        $foreignMembership = $foreign->memberships()->where('tenant_id', $other->id)->firstOrFail();
+        $client = Client::factory()->forTenant($tenant)->create();
         Sanctum::actingAs($admin);
 
         $this->postJson('/api/v1/work/processes', [
@@ -237,13 +237,13 @@ class WorkProcessDomainApiTest extends TestCase
         ])->assertStatus(422);
     }
 
-    /** @return array{User, Office} */
-    private function actor(OfficeRole $role): array
+    /** @return array{User, Tenant} */
+    private function actor(TenantRole $role): array
     {
-        $office = Office::factory()->create();
-        $user = User::factory()->forOffice($office, $role)->create();
-        $user->forceFill(['selected_office_id' => $office->id])->saveQuietly();
+        $tenant = Tenant::factory()->create();
+        $user = User::factory()->forTenant($tenant, $role)->create();
+        $user->forceFill(['selected_tenant_id' => $tenant->id])->saveQuietly();
 
-        return [$user, $office];
+        return [$user, $tenant];
     }
 }

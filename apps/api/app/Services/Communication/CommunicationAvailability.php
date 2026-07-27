@@ -19,9 +19,9 @@ final class CommunicationAvailability
     {
         $this->assertGatewayAvailable();
 
-        $inbox->loadMissing('office');
-        if (! $inbox->office?->communication_enabled) {
-            throw new DomainException('OFFICE_COMMUNICATION_DISABLED');
+        $inbox->loadMissing('tenant');
+        if (! $inbox->tenant?->communication_enabled) {
+            throw new DomainException('TENANT_COMMUNICATION_DISABLED');
         }
         if (! $inbox->is_enabled) {
             throw new DomainException('INBOX_COMMUNICATION_DISABLED');

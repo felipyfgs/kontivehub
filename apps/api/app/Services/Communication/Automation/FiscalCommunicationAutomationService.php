@@ -21,8 +21,8 @@ use App\Models\CommunicationConversation;
 use App\Models\CommunicationIdentity;
 use App\Models\CommunicationInbox;
 use App\Models\CommunicationMessage;
-use App\Models\Office;
 use App\Models\PgdasdArtifact;
+use App\Models\Tenant;
 use App\Services\Communication\CommunicationAvailability;
 use App\Services\Communication\Events\CommunicationEventRecorder;
 use App\Services\Communication\Media\CommunicationMediaStore;
@@ -53,25 +53,25 @@ final readonly class FiscalCommunicationAutomationService
      * @return Collection<int, ClientCommunicationDispatch>
      */
     public function scheduleAutomatic(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $moduleKey,
         string $submoduleKey,
         string $periodKey,
     ): Collection {
-        if (! $this->globallyAvailable($office) || ! preg_match('/^\d{4}-\d{2}$/', $periodKey)) {
+        if (! $this->globallyAvailable($tenant) || ! preg_match('/^\d{4}-\d{2}$/', $periodKey)) {
             return collect();
         }
 
         $policy = CommunicationAutomationPolicy::query()
             ->withoutGlobalScopes()
-            ->with('inbox')
-            ->where('office_id', $office->id)
+            ->with(['inbox' => fn ($query) => $query->withoutGlobalScopes()])
+            ->where('tenant_id', $tenant->id)
             ->where('module_key', $moduleKey)
             ->where('submodule_key', $submoduleKey)
             ->where('is_enabled', true)
             ->first();
-        $preference = $this->preference($office, $client, $moduleKey, $submoduleKey);
+        $preference = $this->preference($tenant, $client, $moduleKey, $submoduleKey);
         if ($policy === null
             || ! $policy->inbox instanceof CommunicationInbox
             || ! $policy->inbox->is_enabled
@@ -93,12 +93,12 @@ final readonly class FiscalCommunicationAutomationService
         $scheduledAt = $this->cutoff($periodKey, $policy);
         $created = collect();
         foreach ($identities as $identity) {
-            $key = $this->automaticKey($office, $client, $policy, $identity, $periodKey);
+            $key = $this->automaticKey($tenant, $client, $policy, $identity, $periodKey);
             try {
                 $dispatch = ClientCommunicationDispatch::query()->withoutGlobalScopes()->firstOrCreate(
-                    ['office_id' => $office->id, 'idempotency_key' => $key],
+                    ['tenant_id' => $tenant->id, 'idempotency_key' => $key],
                     $this->dispatchAttributes(
-                        $office,
+                        $tenant,
                         $client,
                         $preference,
                         $policy->inbox,
@@ -119,12 +119,12 @@ final readonly class FiscalCommunicationAutomationService
                     throw $error;
                 }
                 $dispatch = ClientCommunicationDispatch::query()->withoutGlobalScopes()
-                    ->where('office_id', $office->id)->where('idempotency_key', $key)->first();
+                    ->where('tenant_id', $tenant->id)->where('idempotency_key', $key)->first();
             }
             if ($dispatch instanceof ClientCommunicationDispatch && $dispatch->wasRecentlyCreated) {
                 $created->push($dispatch);
                 $this->events->record(
-                    (int) $office->id,
+                    (int) $tenant->id,
                     'FISCAL_COMMUNICATION_SCHEDULED',
                     [
                         'dispatch_id' => (int) $dispatch->id,
@@ -148,30 +148,30 @@ final readonly class FiscalCommunicationAutomationService
      * @return Collection<int, ClientCommunicationDispatch>
      */
     public function sendManual(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $moduleKey,
         string $submoduleKey,
         string $periodKey,
         ?int $actorUserId = null,
     ): Collection {
-        if (! $this->globallyAvailable($office) || ! preg_match('/^\d{4}-\d{2}$/', $periodKey)) {
+        if (! $this->globallyAvailable($tenant) || ! preg_match('/^\d{4}-\d{2}$/', $periodKey)) {
             throw new DomainException('COMMUNICATION_DISABLED_OR_PERIOD_INVALID');
         }
-        $preference = $this->preference($office, $client, $moduleKey, $submoduleKey);
+        $preference = $this->preference($tenant, $client, $moduleKey, $submoduleKey);
         if ($preference === null || ! $preference->whatsapp_enabled) {
             throw new DomainException('WHATSAPP_PREFERENCE_DISABLED');
         }
         $policy = CommunicationAutomationPolicy::query()->withoutGlobalScopes()
-            ->with('inbox')
-            ->where('office_id', $office->id)
+            ->with(['inbox' => fn ($query) => $query->withoutGlobalScopes()])
+            ->where('tenant_id', $tenant->id)
             ->where('module_key', $moduleKey)
             ->where('submodule_key', $submoduleKey)
             ->first();
         $inbox = $policy?->inbox;
         if (! $inbox instanceof CommunicationInbox) {
-            $inbox = CommunicationInbox::query()->withoutGlobalScope('office')
-                ->where('office_id', $office->id)->where('is_default', true)->first();
+            $inbox = CommunicationInbox::query()->withoutGlobalScope('tenant')
+                ->where('tenant_id', $tenant->id)->where('is_default', true)->first();
         }
         if (! $inbox instanceof CommunicationInbox) {
             throw new DomainException('DEFAULT_INBOX_MISSING');
@@ -187,7 +187,7 @@ final readonly class FiscalCommunicationAutomationService
             $key = hash('sha256', 'manual|'.Str::ulid().'|'.$identity->id);
             $dispatch = ClientCommunicationDispatch::query()->withoutGlobalScopes()->create(
                 $this->dispatchAttributes(
-                    $office,
+                    $tenant,
                     $client,
                     $preference,
                     $inbox,
@@ -214,18 +214,24 @@ final readonly class FiscalCommunicationAutomationService
     public function process(int $dispatchId): ?ClientCommunicationDispatch
     {
         $dispatch = ClientCommunicationDispatch::query()->withoutGlobalScopes()
-            ->with(['client', 'preference', 'inbox.office', 'identity'])
+            ->with([
+                'client' => fn ($query) => $query->withoutGlobalScopes(),
+                'preference' => fn ($query) => $query->withoutGlobalScopes(),
+                'inbox' => fn ($query) => $query->withoutGlobalScopes(),
+                'inbox.tenant' => fn ($query) => $query->withoutGlobalScopes(),
+                'identity' => fn ($query) => $query->withoutGlobalScopes(),
+            ])
             ->find($dispatchId);
         if (! $dispatch instanceof ClientCommunicationDispatch
             || $dispatch->status !== CommunicationDispatchStatus::Scheduled
             || $dispatch->scheduled_at?->isFuture()) {
             return $dispatch;
         }
-        $office = $dispatch->inbox?->office;
+        $tenant = $dispatch->inbox?->tenant;
         $client = $dispatch->client;
         $inbox = $dispatch->inbox;
         $identity = $dispatch->identity;
-        if (! $office instanceof Office || ! $client instanceof Client
+        if (! $tenant instanceof Tenant || ! $client instanceof Client
             || ! $inbox instanceof CommunicationInbox || ! $identity instanceof CommunicationIdentity) {
             return $this->fail($dispatch, 'DISPATCH_SCOPE_INVALID');
         }
@@ -238,7 +244,7 @@ final readonly class FiscalCommunicationAutomationService
         $metadata = is_array($dispatch->metadata) ? $dispatch->metadata : [];
         $automatic = ($metadata['trigger'] ?? null) === 'automatic';
         $resolution = $this->artifacts->resolve(
-            $office,
+            $tenant,
             $client,
             (string) $dispatch->module_key,
             (string) $dispatch->submodule_key,
@@ -250,12 +256,12 @@ final readonly class FiscalCommunicationAutomationService
         }
 
         try {
-            $bytes = $this->artifacts->read($resolution->artifact, (int) $office->id);
+            $bytes = $this->artifacts->read($resolution->artifact, (int) $tenant->id);
         } catch (Throwable) {
             return $this->fail($dispatch, 'DOCUMENT_READ_FAILED');
         }
         $storageContext = [
-            'office_id' => (int) $office->id,
+            'tenant_id' => (int) $tenant->id,
             'inbox_id' => (int) $inbox->id,
             'dispatch_id' => (int) $dispatch->id,
             'sha256' => $resolution->artifact->digest,
@@ -283,7 +289,7 @@ final readonly class FiscalCommunicationAutomationService
         try {
             $result = DB::transaction(function () use (
                 $dispatch,
-                $office,
+                $tenant,
                 $client,
                 $inbox,
                 $identity,
@@ -299,14 +305,14 @@ final readonly class FiscalCommunicationAutomationService
                 }
                 CommunicationIdentity::query()->withoutGlobalScopes()->whereKey($identity->id)->lockForUpdate()->firstOrFail();
                 $conversation = CommunicationConversation::query()->withoutGlobalScopes()
-                    ->where('office_id', $office->id)
+                    ->where('tenant_id', $tenant->id)
                     ->where('inbox_id', $inbox->id)
                     ->where('identity_id', $identity->id)
                     ->where('status', '!=', ConversationStatus::Resolved->value)
                     ->first();
                 if (! $conversation instanceof CommunicationConversation) {
                     $conversation = CommunicationConversation::query()->withoutGlobalScopes()->create([
-                        'office_id' => $office->id,
+                        'tenant_id' => $tenant->id,
                         'inbox_id' => $inbox->id,
                         'identity_id' => $identity->id,
                         'status' => ConversationStatus::Pending,
@@ -316,7 +322,7 @@ final readonly class FiscalCommunicationAutomationService
                     ]);
                 }
                 DB::table('communication_conversation_clients')->insertOrIgnore([
-                    'office_id' => $office->id,
+                    'tenant_id' => $tenant->id,
                     'conversation_id' => $conversation->id,
                     'client_id' => $client->id,
                     'created_at' => now(),
@@ -325,7 +331,7 @@ final readonly class FiscalCommunicationAutomationService
                 $body = $this->renderTemplate($locked, $client);
                 $providerId = 'fiscal-'.substr(hash('sha256', (string) $locked->idempotency_key), 0, 40);
                 $message = CommunicationMessage::query()->withoutGlobalScopes()->create([
-                    'office_id' => $office->id,
+                    'tenant_id' => $tenant->id,
                     'inbox_id' => $inbox->id,
                     'conversation_id' => $conversation->id,
                     'identity_id' => $identity->id,
@@ -348,7 +354,7 @@ final readonly class FiscalCommunicationAutomationService
                     'occurred_at' => now(),
                 ]);
                 $attachment = CommunicationAttachment::query()->withoutGlobalScopes()->create([
-                    'office_id' => $office->id,
+                    'tenant_id' => $tenant->id,
                     'message_id' => $message->id,
                     'object_id' => $stored['object_id'],
                     'original_name_encrypted' => $resolution->artifact->filename,
@@ -366,7 +372,7 @@ final readonly class FiscalCommunicationAutomationService
                 ])->save();
                 $entry = $this->outbox->enqueue($inbox, GatewayCommandType::SendMessage, [
                     'to' => (string) $identity->address_encrypted,
-                    'text' => $body,
+                    'kind' => MessageKind::Document->value,
                     'media' => [
                         'attachment_id' => (int) $attachment->id,
                         'mime_type' => $attachment->mime_type,
@@ -391,7 +397,7 @@ final readonly class FiscalCommunicationAutomationService
                     'metadata' => [...(is_array($locked->metadata) ? $locked->metadata : []), 'command_id' => $entry->command_id],
                 ])->save();
                 $this->events->record(
-                    (int) $office->id,
+                    (int) $tenant->id,
                     'FISCAL_MESSAGE_QUEUED',
                     [
                         'dispatch_id' => (int) $locked->id,
@@ -430,24 +436,24 @@ final readonly class FiscalCommunicationAutomationService
     }
 
     private function preference(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $moduleKey,
         string $submoduleKey,
     ): ?ClientCommunicationPreference {
         return ClientCommunicationPreference::query()->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('module_key', $moduleKey)
             ->where('submodule_key', $submoduleKey)
             ->first();
     }
 
-    private function globallyAvailable(Office $office): bool
+    private function globallyAvailable(Tenant $tenant): bool
     {
         return (bool) config('communication.enabled')
             && (bool) config('communication.gateway.enabled')
-            && (bool) $office->communication_enabled;
+            && (bool) $tenant->communication_enabled;
     }
 
     private function cutoff(string $periodKey, CommunicationAutomationPolicy $policy): CarbonImmutable
@@ -465,14 +471,14 @@ final readonly class FiscalCommunicationAutomationService
     }
 
     private function automaticKey(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         CommunicationAutomationPolicy $policy,
         CommunicationIdentity $identity,
         string $periodKey,
     ): string {
         return hash('sha256', implode('|', [
-            $office->id,
+            $tenant->id,
             $client->id,
             $policy->module_key,
             $policy->submodule_key,
@@ -486,7 +492,7 @@ final readonly class FiscalCommunicationAutomationService
 
     /** @return array<string, mixed> */
     private function dispatchAttributes(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         ClientCommunicationPreference $preference,
         CommunicationInbox $inbox,
@@ -503,7 +509,7 @@ final readonly class FiscalCommunicationAutomationService
         ?int $actorUserId = null,
     ): array {
         return [
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'preference_id' => $preference->id,
             'inbox_id' => $inbox->id,
@@ -562,7 +568,7 @@ final readonly class FiscalCommunicationAutomationService
             ]);
         if ($changed === 1) {
             $this->events->record(
-                (int) $dispatch->office_id,
+                (int) $dispatch->tenant_id,
                 'FISCAL_COMMUNICATION_SKIPPED',
                 [
                     'dispatch_id' => (int) $dispatch->id,
@@ -590,7 +596,7 @@ final readonly class FiscalCommunicationAutomationService
             ]);
         if ($changed === 1) {
             $this->events->record(
-                (int) $dispatch->office_id,
+                (int) $dispatch->tenant_id,
                 'FISCAL_COMMUNICATION_FAILED',
                 ['dispatch_id' => (int) $dispatch->id, 'reason' => mb_substr($code, 0, 80)],
                 inboxId: $dispatch->inbox_id !== null ? (int) $dispatch->inbox_id : null,

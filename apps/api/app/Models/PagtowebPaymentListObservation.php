@@ -2,15 +2,15 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use LogicException;
 
-#[Fillable(['office_id', 'client_id', 'filter_summary', 'returned_count', 'digest', 'observed_at', 'source_run_id', 'source_provenance', 'created_at'])]
+#[Fillable(['tenant_id', 'client_id', 'filter_summary', 'returned_count', 'digest', 'observed_at', 'source_run_id', 'source_provenance', 'created_at'])]
 class PagtowebPaymentListObservation extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     public $timestamps = false;
 

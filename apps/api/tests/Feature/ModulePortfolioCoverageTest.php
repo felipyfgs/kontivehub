@@ -13,7 +13,7 @@ use App\Models\Client;
 use App\Models\FiscalCategory;
 use App\Models\FiscalMonitoringRun;
 use App\Models\FiscalSnapshot;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\FiscalMonitoring\ModulePortfolio\ModulePortfolioQueryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -24,23 +24,23 @@ class ModulePortfolioCoverageTest extends TestCase
 
     public function test_overview_rows_and_filter_share_partial_aggregation_for_mixed_dimensions(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->for($office)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->for($tenant)->create();
         $this->category('DCTFWEB_FULL', 'INTEGRA_DCTFWEB', FiscalCoverage::Full, 1);
         $this->category('MIT_UNSUPPORTED', 'INTEGRA_MIT', FiscalCoverage::Unsupported, 2);
-        $this->snapshot($office, $client, 'INTEGRA_DCTFWEB', FiscalCoverage::Full);
-        $this->snapshot($office, $client, 'INTEGRA_MIT', FiscalCoverage::Unsupported);
+        $this->snapshot($tenant, $client, 'INTEGRA_DCTFWEB', FiscalCoverage::Full);
+        $this->snapshot($tenant, $client, 'INTEGRA_MIT', FiscalCoverage::Unsupported);
         $portfolio = app(ModulePortfolioQueryService::class);
 
         $overview = $portfolio->overview(
-            $office,
+            $tenant,
             FiscalModuleKey::Dctfweb,
             ModulePortfolioFilters::fromRequest([]),
         );
         $this->assertSame(FiscalCoverage::Partial->value, $overview->coverage);
 
         $page = $portfolio->clients(
-            $office,
+            $tenant,
             FiscalModuleKey::Dctfweb,
             ModulePortfolioFilters::fromRequest([]),
         );
@@ -50,12 +50,12 @@ class ModulePortfolioCoverageTest extends TestCase
         $this->assertNull($page->items()[0]->document?->href);
 
         $partial = $portfolio->clients(
-            $office,
+            $tenant,
             FiscalModuleKey::Dctfweb,
             ModulePortfolioFilters::fromRequest(['coverage' => 'PARTIAL']),
         );
         $full = $portfolio->clients(
-            $office,
+            $tenant,
             FiscalModuleKey::Dctfweb,
             ModulePortfolioFilters::fromRequest(['coverage' => 'FULL']),
         );
@@ -72,7 +72,7 @@ class ModulePortfolioCoverageTest extends TestCase
         FiscalCategory::query()->create([
             'code' => $code,
             'name' => $code,
-            'module_key' => 'dctfweb_mit',
+            'module_key' => 'dctfweb',
             'default_coverage' => $coverage,
             'default_mutability' => FiscalMutability::ReadOnly,
             'system_code' => $systemCode,
@@ -83,13 +83,13 @@ class ModulePortfolioCoverageTest extends TestCase
     }
 
     private function snapshot(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $systemCode,
         FiscalCoverage $coverage,
     ): void {
         $run = FiscalMonitoringRun::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'system_code' => $systemCode,
             'service_code' => str_replace('INTEGRA_', '', $systemCode),
@@ -102,7 +102,7 @@ class ModulePortfolioCoverageTest extends TestCase
             'mutability' => FiscalMutability::ReadOnly,
         ]);
         FiscalSnapshot::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'run_id' => $run->id,
             'client_id' => $client->id,
             'system_code' => $systemCode,

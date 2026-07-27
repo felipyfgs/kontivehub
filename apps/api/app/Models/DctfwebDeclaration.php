@@ -8,14 +8,14 @@ use App\Enums\DctfwebTransmissionStatus;
 use App\Enums\FiscalCoverage;
 use App\Enums\FiscalPaymentStatus;
 use App\Enums\FiscalSituation;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'client_id',
     'competence_id',
     'period_key',
@@ -41,7 +41,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 ])]
 class DctfwebDeclaration extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {
@@ -95,7 +95,7 @@ class DctfwebDeclaration extends Model
     {
         return [
             'id' => $this->id,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'client_id' => $this->client_id,
             'competence_id' => $this->competence_id,
             'period_key' => $this->period_key,

@@ -2,13 +2,13 @@
 
 namespace App\Console\Commands;
 
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Verificação somente leitura de isolamento multi-tenant / consistência de office_id.
+ * Verificação somente leitura de isolamento multi-tenant / consistência de tenant_id.
  * Não corrige dados; emite diagnóstico sanitizado (sem PFX, vault payload ou QSA).
  */
 class OpsPreflightTenantIsolationCommand extends Command
@@ -21,32 +21,32 @@ class OpsPreflightTenantIsolationCommand extends Command
 
     public function handle(): int
     {
-        if (! Schema::hasTable('offices') || ! Schema::hasTable('office_user')) {
-            $this->error('Tabelas offices/office_user ausentes.');
+        if (! Schema::hasTable('tenants') || ! Schema::hasTable('tenant_memberships')) {
+            $this->error('Tabelas tenants/tenant_memberships ausentes.');
 
             return self::FAILURE;
         }
 
         $membershipIssues = $this->checkMemberships();
-        $nullOfficeId = $this->checkNullOfficeIds();
+        $nullTenantId = $this->checkNullTenantIds();
         $vaultOrphans = $this->checkVaultOrphans();
         $pendingMigrations = $this->checkPendingMigrations();
         $duplicateCritical = $this->checkCriticalDuplicates();
 
         $blockers = [
-            'membership_orphans' => $membershipIssues['orphan_office'] + $membershipIssues['orphan_user'],
+            'membership_orphans' => $membershipIssues['orphan_tenant'] + $membershipIssues['orphan_user'],
             'invalid_roles' => $membershipIssues['invalid_roles'],
-            // Somente colunas office_id NOT NULL com nulos (violação de invariante).
-            'null_office_id_rows' => $nullOfficeId['total_null_required'],
+            // Somente colunas tenant_id NOT NULL com nulos (violação de invariante).
+            'null_tenant_id_rows' => $nullTenantId['total_null_required'],
             'critical_duplicates' => $duplicateCritical['total'],
             'pending_migrations' => count($pendingMigrations['pending']),
         ];
 
         $warnings = [
-            'active_membership_on_inactive_office' => $membershipIssues['active_on_inactive_office'],
+            'active_membership_on_inactive_tenant' => $membershipIssues['active_on_inactive_tenant'],
             'users_with_multiple_active_memberships' => $membershipIssues['multi_active_users'],
-            'offices_without_active_membership' => $membershipIssues['offices_without_active'],
-            'nullable_office_id_null_rows' => $nullOfficeId['total_null_optional'],
+            'tenants_without_active_membership' => $membershipIssues['tenants_without_active'],
+            'nullable_tenant_id_null_rows' => $nullTenantId['total_null_optional'],
             'vault_orphan_scan_limited' => $vaultOrphans['limited'] ? 1 : 0,
             'vault_null_refs' => $vaultOrphans['null_ref_total'],
         ];
@@ -59,7 +59,7 @@ class OpsPreflightTenantIsolationCommand extends Command
             'warnings' => $warnings,
             'details' => [
                 'memberships' => $membershipIssues,
-                'null_office_id' => $nullOfficeId,
+                'null_tenant_id' => $nullTenantId,
                 'vault' => $vaultOrphans,
                 'pending_migrations' => $pendingMigrations,
                 'critical_duplicates' => $duplicateCritical,
@@ -73,15 +73,15 @@ class OpsPreflightTenantIsolationCommand extends Command
             $this->table(
                 ['Checagem', 'Quantidade', 'Severidade'],
                 [
-                    ['Memberships órfãs (office/user)', $blockers['membership_orphans'], 'bloqueio'],
-                    ['Roles inválidos em office_user', $blockers['invalid_roles'], 'bloqueio'],
-                    ['office_id nulo em colunas obrigatórias', $blockers['null_office_id_rows'], 'bloqueio'],
+                    ['Memberships órfãs (tenant/user)', $blockers['membership_orphans'], 'bloqueio'],
+                    ['Roles inválidos em tenant_memberships', $blockers['invalid_roles'], 'bloqueio'],
+                    ['tenant_id nulo em colunas obrigatórias', $blockers['null_tenant_id_rows'], 'bloqueio'],
                     ['Duplicidades críticas', $blockers['critical_duplicates'], 'bloqueio'],
                     ['Migrations pendentes', $blockers['pending_migrations'], 'bloqueio'],
-                    ['Membership ativa em office inativo', $warnings['active_membership_on_inactive_office'], 'aviso'],
+                    ['Membership ativa em tenant inativo', $warnings['active_membership_on_inactive_tenant'], 'aviso'],
                     ['Usuários com múltiplas memberships ativas', $warnings['users_with_multiple_active_memberships'], 'aviso'],
-                    ['Offices sem membership ativa', $warnings['offices_without_active_membership'], 'aviso'],
-                    ['office_id nulo em colunas nullable (ex.: audit)', $warnings['nullable_office_id_null_rows'], 'aviso'],
+                    ['Tenants sem membership ativa', $warnings['tenants_without_active_membership'], 'aviso'],
+                    ['tenant_id nulo em colunas nullable (ex.: audit)', $warnings['nullable_tenant_id_null_rows'], 'aviso'],
                     ['Scan de vault limitado (sem catálogo)', $warnings['vault_orphan_scan_limited'], 'aviso'],
                     ['Referências vault nulas em colunas esperadas', $warnings['vault_null_refs'], 'aviso'],
                 ],
@@ -100,40 +100,40 @@ class OpsPreflightTenantIsolationCommand extends Command
 
     /**
      * @return array{
-     *     orphan_office: int,
+     *     orphan_tenant: int,
      *     orphan_user: int,
      *     invalid_roles: int,
-     *     active_on_inactive_office: int,
+     *     active_on_inactive_tenant: int,
      *     multi_active_users: int,
-     *     offices_without_active: int,
+     *     tenants_without_active: int,
      *     samples: array<string, list<array<string, mixed>>>
      * }
      */
     private function checkMemberships(): array
     {
-        $validRoles = array_map(fn (OfficeRole $r) => $r->value, OfficeRole::cases());
+        $validRoles = array_map(fn (TenantRole $r) => $r->value, TenantRole::cases());
 
-        $orphanOffice = (int) DB::table('office_user as ou')
-            ->leftJoin('offices as o', 'o.id', '=', 'ou.office_id')
+        $orphanTenant = (int) DB::table('tenant_memberships as ou')
+            ->leftJoin('tenants as o', 'o.id', '=', 'ou.tenant_id')
             ->whereNull('o.id')
             ->count();
 
-        $orphanUser = (int) DB::table('office_user as ou')
+        $orphanUser = (int) DB::table('tenant_memberships as ou')
             ->leftJoin('users as u', 'u.id', '=', 'ou.user_id')
             ->whereNull('u.id')
             ->count();
 
-        $invalidRoles = (int) DB::table('office_user')
+        $invalidRoles = (int) DB::table('tenant_memberships')
             ->whereNotIn('role', $validRoles)
             ->count();
 
-        $activeOnInactive = (int) DB::table('office_user as ou')
-            ->join('offices as o', 'o.id', '=', 'ou.office_id')
+        $activeOnInactive = (int) DB::table('tenant_memberships as ou')
+            ->join('tenants as o', 'o.id', '=', 'ou.tenant_id')
             ->where('ou.is_active', true)
             ->where('o.is_active', false)
             ->count();
 
-        $multiActiveUsers = (int) DB::table('office_user')
+        $multiActiveUsers = (int) DB::table('tenant_memberships')
             ->where('is_active', true)
             ->select('user_id')
             ->groupBy('user_id')
@@ -141,9 +141,9 @@ class OpsPreflightTenantIsolationCommand extends Command
             ->get()
             ->count();
 
-        $officesWithoutActive = (int) DB::table('offices as o')
-            ->leftJoin('office_user as ou', function ($join): void {
-                $join->on('ou.office_id', '=', 'o.id')
+        $tenantsWithoutActive = (int) DB::table('tenants as o')
+            ->leftJoin('tenant_memberships as ou', function ($join): void {
+                $join->on('ou.tenant_id', '=', 'o.id')
                     ->where('ou.is_active', '=', true);
             })
             ->where('o.is_active', true)
@@ -151,24 +151,24 @@ class OpsPreflightTenantIsolationCommand extends Command
             ->count();
 
         $samples = [
-            'orphan_office' => DB::table('office_user as ou')
-                ->leftJoin('offices as o', 'o.id', '=', 'ou.office_id')
+            'orphan_tenant' => DB::table('tenant_memberships as ou')
+                ->leftJoin('tenants as o', 'o.id', '=', 'ou.tenant_id')
                 ->whereNull('o.id')
                 ->limit(20)
-                ->get(['ou.id', 'ou.office_id', 'ou.user_id'])
+                ->get(['ou.id', 'ou.tenant_id', 'ou.user_id'])
                 ->map(fn ($r) => [
                     'membership_id' => (int) $r->id,
-                    'office_id' => (int) $r->office_id,
+                    'tenant_id' => (int) $r->tenant_id,
                     'user_id' => (int) $r->user_id,
                 ])
                 ->all(),
-            'invalid_roles' => DB::table('office_user')
+            'invalid_roles' => DB::table('tenant_memberships')
                 ->whereNotIn('role', $validRoles)
                 ->limit(20)
-                ->get(['id', 'office_id', 'user_id', 'role'])
+                ->get(['id', 'tenant_id', 'user_id', 'role'])
                 ->map(fn ($r) => [
                     'membership_id' => (int) $r->id,
-                    'office_id' => (int) $r->office_id,
+                    'tenant_id' => (int) $r->tenant_id,
                     'user_id' => (int) $r->user_id,
                     'role' => (string) $r->role,
                 ])
@@ -176,18 +176,18 @@ class OpsPreflightTenantIsolationCommand extends Command
         ];
 
         return [
-            'orphan_office' => $orphanOffice,
+            'orphan_tenant' => $orphanTenant,
             'orphan_user' => $orphanUser,
             'invalid_roles' => $invalidRoles,
-            'active_on_inactive_office' => $activeOnInactive,
+            'active_on_inactive_tenant' => $activeOnInactive,
             'multi_active_users' => $multiActiveUsers,
-            'offices_without_active' => $officesWithoutActive,
+            'tenants_without_active' => $tenantsWithoutActive,
             'samples' => $samples,
         ];
     }
 
     /**
-     * Heurística: tabelas com coluna office_id e contagem de nulos.
+     * Heurística: tabelas com coluna tenant_id e contagem de nulos.
      * NOT NULL com nulos → bloqueio; nullable com nulos → aviso (escopo global legítimo).
      *
      * @return array{
@@ -198,9 +198,9 @@ class OpsPreflightTenantIsolationCommand extends Command
      *     scanned_tables: int
      * }
      */
-    private function checkNullOfficeIds(): array
+    private function checkNullTenantIds(): array
     {
-        $columns = $this->officeIdColumns();
+        $columns = $this->tenantIdColumns();
         $requiredHits = [];
         $optionalHits = [];
         $totalRequired = 0;
@@ -211,7 +211,7 @@ class OpsPreflightTenantIsolationCommand extends Command
             $nullable = $meta['nullable'];
 
             try {
-                $count = (int) DB::table($table)->whereNull('office_id')->count();
+                $count = (int) DB::table($table)->whereNull('tenant_id')->count();
             } catch (\Throwable) {
                 continue;
             }
@@ -242,63 +242,21 @@ class OpsPreflightTenantIsolationCommand extends Command
     /**
      * @return list<array{table: string, nullable: bool}>
      */
-    private function officeIdColumns(): array
+    private function tenantIdColumns(): array
     {
-        $driver = Schema::getConnection()->getDriverName();
+        $rows = DB::select(<<<'SQL'
+            SELECT table_name, is_nullable
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND column_name = 'tenant_id'
+              AND table_name NOT LIKE 'pg_%'
+            ORDER BY table_name
+        SQL);
 
-        if ($driver === 'pgsql') {
-            $rows = DB::select(<<<'SQL'
-                SELECT table_name, is_nullable
-                FROM information_schema.columns
-                WHERE table_schema = current_schema()
-                  AND column_name = 'office_id'
-                  AND table_name NOT LIKE 'pg_%'
-                ORDER BY table_name
-            SQL);
-
-            return array_values(array_map(fn ($r) => [
-                'table' => (string) $r->table_name,
-                'nullable' => strtoupper((string) $r->is_nullable) === 'YES',
-            ], $rows));
-        }
-
-        if ($driver === 'sqlite') {
-            $names = array_map(
-                fn ($r) => (string) $r->name,
-                DB::select("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"),
-            );
-            $out = [];
-            foreach ($names as $name) {
-                if (! Schema::hasColumn($name, 'office_id')) {
-                    continue;
-                }
-                $nullable = true;
-                try {
-                    $cols = DB::select('PRAGMA table_info('.$this->quoteSqliteIdent($name).')');
-                    foreach ($cols as $col) {
-                        if ((string) ($col->name ?? '') === 'office_id') {
-                            // notnull=1 significa NOT NULL
-                            $nullable = ((int) ($col->notnull ?? 0)) === 0;
-                            break;
-                        }
-                    }
-                } catch (\Throwable) {
-                    // assume nullable se não der para inspecionar
-                }
-                $out[] = ['table' => $name, 'nullable' => $nullable];
-            }
-
-            return $out;
-        }
-
-        $out = [];
-        foreach (Schema::getTableListing() as $name) {
-            if (Schema::hasColumn($name, 'office_id')) {
-                $out[] = ['table' => $name, 'nullable' => true];
-            }
-        }
-
-        return $out;
+        return array_values(array_map(fn ($row) => [
+            'table' => (string) $row->table_name,
+            'nullable' => strtoupper((string) $row->is_nullable) === 'YES',
+        ], $rows));
     }
 
     /**
@@ -316,8 +274,8 @@ class OpsPreflightTenantIsolationCommand extends Command
         $known = [
             ['client_credentials', 'vault_object_id'],
             ['dfe_documents', 'vault_object_id'],
-            ['office_credentials', 'vault_object_id'],
-            ['fiscal_document_quarantine', 'vault_object_id'],
+            ['tenant_credentials', 'vault_object_id'],
+            ['fiscal_document_quarantines', 'vault_object_id'],
             ['document_import_batches', 'spool_vault_object_id'],
             ['document_import_batch_items', 'spool_vault_object_id'],
             ['client_custom_fields', 'vault_object_id'],
@@ -376,55 +334,23 @@ class OpsPreflightTenantIsolationCommand extends Command
      */
     private function discoverVaultRefColumns(): array
     {
-        $driver = Schema::getConnection()->getDriverName();
         $pairs = [];
 
-        if ($driver === 'pgsql') {
-            $rows = DB::select(<<<'SQL'
-                SELECT table_name, column_name
-                FROM information_schema.columns
-                WHERE table_schema = current_schema()
-                  AND (
-                    column_name LIKE '%vault_object_id%'
-                    OR column_name LIKE '%vault%object%'
-                  )
-                ORDER BY table_name, column_name
-            SQL);
-            foreach ($rows as $r) {
-                $pairs[] = [(string) $r->table_name, (string) $r->column_name];
-            }
-
-            return $pairs;
+        $rows = DB::select(<<<'SQL'
+            SELECT table_name, column_name
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND (
+                column_name LIKE '%vault_object_id%'
+                OR column_name LIKE '%vault%object%'
+              )
+            ORDER BY table_name, column_name
+        SQL);
+        foreach ($rows as $row) {
+            $pairs[] = [(string) $row->table_name, (string) $row->column_name];
         }
 
-        if ($driver === 'sqlite') {
-            $names = array_map(
-                fn ($r) => (string) $r->name,
-                DB::select("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"),
-            );
-            foreach ($names as $name) {
-                try {
-                    $cols = DB::select('PRAGMA table_info('.$this->quoteSqliteIdent($name).')');
-                } catch (\Throwable) {
-                    continue;
-                }
-                foreach ($cols as $col) {
-                    $colName = (string) ($col->name ?? '');
-                    if ($colName !== '' && str_contains($colName, 'vault')) {
-                        $pairs[] = [$name, $colName];
-                    }
-                }
-            }
-
-            return $pairs;
-        }
-
-        return [];
-    }
-
-    private function quoteSqliteIdent(string $name): string
-    {
-        return '"'.str_replace('"', '""', $name).'"';
+        return $pairs;
     }
 
     /**
@@ -472,31 +398,31 @@ class OpsPreflightTenantIsolationCommand extends Command
     {
         $items = [];
 
-        // office_user: unique (office_id, user_id) — se constraint ausente em algum env, detecta
-        $dupMemberships = DB::table('office_user')
-            ->select(['office_id', 'user_id', DB::raw('COUNT(*) as total')])
-            ->groupBy('office_id', 'user_id')
+        // tenant_memberships: unique (tenant_id, user_id) — se constraint ausente em algum env, detecta
+        $dupMemberships = DB::table('tenant_memberships')
+            ->select(['tenant_id', 'user_id', DB::raw('COUNT(*) as total')])
+            ->groupBy('tenant_id', 'user_id')
             ->havingRaw('COUNT(*) > 1')
             ->get();
 
         foreach ($dupMemberships as $row) {
             $items[] = [
-                'kind' => 'office_user_pair',
-                'office_id' => (int) $row->office_id,
+                'kind' => 'tenant_memberships_pair',
+                'tenant_id' => (int) $row->tenant_id,
                 'user_id' => (int) $row->user_id,
                 'count' => (int) $row->total,
             ];
         }
 
-        if (Schema::hasTable('offices') && Schema::hasColumn('offices', 'slug')) {
-            $dupSlugs = DB::table('offices')
+        if (Schema::hasTable('tenants') && Schema::hasColumn('tenants', 'slug')) {
+            $dupSlugs = DB::table('tenants')
                 ->select(['slug', DB::raw('COUNT(*) as total')])
                 ->groupBy('slug')
                 ->havingRaw('COUNT(*) > 1')
                 ->get();
             foreach ($dupSlugs as $row) {
                 $items[] = [
-                    'kind' => 'office_slug',
+                    'kind' => 'tenant_slug',
                     'slug' => (string) $row->slug,
                     'count' => (int) $row->total,
                 ];

@@ -4,7 +4,7 @@ use App\Services\Fiscal\Demo\DemoEnvironmentGuard;
 use Database\Seeders\FiscalMonitoringDemoSeeder;
 
 /**
- * Fixtures fiscais demonstrativas (office demo only, local/testing).
+ * Fixtures fiscais demonstrativas (tenant demo only, local/testing).
  *
  * NUNCA habilita seeder, origem sintética ou fallback em production —
  * o guard de ambiente prevalece sobre qualquer variável DEMO_*.
@@ -21,10 +21,10 @@ return [
     'enabled' => filter_var(env('FISCAL_DEMO_ENABLED', true), FILTER_VALIDATE_BOOL),
 
     /** Slug do tenant contábil principal (canário / ex-demo). */
-    'office_slug' => env('FISCAL_DEMO_OFFICE_SLUG', 'contador'),
+    'tenant_slug' => env('FISCAL_DEMO_TENANT_SLUG', 'contador'),
 
-    /** Office sentinela de isolamento (mesmo CNPJ, nunca na carteira demo). */
-    'sentinel_office_slug' => env('FISCAL_DEMO_SENTINEL_SLUG', 'plataforma'),
+    /** Tenant sentinela de isolamento (mesmo CNPJ, nunca na carteira demo). */
+    'sentinel_tenant_slug' => env('FISCAL_DEMO_SENTINEL_SLUG', 'plataforma'),
 
     /**
      * Data-âncora determinística (ISO-8601). Competências, vencimentos e

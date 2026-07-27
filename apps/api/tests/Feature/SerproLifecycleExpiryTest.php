@@ -8,10 +8,9 @@ use App\Enums\SerproEnvironment;
 use App\Enums\TaxProxyPowerSource;
 use App\Enums\TaxProxyPowerStatus;
 use App\Models\Client;
-use App\Models\ClientProcuracaoSnapshot;
 use App\Models\ClientProcuracaoSync;
-use App\Models\Office;
 use App\Models\TaxProxyPower;
+use App\Models\Tenant;
 use App\Services\Serpro\SerproLifecycleMonitor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -23,10 +22,10 @@ class SerproLifecycleExpiryTest extends TestCase
     public function test_daily_scan_expires_proxy_evidence_locally_and_uses_30_7_1_windows(): void
     {
         config(['serpro.lifecycle.alert_days' => [30, 7, 1]]);
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
-        $snapshot = ClientProcuracaoSnapshot::query()->create([
-            'office_id' => $office->id,
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
+        $sync = ClientProcuracaoSync::query()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'environment' => SerproEnvironment::Trial,
             'status' => ClientProcuracaoSyncStatus::Authorized,
@@ -34,11 +33,8 @@ class SerproLifecycleExpiryTest extends TestCase
             'valid_to' => now()->subDay(),
             'power_codes' => ['00103'],
         ]);
-        $canonical = ClientProcuracaoSync::factory()->forClient($client)->authorized()->create([
-            'valid_to' => now()->subDay(),
-        ]);
         $power = TaxProxyPower::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'environment' => SerproEnvironment::Trial,
             'author_identity' => '11222333000181',
@@ -55,9 +51,8 @@ class SerproLifecycleExpiryTest extends TestCase
         $result = app(SerproLifecycleMonitor::class)->scan();
 
         $this->assertSame(TaxProxyPowerStatus::Expired, $power->fresh()->status);
-        $this->assertSame(ClientProcuracaoSyncStatus::Expired, $snapshot->fresh()->status);
-        $this->assertSame(ClientProcuracaoSyncStatus::Expired, $canonical->fresh()->status);
-        $this->assertSame(1, $result['scanned']['procuracao_snapshots_expired']);
+        $this->assertSame(ClientProcuracaoSyncStatus::Expired, $sync->fresh()->status);
+        $this->assertSame(1, $result['scanned']['procuracao_syncs_expired']);
         $this->assertContains('EXPIRED', array_column($result['alerts'], 'severity'));
     }
 }

@@ -6,7 +6,7 @@ use App\Enums\MeiAutomationStatus;
 use App\Enums\MeiProvider;
 use App\Models\Client;
 use App\Models\MeiAutomationAttempt;
-use App\Models\Office;
+use App\Models\Tenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -16,10 +16,10 @@ class MeiAutomationAttemptTest extends TestCase
 
     public function test_public_payload_omits_internal_and_sensitive_fields(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
         $attempt = MeiAutomationAttempt::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'operation_key' => 'pgmei.dividaativa',
             'provider' => MeiProvider::ReceitaPortal,
@@ -35,7 +35,7 @@ class MeiAutomationAttemptTest extends TestCase
 
         $payload = $attempt->toPublicArray();
 
-        self::assertArrayNotHasKey('office_id', $payload);
+        self::assertArrayNotHasKey('tenant_id', $payload);
         self::assertArrayNotHasKey('idempotency_key', $payload);
         self::assertArrayNotHasKey('request_fingerprint', $payload);
         self::assertArrayNotHasKey('external_job_id', $payload);

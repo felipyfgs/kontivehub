@@ -4,9 +4,9 @@ namespace App\Services\Fiscal\Guides;
 
 use App\Contracts\GuideEmissionClient;
 use App\Enums\TaxGuidePaymentStatus;
-use App\Models\Office;
 use App\Models\TaxGuide;
 use App\Models\TaxGuidePaymentConfirmation;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use App\Services\Fiscal\Guides\DTO\GuidePaymentLookupRequest;
@@ -30,14 +30,14 @@ final class GuidePaymentService
      *
      * @return array{guide:TaxGuide,confirmation:?TaxGuidePaymentConfirmation,status:string}
      */
-    public function lookupAndConfirm(Office $office, TaxGuide $guide, ?User $user = null): array
+    public function lookupAndConfirm(Tenant $tenant, TaxGuide $guide, ?User $user = null): array
     {
-        $this->assertTenant($office, $guide);
+        $this->assertTenant($tenant, $guide);
 
         $version = $guide->currentVersion()->withoutGlobalScopes()->first();
 
         $lookup = $this->client->lookupPayment(new GuidePaymentLookupRequest(
-            officeId: (int) $office->id,
+            tenantId: (int) $tenant->id,
             clientId: (int) $guide->client_id,
             systemCode: $guide->system_code,
             serviceCode: $guide->service_code,
@@ -67,7 +67,7 @@ final class GuidePaymentService
                 subject: $guide,
                 context: ['official' => true],
                 userId: $user?->id,
-                officeId: (int) $office->id,
+                tenantId: (int) $tenant->id,
             );
 
             return ['guide' => $guide->fresh(), 'confirmation' => null, 'status' => $lookup->status];
@@ -82,7 +82,7 @@ final class GuidePaymentService
         }
 
         $confirmation = $this->recordOfficial(
-            office: $office,
+            tenant: $tenant,
             guide: $guide,
             source: $lookup->source ?? 'INTEGRA_PAGAMENTO',
             externalId: $lookup->externalId,
@@ -106,7 +106,7 @@ final class GuidePaymentService
      * Registro explícito de confirmação oficial (adapter/job).
      */
     public function recordOfficial(
-        Office $office,
+        Tenant $tenant,
         TaxGuide $guide,
         string $source,
         string $externalId,
@@ -118,13 +118,13 @@ final class GuidePaymentService
         ?User $user,
         ?int $versionId = null,
     ): TaxGuidePaymentConfirmation {
-        $this->assertTenant($office, $guide);
+        $this->assertTenant($tenant, $guide);
 
         $digest = GuideIdempotency::paymentEvidenceDigest($source, $externalId);
 
         $existing = TaxGuidePaymentConfirmation::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('evidence_digest', $digest)
             ->first();
 
@@ -133,7 +133,7 @@ final class GuidePaymentService
         }
 
         return DB::transaction(function () use (
-            $office,
+            $tenant,
             $guide,
             $source,
             $externalId,
@@ -149,14 +149,14 @@ final class GuidePaymentService
             $stored = null;
             if ($evidenceBytes !== null && $evidenceBytes !== '') {
                 $stored = $this->storage->storePaymentEvidence(
-                    (int) $office->id,
+                    (int) $tenant->id,
                     $evidenceBytes,
                     $contentType ?? 'application/json',
                 );
             }
 
             $confirmation = TaxGuidePaymentConfirmation::query()->create([
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'tax_guide_id' => $guide->id,
                 'tax_guide_version_id' => $versionId ?? $guide->current_version_id,
                 'source' => strtoupper($source),
@@ -195,7 +195,7 @@ final class GuidePaymentService
                     // sem vault_object_id
                 ],
                 userId: $user?->id,
-                officeId: (int) $office->id,
+                tenantId: (int) $tenant->id,
             );
 
             return $confirmation;
@@ -212,9 +212,9 @@ final class GuidePaymentService
             : TaxGuidePaymentStatus::from((string) $guide->payment_status);
     }
 
-    private function assertTenant(Office $office, TaxGuide $guide): void
+    private function assertTenant(Tenant $tenant, TaxGuide $guide): void
     {
-        if ((int) $guide->office_id !== (int) $office->id) {
+        if ((int) $guide->tenant_id !== (int) $tenant->id) {
             throw GuideException::notFound();
         }
     }

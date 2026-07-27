@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Jobs\Fiscal\ExecuteFiscalMonitoringRunJob;
 use App\Models\FiscalMonitoringRun;
 use App\Models\User;
@@ -23,7 +23,7 @@ class PgdasdPortfolioConsultHttpTest extends TestCase
         Http::fake();
 
         $seed = $this->seedSimplesNacionalPortfolio();
-        $this->actingAsOfficeUser($seed['operator']);
+        $this->actingAsTenantUser($seed['operator']);
 
         $response = $this->postJson('/api/v1/fiscal/runs', [
             'client_id' => $seed['sn']->id,
@@ -58,7 +58,7 @@ class PgdasdPortfolioConsultHttpTest extends TestCase
         Http::fake();
 
         $seed = $this->seedSimplesNacionalPortfolio();
-        $this->actingAsOfficeUser($seed['viewer']);
+        $this->actingAsTenantUser($seed['viewer']);
 
         $this->postJson('/api/v1/fiscal/runs', [
             'client_id' => $seed['sn']->id,
@@ -71,14 +71,14 @@ class PgdasdPortfolioConsultHttpTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_rejects_client_from_another_office(): void
+    public function test_rejects_client_from_another_tenant(): void
     {
         Queue::fake();
         Http::fake();
 
         $seed = $this->seedSimplesNacionalPortfolio();
         $other = $this->seedSimplesNacionalPortfolio();
-        $this->actingAsOfficeUser($seed['operator']);
+        $this->actingAsTenantUser($seed['operator']);
 
         $this->postJson('/api/v1/fiscal/runs', [
             'client_id' => $other['sn']->id,
@@ -98,7 +98,7 @@ class PgdasdPortfolioConsultHttpTest extends TestCase
 
         $seed = $this->seedSimplesNacionalPortfolio();
         $other = $this->seedSimplesNacionalPortfolio();
-        $this->actingAsOfficeUser($seed['operator']);
+        $this->actingAsTenantUser($seed['operator']);
 
         $created = $this->postJson('/api/v1/fiscal/runs', [
             'client_id' => $seed['sn']->id,
@@ -109,8 +109,8 @@ class PgdasdPortfolioConsultHttpTest extends TestCase
 
         $runId = (int) $created->json('data.id');
 
-        $foreignOperator = User::factory()->forOffice($other['office'], OfficeRole::Operator)->create();
-        $this->actingAsOfficeUser($foreignOperator);
+        $foreignOperator = User::factory()->forTenant($other['tenant'], TenantRole::TenantUser)->create();
+        $this->actingAsTenantUser($foreignOperator);
 
         $this->getJson('/api/v1/fiscal/runs/'.$runId)
             ->assertNotFound();

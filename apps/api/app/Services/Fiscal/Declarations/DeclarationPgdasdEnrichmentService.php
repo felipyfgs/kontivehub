@@ -5,10 +5,10 @@ namespace App\Services\Fiscal\Declarations;
 use App\Enums\FiscalSituation;
 use App\Enums\PgdasdDeclarationState;
 use App\Enums\PgdasdOperationKind;
-use App\Models\Office;
 use App\Models\PgdasdArtifact;
 use App\Models\PgdasdOperation;
 use App\Models\TaxObligationProjection;
+use App\Models\Tenant;
 use Illuminate\Support\Collection;
 
 /**
@@ -21,7 +21,7 @@ final class DeclarationPgdasdEnrichmentService
      * @param  iterable<int, TaxObligationProjection>  $projections
      * @return list<array<string, mixed>>
      */
-    public function enrichPublicList(Office $office, iterable $projections, bool $withDeepLinks = true): array
+    public function enrichPublicList(Tenant $tenant, iterable $projections, bool $withDeepLinks = true): array
     {
         /** @var Collection<int, TaxObligationProjection> $items */
         $items = collect($projections)->values();
@@ -37,8 +37,8 @@ final class DeclarationPgdasdEnrichmentService
             return $code === 'PGDAS_D';
         });
 
-        $declarationsByClientPeriod = $this->loadDeclarations($office, $pgdasItems);
-        $documentsByClientPeriod = $this->loadDocuments($office, $pgdasItems);
+        $declarationsByClientPeriod = $this->loadDeclarations($tenant, $pgdasItems);
+        $documentsByClientPeriod = $this->loadDocuments($tenant, $pgdasItems);
 
         return $items->map(function (TaxObligationProjection $projection) use (
             $withDeepLinks,
@@ -91,7 +91,7 @@ final class DeclarationPgdasdEnrichmentService
      * @param  Collection<int, TaxObligationProjection>  $pgdasItems
      * @return Collection<string, PgdasdOperation>
      */
-    private function loadDeclarations(Office $office, Collection $pgdasItems): Collection
+    private function loadDeclarations(Tenant $tenant, Collection $pgdasItems): Collection
     {
         if ($pgdasItems->isEmpty()) {
             return collect();
@@ -102,7 +102,7 @@ final class DeclarationPgdasdEnrichmentService
 
         $ops = PgdasdOperation::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->whereIn('period_key', $periodKeys)
             ->where('kind', PgdasdOperationKind::Declaration->value)
@@ -126,7 +126,7 @@ final class DeclarationPgdasdEnrichmentService
      * @param  Collection<int, TaxObligationProjection>  $pgdasItems
      * @return Collection<string, array<string, mixed>>
      */
-    private function loadDocuments(Office $office, Collection $pgdasItems): Collection
+    private function loadDocuments(Tenant $tenant, Collection $pgdasItems): Collection
     {
         if ($pgdasItems->isEmpty()) {
             return collect();
@@ -137,7 +137,7 @@ final class DeclarationPgdasdEnrichmentService
 
         $artifacts = PgdasdArtifact::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->orderByDesc('observed_at')
             ->orderByDesc('id')

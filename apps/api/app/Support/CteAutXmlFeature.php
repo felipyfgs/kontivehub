@@ -21,19 +21,19 @@ final class CteAutXmlFeature
         return (bool) config('sefaz.cte_autxml.enabled', false);
     }
 
-    public static function isOfficeAllowed(int $officeId): bool
+    public static function isTenantAllowed(int $tenantId): bool
     {
         if (! self::isGloballyEnabled()) {
             return false;
         }
 
         /** @var list<int> $allowlist */
-        $allowlist = config('sefaz.cte_autxml.office_allowlist', []);
+        $allowlist = config('sefaz.cte_autxml.tenant_allowlist', []);
 
         if ($allowlist === []) {
-            return (bool) config('sefaz.cte_autxml.allow_all_offices', false);
+            return (bool) config('sefaz.cte_autxml.allow_all_tenants', false);
         }
 
-        return in_array($officeId, $allowlist, true);
+        return in_array($tenantId, $allowlist, true);
     }
 }

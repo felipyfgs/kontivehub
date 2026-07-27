@@ -19,8 +19,8 @@ class AccountActivation extends Model
         'purpose',
         'method',
         'user_id',
-        'office_id',
-        'office_membership_id',
+        'tenant_id',
+        'tenant_membership_id',
         'platform_membership_id',
         'email_normalized',
         'secret_hash',
@@ -48,14 +48,14 @@ class AccountActivation extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function office(): BelongsTo
+    public function tenant(): BelongsTo
     {
-        return $this->belongsTo(Office::class);
+        return $this->belongsTo(Tenant::class);
     }
 
-    public function officeMembership(): BelongsTo
+    public function tenantMembership(): BelongsTo
     {
-        return $this->belongsTo(OfficeMembership::class, 'office_membership_id');
+        return $this->belongsTo(TenantMembership::class, 'tenant_membership_id');
     }
 
     public function platformMembership(): BelongsTo

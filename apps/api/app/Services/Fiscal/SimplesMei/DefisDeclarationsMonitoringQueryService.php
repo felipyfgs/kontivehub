@@ -5,7 +5,7 @@ namespace App\Services\Fiscal\SimplesMei;
 use App\Jobs\Fiscal\ExecuteFiscalMonitoringRunJob;
 use App\Models\Client;
 use App\Models\DefisDeclarationProjection;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\FiscalMonitoring\FiscalMonitoringRunService;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -16,12 +16,12 @@ final class DefisDeclarationsMonitoringQueryService
     public function __construct(private readonly FiscalMonitoringRunService $runs) {}
 
     /** @return array<string, mixed> */
-    public function history(Office $office, Client $client): array
+    public function history(Tenant $tenant, Client $client): array
     {
-        $this->assertClient($office, $client);
+        $this->assertClient($tenant, $client);
         $items = DefisDeclarationProjection::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->orderByDesc('calendar_year')
             ->orderBy('declaration_type')
@@ -38,11 +38,11 @@ final class DefisDeclarationsMonitoringQueryService
     }
 
     /** @return array<string, mixed> */
-    public function enqueueManualConsult(Office $office, Client $client, ?int $actorUserId): array
+    public function enqueueManualConsult(Tenant $tenant, Client $client, ?int $actorUserId): array
     {
-        $this->assertClient($office, $client);
+        $this->assertClient($tenant, $client);
         $run = $this->runs->enqueueManual(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             systemCode: 'INTEGRA_SN',
             serviceCode: 'DEFIS',
@@ -61,9 +61,9 @@ final class DefisDeclarationsMonitoringQueryService
         return $run->toPublicArray();
     }
 
-    private function assertClient(Office $office, Client $client): void
+    private function assertClient(Tenant $tenant, Client $client): void
     {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new HttpException(404, 'Cliente não encontrado no escritório atual.');
         }
     }

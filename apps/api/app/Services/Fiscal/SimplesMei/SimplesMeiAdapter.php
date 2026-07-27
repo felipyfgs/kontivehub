@@ -23,10 +23,9 @@ use App\Services\Fiscal\SimplesMei\Pgmei\PgmeiYear;
 use App\Services\Integra\ContributorCnpjResolver;
 use App\Services\Integra\EnsureClientProcuracaoForConsult;
 use App\Services\Integra\IntegraEligibilityService;
-use App\Services\Integra\OfficeSerproAuthorizationService;
+use App\Services\Integra\TenantSerproAuthorizationService;
 use App\Services\Serpro\CapabilityDriverResolver;
 use App\Services\Serpro\Catalog\OperationCoordinateResolver;
-use App\Services\Serpro\Catalog\OperationKeyMap;
 use App\Services\Serpro\SerproContractService;
 use App\Services\Serpro\SerproOperationService;
 use App\Support\FeatureFlags;
@@ -44,7 +43,7 @@ final class SimplesMeiAdapter implements FiscalSourceAdapter
         private readonly SerproOperationService $operations,
         private readonly SimplesMeiResponseMapper $mapper,
         private readonly SerproContractService $contracts,
-        private readonly OfficeSerproAuthorizationService $authorizations,
+        private readonly TenantSerproAuthorizationService $authorizations,
         private readonly RegimeApplicabilityService $regimeApplicability,
         private readonly ContributorCnpjResolver $contributors,
         private readonly PgdasdConsDeclaracao13Codec $pgdasdCodec13,
@@ -103,18 +102,18 @@ final class SimplesMeiAdapter implements FiscalSourceAdapter
     public function execute(FiscalAdapterRequest $request): FiscalAdapterResult
     {
         $def = $this->definition;
-        $office = $request->office;
+        $tenant = $request->tenant;
         $client = $request->client;
 
         // 1. Feature module
-        if (! FeatureFlags::isModuleEnabled(SimplesMeiCatalog::MODULE, $office->id)
+        if (! FeatureFlags::isModuleEnabled(SimplesMeiCatalog::MODULE, $tenant->id)
             && ! (bool) config('fiscal_monitoring.enabled', false)) {
             return FiscalAdapterResult::blocked('Módulo simples_mei desabilitado.', 'FEATURE_DISABLED');
         }
 
         // 2. Mutantes (transmissão / emissão) — bloqueio no piloto
         if ($def->mutability->isMutating()) {
-            $mutatingOk = FeatureFlags::isMutatingEnabled(SimplesMeiCatalog::MODULE, $office->id)
+            $mutatingOk = FeatureFlags::isMutatingEnabled(SimplesMeiCatalog::MODULE, $tenant->id)
                 && (bool) config('fiscal_monitoring.mutating_enabled', false);
 
             if (! $mutatingOk) {
@@ -129,7 +128,7 @@ final class SimplesMeiAdapter implements FiscalSourceAdapter
         $periodKey = $request->competence?->period_key
             ?? (string) ($request->context['period_key'] ?? $request->progress['period_key'] ?? '');
         $regimeCheck = $this->regimeApplicability->assertOperationApplicable(
-            $office,
+            $tenant,
             $client,
             $def,
             $periodKey !== '' ? $periodKey : null,
@@ -142,16 +141,8 @@ final class SimplesMeiAdapter implements FiscalSourceAdapter
         $env = SerproEnvironment::tryFrom((string) config('serpro.default_environment', 'TRIAL'))
             ?? SerproEnvironment::Trial;
 
-        // A elegibilidade deve usar as coordenadas oficiais resolvidas do
-        // catálogo, e não os aliases internos INTEGRA_SN/PGDASD. Caso
-        // contrário, o poder oficial 00146 é comparado ao alias "PGDASD".
         try {
-            $operationKey = OperationKeyMap::require(
-                null,
-                $def->systemCode,
-                $def->serviceCode,
-                $this->mapExternalOperation($def),
-            );
+            $operationKey = $def->operationKey;
             $coordinates = app(OperationCoordinateResolver::class)->resolveExecutable($operationKey);
         } catch (\Throwable) {
             return FiscalAdapterResult::failed(
@@ -171,7 +162,7 @@ final class SimplesMeiAdapter implements FiscalSourceAdapter
 
         if ($def->requiredPowers !== []) {
             $ensure = $this->procuracaoEnsure->ensure(
-                $office,
+                $tenant,
                 $client,
                 $env,
                 $def->requiredPowers,
@@ -188,7 +179,7 @@ final class SimplesMeiAdapter implements FiscalSourceAdapter
         }
 
         $elig = $this->eligibility->evaluate(
-            $office,
+            $tenant,
             $client,
             $eligibilitySolution,
             $eligibilityService,
@@ -207,7 +198,7 @@ final class SimplesMeiAdapter implements FiscalSourceAdapter
             );
         }
 
-        $this->eligibility->touchRateLimit($office->id);
+        $this->eligibility->touchRateLimit($tenant->id);
 
         $contract = $this->contracts->activeFor($env);
         if ($contract === null || ! $contract->isUsable()) {
@@ -215,7 +206,7 @@ final class SimplesMeiAdapter implements FiscalSourceAdapter
         }
 
         // Autor/contribuinte resolvidos no executor; pre-check de identidade do autor
-        $auth = $this->authorizations->getOrCreate($office, $env);
+        $auth = $this->authorizations->getOrCreate($tenant, $env);
         if (trim((string) ($auth->author_identity ?? '')) === '') {
             return FiscalAdapterResult::blocked('Autor do Pedido não configurado.', 'AUTHOR_IDENTITY_MISSING');
         }
@@ -241,7 +232,7 @@ final class SimplesMeiAdapter implements FiscalSourceAdapter
 
         try {
             $response = $this->operations->execute(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 operationKey: $operationKey,
                 businessData: $payload,
@@ -299,7 +290,7 @@ final class SimplesMeiAdapter implements FiscalSourceAdapter
             && $result->result->value === 'SUCCESS'
             && is_array($result->normalized)) {
             $this->defisProjector->projectFromResponse(
-                $office,
+                $tenant,
                 $client,
                 $response->dados ?? $response->body,
                 $request->run->id,
@@ -329,7 +320,7 @@ final class SimplesMeiAdapter implements FiscalSourceAdapter
             if (strtoupper($def->serviceCode) === 'REGIME_APURACAO') {
                 if (strtoupper($def->operationCode) === 'CONSULTAR_ANOS_CALENDARIOS') {
                     $this->regimeApplicability->projectCalendarOptions(
-                        $office,
+                        $tenant,
                         $client,
                         is_array($result->normalized['calendar_options'] ?? null)
                             ? $result->normalized['calendar_options']
@@ -340,7 +331,7 @@ final class SimplesMeiAdapter implements FiscalSourceAdapter
                     $option = $result->normalized['calendar_options'][0] ?? null;
                     if (is_array($option)) {
                         $this->regimeApplicability->projectRegimeOption(
-                            $office,
+                            $tenant,
                             $client,
                             $option,
                             $request->run->id,
@@ -350,7 +341,7 @@ final class SimplesMeiAdapter implements FiscalSourceAdapter
                     // Projeção já feita no post-consult (evidência + descritor).
                 } else {
                     $this->regimeApplicability->projectFromNormalized(
-                        $office,
+                        $tenant,
                         $client,
                         $result->normalized,
                         $request->run->id,
@@ -367,7 +358,7 @@ final class SimplesMeiAdapter implements FiscalSourceAdapter
                     DefisSpecificDeclarationPostConsultService::OPERATION_KEY,
                 ], true)) {
                 $this->regimeApplicability->projectCompetenceSituation(
-                    $office,
+                    $tenant,
                     $client,
                     $def,
                     $periodKey,
@@ -397,11 +388,6 @@ final class SimplesMeiAdapter implements FiscalSourceAdapter
         };
     }
 
-    private function mapExternalOperation(SimplesMeiOperationDef $def): string
-    {
-        return $this->resolveCatalogOperation($def);
-    }
-
     /**
      * Payload oficial por operation_key. PGDAS-D 13 usa XOR ano/PA.
      *
@@ -415,12 +401,12 @@ final class SimplesMeiAdapter implements FiscalSourceAdapter
                 throw new InvalidArgumentException('Referência de declaração DEFIS inválida.');
             }
             $reference = DefisDeclarationReference::query()->withoutGlobalScopes()
-                ->where('office_id', $request->office->id)->where('client_id', $request->client->id)->find((int) $referenceId);
+                ->where('tenant_id', $request->tenant->id)->where('client_id', $request->client->id)->find((int) $referenceId);
             if ($reference === null) {
                 throw new InvalidArgumentException('Referência de declaração DEFIS indisponível.');
             }
 
-            return ['idDefis' => $this->defisReferences->read($reference, $request->office)];
+            return ['idDefis' => $this->defisReferences->read($reference, $request->tenant)];
         }
 
         if ($operationKey === 'regimeapuracao.consultaranoscalendarios') {
@@ -521,7 +507,7 @@ final class SimplesMeiAdapter implements FiscalSourceAdapter
                     $ano = null;
                 }
             } else {
-                $tz = (string) ($request->office->timezone ?? 'America/Sao_Paulo') ?: 'America/Sao_Paulo';
+                $tz = (string) ($request->tenant->timezone ?? 'America/Sao_Paulo') ?: 'America/Sao_Paulo';
                 $expectedPa = PgdasdPeriod::expectedPa(null, $tz);
                 $ano = PgdasdPeriod::yearFromPa($expectedPa);
             }
@@ -556,7 +542,7 @@ final class SimplesMeiAdapter implements FiscalSourceAdapter
 
         $observed = PgdasdOperation::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $request->office->id)
+            ->where('tenant_id', $request->tenant->id)
             ->where('client_id', $request->client->id)
             ->where('kind', 'DECLARATION')
             ->where('declaration_number', $declarationNumber)
@@ -629,7 +615,7 @@ final class SimplesMeiAdapter implements FiscalSourceAdapter
             ?? ($periodKey !== '' ? $periodKey : null);
 
         if ($raw === null || $raw === '') {
-            $tz = (string) ($request->office->timezone ?? 'America/Sao_Paulo') ?: 'America/Sao_Paulo';
+            $tz = (string) ($request->tenant->timezone ?? 'America/Sao_Paulo') ?: 'America/Sao_Paulo';
             $raw = (string) PgmeiYear::yearForDailyCycle(null, $tz);
         }
 

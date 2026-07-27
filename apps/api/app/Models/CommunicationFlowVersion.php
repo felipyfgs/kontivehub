@@ -2,13 +2,13 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'flow_id',
     'version',
     'graph_encrypted',
@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class CommunicationFlowVersion extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {
@@ -36,6 +36,6 @@ class CommunicationFlowVersion extends Model
 
     public function publishedBy(): BelongsTo
     {
-        return $this->belongsTo(OfficeMembership::class, 'published_by_membership_id');
+        return $this->belongsTo(TenantMembership::class, 'published_by_membership_id');
     }
 }

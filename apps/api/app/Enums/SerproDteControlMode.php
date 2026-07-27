@@ -6,8 +6,8 @@ namespace App\Enums;
  * Controle operacional de DTE após go-live controlado.
  *
  * DISABLED — nenhuma reserva/dispatch
- * CANARY   — exatamente uma tentativa unitária no Office/cliente piloto
- * LIMITED  — mesmo Office, teto quantitativo (padrão 10 no ciclo)
+ * CANARY   — exatamente uma tentativa unitária no Tenant/cliente piloto
+ * LIMITED  — mesmo Tenant, teto quantitativo (padrão 10 no ciclo)
  */
 enum SerproDteControlMode: string
 {

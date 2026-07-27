@@ -54,7 +54,14 @@ function loadInputs() {
 }
 
 function refreshSurfaceInventory(liveRoutesPath) {
+  const currentPages = new Set(currentPageFiles())
   const pages = readJson(resolve(webSurfaceDir, 'web-pages.json'))
+    .filter(page => currentPages.has(page.file))
+  if (pages.length !== currentPages.size) {
+    const classified = new Set(pages.map(page => page.file))
+    const missing = [...currentPages].filter(file => !classified.has(file))
+    throw new Error(`Páginas sem classificação no inventário: ${missing.join(', ')}`)
+  }
   const seedPath = existsSync(resolve(webSurfaceDir, 'api-routes.json'))
     ? resolve(webSurfaceDir, 'api-routes.json')
     : resolve(apiSurfaceDir, 'api-routes.json')
@@ -65,6 +72,7 @@ function refreshSurfaceInventory(liveRoutesPath) {
   const summary = summaryFor(apiRoutes, pages)
 
   writeText(resolve(webSurfaceDir, 'api-routes.json'), jsonText(apiRoutes))
+  writeText(resolve(webSurfaceDir, 'web-pages.json'), jsonText(pages))
   writeText(resolve(webSurfaceDir, 'summary.json'), jsonText(summary))
   if (existsSync(resolve(repoRoot, 'apps/api'))) {
     writeText(resolve(apiSurfaceDir, 'api-routes.json'), jsonText(apiRoutes))

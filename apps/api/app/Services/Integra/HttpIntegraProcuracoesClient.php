@@ -8,7 +8,7 @@ use App\DTO\Serpro\ProcuracaoLookupRequest;
 use App\DTO\Serpro\ProcuracaoLookupResult;
 use App\DTO\Serpro\SerproOperationCommand;
 use App\Models\Client;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Serpro\SerproOperationService;
 use Carbon\CarbonImmutable;
 use InvalidArgumentException;
@@ -34,20 +34,20 @@ final class HttpIntegraProcuracoesClient implements IntegraProcuracoesClient
 
     public function lookup(ProcuracaoLookupRequest $request): ProcuracaoLookupResult
     {
-        $office = Office::query()->withoutGlobalScopes()->find($request->officeId);
-        if ($office === null) {
+        $tenant = Tenant::query()->withoutGlobalScopes()->find($request->tenantId);
+        if ($tenant === null) {
             return new ProcuracaoLookupResult(
                 success: false,
                 powers: [],
                 simulated: false,
-                errorCode: 'OFFICE_NOT_FOUND',
-                errorMessage: 'Office não encontrado.',
+                errorCode: 'TENANT_NOT_FOUND',
+                errorMessage: 'Tenant não encontrado.',
             );
         }
 
         $client = Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($request->clientId)
             ->first();
         if ($client === null) {
@@ -73,7 +73,7 @@ final class HttpIntegraProcuracoesClient implements IntegraProcuracoesClient
         }
 
         $response = $this->operations()->run(new SerproOperationCommand(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             operationKey: self::OPERATION_KEY,
             businessData: $businessData,
@@ -112,12 +112,12 @@ final class HttpIntegraProcuracoesClient implements IntegraProcuracoesClient
             powers: $powers,
             unmappedSystems: $mapped['unmapped_systems'],
             simulated: $response->simulated,
-            evidenceRef: $response->requestTag ?? ('PROCURACAO-'.$request->officeId),
+            evidenceRef: $response->requestTag ?? ('PROCURACAO-'.$request->tenantId),
         );
     }
 
     /**
-     * Payload oficial OBTERPROCURACAO41: contribuinte outorga ao autor do office.
+     * Payload oficial OBTERPROCURACAO41: contribuinte outorga ao autor do tenant.
      *
      * @return array{outorgante: string, tipoOutorgante: string, outorgado: string, tipoOutorgado: string}
      */

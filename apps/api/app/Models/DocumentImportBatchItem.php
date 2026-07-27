@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ImportBatchItemStatus;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'office_id', 'document_import_batch_id', 'item_index', 'source_name', 'entry_name',
+    'tenant_id', 'document_import_batch_id', 'item_index', 'source_name', 'entry_name',
     'sha256', 'access_key', 'model', 'issuer_cnpj', 'establishment_id', 'dfe_document_id',
     'status', 'result_code', 'result_message', 'attempts', 'byte_size',
     'spool_vault_object_id', 'processed_at',
@@ -19,7 +19,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Hidden(['spool_vault_object_id'])]
 class DocumentImportBatchItem extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
     use HasFactory;
 
     protected function casts(): array

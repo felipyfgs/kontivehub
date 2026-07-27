@@ -18,9 +18,9 @@ use App\Enums\TaxGuideRiskLevel;
 use App\Models\Client;
 use App\Models\FgtsDigitalRun;
 use App\Models\FiscalMutationOperation;
-use App\Models\Office;
 use App\Models\TaxGuide;
 use App\Models\TaxGuideVersion;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\FgtsDigital\Exceptions\FgtsDigitalException;
 use App\Services\Fiscal\Guides\GuideStorageService;
@@ -41,14 +41,14 @@ final class FgtsDigitalPortalService
     ) {}
 
     /** @param array<string, mixed> $parameters */
-    public function createQueryRun(Office $office, Client $client, ?User $user, array $parameters = []): FgtsDigitalRun
+    public function createQueryRun(Tenant $tenant, Client $client, ?User $user, array $parameters = []): FgtsDigitalRun
     {
-        $this->assertTenant($office, $client);
+        $this->assertTenant($tenant, $client);
         $private = $this->normalizeParameters($parameters);
         $safe = $this->sanitizeParameters($private);
 
         $run = FgtsDigitalRun::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'requested_by' => $user?->id,
             'operation' => FgtsDigitalOperation::QueryGuides,
@@ -68,13 +68,13 @@ final class FgtsDigitalPortalService
      * @return array{run:FgtsDigitalRun,preview_token:?string}
      */
     public function preview(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         User $user,
         FgtsDigitalGuideType $guideType,
         array $parameters,
     ): array {
-        $this->assertTenant($office, $client);
+        $this->assertTenant($tenant, $client);
         $private = $this->normalizeParameters([...$parameters, 'guide_type' => $guideType->value]);
         $safe = $this->sanitizeParameters($private);
         $digest = $this->digest($private);
@@ -84,7 +84,7 @@ final class FgtsDigitalPortalService
         $correlation = (string) Str::uuid();
 
         $mutation = FiscalMutationOperation::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'requested_by' => $user->id,
             'idempotency_key' => 'fgts-preflight|'.$correlation,
@@ -95,6 +95,7 @@ final class FgtsDigitalPortalService
             'solution_code' => 'FGTS_DIGITAL',
             'service_code' => 'GUIAS',
             'operation_code' => 'EMITIR_GUIA',
+            'operation_key' => 'fgts_digital.emitir_guia',
             'module_key' => 'fgts',
             'competence_period_key' => $safe['competence_period_key'] ?? null,
             'status' => FiscalMutationStatus::Pending,
@@ -109,7 +110,7 @@ final class FgtsDigitalPortalService
         ]);
 
         $run = FgtsDigitalRun::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'requested_by' => $user->id,
             'fiscal_mutation_operation_id' => $mutation->id,
@@ -141,13 +142,13 @@ final class FgtsDigitalPortalService
 
     /** @return array{run:FgtsDigitalRun,reused:bool} */
     public function authorizeEmission(
-        Office $office,
+        Tenant $tenant,
         FgtsDigitalRun $preview,
         User $user,
         string $previewToken,
         string $confirmationPhrase,
     ): array {
-        if ((int) $preview->office_id !== (int) $office->id || $preview->operation !== FgtsDigitalOperation::Preview) {
+        if ((int) $preview->tenant_id !== (int) $tenant->id || $preview->operation !== FgtsDigitalOperation::Preview) {
             throw new FgtsDigitalException('Prévia não encontrada.', 'FGTS_DIGITAL_PREVIEW_NOT_FOUND', 404);
         }
         if ($preview->status !== FgtsDigitalRunStatus::Previewed
@@ -169,7 +170,7 @@ final class FgtsDigitalPortalService
         $idempotency = 'fgts-emit|'.$preview->client_id.'|'.$preview->request_digest;
         $existing = FgtsDigitalRun::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('idempotency_key', $idempotency)
             ->first();
         if ($existing !== null) {
@@ -185,7 +186,7 @@ final class FgtsDigitalPortalService
 
         $mutation = FiscalMutationOperation::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($preview->fiscal_mutation_operation_id)
             ->firstOrFail();
         $mutation->forceFill([
@@ -194,7 +195,7 @@ final class FgtsDigitalPortalService
         ])->save();
 
         $run = FgtsDigitalRun::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $preview->client_id,
             'requested_by' => $user->id,
             'fiscal_mutation_operation_id' => $mutation->id,
@@ -215,21 +216,21 @@ final class FgtsDigitalPortalService
     public function executeRun(FgtsDigitalRun $run): FgtsDigitalRun
     {
         $timeout = (int) config('fgts_digital.runtime.timeout_seconds', 120);
-        $lock = Cache::lock('fgts-digital:run:'.$run->office_id.':'.$run->client_id, $timeout + 30);
+        $lock = Cache::lock('fgts-digital:run:'.$run->tenant_id.':'.$run->client_id, $timeout + 30);
         if (! $lock->get()) {
             throw new FgtsDigitalException('Já existe execução FGTS Digital para o cliente.', 'FGTS_DIGITAL_CONCURRENT_RUN', 409);
         }
 
         try {
-            $office = Office::query()->find($run->office_id);
+            $tenant = Tenant::query()->find($run->tenant_id);
             $client = Client::query()->withoutGlobalScopes()
-                ->where('office_id', $run->office_id)
+                ->where('tenant_id', $run->tenant_id)
                 ->whereKey($run->client_id)
                 ->first();
-            if ($office === null || $client === null) {
+            if ($tenant === null || $client === null) {
                 throw new FgtsDigitalException('Tenant da execução não encontrado.', 'FGTS_DIGITAL_TENANT_NOT_FOUND', 404);
             }
-            $ready = $this->readiness->check($office, $client);
+            $ready = $this->readiness->check($tenant, $client);
             if (! $ready['ready_for_read']) {
                 $blocker = $ready['blockers'][0] ?? ['code' => 'FGTS_DIGITAL_NOT_READY', 'message' => 'FGTS Digital indisponível.'];
                 $run->forceFill([
@@ -242,13 +243,13 @@ final class FgtsDigitalPortalService
                 return $run->fresh();
             }
 
-            $credential = $this->credentials->resolve($office, $client, includeMaterial: true);
+            $credential = $this->credentials->resolve($tenant, $client, includeMaterial: true);
             if ($credential === null) {
                 throw new FgtsDigitalException('Credencial FGTS Digital indisponível.', 'FGTS_DIGITAL_CREDENTIAL_MISSING', 422);
             }
             $targetIdentifierHash = FgtsDigitalCredentialResolver::identifierHash((string) $client->root_cnpj);
             $session = $this->sessions->latest(
-                (int) $office->id,
+                (int) $tenant->id,
                 (int) $client->id,
                 $credential['fingerprint'],
                 $credential['profile_type'],
@@ -275,7 +276,7 @@ final class FgtsDigitalPortalService
             try {
                 $result = $this->portal->execute(new FgtsDigitalPortalRequest(
                     operation: $run->operation,
-                    officeId: (int) $office->id,
+                    tenantId: (int) $tenant->id,
                     clientId: (int) $client->id,
                     targetIdentifier: (string) $client->root_cnpj,
                     credentialSource: $credential['source']->value,
@@ -294,7 +295,7 @@ final class FgtsDigitalPortalService
 
             if ($result->storageState !== null) {
                 $session = $this->sessions->store(
-                    (int) $office->id,
+                    (int) $tenant->id,
                     (int) $client->id,
                     $credential['source'],
                     $credential['fingerprint'],
@@ -309,7 +310,7 @@ final class FgtsDigitalPortalService
                 ? FgtsDigitalRunStatus::Previewed
                 : $this->statusFromResult($result);
             $persisted = in_array($result->status, ['SUCCEEDED', 'REUSED'], true)
-                ? $this->persistGuides($office, $client, $run, $result)
+                ? $this->persistGuides($tenant, $client, $run, $result)
                 : [];
             $last = end($persisted) ?: null;
 
@@ -341,7 +342,7 @@ final class FgtsDigitalPortalService
     }
 
     /** @return list<array{guide:TaxGuide,version:?TaxGuideVersion,reused:bool}> */
-    private function persistGuides(Office $office, Client $client, FgtsDigitalRun $run, FgtsDigitalPortalResult $result): array
+    private function persistGuides(Tenant $tenant, Client $client, FgtsDigitalRun $run, FgtsDigitalPortalResult $result): array
     {
         $guides = $result->data['guides'] ?? [];
         if (! is_array($guides)) {
@@ -367,12 +368,13 @@ final class FgtsDigitalPortalService
 
             $guide = TaxGuide::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('logical_key', $logical)
                 ->first();
             $guide ??= TaxGuide::query()->create([
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'client_id' => $client->id,
+                'operation_key' => (string) $run->operation_key,
                 'system_code' => 'FGTS_DIGITAL',
                 'service_code' => 'GUIAS',
                 'operation_code' => $run->operation === FgtsDigitalOperation::EmitGuide ? 'EMITIR_GUIA' : 'CONSULTAR_GUIAS',
@@ -417,7 +419,7 @@ final class FgtsDigitalPortalService
             }
             $current = TaxGuideVersion::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('tax_guide_id', $guide->id)
                 ->where('is_current', true)
                 ->first();
@@ -427,8 +429,8 @@ final class FgtsDigitalPortalService
                 continue;
             }
 
-            $object = $this->guideStorage->storeDocument((int) $office->id, $artifact['bytes'], 'application/pdf');
-            $version = DB::transaction(function () use ($office, $guide, $current, $object, $identifier, $amount, $dueAt, $run, $artifact): TaxGuideVersion {
+            $object = $this->guideStorage->storeDocument((int) $tenant->id, $artifact['bytes'], 'application/pdf');
+            $version = DB::transaction(function () use ($tenant, $guide, $current, $object, $identifier, $amount, $dueAt, $run, $artifact): TaxGuideVersion {
                 if ($current !== null) {
                     $current->forceFill([
                         'is_current' => false,
@@ -436,7 +438,7 @@ final class FgtsDigitalPortalService
                     ])->save();
                 }
                 $version = TaxGuideVersion::query()->create([
-                    'office_id' => $office->id,
+                    'tenant_id' => $tenant->id,
                     'tax_guide_id' => $guide->id,
                     'version_number' => ((int) ($current?->version_number ?? 0)) + 1,
                     'is_current' => true,
@@ -510,7 +512,7 @@ final class FgtsDigitalPortalService
 
         return FiscalMutationOperation::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $run->office_id)
+            ->where('tenant_id', $run->tenant_id)
             ->whereKey($run->fiscal_mutation_operation_id)
             ->first();
     }
@@ -628,7 +630,7 @@ final class FgtsDigitalPortalService
     private function requestAad(FgtsDigitalRun $run): array
     {
         return SecureObjectPurpose::FgtsDigitalRequest->aadBase([
-            'office_id' => (int) $run->office_id,
+            'tenant_id' => (int) $run->tenant_id,
             'client_id' => (int) $run->client_id,
             'run_id' => (int) $run->id,
             'request_digest' => (string) $run->request_digest,
@@ -666,9 +668,9 @@ final class FgtsDigitalPortalService
         return CarbonImmutable::parse($value);
     }
 
-    private function assertTenant(Office $office, Client $client): void
+    private function assertTenant(Tenant $tenant, Client $client): void
     {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new FgtsDigitalException('Cliente não encontrado.', 'FGTS_DIGITAL_CLIENT_NOT_FOUND', 404);
         }
     }

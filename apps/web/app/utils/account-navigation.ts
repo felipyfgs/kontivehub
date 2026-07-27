@@ -3,9 +3,9 @@ import type { MeUser } from '~/types/api'
 import type { NavLayerItem, NavLeafDestination } from '~/utils/navigation-hierarchy'
 import { filterNavItems, flattenNavLeaves, validateNavCatalog } from '~/utils/navigation-hierarchy'
 import {
-  canAccessOfficeSettings,
+  canAccessTenantSettings,
   canAccessPlatformAdmin,
-  canManageOfficeTeam,
+  canManageTenantTeam,
   canManageWorkCatalog
 } from '~/utils/permissions'
 
@@ -19,7 +19,7 @@ export interface AccountNavigationItem {
 
 /**
  * Vocabulário canônico da Conta — uma seção = um path (como o template settings).
- * Perfil pertence ao User; demais seções pertencem ao Office.
+ * Perfil pertence ao User; demais seções pertencem ao Tenant.
  */
 export const ACCOUNT_NAVIGATION = {
   profile: {
@@ -29,8 +29,8 @@ export const ACCOUNT_NAVIGATION = {
     to: '/conta',
     exact: true
   },
-  office: {
-    id: 'account-office',
+  tenant: {
+    id: 'account-tenant',
     label: 'Escritório',
     icon: 'i-lucide-building-2',
     to: '/conta/escritorio',
@@ -79,11 +79,11 @@ function leaf(item: AccountNavigationItem, capability?: string): NavLeafDestinat
  */
 export const ACCOUNT_NAV_ITEMS: NavLayerItem[] = [
   leaf(ACCOUNT_NAVIGATION.profile, 'profile'),
-  leaf(ACCOUNT_NAVIGATION.office, 'office-settings'),
+  leaf(ACCOUNT_NAVIGATION.tenant, 'tenant-settings'),
   leaf(ACCOUNT_NAVIGATION.departments, 'work-catalog'),
   leaf(ACCOUNT_NAVIGATION.team, 'manage-team'),
-  leaf(ACCOUNT_NAVIGATION.subscription, 'office-settings'),
-  leaf(ACCOUNT_NAVIGATION.usage, 'office-settings')
+  leaf(ACCOUNT_NAVIGATION.subscription, 'tenant-settings'),
+  leaf(ACCOUNT_NAVIGATION.usage, 'tenant-settings')
 ]
 
 /** Flat settings: até 8 folhas na toolbar (sem grupos/subtabs). */
@@ -93,10 +93,10 @@ function allowAccountLeaf(user: MeUser | null | undefined, leafItem: NavLeafDest
   switch (leafItem.capability) {
     case 'profile':
       return true
-    case 'office-settings':
-      return canAccessOfficeSettings(user)
+    case 'tenant-settings':
+      return canAccessTenantSettings(user)
     case 'manage-team':
-      return canManageOfficeTeam(user)
+      return canManageTenantTeam(user)
     case 'work-catalog':
       return canManageWorkCatalog(user)
     default:
@@ -107,13 +107,13 @@ function allowAccountLeaf(user: MeUser | null | undefined, leafItem: NavLeafDest
 /** Catálogo filtrado por capacidade. */
 export function accountNavigationTree(user?: MeUser | null): NavLayerItem[] {
   if (!user) return []
-  const office = user.current_office ?? user.office
-  if (canAccessPlatformAdmin(user) && !office) return []
+  const tenant = user.current_tenant
+  if (canAccessPlatformAdmin(user) && !tenant) return []
 
   return filterNavItems(ACCOUNT_NAV_ITEMS, leafItem => allowAccountLeaf(user, leafItem))
 }
 
-/** Folhas planas — sidebar, busca e compatibilidade. */
+/** Folhas planas para sidebar e busca. */
 export function accountNavigationItems(user?: MeUser | null): AccountNavigationItem[] {
   return flattenNavLeaves(accountNavigationTree(user)).map(item => ({
     id: item.id,

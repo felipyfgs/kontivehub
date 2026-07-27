@@ -1,16 +1,16 @@
 import type {
   ActivationMethod,
-  CreatePlatformOfficeBody,
-  CreatePlatformOfficeResult,
+  CreatePlatformTenantBody,
+  CreatePlatformTenantResult,
   CredentialDeliveryPayload,
   FiscalModuleAdminItem,
   FiscalModuleRestrictionBody,
-  PlatformOfficeAdminDetail,
-  PlatformOfficeAdminSummary,
-  PlatformOfficeSelectResult,
+  PlatformTenantAdminDetail,
+  PlatformTenantAdminSummary,
+  PlatformTenantSelectResult,
   PlatformFiscalModulesEnvelope,
-  PlatformOfficeFiscalModulesEnvelope,
-  PlatformOfficesEnvelope,
+  PlatformTenantFiscalModulesEnvelope,
+  PlatformTenantsEnvelope,
   PlatformOwner,
   SerproCatalogEntry,
   SerproContractSanitized,
@@ -29,7 +29,7 @@ import type { ApiClient } from './types'
 
 /**
  * API global PLATFORM_ADMIN (prefixo /api/v1/platform/*).
- * Sem office context; respostas sanitizadas — nunca segredo/XML/vault id.
+ * Sem tenant context; respostas sanitizadas — nunca segredo/XML/vault id.
  *
  * Paths alinhados às rotas Laravel em /api/v1/platform/* (sem inventar singular
  * quando a API só expõe o plural, ex.: /serpro/rollouts).
@@ -37,54 +37,48 @@ import type { ApiClient } from './types'
 export function createPlatformApi(client: ApiClient) {
   return {
     platform: {
-      tenants: {
-        list: (params?: { page?: number, per_page?: number }) =>
-          client<{ data: Array<Record<string, unknown>> }>('/api/v1/platform/tenants', { query: params }),
-        show: (officeId: number) =>
-          client<{ data: Record<string, unknown> }>(`/api/v1/platform/tenants/${officeId}`)
-      },
       /**
        * Seletor global de escritórios (PLATFORM_ADMIN).
-       * Seleção privilegiada — não cria membership nem altera selected_office_id.
+       * Seleção privilegiada — não cria membership nem altera selected_tenant_id.
        * Administração (criação/pendentes): adminList / create / show / regenerate / updateFirstAdmin.
        */
-      offices: {
+      tenants: {
         list: (params?: { page?: number, per_page?: number, q?: string }) =>
-          client<{ data: PlatformOfficesEnvelope }>('/api/v1/platform/offices', {
+          client<{ data: PlatformTenantsEnvelope }>('/api/v1/platform/tenants/selector', {
             query: params
           }),
-        select: (officeId: number) =>
-          client<{ data: PlatformOfficeSelectResult }>('/api/v1/platform/offices/select', {
+        select: (tenantId: number) =>
+          client<{ data: PlatformTenantSelectResult }>('/api/v1/platform/tenants/select', {
             method: 'POST',
-            body: { office_id: officeId }
+            body: { tenant_id: tenantId }
           }),
         clear: () =>
-          client<{ data: { access_mode: string | null } }>('/api/v1/platform/offices/select', {
+          client<{ data: { access_mode: string | null } }>('/api/v1/platform/tenants/select', {
             method: 'DELETE'
           }),
         /** Lista admin (inclui PENDING_ACTIVATION). */
         adminList: (params?: { lifecycle_status?: string }) =>
-          client<{ data: PlatformOfficeAdminSummary[] }>('/api/v1/platform/offices/admin', {
+          client<{ data: PlatformTenantAdminSummary[] }>('/api/v1/platform/tenants/admin', {
             query: params
           }),
-        create: (body: CreatePlatformOfficeBody) =>
-          client<{ data: CreatePlatformOfficeResult }>('/api/v1/platform/offices', {
+        create: (body: CreatePlatformTenantBody) =>
+          client<{ data: CreatePlatformTenantResult }>('/api/v1/platform/tenants', {
             method: 'POST',
             body
           }),
-        show: (officeId: number) =>
-          client<{ data: PlatformOfficeAdminDetail }>(`/api/v1/platform/offices/${officeId}`),
-        regenerateActivation: (officeId: number, body: { method: ActivationMethod }) =>
+        show: (tenantId: number) =>
+          client<{ data: PlatformTenantAdminDetail }>(`/api/v1/platform/tenants/${tenantId}`),
+        regenerateActivation: (tenantId: number, body: { method: ActivationMethod }) =>
           client<{ data: CredentialDeliveryPayload }>(
-            `/api/v1/platform/offices/${officeId}/activation/regenerate`,
+            `/api/v1/platform/tenants/${tenantId}/activation/regenerate`,
             { method: 'POST', body }
           ),
         updateFirstAdmin: (
-          officeId: number,
+          tenantId: number,
           body: { name: string, email: string, method: ActivationMethod }
         ) =>
           client<{ data: CredentialDeliveryPayload }>(
-            `/api/v1/platform/offices/${officeId}/first-admin`,
+            `/api/v1/platform/tenants/${tenantId}/first-admin`,
             { method: 'PATCH', body }
           )
       },
@@ -96,17 +90,17 @@ export function createPlatformApi(client: ApiClient) {
             `/api/v1/platform/fiscal/modules/${encodeURIComponent(moduleKey)}/restriction`,
             { method: 'PATCH', body }
           ),
-        listForOffice: (officeId: number) =>
-          client<{ data: PlatformOfficeFiscalModulesEnvelope }>(
-            `/api/v1/platform/tenants/${officeId}/fiscal/modules`
+        listForTenant: (tenantId: number) =>
+          client<{ data: PlatformTenantFiscalModulesEnvelope }>(
+            `/api/v1/platform/tenants/${tenantId}/fiscal/modules`
           ),
-        setOfficeRestriction: (
-          officeId: number,
+        setTenantRestriction: (
+          tenantId: number,
           moduleKey: string,
           body: FiscalModuleRestrictionBody
         ) =>
           client<{ data: FiscalModuleAdminItem, message: string }>(
-            `/api/v1/platform/tenants/${officeId}/fiscal/modules/${encodeURIComponent(moduleKey)}/restriction`,
+            `/api/v1/platform/tenants/${tenantId}/fiscal/modules/${encodeURIComponent(moduleKey)}/restriction`,
             { method: 'PATCH', body }
           )
       },
@@ -123,7 +117,7 @@ export function createPlatformApi(client: ApiClient) {
       serpro: {
         /**
          * Configuração global unificada (Proprietário).
-         * Mutações de contrato legado removidas — use credentialVersions.
+         * Versões de credencial são a única superfície de mutação do contrato.
          */
         configuration: {
           show: (params?: { environment?: string }) =>
@@ -171,9 +165,9 @@ export function createPlatformApi(client: ApiClient) {
               `/api/v1/platform/serpro/credential-versions/${id}/test-connection`,
               { method: 'POST', body: {} }
             ),
-          cutover: (id: number, body?: { approval_id?: number, reason?: string, serpro_contract_id?: number }) =>
+          activate: (id: number, body?: { approval_id?: number, reason?: string, serpro_contract_id?: number }) =>
             client<{ data: SerproCredentialVersionSanitized }>(
-              `/api/v1/platform/serpro/credential-versions/${id}/cutover`,
+              `/api/v1/platform/serpro/credential-versions/${id}/activation`,
               { method: 'POST', body: body || {} }
             )
         },
@@ -196,9 +190,9 @@ export function createPlatformApi(client: ApiClient) {
             cycle_start_day: number
             alert_percent: number
             global_limit_quantity?: number | null
-            office_limits?: Array<{ office_id: number, limit_quantity?: number | null }>
+            tenant_limits?: Array<{ tenant_id: number, limit_quantity?: number | null }>
           }) =>
-            client<{ data: { config: Record<string, unknown>, office_limits: Array<Record<string, unknown>> } }>(
+            client<{ data: { config: Record<string, unknown>, tenant_limits: Array<Record<string, unknown>> } }>(
               '/api/v1/platform/serpro/usage-limits',
               { method: 'PUT', body }
             )
@@ -291,7 +285,7 @@ export function createPlatformApi(client: ApiClient) {
               '/api/v1/platform/serpro-usage/consolidation',
               { query: params }
             ),
-          recompute: (body: { year: number, month: number, office_id?: number | null }) =>
+          recompute: (body: { year: number, month: number, tenant_id?: number | null }) =>
             client<{ data: Record<string, unknown> }>('/api/v1/platform/serpro-usage/recompute', {
               method: 'POST',
               body
@@ -317,7 +311,7 @@ export function createPlatformApi(client: ApiClient) {
             }),
           show: (id: number) =>
             client<{ data: Record<string, unknown> }>(`/api/v1/platform/serpro/dte-canary/${id}`),
-          selectTarget: (id: number, body: { office_id: number, client_id: number }) =>
+          selectTarget: (id: number, body: { tenant_id: number, client_id: number }) =>
             client<{ data: Record<string, unknown> }>(
               `/api/v1/platform/serpro/dte-canary/${id}/target`,
               { method: 'POST', body }

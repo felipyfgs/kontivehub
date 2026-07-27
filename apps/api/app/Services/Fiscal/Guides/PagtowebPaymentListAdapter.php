@@ -54,7 +54,7 @@ final class PagtowebPaymentListAdapter implements FiscalSourceAdapter
 
     public function moduleKey(): ?string
     {
-        return 'guias';
+        return 'guides';
     }
 
     public function supports(FiscalAdapterRequest $request): bool
@@ -64,7 +64,7 @@ final class PagtowebPaymentListAdapter implements FiscalSourceAdapter
 
     public function execute(FiscalAdapterRequest $request): FiscalAdapterResult
     {
-        if (! FeatureFlags::isModuleEnabled('guias', $request->office->id) && ! (bool) config('fiscal_monitoring.enabled', false)) {
+        if (! FeatureFlags::isModuleEnabled('guides', $request->tenant->id) && ! (bool) config('fiscal_monitoring.enabled', false)) {
             return FiscalAdapterResult::blocked('Módulo guias desabilitado.', 'FEATURE_DISABLED');
         }
         try {
@@ -74,7 +74,7 @@ final class PagtowebPaymentListAdapter implements FiscalSourceAdapter
                 $filters['numero_documento_lista'] = $this->codec->decryptDocumentNumbers($encryptedDocuments);
             }
             $normalized = $this->codec->normalizeFilters($filters);
-            $response = $this->operations->execute(office: $request->office, client: $request->client, operationKey: self::OPERATION_KEY, businessData: $normalized['business_data'], idempotencyKey: 'pagtoweb-payment-list:'.$request->run->idempotency_key, correlationId: $request->run->correlation_id, entityKey: 'fiscal-run:'.$request->run->id, module: 'guias');
+            $response = $this->operations->execute(tenant: $request->tenant, client: $request->client, operationKey: self::OPERATION_KEY, businessData: $normalized['business_data'], idempotencyKey: 'pagtoweb-payment-list:'.$request->run->idempotency_key, correlationId: $request->run->correlation_id, entityKey: 'fiscal-run:'.$request->run->id, module: 'guides');
             if (! $response->success) {
                 return FiscalAdapterResult::failed($response->errorMessage ?? 'Falha na consulta de pagamentos.', $response->errorCode ?? 'PAGTOWEB_PAYMENT_LIST_FAILED', $this->coverage());
             }
@@ -87,9 +87,9 @@ final class PagtowebPaymentListAdapter implements FiscalSourceAdapter
                 : ($response->sourceProvenance === FiscalSourceProvenance::SerproTrial->value
                     ? FiscalSourceProvenance::SerproTrial->value
                     : FiscalSourceProvenance::Unverified->value);
-            $projected = $this->projector->project($request->office, $request->client, $items, $normalized['filter_summary'], $request->run->id, $provenance);
+            $projected = $this->projector->project($request->tenant, $request->client, $items, $normalized['filter_summary'], $request->run->id, $provenance);
         } catch (Throwable) {
-            Log::warning('pagtoweb.payment_list_failed', ['operation_key' => self::OPERATION_KEY, 'office_id' => $request->office->id, 'client_id' => $request->client->id, 'reason' => 'PAYMENT_LIST_FAILED']);
+            Log::warning('pagtoweb.payment_list_failed', ['operation_key' => self::OPERATION_KEY, 'tenant_id' => $request->tenant->id, 'client_id' => $request->client->id, 'reason' => 'PAYMENT_LIST_FAILED']);
 
             return FiscalAdapterResult::failed('Não foi possível consultar os pagamentos.', 'PAGTOWEB_PAYMENT_LIST_FAILED', $this->coverage());
         }

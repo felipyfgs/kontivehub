@@ -20,11 +20,11 @@ final class MeiAutomationAttemptRepository
     ) {}
 
     /** @param array<string, mixed> $attributes */
-    public function createOrGet(int $officeId, string $idempotencyKey, int $attemptNumber, array $attributes): MeiAutomationAttempt
+    public function createOrGet(int $tenantId, string $idempotencyKey, int $attemptNumber, array $attributes): MeiAutomationAttempt
     {
         $attempt = MeiAutomationAttempt::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('idempotency_key', $idempotencyKey)
             ->where('attempt_number', $attemptNumber)
             ->first();
@@ -39,26 +39,26 @@ final class MeiAutomationAttemptRepository
 
         return MeiAutomationAttempt::query()->withoutGlobalScopes()->create([
             ...$attributes,
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'idempotency_key' => $idempotencyKey,
             'attempt_number' => $attemptNumber,
             'safe_metadata' => $this->sanitizer->sanitize((array) ($attributes['safe_metadata'] ?? [])),
         ]);
     }
 
-    public function findForOffice(int $officeId, int $attemptId): MeiAutomationAttempt
+    public function findForTenant(int $tenantId, int $attemptId): MeiAutomationAttempt
     {
         return MeiAutomationAttempt::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->findOrFail($attemptId);
     }
 
-    public function findByExternalJobForOffice(int $officeId, string $externalJobId): MeiAutomationAttempt
+    public function findByExternalJobForTenant(int $tenantId, string $externalJobId): MeiAutomationAttempt
     {
         $attempt = MeiAutomationAttempt::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('external_job_id', $externalJobId)
             ->first();
 
@@ -143,7 +143,7 @@ final class MeiAutomationAttemptRepository
         return DB::transaction(function () use ($attempt, $artifact): MeiAutomationAttempt {
             $locked = MeiAutomationAttempt::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $attempt->office_id)
+                ->where('tenant_id', $attempt->tenant_id)
                 ->whereKey($attempt->id)
                 ->lockForUpdate()
                 ->firstOrFail();

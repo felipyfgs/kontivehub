@@ -11,9 +11,9 @@ use App\Enums\TaxObligationApplicability;
 use App\Models\Client;
 use App\Models\DctfwebDarfDocument;
 use App\Models\DctfwebDeclaration;
-use App\Models\Office;
 use App\Models\TaxObligationDefinition;
 use App\Models\TaxObligationProjection;
+use App\Models\Tenant;
 use App\Services\Fiscal\Declarations\DeclarationDctfwebEnrichmentService;
 use App\Services\Fiscal\Guides\ClientGuidesQueryService;
 use Carbon\CarbonImmutable;
@@ -26,10 +26,10 @@ class ClientDetailDctfwebHubWiringTest extends TestCase
 
     public function test_declaration_enrichment_marks_receipt_up_to_date(): void
     {
-        [$office, $client, $projection] = $this->seedProjection();
+        [$tenant, $client, $projection] = $this->seedProjection();
 
         DctfwebDeclaration::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'period_key' => '2026-06',
             'category' => DctfwebCategory::default()->value,
@@ -42,7 +42,7 @@ class ClientDetailDctfwebHubWiringTest extends TestCase
         ]);
 
         $rows = app(DeclarationDctfwebEnrichmentService::class)->enrichFromProjections(
-            $office,
+            $tenant,
             [$projection->fresh(['obligation'])],
             true,
             (int) $client->id,
@@ -56,14 +56,13 @@ class ClientDetailDctfwebHubWiringTest extends TestCase
 
     public function test_declaration_list_includes_synthetic_without_projection(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->for($office)->create([
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->for($tenant)->create([
             'is_active' => true,
-            'matrix_client_id' => null,
         ]);
 
         DctfwebDeclaration::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'period_key' => '2026-05',
             'category' => DctfwebCategory::default()->value,
@@ -76,7 +75,7 @@ class ClientDetailDctfwebHubWiringTest extends TestCase
         ]);
 
         $rows = app(DeclarationDctfwebEnrichmentService::class)->enrichPublicRows(
-            $office,
+            $tenant,
             [],
             (int) $client->id,
         );
@@ -90,14 +89,13 @@ class ClientDetailDctfwebHubWiringTest extends TestCase
 
     public function test_client_guides_include_darf_document(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->for($office)->create([
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->for($tenant)->create([
             'is_active' => true,
-            'matrix_client_id' => null,
         ]);
 
         $declaration = DctfwebDeclaration::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'period_key' => '2026-06',
             'category' => DctfwebCategory::default()->value,
@@ -108,7 +106,7 @@ class ClientDetailDctfwebHubWiringTest extends TestCase
         ]);
 
         DctfwebDarfDocument::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'declaration_id' => $declaration->id,
             'document_number' => 'DARF-998877',
@@ -119,7 +117,7 @@ class ClientDetailDctfwebHubWiringTest extends TestCase
             'content_sha256' => str_repeat('a', 64),
         ]);
 
-        $page = app(ClientGuidesQueryService::class)->paginate($office, (int) $client->id, 20)['page'];
+        $page = app(ClientGuidesQueryService::class)->paginate($tenant, (int) $client->id, 20)['page'];
         $this->assertSame(1, $page->total());
         $row = $page->items()[0];
         $this->assertSame('DARF-998877', $row['identifier_code']);
@@ -131,14 +129,13 @@ class ClientDetailDctfwebHubWiringTest extends TestCase
 
     public function test_receipt_only_does_not_invent_darf_guide(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->for($office)->create([
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->for($tenant)->create([
             'is_active' => true,
-            'matrix_client_id' => null,
         ]);
 
         DctfwebDeclaration::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'period_key' => '2026-06',
             'category' => DctfwebCategory::default()->value,
@@ -147,19 +144,18 @@ class ClientDetailDctfwebHubWiringTest extends TestCase
             'receipt_number' => 'REC-ONLY',
         ]);
 
-        $page = app(ClientGuidesQueryService::class)->paginate($office, (int) $client->id, 20)['page'];
+        $page = app(ClientGuidesQueryService::class)->paginate($tenant, (int) $client->id, 20)['page'];
         $this->assertSame(0, $page->total());
     }
 
     /**
-     * @return array{0: Office, 1: Client, 2: TaxObligationProjection}
+     * @return array{0: Tenant, 1: Client, 2: TaxObligationProjection}
      */
     private function seedProjection(): array
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->for($office)->create([
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->for($tenant)->create([
             'is_active' => true,
-            'matrix_client_id' => null,
         ]);
 
         $def = TaxObligationDefinition::query()->firstOrCreate(
@@ -174,7 +170,7 @@ class ClientDetailDctfwebHubWiringTest extends TestCase
         );
 
         $projection = TaxObligationProjection::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'obligation_definition_id' => $def->id,
             'period_key' => '2026-06',
@@ -186,6 +182,6 @@ class ClientDetailDctfwebHubWiringTest extends TestCase
             'applicability' => TaxObligationApplicability::Applicable,
         ]);
 
-        return [$office, $client, $projection];
+        return [$tenant, $client, $projection];
     }
 }

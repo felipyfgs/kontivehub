@@ -46,7 +46,7 @@ export function createOperationsApi(client: ApiClient, apiUrl: ApiUrl) {
         }>('/api/v1/cte/coverage', { query: params }),
       pending: () =>
         client<{ data: CtePendingItem[] }>('/api/v1/cte/pending'),
-      /** Reparo por consNSU conhecido — recusado em quiet/circuito (ADMIN/OPERATOR). */
+      /** Reparo por consNSU conhecido — recusado em quiet/circuito ou sem permissão. */
       repair: (body: { cursor_id: number, nsu: number }) =>
         client<{
           data: {

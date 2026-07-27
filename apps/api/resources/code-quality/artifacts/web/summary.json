@@ -1,42 +1,42 @@
 {
     "schemaVersion": 1,
-    "combinedDigest": "b070adbcb8587161be1de85e3a20d1540b31caeefbf607e58c355df67299dd13",
+    "combinedDigest": "88a43a669c7b6df19bdb78387582321e326a1131ee89b0099856821412d861d4",
     "inventoryDigests": {
-        "api": "4f732a3ce71b9f9da4abe6c9f4c88fba7c72ddf78b9c5d6a09d16bd75390cce2",
-        "web": "4f9a29c1c57e6abf283b18ae1dcf711f829a82a5de605235bfca79de515be2f0"
+        "api": "d28168aa3c0f7970771ea7d7ef352518c068919bd8cef1dfa2f4b8c7f2f247a0",
+        "web": "58d4411cd6404cb195e4c9e3c33da1321f1d1cb1a3ef1f857a25ce23cda7cd27"
     },
     "api": {
-        "files": 2037,
-        "symbols": 13309,
-        "executableFiles": 1977,
+        "files": 2060,
+        "symbols": 12946,
+        "executableFiles": 2000,
         "parseErrors": 0,
         "byApp": {
-            "api": 2037
+            "api": 2060
         },
         "byCategory": {
-            "application": 1497,
+            "application": 1454,
             "bootstrap": 3,
-            "configuration": 42,
-            "control": 4,
+            "configuration": 40,
+            "control": 3,
             "dependency-manifest": 2,
             "documentation": 1,
             "factory": 34,
             "fixture": 18,
-            "migration": 164,
-            "other": 16,
+            "migration": 227,
+            "other": 17,
             "public-asset": 3,
-            "resource": 19,
+            "resource": 20,
             "route": 3,
             "rpa": 1,
-            "seeder": 9,
+            "seeder": 10,
             "storage-placeholder": 10,
-            "test": 211
+            "test": 214
         },
         "byLanguage": {
-            "json": 33,
+            "json": 34,
             "markdown": 1,
-            "other": 21,
-            "php": 1973,
+            "other": 20,
+            "php": 1996,
             "python": 4,
             "text": 2,
             "xml": 1,
@@ -44,26 +44,26 @@
             "yaml": 1
         },
         "bySymbolKind": {
-            "arrow-function": 907,
-            "class": 1705,
-            "closure": 1188,
-            "enum": 193,
-            "function": 52,
+            "arrow-function": 924,
+            "class": 1730,
+            "closure": 916,
+            "enum": 192,
+            "function": 62,
             "interface": 44,
-            "method": 9215,
+            "method": 9073,
             "trait": 5
         }
     },
     "web": {
-        "files": 674,
-        "symbols": 7250,
-        "executableFiles": 647,
+        "files": 643,
+        "symbols": 7121,
+        "executableFiles": 616,
         "parseErrors": 0,
         "byApp": {
-            "web": 674
+            "web": 643
         },
         "byCategory": {
-            "application": 520,
+            "application": 486,
             "configuration": 5,
             "control": 1,
             "dependency-manifest": 2,
@@ -71,25 +71,25 @@
             "fixture": 12,
             "other": 5,
             "public-asset": 4,
-            "script": 6,
+            "script": 9,
             "server": 1,
             "test": 117
         },
         "byLanguage": {
             "css": 1,
             "image": 4,
-            "javascript": 9,
+            "javascript": 12,
             "json": 8,
             "markdown": 3,
             "other": 9,
-            "typescript": 313,
-            "vue": 325,
+            "typescript": 312,
+            "vue": 292,
             "yaml": 2
         },
         "bySymbolKind": {
-            "arrow-function": 4343,
-            "function": 2381,
-            "interface": 511,
+            "arrow-function": 4284,
+            "function": 2328,
+            "interface": 494,
             "method": 15
         }
     }

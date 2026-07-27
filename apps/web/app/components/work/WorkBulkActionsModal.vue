@@ -3,7 +3,7 @@
  * Modal de ações em massa para Processos e/ou Tarefas (listas Work).
  * Padrão visual: AssignCategoriesModal / SaveFilterModal / ShellFormModal.
  */
-import type { OfficeMember } from '~/types/api'
+import type { TenantMember } from '~/types/api'
 import type { WorkDepartment } from '~/types/work'
 import { apiErrorMessage } from '~/utils/api-error'
 import { initialWorkBulkScope } from '~/utils/work-bulk-actions'
@@ -67,7 +67,7 @@ const reason = ref('')
 const dueDate = ref('')
 const assigneeMembershipId = ref<number | undefined>(undefined)
 const departmentId = ref<number | undefined>(undefined)
-const members = ref<OfficeMember[]>([])
+const members = ref<TenantMember[]>([])
 const departments = ref<WorkDepartment[]>([])
 
 const processCount = computed(() => props.processes.length)
@@ -275,7 +275,7 @@ watch(open, async (isOpen) => {
   if (props.canAdminister || props.canUpdateProcesses) {
     try {
       const [membersRes, departmentsRes] = await Promise.all([
-        api.office.members.list(),
+        api.tenant.members.list(),
         api.work.departments.list({ per_page: 100, is_active: true })
       ])
       members.value = Array.isArray(membersRes?.data) ? membersRes.data : []

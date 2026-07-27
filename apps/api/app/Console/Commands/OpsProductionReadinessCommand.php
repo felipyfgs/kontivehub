@@ -6,7 +6,7 @@ use App\Services\Ops\ProductionReadinessService;
 use Illuminate\Console\Command;
 
 /**
- * Readiness global de produção — sem Office, sem transporte fiscal externo.
+ * Readiness global de produção — sem Tenant, sem transporte fiscal externo.
  */
 class OpsProductionReadinessCommand extends Command
 {

@@ -4,8 +4,8 @@ namespace App\Jobs\Mailbox;
 
 use App\Jobs\Serpro\PollEventosAtualizacaoJob;
 use App\Models\MailboxMonitoringSetting;
-use App\Models\Office;
 use App\Models\SerproEventosRun;
+use App\Models\Tenant;
 use App\Services\Integra\Eventos\EventosAtualizacaoFlowService;
 use App\Services\Integra\Mailbox\MailboxContributorBatchBuilder;
 use App\Services\Integra\Mailbox\MailboxSyncOrchestrator;
@@ -24,14 +24,14 @@ final class DispatchMailboxMonitoringJob implements ShouldQueue
 
     public int $timeout = 300;
 
-    public function __construct(public readonly int $officeId)
+    public function __construct(public readonly int $tenantId)
     {
         $this->onQueue((string) config('serpro.eventos.queue', 'fiscal'));
     }
 
     public function middleware(): array
     {
-        return [(new WithoutOverlapping('mailbox-monitoring:'.$this->officeId))->expireAfter(900)->releaseAfter(60)];
+        return [(new WithoutOverlapping('mailbox-monitoring:'.$this->tenantId))->expireAfter(900)->releaseAfter(60)];
     }
 
     public function handle(
@@ -43,14 +43,14 @@ final class DispatchMailboxMonitoringJob implements ShouldQueue
             return;
         }
         $setting = MailboxMonitoringSetting::query()->withoutGlobalScopes()
-            ->where('office_id', $this->officeId)->where('enabled', true)->first();
-        $office = Office::query()->withoutGlobalScopes()->whereKey($this->officeId)->where('is_active', true)->first();
-        if ($setting === null || $office === null) {
+            ->where('tenant_id', $this->tenantId)->where('enabled', true)->first();
+        $tenant = Tenant::query()->withoutGlobalScopes()->whereKey($this->tenantId)->where('is_active', true)->first();
+        if ($setting === null || $tenant === null) {
             return;
         }
 
-        foreach ($contributors->batches($office) as $batch) {
-            $run = $events->solicit($office, 'PJ', 'E0601', contributorIdentities: $batch);
+        foreach ($contributors->batches($tenant) as $batch) {
+            $run = $events->solicit($tenant, 'PJ', 'E0601', contributorIdentities: $batch);
             if ($run->status === SerproEventosRun::STATUS_RUNNING) {
                 $delay = max(1, (int) ceil(((int) $run->tempo_espera_medio_ms) / 1000));
                 PollEventosAtualizacaoJob::dispatch($run->id)->delay(now()->addSeconds($delay));
@@ -58,9 +58,9 @@ final class DispatchMailboxMonitoringJob implements ShouldQueue
         }
 
         // Bootstrap e reconciliação faturável são previstos/bloqueados antes de criar as runs.
-        $preview = $sync->preview($office, $setting);
+        $preview = $sync->preview($tenant, $setting);
         if ($preview['can_confirm']) {
-            $sync->confirm($office, $setting);
+            $sync->confirm($tenant, $setting);
         }
         $setting->forceFill(['last_dispatched_at' => now()])->save();
     }

@@ -9,14 +9,14 @@ enum FiscalControlModule: string
 {
     case SimplesMei = 'simples_mei';
     case Dctfweb = 'dctfweb';
-    case Installments = 'parcelamentos';
-    case FiscalSituation = 'situacao_fiscal';
-    case Mailbox = 'caixa_postal';
-    case Declarations = 'declaracoes';
-    case Guides = 'guias';
+    case Installments = 'installments';
+    case FiscalSituation = 'sitfis';
+    case Mailbox = 'mailbox';
+    case Declarations = 'declarations';
+    case Guides = 'guides';
     case Fgts = 'fgts';
-    case Registrations = 'cadastros';
-    case FiscalProcesses = 'processos_fiscais';
+    case Registrations = 'registrations';
+    case FiscalProcesses = 'tax_processes';
 
     public function label(): string
     {
@@ -36,19 +36,7 @@ enum FiscalControlModule: string
 
     public static function fromRuntimeKey(string $key): self
     {
-        $normalized = strtolower(str_replace('-', '_', trim($key)));
-        $aliases = [
-            'dctfweb_mit' => self::Dctfweb,
-            'installments' => self::Installments,
-            'sitfis' => self::FiscalSituation,
-            'mailbox' => self::Mailbox,
-            'declarations' => self::Declarations,
-            'guides' => self::Guides,
-            'registrations' => self::Registrations,
-            'tax_processes' => self::FiscalProcesses,
-        ];
-
-        return $aliases[$normalized] ?? self::tryFrom($normalized)
+        return self::tryFrom(trim($key))
             ?? throw new InvalidArgumentException("Módulo fiscal desconhecido: {$key}");
     }
 

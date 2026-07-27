@@ -12,7 +12,7 @@ enum QuarantineReason: string
     case BytesDiverge = 'BYTES_DIVERGE';
     case SchemaIncomplete = 'SCHEMA_INCOMPLETE';
     case UnknownSchema = 'UNKNOWN_SCHEMA';
-    case OfficeAlsoRecipient = 'OFFICE_ALSO_RECIPIENT';
+    case TenantAlsoRecipient = 'TENANT_ALSO_RECIPIENT';
     case SummaryOnly = 'SUMMARY_ONLY';
     /** CT-e principal do próprio emitente no DistDFe do cliente (contrato: não distribui). */
     case UnexpectedOwnIssuerDocument = 'UNEXPECTED_OWN_ISSUER_DOCUMENT';
@@ -34,7 +34,7 @@ enum QuarantineReason: string
             self::BytesDiverge => 'Bytes divergentes para a mesma chave',
             self::SchemaIncomplete => 'Schema/XML incompleto',
             self::UnknownSchema => 'Versão de schema desconhecida',
-            self::OfficeAlsoRecipient => 'Escritório também é destinatário',
+            self::TenantAlsoRecipient => 'Escritório também é destinatário',
             self::SummaryOnly => 'Apenas resumo (resNFe)',
             self::UnexpectedOwnIssuerDocument => 'CT-e do próprio emitente no DistDFe do cliente',
             self::UnmatchedFiscalRole => 'Papel fiscal CT-e não identificado',

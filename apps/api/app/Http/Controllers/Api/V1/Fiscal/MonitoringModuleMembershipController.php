@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Api\V1\Fiscal;
 
 use App\Enums\FiscalModuleKey;
-use App\Enums\OfficeRole;
+use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
+use App\Models\User;
+use App\Services\Authorization\TenantAuthorization;
 use App\Services\FiscalMonitoring\MonitoringModuleMembershipService;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -18,14 +20,15 @@ use RuntimeException;
 class MonitoringModuleMembershipController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly MonitoringModuleMembershipService $membership,
+        private readonly TenantAuthorization $authorization,
     ) {}
 
     public function index(Request $request): JsonResponse
     {
         $this->assertCanRead();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
         $data = $request->validate([
             'module' => ['required', 'string', Rule::in(FiscalModuleKey::values())],
@@ -39,7 +42,7 @@ class MonitoringModuleMembershipController extends Controller
         }
 
         $items = $this->membership->listExclusions(
-            $office,
+            $tenant,
             $module,
             $data['submodule'] ?? null,
         );
@@ -52,7 +55,7 @@ class MonitoringModuleMembershipController extends Controller
     public function exclude(Request $request): JsonResponse
     {
         $this->assertCanWrite();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
         $actor = $request->user();
 
         $data = $request->validate([
@@ -70,7 +73,7 @@ class MonitoringModuleMembershipController extends Controller
 
         try {
             $result = $this->membership->exclude(
-                $office,
+                $tenant,
                 $module,
                 $data['client_ids'],
                 $data['submodule'] ?? null,
@@ -86,7 +89,7 @@ class MonitoringModuleMembershipController extends Controller
     public function include(Request $request): JsonResponse
     {
         $this->assertCanWrite();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
         $data = $request->validate([
             'module' => ['required', 'string', Rule::in(FiscalModuleKey::values())],
@@ -103,7 +106,7 @@ class MonitoringModuleMembershipController extends Controller
 
         try {
             $result = $this->membership->include(
-                $office,
+                $tenant,
                 $module,
                 $data['client_ids'],
                 $data['submodule'] ?? null,
@@ -119,16 +122,18 @@ class MonitoringModuleMembershipController extends Controller
 
     private function assertCanRead(): void
     {
-        $role = $this->currentOffice->role();
-        if ($role === null) {
+        $actor = request()->user();
+        if (! $actor instanceof User
+            || ! $this->authorization->allows($actor, TenantPermission::FiscalMonitoringView)) {
             abort(403, 'Perfil não resolvido.');
         }
     }
 
     private function assertCanWrite(): void
     {
-        $role = $this->currentOffice->role();
-        if ($role === null || ! in_array($role, [OfficeRole::Admin, OfficeRole::Operator], true)) {
+        $actor = request()->user();
+        if (! $actor instanceof User
+            || ! $this->authorization->allows($actor, TenantPermission::ClientsManage)) {
             abort(403, 'Ação não autorizada para o perfil atual.');
         }
     }

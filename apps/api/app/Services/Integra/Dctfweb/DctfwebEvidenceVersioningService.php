@@ -50,7 +50,7 @@ final class DctfwebEvidenceVersioningService
         ) {
             $current = DctfwebEvidenceVersion::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $declaration->office_id)
+                ->where('tenant_id', $declaration->tenant_id)
                 ->where('declaration_id', $declaration->id)
                 ->where('artifact_kind', $kind->value)
                 ->where('is_current', true)
@@ -89,7 +89,7 @@ final class DctfwebEvidenceVersioningService
             }
 
             $version = DctfwebEvidenceVersion::query()->create([
-                'office_id' => $declaration->office_id,
+                'tenant_id' => $declaration->tenant_id,
                 'client_id' => $declaration->client_id,
                 'declaration_id' => $declaration->id,
                 'competence_id' => $declaration->competence_id,
@@ -129,7 +129,7 @@ final class DctfwebEvidenceVersioningService
     {
         $q = DctfwebEvidenceVersion::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $declaration->office_id)
+            ->where('tenant_id', $declaration->tenant_id)
             ->where('declaration_id', $declaration->id)
             ->orderBy('artifact_kind')
             ->orderBy('version');

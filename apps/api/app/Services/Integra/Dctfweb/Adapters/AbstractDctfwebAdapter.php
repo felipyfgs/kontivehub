@@ -82,9 +82,7 @@ abstract class AbstractDctfwebAdapter implements FiscalSourceAdapter
     {
         $response = $this->caller->call(
             request: $request,
-            solutionCode: $this->systemCode(),
-            serviceCode: $this->serviceCode(),
-            operationCode: $this->operationCode(),
+            operationKey: DctfwebCodes::operationKey($this->operationCode()),
             payload: $payload,
         );
 

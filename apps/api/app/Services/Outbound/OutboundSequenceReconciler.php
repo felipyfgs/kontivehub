@@ -12,9 +12,9 @@ use App\Enums\OutboundRetrievalStatus;
 use App\Enums\OutboundSeriesStatus;
 use App\Models\Client;
 use App\Models\Establishment;
-use App\Models\MaOutboundRetrievalRequest;
 use App\Models\OutboundCaptureProfile;
 use App\Models\OutboundNumberState;
+use App\Models\OutboundRetrievalRequest;
 use App\Models\OutboundSeriesCursor;
 use App\Services\Certificates\CredentialService;
 use App\Services\Clients\CaptureEligibilityService;
@@ -100,11 +100,11 @@ final class OutboundSequenceReconciler
             }
             $credential = $this->credentials->activeFor($client);
             if ($credential === null) {
-                throw new RuntimeException('Credencial A1 da raiz ausente.');
+                throw new RuntimeException('certificado da raiz ausente.');
             }
             $material = $this->credentials->loadPfxMaterial($credential);
             if ($material === null) {
-                throw new RuntimeException('Não foi possível materializar A1 da raiz.');
+                throw new RuntimeException('Não foi possível materializar certificado da raiz.');
             }
 
             $max = min($maxNumbers, (int) config('sefaz.ma_outbound.max_numbers_per_run', 10));
@@ -438,7 +438,7 @@ final class OutboundSequenceReconciler
     }
 
     /**
-     * Pendência assistida de recuperação de XML (sem M2M), idempotente por office_id + access_key.
+     * Pendência assistida de recuperação de XML (sem M2M), idempotente por tenant_id + access_key.
      */
     private function openAssistedRetrievalPending(
         OutboundSeriesCursor $series,
@@ -463,9 +463,9 @@ final class OutboundSequenceReconciler
             $rootCnpj = substr($key, 6, 8);
         }
 
-        MaOutboundRetrievalRequest::query()->firstOrCreate(
+        OutboundRetrievalRequest::query()->firstOrCreate(
             [
-                'office_id' => $series->office_id,
+                'tenant_id' => $series->tenant_id,
                 'access_key' => $key,
             ],
             [
@@ -507,7 +507,7 @@ final class OutboundSequenceReconciler
         ]);
 
         return OutboundNumberState::query()->create([
-            'office_id' => $series->office_id,
+            'tenant_id' => $series->tenant_id,
             'outbound_capture_profile_id' => $series->outbound_capture_profile_id,
             'outbound_series_cursor_id' => $series->id,
             'series' => $series->series,

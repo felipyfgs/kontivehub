@@ -4,7 +4,7 @@ const workspace = useCommunicationWorkspace()
 const activeTab = ref('channels')
 const newInboxName = ref('')
 const creatingInbox = ref(false)
-const officeSwitchLoading = ref(false)
+const tenantSwitchLoading = ref(false)
 
 const tabs = [
   { label: 'Canais', value: 'channels', icon: 'i-lucide-message-square-more' },
@@ -29,10 +29,10 @@ async function createInbox() {
   creatingInbox.value = false
 }
 
-async function toggleOffice(value: boolean) {
-  officeSwitchLoading.value = true
-  await workspace.updateOfficeEnabled(value)
-  officeSwitchLoading.value = false
+async function toggleTenant(value: boolean) {
+  tenantSwitchLoading.value = true
+  await workspace.updateTenantEnabled(value)
+  tenantSwitchLoading.value = false
 }
 
 function policyFor(scope: string) {
@@ -88,10 +88,10 @@ function policyFor(scope: string) {
                 </p>
               </div>
               <USwitch
-                :model-value="workspace.featureMeta.value.office_enabled"
+                :model-value="workspace.featureMeta.value.tenant_enabled"
                 label="Comunicação habilitada"
-                :loading="officeSwitchLoading"
-                @update:model-value="toggleOffice"
+                :loading="tenantSwitchLoading"
+                @update:model-value="toggleTenant"
               />
             </div>
           </UCard>
@@ -125,7 +125,7 @@ function policyFor(scope: string) {
               v-for="inbox in workspace.inboxes.value"
               :key="inbox.id"
               :inbox="inbox"
-              :members="workspace.officeMembers.value"
+              :members="workspace.tenantMembers.value"
               :departments="workspace.departments.value"
             />
             <UAlert

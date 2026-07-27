@@ -48,12 +48,6 @@ enum TaxGuideEmissionStatus: string
         return in_array($this, [self::UnknownResult, self::Reconciling, self::Sent], true);
     }
 
-    /** Alias semântico usado pelos services de emissão. */
-    public function blocksRetry(): bool
-    {
-        return $this->blocksImmediateRetry();
-    }
-
     public function isUsableDocument(): bool
     {
         return $this === self::Confirmed;

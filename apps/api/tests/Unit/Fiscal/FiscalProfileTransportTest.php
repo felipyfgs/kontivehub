@@ -21,7 +21,7 @@ class FiscalProfileTransportTest extends TestCase
         );
 
         $response = app(FixtureIntegraContadorClient::class)->execute(new IntegraRequest(
-            officeId: 1,
+            tenantId: 1,
             clientId: 1,
             environment: 'DEV',
             contractorCnpj: '11222333000181',

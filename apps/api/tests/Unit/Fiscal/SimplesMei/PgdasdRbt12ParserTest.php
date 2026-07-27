@@ -17,20 +17,6 @@ final class PgdasdRbt12ParserTest extends TestCase
         $this->parser = new PgdasdRbt12Parser;
     }
 
-    public function test_parses_single_line_rbt12(): void
-    {
-        $text = "Período de Apuração: 05/2026\n"
-            ."RBT12 Mercado Interno 10.000,00 Mercado Externo 0,00 Total 10.000,00\n";
-
-        $parsed = $this->parser->parse($text, '202605');
-
-        $this->assertSame(PgdasdRbt12Status::Parsed, $parsed['status']);
-        $this->assertSame(1_000_000, $parsed['total_cents']);
-        $this->assertSame(1_000_000, $parsed['internal_market_cents']);
-        $this->assertSame(0, $parsed['external_market_cents']);
-        $this->assertSame('pgdasd-rbt12-v4', $parsed['parser_version']);
-    }
-
     public function test_parses_official_cons_extrato_layout_with_doze_meses(): void
     {
         $text = <<<'TXT'

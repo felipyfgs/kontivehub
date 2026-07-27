@@ -70,7 +70,7 @@ function channelUiState(row: CteChannelCursor): ChannelUiState {
       color: 'info',
       hint: row.next_sync_at
         ? `cStat 137: sem documentos novos até ${formatDateTime(row.next_sync_at)}.`
-        : 'cStat 137: quiet mínimo — não é falha nem backfill concluído.'
+        : 'cStat 137: quiet mínimo — não é falha nem carga retroativa concluída.'
     }
   }
   if (quietFuture) {
@@ -137,7 +137,7 @@ function summarizeChannel(rows: CteChannelCursor[] | undefined) {
 const clientChannelSummary = computed(() =>
   summarizeChannel(cteHealth.value?.channels?.CTE_DISTDFE)
 )
-const officeChannelSummary = computed(() =>
+const tenantChannelSummary = computed(() =>
   summarizeChannel(cteHealth.value?.channels?.CTE_AUTXML_DISTDFE)
 )
 
@@ -224,7 +224,7 @@ onMounted(refreshAll)
     </template>
 
     <template #body>
-      <OfficeAutXmlSyncCard class="mb-4" />
+      <TenantAutXmlSyncCard class="mb-4" />
 
       <div
         class="grid gap-4 lg:grid-cols-2"
@@ -338,36 +338,36 @@ onMounted(refreshAll)
           <template v-else>
             <div class="flex flex-wrap items-center gap-2">
               <UBadge color="neutral" variant="subtle">
-                {{ officeChannelSummary.list.length || cteHealth?.summary.office_streams || 0 }} stream(s)
+                {{ tenantChannelSummary.list.length || cteHealth?.summary.tenant_streams || 0 }} stream(s)
               </UBadge>
               <UBadge
-                v-if="officeChannelSummary.primary"
-                :color="officeChannelSummary.primary.color"
+                v-if="tenantChannelSummary.primary"
+                :color="tenantChannelSummary.primary.color"
                 variant="subtle"
-                data-testid="cte-office-channel-state"
+                data-testid="cte-tenant-channel-state"
               >
-                {{ officeChannelSummary.primary.label }}
+                {{ tenantChannelSummary.primary.label }}
               </UBadge>
               <UBadge
-                v-if="officeChannelSummary.blocked"
+                v-if="tenantChannelSummary.blocked"
                 color="error"
                 variant="subtle"
               >
-                {{ officeChannelSummary.blocked }} bloqueado(s)
+                {{ tenantChannelSummary.blocked }} bloqueado(s)
               </UBadge>
               <UBadge
-                v-if="officeChannelSummary.quiet"
+                v-if="tenantChannelSummary.quiet"
                 color="info"
                 variant="subtle"
               >
-                {{ officeChannelSummary.quiet }} em quiet
+                {{ tenantChannelSummary.quiet }} em quiet
               </UBadge>
             </div>
             <p
-              v-if="officeChannelSummary.primary"
+              v-if="tenantChannelSummary.primary"
               class="mt-2 text-sm text-muted"
             >
-              {{ officeChannelSummary.primary.hint }}
+              {{ tenantChannelSummary.primary.hint }}
             </p>
             <p
               v-else-if="!cteError"

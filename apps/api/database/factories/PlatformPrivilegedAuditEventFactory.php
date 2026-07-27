@@ -2,8 +2,8 @@
 
 namespace Database\Factories;
 
-use App\Models\Office;
 use App\Models\PlatformPrivilegedAuditEvent;
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
@@ -19,9 +19,9 @@ class PlatformPrivilegedAuditEventFactory extends Factory
     {
         return [
             'actor_user_id' => User::factory(),
-            'office_id' => Office::factory(),
-            'action' => PlatformPrivilegedAuditEvent::ACTION_SELECT_OFFICE,
-            'target_type' => Office::class,
+            'tenant_id' => Tenant::factory(),
+            'action' => PlatformPrivilegedAuditEvent::ACTION_SELECT_TENANT,
+            'target_type' => Tenant::class,
             'target_id' => null,
             'result' => PlatformPrivilegedAuditEvent::RESULT_SUCCESS,
             'request_id' => (string) Str::uuid(),
@@ -38,12 +38,12 @@ class PlatformPrivilegedAuditEventFactory extends Factory
         return $this->state(fn () => ['actor_user_id' => $user->id]);
     }
 
-    public function forOffice(Office $office): static
+    public function forTenant(Tenant $tenant): static
     {
         return $this->state(fn () => [
-            'office_id' => $office->id,
-            'target_type' => Office::class,
-            'target_id' => $office->id,
+            'tenant_id' => $tenant->id,
+            'target_type' => Tenant::class,
+            'target_id' => $tenant->id,
         ]);
     }
 
@@ -61,7 +61,7 @@ class PlatformPrivilegedAuditEventFactory extends Factory
                 'password' => 'super-secret',
                 'pfx' => 'binary-blob',
                 'access_mode' => 'platform_privileged',
-                'office_slug' => 'acme',
+                'tenant_slug' => 'acme',
             ],
         ]);
     }

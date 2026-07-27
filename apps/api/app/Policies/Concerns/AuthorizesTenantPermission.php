@@ -5,7 +5,7 @@ namespace App\Policies\Concerns;
 use App\Enums\TenantPermission;
 use App\Models\User;
 use App\Services\Authorization\TenantAuthorization;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Database\Eloquent\Model;
 
 trait AuthorizesTenantPermission
@@ -15,20 +15,20 @@ trait AuthorizesTenantPermission
         return app(TenantAuthorization::class)->allows($user, $permission, $target);
     }
 
-    protected function hasOfficeContext(User $user): bool
+    protected function hasTenantContext(User $user): bool
     {
-        return app(CurrentOffice::class)->resolve($user) !== null;
+        return app(CurrentTenant::class)->resolve($user) !== null;
     }
 
-    protected function sameOffice(User $user, Model $model): bool
+    protected function sameTenant(User $user, Model $model): bool
     {
-        $officeId = app(CurrentOffice::class)->resolve($user)?->id;
-        if ($officeId === null) {
+        $tenantId = app(CurrentTenant::class)->resolve($user)?->id;
+        if ($tenantId === null) {
             return false;
         }
 
-        $modelOfficeId = $model->getAttribute('office_id');
+        $modelTenantId = $model->getAttribute('tenant_id');
 
-        return $modelOfficeId !== null && (int) $modelOfficeId === (int) $officeId;
+        return $modelTenantId !== null && (int) $modelTenantId === (int) $tenantId;
     }
 }

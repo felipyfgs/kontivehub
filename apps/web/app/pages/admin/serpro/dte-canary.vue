@@ -12,7 +12,7 @@ const acting = ref(false)
 const loadError = ref<string | null>(null)
 const summary = ref<Record<string, unknown> | null>(null)
 
-const officeId = ref<number | null>(null)
+const tenantId = ref<number | null>(null)
 const clientId = ref<number | null>(null)
 const reconcileRef = ref('')
 const reconcileSummary = ref('')
@@ -32,9 +32,9 @@ const blockers = computed(() => Array.isArray(gate.value?.blockers)
   ? gate.value.blockers.map(item => String(item))
   : [])
 const ownerApproved = computed(() => Boolean(request.value?.owner_approved))
-const officeAdminApproved = computed(() => Boolean(request.value?.office_admin_approved))
-const approvalsComplete = computed(() => ownerApproved.value && officeAdminApproved.value)
-const targetSelected = computed(() => Boolean(request.value?.office_id && request.value?.client_id))
+const tenantAdminApproved = computed(() => Boolean(request.value?.tenant_admin_approved))
+const approvalsComplete = computed(() => ownerApproved.value && tenantAdminApproved.value)
+const targetSelected = computed(() => Boolean(request.value?.tenant_id && request.value?.client_id))
 const requestStatus = computed(() => String(request.value?.status || '').toUpperCase())
 const attemptFinished = computed(() => Boolean(request.value?.result_status) || [
   'SUCCEEDED',
@@ -145,13 +145,13 @@ function createRequest() {
 
 function selectTarget() {
   const id = Number(request.value?.id)
-  if (!id || !officeId.value || !clientId.value) {
-    toast.add({ title: 'Informe Office e cliente', color: 'warning' })
+  if (!id || !tenantId.value || !clientId.value) {
+    toast.add({ title: 'Informe Tenant e cliente', color: 'warning' })
     return Promise.resolve()
   }
   return run(async () => {
     await api.platform.serpro.dteCanary.selectTarget(id, {
-      office_id: officeId.value!,
+      tenant_id: tenantId.value!,
       client_id: clientId.value!
     })
     toast.add({ title: 'Alvo selecionado (server-side)', color: 'success' })
@@ -311,10 +311,10 @@ onMounted(load)
             </div>
             <div>
               <dt class="text-muted">
-                Office piloto
+                Tenant piloto
               </dt>
               <dd class="font-medium">
-                {{ control?.pilot_office_id ?? request?.office_id ?? '—' }}
+                {{ control?.pilot_tenant_id ?? request?.tenant_id ?? '—' }}
               </dd>
             </div>
             <div>
@@ -363,7 +363,7 @@ onMounted(load)
                 Alvo persistido
               </dt>
               <dd class="font-medium">
-                Office #{{ request.office_id || '—' }}
+                Tenant #{{ request.tenant_id || '—' }}
                 · Cliente #{{ request.client_id || '—' }}
               </dd>
             </div>
@@ -400,20 +400,20 @@ onMounted(load)
             class="mt-6 grid gap-3 sm:grid-cols-2"
           >
             <UFormField
-              label="Office piloto"
+              label="Tenant piloto"
               required
             >
               <UInput
-                v-model.number="officeId"
+                v-model.number="tenantId"
                 type="number"
                 min="1"
                 class="w-full"
-                placeholder="ID do Office"
-                data-testid="dte-canary-office-id"
+                placeholder="ID do Tenant"
+                data-testid="dte-canary-tenant-id"
               />
             </UFormField>
             <UFormField
-              label="Cliente do Office"
+              label="Cliente do Tenant"
               required
             >
               <UInput
@@ -441,7 +441,7 @@ onMounted(load)
                 v-else-if="!attemptFinished && !approvalsComplete"
                 label="Definir alvo"
                 icon="i-lucide-crosshair"
-                :disabled="!officeId || !clientId"
+                :disabled="!tenantId || !clientId"
                 :loading="acting"
                 data-testid="dte-canary-select-target"
                 @click="requestRecentPassword('Definir alvo do canário', selectTarget)"
@@ -480,14 +480,14 @@ onMounted(load)
             </div>
             <div class="rounded-lg border border-default p-3">
               <p class="text-sm font-medium text-highlighted">
-                Office ADMIN
+                Administrador do tenant
               </p>
               <div class="mt-2">
                 <UBadge
-                  :color="officeAdminApproved ? 'success' : 'warning'"
+                  :color="tenantAdminApproved ? 'success' : 'warning'"
                   variant="subtle"
                 >
-                  {{ officeAdminApproved ? 'Aprovado' : 'Pendente no Office' }}
+                  {{ tenantAdminApproved ? 'Aprovado' : 'Pendente no Tenant' }}
                 </UBadge>
               </div>
             </div>
@@ -496,7 +496,7 @@ onMounted(load)
           <template #footer>
             <div class="flex w-full flex-wrap items-center justify-between gap-3">
               <p class="max-w-xl text-sm text-muted">
-                O ADMIN aprova no próprio escritório.
+                O administrador aprova no próprio escritório.
               </p>
               <UButton
                 v-if="!ownerApproved"

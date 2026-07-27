@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'organization_name',
     'onboarding_completed_at',
     'onboarded_by_user_id',
-    'primary_office_id',
+    'primary_tenant_id',
 ])]
 class PlatformSetting extends Model
 {
@@ -27,7 +27,7 @@ class PlatformSetting extends Model
             'id' => 'integer',
             'onboarding_completed_at' => 'immutable_datetime',
             'onboarded_by_user_id' => 'integer',
-            'primary_office_id' => 'integer',
+            'primary_tenant_id' => 'integer',
         ];
     }
 
@@ -36,8 +36,8 @@ class PlatformSetting extends Model
         return $this->belongsTo(User::class, 'onboarded_by_user_id');
     }
 
-    public function primaryOffice(): BelongsTo
+    public function primaryTenant(): BelongsTo
     {
-        return $this->belongsTo(Office::class, 'primary_office_id');
+        return $this->belongsTo(Tenant::class, 'primary_tenant_id');
     }
 }

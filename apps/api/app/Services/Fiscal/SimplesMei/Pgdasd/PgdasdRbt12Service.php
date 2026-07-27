@@ -6,10 +6,10 @@ use App\Enums\PgdasdOperationKind;
 use App\Enums\PgdasdRbt12Status;
 use App\Jobs\Fiscal\FetchPgdasdRbt12Job;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
 use App\Models\PgdasdOperation;
 use App\Models\PgdasdRbt12Projection;
 use App\Models\TaxObligationProjection;
+use App\Models\Tenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -58,7 +58,7 @@ final class PgdasdRbt12Service
         $latestDeclaration = $this->latestDeclarationForProjection($projection);
         $dasOperations = PgdasdOperation::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $run->office_id)
+            ->where('tenant_id', $run->tenant_id)
             ->where('client_id', $run->client_id)
             ->where('projection_id', $projection->id)
             ->where('kind', PgdasdOperationKind::Das->value)
@@ -93,7 +93,7 @@ final class PgdasdRbt12Service
         }
 
         $key = $this->sourceReferenceKey(
-            (int) $run->office_id,
+            (int) $run->tenant_id,
             (int) $run->client_id,
             (string) $projection->period_key,
             (string) $das->das_number,
@@ -124,7 +124,7 @@ final class PgdasdRbt12Service
     }
 
     public function sourceReferenceKey(
-        int $officeId,
+        int $tenantId,
         int $clientId,
         string $periodKey,
         string $dasNumber,
@@ -132,7 +132,7 @@ final class PgdasdRbt12Service
         ?string $latestTransmission,
     ): string {
         return hash('sha256', implode('|', [
-            $officeId,
+            $tenantId,
             $clientId,
             $periodKey,
             $dasNumber,
@@ -224,7 +224,7 @@ final class PgdasdRbt12Service
 
         return PgdasdRbt12Projection::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $run->office_id)
+            ->where('tenant_id', $run->tenant_id)
             ->where('client_id', $run->client_id)
             ->where('source_run_id', $run->id)
             ->where('status', PgdasdRbt12Status::Pending->value)
@@ -264,7 +264,7 @@ final class PgdasdRbt12Service
         }
 
         $key = $this->sourceReferenceKey(
-            (int) $run->office_id,
+            (int) $run->tenant_id,
             (int) $run->client_id,
             (string) $projection->period_key,
             'DECLARATION',
@@ -309,7 +309,7 @@ final class PgdasdRbt12Service
         ?PgdasdOperation $latestDeclaration,
     ): ?PgdasdRbt12Projection {
         $key = $this->sourceReferenceKey(
-            (int) $run->office_id,
+            (int) $run->tenant_id,
             (int) $run->client_id,
             (string) $projection->period_key,
             'NO_DAS',
@@ -348,7 +348,7 @@ final class PgdasdRbt12Service
             ): ?PgdasdRbt12Projection {
                 $existing = PgdasdRbt12Projection::query()
                     ->withoutGlobalScopes()
-                    ->where('office_id', $run->office_id)
+                    ->where('tenant_id', $run->tenant_id)
                     ->where('client_id', $run->client_id)
                     ->where('projection_id', $projection->id)
                     ->where('source_reference_key', $sourceKey)
@@ -368,7 +368,7 @@ final class PgdasdRbt12Service
                 ], $metadataExtras);
 
                 return PgdasdRbt12Projection::query()->create([
-                    'office_id' => $run->office_id,
+                    'tenant_id' => $run->tenant_id,
                     'client_id' => $run->client_id,
                     'projection_id' => $projection->id,
                     'source_reference_key' => $sourceKey,
@@ -427,7 +427,7 @@ final class PgdasdRbt12Service
     ): ?TaxObligationProjection {
         foreach ($periodProjections as $projection) {
             if ((string) $projection->period_key === $expectedPeriodKey
-                && (int) $projection->office_id === (int) $run->office_id
+                && (int) $projection->tenant_id === (int) $run->tenant_id
                 && (int) $projection->client_id === (int) $run->client_id
             ) {
                 return $projection;
@@ -436,7 +436,7 @@ final class PgdasdRbt12Service
 
         return TaxObligationProjection::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $run->office_id)
+            ->where('tenant_id', $run->tenant_id)
             ->where('client_id', $run->client_id)
             ->where('period_key', $expectedPeriodKey)
             ->orderByDesc('id')
@@ -451,9 +451,9 @@ final class PgdasdRbt12Service
             return $fromProgress;
         }
 
-        $office = Office::query()->find($run->office_id);
-        $tz = is_string($office?->timezone) && $office->timezone !== ''
-            ? $office->timezone
+        $tenant = Tenant::query()->find($run->tenant_id);
+        $tz = is_string($tenant?->timezone) && $tenant->timezone !== ''
+            ? $tenant->timezone
             : 'America/Sao_Paulo';
 
         return PgdasdPeriod::toPeriodKey(PgdasdPeriod::expectedPa(null, $tz));
@@ -463,7 +463,7 @@ final class PgdasdRbt12Service
     {
         return PgdasdOperation::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $projection->office_id)
+            ->where('tenant_id', $projection->tenant_id)
             ->where('client_id', $projection->client_id)
             ->where('projection_id', $projection->id)
             ->where('kind', PgdasdOperationKind::Declaration->value)

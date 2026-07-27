@@ -7,7 +7,7 @@ use App\Models\Client;
 use App\Models\DefisDeclarationProjection;
 use App\Models\DefisDeclarationReference;
 use App\Models\DefisSpecificDeclarationArtifact;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\FiscalMonitoring\FiscalMonitoringRunService;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -18,11 +18,11 @@ final class DefisSpecificDeclarationMonitoringQueryService
     public function __construct(private readonly FiscalMonitoringRunService $runs) {}
 
     /** @return array<string, mixed> */
-    public function history(Office $office, Client $client, ?int $referenceId = null): array
+    public function history(Tenant $tenant, Client $client, ?int $referenceId = null): array
     {
-        $this->assertClient($office, $client);
+        $this->assertClient($tenant, $client);
         $references = DefisDeclarationProjection::query()->withoutGlobalScopes()
-            ->where('office_id', $office->id)->where('client_id', $client->id)
+            ->where('tenant_id', $tenant->id)->where('client_id', $client->id)
             ->whereNotNull('defis_declaration_reference_id')
             ->orderByDesc('calendar_year')->orderBy('declaration_type')
             ->get(['calendar_year', 'declaration_type', 'last_observed_at', 'defis_declaration_reference_id'])
@@ -35,9 +35,9 @@ final class DefisSpecificDeclarationMonitoringQueryService
 
         $documents = [];
         if ($referenceId !== null) {
-            $this->findReference($office, $client, $referenceId);
+            $this->findReference($tenant, $client, $referenceId);
             $documents = DefisSpecificDeclarationArtifact::query()->withoutGlobalScopes()
-                ->where('office_id', $office->id)->where('client_id', $client->id)
+                ->where('tenant_id', $tenant->id)->where('client_id', $client->id)
                 ->where('defis_declaration_reference_id', $referenceId)
                 ->with('evidenceArtifact')->orderByDesc('observed_at')->orderBy('kind')->get()
                 ->map(static fn (DefisSpecificDeclarationArtifact $artifact): array => $artifact->toPublicArray())->values()->all();
@@ -52,12 +52,12 @@ final class DefisSpecificDeclarationMonitoringQueryService
     }
 
     /** @return array<string, mixed> */
-    public function enqueueManualConsult(Office $office, Client $client, int $referenceId, ?int $actorUserId): array
+    public function enqueueManualConsult(Tenant $tenant, Client $client, int $referenceId, ?int $actorUserId): array
     {
-        $this->assertClient($office, $client);
-        $this->findReference($office, $client, $referenceId);
+        $this->assertClient($tenant, $client);
+        $this->findReference($tenant, $client, $referenceId);
         $run = $this->runs->enqueueManual(
-            office: $office, client: $client, systemCode: 'INTEGRA_SN', serviceCode: 'DEFIS',
+            tenant: $tenant, client: $client, systemCode: 'INTEGRA_SN', serviceCode: 'DEFIS',
             operationCode: 'CONSULTAR_DECLARACAO_RECIBO', competence: null, actorId: $actorUserId,
             correlationId: sprintf('defis-144-manual-%d-%s', $client->id, (string) Str::uuid()), dispatch: false,
         );
@@ -70,16 +70,16 @@ final class DefisSpecificDeclarationMonitoringQueryService
         return $run->toPublicArray();
     }
 
-    public function findArtifact(Office $office, int $artifactId): ?DefisSpecificDeclarationArtifact
+    public function findArtifact(Tenant $tenant, int $artifactId): ?DefisSpecificDeclarationArtifact
     {
         return DefisSpecificDeclarationArtifact::query()->withoutGlobalScopes()
-            ->where('office_id', $office->id)->whereKey($artifactId)->first();
+            ->where('tenant_id', $tenant->id)->whereKey($artifactId)->first();
     }
 
-    private function findReference(Office $office, Client $client, int $referenceId): DefisDeclarationReference
+    private function findReference(Tenant $tenant, Client $client, int $referenceId): DefisDeclarationReference
     {
         $reference = DefisDeclarationReference::query()->withoutGlobalScopes()
-            ->where('office_id', $office->id)->where('client_id', $client->id)->find($referenceId);
+            ->where('tenant_id', $tenant->id)->where('client_id', $client->id)->find($referenceId);
         if ($reference === null) {
             throw new HttpException(404, 'Referência de declaração DEFIS não encontrada no escritório atual.');
         }
@@ -87,9 +87,9 @@ final class DefisSpecificDeclarationMonitoringQueryService
         return $reference;
     }
 
-    private function assertClient(Office $office, Client $client): void
+    private function assertClient(Tenant $tenant, Client $client): void
     {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new HttpException(404, 'Cliente não encontrado no escritório atual.');
         }
     }

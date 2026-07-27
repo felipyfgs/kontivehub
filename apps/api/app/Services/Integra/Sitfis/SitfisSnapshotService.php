@@ -12,14 +12,13 @@ use App\Models\Client;
 use App\Models\FiscalCategory;
 use App\Models\FiscalMonitoringRun;
 use App\Models\FiscalSnapshot;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Fiscal\Availability\FiscalModuleAvailabilityService;
 use App\Services\FiscalMonitoring\FiscalCategoryService;
 use App\Services\FiscalMonitoring\FiscalIdempotency;
 use App\Services\FiscalMonitoring\FiscalMonitoringRunService;
 use App\Services\Serpro\CapabilityDriverResolver;
 use Carbon\CarbonImmutable;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
@@ -51,9 +50,9 @@ final class SitfisSnapshotService
      *     active_run: ?array<string, mixed>
      * }
      */
-    public function current(Office $office, Client $client): array
+    public function current(Tenant $tenant, Client $client): array
     {
-        $this->assertTenant($office, $client);
+        $this->assertTenant($tenant, $client);
         $ttl = $this->ttlSeconds();
         $system = $this->systemCode();
         $service = $this->serviceCode();
@@ -61,23 +60,21 @@ final class SitfisSnapshotService
         // Preferência: snapshot corrente verificável com evidência (TTL / reuso).
         $verifiedQuery = FiscalSnapshot::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('system_code', $system)
             ->where('service_code', $service)
             ->where('is_current', true)
             ->whereNotNull('evidence_artifact_id');
 
-        if (Schema::hasColumn('fiscal_snapshots', 'source_provenance')) {
-            $verifiedQuery->where('verification_state', FiscalVerificationState::Verified->value);
-            if (app()->environment('production')) {
-                $verifiedQuery->where('source_provenance', FiscalSourceProvenance::SerproReal->value);
-            } else {
-                $verifiedQuery->whereIn('source_provenance', [
-                    FiscalSourceProvenance::SerproReal->value,
-                    FiscalSourceProvenance::SerproTrial->value,
-                ]);
-            }
+        $verifiedQuery->where('verification_state', FiscalVerificationState::Verified->value);
+        if (app()->environment('production')) {
+            $verifiedQuery->where('source_provenance', FiscalSourceProvenance::SerproReal->value);
+        } else {
+            $verifiedQuery->whereIn('source_provenance', [
+                FiscalSourceProvenance::SerproReal->value,
+                FiscalSourceProvenance::SerproTrial->value,
+            ]);
         }
 
         $snapshot = $verifiedQuery->orderByDesc('id')->first();
@@ -88,7 +85,7 @@ final class SitfisSnapshotService
         if ($snapshot === null) {
             $fallback = FiscalSnapshot::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('client_id', $client->id)
                 ->where('system_code', $system)
                 ->where('service_code', $service)
@@ -122,7 +119,7 @@ final class SitfisSnapshotService
 
         $activeRun = FiscalMonitoringRun::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('system_code', $system)
             ->where('service_code', $service)
@@ -134,7 +131,7 @@ final class SitfisSnapshotService
         if ($activeRun === null) {
             $activeRun = FiscalMonitoringRun::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('client_id', $client->id)
                 ->where('system_code', $system)
                 ->where('service_code', $service)
@@ -148,7 +145,7 @@ final class SitfisSnapshotService
         if ($activeRun === null && ($displayOnly || $snapshot === null)) {
             $lastFailedRun = FiscalMonitoringRun::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('client_id', $client->id)
                 ->where('system_code', $system)
                 ->where('service_code', $service)
@@ -179,17 +176,17 @@ final class SitfisSnapshotService
      * @return array{run: ?FiscalMonitoringRun, reused_snapshot: bool, enqueued: bool, reason: string, view: array<string, mixed>}
      */
     public function refresh(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         bool $force = false,
         ?int $actorId = null,
         bool $dispatch = true,
     ): array {
-        $this->assertTenant($office, $client);
+        $this->assertTenant($tenant, $client);
 
         $availability = $this->availability->resolve(
             FiscalControlModule::FiscalSituation,
-            $office,
+            $tenant,
             FiscalOperationClass::Read,
         );
         if (! $availability->allowed) {
@@ -201,7 +198,7 @@ final class SitfisSnapshotService
             throw new RuntimeException('Capacidade SITFIS desabilitada.');
         }
 
-        $view = $this->current($office, $client);
+        $view = $this->current($tenant, $client);
 
         // force ou snapshot terminal/falho: não bloquear por TTL de reuso.
         $ttlBlocks = $view['is_within_ttl']
@@ -236,7 +233,7 @@ final class SitfisSnapshotService
 
         $correlation = (string) Str::uuid();
         $run = $this->runs->enqueueManual(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             systemCode: $this->systemCode(),
             serviceCode: $this->serviceCode(),
@@ -252,9 +249,9 @@ final class SitfisSnapshotService
             'verification_state' => FiscalVerificationState::Unverified,
         ])->save();
 
-        $this->ensureSitfisSchedule($office, $client, $actorId);
+        $this->ensureSitfisSchedule($tenant, $client, $actorId);
 
-        $view = $this->current($office, $client);
+        $view = $this->current($tenant, $client);
 
         return [
             'run' => $run,
@@ -286,7 +283,7 @@ final class SitfisSnapshotService
         ], true);
     }
 
-    private function ensureSitfisSchedule(Office $office, Client $client, ?int $actorId): void
+    private function ensureSitfisSchedule(Tenant $tenant, Client $client, ?int $actorId): void
     {
         try {
             $category = FiscalCategory::query()
@@ -303,7 +300,7 @@ final class SitfisSnapshotService
                 return;
             }
 
-            $this->categories->associate($office, $client, $category, $actorId);
+            $this->categories->associate($tenant, $client, $category, $actorId);
         } catch (Throwable $e) {
             report($e);
         }
@@ -389,7 +386,7 @@ final class SitfisSnapshotService
                 'evidence_download' => $evidenceDownload,
             ],
             'cache_key_hint' => FiscalIdempotency::cacheKey(
-                (int) ($snapshot?->office_id ?? 0),
+                (int) ($snapshot?->tenant_id ?? 0),
                 'sitfis',
                 'snap',
                 (string) ($snapshot?->client_id ?? 0),
@@ -397,9 +394,9 @@ final class SitfisSnapshotService
         ];
     }
 
-    private function assertTenant(Office $office, Client $client): void
+    private function assertTenant(Tenant $tenant, Client $client): void
     {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new RuntimeException('Cliente não pertence ao escritório ativo.');
         }
     }

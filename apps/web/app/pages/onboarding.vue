@@ -102,7 +102,7 @@ async function onSubmit(_event: FormSubmitEvent<Schema>) {
     state.password = ''
     state.password_confirmation = ''
     await refreshIdentity()
-    const target = res.data?.redirect || '/admin/offices/new'
+    const target = res.data?.redirect || '/admin/tenants/new'
     await navigateTo(target)
   } catch (caught) {
     error.value = apiErrorMessage(caught, 'Não foi possível concluir o onboarding.')

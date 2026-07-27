@@ -4,7 +4,7 @@ namespace Tests\Unit\Communication;
 
 use App\Enums\TenantPermission;
 use App\Models\CommunicationCannedResponse;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Communication\Flows\CommunicationFlowGraphCanonicalizer;
 use App\Services\Communication\Flows\CommunicationFlowGraphValidator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -27,7 +27,7 @@ final class CommunicationFlowGraphValidatorTest extends TestCase
 
     public function test_accepts_allowlisted_dag(): void
     {
-        $office = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
         $graph = [
             'nodes' => [
                 ['id' => 's', 'type' => 'start', 'data' => []],
@@ -42,7 +42,7 @@ final class CommunicationFlowGraphValidatorTest extends TestCase
             ],
         ];
 
-        $result = $this->validator->validate($graph, (int) $office->id);
+        $result = $this->validator->validate($graph, (int) $tenant->id);
 
         $this->assertTrue($result->valid);
         $this->assertSame($this->canonicalizer->digest($graph), $result->digest);
@@ -51,7 +51,7 @@ final class CommunicationFlowGraphValidatorTest extends TestCase
 
     public function test_rejects_cycle(): void
     {
-        $office = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
         $graph = [
             'nodes' => [
                 ['id' => 's', 'type' => 'start', 'data' => []],
@@ -65,7 +65,7 @@ final class CommunicationFlowGraphValidatorTest extends TestCase
             ],
         ];
 
-        $result = $this->validator->validate($graph, (int) $office->id);
+        $result = $this->validator->validate($graph, (int) $tenant->id);
 
         $this->assertFalse($result->valid);
         $this->assertContains('cycle_detected', array_column($result->errors, 'code'));
@@ -73,7 +73,7 @@ final class CommunicationFlowGraphValidatorTest extends TestCase
 
     public function test_rejects_forbidden_webhook_and_ai_nodes(): void
     {
-        $office = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
         $graph = [
             'nodes' => [
                 ['id' => 's', 'type' => 'start', 'data' => []],
@@ -86,7 +86,7 @@ final class CommunicationFlowGraphValidatorTest extends TestCase
             ],
         ];
 
-        $result = $this->validator->validate($graph, (int) $office->id);
+        $result = $this->validator->validate($graph, (int) $tenant->id);
 
         $this->assertFalse($result->valid);
         $codes = array_column($result->errors, 'code');
@@ -150,12 +150,12 @@ final class CommunicationFlowGraphValidatorTest extends TestCase
         );
     }
 
-    public function test_rejects_canned_from_other_office(): void
+    public function test_rejects_canned_from_other_tenant(): void
     {
-        $office = Office::factory()->create();
-        $foreign = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
+        $foreign = Tenant::factory()->create();
         $canned = CommunicationCannedResponse::query()->withoutGlobalScopes()->create([
-            'office_id' => $foreign->id,
+            'tenant_id' => $foreign->id,
             'title' => 'X',
             'shortcut' => 'x',
             'body_encrypted' => 'corpo',
@@ -175,10 +175,10 @@ final class CommunicationFlowGraphValidatorTest extends TestCase
             ],
         ];
 
-        $result = $this->validator->validate($graph, (int) $office->id);
+        $result = $this->validator->validate($graph, (int) $tenant->id);
 
         $this->assertFalse($result->valid);
-        $this->assertContains('canned_out_of_office', array_column($result->errors, 'code'));
+        $this->assertContains('canned_out_of_tenant', array_column($result->errors, 'code'));
     }
 
     public function test_permission_and_flag_defaults(): void

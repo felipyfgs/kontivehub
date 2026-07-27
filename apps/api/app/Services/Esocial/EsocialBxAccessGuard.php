@@ -5,7 +5,7 @@ namespace App\Services\Esocial;
 use App\Exceptions\EsocialBxException;
 use App\Models\Client;
 use App\Models\EsocialBxAccessLedger;
-use App\Models\Office;
+use App\Models\Tenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Cache\Lock;
 use Illuminate\Support\Facades\Cache;
@@ -76,17 +76,17 @@ final class EsocialBxAccessGuard
     }
 
     public function reserve(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $environment,
         string $operation,
         ?string $correlationId = null,
         ?CarbonImmutable $now = null,
     ): EsocialBxAccessLedger {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new EsocialBxException(
                 'ESOCIAL_BX_TENANT_MISMATCH',
-                'Cliente não pertence ao office da operação eSocial BX.',
+                'Cliente não pertence ao tenant da operação eSocial BX.',
                 blocked: true,
             );
         }
@@ -119,7 +119,7 @@ final class EsocialBxAccessGuard
         }
 
         try {
-            return DB::transaction(function () use ($office, $client, $environment, $operation, $correlationId, $now, $limit): EsocialBxAccessLedger {
+            return DB::transaction(function () use ($tenant, $client, $environment, $operation, $correlationId, $now, $limit): EsocialBxAccessLedger {
                 Client::query()->withoutGlobalScopes()->whereKey($client->id)->lockForUpdate()->firstOrFail();
                 if ($this->consumedToday($client, $environment, $now) >= $limit) {
                     throw new EsocialBxException(
@@ -130,7 +130,7 @@ final class EsocialBxAccessGuard
                 }
 
                 return EsocialBxAccessLedger::query()->withoutGlobalScopes()->create([
-                    'office_id' => $office->id,
+                    'tenant_id' => $tenant->id,
                     'client_id' => $client->id,
                     'employer_hash' => $this->employerHash($client),
                     'environment' => $environment,

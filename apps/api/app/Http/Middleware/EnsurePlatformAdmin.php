@@ -9,7 +9,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Autorização global PLATFORM_ADMIN.
- * Não resolve nem exige CurrentOffice — admin da plataforma ≠ acesso fiscal.
+ * Não resolve nem exige CurrentTenant — admin da plataforma ≠ acesso fiscal.
  */
 class EnsurePlatformAdmin
 {

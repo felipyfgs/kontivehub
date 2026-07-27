@@ -5,7 +5,7 @@ namespace App\Services\Integra\Mailbox;
 use App\Models\Client;
 use App\Models\FiscalLastUpdateEvent;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\FiscalMonitoring\FiscalLastUpdateEventService;
 use Carbon\CarbonImmutable;
 
@@ -31,7 +31,7 @@ final class MailboxEventService
      * @return array{event: FiscalLastUpdateEvent, duplicate: bool, run: ?FiscalMonitoringRun}
      */
     public function ingestNewMessageEvent(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         ?string $externalEventId = null,
         ?string $payloadDigest = null,
@@ -43,7 +43,7 @@ final class MailboxEventService
         $safeMeta = $this->sanitizeMetadata($metadata);
 
         return $this->events->ingestAndDirect(
-            office: $office,
+            tenant: $tenant,
             systemCode: self::SYSTEM,
             eventType: self::EVENT_NEW_MESSAGE,
             client: $client,

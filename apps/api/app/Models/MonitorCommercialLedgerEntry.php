@@ -4,7 +4,7 @@ namespace App\Models;
 
 use App\Enums\MonitorCommercialDispatchState;
 use App\Enums\MonitorCommercialOrigin;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Database\Factories\MonitorCommercialLedgerEntryFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * Identidade protegida; dispatch_state pode avançar.
  */
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'client_id',
     'monitor_key',
     'origin',
@@ -36,7 +36,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class MonitorCommercialLedgerEntry extends Model
 {
     /** @use HasFactory<MonitorCommercialLedgerEntryFactory> */
-    use BelongsToOffice, HasFactory;
+    use BelongsToTenant, HasFactory;
 
     protected function casts(): array
     {
@@ -56,7 +56,7 @@ class MonitorCommercialLedgerEntry extends Model
     {
         static::updating(function (self $entry): void {
             $protected = [
-                'office_id',
+                'tenant_id',
                 'client_id',
                 'monitor_key',
                 'origin',
@@ -93,7 +93,7 @@ class MonitorCommercialLedgerEntry extends Model
     {
         return [
             'id' => $this->id,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'client_id' => $this->client_id,
             'monitor_key' => $this->monitor_key,
             'origin' => $this->origin->value,

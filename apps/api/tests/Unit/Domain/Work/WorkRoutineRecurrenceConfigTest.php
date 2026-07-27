@@ -5,7 +5,7 @@ namespace Tests\Unit\Domain\Work;
 use App\Domain\Work\WorkRoutineRecurrenceSchedule;
 use App\Enums\Work\RecurrenceFrequency;
 use App\Enums\Work\RecurrencePeriodOffset;
-use App\Models\Office;
+use App\Models\Tenant;
 use Carbon\CarbonImmutable;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -90,9 +90,9 @@ class WorkRoutineRecurrenceConfigTest extends TestCase
         $this->assertSame('2026', $period->value());
     }
 
-    public function test_upcoming_run_respects_office_timezone_near_midnight(): void
+    public function test_upcoming_run_respects_tenant_timezone_near_midnight(): void
     {
-        $office = new Office(['timezone' => 'America/Sao_Paulo']);
+        $tenant = new Tenant(['timezone' => 'America/Sao_Paulo']);
         $schedule = WorkRoutineRecurrenceSchedule::fromArray([
             'recurrence_enabled' => true,
             'recurrence_frequency' => RecurrenceFrequency::Monthly->value,
@@ -101,7 +101,7 @@ class WorkRoutineRecurrenceConfigTest extends TestCase
 
         // 2026-06-30 23:30 UTC = 2026-06-30 20:30 America/Sao_Paulo → próximo é 2026-07-01 03:00 UTC
         $nowUtc = CarbonImmutable::parse('2026-06-30 23:30:00', 'UTC');
-        $next = $schedule->upcomingRunAtUtc($office, $nowUtc);
+        $next = $schedule->upcomingRunAtUtc($tenant, $nowUtc);
 
         $this->assertSame('2026-07-01T03:00:00+00:00', $next->toIso8601String());
         $this->assertSame(1, $next->timezone('America/Sao_Paulo')->day);

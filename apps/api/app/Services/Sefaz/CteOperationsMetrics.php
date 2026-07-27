@@ -8,31 +8,31 @@ use App\Models\ChannelSyncCursor;
 use App\Models\CteCoverageSnapshot;
 use App\Models\DocumentAcquisition;
 use App\Models\FiscalDocumentQuarantine;
-use App\Models\OfficeDistributionCursor;
-use App\Models\OfficeDistributionRun;
+use App\Models\TenantDistributionCursor;
+use App\Models\TenantDistributionRun;
 
 /** Snapshot CT-e de baixa cardinalidade, sempre escopado ao escritório. */
 final class CteOperationsMetrics
 {
     /** @return array<string, mixed> */
-    public function snapshot(int $officeId, ?string $period = null): array
+    public function snapshot(int $tenantId, ?string $period = null): array
     {
         $period ??= now()->format('Y-m');
         $client = ChannelSyncCursor::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('channel', CaptureChannel::CteDistDfe->value);
-        $office = OfficeDistributionCursor::query()
-            ->where('office_id', $officeId)
+        $tenant = TenantDistributionCursor::query()
+            ->where('tenant_id', $tenantId)
             ->where('channel', CaptureChannel::CteAutXmlDistDfe->value);
-        $runs = OfficeDistributionRun::query()
-            ->where('office_id', $officeId)
+        $runs = TenantDistributionRun::query()
+            ->where('tenant_id', $tenantId)
             ->where('created_at', '>=', now()->subDay());
         $acquisitions = DocumentAcquisition::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereIn('source', array_map(fn (DocumentAcquisitionSource $source) => $source->value, [
                 DocumentAcquisitionSource::CteDistNsu,
                 DocumentAcquisitionSource::CteAutXmlDistNsu,
-                DocumentAcquisitionSource::CteDistDfe,
+                DocumentAcquisitionSource::CteDistNsu,
                 DocumentAcquisitionSource::EmitterPush,
                 DocumentAcquisitionSource::ManualXml,
                 DocumentAcquisitionSource::ManualZip,
@@ -42,7 +42,7 @@ final class CteOperationsMetrics
             'period' => $period,
             'channels' => [
                 CaptureChannel::CteDistDfe->value => $this->cursorMetrics(clone $client),
-                CaptureChannel::CteAutXmlDistDfe->value => $this->cursorMetrics(clone $office),
+                CaptureChannel::CteAutXmlDistDfe->value => $this->cursorMetrics(clone $tenant),
             ],
             'runs_24h' => [
                 'total' => (clone $runs)->count(),
@@ -52,7 +52,7 @@ final class CteOperationsMetrics
                 'quarantined' => (int) (clone $runs)->sum('documents_quarantined'),
             ],
             'quarantine_open' => FiscalDocumentQuarantine::query()
-                ->where('office_id', $officeId)
+                ->where('tenant_id', $tenantId)
                 ->where('resolution_status', 'OPEN')
                 ->where(fn ($query) => $query->where('model', '57')->orWhere('schema_family', 'like', '%CTe%'))
                 ->count(),
@@ -64,7 +64,7 @@ final class CteOperationsMetrics
                 ->map(fn ($value) => (int) $value)
                 ->all(),
             'coverage' => CteCoverageSnapshot::query()
-                ->where('office_id', $officeId)
+                ->where('tenant_id', $tenantId)
                 ->where('period', $period)
                 ->selectRaw('status, count(*) as aggregate')
                 ->groupBy('status')

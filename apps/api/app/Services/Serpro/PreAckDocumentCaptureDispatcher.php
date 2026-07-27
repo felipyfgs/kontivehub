@@ -24,10 +24,10 @@ final class PreAckDocumentCaptureDispatcher
         ], true);
     }
 
-    public function capture(string $operationKey, string $entityKey, IntegraResponse $response, int $officeId, int $clientId): IntegraResponse
+    public function capture(string $operationKey, string $entityKey, IntegraResponse $response, int $tenantId, int $clientId): IntegraResponse
     {
         return $operationKey === 'pagtoweb.comparrecadacao'
-            ? $this->pagtoweb->capture($operationKey, $entityKey, $response, $officeId, $clientId)
-            : $this->pgdasd->capture($operationKey, $entityKey, $response, $officeId, $clientId);
+            ? $this->pagtoweb->capture($operationKey, $entityKey, $response, $tenantId, $clientId)
+            : $this->pgdasd->capture($operationKey, $entityKey, $response, $tenantId, $clientId);
     }
 }

@@ -6,7 +6,7 @@ use App\Enums\CaptureChannel;
 use App\Enums\DocumentAcquisitionSource;
 use App\Enums\QuarantineReason;
 use App\Enums\QuarantineResolutionStatus;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -18,9 +18,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * Nunca serializa vault_object_id ou bytes.
  */
 #[Fillable([
-    'office_id', 'sha256', 'vault_object_id', 'byte_size', 'access_key',
+    'tenant_id', 'sha256', 'vault_object_id', 'byte_size', 'access_key',
     'issuer_cnpj', 'recipient_cnpj', 'model', 'schema_family', 'reason',
-    'source', 'channel', 'nsu', 'office_distribution_cursor_id',
+    'source', 'channel', 'nsu', 'tenant_distribution_cursor_id',
     'document_import_batch_item_id', 'resolution_status', 'resolved_by',
     'resolved_at', 'resolution_code', 'resolution_notes', 'promoted_dfe_document_id',
     'metadata',
@@ -28,10 +28,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Hidden(['vault_object_id'])]
 class FiscalDocumentQuarantine extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
     use HasFactory;
 
-    protected $table = 'fiscal_document_quarantine';
+    protected $table = 'fiscal_document_quarantines';
 
     protected function casts(): array
     {
@@ -49,7 +49,7 @@ class FiscalDocumentQuarantine extends Model
 
     public function cursor(): BelongsTo
     {
-        return $this->belongsTo(OfficeDistributionCursor::class, 'office_distribution_cursor_id');
+        return $this->belongsTo(TenantDistributionCursor::class, 'tenant_distribution_cursor_id');
     }
 
     public function batchItem(): BelongsTo

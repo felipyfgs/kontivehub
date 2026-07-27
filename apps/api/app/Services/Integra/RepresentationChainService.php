@@ -7,8 +7,8 @@ use App\DTO\Serpro\RepresentationChain;
 use App\Enums\SerproAuthorizationStatus;
 use App\Enums\SerproEnvironment;
 use App\Models\Client;
-use App\Models\Office;
-use App\Models\OfficeSerproAuthorization;
+use App\Models\Tenant;
+use App\Models\TenantSerproAuthorization;
 use App\Services\Serpro\SerproContractService;
 use RuntimeException;
 use Throwable;
@@ -20,15 +20,15 @@ final class RepresentationChainService
 {
     public function __construct(
         private readonly SerproContractService $contracts,
-        private readonly OfficeSerproAuthorizationService $authorizations,
+        private readonly TenantSerproAuthorizationService $authorizations,
         private readonly ContributorCnpjResolver $contributors,
     ) {}
 
     public function resolve(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         SerproEnvironment $environment,
-        ?OfficeSerproAuthorization $auth = null,
+        ?TenantSerproAuthorization $auth = null,
     ): RepresentationChain {
         $missing = [];
         $contractor = '';
@@ -36,13 +36,13 @@ final class RepresentationChainService
         $authorType = '';
         $contributor = '';
 
-        if ($client->office_id !== $office->id) {
+        if ($client->tenant_id !== $tenant->id) {
             return new RepresentationChain(
                 contractorCnpj: '',
                 authorIdentity: '',
                 authorIdentityType: '',
                 contributorCnpj: '',
-                officeId: (int) $office->id,
+                tenantId: (int) $tenant->id,
                 clientId: (int) $client->id,
                 environment: $environment->value,
                 complete: false,
@@ -62,7 +62,7 @@ final class RepresentationChainService
             }
         }
 
-        $auth ??= $this->authorizations->getOrCreate($office, $environment);
+        $auth ??= $this->authorizations->getOrCreate($tenant, $environment);
         $author = strtoupper(trim((string) $auth->author_identity));
         $authorType = $auth->author_identity_type?->value
             ?? (string) $auth->author_identity_type;
@@ -109,7 +109,7 @@ final class RepresentationChainService
             authorIdentity: $author,
             authorIdentityType: $authorType,
             contributorCnpj: $contributor,
-            officeId: (int) $office->id,
+            tenantId: (int) $tenant->id,
             clientId: (int) $client->id,
             environment: $environment->value,
             complete: $complete,
@@ -122,12 +122,12 @@ final class RepresentationChainService
      * Fail-closed para operações reais: lança se qualquer elo faltar.
      */
     public function assertComplete(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         SerproEnvironment $environment,
-        ?OfficeSerproAuthorization $auth = null,
+        ?TenantSerproAuthorization $auth = null,
     ): RepresentationChain {
-        $chain = $this->resolve($office, $client, $environment, $auth);
+        $chain = $this->resolve($tenant, $client, $environment, $auth);
         if (! $chain->isComplete()) {
             throw new RuntimeException($chain->blockReason ?? 'Cadeia de representação incompleta.');
         }

@@ -29,7 +29,7 @@ class AssistantChatServiceSanitizeTest extends TestCase
                 'status' => 'ok',
                 'args' => [
                     'name' => 'Modelo',
-                    'office_id' => 99,
+                    'tenant_id' => 99,
                     'api_key' => 'should-go',
                 ],
             ],
@@ -39,7 +39,7 @@ class AssistantChatServiceSanitizeTest extends TestCase
         $this->assertArrayNotHasKey('approval_token', $sanitized[0]);
         $this->assertNull($sanitized[1]['args'] ?? null);
         $this->assertSame('Modelo', $sanitized[2]['args']['name']);
-        $this->assertArrayNotHasKey('office_id', $sanitized[2]['args']);
+        $this->assertArrayNotHasKey('tenant_id', $sanitized[2]['args']);
         $this->assertArrayNotHasKey('api_key', $sanitized[2]['args']);
     }
 }

@@ -93,11 +93,8 @@ export function normalizeFiscalSituation(value?: string | null): FiscalSituation
   return String(value).trim().toUpperCase()
 }
 
-/**
- * Aliases de emissão/pagamento/eixos oficiais → meta fiscal.
- * Evita badges em inglês cru (CONFIRMED, TRANSMITTED, …) na UI.
- */
-const ALIASES: Record<string, Omit<FiscalStatusMeta, 'code'>> = {
+/** Metadados dos estados oficiais fora do catálogo de situações fiscais. */
+const OFFICIAL_STATUS_META: Record<string, Omit<FiscalStatusMeta, 'code'>> = {
   ACTIVE: {
     label: 'Ativo',
     description: 'Parcelamento ou operação em situação ativa.',
@@ -178,9 +175,9 @@ export function fiscalStatusMeta(value?: string | null): FiscalStatusMeta {
   if (known) {
     return { code, ...known }
   }
-  const alias = ALIASES[String(code)]
-  if (alias) {
-    return { code, ...alias }
+  const official = OFFICIAL_STATUS_META[String(code)]
+  if (official) {
+    return { code, ...official }
   }
   // Fallback legível em pt-BR (nunca código cru em UPPERCASE na UI).
   const human = String(code || 'Desconhecido')
@@ -331,7 +328,7 @@ export function dataOriginMeta(value?: string | null): FiscalOriginMeta {
       return {
         code,
         label: 'Dados demonstrativos',
-        description: 'Dataset sintético do office demo — sem validade fiscal.',
+        description: 'Dataset sintético do tenant demo — sem validade fiscal.',
         icon: 'i-lucide-flask-conical',
         color: 'warning',
         synthetic: true

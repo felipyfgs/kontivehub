@@ -5,12 +5,12 @@ namespace App\Http\Controllers\Api\V1\Fiscal;
 use App\Contracts\SecureObjectStore;
 use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
-use App\Http\Middleware\EnsureOfficeContext;
+use App\Http\Middleware\EnsureTenantContext;
 use App\Http\Resources\Fiscal\MeiAutomationAttemptResource;
 use App\Models\User;
 use App\Services\Authorization\TenantAuthorization;
 use App\Services\MeiAutomation\MeiAutomationAttemptRepository;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -18,7 +18,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 final class MeiAutomationAttemptController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly TenantAuthorization $authorization,
         private readonly MeiAutomationAttemptRepository $attempts,
         private readonly SecureObjectStore $objects,
@@ -26,14 +26,14 @@ final class MeiAutomationAttemptController extends Controller
 
     public function show(Request $request, int $attempt): JsonResponse
     {
-        if ($request->attributes->get(EnsureOfficeContext::CLIENT_OFFICE_ID_SUPPLIED) === true) {
+        if ($request->attributes->get(EnsureTenantContext::CLIENT_TENANT_ID_SUPPLIED) === true) {
             return response()->json([
-                'message' => 'office_id não é aceito; o tenant vem da sessão autenticada.',
+                'message' => 'tenant_id não é aceito; o tenant vem da sessão autenticada.',
             ], 422);
         }
 
-        $office = $this->currentOffice->office();
-        $model = $this->attempts->findForOffice((int) $office->id, $attempt);
+        $tenant = $this->currentTenant->tenant();
+        $model = $this->attempts->findForTenant((int) $tenant->id, $attempt);
         $actor = $request->user();
         if (! $actor instanceof User
             || ! $this->authorization->allows($actor, TenantPermission::FiscalMonitoringView, $model)) {
@@ -45,8 +45,8 @@ final class MeiAutomationAttemptController extends Controller
 
     public function download(Request $request, int $attempt, string $artifact): StreamedResponse
     {
-        $office = $this->currentOffice->office();
-        $model = $this->attempts->findForOffice((int) $office->id, $attempt);
+        $tenant = $this->currentTenant->tenant();
+        $model = $this->attempts->findForTenant((int) $tenant->id, $attempt);
         $actor = $request->user();
         if (! $actor instanceof User
             || ! $this->authorization->allows($actor, TenantPermission::FiscalMonitoringView, $model)) {
@@ -65,7 +65,7 @@ final class MeiAutomationAttemptController extends Controller
 
         $bytes = $this->objects->get($descriptor['object_id'], [
             'purpose' => 'MEI_PORTAL_ARTIFACT',
-            'office_id' => (int) $model->office_id,
+            'tenant_id' => (int) $model->tenant_id,
             'client_id' => (int) $model->client_id,
             'attempt_id' => (int) $model->id,
             'artifact_id' => $artifact,

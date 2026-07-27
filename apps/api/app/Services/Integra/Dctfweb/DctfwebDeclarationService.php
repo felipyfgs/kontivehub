@@ -15,7 +15,7 @@ use App\Models\DctfwebDeclaration;
 use App\Models\DctfwebEvidenceVersion;
 use App\Models\FiscalEvidenceArtifact;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
+use App\Models\Tenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -31,7 +31,7 @@ final class DctfwebDeclarationService
     ) {}
 
     public function findOrCreate(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $periodKey,
         DctfwebCategory|string $category = DctfwebCategory::GeralMensal,
@@ -40,49 +40,26 @@ final class DctfwebDeclarationService
         $cat = $category instanceof DctfwebCategory
             ? $category
             : (DctfwebCategory::fromOfficialCode($category) ?? DctfwebCategory::default());
-        $competence = $this->competences->resolve($office, $client, $periodKey, DctfwebCodes::CATEGORY_DCTFWEB);
+        $competence = $this->competences->resolve($tenant, $client, $periodKey, DctfwebCodes::CATEGORY_DCTFWEB);
 
         $existing = DctfwebDeclaration::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('period_key', $periodKey)
             ->where('category', $cat->value)
             ->first();
 
-        // Legado: registros sem category (ou default implícito) no mesmo PA.
-        if ($existing === null) {
-            $existing = DctfwebDeclaration::query()
-                ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
-                ->where('client_id', $client->id)
-                ->where('period_key', $periodKey)
-                ->where(function ($q) use ($cat): void {
-                    $q->whereNull('category')
-                        ->orWhere('category', '')
-                        ->orWhere('category', $cat->value);
-                })
-                ->orderBy('id')
-                ->first();
-        }
-
         if ($existing !== null) {
-            $fill = [];
             if ($existing->competence_id === null) {
-                $fill['competence_id'] = $competence->id;
-            }
-            if ($existing->category === null) {
-                $fill['category'] = $cat;
-            }
-            if ($fill !== []) {
-                $existing->forceFill($fill)->save();
+                $existing->forceFill(['competence_id' => $competence->id])->save();
             }
 
             return $existing->fresh();
         }
 
         return DctfwebDeclaration::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'competence_id' => $competence->id,
             'period_key' => $periodKey,
@@ -110,14 +87,14 @@ final class DctfwebDeclarationService
      */
     public function projectFromRecibo(
         FiscalMonitoringRun $run,
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $periodKey,
         string $evidenceBytes,
         array $body,
         ?string $sourceVersion = null,
     ): array {
-        $declaration = $this->findOrCreate($office, $client, $periodKey);
+        $declaration = $this->findOrCreate($tenant, $client, $periodKey);
 
         $receipt = $this->stringFrom($body, ['recibo', 'numeroRecibo', 'receipt_number', 'numero_recibo']);
         $transmitted = $this->boolFrom($body, ['transmitida', 'transmitted', 'entregue'])
@@ -188,7 +165,7 @@ final class DctfwebDeclarationService
      */
     public function projectArtifact(
         FiscalMonitoringRun $run,
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $periodKey,
         DctfwebArtifactKind $kind,
@@ -197,7 +174,7 @@ final class DctfwebDeclarationService
         ?string $contentType = null,
         ?string $sourceVersion = null,
     ): array {
-        $declaration = $this->findOrCreate($office, $client, $periodKey);
+        $declaration = $this->findOrCreate($tenant, $client, $periodKey);
         $stored = $this->versioning->storeVersioned(
             run: $run,
             declaration: $declaration,
@@ -223,7 +200,7 @@ final class DctfwebDeclarationService
      */
     public function projectDarf(
         FiscalMonitoringRun $run,
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $periodKey,
         string $evidenceBytes,
@@ -231,7 +208,7 @@ final class DctfwebDeclarationService
         ?string $sourceVersion = null,
         string $contentType = 'application/json',
     ): DctfwebDarfDocument {
-        $declaration = $this->findOrCreate($office, $client, $periodKey);
+        $declaration = $this->findOrCreate($tenant, $client, $periodKey);
         $stored = $this->versioning->storeVersioned(
             run: $run,
             declaration: $declaration,
@@ -243,10 +220,10 @@ final class DctfwebDeclarationService
 
         $sha = hash('sha256', $evidenceBytes);
 
-        return DB::transaction(function () use ($office, $client, $declaration, $stored, $body, $sha) {
+        return DB::transaction(function () use ($tenant, $client, $declaration, $stored, $body, $sha) {
             $existing = DctfwebDarfDocument::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('content_sha256', $sha)
                 ->lockForUpdate()
                 ->first();
@@ -260,7 +237,7 @@ final class DctfwebDeclarationService
             $docNumber = $this->stringFrom($body, ['numero', 'document_number', 'numeroDocumento']);
 
             return DctfwebDarfDocument::query()->create([
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'client_id' => $client->id,
                 'declaration_id' => $declaration->id,
                 'competence_id' => $declaration->competence_id,
@@ -282,11 +259,11 @@ final class DctfwebDeclarationService
     /**
      * @return LengthAwarePaginator<int, DctfwebDeclaration>
      */
-    public function paginate(Office $office, int $perPage = 50, ?int $clientId = null): LengthAwarePaginator
+    public function paginate(Tenant $tenant, int $perPage = 50, ?int $clientId = null): LengthAwarePaginator
     {
         $q = DctfwebDeclaration::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->orderByDesc('period_key');
 
         if ($clientId !== null) {
@@ -296,11 +273,11 @@ final class DctfwebDeclarationService
         return $q->paginate($perPage);
     }
 
-    public function findForOffice(Office $office, int $id): ?DctfwebDeclaration
+    public function findForTenant(Tenant $tenant, int $id): ?DctfwebDeclaration
     {
         return DctfwebDeclaration::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($id)
             ->first();
     }

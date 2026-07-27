@@ -7,7 +7,7 @@ use App\Enums\RegistrationSource;
 use App\Enums\RegistrationStatus;
 use App\Models\Client;
 use App\Models\Establishment;
-use App\Models\Office;
+use App\Models\Tenant;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -20,11 +20,11 @@ class EstablishmentFactory extends Factory
     public function definition(): array
     {
         return [
-            'office_id' => Office::factory(),
+            'tenant_id' => Tenant::factory(),
             'client_id' => Client::factory(),
             'cnpj' => '11222333000181',
             'trade_name' => fake()->company(),
-            'is_matrix' => true,
+            'is_headquarters' => true,
             'is_active' => true,
             'registration_status' => RegistrationStatus::Unknown,
             'registration_status_at' => null,
@@ -55,7 +55,7 @@ class EstablishmentFactory extends Factory
         $cnpj ??= self::cnpjWithRoot($client->root_cnpj);
 
         return $this->state(fn () => [
-            'office_id' => $client->office_id,
+            'tenant_id' => $client->tenant_id,
             'client_id' => $client->id,
             'cnpj' => $cnpj,
         ]);
@@ -63,12 +63,12 @@ class EstablishmentFactory extends Factory
 
     public function matrix(): static
     {
-        return $this->state(fn () => ['is_matrix' => true]);
+        return $this->state(fn () => ['is_headquarters' => true]);
     }
 
     public function branch(): static
     {
-        return $this->state(fn () => ['is_matrix' => false]);
+        return $this->state(fn () => ['is_headquarters' => false]);
     }
 
     public function captureDisabled(): static

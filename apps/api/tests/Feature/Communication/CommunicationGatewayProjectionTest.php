@@ -10,19 +10,16 @@ use App\Enums\Communication\MessageKind;
 use App\Enums\Communication\MessageSource;
 use App\Enums\Communication\MessageStatus;
 use App\Enums\CommunicationChannel;
-use App\Enums\OfficeRole;
 use App\Models\CommunicationContact;
 use App\Models\CommunicationConversation;
 use App\Models\CommunicationIdentity;
 use App\Models\CommunicationInbox;
 use App\Models\CommunicationMessage;
-use App\Models\Office;
-use App\Models\User;
+use App\Models\Tenant;
+use App\Services\Communication\Pairing\CommunicationPairingStateStore;
 use App\Services\Communication\Security\CommunicationHmacSigner;
-use App\Support\CurrentOffice;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
-use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 final class CommunicationGatewayProjectionTest extends TestCase
@@ -239,10 +236,10 @@ final class CommunicationGatewayProjectionTest extends TestCase
         $this->assertNotNull($inbox->connected_at);
     }
 
-    public function test_same_provider_message_id_remains_isolated_by_office_session(): void
+    public function test_same_provider_message_id_remains_isolated_by_tenant_session(): void
     {
-        [$firstInbox] = $this->context(sessionId: 'session-projection-office-0001');
-        [$secondInbox] = $this->context(sessionId: 'session-projection-office-0002');
+        [$firstInbox] = $this->context(sessionId: 'session-projection-tenant-0001');
+        [$secondInbox] = $this->context(sessionId: 'session-projection-tenant-0002');
         $payload = [
             'provider_message_id' => 'provider-shared-rich-0001',
             'from' => '+5511999990001',
@@ -252,42 +249,37 @@ final class CommunicationGatewayProjectionTest extends TestCase
             'contacts' => [['display_name' => 'Cliente', 'vcard' => 'BEGIN:VCARD']],
         ];
 
-        $this->postEvent($firstInbox, GatewayEventType::MessageReceived, 'gateway-shared-office-0001', $payload)
+        $this->postEvent($firstInbox, GatewayEventType::MessageReceived, 'gateway-shared-tenant-0001', $payload)
             ->assertNoContent();
-        $this->postEvent($secondInbox, GatewayEventType::MessageReceived, 'gateway-shared-office-0002', $payload)
+        $this->postEvent($secondInbox, GatewayEventType::MessageReceived, 'gateway-shared-tenant-0002', $payload)
             ->assertNoContent();
 
         $messages = CommunicationMessage::query()->withoutGlobalScopes()
             ->where('provider_message_id', 'provider-shared-rich-0001')->get();
         $this->assertCount(2, $messages);
         $this->assertEqualsCanonicalizing(
-            [(int) $firstInbox->office_id, (int) $secondInbox->office_id],
-            $messages->pluck('office_id')->map(fn ($id): int => (int) $id)->all(),
+            [(int) $firstInbox->tenant_id, (int) $secondInbox->tenant_id],
+            $messages->pluck('tenant_id')->map(fn ($id): int => (int) $id)->all(),
         );
     }
 
-    public function test_legacy_session_events_are_normalized_to_the_three_public_states(): void
+    public function test_session_events_require_the_canonical_public_states(): void
     {
         [$inbox] = $this->context();
 
-        $this->postEvent($inbox, GatewayEventType::SessionStatusChanged, 'gateway-legacy-pairing-0001', [
-            'status' => 'PAIRING',
+        $this->postEvent($inbox, GatewayEventType::SessionStatusChanged, 'gateway-canonical-connecting-0001', [
+            'status' => 'CONNECTING',
         ])->assertNoContent();
         $this->assertSame(InboxStatus::Connecting, $inbox->refresh()->status);
 
-        $this->postEvent($inbox, GatewayEventType::SessionStatusChanged, 'gateway-legacy-degraded-0001', [
-            'status' => 'DEGRADED',
+        $this->postEvent($inbox, GatewayEventType::SessionStatusChanged, 'gateway-canonical-disconnected-0001', [
+            'status' => 'DISCONNECTED',
             'reason_code' => 'CONNECT_RETRIES_EXHAUSTED',
         ])->assertNoContent();
         $this->assertSame(InboxStatus::Disconnected, $inbox->refresh()->status);
 
-        $office = Office::query()->withoutGlobalScopes()->findOrFail($inbox->office_id);
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
-        Sanctum::actingAs($admin);
-        app(CurrentOffice::class)->clear();
-        $this->getJson('/api/v1/communication/inboxes/'.$inbox->id.'/pairing')
-            ->assertOk()
-            ->assertJsonPath('data.error_code', 'CONNECT_RETRIES_EXHAUSTED');
+        $pairing = app(CommunicationPairingStateStore::class)->get((int) $inbox->id);
+        $this->assertSame('CONNECT_RETRIES_EXHAUSTED', $pairing['error_code'] ?? null);
     }
 
     public function test_terminal_pairing_error_remains_available_to_the_administrative_poll(): void
@@ -300,17 +292,10 @@ final class CommunicationGatewayProjectionTest extends TestCase
         ])->assertNoContent();
         $this->assertSame(InboxStatus::Disconnected, $inbox->refresh()->status);
 
-        $office = Office::query()->withoutGlobalScopes()->findOrFail($inbox->office_id);
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
-        Sanctum::actingAs($admin);
-        app(CurrentOffice::class)->clear();
-
-        $this->getJson('/api/v1/communication/inboxes/'.$inbox->id.'/pairing')
-            ->assertOk()
-            ->assertJsonPath('data.event', 'error')
-            ->assertJsonPath('data.error_code', 'SESSION_ALREADY_PAIRED')
-            ->assertJsonPath('data.status', null)
-            ->assertJsonStructure(['data' => ['expires_at']]);
+        $pairing = app(CommunicationPairingStateStore::class)->get((int) $inbox->id);
+        $this->assertSame('error', $pairing['event'] ?? null);
+        $this->assertSame('SESSION_ALREADY_PAIRED', $pairing['error_code'] ?? null);
+        $this->assertArrayHasKey('expires_at', $pairing);
     }
 
     /** @return array{CommunicationInbox,CommunicationConversation,CommunicationMessage} */
@@ -318,22 +303,22 @@ final class CommunicationGatewayProjectionTest extends TestCase
         ConversationStatus $status = ConversationStatus::Open,
         string $sessionId = 'session-projection-0001',
     ): array {
-        $office = Office::factory()->create(['communication_enabled' => true]);
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
         $inbox = CommunicationInbox::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => 'Atendimento',
             'session_id' => $sessionId,
             'status' => InboxStatus::Connected,
             'is_enabled' => true,
         ]);
         $contact = CommunicationContact::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => 'Cliente',
             'is_active' => true,
         ]);
         $address = '+5511999990001';
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'contact_id' => $contact->id,
             'channel' => CommunicationChannel::Whatsapp,
             'address_encrypted' => $address,
@@ -342,7 +327,7 @@ final class CommunicationGatewayProjectionTest extends TestCase
             'is_active' => true,
         ]);
         $conversation = CommunicationConversation::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'inbox_id' => $inbox->id,
             'identity_id' => $identity->id,
             'status' => $status,
@@ -350,7 +335,7 @@ final class CommunicationGatewayProjectionTest extends TestCase
             'last_message_at' => now(),
         ]);
         $message = CommunicationMessage::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'inbox_id' => $inbox->id,
             'conversation_id' => $conversation->id,
             'identity_id' => $identity->id,

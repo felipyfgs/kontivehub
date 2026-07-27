@@ -112,14 +112,6 @@ final class IntegraBillingClassifier
     }
 
     /**
-     * Compat: true quando a tentativa deve entrar no ledger como faturável/possivelmente.
-     */
-    public function isBillableAttempt(?string $functionalRoute, ?int $httpStatus): bool
-    {
-        return $this->classifyPostTransport($functionalRoute, $httpStatus)->isBillableAttempt();
-    }
-
-    /**
      * @return list<int>
      */
     public function nonBillableStatuses(): array

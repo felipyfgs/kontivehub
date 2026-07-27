@@ -6,8 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\AssistantConversation;
 use App\Models\AssistantMessage;
 use App\Services\Assistant\AssistantAvailability;
-use App\Support\CurrentOffice;
-use App\Support\Work\RejectClientOfficeId;
+use App\Support\CurrentTenant;
+use App\Support\Work\RejectClientTenantId;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -17,16 +17,16 @@ class AssistantConversationController extends Controller
         private readonly AssistantAvailability $availability,
     ) {}
 
-    public function index(Request $request, CurrentOffice $currentOffice): JsonResponse
+    public function index(Request $request, CurrentTenant $currentTenant): JsonResponse
     {
         $this->availability->assertEnabled();
-        RejectClientOfficeId::strip($request);
+        RejectClientTenantId::strip($request);
 
         $user = $request->user();
         $perPage = min(max((int) $request->input('per_page', 20), 1), 50);
 
         $paginator = AssistantConversation::query()
-            ->where('office_id', $currentOffice->id())
+            ->where('tenant_id', $currentTenant->id())
             ->where('user_id', $user->id)
             ->orderByDesc('updated_at')
             ->paginate($perPage);
@@ -42,19 +42,19 @@ class AssistantConversationController extends Controller
         ]);
     }
 
-    public function store(Request $request, CurrentOffice $currentOffice): JsonResponse
+    public function store(Request $request, CurrentTenant $currentTenant): JsonResponse
     {
         $this->availability->assertEnabled();
-        RejectClientOfficeId::strip($request);
+        RejectClientTenantId::strip($request);
 
         $data = $request->validate([
             'title' => ['nullable', 'string', 'max:200'],
         ]);
 
         $conversation = AssistantConversation::query()->create([
-            'office_id' => $currentOffice->id(),
+            'tenant_id' => $currentTenant->id(),
             'user_id' => $request->user()->id,
-            'membership_id' => $currentOffice->membership()?->id,
+            'membership_id' => $currentTenant->realMembership()?->id,
             'title' => $data['title'] ?? null,
         ]);
 
@@ -64,15 +64,15 @@ class AssistantConversationController extends Controller
     public function messages(
         Request $request,
         AssistantConversation $conversation,
-        CurrentOffice $currentOffice,
+        CurrentTenant $currentTenant,
     ): JsonResponse {
         $this->availability->assertEnabled();
-        RejectClientOfficeId::strip($request);
-        $this->assertOwned($conversation, $request, $currentOffice);
+        RejectClientTenantId::strip($request);
+        $this->assertOwned($conversation, $request, $currentTenant);
 
         $messages = AssistantMessage::query()
             ->where('conversation_id', $conversation->id)
-            ->where('office_id', $currentOffice->id())
+            ->where('tenant_id', $currentTenant->id())
             ->orderBy('id')
             ->get();
 
@@ -84,9 +84,9 @@ class AssistantConversationController extends Controller
     private function assertOwned(
         AssistantConversation $conversation,
         Request $request,
-        CurrentOffice $currentOffice,
+        CurrentTenant $currentTenant,
     ): void {
-        if ((int) $conversation->office_id !== (int) $currentOffice->id()
+        if ((int) $conversation->tenant_id !== (int) $currentTenant->id()
             || (int) $conversation->user_id !== (int) $request->user()->id) {
             abort(404);
         }

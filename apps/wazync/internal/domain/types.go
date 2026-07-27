@@ -26,7 +26,6 @@ const (
 	CommandPasskeyConfirm         CommandType = "SESSION_PASSKEY_CONFIRM"
 	CommandConnectSession         CommandType = "SESSION_CONNECT"
 	CommandDisconnectSession      CommandType = "SESSION_DISCONNECT"
-	CommandResetSession           CommandType = "SESSION_RESET"
 	CommandSetPassive             CommandType = "SESSION_SET_PASSIVE"
 	CommandLogoutSession          CommandType = "SESSION_LOGOUT"
 	CommandSendMessage            CommandType = "MESSAGE_SEND"
@@ -51,7 +50,7 @@ const (
 func (t CommandType) Valid() bool {
 	switch t {
 	case CommandProvisionSession, CommandPairSession, CommandPairPhone, CommandPasskeyRespond,
-		CommandPasskeyConfirm, CommandConnectSession, CommandDisconnectSession, CommandResetSession,
+		CommandPasskeyConfirm, CommandConnectSession, CommandDisconnectSession,
 		CommandSetPassive, CommandLogoutSession, CommandSendMessage, CommandEditMessage,
 		CommandRevokeMessage, CommandReactMessage, CommandVotePoll, CommandMarkMessage,
 		CommandRequestUnavailable, CommandRetryMedia, CommandSetPresence, CommandSubscribePresence,
@@ -195,19 +194,6 @@ func (s SessionStatus) Valid() bool {
 		return true
 	default:
 		return false
-	}
-}
-
-// NormalizeSessionStatus is used only at persistence/event compatibility
-// boundaries. Internal code stores and publishes the three canonical values.
-func NormalizeSessionStatus(status string) SessionStatus {
-	switch SessionStatus(status) {
-	case SessionConnected:
-		return SessionConnected
-	case SessionConnecting, "PAIRING":
-		return SessionConnecting
-	default:
-		return SessionDisconnected
 	}
 }
 

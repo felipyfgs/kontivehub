@@ -4,7 +4,7 @@
  * Páginas devem: (1) watch sessionEpoch; (2) zerar seleção/paginação/detalhe;
  * (3) descartar respostas em voo comparando epoch no resolve.
  */
-import type { OfficeMembership } from '~/types/api'
+import type { TenantMembership } from '~/types/api'
 
 /** Helper para reset local de UI tenant-scoped ao trocar escritório. */
 export function resetTenantScopedUi(handlers: {
@@ -25,8 +25,8 @@ export function useTenantSwitch() {
   const { refreshIdentity } = useSanctumAuth()
   const { sessionEpoch, bumpSessionEpoch } = useDashboard()
 
-  const memberships = ref<OfficeMembership[]>([])
-  const currentOfficeId = ref<number | null>(null)
+  const memberships = ref<TenantMembership[]>([])
+  const currentTenantId = ref<number | null>(null)
   const loading = ref(false)
   const switching = ref(false)
   const loadError = ref<string | null>(null)
@@ -36,7 +36,7 @@ export function useTenantSwitch() {
     try {
       const res = await api.tenants.memberships()
       memberships.value = res.data.memberships || []
-      currentOfficeId.value = res.data.current_office_id
+      currentTenantId.value = res.data.current_tenant_id
       loadError.value = null
     } catch (caught) {
       loadError.value = apiErrorMessage(caught, 'Não foi possível carregar os escritórios.')
@@ -49,11 +49,11 @@ export function useTenantSwitch() {
   /**
    * Confirma troca: POST /tenants/switch → refresh me → bump epoch → reload rota.
    */
-  async function switchTo(officeId: number): Promise<boolean> {
+  async function switchTo(tenantId: number): Promise<boolean> {
     if (switching.value) return false
-    if (officeId === currentOfficeId.value) return true
+    if (tenantId === currentTenantId.value) return true
 
-    const target = memberships.value.find(m => m.office_id === officeId)
+    const target = memberships.value.find(m => m.tenant_id === tenantId)
     if (!target) {
       toast.add({
         title: 'Escritório não autorizado',
@@ -65,17 +65,17 @@ export function useTenantSwitch() {
 
     switching.value = true
     try {
-      await api.tenants.switch(officeId)
+      await api.tenants.switch(tenantId)
       await refreshIdentity()
       bumpSessionEpoch()
-      currentOfficeId.value = officeId
+      currentTenantId.value = tenantId
       memberships.value = memberships.value.map(m => ({
         ...m,
-        is_current: m.office_id === officeId
+        is_current: m.tenant_id === tenantId
       }))
       toast.add({
         title: 'Escritório alterado',
-        description: target.office_name || `Escritório #${officeId}`,
+        description: target.tenant_name || `Escritório #${tenantId}`,
         color: 'success'
       })
       // Recarrega a rota atual sem misturar dados do tenant anterior.
@@ -99,7 +99,7 @@ export function useTenantSwitch() {
 
   return {
     memberships,
-    currentOfficeId,
+    currentTenantId,
     loading,
     switching,
     loadError,

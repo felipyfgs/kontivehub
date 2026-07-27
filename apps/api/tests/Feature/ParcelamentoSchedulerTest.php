@@ -7,7 +7,7 @@ use App\Jobs\Fiscal\ExecuteFiscalMonitoringRunJob;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
 use App\Models\MonitorCommercialLedgerEntry;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\FiscalMonitoring\FiscalMonitoringScheduler;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -22,8 +22,8 @@ class ParcelamentoSchedulerTest extends TestCase
     public function test_commercial_scheduler_expands_installments_into_eight_idempotent_runs(): void
     {
         Queue::fake();
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
         $entry = MonitorCommercialLedgerEntry::factory()
             ->forClient($client)
             ->scheduled()
@@ -36,7 +36,7 @@ class ParcelamentoSchedulerTest extends TestCase
 
         $this->assertSame('dispatched', $method->invoke(
             $scheduler,
-            $office->id,
+            $tenant->id,
             $client->id,
             'installments',
             $entry,
@@ -44,7 +44,7 @@ class ParcelamentoSchedulerTest extends TestCase
         ));
         $this->assertSame('skipped', $method->invoke(
             $scheduler,
-            $office->id,
+            $tenant->id,
             $client->id,
             'installments',
             $entry->fresh(),

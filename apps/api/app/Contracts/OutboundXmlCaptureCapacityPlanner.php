@@ -40,6 +40,6 @@ interface OutboundXmlCaptureCapacityPlanner
         int $eligibleSecondAttempts,
         ?CarbonImmutable $from = null,
         ?CarbonImmutable $untilTarget = null,
-        ?int $officeId = null,
+        ?int $tenantId = null,
     ): array;
 }

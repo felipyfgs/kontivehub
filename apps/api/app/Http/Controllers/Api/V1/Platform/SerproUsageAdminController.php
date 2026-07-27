@@ -25,12 +25,9 @@ class SerproUsageAdminController extends Controller
     {
         $year = $request->query('year');
         $month = $request->query('month');
-        $recompute = filter_var($request->query('recompute', false), FILTER_VALIDATE_BOOL);
-
         $data = $this->reports->platformConsolidation(
             year: is_numeric($year) ? (int) $year : null,
             month: is_numeric($month) ? (int) $month : null,
-            recompute: $recompute,
         );
 
         return response()->json(['data' => $data]);
@@ -41,13 +38,13 @@ class SerproUsageAdminController extends Controller
         $validated = $request->validate([
             'year' => ['required', 'integer', 'min:2020', 'max:2100'],
             'month' => ['required', 'integer', 'min:1', 'max:12'],
-            'office_id' => ['sometimes', 'nullable', 'integer', 'exists:offices,id'],
+            'tenant_id' => ['sometimes', 'nullable', 'integer', 'exists:tenants,id'],
         ]);
 
         $result = $this->aggregates->recomputeMonth(
             (int) $validated['year'],
             (int) $validated['month'],
-            isset($validated['office_id']) ? (int) $validated['office_id'] : null,
+            isset($validated['tenant_id']) ? (int) $validated['tenant_id'] : null,
         );
 
         return response()->json(['data' => $result]);
@@ -65,7 +62,7 @@ class SerproUsageAdminController extends Controller
             'difference_cause' => ['sometimes', 'nullable', 'string', 'max:120'],
             'recompute_aggregates' => ['sometimes', 'boolean'],
             'adjustments' => ['sometimes', 'array'],
-            'adjustments.*.office_id' => ['sometimes', 'nullable', 'integer', 'exists:offices,id'],
+            'adjustments.*.tenant_id' => ['sometimes', 'nullable', 'integer', 'exists:tenants,id'],
             'adjustments.*.service_code' => ['sometimes', 'nullable', 'string', 'max:80'],
             'adjustments.*.consumption_class' => ['sometimes', 'nullable', 'string', 'max:30'],
             'adjustments.*.amount_micros' => ['required_with:adjustments', 'integer'],

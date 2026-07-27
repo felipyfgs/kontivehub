@@ -8,7 +8,7 @@ use App\Enums\TenantPermission;
 use App\Models\FiscalDocumentQuarantine;
 use App\Models\User;
 use App\Services\Authorization\TenantAuthorization;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use RuntimeException;
 
 /**
@@ -21,10 +21,10 @@ final class FiscalDocumentQuarantineService
     /**
      * @return list<FiscalDocumentQuarantine>
      */
-    public function listOpen(int $officeId, ?string $reason = null, int $limit = 50): array
+    public function listOpen(int $tenantId, ?string $reason = null, int $limit = 50): array
     {
         $q = FiscalDocumentQuarantine::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('resolution_status', QuarantineResolutionStatus::Open)
             ->orderByDesc('id')
             ->limit(min(100, max(1, $limit)));
@@ -43,7 +43,7 @@ final class FiscalDocumentQuarantineService
         ?string $code = null,
         ?string $notes = null,
     ): FiscalDocumentQuarantine {
-        if ((int) $item->office_id !== (int) app(CurrentOffice::class)->id()) {
+        if ((int) $item->tenant_id !== (int) app(CurrentTenant::class)->id()) {
             throw new RuntimeException('Quarentena não pertence ao escritório da sessão.');
         }
 

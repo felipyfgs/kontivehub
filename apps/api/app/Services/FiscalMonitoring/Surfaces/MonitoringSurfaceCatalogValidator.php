@@ -168,8 +168,13 @@ final class MonitoringSurfaceCatalogValidator
             $errors[] = "{$key}: hierarchy diverge de operation_keys";
         }
 
-        if (in_array($key, ['simples_mei_pgdasd', 'simples_mei_pgmei'], true)
-            && $contract->routePattern !== '/monitoring/simples-mei'
+        if ($key === 'simples_mei_pgdasd'
+            && $contract->routePattern !== '/monitoring/simples'
+        ) {
+            $errors[] = "{$key}: rota canônica divergente";
+        }
+        if ($key === 'simples_mei_pgmei'
+            && $contract->routePattern !== '/monitoring/mei'
         ) {
             $errors[] = "{$key}: rota canônica divergente";
         }

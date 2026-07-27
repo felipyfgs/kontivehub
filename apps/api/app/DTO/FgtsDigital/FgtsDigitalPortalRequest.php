@@ -10,7 +10,7 @@ final readonly class FgtsDigitalPortalRequest
     /** @param array<string, mixed> $parameters */
     public function __construct(
         public FgtsDigitalOperation $operation,
-        public int $officeId,
+        public int $tenantId,
         public int $clientId,
         public string $targetIdentifier,
         public ?string $credentialSource = null,
@@ -29,7 +29,7 @@ final readonly class FgtsDigitalPortalRequest
             'contract_version' => (int) config('fgts_digital.contract_version', 1),
             'operation' => $this->operation->value,
             'subject' => [
-                'office_id' => $this->officeId,
+                'tenant_id' => $this->tenantId,
                 'client_id' => $this->clientId,
                 'target_identifier' => $this->targetIdentifier,
                 'credential_source' => $this->credentialSource,

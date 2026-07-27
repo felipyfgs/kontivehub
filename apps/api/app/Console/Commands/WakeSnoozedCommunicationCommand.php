@@ -38,7 +38,7 @@ final class WakeSnoozedCommunicationCommand extends Command
                     'lock_version' => (int) $conversation->lock_version + 1,
                 ])->save();
                 $events->record(
-                    (int) $conversation->office_id,
+                    (int) $conversation->tenant_id,
                     'CONVERSATION_SNOOZE_ENDED',
                     ['status' => ConversationStatus::Open->value],
                     inboxId: (int) $conversation->inbox_id,

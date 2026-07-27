@@ -191,30 +191,11 @@ export function monitoringCanonicalQuery(
   return {}
 }
 
-/** Redirect legado `/modulo/:submodule` → superfície canônica correspondente. */
-export function monitoringLegacySubmoduleLocation(
-  moduleKey: RoutedMonitoringModuleKey,
-  _query: Record<string, unknown> = {},
-  pathSegment?: unknown
-) {
-  if (
-    moduleKey === 'simples_mei'
-    && normalizeMonitoringSubmodule('simples_mei', pathSegment) === 'PGMEI'
-  ) {
-    return { path: '/monitoring/mei', query: {} }
-  }
-  return monitoringSubmoduleLocation(moduleKey)
-}
-
 export function monitoringNavActiveModule(path: string): MonitoringModuleKey {
   const p = path.split('?')[0] || path
   if (p === '/monitoring' || p === '/monitoring/') return 'dashboard'
   // detalhe de cliente fiscal não é item de nav — cai no dashboard
   if (p.startsWith('/monitoring/clients')) return 'dashboard'
-  // Path legado pré-desacoplamento MEI
-  if (p === '/monitoring/simples-mei' || p.startsWith('/monitoring/simples-mei/')) {
-    return 'simples_mei'
-  }
   for (const item of MONITORING_NAV_ITEMS) {
     if (item.exact) {
       if (p === item.to) return item.moduleKey

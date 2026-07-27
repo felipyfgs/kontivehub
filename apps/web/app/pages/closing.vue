@@ -436,7 +436,7 @@ async function load() {
 
 async function confirmPartial() {
   if (!canCreateExport.value) {
-    toast.add({ title: 'Somente OPERATOR/ADMIN pode confirmar parcial.', color: 'warning' })
+    toast.add({ title: 'Sem permissão para confirmar parcialmente.', color: 'warning' })
     return
   }
   actionLoading.value = true
@@ -456,7 +456,7 @@ async function confirmPartial() {
 
 async function exportMonthly() {
   if (!canCreateExport.value) {
-    toast.add({ title: 'Somente OPERATOR/ADMIN pode exportar.', color: 'warning' })
+    toast.add({ title: 'Sem permissão para exportar.', color: 'warning' })
     return
   }
   actionLoading.value = true
@@ -481,7 +481,7 @@ async function exportMonthly() {
 
 async function advanceTarget() {
   if (!canAccessAdministration.value) {
-    toast.add({ title: 'Somente ADMIN com 2FA recente pode antecipar a meta.', color: 'warning' })
+    toast.add({ title: 'A antecipação exige permissão e autenticação recente.', color: 'warning' })
     return
   }
   if (!advanceTargetLocal.value) {
@@ -757,7 +757,7 @@ watch(
 
       <p class="text-xs text-muted">
         Escopo: {{ summary?.completeness_scope || 'known_documents_only' }}.
-        Papel atual: {{ me?.role || '—' }}.
+        Papel atual: {{ me?.tenant_role || '—' }}.
         Atalho: <kbd class="px-1 rounded border">g</kbd> então <kbd class="px-1 rounded border">f</kbd>.
       </p>
 

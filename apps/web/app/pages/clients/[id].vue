@@ -4,17 +4,10 @@
  * Layout master (main ~2/3 + aside ~1/3), não settings puro.
  */
 import type { Client, ClientCredential, Establishment } from '~/types/api'
-import { clientDetailKey, clientSectionPath } from '~/composables/useClientDetail'
-import {
-  clientDetailHref,
-  legacySectionToHref,
-  queryToClientDetailHref
-} from '~/utils/client-detail-tabs'
+import { clientDetailKey } from '~/composables/useClientDetail'
 import { clientNavigationMenu } from '~/utils/client-detail-navigation'
-import type { ClientDetailPanel, ClientDetailTab } from '~/utils/client-detail-tabs'
 
 const route = useRoute()
-const router = useRouter()
 const api = useApi()
 const toast = useToast()
 const {
@@ -35,7 +28,7 @@ const credentialSlideoverOpen = ref(false)
 const establishments = computed(() => item.value?.establishments || [])
 
 const shareholdersCount = computed(() => {
-  const primary = item.value?.establishments?.find(e => e.is_matrix)
+  const primary = item.value?.establishments?.find(e => e.is_headquarters)
     || item.value?.establishments?.[0]
   return (primary?.shareholders || []).length
 })
@@ -103,14 +96,6 @@ function onCredentialActivated(value: ClientCredential) {
   }
 }
 
-function sectionPath(section?: string) {
-  return clientSectionPath(clientId.value, section)
-}
-
-function goToTab(tab: ClientDetailTab, panel?: ClientDetailPanel) {
-  void navigateTo(clientDetailHref(clientId.value, tab, panel))
-}
-
 function openClientEdit() {
   if (!item.value || !canManageClients.value) return
   clientFormOpen.value = true
@@ -135,56 +120,15 @@ provide(clientDetailKey, {
   load,
   triggerSync,
   onCredentialActivated,
-  sectionPath,
-  goToTab,
   openClientEdit
 })
-
-/** `/clients/:id` → `/clients/:id/cadastro` */
-async function ensureCanonicalChild() {
-  const path = route.path.replace(/\/+$/, '')
-  if (!/^\/clients\/\d+$/.test(path)) return
-
-  if (typeof route.query.tab === 'string' || typeof route.query.section === 'string') {
-    const fromSection = typeof route.query.section === 'string'
-      ? legacySectionToHref(clientId.value, route.query.section)
-      : null
-    const href = fromSection || queryToClientDetailHref(clientId.value, route.query as Record<string, unknown>)
-    await router.replace(href)
-    return
-  }
-
-  await router.replace(clientDetailHref(clientId.value, 'cadastro'))
-}
-
-/** Query legada em qualquer filho → path. */
-async function migrateLegacyQuery() {
-  if (typeof route.query.tab !== 'string' && typeof route.query.section !== 'string') return
-  const fromSection = typeof route.query.section === 'string'
-    ? legacySectionToHref(clientId.value, route.query.section)
-    : null
-  const href = fromSection || queryToClientDetailHref(clientId.value, route.query as Record<string, unknown>)
-  await router.replace(href)
-}
 
 watch(clientId, () => {
   triggeredIds.value = []
   load()
 })
 
-watch(
-  () => route.fullPath,
-  async () => {
-    await ensureCanonicalChild()
-    await migrateLegacyQuery()
-  }
-)
-
-onMounted(async () => {
-  await ensureCanonicalChild()
-  await migrateLegacyQuery()
-  await load()
-})
+onMounted(load)
 </script>
 
 <template>
@@ -273,7 +217,7 @@ onMounted(async () => {
 
     <USlideover
       v-model:open="credentialSlideoverOpen"
-      title="Certificado A1"
+      title="certificado"
       description="Upload e gestão do certificado digital deste cliente."
     >
       <template #body>

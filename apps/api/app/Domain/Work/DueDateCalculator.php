@@ -21,10 +21,10 @@ final class DueDateCalculator
     public function calculate(
         DueRule $rule,
         CompetenceMonth $competence,
-        string $officeTimezone,
+        string $tenantTimezone,
         ?string $processDueDate = null,
     ): string {
-        $tz = $this->assertTimezone($officeTimezone);
+        $tz = $this->assertTimezone($tenantTimezone);
 
         return match ($rule->type) {
             DueRuleType::FixedDayOfCompetence => $this->fixedDay($competence, $rule->value, $tz),
@@ -45,9 +45,9 @@ final class DueDateCalculator
     /**
      * Data civil “hoje” no timezone do escritório (Y-m-d).
      */
-    public function todayInOffice(string $officeTimezone, ?DateTimeImmutable $now = null): string
+    public function todayInTenant(string $tenantTimezone, ?DateTimeImmutable $now = null): string
     {
-        $tz = $this->assertTimezone($officeTimezone);
+        $tz = $this->assertTimezone($tenantTimezone);
         $now ??= new DateTimeImmutable('now', $tz);
 
         return $now->setTimezone($tz)->format('Y-m-d');

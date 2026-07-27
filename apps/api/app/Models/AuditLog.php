@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
     'chain_seq',
-    'office_id',
+    'tenant_id',
     'user_id',
     'action',
     'subject_type',
@@ -40,8 +40,8 @@ class AuditLog extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function office(): BelongsTo
+    public function tenant(): BelongsTo
     {
-        return $this->belongsTo(Office::class);
+        return $this->belongsTo(Tenant::class);
     }
 }

@@ -11,11 +11,12 @@ final class GuideEmissionRequest
      * @param  array<string, mixed>  $payload
      */
     public function __construct(
-        public readonly int $officeId,
+        public readonly int $tenantId,
         public readonly int $clientId,
         public readonly string $systemCode,
         public readonly string $serviceCode,
         public readonly string $operationCode,
+        public readonly string $operationKey,
         public readonly ?string $competencePeriodKey,
         public readonly ?string $debitRef,
         public readonly ?int $amountCents,

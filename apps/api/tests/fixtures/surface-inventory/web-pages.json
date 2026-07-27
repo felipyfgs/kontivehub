@@ -108,18 +108,6 @@
     "notes": "layout: `auth`"
   },
   {
-    "section": "auth",
-    "file": "app/pages/two-factor/setup.vue",
-    "route": "/two-factor/setup",
-    "notes": "layout: `auth`; **redirect-only** → `/` or `/login`"
-  },
-  {
-    "section": "auth",
-    "file": "app/pages/two-factor-challenge.vue",
-    "route": "/two-factor-challenge",
-    "notes": "layout: `auth`; **redirect-only** → `/` or `/login`"
-  },
-  {
     "section": "clients",
     "file": "app/pages/clients.vue",
     "route": "/clients",
@@ -142,12 +130,6 @@
     "file": "app/pages/clients/[id].vue",
     "route": "/clients/:id",
     "notes": "**parent shell** (detail header + tabs)"
-  },
-  {
-    "section": "clients",
-    "file": "app/pages/clients/[id]/index.vue",
-    "route": "/clients/:id",
-    "notes": "**redirect-only** → `/clients/:id/cadastro`"
   },
   {
     "section": "clients",
@@ -184,78 +166,6 @@
     "file": "app/pages/clients/[id]/contratos.vue",
     "route": "/clients/:id/contratos",
     "notes": "Active detail tab"
-  },
-  {
-    "section": "clients",
-    "file": "app/pages/clients/[id]/configuracao.vue",
-    "route": "/clients/:id/configuracao",
-    "notes": "**redirect-only** → `dados-adicionais` tab"
-  },
-  {
-    "section": "clients",
-    "file": "app/pages/clients/[id]/certificado.vue",
-    "route": "/clients/:id/certificado",
-    "notes": "**redirect-only** (legacy → 4-page IA via `legacyClientPathToHref`)"
-  },
-  {
-    "section": "clients",
-    "file": "app/pages/clients/[id]/ccmei.vue",
-    "route": "/clients/:id/ccmei",
-    "notes": "**redirect-only** (legacy)"
-  },
-  {
-    "section": "clients",
-    "file": "app/pages/clients/[id]/comprovantes.vue",
-    "route": "/clients/:id/comprovantes",
-    "notes": "**redirect-only** (legacy)"
-  },
-  {
-    "section": "clients",
-    "file": "app/pages/clients/[id]/pagamentos.vue",
-    "route": "/clients/:id/pagamentos",
-    "notes": "**redirect-only** (legacy)"
-  },
-  {
-    "section": "clients",
-    "file": "app/pages/clients/[id]/sicalc.vue",
-    "route": "/clients/:id/sicalc",
-    "notes": "**redirect-only** (legacy)"
-  },
-  {
-    "section": "clients",
-    "file": "app/pages/clients/[id]/renuncias.vue",
-    "route": "/clients/:id/renuncias",
-    "notes": "**redirect-only** (legacy)"
-  },
-  {
-    "section": "clients",
-    "file": "app/pages/clients/[id]/saidas.vue",
-    "route": "/clients/:id/saidas",
-    "notes": "**redirect-only** (legacy)"
-  },
-  {
-    "section": "clients",
-    "file": "app/pages/clients/[id]/sincronizacao.vue",
-    "route": "/clients/:id/sincronizacao",
-    "notes": "**redirect-only** (legacy)"
-  },
-  {
-    "section": "clients",
-    "file": "app/pages/clients/[id]/integracoes.vue",
-    "route": "/clients/:id/integracoes",
-    "notes": "**redirect-only** (legacy)"
-  },
-  {
-    "section": "clients",
-    "file": "app/pages/clients/[id]/fiscal.vue",
-    "route": "/clients/:id/fiscal",
-    "notes": "**redirect-only** (legacy)"
-  },
-  {
-    "section": "clients",
-    "file": "app/pages/clients/[id]/estabelecimentos.vue",
-    "route": "/clients/:id/estabelecimentos",
-    "notes": "**redirect-only** (legacy)"
   },
   {
     "section": "monitoring",
@@ -343,45 +253,9 @@
   },
   {
     "section": "monitoring",
-    "file": "app/pages/monitoring/simples/[submodule].vue",
-    "route": "/monitoring/simples/:submodule",
-    "notes": "**redirect-only** via middleware `monitoring-submodule-legacy` (301)"
-  },
-  {
-    "section": "monitoring",
-    "file": "app/pages/monitoring/simples-mei/index.vue",
-    "route": "/monitoring/simples-mei",
-    "notes": "**redirect-only** → `/monitoring/simples` (301)"
-  },
-  {
-    "section": "monitoring",
-    "file": "app/pages/monitoring/simples-mei/[submodule].vue",
-    "route": "/monitoring/simples-mei/:submodule",
-    "notes": "**redirect-only** via middleware `monitoring-submodule-legacy` (301)"
-  },
-  {
-    "section": "monitoring",
     "file": "app/pages/monitoring/dctfweb/index.vue",
     "route": "/monitoring/dctfweb",
     "notes": ""
-  },
-  {
-    "section": "monitoring",
-    "file": "app/pages/monitoring/dctfweb/[submodule].vue",
-    "route": "/monitoring/dctfweb/:submodule",
-    "notes": "**redirect-only** via middleware `monitoring-submodule-legacy` (301)"
-  },
-  {
-    "section": "admin",
-    "file": "app/pages/admin/index.vue",
-    "route": "/admin",
-    "notes": "**redirect-only** (`definePageMeta redirect` → `/admin/offices`)"
-  },
-  {
-    "section": "admin",
-    "file": "app/pages/admin/departments.vue",
-    "route": "/admin/departments",
-    "notes": "**redirect-only** → `/conta/departamentos` (also **middleware redirect**)"
   },
   {
     "section": "admin",
@@ -391,27 +265,21 @@
   },
   {
     "section": "admin",
-    "file": "app/pages/admin/offices/index.vue",
-    "route": "/admin/offices",
-    "notes": "Offices list"
+    "file": "app/pages/admin/tenants/index.vue",
+    "route": "/admin/tenants",
+    "notes": "Tenants list"
   },
   {
     "section": "admin",
-    "file": "app/pages/admin/offices/new.vue",
-    "route": "/admin/offices/new",
-    "notes": "Create office"
+    "file": "app/pages/admin/tenants/new.vue",
+    "route": "/admin/tenants/new",
+    "notes": "Create tenant"
   },
   {
     "section": "admin",
-    "file": "app/pages/admin/offices/[id].vue",
-    "route": "/admin/offices/:id",
-    "notes": "Office detail"
-  },
-  {
-    "section": "admin",
-    "file": "app/pages/admin/owner/index.vue",
-    "route": "/admin/owner",
-    "notes": "**redirect-only** → `/admin/offices` (also **middleware redirect**)"
+    "file": "app/pages/admin/tenants/[id].vue",
+    "route": "/admin/tenants/:id",
+    "notes": "Tenant detail"
   },
   {
     "section": "admin/serpro",
@@ -462,54 +330,6 @@
     "notes": ""
   },
   {
-    "section": "settings",
-    "file": "app/pages/settings.vue",
-    "route": "/settings",
-    "notes": "**redirect-only** (301)"
-  },
-  {
-    "section": "settings",
-    "file": "app/pages/settings/index.vue",
-    "route": "/settings",
-    "notes": "**redirect-only** (301)"
-  },
-  {
-    "section": "settings",
-    "file": "app/pages/settings/proxies.vue",
-    "route": "/settings/proxies",
-    "notes": "**redirect-only** (+ middleware)"
-  },
-  {
-    "section": "settings",
-    "file": "app/pages/settings/departments.vue",
-    "route": "/settings/departments",
-    "notes": "Full page exists; **middleware redirect** before render"
-  },
-  {
-    "section": "settings",
-    "file": "app/pages/settings/team.vue",
-    "route": "/settings/team",
-    "notes": "Full page exists; **middleware redirect**"
-  },
-  {
-    "section": "settings",
-    "file": "app/pages/settings/usage.vue",
-    "route": "/settings/usage",
-    "notes": "Full page exists; **middleware redirect**"
-  },
-  {
-    "section": "settings",
-    "file": "app/pages/settings/subscription.vue",
-    "route": "/settings/subscription",
-    "notes": "Full page exists; **middleware redirect**"
-  },
-  {
-    "section": "settings",
-    "file": "app/pages/settings/cte.vue",
-    "route": "/settings/cte",
-    "notes": "**redirect-only** (+ middleware)"
-  },
-  {
     "section": "conta",
     "file": "app/pages/conta.vue",
     "route": "/conta",
@@ -525,7 +345,7 @@
     "section": "conta",
     "file": "app/pages/conta/escritorio.vue",
     "route": "/conta/escritorio",
-    "notes": "Office settings (replaces `/settings`)"
+    "notes": "Tenant settings (replaces `/settings`)"
   },
   {
     "section": "conta",
@@ -580,24 +400,6 @@
     "file": "app/pages/docs/imports/[id].vue",
     "route": "/docs/imports/:id",
     "notes": "Import batch detail"
-  },
-  {
-    "section": "docs",
-    "file": "app/pages/docs/import-batches.vue",
-    "route": "/docs/import-batches",
-    "notes": "**redirect-only** → `/docs/imports`"
-  },
-  {
-    "section": "notes",
-    "file": "app/pages/notes/index.vue",
-    "route": "/notes",
-    "notes": "**redirect-only** (301) → `/docs`"
-  },
-  {
-    "section": "notes",
-    "file": "app/pages/notes/[accessKey].vue",
-    "route": "/notes/:accessKey",
-    "notes": "**redirect-only** (301) → `/docs/:accessKey`"
   },
   {
     "section": "work",

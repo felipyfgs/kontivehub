@@ -5,7 +5,7 @@ namespace App\Models;
 use App\Enums\CommunicationChannel;
 use App\Enums\CommunicationDispatchStatus;
 use App\Enums\CommunicationExecutionMode;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * Destinatário: mascarado + hash, nunca valor em claro.
  */
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'client_id',
     'preference_id',
     'inbox_id',
@@ -56,7 +56,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 ])]
 class ClientCommunicationDispatch extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {

@@ -5,8 +5,8 @@ namespace App\Services\Fiscal\SimplesMei\Pgdasd;
 use App\Enums\FiscalSourceProvenance;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
 use App\Models\PagtowebPaymentListObservation;
+use App\Models\Tenant;
 use App\Services\Fiscal\Guides\PagtowebPaymentListCodec;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -25,7 +25,7 @@ final class PgdasdPagtowebEvidenceReapplyService
     /**
      * @return array{observations:int,paid:int,not_found:int,skipped:int}
      */
-    public function reapply(?int $officeId = null, ?int $clientId = null): array
+    public function reapply(?int $tenantId = null, ?int $clientId = null): array
     {
         Http::preventStrayRequests();
 
@@ -36,8 +36,8 @@ final class PgdasdPagtowebEvidenceReapplyService
             ->where('source_provenance', FiscalSourceProvenance::SerproReal->value)
             ->orderBy('id');
 
-        if ($officeId !== null) {
-            $query->where('office_id', $officeId);
+        if ($tenantId !== null) {
+            $query->where('tenant_id', $tenantId);
         }
         if ($clientId !== null) {
             $query->where('client_id', $clientId);
@@ -63,12 +63,12 @@ final class PgdasdPagtowebEvidenceReapplyService
      */
     private function reapplyObservation(PagtowebPaymentListObservation $observation): ?array
     {
-        $office = Office::query()->find($observation->office_id);
+        $tenant = Tenant::query()->find($observation->tenant_id);
         $client = Client::query()->withoutGlobalScopes()
             ->whereKey($observation->client_id)
-            ->where('office_id', $observation->office_id)
+            ->where('tenant_id', $observation->tenant_id)
             ->first();
-        if ($office === null || $client === null) {
+        if ($tenant === null || $client === null) {
             return null;
         }
 
@@ -81,9 +81,9 @@ final class PgdasdPagtowebEvidenceReapplyService
             ? $observation->observed_at
             : CarbonImmutable::parse((string) $observation->observed_at);
 
-        return DB::transaction(function () use ($office, $client, $observation, $digests, $verifiedAt): array {
+        return DB::transaction(function () use ($tenant, $client, $observation, $digests, $verifiedAt): array {
             return $this->evidence->apply(
-                $office,
+                $tenant,
                 $client,
                 $observation,
                 $digests,
@@ -106,10 +106,10 @@ final class PgdasdPagtowebEvidenceReapplyService
             )));
         }
 
-        $legacy = (array) (($observation->filter_summary['numero_documento_digests'] ?? []));
+        $recordedDigests = (array) ($observation->filter_summary['numero_documento_digests'] ?? []);
 
         return array_values(array_filter(
-            $legacy,
+            $recordedDigests,
             static fn (mixed $digest): bool => is_string($digest)
                 && preg_match('/^[a-f0-9]{64}$/', $digest) === 1,
         ));
@@ -127,7 +127,7 @@ final class PgdasdPagtowebEvidenceReapplyService
         $run = FiscalMonitoringRun::query()
             ->withoutGlobalScopes()
             ->whereKey($observation->source_run_id)
-            ->where('office_id', $observation->office_id)
+            ->where('tenant_id', $observation->tenant_id)
             ->where('client_id', $observation->client_id)
             ->first();
         if ($run === null) {

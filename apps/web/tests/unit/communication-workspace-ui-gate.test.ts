@@ -333,7 +333,7 @@ describe('superfície de atendimento compartilhado', () => {
     expect(inbox).not.toMatch(/https?:\/\//)
   })
 
-  it('integra REST office-scoped e navegação permission-aware', () => {
+  it('integra REST tenant-scoped e navegação permission-aware', () => {
     const api = source('app/composables/api/createCommunicationApi.ts')
     const navigation = source('app/utils/navigation.ts')
     const routes = source('app/utils/communication-routes.ts')

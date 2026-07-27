@@ -89,7 +89,7 @@ async function loadCscIntoForm(profileId: number) {
       cscToken.value = res.data.csc
     }
   } catch {
-    // VIEWER/OPERATOR ou falha: só metadados do perfil
+    // Sem acesso ao segredo ou em falha: conserva somente os metadados do perfil.
   }
 }
 
@@ -149,7 +149,7 @@ function clearSeedFile() {
 /**
  * Um único botão: XML (semente) e/ou CSC.
  * Se houver XML de modelo 65, tenta gravar CSC no perfil resultante.
- * Ativa perfil com mandato padrão se ainda SEED_READY e for admin.
+ * Ativa o perfil com mandato padrão quando a permissão efetiva autoriza.
  */
 async function saveAll() {
   lastError.value = null
@@ -194,7 +194,7 @@ async function saveAll() {
     // 2) CSC (modelo 65)
     if (cscId.value.trim() && cscToken.value.trim()) {
       if (!props.canAdmin) {
-        lastError.value = 'Só ADMIN grava CSC. XML pode ser salvo por OPERATOR.'
+        lastError.value = 'Sem permissão para gravar o CSC.'
         toast.add({ title: lastError.value, color: 'warning' })
       } else if (!profile || profile.model !== '65') {
         lastError.value = 'CSC é da NFC-e (modelo 65). Envie primeiro um XML modelo 65.'
@@ -376,7 +376,7 @@ watch(() => props.establishments, () => syncDefaultEstablishment(), { deep: true
             <UFormField
               label="CSC"
               name="csc"
-              help="Valor exibido para ADMIN (salvo no cofre)."
+              help="Valor exibido somente a quem pode gerenciar o segredo salvo no cofre."
             >
               <UInput
                 v-model="cscToken"

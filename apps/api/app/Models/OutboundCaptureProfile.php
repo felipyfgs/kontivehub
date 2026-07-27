@@ -5,7 +5,7 @@ namespace App\Models;
 use App\Enums\OutboundCaptureMode;
 use App\Enums\OutboundFiscalModel;
 use App\Enums\OutboundProfileStatus;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Model;
@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
-    'office_id', 'client_id', 'establishment_id', 'uf', 'environment', 'model',
+    'tenant_id', 'client_id', 'establishment_id', 'uf', 'environment', 'model',
     'mode', 'status', 'consent_recorded', 'consent_recorded_at', 'mandate_reference',
     'allowlisted', 'allowlisted_at', 'kill_switch', 'kill_switch_reason', 'kill_switch_at',
     'csc_vault_object_id', 'csc_id', 'csc_configured', 'csc_configured_at',
@@ -22,7 +22,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Hidden(['csc_vault_object_id'])]
 class OutboundCaptureProfile extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {
@@ -64,7 +64,7 @@ class OutboundCaptureProfile extends Model
 
     public function retrievalRequests(): HasMany
     {
-        return $this->hasMany(MaOutboundRetrievalRequest::class);
+        return $this->hasMany(OutboundRetrievalRequest::class);
     }
 
     public function captureRuns(): HasMany

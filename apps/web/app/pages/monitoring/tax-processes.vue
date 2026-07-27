@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * Processos fiscais (e-Processo) — lista tenant-scoped via MonitoringModuleTable.
- * Arquétipo customers.vue; isolamento por office da sessão; sem segredos.
+ * Arquétipo customers.vue; isolamento por tenant da sessão; sem segredos.
  */
 import type { TableColumn } from '@nuxt/ui'
 import type {

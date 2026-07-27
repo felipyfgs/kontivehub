@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * Preços/orçamento global e conciliação (PLATFORM_ADMIN).
- * Sem detalhe fiscal de tenant — apenas agregados e office_id opaco.
+ * Sem detalhe fiscal de tenant — apenas agregados e tenant_id opaco.
  */
 import type { TableColumn } from '@nuxt/ui'
 import type { SerproUsageConsolidation, SerproUsageReconciliation } from '~/types/api'
@@ -26,7 +26,7 @@ const reconOpen = ref(false)
 interface SerproBudgetRow {
   id?: number
   scope?: string
-  office_id?: number | null
+  tenant_id?: number | null
   environment?: string
   limit_micros?: number
   reserved_micros?: number
@@ -63,7 +63,7 @@ const budgetColumns: TableColumn<SerproBudgetRow>[] = [
     header: 'Escopo',
     cell: ({ row }) => [
       row.original.scope,
-      row.original.office_id ? `Office #${row.original.office_id}` : null,
+      row.original.tenant_id ? `Tenant #${row.original.tenant_id}` : null,
       row.original.is_canary ? 'Canário' : null
     ].filter(Boolean).join(' · ') || '—'
   },
@@ -86,8 +86,8 @@ const budgetColumns: TableColumn<SerproBudgetRow>[] = [
   }
 ]
 
-const tenantColumns: TableColumn<{ office_id: number, entry_count?: number, total_quantity?: number, total_estimated_cost_micros?: number }>[] = [
-  { accessorKey: 'office_id', header: 'Office ID' },
+const tenantColumns: TableColumn<{ tenant_id: number, entry_count?: number, total_quantity?: number, total_estimated_cost_micros?: number }>[] = [
+  { accessorKey: 'tenant_id', header: 'Tenant ID' },
   { accessorKey: 'entry_count', header: 'Lançamentos' },
   { accessorKey: 'total_quantity', header: 'Quantidade' },
   {
@@ -351,7 +351,7 @@ onMounted(load)
 
     <section>
       <UPageCard
-        title="Consumo por Office"
+        title="Consumo por Tenant"
         variant="naked"
         orientation="horizontal"
         class="mb-4"
@@ -383,7 +383,7 @@ onMounted(load)
           ui-preset="dashboard"
           horizontal-scroll
           table-class="w-full min-w-0"
-          primary-column-id="office_id"
+          primary-column-id="tenant_id"
           :summary-column-ids="['entry_count', 'total_quantity', 'cost']"
           :data="tenantPage.rows"
           :loading="loading"
@@ -391,7 +391,7 @@ onMounted(load)
           :page="tenantPage.page"
           :total="tenantPage.total"
           :items-per-page="tenantPage.perPage"
-          per-page-aria-label="Offices por página"
+          per-page-aria-label="Tenants por página"
           @update:page="tenantPage.setPage"
           @update:items-per-page="tenantPage.setPerPage"
         />

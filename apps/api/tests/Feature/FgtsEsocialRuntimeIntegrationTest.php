@@ -25,7 +25,7 @@ use App\Models\ClientCredential;
 use App\Models\EsocialEventEvidence;
 use App\Models\FiscalMonitoringRun;
 use App\Models\FiscalMonitoringSchedule;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Esocial\EsocialBxReadinessService;
 use App\Services\Esocial\EsocialEvidencePersistence;
 use App\Services\Esocial\FgtsEsocialMonitoringService;
@@ -62,8 +62,8 @@ class FgtsEsocialRuntimeIntegrationTest extends TestCase
     {
         $store = new CountingSecureObjectStore;
         $this->app->instance(SecureObjectStore::class, $store);
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
         $observedAt = CarbonImmutable::parse('2026-07-10 15:00:00-03:00');
         $events = [
             new EsocialEventDto(
@@ -86,8 +86,8 @@ class FgtsEsocialRuntimeIntegrationTest extends TestCase
         ];
         $persistence = app(EsocialEvidencePersistence::class);
 
-        $first = $persistence->persistMany($office, $client, $events);
-        $repeated = $persistence->persistMany($office, $client, $events);
+        $first = $persistence->persistMany($tenant, $client, $events);
+        $repeated = $persistence->persistMany($tenant, $client, $events);
 
         $this->assertSame(array_column($first, 'id'), array_column($repeated, 'id'));
         $this->assertSame(2, EsocialEventEvidence::query()->withoutGlobalScopes()->count());
@@ -97,7 +97,7 @@ class FgtsEsocialRuntimeIntegrationTest extends TestCase
 
         $projection = app(FgtsIndependentStateProjector::class)->project(
             '2026-06',
-            $persistence->listForCompetence($office, $client, '2026-06'),
+            $persistence->listForCompetence($tenant, $client, '2026-06'),
             CarbonImmutable::now(),
         );
 
@@ -114,8 +114,8 @@ class FgtsEsocialRuntimeIntegrationTest extends TestCase
 
     public function test_source_adapter_preserves_blocked_and_retryable_official_codes(): void
     {
-        [$office, $client] = $this->readyTenant();
-        $run = $this->createMonitoringRun($office, $client);
+        [$tenant, $client] = $this->readyTenant();
+        $run = $this->createMonitoringRun($tenant, $client);
         $clientDouble = new MutableEsocialEventClient(new EsocialFetchResult(
             success: false,
             errorCode: 'ESOCIAL_BX_QUOTA_EXHAUSTED',
@@ -125,7 +125,7 @@ class FgtsEsocialRuntimeIntegrationTest extends TestCase
         $this->app->instance(EsocialEventClient::class, $clientDouble);
         $adapter = app(FgtsEsocialSourceAdapter::class);
         $request = new FiscalAdapterRequest(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             run: $run,
             systemCode: 'ESOCIAL',
@@ -158,10 +158,10 @@ class FgtsEsocialRuntimeIntegrationTest extends TestCase
 
     public function test_scheduler_and_horizon_job_stop_before_client_egress_when_readiness_is_blocked(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create(['root_cnpj' => '48123272']);
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create(['root_cnpj' => '48123272']);
         $schedule = FiscalMonitoringSchedule::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'system_code' => 'ESOCIAL',
             'service_code' => 'FGTS',
@@ -185,7 +185,7 @@ class FgtsEsocialRuntimeIntegrationTest extends TestCase
         Queue::assertNothingPushed();
 
         $job = new SyncFgtsEsocialCompetenceJob(
-            $office->id,
+            $tenant->id,
             $client->id,
             '2026-06',
         );
@@ -198,16 +198,16 @@ class FgtsEsocialRuntimeIntegrationTest extends TestCase
         $this->assertSame(0, EsocialEventEvidence::query()->withoutGlobalScopes()->count());
     }
 
-    /** @return array{Office,Client} */
+    /** @return array{Tenant,Client} */
     private function readyTenant(): array
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create(['root_cnpj' => '48123272']);
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create(['root_cnpj' => '48123272']);
         ClientCredential::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'status' => CredentialStatus::Active,
-            'subject_name' => 'Metadata A1 de teste',
+            'subject_name' => 'Metadata certificado de teste',
             'holder_cnpj' => '48123272000105',
             'fingerprint_sha256' => str_repeat('e', 64),
             'valid_from' => now()->subDay(),
@@ -216,13 +216,13 @@ class FgtsEsocialRuntimeIntegrationTest extends TestCase
             'activated_at' => now(),
         ]);
 
-        return [$office, $client];
+        return [$tenant, $client];
     }
 
-    private function createMonitoringRun(Office $office, Client $client): FiscalMonitoringRun
+    private function createMonitoringRun(Tenant $tenant, Client $client): FiscalMonitoringRun
     {
         return FiscalMonitoringRun::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'system_code' => 'ESOCIAL',
             'service_code' => 'FGTS',

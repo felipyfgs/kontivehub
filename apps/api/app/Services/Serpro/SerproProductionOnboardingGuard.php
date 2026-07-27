@@ -2,58 +2,58 @@
 
 namespace App\Services\Serpro;
 
-use App\Enums\OfficeRole;
 use App\Enums\SerproDataSegregationClass;
 use App\Enums\SerproEnvironment;
-use App\Models\Office;
+use App\Enums\TenantRole;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Auth\RecentPasswordConfirmationGate;
-use App\Services\Integra\OfficeSerproAuthorizationService;
+use App\Services\Integra\TenantSerproAuthorizationService;
 use RuntimeException;
 
 /**
- * Seleção explícita de Office real + ambiente, consentimento e papéis para
- * certificado/Termo/token. Office demo não usa endpoint real.
+ * Seleção explícita de Tenant real + ambiente, consentimento e papéis para
+ * certificado/Termo/token. Tenant demo não usa endpoint real.
  */
 final class SerproProductionOnboardingGuard
 {
     public function __construct(
-        private readonly OfficeSerproAuthorizationService $authorizations,
+        private readonly TenantSerproAuthorizationService $authorizations,
     ) {}
 
-    public function isDemoOffice(Office $office): bool
+    public function isDemoTenant(Tenant $tenant): bool
     {
-        $demoSlug = strtolower((string) config('fiscal_demo.office_slug', 'demo'));
-        $slug = strtolower((string) $office->slug);
+        $demoSlug = strtolower((string) config('fiscal_demo.tenant_slug', 'demo'));
+        $slug = strtolower((string) $tenant->slug);
 
         if ($slug === $demoSlug || str_contains($slug, 'demo')) {
             return true;
         }
 
-        $seg = strtoupper((string) ($office->serpro_segregation_class ?? ''));
+        $seg = strtoupper((string) ($tenant->serpro_segregation_class ?? ''));
 
         return $seg === SerproDataSegregationClass::Demo->value;
     }
 
     /**
-     * Bloqueia endpoint/driver real para Office demo ou segregação não produtiva.
+     * Bloqueia endpoint/driver real para Tenant demo ou segregação não produtiva.
      */
-    public function assertMayUseRealEndpoint(Office $office, SerproEnvironment $environment): void
+    public function assertMayUseRealEndpoint(Tenant $tenant, SerproEnvironment $environment): void
     {
-        if ($this->isDemoOffice($office)) {
+        if ($this->isDemoTenant($tenant)) {
             throw new RuntimeException(
                 'Escritório demo/seed é inelegível para endpoint real SERPRO.'
             );
         }
 
         if ($environment === SerproEnvironment::Production) {
-            $seg = strtoupper((string) ($office->serpro_segregation_class ?? ''));
+            $seg = strtoupper((string) ($tenant->serpro_segregation_class ?? ''));
             // Fail-closed: null/vazio não é elegível — exige classe Production explícita.
             if ($seg !== SerproDataSegregationClass::Production->value) {
                 throw new RuntimeException(
                     $seg === ''
-                        ? 'Office sem serpro_segregation_class=PRODUCTION não pode usar produção real.'
-                        : 'Office com segregação '.$seg.' não pode usar produção real.'
+                        ? 'Tenant sem serpro_segregation_class=PRODUCTION não pode usar produção real.'
+                        : 'Tenant com segregação '.$seg.' não pode usar produção real.'
                 );
             }
         }
@@ -65,26 +65,26 @@ final class SerproProductionOnboardingGuard
      * @param  'certificate'|'termo'|'token'|'proxy_approve'  $purpose
      */
     public function assertSensitiveMutationAllowed(
-        Office $office,
+        Tenant $tenant,
         User $user,
         SerproEnvironment $environment,
         string $purpose,
         bool $explicitConsent,
-        bool $officeExplicitlySelected = true,
+        bool $tenantExplicitlySelected = true,
     ): void {
-        if (! $officeExplicitlySelected) {
-            throw new RuntimeException('Seleção explícita do Office é obrigatória.');
+        if (! $tenantExplicitlySelected) {
+            throw new RuntimeException('Seleção explícita do Tenant é obrigatória.');
         }
 
-        $this->assertMayUseRealEndpoint($office, $environment);
+        $this->assertMayUseRealEndpoint($tenant, $environment);
 
         $membership = $user->memberships()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('is_active', true)
             ->first();
 
-        if ($membership === null || $membership->role !== OfficeRole::Admin) {
-            throw new RuntimeException('Somente Office ADMIN pode executar '.$purpose.'.');
+        if ($membership === null || $membership->role !== TenantRole::TenantAdmin) {
+            throw new RuntimeException('Somente Tenant ADMIN pode executar '.$purpose.'.');
         }
 
         $passwordGate = app(RecentPasswordConfirmationGate::class);
@@ -98,32 +98,32 @@ final class SerproProductionOnboardingGuard
     }
 
     /**
-     * Confirma identidade do Office/autor/ambiente antes de material sensível.
+     * Confirma identidade do Tenant/autor/ambiente antes de material sensível.
      *
-     * @return array{office_id: int, environment: string, author_identity_masked: string}
+     * @return array{tenant_id: int, environment: string, author_identity_masked: string}
      */
     public function confirmIdentitySelection(
-        Office $office,
+        Tenant $tenant,
         SerproEnvironment $environment,
         User $user,
-        bool $confirmOffice,
+        bool $confirmTenant,
         bool $confirmEnvironment,
         bool $confirmAuthor,
     ): array {
-        if (! $confirmOffice || ! $confirmEnvironment) {
-            throw new RuntimeException('Confirmação explícita de Office e ambiente é obrigatória.');
+        if (! $confirmTenant || ! $confirmEnvironment) {
+            throw new RuntimeException('Confirmação explícita de Tenant e ambiente é obrigatória.');
         }
 
-        $this->assertMayUseRealEndpoint($office, $environment);
+        $this->assertMayUseRealEndpoint($tenant, $environment);
 
-        $auth = $this->authorizations->getOrCreate($office, $environment);
+        $auth = $this->authorizations->getOrCreate($tenant, $environment);
         $author = (string) $auth->author_identity;
         if ($confirmAuthor && ($author === '' || $author === '00000000000000')) {
             throw new RuntimeException('Autor do pedido ainda não configurado para confirmação.');
         }
 
         return [
-            'office_id' => (int) $office->id,
+            'tenant_id' => (int) $tenant->id,
             'environment' => $environment->value,
             'author_identity_masked' => $this->mask($author),
             'confirmed_by_user_id' => (int) $user->id,

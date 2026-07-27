@@ -1,7 +1,7 @@
-import type { OfficeMember, OfficeRole } from '~/types/api'
+import type { TenantMember, TenantRole } from '~/types/api'
 
 /** Filtro de papel na tela de equipe (`Todos` = sem restrição). */
-export type TeamRoleFilter = 'ALL' | OfficeRole
+export type TeamRoleFilter = 'ALL' | TenantRole
 
 /** Normaliza texto de busca (trim + minúsculas) sem construir RegExp da entrada. */
 export function normalizeTeamSearch(value: string): string {
@@ -13,10 +13,10 @@ export function normalizeTeamSearch(value: string): string {
  * Texto e papel são combinados (AND). Não usa RegExp construída da entrada.
  */
 export function filterTeamMembers(
-  members: OfficeMember[],
+  members: TenantMember[],
   query: string,
   role: TeamRoleFilter
-): OfficeMember[] {
+): TenantMember[] {
   const term = normalizeTeamSearch(query)
 
   return members.filter((member) => {

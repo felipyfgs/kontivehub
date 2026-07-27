@@ -5,25 +5,21 @@
  * URL canônica:
  * - `/work/tasks` — sem seleção
  * - `/work/tasks/{id}` — tarefa no path
- * - query: filtros + `view=lista|kanban` opcional — nunca `task` / `office_id`
- *
- * Compat: `/work/tasks?task=N` → `/work/tasks/N` (preserva demais query).
+ * - query: filtros + `view=lista|kanban` opcional — nunca `task` / `tenant_id`
  */
 import { breakpointsTailwind } from '@vueuse/core'
 import { h } from 'vue'
 import type { TableColumn } from '@nuxt/ui'
 import UCheckbox from '@nuxt/ui/components/Checkbox.vue'
-import type { OperationalTaskDetail, OperationalTaskSummary, WorkDepartment, WorkEntityLevel } from '~/types/work'
+import type { WorkTaskDetail, WorkTaskSummary, WorkDepartment, WorkEntityLevel } from '~/types/work'
 import type { DataTableFilterDefinition, DataTableFilterModel } from '~/types/data-table-filter'
 import type { SavedListFilterPayload } from '~/types/saved-list-filters'
 import { apiErrorMessage } from '~/utils/api-error'
 import {
   coerceWorkQueueTabForView,
-  parseWorkQueueQuery,
   serializeWorkQueueQuery,
   useWorkQueueFilters,
   workQueuePath,
-  workTaskPath,
   type WorkQueueView
 } from '~/composables/useWorkQueueFilters'
 import {
@@ -50,7 +46,6 @@ import { COMPACT_BUTTON_LABEL_UI } from '~/utils/list-filter-layout'
 import { restoreWorkSelectionFocus } from '~/utils/work-focus'
 import { createWorkAssigneeFilterModel } from '~/utils/work-queue-filter-models'
 
-const route = useRoute()
 const router = useRouter()
 const api = useApi()
 const toast = useToast()
@@ -71,16 +66,16 @@ const bulkOpen = ref(false)
 const selectionOrigin = ref<HTMLElement | null>(null)
 
 const departments = ref<WorkDepartment[]>([])
-const officeMembers = ref<Array<{ id: number, name: string }>>([])
+const tenantMembers = ref<Array<{ id: number, name: string }>>([])
 
 onMounted(async () => {
   try {
     const [deptRes, membersRes] = await Promise.all([
       api.work.departments.list({ per_page: 100, is_active: true }),
-      api.office.members.list()
+      api.tenant.members.list()
     ])
     departments.value = Array.isArray(deptRes?.data) ? deptRes.data : []
-    officeMembers.value = Array.isArray(membersRes?.data)
+    tenantMembers.value = Array.isArray(membersRes?.data)
       ? membersRes.data
           .filter(m => m.is_active !== false)
           .map(m => ({
@@ -90,7 +85,7 @@ onMounted(async () => {
       : []
   } catch {
     departments.value = []
-    officeMembers.value = []
+    tenantMembers.value = []
   }
 })
 
@@ -107,7 +102,7 @@ const queueDefinitions = computed((): DataTableFilterDefinition[] => [
     kind: 'option',
     label: 'Responsável',
     emptyValue: '',
-    items: officeMembers.value.map(m => ({ label: m.name, value: String(m.id) }))
+    items: tenantMembers.value.map(m => ({ label: m.name, value: String(m.id) }))
   },
   {
     key: 'client_id',
@@ -123,7 +118,7 @@ const queueDefinitions = computed((): DataTableFilterDefinition[] => [
     items: [
       { label: 'Minhas', value: 'mine' },
       { label: 'Departamento', value: 'department' },
-      { label: 'Escritório', value: 'office' }
+      { label: 'Escritório', value: 'tenant' }
     ]
   }
 ])
@@ -142,7 +137,7 @@ function queueModelsFromFilters(): DataTableFilterModel[] {
   }
   if (f.assignee_membership_id) {
     const def = findDefinition(defs, 'assignee_membership_id')
-    const known = officeMembers.value.find(m => m.id === f.assignee_membership_id)
+    const known = tenantMembers.value.find(m => m.id === f.assignee_membership_id)
     // Chip visível mesmo se as opções ainda não carregaram ou o factory rejeitar o valor.
     models.push(createWorkAssigneeFilterModel(
       def,
@@ -208,25 +203,8 @@ function onQueuePreset(payload: SavedListFilterPayload) {
   }, { resetPage: false })
 }
 
-// Legado ?task= → path canônico
-watch(
-  () => route.query.task,
-  async (legacy) => {
-    if (legacy === undefined || legacy === null || legacy === '') return
-    const id = Number(Array.isArray(legacy) ? legacy[0] : legacy)
-    if (!Number.isFinite(id) || id <= 0) return
-    const q = { ...(route.query as Record<string, unknown>) }
-    delete q.task
-    await router.replace({
-      path: workTaskPath(id),
-      query: serializeWorkQueueQuery(parseWorkQueueQuery(q))
-    })
-  },
-  { immediate: true }
-)
-
-const items = ref<OperationalTaskSummary[]>([])
-const detail = ref<OperationalTaskDetail | null>(null)
+const items = ref<WorkTaskSummary[]>([])
+const detail = ref<WorkTaskDetail | null>(null)
 const loading = ref(false)
 const detailLoading = ref(false)
 const loadError = ref<string | null>(null)
@@ -267,12 +245,12 @@ function setQueueView(next: WorkQueueView) {
 
 async function onEntityLevel(level: WorkEntityLevel) {
   if (level === 'task') return
-  const compatible = {
+  const sharedFilters = {
     q: filters.value.q,
     client_id: filters.value.client_id,
     department_id: filters.value.department_id
   }
-  await navigateTo(processesPathForEntityLevel(level, compatible))
+  await navigateTo(processesPathForEntityLevel(level, sharedFilters))
 }
 
 const filaListaTabs = [
@@ -433,8 +411,8 @@ function onListPerPage(perPage: number) {
   void patch({ per_page: perPage, page: 1 }, { resetPage: false })
 }
 
-const taskListColumns = computed<TableColumn<OperationalTaskSummary>[]>(() => {
-  const selectColumn: TableColumn<OperationalTaskSummary> = {
+const taskListColumns = computed<TableColumn<WorkTaskSummary>[]>(() => {
+  const selectColumn: TableColumn<WorkTaskSummary> = {
     id: 'select',
     enableHiding: false,
     enableSorting: false,
@@ -454,7 +432,7 @@ const taskListColumns = computed<TableColumn<OperationalTaskSummary>[]>(() => {
     })
   }
 
-  const columns: TableColumn<OperationalTaskSummary>[] = [
+  const columns: TableColumn<WorkTaskSummary>[] = [
     {
       accessorKey: 'title',
       header: ({ column }) => sortHeader('Tarefa', column),
@@ -566,7 +544,7 @@ function clearListSelection() {
   rowSelection.value = {}
 }
 
-function taskOriginLabel(item: OperationalTaskSummary): string {
+function taskOriginLabel(item: WorkTaskSummary): string {
   const client = item.process?.client?.name
   const process = item.process?.title
   if (client && process) return `${client} · ${process}`

@@ -4,14 +4,14 @@ namespace App\Models;
 
 use App\Enums\MailboxEventItemClassification;
 use App\Enums\MailboxEventProcessingStatus;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
     'serpro_eventos_run_id',
-    'office_id',
+    'tenant_id',
     'client_id',
     'ni_fingerprint',
     'classification',
@@ -23,7 +23,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class SerproEventosRunItem extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {

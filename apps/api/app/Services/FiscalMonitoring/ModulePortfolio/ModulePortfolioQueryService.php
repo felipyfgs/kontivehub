@@ -19,7 +19,6 @@ use App\Enums\TaxInstallmentModality;
 use App\Enums\TaxInstallmentParcelStatus;
 use App\Enums\TaxRegimeCode;
 use App\Models\Client;
-use App\Models\ClientProcuracaoSnapshot;
 use App\Models\ClientProcuracaoSync;
 use App\Models\FgtsCompetenceStatus;
 use App\Models\FiscalCategory;
@@ -30,13 +29,13 @@ use App\Models\FiscalPendingItem;
 use App\Models\FiscalSnapshot;
 use App\Models\MailboxContributorState;
 use App\Models\MailboxMessage;
-use App\Models\MitApuracao;
-use App\Models\Office;
-use App\Models\OfficeFiscalCategoryLink;
+use App\Models\MitAssessment;
 use App\Models\TaxGuide;
 use App\Models\TaxInstallmentOrder;
 use App\Models\TaxInstallmentParcel;
 use App\Models\TaxObligationProjection;
+use App\Models\Tenant;
+use App\Models\TenantFiscalCategoryLink;
 use App\Services\Fiscal\Dctfweb\DctfwebMonitoringQueryService;
 use App\Services\Fiscal\SimplesMei\Pgdasd\PgdasdCommunicationService;
 use App\Services\Fiscal\SimplesMei\Pgdasd\PgdasdMonitoringQueryService;
@@ -72,20 +71,20 @@ final class ModulePortfolioQueryService
     ) {}
 
     public function overview(
-        Office $office,
+        Tenant $tenant,
         FiscalModuleKey $module,
         ModulePortfolioFilters $filters,
     ): ModuleOverviewDto {
-        $origin = $this->dataOrigin->resolve($office);
+        $origin = $this->dataOrigin->resolve($tenant);
         $categories = $this->moduleCategories($module);
         $surface = $this->surfaces->resolveForModule($module, $filters->submodule);
 
         // Contadores + total no mesmo agrupamento (sem filtro de situation).
-        $counters = $this->aggregateCounters($office, $module, $filters);
+        $counters = $this->aggregateCounters($tenant, $module, $filters);
         $total = $counters->total();
-        $agenda = $this->buildAgenda($office, $module, $filters);
-        $categorySummaries = $this->categorySummaries($office, $categories, $filters);
-        $asOf = $this->latestObservedAt($office, $module, $filters);
+        $agenda = $this->buildAgenda($tenant, $module, $filters);
+        $categorySummaries = $this->categorySummaries($tenant, $categories, $filters);
+        $asOf = $this->latestObservedAt($tenant, $module, $filters);
         $coverage = $this->moduleDefaultCoverage($categories);
         if ($module === FiscalModuleKey::Fgts
             && $coverage === FiscalCoverage::Full->value
@@ -108,7 +107,7 @@ final class ModulePortfolioQueryService
             counters: $counters,
             agenda: $agenda,
             categories: $categorySummaries,
-            metrics: $this->moduleMetrics($office, $module, $filters, $total),
+            metrics: $this->moduleMetrics($tenant, $module, $filters, $total),
             surface: $surface->toPublicArray(),
         );
     }
@@ -117,12 +116,12 @@ final class ModulePortfolioQueryService
      * @return LengthAwarePaginator<int, ModuleClientRowDto>
      */
     public function clients(
-        Office $office,
+        Tenant $tenant,
         FiscalModuleKey $module,
         ModulePortfolioFilters $filters,
     ): LengthAwarePaginator {
-        $origin = $this->dataOrigin->resolve($office);
-        $idsQuery = $this->scopedClientIdsQuery($office, $module, $filters);
+        $origin = $this->dataOrigin->resolve($tenant);
+        $idsQuery = $this->scopedClientIdsQuery($tenant, $module, $filters);
         $isPgdasdPortfolio = $this->isPgdasdPortfolioSubmodule($module, $filters);
 
         $sortColumn = match ($filters->sort) {
@@ -146,33 +145,33 @@ final class ModulePortfolioQueryService
             ->withoutGlobalScopes()
             ->from('clients')
             ->whereIn('clients.id', $idsQuery)
-            ->where('clients.office_id', $office->id)
+            ->where('clients.tenant_id', $tenant->id)
             ->select('clients.*')
             ->selectSub(
-                $this->situationSubquery($office, $module, $filters),
+                $this->situationSubquery($tenant, $module, $filters),
                 'portfolio_situation',
             )
             ->selectSub(
-                $this->lastConsultedSubquery($office, $module, $filters),
+                $this->lastConsultedSubquery($tenant, $module, $filters),
                 'portfolio_last_consulted_at',
             )
             ->selectSub(
-                $this->competenceSubquery($office, $module, $filters),
+                $this->competenceSubquery($tenant, $module, $filters),
                 'portfolio_competence',
             );
 
         if ($isPgdasdPortfolio) {
             $pageQuery
                 ->selectSub(
-                    $this->pgdasdDeclarationStateSortSubquery($office),
+                    $this->pgdasdDeclarationStateSortSubquery($tenant),
                     'portfolio_pgdasd_declaration_state',
                 )
                 ->selectSub(
-                    $this->pgdasdLastDeclarationSortSubquery($office),
+                    $this->pgdasdLastDeclarationSortSubquery($tenant),
                     'portfolio_pgdasd_last_declaration',
                 )
                 ->selectSub(
-                    $this->pgdasdRbt12SortSubquery($office),
+                    $this->pgdasdRbt12SortSubquery($tenant),
                     'portfolio_pgdasd_rbt12',
                 );
         }
@@ -187,11 +186,11 @@ final class ModulePortfolioQueryService
         $clients = $paginator->getCollection();
         $clientIds = $clients->pluck('id')->map(fn ($id) => (int) $id)->all();
 
-        $matrixCnpjs = $this->loadMatrixCnpjs($office, $clientIds);
-        $coverages = $this->loadCoverages($office, $module, $clientIds, $filters);
-        $details = $this->loadModuleDetails($office, $module, $clientIds, $filters);
-        $deadlines = $this->loadNextDeadlines($office, $module, $clientIds, $filters);
-        $documents = $this->loadDocuments($office, $module, $filters, $clientIds);
+        $matrixCnpjs = $this->loadMatrixCnpjs($tenant, $clientIds);
+        $coverages = $this->loadCoverages($tenant, $module, $clientIds, $filters);
+        $details = $this->loadModuleDetails($tenant, $module, $clientIds, $filters);
+        $deadlines = $this->loadNextDeadlines($tenant, $module, $clientIds, $filters);
+        $documents = $this->loadDocuments($tenant, $module, $filters, $clientIds);
 
         $rows = $clients->map(function (Client $client) use (
             $module,
@@ -223,8 +222,6 @@ final class ModulePortfolioQueryService
                 legalName: (string) $client->legal_name,
                 displayName: $client->display_name,
                 cnpj: strlen($normalizedCnpj) === 14 ? $normalizedCnpj : null,
-                cnpjMasked: $this->maskCnpj($cnpj ?? $client->root_cnpj),
-                rootCnpjMasked: $this->maskRootCnpj((string) $client->root_cnpj),
                 competence: is_string($competence) && $competence !== '' ? $competence : null,
                 situation: $situation,
                 coverage: $coverage,
@@ -265,11 +262,11 @@ final class ModulePortfolioQueryService
      * }
      */
     public function exportSanitizedRows(
-        Office $office,
+        Tenant $tenant,
         FiscalModuleKey $module,
         ModulePortfolioFilters $filters,
     ): array {
-        $origin = $this->dataOrigin->resolve($office);
+        $origin = $this->dataOrigin->resolve($tenant);
         $rows = [];
         $page = 1;
         $total = 0;
@@ -277,7 +274,7 @@ final class ModulePortfolioQueryService
 
         do {
             $pageFilters = $filters->withPage($page, 100);
-            $paginator = $this->clients($office, $module, $pageFilters);
+            $paginator = $this->clients($tenant, $module, $pageFilters);
             $total = (int) $paginator->total();
 
             /** @var ModuleClientRowDto $dto */
@@ -310,8 +307,7 @@ final class ModulePortfolioQueryService
             'client_id' => $dto->clientId,
             'legal_name' => $dto->legalName,
             'display_name' => $dto->displayName,
-            'cnpj_masked' => $dto->cnpjMasked,
-            'root_cnpj_masked' => $dto->rootCnpjMasked,
+            'cnpj' => $dto->cnpj,
             'competence' => $dto->competence,
             'situation' => $dto->situation,
             'coverage' => $dto->coverage,
@@ -382,16 +378,15 @@ final class ModulePortfolioQueryService
      * @return Builder<Client>|QueryBuilder
      */
     public function scopedClientIdsQuery(
-        Office $office,
+        Tenant $tenant,
         FiscalModuleKey $module,
         ModulePortfolioFilters $filters,
     ): Builder|QueryBuilder {
         $q = Client::query()
             ->withoutGlobalScopes()
             ->select('clients.id')
-            ->where('clients.office_id', $office->id)
-            ->where('clients.is_active', true)
-            ->whereNull('clients.matrix_client_id');
+            ->where('clients.tenant_id', $tenant->id)
+            ->where('clients.is_active', true);
 
         $clientIds = $filters->clientIdList();
         if ($clientIds !== []) {
@@ -408,7 +403,7 @@ final class ModulePortfolioQueryService
 
         $situations = $filters->situationList();
         if ($situations !== []) {
-            $expr = '('.$this->situationSqlExpression($office, $module, $filters).')';
+            $expr = '('.$this->situationSqlExpression($tenant, $module, $filters).')';
             if (count($situations) === 1) {
                 $q->whereRaw($expr.' = ?', [$situations[0]]);
             } else {
@@ -419,11 +414,11 @@ final class ModulePortfolioQueryService
 
         if ($filters->competence !== null) {
             $comp = $filters->competence;
-            $q->whereExists(function (QueryBuilder $exists) use ($office, $module, $filters, $comp): void {
+            $q->whereExists(function (QueryBuilder $exists) use ($tenant, $module, $filters, $comp): void {
                 $exists->select(DB::raw('1'))
                     ->from('fiscal_competences as fc')
                     ->whereColumn('fc.client_id', 'clients.id')
-                    ->where('fc.office_id', $office->id)
+                    ->where('fc.tenant_id', $tenant->id)
                     ->where('fc.period_key', $comp);
 
                 $catIds = $this->categoryIdsForModule($module, $filters->submodule);
@@ -439,11 +434,11 @@ final class ModulePortfolioQueryService
         $deliveries = $filters->deliveryStatusList();
         if ($deliveries !== [] && $module === FiscalModuleKey::Declarations) {
             $obligationCode = $this->declarationsObligationCode($filters->submodule);
-            $q->whereExists(function (QueryBuilder $exists) use ($office, $deliveries, $obligationCode): void {
+            $q->whereExists(function (QueryBuilder $exists) use ($tenant, $deliveries, $obligationCode): void {
                 $exists->select(DB::raw('1'))
                     ->from('tax_obligation_projections as top')
                     ->whereColumn('top.client_id', 'clients.id')
-                    ->where('top.office_id', $office->id)
+                    ->where('top.tenant_id', $tenant->id)
                     ->whereIn('top.delivery_status', $deliveries);
                 if ($obligationCode !== null) {
                     $exists->join('tax_obligation_definitions as tod', 'tod.id', '=', 'top.obligation_definition_id')
@@ -453,27 +448,27 @@ final class ModulePortfolioQueryService
         }
 
         if ($module === FiscalModuleKey::Declarations) {
-            $this->applyDeclarationsSubmoduleScope($q, $office, $filters);
+            $this->applyDeclarationsSubmoduleScope($q, $tenant, $filters);
         }
 
         if ($module === FiscalModuleKey::SimplesMei) {
             $this->applySimplesMeiSubmoduleScope($q, $filters);
-            $this->applyPgdasdSendStatusFilter($q, $office, $filters);
+            $this->applyPgdasdSendStatusFilter($q, $tenant, $filters);
         }
 
-        $this->membership->applyExclusionScope($q, $office, $module, $filters->submodule);
+        $this->membership->applyExclusionScope($q, $tenant, $module, $filters->submodule);
 
         if ($filters->coverageList() !== []) {
-            $this->applyCoverageFilter($q, $office, $module, $filters);
+            $this->applyCoverageFilter($q, $tenant, $module, $filters);
         }
 
         $modalities = $filters->modalityList();
         if ($modalities !== [] && $module === FiscalModuleKey::Installments) {
-            $q->whereExists(function (QueryBuilder $exists) use ($office, $modalities): void {
+            $q->whereExists(function (QueryBuilder $exists) use ($tenant, $modalities): void {
                 $exists->select(DB::raw('1'))
                     ->from('tax_installment_orders as tio')
                     ->whereColumn('tio.client_id', 'clients.id')
-                    ->where('tio.office_id', $office->id)
+                    ->where('tio.tenant_id', $tenant->id)
                     ->whereIn('tio.modality', $modalities);
             });
         }
@@ -487,7 +482,7 @@ final class ModulePortfolioQueryService
      */
     private function applyCoverageFilter(
         Builder|QueryBuilder $q,
-        Office $office,
+        Tenant $tenant,
         FiscalModuleKey $module,
         ModulePortfolioFilters $filters,
     ): void {
@@ -514,7 +509,7 @@ final class ModulePortfolioQueryService
         ELSE NULL
     END
     FROM fiscal_snapshots fs
-    WHERE fs.office_id = {$office->id}
+    WHERE fs.tenant_id = {$tenant->id}
       AND fs.client_id = clients.id
       AND fs.is_current = true
       AND fs.system_code IN ({$sysList})
@@ -537,8 +532,8 @@ SQL;
         WHEN SUM(CASE WHEN ofcl.coverage = 'NOT_APPLICABLE' THEN 1 ELSE 0 END) > 0 THEN 'NOT_APPLICABLE'
         ELSE NULL
     END
-    FROM office_fiscal_category_links ofcl
-    WHERE ofcl.office_id = {$office->id}
+    FROM tenant_fiscal_category_links ofcl
+    WHERE ofcl.tenant_id = {$tenant->id}
       AND ofcl.client_id = clients.id
       AND ofcl.status = 'ACTIVE'
       AND ofcl.fiscal_category_id IN ({$catList})
@@ -555,7 +550,7 @@ SQL;
     }
 
     private function aggregateCounters(
-        Office $office,
+        Tenant $tenant,
         FiscalModuleKey $module,
         ModulePortfolioFilters $filters,
     ): ModuleCountersDto {
@@ -579,14 +574,14 @@ SQL;
             sendStatus: $filters->sendStatus,
         );
 
-        $ids = $this->scopedClientIdsQuery($office, $module, $scopeFilters);
-        $expr = $this->situationSqlExpression($office, $module, $scopeFilters);
+        $ids = $this->scopedClientIdsQuery($tenant, $module, $scopeFilters);
+        $expr = $this->situationSqlExpression($tenant, $module, $scopeFilters);
 
         $rows = Client::query()
             ->withoutGlobalScopes()
             ->from('clients')
             ->whereIn('clients.id', $ids)
-            ->where('clients.office_id', $office->id)
+            ->where('clients.tenant_id', $tenant->id)
             ->selectRaw("({$expr}) as sit")
             ->selectRaw('COUNT(*) as cnt')
             ->groupBy(DB::raw("({$expr})"))
@@ -613,16 +608,16 @@ SQL;
      * @return list<ModuleAgendaItemDto>
      */
     private function buildAgenda(
-        Office $office,
+        Tenant $tenant,
         FiscalModuleKey $module,
         ModulePortfolioFilters $filters,
     ): array {
         $catIds = $this->categoryIdsForModule($module, $filters->submodule);
-        $clientIds = $this->scopedClientIdsQuery($office, $module, $filters);
+        $clientIds = $this->scopedClientIdsQuery($tenant, $module, $filters);
 
         $items = FiscalCompetence::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->whereNotNull('due_at')
             ->whereNull('closed_at')
@@ -649,7 +644,7 @@ SQL;
      * @return list<ModuleCategorySummaryDto>
      */
     private function categorySummaries(
-        Office $office,
+        Tenant $tenant,
         Collection $categories,
         ModulePortfolioFilters $filters,
     ): array {
@@ -657,9 +652,9 @@ SQL;
             return [];
         }
 
-        $counts = OfficeFiscalCategoryLink::query()
+        $counts = TenantFiscalCategoryLink::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('status', FiscalLinkStatus::Active->value)
             ->whereIn('fiscal_category_id', $categories->pluck('id'))
             ->selectRaw('fiscal_category_id, COUNT(DISTINCT client_id) as cnt')
@@ -676,7 +671,7 @@ SQL;
     }
 
     private function latestObservedAt(
-        Office $office,
+        Tenant $tenant,
         FiscalModuleKey $module,
         ModulePortfolioFilters $filters,
     ): ?string {
@@ -687,10 +682,10 @@ SQL;
 
         $at = FiscalSnapshot::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('is_current', true)
             ->whereIn('system_code', $systemCodes)
-            ->whereIn('client_id', $this->scopedClientIdsQuery($office, $module, $filters))
+            ->whereIn('client_id', $this->scopedClientIdsQuery($tenant, $module, $filters))
             ->max('observed_at');
 
         return $at !== null ? CarbonImmutable::parse((string) $at)->toIso8601String() : null;
@@ -700,7 +695,7 @@ SQL;
      * @return array<string, mixed>
      */
     private function moduleMetrics(
-        Office $office,
+        Tenant $tenant,
         FiscalModuleKey $module,
         ModulePortfolioFilters $filters,
         int $totalClients,
@@ -713,26 +708,26 @@ SQL;
             FiscalModuleKey::Mailbox => [
                 'open_messages' => MailboxMessage::query()
                     ->withoutGlobalScopes()
-                    ->where('office_id', $office->id)
-                    ->whereIn('client_id', $this->scopedClientIdsQuery($office, $module, $filters))
+                    ->where('tenant_id', $tenant->id)
+                    ->whereIn('client_id', $this->scopedClientIdsQuery($tenant, $module, $filters))
                     ->whereIn('triage_status', ['NEW', 'IN_REVIEW'])
                     ->count(),
             ],
             FiscalModuleKey::Guides => [
                 'unconfirmed_payment_guides' => TaxGuide::query()
                     ->withoutGlobalScopes()
-                    ->where('office_id', $office->id)
-                    ->whereIn('client_id', $this->scopedClientIdsQuery($office, $module, $filters))
+                    ->where('tenant_id', $tenant->id)
+                    ->whereIn('client_id', $this->scopedClientIdsQuery($tenant, $module, $filters))
                     ->whereIn('payment_status', ['UNKNOWN', 'NOT_CONFIRMED'])
                     ->count(),
             ],
             FiscalModuleKey::Installments => [
                 'total_clients' => $totalClients,
-                'tab_counts' => $this->installmentTabCounts($office, $filters),
+                'tab_counts' => $this->installmentTabCounts($tenant, $filters),
             ],
             FiscalModuleKey::Declarations => [
                 'total_clients' => $totalClients,
-                'tab_counts' => $this->declarationsTabCounts($office, $filters),
+                'tab_counts' => $this->declarationsTabCounts($tenant, $filters),
             ],
             default => [
                 'total_clients' => $totalClients,
@@ -747,12 +742,12 @@ SQL;
      * @return array<string, int>
      */
     private function installmentTabCounts(
-        Office $office,
+        Tenant $tenant,
         ModulePortfolioFilters $filters,
     ): array {
         $counts = [
             'all' => $this->countTabClients(
-                $office,
+                $tenant,
                 FiscalModuleKey::Installments,
                 $this->installmentTabFilters($filters, null),
             ),
@@ -760,7 +755,7 @@ SQL;
 
         foreach (TaxInstallmentModality::cases() as $modality) {
             $counts[$modality->value] = $this->countTabClients(
-                $office,
+                $tenant,
                 FiscalModuleKey::Installments,
                 $this->installmentTabFilters($filters, $modality->value),
             );
@@ -780,7 +775,7 @@ SQL;
      * @return array<string, int>
      */
     private function declarationsTabCounts(
-        Office $office,
+        Tenant $tenant,
         ModulePortfolioFilters $filters,
     ): array {
         $counts = [];
@@ -792,7 +787,7 @@ SQL;
             $counts[$submodule] = $submodule === 'DIRF'
                 ? 0
                 : $this->countTabClients(
-                    $office,
+                    $tenant,
                     FiscalModuleKey::Declarations,
                     $this->declarationsTabFilters($filters, $submodule),
                 );
@@ -802,11 +797,11 @@ SQL;
     }
 
     private function countTabClients(
-        Office $office,
+        Tenant $tenant,
         FiscalModuleKey $module,
         ModulePortfolioFilters $filters,
     ): int {
-        return (int) $this->scopedClientIdsQuery($office, $module, $filters)->count();
+        return (int) $this->scopedClientIdsQuery($tenant, $module, $filters)->count();
     }
 
     private function installmentTabFilters(
@@ -857,7 +852,7 @@ SQL;
      * Expressão SQL escalar de situação por cliente (mesmo critério de contadores e lista).
      */
     private function situationSqlExpression(
-        Office $office,
+        Tenant $tenant,
         FiscalModuleKey $module,
         ModulePortfolioFilters $filters,
     ): string {
@@ -873,7 +868,7 @@ SQL;
 (
     SELECT fs.situation
     FROM fiscal_snapshots fs
-    WHERE fs.office_id = {$office->id}
+    WHERE fs.tenant_id = {$tenant->id}
       AND fs.client_id = clients.id
       AND fs.is_current = true
       AND fs.system_code IN ({$sysList})
@@ -885,13 +880,13 @@ SQL;
 
         // Complementos por módulo (projeções específicas têm prioridade se existirem)
         $moduleSql = match ($module) {
-            FiscalModuleKey::Dctfweb => $this->dctfwebSituationSql($office, $filters),
-            FiscalModuleKey::SimplesMei => $this->simplesMeiSituationSql($office, $filters),
-            FiscalModuleKey::Installments => $this->parcelamentosSituationSql($office, $filters),
-            FiscalModuleKey::Mailbox => $this->mailboxSituationSql($office),
-            FiscalModuleKey::Declarations => $this->declaracoesSituationSql($office, $filters),
-            FiscalModuleKey::Guides => $this->guiasSituationSql($office),
-            FiscalModuleKey::Fgts => $this->fgtsSituationSql($office),
+            FiscalModuleKey::Dctfweb => $this->dctfwebSituationSql($tenant, $filters),
+            FiscalModuleKey::SimplesMei => $this->simplesMeiSituationSql($tenant, $filters),
+            FiscalModuleKey::Installments => $this->parcelamentosSituationSql($tenant, $filters),
+            FiscalModuleKey::Mailbox => $this->mailboxSituationSql($tenant),
+            FiscalModuleKey::Declarations => $this->declaracoesSituationSql($tenant, $filters),
+            FiscalModuleKey::Guides => $this->guiasSituationSql($tenant),
+            FiscalModuleKey::Fgts => $this->fgtsSituationSql($tenant),
             default => null,
         };
 
@@ -908,13 +903,13 @@ SQL;
      * PGDAS-D: tax_obligation_projections.situation (já mapeada no post-consult).
      * PGMEI: debt_state da projeção anual → FiscalSituation.
      */
-    private function simplesMeiSituationSql(Office $office, ModulePortfolioFilters $filters): string
+    private function simplesMeiSituationSql(Tenant $tenant, ModulePortfolioFilters $filters): string
     {
         $sub = strtoupper((string) ($filters->submodule ?? 'PGDASD'));
 
         if ($sub === 'PGMEI') {
             $year = $filters->year;
-            // Ano via PHP: portável em PostgreSQL e SQLite de testes (sem EXTRACT/::int).
+            // O ano é normalizado em PHP para manter a expressão simples.
             $resolvedYear = ($year !== null && $year >= 2000)
                 ? (int) $year
                 : (int) now()->year;
@@ -927,7 +922,7 @@ SQL;
                     ELSE 'UNKNOWN'
                 END
                 FROM pgmei_debt_projections pdp
-                WHERE pdp.office_id = {$office->id}
+                WHERE pdp.tenant_id = {$tenant->id}
                   AND pdp.client_id = clients.id
                   {$yearClause}
                 ORDER BY pdp.last_valid_query_at DESC NULLS LAST, pdp.id DESC
@@ -941,7 +936,7 @@ SQL;
             FROM tax_obligation_projections top
             INNER JOIN tax_obligation_definitions tod
               ON tod.id = top.obligation_definition_id
-            WHERE top.office_id = {$office->id}
+            WHERE top.tenant_id = {$tenant->id}
               AND top.client_id = clients.id
               AND tod.code = 'PGDAS_D'
               AND top.situation IS NOT NULL
@@ -950,13 +945,13 @@ SQL;
         )";
     }
 
-    private function dctfwebSituationSql(Office $office, ModulePortfolioFilters $filters): string
+    private function dctfwebSituationSql(Tenant $tenant, ModulePortfolioFilters $filters): string
     {
         $sub = $filters->submodule;
         if ($sub === 'MIT') {
             return "(
-                SELECT ma.situation FROM mit_apuracoes ma
-                WHERE ma.office_id = {$office->id} AND ma.client_id = clients.id
+                SELECT ma.situation FROM mit_assessments ma
+                WHERE ma.tenant_id = {$tenant->id} AND ma.client_id = clients.id
                 ORDER BY ma.observed_at DESC, ma.id DESC LIMIT 1
             )";
         }
@@ -964,7 +959,7 @@ SQL;
         if ($sub === 'DCTFWEB') {
             return "(
                 SELECT dd.situation FROM dctfweb_declarations dd
-                WHERE dd.office_id = {$office->id} AND dd.client_id = clients.id
+                WHERE dd.tenant_id = {$tenant->id} AND dd.client_id = clients.id
                 ORDER BY dd.official_at DESC, dd.id DESC LIMIT 1
             )";
         }
@@ -974,11 +969,11 @@ SQL;
             SELECT sit FROM (
                 SELECT dd.situation AS sit, 1 AS src_ord, COALESCE(dd.official_at, dd.updated_at) AS ord_at, dd.id AS ord_id
                 FROM dctfweb_declarations dd
-                WHERE dd.office_id = {$office->id} AND dd.client_id = clients.id
+                WHERE dd.tenant_id = {$tenant->id} AND dd.client_id = clients.id
                 UNION ALL
                 SELECT ma.situation, 2, COALESCE(ma.observed_at, ma.updated_at), ma.id
-                FROM mit_apuracoes ma
-                WHERE ma.office_id = {$office->id} AND ma.client_id = clients.id
+                FROM mit_assessments ma
+                WHERE ma.tenant_id = {$tenant->id} AND ma.client_id = clients.id
             ) u
             ORDER BY
                 CASE u.sit
@@ -992,7 +987,7 @@ SQL;
         )";
     }
 
-    private function parcelamentosSituationSql(Office $office, ModulePortfolioFilters $filters): string
+    private function parcelamentosSituationSql(Tenant $tenant, ModulePortfolioFilters $filters): string
     {
         $modalityList = $filters->modalityList();
         $modalitySql = $modalityList === [] ? null : $this->quoteList($modalityList);
@@ -1004,28 +999,28 @@ SQL;
             SELECT CASE
                 WHEN EXISTS (
                     SELECT 1 FROM tax_installment_parcels tip
-                    WHERE tip.office_id = {$office->id} AND tip.client_id = clients.id
+                    WHERE tip.tenant_id = {$tenant->id} AND tip.client_id = clients.id
                       AND tip.status IN ('ATTENTION','PENDING')
                       {$parcelModalityClause}
                 ) THEN 'ATTENTION'
                 WHEN EXISTS (
                     SELECT 1 FROM tax_installment_orders tio
-                    WHERE tio.office_id = {$office->id} AND tio.client_id = clients.id
+                    WHERE tio.tenant_id = {$tenant->id} AND tio.client_id = clients.id
                       AND UPPER(COALESCE(tio.situation,'')) IN ('ATTENTION','PENDING','ERROR','BLOCKED')
                       {$orderModalityClause}
                 ) THEN (
                     SELECT UPPER(tio.situation) FROM tax_installment_orders tio
-                    WHERE tio.office_id = {$office->id} AND tio.client_id = clients.id
+                    WHERE tio.tenant_id = {$tenant->id} AND tio.client_id = clients.id
                       {$orderModalityClause}
                     ORDER BY tio.observed_at DESC, tio.id DESC LIMIT 1
                 )
                 WHEN EXISTS (
                     SELECT 1 FROM tax_installment_orders tio
-                    WHERE tio.office_id = {$office->id} AND tio.client_id = clients.id
+                    WHERE tio.tenant_id = {$tenant->id} AND tio.client_id = clients.id
                       {$orderModalityClause}
                 ) THEN COALESCE((
                     SELECT UPPER(tio.situation) FROM tax_installment_orders tio
-                    WHERE tio.office_id = {$office->id} AND tio.client_id = clients.id
+                    WHERE tio.tenant_id = {$tenant->id} AND tio.client_id = clients.id
                       {$orderModalityClause}
                     ORDER BY tio.observed_at DESC, tio.id DESC LIMIT 1
                 ), 'UNKNOWN')
@@ -1034,43 +1029,43 @@ SQL;
         )";
     }
 
-    private function mailboxSituationSql(Office $office): string
+    private function mailboxSituationSql(Tenant $tenant): string
     {
         return "(
             SELECT CASE
                 WHEN EXISTS (
                     SELECT 1 FROM mailbox_messages mm
-                    WHERE mm.office_id = {$office->id} AND mm.client_id = clients.id
+                    WHERE mm.tenant_id = {$tenant->id} AND mm.client_id = clients.id
                       AND mm.due_at IS NOT NULL AND mm.due_at < CURRENT_TIMESTAMP
                       AND mm.triage_status IN ('NEW','IN_REVIEW')
                 ) THEN 'ATTENTION'
                 WHEN EXISTS (
                     SELECT 1 FROM mailbox_messages mm
-                    WHERE mm.office_id = {$office->id} AND mm.client_id = clients.id
+                    WHERE mm.tenant_id = {$tenant->id} AND mm.client_id = clients.id
                       AND mm.triage_status = 'NEW'
                 ) THEN 'PENDING'
                 WHEN EXISTS (
                     SELECT 1 FROM mailbox_contributor_states mcs
-                    WHERE mcs.office_id = {$office->id} AND mcs.client_id = clients.id
+                    WHERE mcs.tenant_id = {$tenant->id} AND mcs.client_id = clients.id
                       AND COALESCE(mcs.official_unread_count, 0) > 0
                 ) THEN 'PENDING'
                 WHEN EXISTS (
                     SELECT 1 FROM mailbox_contributor_states mcs
-                    WHERE mcs.office_id = {$office->id} AND mcs.client_id = clients.id
+                    WHERE mcs.tenant_id = {$tenant->id} AND mcs.client_id = clients.id
                 ) THEN 'UP_TO_DATE'
                 ELSE NULL
             END
         )";
     }
 
-    private function declaracoesSituationSql(Office $office, ModulePortfolioFilters $filters): string
+    private function declaracoesSituationSql(Tenant $tenant, ModulePortfolioFilters $filters): string
     {
         $sub = strtoupper((string) ($filters->submodule ?? ''));
         if ($sub === 'DIRF') {
             return "'UNSUPPORTED'";
         }
         if ($sub === 'FGTS') {
-            return $this->fgtsSituationSql($office);
+            return $this->fgtsSituationSql($tenant);
         }
 
         $obligationCode = $this->declarationsObligationCode($filters->submodule);
@@ -1082,7 +1077,7 @@ SQL;
             SELECT top.situation FROM tax_obligation_projections top
             INNER JOIN tax_obligation_definitions tod
               ON tod.id = top.obligation_definition_id
-            WHERE top.office_id = {$office->id} AND top.client_id = clients.id
+            WHERE top.tenant_id = {$tenant->id} AND top.client_id = clients.id
               AND top.is_open = true
               {$codeClause}
             ORDER BY
@@ -1096,24 +1091,24 @@ SQL;
         )";
     }
 
-    private function guiasSituationSql(Office $office): string
+    private function guiasSituationSql(Tenant $tenant): string
     {
         return "(
             SELECT CASE
                 WHEN EXISTS (
                     SELECT 1 FROM tax_guides tg
-                    WHERE tg.office_id = {$office->id} AND tg.client_id = clients.id
+                    WHERE tg.tenant_id = {$tenant->id} AND tg.client_id = clients.id
                       AND tg.due_at IS NOT NULL AND tg.due_at < CURRENT_TIMESTAMP
                       AND tg.payment_status IN ('UNKNOWN','NOT_CONFIRMED')
                 ) THEN 'ATTENTION'
                 WHEN EXISTS (
                     SELECT 1 FROM tax_guides tg
-                    WHERE tg.office_id = {$office->id} AND tg.client_id = clients.id
+                    WHERE tg.tenant_id = {$tenant->id} AND tg.client_id = clients.id
                       AND tg.payment_status IN ('UNKNOWN','NOT_CONFIRMED')
                 ) THEN 'PENDING'
                 WHEN EXISTS (
                     SELECT 1 FROM tax_guides tg
-                    WHERE tg.office_id = {$office->id} AND tg.client_id = clients.id
+                    WHERE tg.tenant_id = {$tenant->id} AND tg.client_id = clients.id
                       AND tg.payment_status IN ('CONFIRMED','PARTIAL')
                 ) THEN 'UP_TO_DATE'
                 ELSE NULL
@@ -1121,22 +1116,22 @@ SQL;
         )";
     }
 
-    private function fgtsSituationSql(Office $office): string
+    private function fgtsSituationSql(Tenant $tenant): string
     {
         return "(
             SELECT fcs.situation FROM fgts_competence_statuses fcs
-            WHERE fcs.office_id = {$office->id} AND fcs.client_id = clients.id
+            WHERE fcs.tenant_id = {$tenant->id} AND fcs.client_id = clients.id
               AND fcs.is_quarantined = false
             ORDER BY fcs.last_synced_at DESC, fcs.id DESC LIMIT 1
         )";
     }
 
     private function situationSubquery(
-        Office $office,
+        Tenant $tenant,
         FiscalModuleKey $module,
         ModulePortfolioFilters $filters,
     ): QueryBuilder {
-        return DB::query()->selectRaw($this->situationSqlExpression($office, $module, $filters));
+        return DB::query()->selectRaw($this->situationSqlExpression($tenant, $module, $filters));
     }
 
     private function isPgdasdPortfolioSubmodule(
@@ -1152,7 +1147,7 @@ SQL;
         return in_array($sub, ['', 'PGDASD', 'PGDAS', 'SIMPLES'], true);
     }
 
-    private function pgdasdDeclarationStateSortSubquery(Office $office): QueryBuilder
+    private function pgdasdDeclarationStateSortSubquery(Tenant $tenant): QueryBuilder
     {
         return DB::query()->selectRaw(<<<SQL
 (
@@ -1160,7 +1155,7 @@ SQL;
     FROM tax_obligation_projections top
     INNER JOIN tax_obligation_definitions tod
       ON tod.id = top.obligation_definition_id
-    WHERE top.office_id = {$office->id}
+    WHERE top.tenant_id = {$tenant->id}
       AND top.client_id = clients.id
       AND tod.code = 'PGDAS_D'
     ORDER BY top.last_valid_query_at DESC NULLS LAST, top.id DESC
@@ -1169,13 +1164,13 @@ SQL;
 SQL);
     }
 
-    private function pgdasdLastDeclarationSortSubquery(Office $office): QueryBuilder
+    private function pgdasdLastDeclarationSortSubquery(Tenant $tenant): QueryBuilder
     {
         return DB::query()->selectRaw(<<<SQL
 (
     SELECT po.period_key
     FROM pgdasd_operations po
-    WHERE po.office_id = {$office->id}
+    WHERE po.tenant_id = {$tenant->id}
       AND po.client_id = clients.id
       AND po.kind = 'DECLARATION'
     ORDER BY po.transmitted_at DESC NULLS LAST, po.declaration_number DESC NULLS LAST, po.id DESC
@@ -1184,26 +1179,25 @@ SQL);
 SQL);
     }
 
-    private function pgdasdRbt12SortSubquery(Office $office): QueryBuilder
+    private function pgdasdRbt12SortSubquery(Tenant $tenant): QueryBuilder
     {
-        $tz = is_string($office->timezone) && $office->timezone !== ''
-            ? $office->timezone
+        $tz = is_string($tenant->timezone) && $tenant->timezone !== ''
+            ? $tenant->timezone
             : 'America/Sao_Paulo';
         $expectedPeriodKey = PgdasdPeriod::toPeriodKey(PgdasdPeriod::expectedPa(null, $tz));
         $expectedPeriodSql = $this->escapeSqlLiteral($expectedPeriodKey);
-        $officeId = (int) $office->id;
+        $tenantId = (int) $tenant->id;
 
         // Período de display = declaração do PA esperado se existir; senão última
         // declaração; senão PA esperado — alinhado a portfolioDetails.
-        // Nested subselects correlacionam em pr.client_id (SQLite rejeita clients.id
-        // dentro de ORDER BY aninhado).
+        // Subselects correlacionam em pr.client_id dentro do ORDER BY aninhado.
         return DB::query()->selectRaw(<<<SQL
 (
     SELECT pr.total_cents
     FROM pgdasd_rbt12_projections pr
     LEFT JOIN tax_obligation_projections top_rbt
       ON top_rbt.id = pr.projection_id
-    WHERE pr.office_id = {$officeId}
+    WHERE pr.tenant_id = {$tenantId}
       AND pr.client_id = clients.id
     ORDER BY
       CASE
@@ -1211,7 +1205,7 @@ SQL);
           (
             SELECT po.period_key
             FROM pgdasd_operations po
-            WHERE po.office_id = {$officeId}
+            WHERE po.tenant_id = {$tenantId}
               AND po.client_id = pr.client_id
               AND po.kind = 'DECLARATION'
               AND po.period_key = '{$expectedPeriodSql}'
@@ -1221,7 +1215,7 @@ SQL);
           (
             SELECT po.period_key
             FROM pgdasd_operations po
-            WHERE po.office_id = {$officeId}
+            WHERE po.tenant_id = {$tenantId}
               AND po.client_id = pr.client_id
               AND po.kind = 'DECLARATION'
             ORDER BY po.transmitted_at DESC NULLS LAST, po.declaration_number DESC NULLS LAST, po.id DESC
@@ -1239,7 +1233,7 @@ SQL);
     }
 
     private function lastConsultedSubquery(
-        Office $office,
+        Tenant $tenant,
         FiscalModuleKey $module,
         ModulePortfolioFilters $filters,
     ): QueryBuilder {
@@ -1251,7 +1245,7 @@ SQL);
     FROM tax_obligation_projections top
     INNER JOIN tax_obligation_definitions tod
       ON tod.id = top.obligation_definition_id
-    WHERE top.office_id = {$office->id}
+    WHERE top.tenant_id = {$tenant->id}
       AND top.client_id = clients.id
       AND tod.code = 'PGDAS_D'
       AND top.last_valid_query_at IS NOT NULL
@@ -1271,7 +1265,7 @@ SQL);
     FROM tax_obligation_projections top
     INNER JOIN tax_obligation_definitions tod
       ON tod.id = top.obligation_definition_id
-    WHERE top.office_id = {$office->id}
+    WHERE top.tenant_id = {$tenant->id}
       AND top.client_id = clients.id
       AND tod.code = '{$escaped}'
       AND top.last_valid_query_at IS NOT NULL
@@ -1284,7 +1278,7 @@ SQL);
 (
     SELECT fcs.last_synced_at
     FROM fgts_competence_statuses fcs
-    WHERE fcs.office_id = {$office->id}
+    WHERE fcs.tenant_id = {$tenant->id}
       AND fcs.client_id = clients.id
       AND fcs.is_quarantined = false
       AND fcs.last_synced_at IS NOT NULL
@@ -1300,7 +1294,7 @@ SQL);
         return DB::query()->selectRaw(<<<SQL
 (
     SELECT fs.observed_at FROM fiscal_snapshots fs
-    WHERE fs.office_id = {$office->id}
+    WHERE fs.tenant_id = {$tenant->id}
       AND fs.client_id = clients.id
       AND fs.is_current = true
       AND fs.system_code IN ({$sysList})
@@ -1310,7 +1304,7 @@ SQL);
     }
 
     private function competenceSubquery(
-        Office $office,
+        Tenant $tenant,
         FiscalModuleKey $module,
         ModulePortfolioFilters $filters,
     ): QueryBuilder {
@@ -1320,7 +1314,7 @@ SQL);
         return DB::query()->selectRaw(<<<SQL
 (
     SELECT fc.period_key FROM fiscal_competences fc
-    WHERE fc.office_id = {$office->id}
+    WHERE fc.tenant_id = {$tenant->id}
       AND fc.client_id = clients.id
       AND (fc.fiscal_category_id IN ({$catList}) OR fc.fiscal_category_id IS NULL)
     ORDER BY fc.period_year DESC,
@@ -1494,13 +1488,13 @@ SQL);
     }
 
     /**
-     * Descritores de documento por cliente — href só com artefato real do CurrentOffice.
+     * Descritores de documento por cliente — href só com artefato real do CurrentTenant.
      *
      * @param  list<int>  $clientIds
      * @return array<int, FiscalDocumentDescriptorDto>
      */
     private function loadDocuments(
-        Office $office,
+        Tenant $tenant,
         FiscalModuleKey $module,
         ModulePortfolioFilters $filters,
         array $clientIds,
@@ -1510,11 +1504,11 @@ SQL);
         }
 
         $surface = $this->surfaces->resolveForModule($module, $filters->submodule);
-        $artifactsByClient = $this->latestArtifactsByClient($office, $clientIds, $surface);
+        $artifactsByClient = $this->latestArtifactsByClient($tenant, $clientIds, $surface);
         $map = [];
         foreach ($clientIds as $cid) {
             $map[$cid] = $this->documentDescriptors->forSurface(
-                $office,
+                $tenant,
                 $surface,
                 $artifactsByClient[$cid] ?? null,
             );
@@ -1528,7 +1522,7 @@ SQL);
      * @return array<int, FiscalEvidenceArtifact>
      */
     private function latestArtifactsByClient(
-        Office $office,
+        Tenant $tenant,
         array $clientIds,
         MonitoringSurfaceContract $surface,
     ): array {
@@ -1542,7 +1536,7 @@ SQL);
                 $query->whereNull('fea.verification_state')
                     ->orWhere('fea.verification_state', '!=', 'REJECTED');
             })
-            ->where('fea.office_id', $office->id)
+            ->where('fea.tenant_id', $tenant->id)
             ->whereIn('fmr.client_id', $clientIds)
             ->when(
                 $opKeys !== [],
@@ -1564,7 +1558,7 @@ SQL);
             if ($cid < 1 || isset($map[$cid])) {
                 continue;
             }
-            if ((int) $row->office_id !== (int) $office->id) {
+            if ((int) $row->tenant_id !== (int) $tenant->id) {
                 continue;
             }
             $map[$cid] = $row;
@@ -1577,18 +1571,18 @@ SQL);
      * @param  list<int>  $clientIds
      * @return array<int, string>
      */
-    private function loadMatrixCnpjs(Office $office, array $clientIds): array
+    private function loadMatrixCnpjs(Tenant $tenant, array $clientIds): array
     {
         if ($clientIds === []) {
             return [];
         }
 
         $rows = DB::table('establishments')
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
-            ->orderByDesc('is_matrix')
+            ->orderByDesc('is_headquarters')
             ->orderBy('id')
-            ->get(['client_id', 'cnpj', 'is_matrix']);
+            ->get(['client_id', 'cnpj', 'is_headquarters']);
 
         $map = [];
         foreach ($rows as $row) {
@@ -1606,7 +1600,7 @@ SQL);
      * @return array<int, string>
      */
     private function loadCoverages(
-        Office $office,
+        Tenant $tenant,
         FiscalModuleKey $module,
         array $clientIds,
         ModulePortfolioFilters $filters,
@@ -1618,7 +1612,7 @@ SQL);
         $systemCodes = $this->systemCodesForModule($module, $filters->submodule);
         $rows = FiscalSnapshot::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('is_current', true)
             ->whereIn('client_id', $clientIds)
             ->whereIn('system_code', $systemCodes)
@@ -1633,9 +1627,9 @@ SQL);
         }
 
         // Cobertura do vínculo quando não há snapshot
-        $linkCoverages = OfficeFiscalCategoryLink::query()
+        $linkCoverages = TenantFiscalCategoryLink::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->where('status', FiscalLinkStatus::Active->value)
             ->whereIn('fiscal_category_id', $this->categoryIdsForModule($module, $filters->submodule))
@@ -1645,7 +1639,7 @@ SQL);
             $cid = (int) $clientId;
             if (! isset($map[$cid])) {
                 $map[$cid] = $this->coverageAggregator->aggregate(
-                    $links->map(fn (OfficeFiscalCategoryLink $link) => $link->coverage),
+                    $links->map(fn (TenantFiscalCategoryLink $link) => $link->coverage),
                 )->value;
             }
         }
@@ -1658,7 +1652,7 @@ SQL);
      * @return array<int, array<string, mixed>>
      */
     private function loadModuleDetails(
-        Office $office,
+        Tenant $tenant,
         FiscalModuleKey $module,
         array $clientIds,
         ModulePortfolioFilters $filters,
@@ -1668,14 +1662,14 @@ SQL);
         }
 
         return match ($module) {
-            FiscalModuleKey::SimplesMei => $this->detailSimplesMei($office, $clientIds, $filters),
-            FiscalModuleKey::Dctfweb => $this->detailDctfwebMit($office, $clientIds, $filters),
-            FiscalModuleKey::Installments => $this->detailParcelamentos($office, $clientIds, $filters),
-            FiscalModuleKey::Sitfis => $this->detailSitfis($office, $clientIds),
-            FiscalModuleKey::Mailbox => $this->detailMailbox($office, $clientIds),
-            FiscalModuleKey::Declarations => $this->detailDeclaracoes($office, $clientIds, $filters),
-            FiscalModuleKey::Guides => $this->detailGuias($office, $clientIds),
-            FiscalModuleKey::Fgts => $this->detailFgts($office, $clientIds),
+            FiscalModuleKey::SimplesMei => $this->detailSimplesMei($tenant, $clientIds, $filters),
+            FiscalModuleKey::Dctfweb => $this->detailDctfwebMit($tenant, $clientIds, $filters),
+            FiscalModuleKey::Installments => $this->detailParcelamentos($tenant, $clientIds, $filters),
+            FiscalModuleKey::Sitfis => $this->detailSitfis($tenant, $clientIds),
+            FiscalModuleKey::Mailbox => $this->detailMailbox($tenant, $clientIds),
+            FiscalModuleKey::Declarations => $this->detailDeclaracoes($tenant, $clientIds, $filters),
+            FiscalModuleKey::Guides => $this->detailGuias($tenant, $clientIds),
+            FiscalModuleKey::Fgts => $this->detailFgts($tenant, $clientIds),
         };
     }
 
@@ -1684,7 +1678,7 @@ SQL);
      * @return array<int, array{due_at: ?string}>
      */
     private function loadNextDeadlines(
-        Office $office,
+        Tenant $tenant,
         FiscalModuleKey $module,
         array $clientIds,
         ModulePortfolioFilters $filters,
@@ -1696,7 +1690,7 @@ SQL);
         $catIds = $this->categoryIdsForModule($module, $filters->submodule);
         $rows = FiscalCompetence::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->whereNotNull('due_at')
             ->whereNull('closed_at')
@@ -1721,11 +1715,11 @@ SQL);
      * @param  list<int>  $clientIds
      * @return array<int, array<string, mixed>>
      */
-    private function detailSimplesMei(Office $office, array $clientIds, ModulePortfolioFilters $filters): array
+    private function detailSimplesMei(Tenant $tenant, array $clientIds, ModulePortfolioFilters $filters): array
     {
         $comps = FiscalCompetence::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->orderByDesc('period_year')
             ->orderByDesc('period_month')
@@ -1736,14 +1730,14 @@ SQL);
         $pgmeiDetails = [];
         if (in_array($sub, ['PGDASD', ''], true)) {
             $pgdasdDetails = app(PgdasdMonitoringQueryService::class)
-                ->portfolioDetails($office, $clientIds);
+                ->portfolioDetails($tenant, $clientIds);
         }
         if ($sub === 'PGMEI') {
             $pgmeiDetails = app(PgmeiMonitoringQueryService::class)
-                ->portfolioDetails($office, $clientIds, $filters->year);
+                ->portfolioDetails($tenant, $clientIds, $filters->year);
         }
 
-        $procuracaoByClient = $this->simplesMeiProcuracaoProjections($office, $clientIds);
+        $procuracaoByClient = $this->simplesMeiProcuracaoProjections($tenant, $clientIds);
 
         $map = [];
         foreach ($clientIds as $cid) {
@@ -1771,7 +1765,7 @@ SQL);
             if (isset($pgdasdDetails[$cid])) {
                 $pg = $pgdasdDetails[$cid];
                 $base['pgdasd'] = [
-                    'expected_period_key' => $pg['expected_period_key'] ?? $pg['period_key'] ?? null,
+                    'expected_period_key' => $pg['expected_period_key'] ?? null,
                     'latest_declaration' => $pg['latest_declaration'] ?? null,
                     'declaration_state' => $pg['declaration_state'] ?? null,
                     'declaration_state_reason' => $pg['declaration_state_reason'] ?? null,
@@ -1786,31 +1780,13 @@ SQL);
                     'documents' => $pg['documents'] ?? [],
                     'communication' => $pg['communication'] ?? null,
                 ];
-                $base['declaration_state'] = $pg['declaration_state'];
-                $base['last_declaration'] = $pg['last_declaration'];
-                $base['rbt12'] = $pg['rbt12'];
-                $base['last_productive_consulted_at'] = $pg['last_productive_consulted_at'];
-                $base['communication'] = $pg['communication'];
                 $base['links'] = array_merge($base['links'], $pg['links'] ?? []);
-                if (($pg['period_key'] ?? null) !== null) {
-                    $base['period_key'] = $pg['period_key'];
-                }
             }
 
             if (isset($pgmeiDetails[$cid])) {
                 $pm = $pgmeiDetails[$cid];
                 $base['pgmei'] = $pm['pgmei'] ?? null;
-                $base['calendar_year'] = $pm['calendar_year'] ?? $filters->year;
-                $base['debt_state'] = $pm['debt_state'] ?? null;
-                $base['freshness_state'] = $pm['freshness_state'] ?? null;
-                $base['items_count'] = $pm['items_count'] ?? 0;
-                $base['total_cents'] = $pm['total_cents'] ?? 0;
-                $base['last_valid_query_at'] = $pm['last_valid_query_at'] ?? null;
-                $base['communication'] = $pm['communication'] ?? null;
                 $base['links'] = array_merge($base['links'], $pm['links'] ?? []);
-                if (($pm['period_key'] ?? null) !== null) {
-                    $base['period_key'] = $pm['period_key'];
-                }
             }
 
             $map[$cid] = $base;
@@ -1825,7 +1801,7 @@ SQL);
      * @param  list<int>  $clientIds
      * @return array<int, array{status: string, valid_to: ?string, checked_at: ?string}>
      */
-    private function simplesMeiProcuracaoProjections(Office $office, array $clientIds): array
+    private function simplesMeiProcuracaoProjections(Tenant $tenant, array $clientIds): array
     {
         if ($clientIds === []) {
             return [];
@@ -1836,14 +1812,7 @@ SQL);
 
         $syncs = ClientProcuracaoSync::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
-            ->whereIn('client_id', $clientIds)
-            ->get()
-            ->keyBy('client_id');
-
-        $snapshots = ClientProcuracaoSnapshot::query()
-            ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->where('environment', $environment)
             ->get()
@@ -1851,10 +1820,7 @@ SQL);
 
         $out = [];
         foreach ($clientIds as $cid) {
-            $out[$cid] = $resolver->resolve(
-                $syncs->get($cid),
-                $snapshots->get($cid),
-            );
+            $out[$cid] = $resolver->resolve($syncs->get($cid));
         }
 
         return $out;
@@ -1864,18 +1830,18 @@ SQL);
      * @param  list<int>  $clientIds
      * @return array<int, array<string, mixed>>
      */
-    private function detailDctfwebMit(Office $office, array $clientIds, ModulePortfolioFilters $filters): array
+    private function detailDctfwebMit(Tenant $tenant, array $clientIds, ModulePortfolioFilters $filters): array
     {
         $sub = strtoupper((string) ($filters->submodule ?? 'DCTFWEB'));
         $dctfwebDetails = [];
         if (in_array($sub, ['DCTFWEB', 'DCTF', ''], true)) {
             $dctfwebDetails = app(DctfwebMonitoringQueryService::class)
-                ->portfolioDetails($office, $clientIds);
+                ->portfolioDetails($tenant, $clientIds);
         }
 
-        $mits = MitApuracao::query()
+        $mits = MitAssessment::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->orderByDesc('id')
             ->get();
@@ -1901,38 +1867,20 @@ SQL);
 
             if (isset($dctfwebDetails[$cid])) {
                 $d = $dctfwebDetails[$cid];
-                $last = $d['latest_declaration'] ?? $d['last_declaration'] ?? null;
+                $latest = $d['latest_declaration'] ?? null;
                 $base['dctfweb'] = [
-                    'id' => is_array($d['last_declaration'] ?? null) ? ($d['last_declaration']['id'] ?? null) : null,
-                    'period_key' => $d['period_key'] ?? null,
+                    'id' => is_array($latest) ? ($latest['id'] ?? null) : null,
                     'expected_period_key' => $d['expected_period_key'] ?? null,
                     'category' => $d['category'] ?? null,
                     'declaration_state' => $d['declaration_state'] ?? null,
                     'declaration_state_reason' => $d['declaration_state_reason'] ?? null,
-                    'transmission_status' => is_array($last) ? ($last['transmission_status'] ?? null) : null,
-                    'receipt_number' => is_array($last) ? ($last['receipt_number'] ?? null) : null,
-                    'no_movement' => is_array($last) ? ($last['no_movement'] ?? null) : null,
-                    'situation' => is_array($d['last_declaration'] ?? null)
-                        ? ($d['last_declaration']['situation'] ?? null)
-                        : null,
-                    'payment_status' => is_array($d['last_declaration'] ?? null)
-                        ? ($d['last_declaration']['payment_status'] ?? null)
-                        : null,
-                    'last_declaration' => $last,
-                    'last_search_at' => $d['last_search_at'] ?? $d['last_valid_query_at'] ?? null,
-                    'last_valid_query_at' => $d['last_valid_query_at'] ?? null,
+                    'latest_declaration' => $latest,
+                    'last_search_at' => $d['last_search_at'] ?? null,
                     'calendar_verified' => $d['calendar_verified'] ?? false,
                     'communication' => $d['communication'] ?? null,
                     'has_history' => $d['has_history'] ?? false,
                     'has_tracking' => $d['has_tracking'] ?? false,
                 ];
-                $base['declaration_state'] = $d['declaration_state'] ?? null;
-                $base['last_declaration'] = $last;
-                $base['last_search_at'] = $d['last_search_at'] ?? null;
-                $base['last_productive_consulted_at'] = $d['last_productive_consulted_at'] ?? null;
-                $base['communication'] = $d['communication'] ?? null;
-                $base['has_history'] = $d['has_history'] ?? false;
-                $base['has_tracking'] = $d['has_tracking'] ?? false;
                 $base['links'] = array_merge($base['links'], $d['links'] ?? []);
             } else {
                 $base['dctfweb'] = null;
@@ -1949,14 +1897,14 @@ SQL);
      * @return array<int, array<string, mixed>>
      */
     private function detailParcelamentos(
-        Office $office,
+        Tenant $tenant,
         array $clientIds,
         ModulePortfolioFilters $filters,
     ): array {
         $modalities = $filters->modalityList();
         $orders = TaxInstallmentOrder::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->when($modalities !== [], fn ($query) => $query->whereIn('modality', $modalities))
             ->orderByDesc('observed_at')
@@ -1965,7 +1913,7 @@ SQL);
 
         $parcels = TaxInstallmentParcel::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->when($modalities !== [], fn ($query) => $query->whereIn('modality', $modalities))
             ->whereNotIn('status', [TaxInstallmentParcelStatus::Paid->value, TaxInstallmentParcelStatus::Cancelled->value])
@@ -2029,14 +1977,14 @@ SQL);
      * @param  list<int>  $clientIds
      * @return array<int, array<string, mixed>>
      */
-    private function detailSitfis(Office $office, array $clientIds): array
+    private function detailSitfis(Tenant $tenant, array $clientIds): array
     {
         $system = (string) config('fiscal_monitoring.sitfis.system_code', 'INTEGRA_SITFIS');
         $ttl = (int) config('fiscal_monitoring.sitfis.snapshot_ttl_seconds', 86400);
 
         $snapshots = FiscalSnapshot::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('is_current', true)
             ->where('system_code', $system)
             ->whereIn('client_id', $clientIds)
@@ -2047,7 +1995,7 @@ SQL);
 
         $findings = FiscalFinding::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->whereIn('snapshot_id', $snapshotIds)
             ->where('is_active', true)
@@ -2057,7 +2005,7 @@ SQL);
 
         $pending = FiscalPendingItem::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->where('status', 'OPEN')
             ->whereHas('run', fn ($query) => $query
@@ -2069,7 +2017,7 @@ SQL);
             ->pluck('cnt', 'client_id');
 
         $comms = app(SitfisCommunicationService::class)
-            ->summariesForClients($office, $clientIds);
+            ->summariesForClients($tenant, $clientIds);
 
         $map = [];
         foreach ($clientIds as $cid) {
@@ -2104,18 +2052,18 @@ SQL);
      * @param  list<int>  $clientIds
      * @return array<int, array<string, mixed>>
      */
-    private function detailMailbox(Office $office, array $clientIds): array
+    private function detailMailbox(Tenant $tenant, array $clientIds): array
     {
         $states = MailboxContributorState::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->get()
             ->keyBy('client_id');
 
         $latest = MailboxMessage::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->orderByDesc('received_at_official')
             ->get()
@@ -2123,7 +2071,7 @@ SQL);
 
         $openCounts = MailboxMessage::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->whereIn('triage_status', ['NEW', 'IN_REVIEW'])
             ->selectRaw('client_id, COUNT(*) as cnt')
@@ -2167,7 +2115,7 @@ SQL);
      */
     private function applyDeclarationsSubmoduleScope(
         Builder|QueryBuilder $q,
-        Office $office,
+        Tenant $tenant,
         ModulePortfolioFilters $filters,
     ): void {
         $sub = strtoupper((string) ($filters->submodule ?? ''));
@@ -2183,11 +2131,11 @@ SQL);
         }
 
         if ($sub === 'FGTS') {
-            $q->whereExists(function (QueryBuilder $exists) use ($office): void {
+            $q->whereExists(function (QueryBuilder $exists) use ($tenant): void {
                 $exists->select(DB::raw('1'))
                     ->from('fgts_competence_statuses as fcs')
                     ->whereColumn('fcs.client_id', 'clients.id')
-                    ->where('fcs.office_id', $office->id)
+                    ->where('fcs.tenant_id', $tenant->id)
                     ->where('fcs.is_quarantined', false);
             });
 
@@ -2199,12 +2147,12 @@ SQL);
             return;
         }
 
-        $q->whereExists(function (QueryBuilder $exists) use ($office, $obligationCode): void {
+        $q->whereExists(function (QueryBuilder $exists) use ($tenant, $obligationCode): void {
             $exists->select(DB::raw('1'))
                 ->from('tax_obligation_projections as top')
                 ->join('tax_obligation_definitions as tod', 'tod.id', '=', 'top.obligation_definition_id')
                 ->whereColumn('top.client_id', 'clients.id')
-                ->where('top.office_id', $office->id)
+                ->where('top.tenant_id', $tenant->id)
                 ->where('tod.code', $obligationCode);
         });
     }
@@ -2230,7 +2178,7 @@ SQL);
             return;
         }
 
-        $q->whereIn('clients.tax_regime', $regime->storageFilterValues());
+        $q->where('clients.tax_regime', $regime->value);
     }
 
     /**
@@ -2241,7 +2189,7 @@ SQL);
      */
     private function applyPgdasdSendStatusFilter(
         Builder|QueryBuilder $q,
-        Office $office,
+        Tenant $tenant,
         ModulePortfolioFilters $filters,
     ): void {
         $statuses = $filters->sendStatusList();
@@ -2263,11 +2211,11 @@ SQL);
         $moduleKey = PgdasdCommunicationService::MODULE;
         $submoduleKey = PgdasdCommunicationService::SUBMODULE;
 
-        $existsDispatch = function (QueryBuilder $exists) use ($office, $moduleKey, $submoduleKey): void {
+        $existsDispatch = function (QueryBuilder $exists) use ($tenant, $moduleKey, $submoduleKey): void {
             $exists->select(DB::raw('1'))
                 ->from('client_communication_dispatches as ccd')
                 ->whereColumn('ccd.client_id', 'clients.id')
-                ->where('ccd.office_id', $office->id)
+                ->where('ccd.tenant_id', $tenant->id)
                 ->where('ccd.module_key', $moduleKey)
                 ->where('ccd.submodule_key', $submoduleKey);
         };
@@ -2308,7 +2256,7 @@ SQL);
      * @param  list<int>  $clientIds
      * @return array<int, array<string, mixed>>
      */
-    private function detailDeclaracoes(Office $office, array $clientIds, ModulePortfolioFilters $filters): array
+    private function detailDeclaracoes(Tenant $tenant, array $clientIds, ModulePortfolioFilters $filters): array
     {
         $sub = strtoupper((string) ($filters->submodule ?? ''));
 
@@ -2336,7 +2284,7 @@ SQL);
         }
 
         if ($sub === 'FGTS') {
-            $fgtsDetails = $this->detailFgts($office, $clientIds);
+            $fgtsDetails = $this->detailFgts($tenant, $clientIds);
             $map = [];
             foreach ($clientIds as $cid) {
                 $fgts = $fgtsDetails[$cid] ?? null;
@@ -2368,7 +2316,7 @@ SQL);
         $projections = TaxObligationProjection::query()
             ->withoutGlobalScopes()
             ->with('obligation')
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->where('is_open', true)
             ->when(
@@ -2382,7 +2330,7 @@ SQL);
         $pgdasdDetails = [];
         if (in_array($sub, ['PGDAS', 'PGDASD'], true)) {
             $pgdasdDetails = app(PgdasdMonitoringQueryService::class)
-                ->portfolioDetails($office, $clientIds);
+                ->portfolioDetails($tenant, $clientIds);
         }
 
         $map = [];
@@ -2397,16 +2345,10 @@ SQL);
                 'open_count' => $rows->count(),
                 'next_projection_id' => $next?->id,
                 'next_obligation_code' => $next?->obligation?->code ?? $obligationCode,
-                'next_period_key' => $next?->period_key ?? ($pgdasd['period_key'] ?? null),
+                'next_period_key' => $next?->period_key ?? ($pgdasd['expected_period_key'] ?? null),
                 'next_due_at' => $next?->due_at?->toIso8601String(),
                 'next_delivery_status' => $next?->delivery_status?->value,
                 'next_situation' => $next?->situation?->value,
-                'declaration_state' => $pgdasd['declaration_state'] ?? null,
-                'declaration_state_reason' => $pgdasd['declaration_state_reason'] ?? null,
-                'last_declaration' => $pgdasd['last_declaration'] ?? null,
-                'last_valid_query_at' => $pgdasd['last_valid_query_at']
-                    ?? $pgdasd['last_productive_consulted_at']
-                    ?? null,
                 'pgdasd' => $pgdasd === null ? null : [
                     'expected_period_key' => $pgdasd['expected_period_key'] ?? null,
                     'latest_declaration' => $pgdasd['latest_declaration'] ?? null,
@@ -2444,11 +2386,11 @@ SQL);
      * @param  list<int>  $clientIds
      * @return array<int, array<string, mixed>>
      */
-    private function detailGuias(Office $office, array $clientIds): array
+    private function detailGuias(Tenant $tenant, array $clientIds): array
     {
         $guides = TaxGuide::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->orderBy('due_at')
             ->get()
@@ -2489,12 +2431,12 @@ SQL);
      * @param  list<int>  $clientIds
      * @return array<int, array<string, mixed>>
      */
-    private function detailFgts(Office $office, array $clientIds): array
+    private function detailFgts(Tenant $tenant, array $clientIds): array
     {
         $rows = FgtsCompetenceStatus::query()
             ->withoutGlobalScopes()
             ->operationallyEligible()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->orderByDesc('last_synced_at')
             ->get()
@@ -2560,31 +2502,6 @@ SQL);
         $detailLinks = is_array($detail['links'] ?? null) ? $detail['links'] : [];
 
         return array_merge($base, $detailLinks);
-    }
-
-    private function maskCnpj(?string $cnpj): string
-    {
-        if ($cnpj === null || $cnpj === '') {
-            return '****';
-        }
-
-        $clean = strtoupper(Cnpj::normalize($cnpj));
-        $len = strlen($clean);
-        if ($len < 8) {
-            return '****';
-        }
-
-        return substr($clean, 0, 4).str_repeat('*', max(0, $len - 8)).substr($clean, -4);
-    }
-
-    private function maskRootCnpj(string $root): string
-    {
-        $clean = strtoupper(Cnpj::normalize($root));
-        if (strlen($clean) < 4) {
-            return '****';
-        }
-
-        return substr($clean, 0, 4).str_repeat('*', max(0, strlen($clean) - 4));
     }
 
     /**

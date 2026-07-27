@@ -19,14 +19,14 @@ final class MailboxMonitoringScheduler
         $settings = MailboxMonitoringSetting::query()->withoutGlobalScopes()
             ->where('enabled', true)
             ->where(fn ($query) => $query->whereNull('next_due_at')->orWhere('next_due_at', '<=', $now))
-            ->orderBy('office_id')->get();
+            ->orderBy('tenant_id')->get();
         foreach ($settings as $setting) {
-            $lock = Cache::lock('mailbox-scheduler:'.$setting->office_id, 55);
+            $lock = Cache::lock('mailbox-scheduler:'.$setting->tenant_id, 55);
             if (! $lock->get()) {
                 continue;
             }
             try {
-                DispatchMailboxMonitoringJob::dispatch((int) $setting->office_id);
+                DispatchMailboxMonitoringJob::dispatch((int) $setting->tenant_id);
                 $setting->forceFill(['next_due_at' => $this->nextDue($setting, $now)])->save();
                 $count++;
             } finally {

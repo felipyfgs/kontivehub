@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * Cadastro e vínculos (PNR Contador) — lista tenant-scoped via MonitoringModuleTable.
- * Arquétipo customers.vue; sem office_id no request; sem segredos.
+ * Arquétipo customers.vue; sem tenant_id no request; sem segredos.
  */
 import type { TableColumn } from '@nuxt/ui'
 import type {

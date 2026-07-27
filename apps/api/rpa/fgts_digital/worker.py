@@ -530,7 +530,7 @@ def fill_first(page: Any, selectors: list[str], value: str) -> bool:
 def select_profile_and_employer(page: Any, subject: dict[str, Any]) -> None:
     source = str(subject.get("credential_source") or "CLIENT")
     profile_type = str(subject.get("profile_type") or "EMPREGADOR")
-    if source != "OFFICE" and profile_type not in {"PROCURADOR", "PROCURADOR_PJ"}:
+    if source != "TENANT" and profile_type not in {"PROCURADOR", "PROCURADOR_PJ"}:
         return
 
     target = normalized_digits(subject.get("target_identifier"))

@@ -92,9 +92,6 @@ func buildTypedMessage(
 	uploaded *whatsmeow.UploadResponse,
 ) (*waE2E.Message, error) {
 	kind := payload.Kind
-	if kind == "" {
-		kind = inferMessageKind(payload)
-	}
 	if !kind.Valid() {
 		return nil, fmt.Errorf("unsupported message kind %q", kind)
 	}
@@ -175,32 +172,6 @@ func buildTypedMessage(
 		}
 	}
 	return message, nil
-}
-
-func inferMessageKind(payload domain.MessageSendPayload) domain.MessageKind {
-	switch {
-	case payload.Poll != nil:
-		return domain.MessagePoll
-	case payload.Location != nil:
-		return domain.MessageLocation
-	case payload.Contact != nil:
-		return domain.MessageContact
-	case payload.Interactive != nil:
-		return domain.MessageInteractive
-	case payload.Media != nil:
-		switch whatsmeowMediaType(payload.Media.MIMEType) {
-		case whatsmeow.MediaImage:
-			return domain.MessageImage
-		case whatsmeow.MediaAudio:
-			return domain.MessageAudio
-		case whatsmeow.MediaVideo:
-			return domain.MessageVideo
-		default:
-			return domain.MessageDocument
-		}
-	default:
-		return domain.MessageText
-	}
 }
 
 func mediaTypeForPayload(payload domain.MessageSendPayload) whatsmeow.MediaType {

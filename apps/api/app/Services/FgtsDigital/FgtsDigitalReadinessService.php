@@ -3,7 +3,7 @@
 namespace App\Services\FgtsDigital;
 
 use App\Models\Client;
-use App\Models\Office;
+use App\Models\Tenant;
 
 final class FgtsDigitalReadinessService
 {
@@ -14,7 +14,7 @@ final class FgtsDigitalReadinessService
     ) {}
 
     /** @return array<string, mixed> */
-    public function check(Office $office, Client $client): array
+    public function check(Tenant $tenant, Client $client): array
     {
         $driver = (string) config('fgts_digital.driver', 'disabled');
         $blockers = [];
@@ -42,13 +42,13 @@ final class FgtsDigitalReadinessService
         }
 
         $credential = $blockers === []
-            ? $this->credentials->resolve($office, $client, includeMaterial: false)
+            ? $this->credentials->resolve($tenant, $client, includeMaterial: false)
             : null;
         if ($blockers === [] && $credential === null) {
-            $blockers[] = ['code' => 'FGTS_DIGITAL_CREDENTIAL_MISSING', 'message' => 'A1 do cliente ou procuração ativa não encontrada.'];
+            $blockers[] = ['code' => 'FGTS_DIGITAL_CREDENTIAL_MISSING', 'message' => 'certificado do cliente ou procuração ativa não encontrada.'];
         }
         $session = $credential === null ? null : $this->sessions->latest(
-            (int) $office->id,
+            (int) $tenant->id,
             (int) $client->id,
             $credential['fingerprint'],
             $credential['profile_type'],

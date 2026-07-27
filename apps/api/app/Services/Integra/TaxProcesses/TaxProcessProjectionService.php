@@ -8,8 +8,8 @@ use App\Enums\SerproCapabilityDriver;
 use App\Enums\SerproEnvironment;
 use App\Models\Client;
 use App\Models\FiscalTaxProcess;
-use App\Models\Office;
-use App\Models\OfficeSerproAuthorization;
+use App\Models\Tenant;
+use App\Models\TenantSerproAuthorization;
 use App\Services\Integra\ContributorCnpjResolver;
 use App\Services\Serpro\CapabilityDriverResolver;
 use App\Services\Serpro\SerproContractService;
@@ -34,13 +34,13 @@ final class TaxProcessProjectionService
     /**
      * @return array{success: bool, count: int, simulated: bool, error_code?: string|null, error_message?: string|null}
      */
-    public function refresh(Office $office, Client $client, ?string $correlationId = null): array
+    public function refresh(Tenant $tenant, Client $client, ?string $correlationId = null): array
     {
-        if ($client->office_id !== $office->id) {
-            throw new RuntimeException('Cliente não pertence ao office.');
+        if ($client->tenant_id !== $tenant->id) {
+            throw new RuntimeException('Cliente não pertence ao tenant.');
         }
 
-        $lockKey = sprintf('fiscal:taxproc:%d:%d', $office->id, $client->id);
+        $lockKey = sprintf('fiscal:taxproc:%d:%d', $tenant->id, $client->id);
         $lock = Cache::lock($lockKey, 120);
         if (! $lock->get()) {
             return [
@@ -77,17 +77,17 @@ final class TaxProcessProjectionService
                 ];
             }
 
-            $auth = OfficeSerproAuthorization::query()
-                ->where('office_id', $office->id)
+            $auth = TenantSerproAuthorization::query()
+                ->where('tenant_id', $tenant->id)
                 ->where('environment', $env->value)
                 ->first();
             $author = (string) ($auth?->author_identity ?? $contract->contractor_cnpj);
             $contributor = $this->contributors->resolve($client);
 
-            $idem = sprintf('taxproc:%d:%d:%s', $office->id, $client->id, now()->format('YmdHi'));
+            $idem = sprintf('taxproc:%d:%d:%s', $tenant->id, $client->id, now()->format('YmdHi'));
 
             $response = $this->operations->execute(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 operationKey: self::OPERATION_KEY,
                 businessData: [],
@@ -134,7 +134,7 @@ final class TaxProcessProjectionService
                 $number = (string) $row['numeroDoProcesso'];
                 FiscalTaxProcess::query()->updateOrCreate(
                     [
-                        'office_id' => $office->id,
+                        'tenant_id' => $tenant->id,
                         'client_id' => $client->id,
                         'process_number' => mb_substr($number, 0, 80),
                     ],

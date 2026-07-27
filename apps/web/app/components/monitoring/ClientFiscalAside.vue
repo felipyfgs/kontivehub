@@ -78,7 +78,7 @@ function onClientPicked(next: Client | null) {
             {{ client.is_active ? 'Ativo' : 'Inativo' }}
           </UBadge>
           <span class="truncate text-muted tabular-nums">
-            {{ client.cnpj ? formatCnpj(client.cnpj) : client.root_cnpj }}
+            {{ formatCnpj(client.root_cnpj) }}
           </span>
         </div>
       </template>

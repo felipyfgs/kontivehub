@@ -8,7 +8,7 @@ use App\Models\TaxGuideVersion;
 use RuntimeException;
 
 /**
- * Storage seguro de documentos de guia no cofre (AAD purpose + office_id + sha256).
+ * Storage seguro de documentos de guia no cofre (AAD purpose + tenant_id + sha256).
  */
 final class GuideStorageService
 {
@@ -17,23 +17,23 @@ final class GuideStorageService
     ) {}
 
     /**
-     * @return array{office_id:int,sha256:string,purpose:string}
+     * @return array{tenant_id:int,sha256:string,purpose:string}
      */
-    public static function aad(int $officeId, string $sha256): array
+    public static function aad(int $tenantId, string $sha256): array
     {
         return SecureObjectPurpose::TaxGuideDocument->aadBase([
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'sha256' => $sha256,
         ]);
     }
 
     /**
-     * @return array{office_id:int,sha256:string,purpose:string}
+     * @return array{tenant_id:int,sha256:string,purpose:string}
      */
-    public static function paymentAad(int $officeId, string $sha256): array
+    public static function paymentAad(int $tenantId, string $sha256): array
     {
         return SecureObjectPurpose::TaxGuidePaymentEvidence->aadBase([
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'sha256' => $sha256,
         ]);
     }
@@ -41,7 +41,7 @@ final class GuideStorageService
     /**
      * @return array{vault_object_id:string,content_sha256:string,byte_size:int,content_type:string}
      */
-    public function storeDocument(int $officeId, string $bytes, string $contentType): array
+    public function storeDocument(int $tenantId, string $bytes, string $contentType): array
     {
         $max = (int) config('tax_guides.download.max_bytes', 5_242_880);
         $size = strlen($bytes);
@@ -53,7 +53,7 @@ final class GuideStorageService
         }
 
         $sha256 = hash('sha256', $bytes);
-        $objectId = $this->vault->put($bytes, self::aad($officeId, $sha256));
+        $objectId = $this->vault->put($bytes, self::aad($tenantId, $sha256));
 
         return [
             'vault_object_id' => $objectId,
@@ -66,7 +66,7 @@ final class GuideStorageService
     /**
      * @return array{vault_object_id:string,content_sha256:string,byte_size:int,content_type:string}
      */
-    public function storePaymentEvidence(int $officeId, string $bytes, string $contentType): array
+    public function storePaymentEvidence(int $tenantId, string $bytes, string $contentType): array
     {
         $max = (int) config('tax_guides.download.max_bytes', 5_242_880);
         $size = strlen($bytes);
@@ -78,7 +78,7 @@ final class GuideStorageService
         }
 
         $sha256 = hash('sha256', $bytes);
-        $objectId = $this->vault->put($bytes, self::paymentAad($officeId, $sha256));
+        $objectId = $this->vault->put($bytes, self::paymentAad($tenantId, $sha256));
 
         return [
             'vault_object_id' => $objectId,
@@ -88,9 +88,9 @@ final class GuideStorageService
         ];
     }
 
-    public function readDocumentAuthorized(TaxGuideVersion $version, int $officeId): string
+    public function readDocumentAuthorized(TaxGuideVersion $version, int $tenantId): string
     {
-        if ((int) $version->office_id !== $officeId) {
+        if ((int) $version->tenant_id !== $tenantId) {
             throw new RuntimeException('Guia não pertence ao escritório ativo.');
         }
         if ($version->vault_object_id === null || $version->content_sha256 === null) {
@@ -99,7 +99,7 @@ final class GuideStorageService
 
         return $this->vault->get(
             $version->vault_object_id,
-            self::aad($officeId, $version->content_sha256),
+            self::aad($tenantId, $version->content_sha256),
         );
     }
 }

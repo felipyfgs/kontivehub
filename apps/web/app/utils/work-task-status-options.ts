@@ -19,7 +19,7 @@ export interface WorkTaskStatusOptionsInput {
 
 /**
  * Opções de status/transição a partir do estado atual da tarefa.
- * Terminal (CONCLUIDA/DISPENSADA) → sem opções (reopen só via detalhe/ADMIN).
+ * Terminal (CONCLUIDA/DISPENSADA) → sem opções; reabertura só no detalhe autorizado.
  * Ações rápidas: iniciar, retomar, assumir, concluir (se não exige evidência).
  */
 export function workTaskStatusOptions(

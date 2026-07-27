@@ -10,7 +10,7 @@ use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use App\Services\Authorization\TenantAuthorization;
 use App\Services\Import\DocumentImportBatchService;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -24,7 +24,7 @@ class DocumentImportBatchController extends Controller
 
     public function store(
         Request $request,
-        CurrentOffice $currentOffice,
+        CurrentTenant $currentTenant,
         DocumentImportBatchService $batches,
         AuditLogger $audit,
     ): JsonResponse {
@@ -41,7 +41,7 @@ class DocumentImportBatchController extends Controller
             'idempotency_key' => ['nullable', 'string', 'max:80'],
         ]);
 
-        $office = $currentOffice->office();
+        $tenant = $currentTenant->tenant();
         /** @var list<UploadedFile> $files */
         $files = $request->file('files', []);
         if (! is_array($files)) {
@@ -50,7 +50,7 @@ class DocumentImportBatchController extends Controller
 
         try {
             $result = $batches->admit(
-                officeId: $office->id,
+                tenantId: $tenant->id,
                 actor: $request->user(),
                 files: array_values($files),
                 clientId: isset($validated['client_id']) ? (int) $validated['client_id'] : null,
@@ -87,16 +87,16 @@ class DocumentImportBatchController extends Controller
         ], $status);
     }
 
-    public function show(string $batch, CurrentOffice $currentOffice): JsonResponse
+    public function show(string $batch, CurrentTenant $currentTenant): JsonResponse
     {
-        $model = $this->findBatch($batch, $currentOffice);
+        $model = $this->findBatch($batch, $currentTenant);
 
         return response()->json(['data' => $model->toPublicArray()]);
     }
 
-    public function items(Request $request, string $batch, CurrentOffice $currentOffice): JsonResponse
+    public function items(Request $request, string $batch, CurrentTenant $currentTenant): JsonResponse
     {
-        $model = $this->findBatch($batch, $currentOffice);
+        $model = $this->findBatch($batch, $currentTenant);
         $status = $request->query('status');
         $sort = match ($request->string('sort')->toString()) {
             'status' => 'status',
@@ -139,7 +139,7 @@ class DocumentImportBatchController extends Controller
         Request $request,
         string $batch,
         int $item,
-        CurrentOffice $currentOffice,
+        CurrentTenant $currentTenant,
         DocumentImportBatchService $batches,
         AuditLogger $audit,
     ): JsonResponse {
@@ -148,11 +148,11 @@ class DocumentImportBatchController extends Controller
             return response()->json(['message' => 'Ação não autorizada para o perfil atual.'], 403);
         }
 
-        $model = $this->findBatch($batch, $currentOffice);
-        // office_id sempre do batch resolvido na sessão — nunca do body do cliente
+        $model = $this->findBatch($batch, $currentTenant);
+        // tenant_id sempre do batch resolvido na sessão — nunca do body do cliente
         $row = DocumentImportBatchItem::query()
             ->where('document_import_batch_id', $model->id)
-            ->where('office_id', $model->office_id)
+            ->where('tenant_id', $model->tenant_id)
             ->whereKey($item)
             ->first();
         if ($row === null) {
@@ -180,9 +180,9 @@ class DocumentImportBatchController extends Controller
         return response()->json(['data' => $updated->toPublicArray()]);
     }
 
-    public function exportCsv(string $batch, CurrentOffice $currentOffice): StreamedResponse
+    public function exportCsv(string $batch, CurrentTenant $currentTenant): StreamedResponse
     {
-        $model = $this->findBatch($batch, $currentOffice);
+        $model = $this->findBatch($batch, $currentTenant);
         $filename = 'import-batch-'.$model->public_id.'.csv';
 
         return response()->streamDownload(function () use ($model): void {
@@ -219,9 +219,9 @@ class DocumentImportBatchController extends Controller
         ]);
     }
 
-    public function index(Request $request, CurrentOffice $currentOffice): JsonResponse
+    public function index(Request $request, CurrentTenant $currentTenant): JsonResponse
     {
-        $office = $currentOffice->office();
+        $tenant = $currentTenant->tenant();
         $sort = match ($request->string('sort')->toString()) {
             'status' => 'status',
             'created_at' => 'created_at',
@@ -231,7 +231,7 @@ class DocumentImportBatchController extends Controller
         };
         $direction = $request->string('direction')->lower()->toString() === 'asc' ? 'asc' : 'desc';
         $query = DocumentImportBatch::query()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->orderBy($sort, $direction);
         if ($sort !== 'id') {
             $query->orderBy('id', $direction);
@@ -249,11 +249,11 @@ class DocumentImportBatchController extends Controller
         ]);
     }
 
-    private function findBatch(string $publicId, CurrentOffice $currentOffice): DocumentImportBatch
+    private function findBatch(string $publicId, CurrentTenant $currentTenant): DocumentImportBatch
     {
-        $office = $currentOffice->office();
+        $tenant = $currentTenant->tenant();
         $batch = DocumentImportBatch::query()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('public_id', $publicId)
             ->first();
 

@@ -123,10 +123,9 @@ export function buildSitfisColumns(options: {
       meta: { ...MONITORING_CLIENT_COLUMN_META },
       cell: ({ row }) => h(FiscalClientCell, {
         clientId: row.original.client_id,
-        name: row.original.legal_name || row.original.name || row.original.display_name,
+        name: row.original.display_name || row.original.legal_name,
         legalName: row.original.legal_name,
         cnpj: row.original.cnpj,
-        cnpjMasked: row.original.cnpj_masked,
         to: `/monitoring/clients/${row.original.client_id}/sitfis`
       })
     },
@@ -223,7 +222,7 @@ export function buildSitfisColumns(options: {
       enableSorting: false,
       meta: { ...MONITORING_ACTIONS_META },
       cell: ({ row }) => {
-        const name = row.original.legal_name || row.original.name || `cliente ${row.original.client_id}`
+        const name = row.original.display_name || row.original.legal_name || `cliente ${row.original.client_id}`
         return buildMonitoringActionsMenuCell({
           ariaLabel: `Mais ações de ${name}`,
           testId: 'sitfis-row-actions',

@@ -9,11 +9,11 @@ use App\Enums\SerproEnvironment;
 use App\Models\Client;
 use App\Models\FiscalMutationOperation;
 use App\Models\FiscalMutationOperationEvent;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
-use App\Services\Serpro\Catalog\OperationKeyMap;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 use Throwable;
 
 /**
@@ -35,7 +35,7 @@ final class FiscalMutationService
      * @param  array<string, mixed>  $requestPayload  será sanitizado
      */
     public function preflight(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         User $user,
         string $solutionCode,
@@ -46,7 +46,7 @@ final class FiscalMutationService
         ?string $environment = null,
         array $requestPayload = [],
         ?string $module = null,
-        ?string $providerOperationKey = null,
+        ?string $operationKey = null,
         bool $requireRecentAuth = true,
     ): MutationPreflightResult {
         $environment = SerproEnvironment::tryFrom(
@@ -56,22 +56,12 @@ final class FiscalMutationService
         $solutionCode = strtoupper($solutionCode);
         $serviceCode = strtoupper($serviceCode);
         $operationCode = strtoupper($operationCode);
-        $providerOperationKey ??= $this->meiProviderOperationKey(
-            $solutionCode,
-            $serviceCode,
-            $operationCode,
-            $requestPayload,
-        ) ?? OperationKeyMap::resolve(
-            null,
-            $solutionCode,
-            $serviceCode,
-            $operationCode,
-        );
+        $operationKey = $this->normalizeOperationKey($operationKey);
         $module = $module ?? FiscalMutationCohort::moduleForSolution($solutionCode);
         $idempotencyKey = $this->normalizeIdempotencyKey($idempotencyKey);
         $correlationId = $this->audit->correlationId();
         $logicalKey = $this->logicalKey(
-            $office->id,
+            $tenant->id,
             $client->id,
             $solutionCode,
             $serviceCode,
@@ -82,7 +72,7 @@ final class FiscalMutationService
         // Idempotência: reutiliza operação existente com mesma chave
         $existing = FiscalMutationOperation::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('idempotency_key', $idempotencyKey)
             ->first();
 
@@ -94,7 +84,7 @@ final class FiscalMutationService
                 $serviceCode,
                 $operationCode,
                 $requestPayload,
-                $providerOperationKey,
+                $operationKey,
             );
             $replayEligible = $existing->status === FiscalMutationStatus::Pending
                 && $existing->isPreflightValid()
@@ -108,7 +98,7 @@ final class FiscalMutationService
         }
 
         $policy = $this->policy->evaluate(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             user: $user,
             solutionCode: $solutionCode,
@@ -118,14 +108,9 @@ final class FiscalMutationService
             competencePeriodKey: $competencePeriodKey,
             module: $module,
             options: [
-                'require_totp' => $requireRecentAuth,
+                'require_password' => $requireRecentAuth,
                 'skip_anti_repeat' => false,
-                'provider_operation_key' => $providerOperationKey ?? $this->meiProviderOperationKey(
-                    $solutionCode,
-                    $serviceCode,
-                    $operationCode,
-                    $requestPayload,
-                ),
+                'operation_key' => $operationKey,
             ],
         );
 
@@ -134,10 +119,10 @@ final class FiscalMutationService
         $confirmationPhrase = $this->buildConfirmationPhrase($operationCode);
         $cost = $policy->context['cost_estimate'] ?? null;
         $sanitizedRequest = $this->sanitizeRequest($requestPayload);
-        $snapshot = $this->buildPreOperationSnapshot($office, $client, $competencePeriodKey, $policy);
+        $snapshot = $this->buildPreOperationSnapshot($tenant, $client, $competencePeriodKey, $policy);
 
         $operation = FiscalMutationOperation::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'requested_by' => $user->id,
             'idempotency_key' => $idempotencyKey,
@@ -148,7 +133,7 @@ final class FiscalMutationService
             'solution_code' => $solutionCode,
             'service_code' => $serviceCode,
             'operation_code' => $operationCode,
-            'provider_operation_key' => $providerOperationKey,
+            'operation_key' => $operationKey,
             'module_key' => $module,
             'competence_period_key' => $competencePeriodKey,
             'status' => FiscalMutationStatus::Pending,
@@ -183,7 +168,7 @@ final class FiscalMutationService
         // transition no-op se same status — garantir evento de preflight
         if ($operation->events()->count() === 0) {
             FiscalMutationOperationEvent::query()->create([
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'fiscal_mutation_operation_id' => $operation->id,
                 'from_status' => null,
                 'to_status' => FiscalMutationStatus::Pending->value,
@@ -212,7 +197,7 @@ final class FiscalMutationService
                 'denial' => $policy->primaryCode()?->value,
             ],
             userId: $user->id,
-            officeId: $office->id,
+            tenantId: $tenant->id,
         );
 
         return new MutationPreflightResult(
@@ -228,7 +213,7 @@ final class FiscalMutationService
      * @param  array<string, mixed>  $requestPayload
      */
     public function execute(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         User $user,
         string $solutionCode,
@@ -242,14 +227,15 @@ final class FiscalMutationService
         ?string $environment = null,
         array $requestPayload = [],
         ?string $module = null,
-        ?string $providerOperationKey = null,
+        ?string $operationKey = null,
     ): FiscalMutationOperation {
         $idempotencyKey = $this->normalizeIdempotencyKey($idempotencyKey);
+        $operationKey = $this->normalizeOperationKey($operationKey);
 
         // Double-click / idempotência: retorna operação existente se já enviada/terminal
         $existing = FiscalMutationOperation::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('idempotency_key', $idempotencyKey)
             ->first();
 
@@ -261,13 +247,13 @@ final class FiscalMutationService
                 strtoupper($serviceCode),
                 strtoupper($operationCode),
                 $requestPayload,
-                $providerOperationKey,
+                $operationKey,
             );
             if ($existing->status->blocksBlindRetry() && $existing->status !== FiscalMutationStatus::Pending) {
                 // Replay seguro — não reenvia
                 $this->audit->record('fiscal.mutation.execute_replay', 'SUCCESS', $existing, [
                     'status' => $existing->status->value,
-                ], $user->id, $office->id);
+                ], $user->id, $tenant->id);
 
                 return $existing;
             }
@@ -280,7 +266,7 @@ final class FiscalMutationService
         } else {
             // Sem preflight prévio: cria via preflight embutido
             $pf = $this->preflight(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 user: $user,
                 solutionCode: $solutionCode,
@@ -291,7 +277,7 @@ final class FiscalMutationService
                 environment: $environment,
                 requestPayload: $requestPayload,
                 module: $module,
-                providerOperationKey: $providerOperationKey,
+                operationKey: $operationKey,
             );
             $operation = $pf->operation;
             if ($operation === null) {
@@ -315,7 +301,7 @@ final class FiscalMutationService
         // Anti-repeat / uncertain continuam ativos — só excluem o próprio id (self-match).
         $env = $operation->environment ?? SerproEnvironment::Trial;
         $policy = $this->policy->evaluate(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             user: $user,
             solutionCode: $operation->solution_code,
@@ -325,16 +311,11 @@ final class FiscalMutationService
             competencePeriodKey: $operation->competence_period_key,
             module: $operation->module_key,
             options: [
-                'require_totp' => true,
+                'require_password' => true,
                 'require_confirmation' => true,
                 'confirmed' => $confirmed,
                 'exclude_operation_id' => (int) $operation->id,
-                'provider_operation_key' => $operation->provider_operation_key ?? $this->meiProviderOperationKey(
-                    (string) $operation->solution_code,
-                    (string) $operation->service_code,
-                    (string) $operation->operation_code,
-                    $operation->request_sanitized ?? [],
-                ),
+                'operation_key' => $operation->operation_key,
             ],
         );
 
@@ -383,11 +364,11 @@ final class FiscalMutationService
      * Reconcilia resultado incerto (13.6) — consulta específica, sem reenviar mutação.
      */
     public function reconcile(
-        Office $office,
+        Tenant $tenant,
         FiscalMutationOperation $operation,
         User $user,
     ): FiscalMutationOperation {
-        if ((int) $operation->office_id !== (int) $office->id) {
+        if ((int) $operation->tenant_id !== (int) $tenant->id) {
             throw new FiscalMutationException(FiscalMutationDenialCode::NotFound);
         }
 
@@ -497,11 +478,11 @@ final class FiscalMutationService
         );
     }
 
-    public function findForOffice(Office $office, int $id): ?FiscalMutationOperation
+    public function findForTenant(Tenant $tenant, int $id): ?FiscalMutationOperation
     {
         return FiscalMutationOperation::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($id)
             ->first();
     }
@@ -520,7 +501,7 @@ final class FiscalMutationService
             $fresh = $operation->fresh() ?? $operation;
             $this->audit->record('fiscal.mutation.execute_claim_miss', 'SUCCESS', $fresh, [
                 'status' => $fresh->status->value,
-            ], $user->id, (int) $fresh->office_id);
+            ], $user->id, (int) $fresh->tenant_id);
 
             return $fresh;
         }
@@ -577,7 +558,7 @@ final class FiscalMutationService
                 $operation,
                 ['provider' => $response->sourceProvenance, 'http' => $response->httpStatus],
                 $user->id,
-                (int) $operation->office_id,
+                (int) $operation->tenant_id,
             );
 
             return $operation->refresh();
@@ -723,13 +704,13 @@ final class FiscalMutationService
      * @return array<string, mixed>
      */
     private function buildPreOperationSnapshot(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         ?string $competence,
         MutationPolicyResult $policy,
     ): array {
         return $this->audit->redact([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'client_display' => $client->display_name ?? $client->legal_name,
             'competence' => $competence,
@@ -760,7 +741,7 @@ final class FiscalMutationService
     }
 
     private function logicalKey(
-        int $officeId,
+        int $tenantId,
         int $clientId,
         string $solution,
         string $service,
@@ -768,7 +749,7 @@ final class FiscalMutationService
         ?string $competence,
     ): string {
         return implode('|', [
-            $officeId,
+            $tenantId,
             $clientId,
             $solution,
             $service,
@@ -795,38 +776,31 @@ final class FiscalMutationService
         string $serviceCode,
         string $operationCode,
         array $requestPayload,
-        ?string $providerOperationKey,
+        string $operationKey,
     ): void {
         $sameIdentity = (int) $operation->client_id === (int) $client->id
             && strtoupper((string) $operation->solution_code) === strtoupper($solutionCode)
             && strtoupper((string) $operation->service_code) === strtoupper($serviceCode)
             && strtoupper((string) $operation->operation_code) === strtoupper($operationCode);
-        $sameProviderKey = $providerOperationKey === null
-            || hash_equals((string) $operation->provider_operation_key, $providerOperationKey);
+        $sameOperationKey = hash_equals((string) $operation->operation_key, $operationKey);
         $samePayload = $requestPayload === []
             || (is_string($operation->request_payload_digest)
                 && hash_equals($operation->request_payload_digest, FiscalMutationPayload::digest($requestPayload)));
 
-        if (! $sameIdentity || ! $sameProviderKey || ! $samePayload) {
+        if (! $sameIdentity || ! $sameOperationKey || ! $samePayload) {
             throw new FiscalMutationException(FiscalMutationDenialCode::IdempotencyConflict, $operation);
         }
     }
 
-    /** @param array<string, mixed> $payload */
-    private function meiProviderOperationKey(
-        string $solution,
-        string $service,
-        string $operation,
-        array $payload,
-    ): ?string {
-        if (strtoupper($solution) !== 'INTEGRA_MEI'
-            || strtoupper($service) !== 'PGMEI'
-            || strtoupper($operation) !== 'GERAR_DAS') {
-            return null;
+    private function normalizeOperationKey(?string $operationKey): string
+    {
+        $operationKey = strtolower(trim((string) $operationKey));
+        if ($operationKey === ''
+            || preg_match('/^[a-z0-9_]+(?:\.[a-z0-9_]+)+$/', $operationKey) !== 1
+        ) {
+            throw new InvalidArgumentException('operation_key canônica é obrigatória para mutações fiscais.');
         }
 
-        return strtoupper((string) ($payload['output_format'] ?? 'PDF')) === 'BARCODE'
-            ? 'pgmei.gerardascodbarra'
-            : 'pgmei.gerardaspdf';
+        return $operationKey;
     }
 }

@@ -3,13 +3,13 @@
 namespace App\Models;
 
 use App\Enums\OutboundNumberStatus;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'office_id', 'outbound_capture_profile_id', 'outbound_series_cursor_id',
+    'tenant_id', 'outbound_capture_profile_id', 'outbound_series_cursor_id',
     'series', 'nnf', 'status', 'candidate_access_key', 'candidate_cnf',
     'discovered_access_key', 'last_cstat', 'last_xmotivo', 'protocol',
     'attempts', 'last_attempt_at', 'next_attempt_at', 'key_discovered_at',
@@ -17,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class OutboundNumberState extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {

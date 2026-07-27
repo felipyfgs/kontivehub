@@ -7,7 +7,6 @@ use App\Enums\FiscalSourceProvenance;
 use App\Enums\SerproAttemptState;
 use App\Models\SerproOperationAttempt;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * Persistência da state machine de tentativas do executor central.
@@ -26,7 +25,7 @@ final class SerproOperationAttemptStore
      * }
      */
     public function beginOrReplay(
-        int $officeId,
+        int $tenantId,
         string $environment,
         string $operationKey,
         string $entityKey,
@@ -35,16 +34,8 @@ final class SerproOperationAttemptStore
         ?string $correlationId,
         ?int $clientId,
     ): array {
-        if (! Schema::hasTable('serpro_operation_attempts')) {
-            return [
-                'action' => 'dispatch',
-                'attempt' => null,
-                'response' => null,
-            ];
-        }
-
         return DB::transaction(function () use (
-            $officeId,
+            $tenantId,
             $environment,
             $operationKey,
             $entityKey,
@@ -60,7 +51,7 @@ final class SerproOperationAttemptStore
                 ->first();
 
             if ($existing !== null) {
-                if ((int) $existing->office_id !== $officeId) {
+                if ((int) $existing->tenant_id !== $tenantId) {
                     return [
                         'action' => 'wait',
                         'attempt' => $existing,
@@ -154,7 +145,7 @@ final class SerproOperationAttemptStore
             }
 
             $attempt = SerproOperationAttempt::query()->create([
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'environment' => $environment,
                 'operation_key' => $operationKey,
                 'entity_key' => $entityKey,
@@ -177,10 +168,6 @@ final class SerproOperationAttemptStore
 
     public function markReserved(SerproOperationAttempt $attempt, ?int $reservationId = null): void
     {
-        if (! Schema::hasTable('serpro_operation_attempts')) {
-            return;
-        }
-
         $attempt->forceFill([
             'attempt_state' => SerproAttemptState::Reserved,
             'reservation_id' => $reservationId ?? $attempt->reservation_id,
@@ -191,10 +178,6 @@ final class SerproOperationAttemptStore
 
     public function attachReservation(SerproOperationAttempt $attempt, int $reservationId): void
     {
-        if (! Schema::hasTable('serpro_operation_attempts')) {
-            return;
-        }
-
         $attempt->forceFill(['reservation_id' => $reservationId])->save();
     }
 
@@ -208,10 +191,6 @@ final class SerproOperationAttemptStore
      */
     public function abandonLocalPrecondition(SerproOperationAttempt $attempt): void
     {
-        if (! Schema::hasTable('serpro_operation_attempts')) {
-            return;
-        }
-
         SerproOperationAttempt::query()
             ->withoutGlobalScopes()
             ->whereKey($attempt->id)
@@ -219,24 +198,20 @@ final class SerproOperationAttemptStore
     }
 
     /**
-     * Após refresh do token: remove bloqueios locais de token do office/ambiente.
+     * Após refresh do token: remove bloqueios locais de token do tenant/ambiente.
      *
      * @param  list<string>|null  $errorCodes
      */
     public function purgeNonStickyTokenFailures(
-        int $officeId,
+        int $tenantId,
         string $environment,
         ?array $errorCodes = null,
     ): int {
-        if (! Schema::hasTable('serpro_operation_attempts')) {
-            return 0;
-        }
-
         $codes = $errorCodes ?? SerproAttemptReplayPolicy::tokenRelatedNonStickyCodes();
 
         return SerproOperationAttempt::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('environment', $environment)
             ->where('success', false)
             ->whereIn('error_code', $codes)
@@ -258,10 +233,6 @@ final class SerproOperationAttemptStore
         IntegraResponse $response,
         SerproAttemptState $state,
     ): void {
-        if (! Schema::hasTable('serpro_operation_attempts')) {
-            return;
-        }
-
         if ($response->hasSimulatedSource()) {
             $response = $response->rejectSimulatedSource();
         }
@@ -337,8 +308,8 @@ final class SerproOperationAttemptStore
             sourceProvenance: $attempt->source_provenance ?? FiscalSourceProvenance::Unverified->value,
         );
 
-        // Replay idempotente também deve falhar fechado: attempts legados
-        // com SIMULATED não podem reaparecer como evidência produtiva.
+        // Replay idempotente também deve falhar fechado: fonte simulada
+        // não pode reaparecer como evidência produtiva.
         if ($response->hasSimulatedSource()) {
             return $response->rejectSimulatedSource();
         }

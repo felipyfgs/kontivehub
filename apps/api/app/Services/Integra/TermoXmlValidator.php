@@ -78,8 +78,8 @@ final class TermoXmlValidator
         $root = $dom->documentElement;
         if ($root->localName !== 'termoDeAutorizacao') {
             return $this->reject(
-                'LEGACY_OR_INVALID_ROOT',
-                'Raiz deve ser termoDeAutorizacao (layout legado TermoAutorizacao rejeitado).',
+                'INVALID_ROOT',
+                'Raiz deve ser termoDeAutorizacao.',
                 $limits,
                 $sha256,
             );

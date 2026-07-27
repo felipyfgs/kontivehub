@@ -8,7 +8,7 @@ use App\Models\User;
 use App\Services\Authorization\TenantAuthorization;
 use App\Services\FiscalMonitoring\FiscalEvidenceStore;
 use App\Services\FiscalMonitoring\FiscalQueryService;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,7 +18,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class FiscalSnapshotController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly FiscalQueryService $queries,
         private readonly FiscalEvidenceStore $evidenceStore,
         private readonly TenantAuthorization $authorization,
@@ -27,14 +27,14 @@ class FiscalSnapshotController extends Controller
     public function index(Request $request): JsonResponse
     {
         $this->assertCanRead();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
         $perPage = min(100, max(1, (int) $request->query('per_page', 50)));
         $clientId = $request->query('client_id');
         $currentOnly = filter_var($request->query('current_only', true), FILTER_VALIDATE_BOOL);
 
         $page = $this->queries->snapshots(
-            $office,
+            $tenant,
             $perPage,
             is_numeric($clientId) ? (int) $clientId : null,
             $currentOnly,
@@ -47,8 +47,8 @@ class FiscalSnapshotController extends Controller
     public function show(int $snapshot): JsonResponse
     {
         $this->assertCanRead();
-        $office = $this->currentOffice->office();
-        $model = $this->queries->snapshot($office, $snapshot);
+        $tenant = $this->currentTenant->tenant();
+        $model = $this->queries->snapshot($tenant, $snapshot);
         if ($model === null) {
             return response()->json(['message' => 'Snapshot não encontrado.'], 404);
         }
@@ -62,15 +62,15 @@ class FiscalSnapshotController extends Controller
     public function downloadEvidence(int $evidence): StreamedResponse|JsonResponse
     {
         $this->assertCanRead();
-        $office = $this->currentOffice->office();
-        $artifact = $this->queries->evidence($office, $evidence);
+        $tenant = $this->currentTenant->tenant();
+        $artifact = $this->queries->evidence($tenant, $evidence);
         if ($artifact === null) {
             return response()->json(['message' => 'Evidência não encontrada.'], 404);
         }
         $this->assertCanRead($artifact);
 
         try {
-            $bytes = $this->evidenceStore->readAuthorized($artifact, (int) $office->id);
+            $bytes = $this->evidenceStore->readAuthorized($artifact, (int) $tenant->id);
         } catch (RuntimeException) {
             // Não vazar existência, vault_object_id, hash ou path.
             return response()->json(['message' => 'Evidência não encontrada.'], 404);
@@ -93,13 +93,13 @@ class FiscalSnapshotController extends Controller
     public function findings(Request $request): JsonResponse
     {
         $this->assertCanRead();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
         $perPage = min(100, max(1, (int) $request->query('per_page', 50)));
         $clientId = $request->query('client_id');
         $activeOnly = filter_var($request->query('active_only', true), FILTER_VALIDATE_BOOL);
 
         $page = $this->queries->findings(
-            $office,
+            $tenant,
             $perPage,
             is_numeric($clientId) ? (int) $clientId : null,
             $activeOnly,
@@ -112,13 +112,13 @@ class FiscalSnapshotController extends Controller
     public function pending(Request $request): JsonResponse
     {
         $this->assertCanRead();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
         $perPage = min(100, max(1, (int) $request->query('per_page', 50)));
         $clientId = $request->query('client_id');
         $status = $request->query('status', 'OPEN');
 
         $page = $this->queries->pendingItems(
-            $office,
+            $tenant,
             $perPage,
             is_numeric($clientId) ? (int) $clientId : null,
             is_string($status) ? $status : 'OPEN',

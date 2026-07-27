@@ -56,11 +56,11 @@ final class EventosRateLimiter
     }
 
     /**
-     * Reserva 1 solicitação no contador diário PF ou PJ (por office).
+     * Reserva 1 solicitação no contador diário PF ou PJ (por tenant).
      *
      * @throws RuntimeException RATE_LIMIT_EVENTOS_DAY
      */
-    public function attemptDaily(int $officeId, string $personType): void
+    public function attemptDaily(int $tenantId, string $personType): void
     {
         $personType = strtoupper($personType);
         $limit = $personType === 'PF' ? $this->pfPerDay() : $this->pjPerDay();
@@ -68,14 +68,14 @@ final class EventosRateLimiter
             throw new RuntimeException('EVENTOS_LIMIT_NOT_CONFIGURED: limite diário ausente/zero.');
         }
 
-        if ($this->isRemote429Cooling($officeId, $personType)) {
-            $until = $this->remote429Until($officeId, $personType);
+        if ($this->isRemote429Cooling($tenantId, $personType)) {
+            $until = $this->remote429Until($tenantId, $personType);
             throw new RuntimeException(
                 'RATE_LIMIT_EVENTOS_REMOTE_429: janela diária bloqueada até '.$until->toIso8601String().' (sem retry).'
             );
         }
 
-        $key = $this->dailyKey($officeId, $personType);
+        $key = $this->dailyKey($tenantId, $personType);
         $ttl = $this->secondsUntilEndOfDay();
 
         Cache::add($key, 0, $ttl);
@@ -98,7 +98,7 @@ final class EventosRateLimiter
     /**
      * Marca 429 remoto: sem retry até o fim do dia civil (TZ configurável).
      */
-    public function markRemote429(int $officeId, string $personType, ?int $retryAfterSeconds = null): CarbonImmutable
+    public function markRemote429(int $tenantId, string $personType, ?int $retryAfterSeconds = null): CarbonImmutable
     {
         $until = $this->endOfDay();
         if ($retryAfterSeconds !== null && $retryAfterSeconds > 0) {
@@ -108,16 +108,16 @@ final class EventosRateLimiter
             }
         }
 
-        $key = $this->remote429Key($officeId, strtoupper($personType));
+        $key = $this->remote429Key($tenantId, strtoupper($personType));
         $ttl = max(1, (int) CarbonImmutable::now($this->timezone())->diffInSeconds($until, false));
         Cache::put($key, $until->getTimestamp(), $ttl);
 
         return $until;
     }
 
-    public function isRemote429Cooling(int $officeId, string $personType): bool
+    public function isRemote429Cooling(int $tenantId, string $personType): bool
     {
-        $ts = Cache::get($this->remote429Key($officeId, strtoupper($personType)));
+        $ts = Cache::get($this->remote429Key($tenantId, strtoupper($personType)));
         if ($ts === null) {
             return false;
         }
@@ -125,9 +125,9 @@ final class EventosRateLimiter
         return CarbonImmutable::now($this->timezone())->getTimestamp() < (int) $ts;
     }
 
-    public function remote429Until(int $officeId, string $personType): CarbonImmutable
+    public function remote429Until(int $tenantId, string $personType): CarbonImmutable
     {
-        $ts = (int) (Cache::get($this->remote429Key($officeId, strtoupper($personType))) ?? 0);
+        $ts = (int) (Cache::get($this->remote429Key($tenantId, strtoupper($personType))) ?? 0);
         if ($ts <= 0) {
             return $this->endOfDay();
         }
@@ -135,16 +135,16 @@ final class EventosRateLimiter
         return CarbonImmutable::createFromTimestamp($ts, $this->timezone());
     }
 
-    private function dailyKey(int $officeId, string $personType): string
+    private function dailyKey(int $tenantId, string $personType): string
     {
         $day = CarbonImmutable::now($this->timezone())->format('Ymd');
 
-        return sprintf('serpro:eventos:rl:%s:%s:office:%d:%s', $this->version(), $day, $officeId, strtoupper($personType));
+        return sprintf('serpro:eventos:rl:%s:%s:tenant:%d:%s', $this->version(), $day, $tenantId, strtoupper($personType));
     }
 
-    private function remote429Key(int $officeId, string $personType): string
+    private function remote429Key(int $tenantId, string $personType): string
     {
-        return sprintf('serpro:eventos:429:%s:office:%d:%s', $this->version(), $officeId, strtoupper($personType));
+        return sprintf('serpro:eventos:429:%s:tenant:%d:%s', $this->version(), $tenantId, strtoupper($personType));
     }
 
     private function endOfDay(): CarbonImmutable

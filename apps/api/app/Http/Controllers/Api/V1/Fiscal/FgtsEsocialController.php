@@ -3,17 +3,19 @@
 namespace App\Http\Controllers\Api\V1\Fiscal;
 
 use App\DTO\Esocial\EsocialBxReadiness;
-use App\Enums\OfficeRole;
+use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
 use App\Jobs\Fiscal\SyncFgtsEsocialCompetenceJob;
 use App\Models\Client;
 use App\Models\Establishment;
 use App\Models\FiscalCategory;
 use App\Models\FiscalCompetence;
+use App\Models\User;
+use App\Services\Authorization\TenantAuthorization;
 use App\Services\Esocial\EsocialBxReadinessService;
 use App\Services\Esocial\FgtsEsocialMonitoringService;
 use App\Services\FiscalMonitoring\FiscalMonitoringRunService;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use RuntimeException;
@@ -25,10 +27,11 @@ use RuntimeException;
 class FgtsEsocialController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly FgtsEsocialMonitoringService $monitoring,
         private readonly EsocialBxReadinessService $readiness,
         private readonly FiscalMonitoringRunService $runs,
+        private readonly TenantAuthorization $authorization,
     ) {}
 
     /**
@@ -46,31 +49,31 @@ class FgtsEsocialController extends Controller
     public function readiness(Request $request): JsonResponse
     {
         $this->assertCanRead();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
         $data = $request->validate(['client_id' => ['required', 'integer']]);
         $client = Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($data['client_id'])
             ->first();
         if ($client === null) {
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
 
-        return response()->json(['data' => $this->readiness->check($office, $client)->toArray()]);
+        return response()->json(['data' => $this->readiness->check($tenant, $client)->toArray()]);
     }
 
     public function competences(Request $request): JsonResponse
     {
         $this->assertCanRead();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
         $perPage = min(100, max(1, (int) $request->query('per_page', 50)));
         $clientId = $request->query('client_id');
         $competence = $request->query('competence_period_key');
 
         $page = $this->monitoring->paginateStatuses(
-            $office,
+            $tenant,
             $perPage,
             is_numeric($clientId) ? (int) $clientId : null,
             is_string($competence) ? $competence : null,
@@ -84,14 +87,14 @@ class FgtsEsocialController extends Controller
     public function showCompetence(int $status): JsonResponse
     {
         $this->assertCanRead();
-        $office = $this->currentOffice->office();
-        $model = $this->monitoring->findStatusForOffice($office, $status);
+        $tenant = $this->currentTenant->tenant();
+        $model = $this->monitoring->findStatusForTenant($tenant, $status);
         if ($model === null) {
             return response()->json(['message' => 'Competência FGTS não encontrada.'], 404);
         }
 
         $events = $this->monitoring->paginateEvents(
-            $office,
+            $tenant,
             100,
             $model->client_id,
             $model->competence_period_key,
@@ -107,7 +110,7 @@ class FgtsEsocialController extends Controller
     public function events(Request $request): JsonResponse
     {
         $this->assertCanRead();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
         $perPage = min(100, max(1, (int) $request->query('per_page', 50)));
         $clientId = $request->query('client_id');
@@ -115,7 +118,7 @@ class FgtsEsocialController extends Controller
         $eventCode = $request->query('event_code');
 
         $page = $this->monitoring->paginateEvents(
-            $office,
+            $tenant,
             $perPage,
             is_numeric($clientId) ? (int) $clientId : null,
             is_string($competence) ? $competence : null,
@@ -140,7 +143,7 @@ class FgtsEsocialController extends Controller
     public function sync(Request $request): JsonResponse
     {
         $this->assertCanWrite();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
         $data = $request->validate([
             'client_id' => ['required', 'integer'],
@@ -153,7 +156,7 @@ class FgtsEsocialController extends Controller
 
         $client = Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($data['client_id'])
             ->first();
 
@@ -161,7 +164,7 @@ class FgtsEsocialController extends Controller
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
 
-        $readiness = $this->readiness->check($office, $client);
+        $readiness = $this->readiness->check($tenant, $client);
         if (! $readiness->ready) {
             return $this->readinessBlockedResponse($readiness);
         }
@@ -170,7 +173,7 @@ class FgtsEsocialController extends Controller
         if (! empty($data['establishment_id'])) {
             $establishment = Establishment::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('client_id', $client->id)
                 ->whereKey($data['establishment_id'])
                 ->first();
@@ -191,7 +194,7 @@ class FgtsEsocialController extends Controller
                     [$year, $month] = array_map('intval', explode('-', $data['competence_period_key']));
                     $competence = FiscalCompetence::query()->withoutGlobalScopes()->firstOrCreate(
                         [
-                            'office_id' => $office->id,
+                            'tenant_id' => $tenant->id,
                             'client_id' => $client->id,
                             'fiscal_category_id' => $category->id,
                             'period_key' => $data['competence_period_key'],
@@ -207,7 +210,7 @@ class FgtsEsocialController extends Controller
 
                 // enqueueManual não aceita context; usamos competence no run.
                 $run = $this->runs->enqueueManual(
-                    office: $office,
+                    tenant: $tenant,
                     client: $client,
                     systemCode: (string) config('fgts_esocial.system_code', 'ESOCIAL'),
                     serviceCode: (string) config('fgts_esocial.service_code', 'FGTS'),
@@ -237,7 +240,7 @@ class FgtsEsocialController extends Controller
 
         if ($dispatchJob) {
             SyncFgtsEsocialCompetenceJob::dispatch(
-                officeId: (int) $office->id,
+                tenantId: (int) $tenant->id,
                 clientId: (int) $client->id,
                 competencePeriodKey: $data['competence_period_key'],
                 establishmentId: $establishment?->id,
@@ -263,7 +266,7 @@ class FgtsEsocialController extends Controller
     public function syncNow(Request $request): JsonResponse
     {
         $this->assertCanWrite();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
         $data = $request->validate([
             'client_id' => ['required', 'integer'],
@@ -273,7 +276,7 @@ class FgtsEsocialController extends Controller
 
         $client = Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($data['client_id'])
             ->first();
 
@@ -281,7 +284,7 @@ class FgtsEsocialController extends Controller
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
 
-        $readiness = $this->readiness->check($office, $client);
+        $readiness = $this->readiness->check($tenant, $client);
         if (! $readiness->ready) {
             return $this->readinessBlockedResponse($readiness);
         }
@@ -290,7 +293,7 @@ class FgtsEsocialController extends Controller
         if (! empty($data['establishment_id'])) {
             $establishment = Establishment::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('client_id', $client->id)
                 ->whereKey($data['establishment_id'])
                 ->first();
@@ -301,7 +304,7 @@ class FgtsEsocialController extends Controller
 
         try {
             $out = $this->monitoring->syncCompetence(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 competencePeriodKey: $data['competence_period_key'],
                 establishment: $establishment,
@@ -336,7 +339,9 @@ class FgtsEsocialController extends Controller
 
     private function assertCanRead(): void
     {
-        if ($this->currentOffice->role() === null) {
+        $actor = request()->user();
+        if (! $actor instanceof User
+            || ! $this->authorization->allows($actor, TenantPermission::FiscalMonitoringView)) {
             abort(403, 'Perfil não resolvido.');
         }
     }
@@ -388,8 +393,9 @@ class FgtsEsocialController extends Controller
 
     private function assertCanWrite(): void
     {
-        $role = $this->currentOffice->role();
-        if ($role === null || ! in_array($role, [OfficeRole::Admin, OfficeRole::Operator], true)) {
+        $actor = request()->user();
+        if (! $actor instanceof User
+            || ! $this->authorization->allows($actor, TenantPermission::FiscalSyncTrigger)) {
             abort(403, 'Ação não autorizada para o perfil atual.');
         }
     }

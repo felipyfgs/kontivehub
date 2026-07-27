@@ -91,8 +91,6 @@ CREATE TABLE IF NOT EXISTS wazync.media_retry_states (
     updated_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (session_id, provider_message_id)
 );
-ALTER TABLE wazync.media_retry_states
-    ADD COLUMN IF NOT EXISTS expires_at timestamptz NOT NULL DEFAULT (now() + interval '7 days');
 
 CREATE TABLE IF NOT EXISTS wazync.nonces (
     nonce_digest char(64) PRIMARY KEY,
@@ -103,7 +101,8 @@ CREATE INDEX IF NOT EXISTS wazync_nonces_expiry_idx
 
 CREATE TABLE IF NOT EXISTS wazync.sessions (
     session_id varchar(128) PRIMARY KEY,
-    status varchar(32) NOT NULL DEFAULT 'DISCONNECTED',
+    status varchar(32) NOT NULL DEFAULT 'DISCONNECTED'
+        CHECK (status IN ('DISCONNECTED', 'CONNECTING', 'CONNECTED')),
     desired_connected boolean NOT NULL DEFAULT false,
     fencing_token bigint NOT NULL DEFAULT 0,
     reconnect_count integer NOT NULL DEFAULT 0,
@@ -141,21 +140,9 @@ CREATE TABLE IF NOT EXISTS wazync.session_devices (
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
 );
-ALTER TABLE wazync.session_devices
-    ADD COLUMN IF NOT EXISTS device_jid_hash bytea;
 CREATE UNIQUE INDEX IF NOT EXISTS wazync_session_devices_jid_hash_uq
     ON wazync.session_devices (device_jid_hash)
     WHERE device_jid_hash IS NOT NULL;
-
-ALTER TABLE wazync.sessions
-    ALTER COLUMN status SET DEFAULT 'DISCONNECTED';
-UPDATE wazync.sessions
-SET status = CASE
-    WHEN status = 'CONNECTED' THEN 'CONNECTED'
-    WHEN status IN ('CONNECTING', 'PAIRING') THEN 'CONNECTING'
-    ELSE 'DISCONNECTED'
-END
-WHERE status NOT IN ('DISCONNECTED', 'CONNECTING', 'CONNECTED');
 `
 
 func (s *Postgres) Migrate(ctx context.Context) error {
@@ -316,7 +303,7 @@ WHERE (
 AND (
     c.command_type = 'SESSION_PROVISION'
     OR (
-        c.command_type IN ('SESSION_PAIR', 'SESSION_CONNECT', 'SESSION_DISCONNECT', 'SESSION_RESET', 'SESSION_LOGOUT')
+        c.command_type IN ('SESSION_PAIR', 'SESSION_CONNECT', 'SESSION_DISCONNECT', 'SESSION_LOGOUT')
         AND (
             NOT EXISTS (
                 SELECT 1 FROM wazync.session_leases absent

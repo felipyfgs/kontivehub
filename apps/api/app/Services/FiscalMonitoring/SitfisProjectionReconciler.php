@@ -34,7 +34,7 @@ final class SitfisProjectionReconciler
             $now = CarbonImmutable::now();
 
             FiscalFinding::query()->withoutGlobalScopes()
-                ->where('office_id', $snapshot->office_id)
+                ->where('tenant_id', $snapshot->tenant_id)
                 ->where('client_id', $snapshot->client_id)
                 ->where('is_active', true)
                 ->where('snapshot_id', '<>', $snapshot->id)
@@ -45,7 +45,7 @@ final class SitfisProjectionReconciler
                 ->update(['is_active' => false, 'resolved_at' => $now]);
 
             FiscalPendingItem::query()->withoutGlobalScopes()
-                ->where('office_id', $snapshot->office_id)
+                ->where('tenant_id', $snapshot->tenant_id)
                 ->where('client_id', $snapshot->client_id)
                 ->where('status', FiscalPendingStatus::Open->value)
                 ->whereHas('run', fn ($query) => $query

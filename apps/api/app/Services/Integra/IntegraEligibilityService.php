@@ -4,16 +4,16 @@ namespace App\Services\Integra;
 
 use App\Contracts\IntegraEligibilityEvaluating;
 use App\DTO\Serpro\EligibilityResult;
-use App\Enums\OfficeRole;
 use App\Enums\SerproAuthorizationStatus;
 use App\Enums\SerproConsumptionClass;
 use App\Enums\SerproEligibilityCode;
 use App\Enums\SerproEnvironment;
+use App\Enums\TenantRole;
 use App\Models\Client;
-use App\Models\Office;
 use App\Models\SerproServiceCatalogEntry;
+use App\Models\Tenant;
 use App\Models\User;
-use App\Services\Platform\OfficeSubscriptionGate;
+use App\Services\Platform\TenantSubscriptionGate;
 use App\Services\Serpro\OfficialClarificationGate;
 use App\Services\Serpro\SerproCircuitBreaker;
 use App\Services\Serpro\SerproContractService;
@@ -32,12 +32,12 @@ final class IntegraEligibilityService implements IntegraEligibilityEvaluating
     public const BILLABLE_PROXY_LOOKUP_SERVICE = 'OBTERPROCURACAO41';
 
     public function __construct(
-        private readonly OfficeSubscriptionGate $subscriptionGate,
+        private readonly TenantSubscriptionGate $subscriptionGate,
         private readonly SerproContractService $contracts,
         private readonly SerproKillSwitchService $killSwitch,
         private readonly SerproCircuitBreaker $breaker,
         private readonly TaxProxyPowerService $proxyPowers,
-        private readonly OfficeSerproAuthorizationService $authorizations,
+        private readonly TenantSerproAuthorizationService $authorizations,
         private readonly UsageBudgetGate $budget,
         private readonly RepresentationChainService $representationChain,
         private readonly ProxyPowerMatrixService $powerMatrix,
@@ -46,7 +46,7 @@ final class IntegraEligibilityService implements IntegraEligibilityEvaluating
     ) {}
 
     public function evaluate(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $solutionCode,
         string $serviceCode,
@@ -59,7 +59,7 @@ final class IntegraEligibilityService implements IntegraEligibilityEvaluating
     ): EligibilityResult {
         $codes = [];
         $context = [
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'solution' => $solutionCode,
             'service' => $serviceCode,
@@ -68,18 +68,18 @@ final class IntegraEligibilityService implements IntegraEligibilityEvaluating
         ];
 
         // 0. Feature flags
-        if ($module !== null && ! FeatureFlags::isModuleEnabled($module, $office->id)) {
+        if ($module !== null && ! FeatureFlags::isModuleEnabled($module, $tenant->id)) {
             $codes[] = SerproEligibilityCode::FeatureDisabled;
         }
         if (FeatureFlags::isKillSwitchActive()) {
             $codes[] = SerproEligibilityCode::KillSwitch;
         }
 
-        // 0b. Office demo nunca atinge o endpoint produtivo.
-        if ($this->onboardingGuard->isDemoOffice($office)
+        // 0b. Tenant demo nunca atinge o endpoint produtivo.
+        if ($this->onboardingGuard->isDemoTenant($tenant)
             && $environment === SerproEnvironment::Production
         ) {
-            $codes[] = SerproEligibilityCode::DemoOfficeBlocked;
+            $codes[] = SerproEligibilityCode::DemoTenantBlocked;
         }
 
         // 1. Kill switch SERPRO / solução
@@ -93,7 +93,7 @@ final class IntegraEligibilityService implements IntegraEligibilityEvaluating
         }
 
         // 3. Assinatura do tenant
-        if (! $this->subscriptionGate->allowsExternalCalls($office)) {
+        if (! $this->subscriptionGate->allowsExternalCalls($tenant)) {
             $codes[] = SerproEligibilityCode::SubscriptionBlocked;
         }
 
@@ -106,7 +106,7 @@ final class IntegraEligibilityService implements IntegraEligibilityEvaluating
         }
 
         // 5. Autorização do escritório / Termo / token
-        $auth = $this->authorizations->getOrCreate($office, $environment);
+        $auth = $this->authorizations->getOrCreate($tenant, $environment);
         if (in_array($auth->status, [
             SerproAuthorizationStatus::Draft,
             SerproAuthorizationStatus::PendingTerm,
@@ -133,14 +133,14 @@ final class IntegraEligibilityService implements IntegraEligibilityEvaluating
         }
 
         // 5b. Cadeia contratante → autor → contribuinte
-        $chain = $this->representationChain->resolve($office, $client, $environment, $auth);
+        $chain = $this->representationChain->resolve($tenant, $client, $environment, $auth);
         $context['representation_chain'] = $chain->toSanitizedArray();
         if (! $chain->isComplete()) {
             $codes[] = SerproEligibilityCode::RepresentationChainIncomplete;
         }
 
         // 6. Contribuinte mesmo tenant
-        if ($client->office_id !== $office->id) {
+        if ($client->tenant_id !== $tenant->id) {
             $codes[] = SerproEligibilityCode::ContributorCrossTenant;
         }
 
@@ -187,18 +187,6 @@ final class IntegraEligibilityService implements IntegraEligibilityEvaluating
             ->orderByDesc('catalog_version')
             ->first();
 
-        // Fallback legado (solution/service/operation)
-        if ($catalog === null) {
-            $catalog = SerproServiceCatalogEntry::query()
-                ->where('environment', $environment->value)
-                ->where('solution_code', $solutionCode)
-                ->where('service_code', $serviceCode)
-                ->where('operation_code', $operationCode)
-                ->where('is_enabled', true)
-                ->orderByDesc('catalog_version')
-                ->first();
-        }
-
         // O manifesto oficial é projetado como catálogo canônico de produção.
         // Trial reutiliza essas coordenadas somente quando não
         // houver uma entrada específica do ambiente de execução.
@@ -231,8 +219,7 @@ final class IntegraEligibilityService implements IntegraEligibilityEvaluating
                 $codes[] = SerproEligibilityCode::CoverageUnsupported;
             }
             if ($catalog->is_mutating) {
-                $mod = $module ?? 'mutacoes';
-                if (! FeatureFlags::isMutatingEnabled($mod, $office->id)) {
+                if ($module === null || ! FeatureFlags::isMutatingEnabled($module, $tenant->id)) {
                     $codes[] = SerproEligibilityCode::MutatingDisabled;
                 }
             }
@@ -251,7 +238,7 @@ final class IntegraEligibilityService implements IntegraEligibilityEvaluating
                 $diagCodes = [];
                 foreach ($requiredPowers as $requiredPower) {
                     $power = $this->proxyPowers->findUsablePower(
-                        officeId: $office->id,
+                        tenantId: $tenant->id,
                         clientId: $client->id,
                         powerCode: $requiredPower,
                         authorIdentity: (string) $auth->author_identity,
@@ -265,7 +252,7 @@ final class IntegraEligibilityService implements IntegraEligibilityEvaluating
                         break;
                     }
                     foreach ($this->proxyPowers->diagnoseUnusable(
-                        $office->id,
+                        $tenant->id,
                         $client->id,
                         $requiredPower,
                         (string) $auth->author_identity,
@@ -299,12 +286,12 @@ final class IntegraEligibilityService implements IntegraEligibilityEvaluating
         // 9. Papel do usuário (se presente)
         if ($user !== null) {
             $membership = $user->memberships()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('is_active', true)
                 ->first();
             if ($membership === null) {
                 $codes[] = SerproEligibilityCode::RoleForbidden;
-            } elseif ($membership->role === OfficeRole::Viewer) {
+            } elseif ($membership->role === TenantRole::TenantUser) {
                 $codes[] = SerproEligibilityCode::RoleForbidden;
             }
         }
@@ -312,7 +299,7 @@ final class IntegraEligibilityService implements IntegraEligibilityEvaluating
         // 10. Orçamento
         $consumptionClass = $this->resolveConsumptionClass($catalog);
         $budgetEval = $this->budget->evaluate(
-            officeId: (int) $office->id,
+            tenantId: (int) $tenant->id,
             class: $consumptionClass,
             quantity: 1,
             isEssential: false,
@@ -327,10 +314,10 @@ final class IntegraEligibilityService implements IntegraEligibilityEvaluating
         $context['budget_block_reason'] = $budgetEval['block_reason'];
 
         // 11. Rate limit simples
-        $perOffice = (int) config('serpro.rate_limit.per_office_per_minute', 0);
-        $rateKey = 'serpro.rate.office.'.$office->id.'.'.now()->format('YmdHi');
+        $perTenant = (int) config('serpro.rate_limit.per_tenant_per_minute', 0);
+        $rateKey = 'serpro.rate.tenant.'.$tenant->id.'.'.now()->format('YmdHi');
         $hits = (int) Cache::get($rateKey, 0);
-        if ($perOffice > 0 && $hits >= $perOffice) {
+        if ($perTenant > 0 && $hits >= $perTenant) {
             $codes[] = SerproEligibilityCode::RateLimited;
         }
 
@@ -353,13 +340,13 @@ final class IntegraEligibilityService implements IntegraEligibilityEvaluating
         return EligibilityResult::ok($context);
     }
 
-    public function touchRateLimit(int $officeId): void
+    public function touchRateLimit(int $tenantId): void
     {
-        if ((int) config('serpro.rate_limit.per_office_per_minute', 0) <= 0) {
+        if ((int) config('serpro.rate_limit.per_tenant_per_minute', 0) <= 0) {
             return;
         }
 
-        $rateKey = 'serpro.rate.office.'.$officeId.'.'.now()->format('YmdHi');
+        $rateKey = 'serpro.rate.tenant.'.$tenantId.'.'.now()->format('YmdHi');
         if (! Cache::has($rateKey)) {
             Cache::put($rateKey, 1, 120);
         } else {

@@ -7,8 +7,8 @@ namespace App\Enums;
  */
 enum SvrsNfceFailureReason: string
 {
-    case A1Unavailable = 'A1_UNAVAILABLE';
-    case A1NotRelated = 'A1_NOT_RELATED';
+    case CertificateUnavailable = 'CERTIFICATE_UNAVAILABLE';
+    case CertificateNotRelated = 'CERTIFICATE_NOT_RELATED';
     case HttpTransient = 'HTTP_TRANSIENT';
     case AuthForbidden = 'AUTH_FORBIDDEN';
     case RemoteNotFound = 'REMOTE_NOT_FOUND';
@@ -32,7 +32,7 @@ enum SvrsNfceFailureReason: string
             self::HttpTransient,
             self::RateLimited,
             self::RemoteNotFound,
-            self::A1Unavailable,
+            self::CertificateUnavailable,
             // Operacionais: não terminalizar recovery — volta quando o canal reabre
             self::KillSwitch,
             self::ChannelDisabled,
@@ -54,12 +54,12 @@ enum SvrsNfceFailureReason: string
     }
 
     /**
-     * Trip por raiz imediato (identidade/assinatura/A1).
+     * Trip por raiz imediato (identidade/assinatura/certificado).
      */
     public function opensRootBreaker(): bool
     {
         return in_array($this, [
-            self::A1NotRelated,
+            self::CertificateNotRelated,
             self::IdentityMismatch,
             self::InvalidSignature,
         ], true);
@@ -73,8 +73,8 @@ enum SvrsNfceFailureReason: string
     public function label(): string
     {
         return match ($this) {
-            self::A1Unavailable => 'Credencial A1 indisponível',
-            self::A1NotRelated => 'A1 não relacionado à nota',
+            self::CertificateUnavailable => 'certificado indisponível',
+            self::CertificateNotRelated => 'certificado não relacionado à nota',
             self::HttpTransient => 'Falha HTTP transitória',
             self::AuthForbidden => 'Autenticação negada',
             self::RemoteNotFound => 'Documento não disponível na SVRS',

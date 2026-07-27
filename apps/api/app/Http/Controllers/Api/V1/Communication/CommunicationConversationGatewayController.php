@@ -16,9 +16,9 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 /**
- * Operações remotas de uma conversa 1:1 já projetada no Office atual.
+ * Operações remotas de uma conversa 1:1 já projetada no Tenant atual.
  * Endereço, inbox e provider IDs são sempre derivados do domínio; o caller
- * nunca escolhe session_id, office_id ou JID arbitrário.
+ * nunca escolhe session_id, tenant_id ou JID arbitrário.
  */
 final class CommunicationConversationGatewayController extends Controller
 {

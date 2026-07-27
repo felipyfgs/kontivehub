@@ -7,7 +7,7 @@ use App\Enums\SecureObjectPurpose;
 use RuntimeException;
 
 /**
- * Cofre de corpo/anexo de Caixa Postal — AAD com purpose + office_id + sha256.
+ * Cofre de corpo/anexo de Caixa Postal — AAD com purpose + tenant_id + sha256.
  */
 final class MailboxVaultStore
 {
@@ -16,23 +16,23 @@ final class MailboxVaultStore
     ) {}
 
     /**
-     * @return array{office_id:int,sha256:string,purpose:string}
+     * @return array{tenant_id:int,sha256:string,purpose:string}
      */
-    public static function bodyAad(int $officeId, string $sha256): array
+    public static function bodyAad(int $tenantId, string $sha256): array
     {
         return SecureObjectPurpose::MailboxMessageBody->aadBase([
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'sha256' => $sha256,
         ]);
     }
 
     /**
-     * @return array{office_id:int,sha256:string,purpose:string}
+     * @return array{tenant_id:int,sha256:string,purpose:string}
      */
-    public static function attachmentAad(int $officeId, string $sha256): array
+    public static function attachmentAad(int $tenantId, string $sha256): array
     {
         return SecureObjectPurpose::MailboxAttachment->aadBase([
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'sha256' => $sha256,
         ]);
     }
@@ -40,7 +40,7 @@ final class MailboxVaultStore
     /**
      * @return array{vault_object_id:string,sha256:string,byte_size:int}
      */
-    public function putBody(int $officeId, string $bytes): array
+    public function putBody(int $tenantId, string $bytes): array
     {
         $max = (int) config('fiscal_monitoring.mailbox.max_body_bytes', 2_097_152);
         $size = strlen($bytes);
@@ -52,7 +52,7 @@ final class MailboxVaultStore
         }
 
         $sha256 = hash('sha256', $bytes);
-        $objectId = $this->vault->put($bytes, self::bodyAad($officeId, $sha256));
+        $objectId = $this->vault->put($bytes, self::bodyAad($tenantId, $sha256));
 
         return [
             'vault_object_id' => $objectId,
@@ -64,7 +64,7 @@ final class MailboxVaultStore
     /**
      * @return array{vault_object_id:string,sha256:string,byte_size:int}
      */
-    public function putAttachment(int $officeId, string $bytes): array
+    public function putAttachment(int $tenantId, string $bytes): array
     {
         $max = (int) config('fiscal_monitoring.mailbox.max_attachment_bytes', 10_485_760);
         $size = strlen($bytes);
@@ -76,7 +76,7 @@ final class MailboxVaultStore
         }
 
         $sha256 = hash('sha256', $bytes);
-        $objectId = $this->vault->put($bytes, self::attachmentAad($officeId, $sha256));
+        $objectId = $this->vault->put($bytes, self::attachmentAad($tenantId, $sha256));
 
         return [
             'vault_object_id' => $objectId,
@@ -85,13 +85,13 @@ final class MailboxVaultStore
         ];
     }
 
-    public function getBody(int $officeId, string $objectId, string $sha256): string
+    public function getBody(int $tenantId, string $objectId, string $sha256): string
     {
-        return $this->vault->get($objectId, self::bodyAad($officeId, $sha256));
+        return $this->vault->get($objectId, self::bodyAad($tenantId, $sha256));
     }
 
-    public function getAttachment(int $officeId, string $objectId, string $sha256): string
+    public function getAttachment(int $tenantId, string $objectId, string $sha256): string
     {
-        return $this->vault->get($objectId, self::attachmentAad($officeId, $sha256));
+        return $this->vault->get($objectId, self::attachmentAad($tenantId, $sha256));
     }
 }

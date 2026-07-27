@@ -4,19 +4,19 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Outbound\Competence;
 use App\Domain\Outbound\OperationalSla;
-use App\Enums\OfficeRole;
 use App\Enums\OutboundRetrievalOrigin;
 use App\Enums\OutboundUrgencyBand;
+use App\Enums\TenantRole;
 use App\Http\Controllers\Controller;
-use App\Models\MaOutboundRetrievalRequest;
 use App\Models\OutboundCapacitySnapshot;
+use App\Models\OutboundRetrievalRequest;
 use App\Services\Audit\AuditLogger;
 use App\Services\Outbound\OutboundDeadlineSatisfactionService;
 use App\Services\Outbound\OutboundMetrics;
 use App\Services\Outbound\OutboundMonthlyExportService;
 use App\Services\Outbound\OutboundMonthlyReadinessService;
 use App\Services\Outbound\OutboundXmlCaptureCapacityPlanner;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,7 +28,7 @@ use InvalidArgumentException;
 class OutboundDeadlineController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly OutboundMonthlyReadinessService $readiness,
         private readonly OutboundDeadlineSatisfactionService $satisfaction,
         private readonly OutboundXmlCaptureCapacityPlanner $capacity,
@@ -40,7 +40,7 @@ class OutboundDeadlineController extends Controller
     public function competenceSummary(Request $request): JsonResponse
     {
         $this->authorizeView();
-        $officeId = (int) $this->currentOffice->id();
+        $tenantId = (int) $this->currentTenant->id();
         $competence = (string) $request->query('competence', now()->format('Y-m'));
 
         try {
@@ -49,11 +49,11 @@ class OutboundDeadlineController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        $stats = $this->readiness->compute($officeId, $competence);
-        $ready = $this->readiness->refresh($officeId, $competence);
+        $stats = $this->readiness->compute($tenantId, $competence);
+        $ready = $this->readiness->refresh($tenantId, $competence);
 
-        $bySource = MaOutboundRetrievalRequest::query()
-            ->where('office_id', $officeId)
+        $bySource = OutboundRetrievalRequest::query()
+            ->where('tenant_id', $tenantId)
             ->where('competence', $competence)
             ->where('origin', OutboundRetrievalOrigin::SvrsPortalByKey)
             ->whereNotNull('capture_source')
@@ -79,7 +79,7 @@ class OutboundDeadlineController extends Controller
     public function capacityForecast(Request $request): JsonResponse
     {
         $this->authorizeView();
-        $officeId = (int) $this->currentOffice->id();
+        $tenantId = (int) $this->currentTenant->id();
         $competence = (string) $request->query('competence', now()->format('Y-m'));
 
         try {
@@ -88,20 +88,20 @@ class OutboundDeadlineController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        $first = MaOutboundRetrievalRequest::query()
-            ->where('office_id', $officeId)
+        $first = OutboundRetrievalRequest::query()
+            ->where('tenant_id', $tenantId)
             ->where('competence', $competence)
             ->where('svrs_transaction_count', 0)
             ->whereNotIn('urgency_band', [OutboundUrgencyBand::Captured->value])
             ->count();
-        $second = MaOutboundRetrievalRequest::query()
-            ->where('office_id', $officeId)
+        $second = OutboundRetrievalRequest::query()
+            ->where('tenant_id', $tenantId)
             ->where('competence', $competence)
             ->where('svrs_transaction_count', 1)
             ->whereNotIn('urgency_band', [OutboundUrgencyBand::Captured->value])
             ->count();
 
-        $sla = OperationalSla::fromConfig($this->currentOffice->office()?->deadline_timezone);
+        $sla = OperationalSla::fromConfig($this->currentTenant->tenant()?->deadline_timezone);
         $deadlines = $sla->deadlinesFor($comp);
         $proj = $this->capacity->project(
             $comp,
@@ -109,11 +109,11 @@ class OutboundDeadlineController extends Controller
             $second,
             CarbonImmutable::now('UTC'),
             $deadlines['target_at'],
-            $officeId,
+            $tenantId,
         );
 
         $latestSnap = OutboundCapacitySnapshot::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('competence', $competence)
             ->orderByDesc('id')
             ->first();
@@ -142,7 +142,7 @@ class OutboundDeadlineController extends Controller
     public function pendingItems(Request $request): JsonResponse
     {
         $this->authorizeView();
-        $officeId = (int) $this->currentOffice->id();
+        $tenantId = (int) $this->currentTenant->id();
         $competence = $request->query('competence');
         $band = $request->query('urgency_band');
         $model = $request->query('model');
@@ -159,8 +159,8 @@ class OutboundDeadlineController extends Controller
         };
         $direction = $request->string('direction')->lower()->toString() === 'desc' ? 'desc' : 'asc';
 
-        $q = MaOutboundRetrievalRequest::query()
-            ->where('office_id', $officeId)
+        $q = OutboundRetrievalRequest::query()
+            ->where('tenant_id', $tenantId)
             ->where('origin', OutboundRetrievalOrigin::SvrsPortalByKey)
             ->whereNotIn('urgency_band', [OutboundUrgencyBand::Captured->value]);
 
@@ -186,7 +186,7 @@ class OutboundDeadlineController extends Controller
         }
         if ($clientId !== null && $clientId !== '' && (int) $clientId > 0) {
             $cid = (int) $clientId;
-            $q->whereHas('profile', fn ($p) => $p->where('client_id', $cid)->where('office_id', $officeId));
+            $q->whereHas('profile', fn ($p) => $p->where('client_id', $cid)->where('tenant_id', $tenantId));
         }
         if (is_string($source) && $source !== '') {
             $q->where('capture_source', 'like', '%'.strtoupper($source).'%');
@@ -198,7 +198,7 @@ class OutboundDeadlineController extends Controller
         }
 
         $paginator = $q->paginate($perPage);
-        $items = collect($paginator->items())->map(function (MaOutboundRetrievalRequest $r) {
+        $items = collect($paginator->items())->map(function (OutboundRetrievalRequest $r) {
             $arr = $r->toPublicArray();
             $arr['due_at'] = $r->due_at?->toIso8601String();
             $arr['target_at'] = $r->target_at?->toIso8601String();
@@ -230,11 +230,11 @@ class OutboundDeadlineController extends Controller
     public function contingencyBatch(Request $request): JsonResponse
     {
         $this->authorizeOperator();
-        $officeId = (int) $this->currentOffice->id();
+        $tenantId = (int) $this->currentTenant->id();
         $competence = $request->query('competence');
 
         $batch = $this->satisfaction->contingencyBatch(
-            $officeId,
+            $tenantId,
             is_string($competence) ? $competence : null,
         );
 
@@ -256,7 +256,7 @@ class OutboundDeadlineController extends Controller
         }
 
         $row = $this->readiness->confirmPartial(
-            (int) $this->currentOffice->id(),
+            (int) $this->currentTenant->id(),
             $data['competence'],
             (int) auth()->id(),
             $data['notes'] ?? null,
@@ -268,7 +268,7 @@ class OutboundDeadlineController extends Controller
     public function metrics(Request $request): JsonResponse
     {
         $this->authorizeView();
-        $officeId = (int) $this->currentOffice->id();
+        $tenantId = (int) $this->currentTenant->id();
         $competence = $request->query('competence');
         $comp = is_string($competence) && $competence !== '' ? $competence : null;
         if ($comp !== null) {
@@ -280,7 +280,7 @@ class OutboundDeadlineController extends Controller
         }
 
         return response()->json([
-            'data' => $this->outboundMetrics->deadlineSnapshot($officeId, $comp),
+            'data' => $this->outboundMetrics->deadlineSnapshot($tenantId, $comp),
         ]);
     }
 
@@ -304,7 +304,7 @@ class OutboundDeadlineController extends Controller
 
         try {
             $result = $this->monthlyExport->createMonthlyExport(
-                (int) $this->currentOffice->id(),
+                (int) $this->currentTenant->id(),
                 (int) auth()->id(),
                 $data['competence'],
                 (bool) ($data['include_events'] ?? false),
@@ -346,7 +346,7 @@ class OutboundDeadlineController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        $sla = OperationalSla::fromConfig($this->currentOffice->office()?->deadline_timezone);
+        $sla = OperationalSla::fromConfig($this->currentTenant->tenant()?->deadline_timezone);
         $deadlines = $sla->deadlinesFor($comp);
         $newTarget = CarbonImmutable::parse($data['target_at'])->utc();
 
@@ -368,9 +368,9 @@ class OutboundDeadlineController extends Controller
             ], 422);
         }
 
-        $officeId = (int) $this->currentOffice->id();
-        $n = MaOutboundRetrievalRequest::query()
-            ->where('office_id', $officeId)
+        $tenantId = (int) $this->currentTenant->id();
+        $n = OutboundRetrievalRequest::query()
+            ->where('tenant_id', $tenantId)
             ->where('competence', $comp->value())
             ->whereNotIn('urgency_band', [OutboundUrgencyBand::Captured->value])
             ->update(['target_at' => $newTarget]);
@@ -380,7 +380,7 @@ class OutboundDeadlineController extends Controller
             'target_at' => $newTarget->toIso8601String(),
             'rows' => $n,
             // sem budget/coorte
-        ], null, $officeId);
+        ], null, $tenantId);
 
         return response()->json([
             'data' => [
@@ -394,23 +394,23 @@ class OutboundDeadlineController extends Controller
 
     private function authorizeView(): void
     {
-        if ($this->currentOffice->role() === null) {
+        if ($this->currentTenant->role() === null) {
             abort(403);
         }
     }
 
     private function authorizeOperator(): void
     {
-        $role = $this->currentOffice->role();
-        if ($role === null || ! in_array($role, [OfficeRole::Admin, OfficeRole::Operator], true)) {
+        $role = $this->currentTenant->role();
+        if ($role === null || ! in_array($role, [TenantRole::TenantAdmin, TenantRole::TenantUser], true)) {
             abort(403, 'Ação não autorizada para o perfil atual.');
         }
     }
 
     private function authorizeAdmin(): void
     {
-        if ($this->currentOffice->role() !== OfficeRole::Admin) {
-            abort(403, 'Apenas administradores com 2FA recente.');
+        if ($this->currentTenant->role() !== TenantRole::TenantAdmin) {
+            abort(403, 'Apenas administradores com confirmação recente de senha.');
         }
     }
 }

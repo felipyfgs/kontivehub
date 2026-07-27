@@ -5,7 +5,7 @@ namespace App\Models;
 use App\Enums\SerproConsumptionClass;
 use App\Enums\SerproUsageReservationStatus;
 use App\Enums\SerproUsageResult;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * Transições de status permitidas; valores de custo/classe não são reescritos após create.
  */
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'idempotency_key',
     'client_id',
     'contributor_ref',
@@ -54,7 +54,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 ])]
 class SerproApiUsageReservation extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {

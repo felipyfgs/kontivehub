@@ -8,8 +8,8 @@ use App\Enums\FiscalTrigger;
 use App\Models\Client;
 use App\Models\FiscalCategory;
 use App\Models\FiscalMonitoringSchedule;
-use App\Models\Office;
-use App\Models\OfficeFiscalCategoryLink;
+use App\Models\Tenant;
+use App\Models\TenantFiscalCategoryLink;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -35,14 +35,14 @@ final class FiscalCategoryService
     }
 
     /**
-     * @return Collection<int, OfficeFiscalCategoryLink>
+     * @return Collection<int, TenantFiscalCategoryLink>
      */
-    public function listLinks(Office $office, ?int $clientId = null, ?string $status = null): Collection
+    public function listLinks(Tenant $tenant, ?int $clientId = null, ?string $status = null): Collection
     {
-        $q = OfficeFiscalCategoryLink::query()
+        $q = TenantFiscalCategoryLink::query()
             ->withoutGlobalScopes()
             ->with('category')
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->orderByDesc('id');
 
         if ($clientId !== null) {
@@ -59,7 +59,7 @@ final class FiscalCategoryService
      * Associa um cliente a uma categoria no tenant (sem auto-associar não comprovada).
      */
     public function associate(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         FiscalCategory $category,
         ?int $actorId = null,
@@ -67,18 +67,18 @@ final class FiscalCategoryService
         FiscalLinkStatus $status = FiscalLinkStatus::Active,
         ?string $notes = null,
         bool $createSchedule = true,
-    ): OfficeFiscalCategoryLink {
-        if ((int) $client->office_id !== (int) $office->id) {
+    ): TenantFiscalCategoryLink {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new RuntimeException('Cliente não pertence ao escritório ativo.');
         }
         if (! $category->is_active) {
             throw new RuntimeException('Categoria fiscal inativa.');
         }
 
-        return DB::transaction(function () use ($office, $client, $category, $actorId, $coverage, $status, $notes, $createSchedule) {
-            $link = OfficeFiscalCategoryLink::query()
+        return DB::transaction(function () use ($tenant, $client, $category, $actorId, $coverage, $status, $notes, $createSchedule) {
+            $link = TenantFiscalCategoryLink::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('client_id', $client->id)
                 ->where('fiscal_category_id', $category->id)
                 ->lockForUpdate()
@@ -88,8 +88,8 @@ final class FiscalCategoryService
             $resolvedCoverage = $coverage ?? $category->default_coverage ?? FiscalCoverage::Unknown;
 
             if ($link === null) {
-                $link = OfficeFiscalCategoryLink::query()->create([
-                    'office_id' => $office->id,
+                $link = TenantFiscalCategoryLink::query()->create([
+                    'tenant_id' => $tenant->id,
                     'client_id' => $client->id,
                     'fiscal_category_id' => $category->id,
                     'status' => $status,
@@ -112,7 +112,7 @@ final class FiscalCategoryService
             }
 
             if ($createSchedule && $status === FiscalLinkStatus::Active) {
-                $this->ensureSchedule($office, $client, $category, $link);
+                $this->ensureSchedule($tenant, $client, $category, $link);
             }
 
             return $link->fresh(['category']);
@@ -126,7 +126,7 @@ final class FiscalCategoryService
      * @return array{created:int,updated:int,errors:list<array{client_id:int,message:string}>}
      */
     public function associateBatch(
-        Office $office,
+        Tenant $tenant,
         FiscalCategory $category,
         array $clientIds,
         ?int $actorId = null,
@@ -140,7 +140,7 @@ final class FiscalCategoryService
             try {
                 $client = Client::query()
                     ->withoutGlobalScopes()
-                    ->where('office_id', $office->id)
+                    ->where('tenant_id', $tenant->id)
                     ->whereKey($clientId)
                     ->first();
                 if ($client === null) {
@@ -149,14 +149,14 @@ final class FiscalCategoryService
                     continue;
                 }
 
-                $exists = OfficeFiscalCategoryLink::query()
+                $exists = TenantFiscalCategoryLink::query()
                     ->withoutGlobalScopes()
-                    ->where('office_id', $office->id)
+                    ->where('tenant_id', $tenant->id)
                     ->where('client_id', $clientId)
                     ->where('fiscal_category_id', $category->id)
                     ->exists();
 
-                $this->associate($office, $client, $category, $actorId, $coverage);
+                $this->associate($tenant, $client, $category, $actorId, $coverage);
                 if ($exists) {
                     $updated++;
                 } else {
@@ -171,10 +171,10 @@ final class FiscalCategoryService
     }
 
     public function ensureSchedule(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         FiscalCategory $category,
-        OfficeFiscalCategoryLink $link,
+        TenantFiscalCategoryLink $link,
     ): FiscalMonitoringSchedule {
         $system = (string) ($category->system_code ?? 'UNKNOWN');
         $service = (string) ($category->service_code ?? 'UNKNOWN');
@@ -182,11 +182,11 @@ final class FiscalCategoryService
         $interval = strtoupper($service) === 'SITFIS'
             ? (int) config('fiscal_monitoring.sitfis.interval_minutes', 1440)
             : (int) config('fiscal_monitoring.scheduler.default_interval_minutes', 60);
-        $preferred = $this->scheduler->preferredMinute($office->id, $client->id, $system, $service);
+        $preferred = $this->scheduler->preferredMinute($tenant->id, $client->id, $system, $service);
 
         $schedule = FiscalMonitoringSchedule::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('system_code', $system)
             ->where('service_code', $service)
@@ -208,7 +208,7 @@ final class FiscalCategoryService
         $next = $this->scheduler->firstRunAt($preferred);
 
         return FiscalMonitoringSchedule::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'fiscal_category_id' => $category->id,
             'category_link_id' => $link->id,

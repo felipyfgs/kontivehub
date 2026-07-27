@@ -69,7 +69,7 @@ export function buildClientsColumns(options: {
         disabled: !hasCredential,
         onSelect: () => options.onCredentialToast(
           'Senha indisponível',
-          'A senha do A1 não é recuperável após o upload.'
+          'A senha do certificado não é recuperável após o upload.'
         )
       },
       {
@@ -79,7 +79,7 @@ export function buildClientsColumns(options: {
         disabled: !hasCredential || !options.canManageCredentials,
         onSelect: () => options.onCredentialToast(
           'Remoção indisponível',
-          'Ainda não há endpoint para remover o A1. Use Atualizar.'
+          'Ainda não há endpoint para remover o certificado. Use Atualizar.'
         )
       }
     )
@@ -143,9 +143,9 @@ export function buildClientsColumns(options: {
       },
       cell: ({ row }) => {
         const client = row.original
-        const label = client.legal_name || client.name
+        const label = client.display_name || client.legal_name
         const display = truncateText(label, 40) || label || '—'
-        const rawCnpj = client.cnpj || client.root_cnpj
+        const rawCnpj = client.root_cnpj
 
         return h('div', { class: 'flex min-w-0 flex-col leading-tight' }, [
           h('button', {
@@ -190,7 +190,7 @@ export function buildClientsColumns(options: {
       cell: ({ row }) => {
         const client = row.original
         const info = clientCredentialInfo(client)
-        const label = client.legal_name || client.name
+        const label = client.display_name || client.legal_name
         // Padrão Nuxt UI Dashboard (customers/MembersList):
         // UBadge + UDropdownMenu > UButton ghost, alinhados no centro da linha.
         const actionSlot = !info.hasCredential && options.canManageCredentials
@@ -293,7 +293,7 @@ export function buildClientsColumns(options: {
       },
       cell: ({ row }) => {
         const client = row.original
-        const label = client.legal_name || client.name
+        const label = client.display_name || client.legal_name
         return tableIconGroup([
           tableIconButton({
             label: `Abrir ${label}`,

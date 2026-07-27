@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use App\Casts\FiscalSourceProvenanceCast;
-use App\Models\Concerns\BelongsToOffice;
+use App\Enums\FiscalSourceProvenance;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Model;
@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * expõe somente o descritor do documento, nunca uma chave do cofre.
  */
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'client_id',
     'contributor_cnpj',
     'renunciation_id',
@@ -37,13 +37,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Hidden(['receipt_vault_object_id', 'receipt_sha256'])]
 class FiscalPnrRenunciation extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {
         return [
             'renunciation_id' => 'integer',
-            'source_provenance' => FiscalSourceProvenanceCast::class,
+            'source_provenance' => FiscalSourceProvenance::class,
             'summary_sanitized' => 'array',
             'occurred_at' => 'immutable_datetime',
             'observed_at' => 'immutable_datetime',

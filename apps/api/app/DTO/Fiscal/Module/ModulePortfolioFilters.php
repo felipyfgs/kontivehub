@@ -233,19 +233,6 @@ final readonly class ModulePortfolioFilters
     }
 
     /**
-     * Compat: primeiro valor quando multi (ou único).
-     */
-    public function situationEnum(): ?FiscalSituation
-    {
-        $list = $this->situationList();
-        if ($list === []) {
-            return null;
-        }
-
-        return FiscalSituation::tryFrom($list[0]);
-    }
-
-    /**
      * @param  callable(string): (?string)  $map  normaliza token; null = descarta
      */
     private static function normalizeTokenList(mixed $raw, callable $map): ?string

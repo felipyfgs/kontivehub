@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import QRCode from 'qrcode'
-import type { OfficeMember } from '~/types/api'
+import type { TenantMember } from '~/types/api'
 import type {
   CommunicationInbox,
   CommunicationPairingState,
@@ -18,7 +18,7 @@ import { communicationSessionActions } from '~/utils/communication-session'
 
 const props = defineProps<{
   inbox: CommunicationInbox
-  members: OfficeMember[]
+  members: TenantMember[]
   departments: WorkDepartment[]
 }>()
 
@@ -63,7 +63,7 @@ const gatewayAvailable = computed(() => Boolean(
 ))
 const connectAllowed = computed(() => Boolean(
   gatewayAvailable.value
-  && workspace.featureMeta.value.office_enabled
+  && workspace.featureMeta.value.tenant_enabled
   && enabled.value
   && name.value.trim()
 ))
@@ -74,7 +74,7 @@ const connectBlockedReason = computed(() => {
   if (!workspace.featureMeta.value.gateway_enabled) {
     return 'Gateway do WhatsApp desativado.'
   }
-  if (!workspace.featureMeta.value.office_enabled) {
+  if (!workspace.featureMeta.value.tenant_enabled) {
     return 'Comunicação do escritório desativada.'
   }
   if (!enabled.value) {
@@ -103,7 +103,7 @@ const sessionAlert = computed<SessionAlert | null>(() => {
       icon: 'i-lucide-server-off'
     }
   }
-  if (!workspace.featureMeta.value.office_enabled) {
+  if (!workspace.featureMeta.value.tenant_enabled) {
     return {
       title: 'Comunicação do escritório desativada',
       description: 'As sessões ficam desconectadas até a reativação. Reativar não conecta automaticamente.',

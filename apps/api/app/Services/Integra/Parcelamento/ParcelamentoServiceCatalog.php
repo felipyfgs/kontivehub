@@ -10,7 +10,7 @@ final class ParcelamentoServiceCatalog
 {
     public const SOLUTION = 'INTEGRA_PARCELAMENTO';
 
-    public const MODULE_KEY = 'parcelamentos';
+    public const MODULE_KEY = 'installments';
 
     /** @var list<string> */
     public const READ_OPERATIONS = [

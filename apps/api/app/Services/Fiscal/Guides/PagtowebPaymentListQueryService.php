@@ -4,9 +4,9 @@ namespace App\Services\Fiscal\Guides;
 
 use App\Jobs\Fiscal\ExecuteFiscalMonitoringRunJob;
 use App\Models\Client;
-use App\Models\Office;
 use App\Models\PagtowebPaymentListItem;
 use App\Models\PagtowebPaymentListProjection;
+use App\Models\Tenant;
 use App\Services\FiscalMonitoring\FiscalMonitoringRunService;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -16,14 +16,14 @@ final class PagtowebPaymentListQueryService
     public function __construct(private readonly FiscalMonitoringRunService $runs, private readonly PagtowebPaymentListCodec $codec) {}
 
     /** @return array<string,mixed> */
-    public function history(Office $office, Client $client, int $page = 1, int $perPage = 50): array
+    public function history(Tenant $tenant, Client $client, int $page = 1, int $perPage = 50): array
     {
-        $this->assertClient($office, $client);
-        $projection = PagtowebPaymentListProjection::query()->withoutGlobalScopes()->with('observation')->where('office_id', $office->id)->where('client_id', $client->id)->first();
+        $this->assertClient($tenant, $client);
+        $projection = PagtowebPaymentListProjection::query()->withoutGlobalScopes()->with('observation')->where('tenant_id', $tenant->id)->where('client_id', $client->id)->first();
         if ($projection?->last_observation_id === null) {
             return ['client_id' => $client->id, 'current' => null, 'items' => [], 'meta' => ['page' => $page, 'per_page' => $perPage, 'total' => 0], 'provenance' => ['source' => 'local_projection', 'serpro_called' => false]];
         }
-        $items = PagtowebPaymentListItem::query()->withoutGlobalScopes()->where('office_id', $office->id)->where('client_id', $client->id)->where('observation_id', $projection->last_observation_id)->orderBy('id')->paginate(perPage: $perPage, page: $page);
+        $items = PagtowebPaymentListItem::query()->withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('client_id', $client->id)->where('observation_id', $projection->last_observation_id)->orderBy('id')->paginate(perPage: $perPage, page: $page);
         $observation = $projection->observation;
         $current = $observation?->toPublicArray() ?? ['observed_at' => $projection->last_valid_query_at?->toIso8601String(), 'source_provenance' => $projection->source_provenance];
 
@@ -31,11 +31,11 @@ final class PagtowebPaymentListQueryService
     }
 
     /** @param array<string,mixed> $filters @return array<string,mixed> */
-    public function enqueueManualConsult(Office $office, Client $client, array $filters, ?int $actorUserId): array
+    public function enqueueManualConsult(Tenant $tenant, Client $client, array $filters, ?int $actorUserId): array
     {
-        $this->assertClient($office, $client);
+        $this->assertClient($tenant, $client);
         $normalized = $this->codec->normalizeFilters($filters);
-        $run = $this->runs->enqueueManual(office: $office, client: $client, systemCode: PagtowebPaymentListAdapter::SYSTEM, serviceCode: PagtowebPaymentListAdapter::SERVICE, operationCode: PagtowebPaymentListAdapter::OPERATION, competence: null, actorId: $actorUserId, correlationId: sprintf('pagtoweb-list-%d-%s', $client->id, (string) Str::uuid()), dispatch: false);
+        $run = $this->runs->enqueueManual(tenant: $tenant, client: $client, systemCode: PagtowebPaymentListAdapter::SYSTEM, serviceCode: PagtowebPaymentListAdapter::SERVICE, operationCode: PagtowebPaymentListAdapter::OPERATION, competence: null, actorId: $actorUserId, correlationId: sprintf('pagtoweb-list-%d-%s', $client->id, (string) Str::uuid()), dispatch: false);
         $progress = is_array($run->progress) ? $run->progress : [];
         $persistedFilters = $normalized['filter_summary'];
         unset($persistedFilters['numero_documento_digests']);
@@ -51,9 +51,9 @@ final class PagtowebPaymentListQueryService
         return method_exists($run, 'toPublicArray') ? $run->toPublicArray() : ['id' => $run->id, 'client_id' => $run->client_id];
     }
 
-    private function assertClient(Office $office, Client $client): void
+    private function assertClient(Tenant $tenant, Client $client): void
     {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new HttpException(404, 'Cliente não encontrado no escritório atual.');
         }
     }

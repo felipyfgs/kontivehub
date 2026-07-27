@@ -4,7 +4,7 @@ namespace App\Contracts;
 
 use App\Enums\SerproEnvironment;
 use App\Models\Client;
-use App\Models\Office;
+use App\Models\Tenant;
 
 /**
  * Garante evidência de procuração usável antes de consulta Integra que exige poder e-CAC.
@@ -18,7 +18,7 @@ interface EnsuresClientProcuracaoForConsult
      * @return EnsureResult
      */
     public function ensure(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         SerproEnvironment $environment,
         array $requiredPowers,

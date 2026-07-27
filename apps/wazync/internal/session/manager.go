@@ -11,12 +11,8 @@ import (
 )
 
 type Connector interface {
-	Connect(sessionID string) error
-	Disconnect(sessionID string)
-}
-
-type contextConnector interface {
 	ConnectContext(context.Context, string) error
+	Disconnect(sessionID string)
 }
 
 type connectionResetter interface {
@@ -577,10 +573,7 @@ func (m *Manager) renewWhile(ctx context.Context, sessionID string) func() {
 }
 
 func (m *Manager) connect(ctx context.Context, sessionID string) error {
-	if connector, ok := m.connector.(contextConnector); ok {
-		return connector.ConnectContext(ctx, sessionID)
-	}
-	return m.connector.Connect(sessionID)
+	return m.connector.ConnectContext(ctx, sessionID)
 }
 
 func reconnectDelay(attempt int) time.Duration {

@@ -3,9 +3,9 @@
 namespace App\Contracts;
 
 use App\Models\Client;
-use App\Models\Office;
 use App\Models\TaxGuide;
 use App\Models\TaxInstallmentParcel;
+use App\Models\Tenant;
 
 /**
  * Hook da central de guias para documentos de parcela (DARF/DAS).
@@ -15,7 +15,7 @@ interface TaxGuideEnrollment
 {
     /**
      * Registra ou reutiliza guia a partir de documento de parcela.
-     * Idempotente por office + chave lógica de emissão.
+     * Idempotente por tenant + chave lógica de emissão.
      *
      * @param  array{
      *     modality: string,
@@ -40,7 +40,7 @@ interface TaxGuideEnrollment
      * @return array{guide: TaxGuide, reused: bool}
      */
     public function enrollFromInstallmentDocument(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         TaxInstallmentParcel $parcel,
         array $document,

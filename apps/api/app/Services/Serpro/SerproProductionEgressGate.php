@@ -7,10 +7,9 @@ use App\Enums\SerproDataSegregationClass;
 use App\Enums\SerproEnvironment;
 use App\Enums\SerproExternalGateStatus;
 use App\Enums\SerproFunctionalRoute;
-use App\Models\Office;
-use App\Models\SerproContract;
 use App\Models\SerproCredentialVersion;
 use App\Models\SerproExternalGate;
+use App\Models\Tenant;
 
 /**
  * Gate fail-closed para egress faturável em produção.
@@ -19,7 +18,7 @@ use App\Models\SerproExternalGate;
  * - kill switch ativo;
  * - drivers reais / fake clients em estado inválido;
  * - versão de credencial exposta não estiver RETIRED/COMPROMISED;
- * - Office demo/segregado tentar endpoint real.
+ * - Tenant demo/segregado tentar endpoint real.
  *
  * Gates documentais externos são informativos (snapshot/CLI) e não bloqueiam egress.
  */
@@ -39,7 +38,7 @@ final class SerproProductionEgressGate
      */
     public function evaluateBillableEgress(
         ?SerproFunctionalRoute $route = null,
-        ?Office $office = null,
+        ?Tenant $tenant = null,
         ?SerproEnvironment $environment = null,
     ): array {
         $environment ??= SerproEnvironment::tryFrom(strtoupper((string) config('serpro.default_environment', 'TRIAL')))
@@ -77,46 +76,22 @@ final class SerproProductionEgressGate
             $pass('exposed_credentials', 'Nenhuma versão exposta bloqueia egress faturável.');
         }
 
-        $contract = SerproContract::query()
-            ->where('environment', $environment->value)
-            ->where('status', 'ACTIVE')
-            ->orderByDesc('id')
-            ->first();
-
-        if ($contract !== null && (bool) ($contract->credentials_exposed ?? true)) {
-            $activeVersion = SerproCredentialVersion::query()
-                ->where('environment', $environment->value)
-                ->where('status', SerproCredentialVersionStatus::Active->value)
-                ->first();
-
-            if ($activeVersion === null || $activeVersion->was_exposed) {
-                $fail(
-                    'contract_exposed_flag',
-                    'Contrato ACTIVE ainda marcado com credentials_exposed sem versão limpa ACTIVE.'
-                );
-            } else {
-                $pass('contract_exposed_flag', 'Contrato ACTIVE com versão de credencial não exposta.');
-            }
-        } else {
-            $pass('contract_exposed_flag', 'Contrato sem flag de exposição ou inexistente.');
-        }
-
-        if ($office !== null) {
-            $seg = $office->serpro_segregation_class
-                ?? ($this->isDemoOffice($office) ? SerproDataSegregationClass::Demo->value : null);
+        if ($tenant !== null) {
+            $seg = $tenant->serpro_segregation_class
+                ?? ($this->isDemoTenant($tenant) ? SerproDataSegregationClass::Demo->value : null);
             $segNormalized = $seg !== null ? strtoupper((string) $seg) : '';
             // Fail-closed em PRODUCTION: exige classe Production explícita (null/vazio bloqueia).
             if ($environment === SerproEnvironment::Production) {
                 if ($segNormalized !== SerproDataSegregationClass::Production->value) {
                     $label = $segNormalized === '' ? 'unset' : $segNormalized;
-                    $fail('office_segregation', "Office segregado como {$label}; endpoint real/faturável bloqueado.");
+                    $fail('tenant_segregation', "Tenant segregado como {$label}; endpoint real/faturável bloqueado.");
                 } else {
-                    $pass('office_segregation', 'Office elegível (PRODUCTION).');
+                    $pass('tenant_segregation', 'Tenant elegível (PRODUCTION).');
                 }
             } elseif ($segNormalized !== '' && $segNormalized !== SerproDataSegregationClass::Production->value) {
-                $fail('office_segregation', "Office segregado como {$segNormalized}; endpoint real/faturável bloqueado.");
+                $fail('tenant_segregation', "Tenant segregado como {$segNormalized}; endpoint real/faturável bloqueado.");
             } else {
-                $pass('office_segregation', 'Office elegível (não demo/shadow).');
+                $pass('tenant_segregation', 'Tenant elegível (não demo/shadow).');
             }
         }
 
@@ -191,16 +166,6 @@ final class SerproProductionEgressGate
             $issues[] = 'Credenciais expostas ainda não RETIRED/COMPROMISED bloqueiam egress faturável.';
         }
 
-        // Contrato legado sem versão: se credentials_exposed, também é issue.
-        $legacyExposed = SerproContract::query()
-            ->where('environment', $environment->value)
-            ->where('credentials_exposed', true)
-            ->whereIn('status', ['ACTIVE', 'PENDING', 'BLOCKED'])
-            ->count();
-        if ($legacyExposed > 0 && $exposed === []) {
-            $issues[] = "Contrato(s) com credentials_exposed=true sem versão terminal ({$legacyExposed}).";
-        }
-
         $openGates = SerproExternalGate::query()
             ->get()
             ->filter(fn (SerproExternalGate $g) => $g->status !== SerproExternalGateStatus::Accepted
@@ -246,10 +211,10 @@ final class SerproProductionEgressGate
             ->all();
     }
 
-    private function isDemoOffice(Office $office): bool
+    private function isDemoTenant(Tenant $tenant): bool
     {
-        $slug = strtolower((string) $office->slug);
-        $demoSlug = strtolower((string) config('fiscal_demo.office_slug', 'demo'));
+        $slug = strtolower((string) $tenant->slug);
+        $demoSlug = strtolower((string) config('fiscal_demo.tenant_slug', 'demo'));
 
         return $slug === $demoSlug || str_contains($slug, 'demo');
     }

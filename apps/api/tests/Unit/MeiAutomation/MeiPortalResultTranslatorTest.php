@@ -11,7 +11,7 @@ use App\Enums\MeiAutomationStatus;
 use App\Enums\MeiProvider;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\MeiAutomation\MeiAutomationAttemptService;
 use App\Services\MeiAutomation\MeiPortalResultTranslator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -23,11 +23,11 @@ class MeiPortalResultTranslatorTest extends TestCase
 
     public function test_summary_dasn_never_becomes_full_or_up_to_date(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
-        $run = $this->monitoringRun($office, $client, 'DASN_SIMEI');
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
+        $run = $this->monitoringRun($tenant, $client, 'DASN_SIMEI');
         $attempt = app(MeiAutomationAttemptService::class)->start(
-            $office,
+            $tenant,
             $client,
             'dasnsimei.consultimadecrec',
             MeiProvider::ReceitaPortal,
@@ -54,7 +54,7 @@ class MeiPortalResultTranslatorTest extends TestCase
 
         $result = app(MeiPortalResultTranslator::class)->translate(
             new FiscalAdapterRequest(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 run: $run,
                 systemCode: 'INTEGRA_MEI',
@@ -76,11 +76,11 @@ class MeiPortalResultTranslatorTest extends TestCase
 
     public function test_pending_dasn_creates_structured_fiscal_pending_finding(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
-        $run = $this->monitoringRun($office, $client, 'DASN_SIMEI');
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
+        $run = $this->monitoringRun($tenant, $client, 'DASN_SIMEI');
         $attempt = app(MeiAutomationAttemptService::class)->start(
-            $office,
+            $tenant,
             $client,
             'dasnsimei.consultimadecrec',
             MeiProvider::ReceitaPortal,
@@ -111,7 +111,7 @@ class MeiPortalResultTranslatorTest extends TestCase
 
         $result = app(MeiPortalResultTranslator::class)->translate(
             new FiscalAdapterRequest(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 run: $run,
                 systemCode: 'INTEGRA_MEI',
@@ -132,10 +132,10 @@ class MeiPortalResultTranslatorTest extends TestCase
         self::assertSame(FiscalSituation::Pending->value, $result->findings[0]['situation']);
     }
 
-    private function monitoringRun(Office $office, Client $client, string $service): FiscalMonitoringRun
+    private function monitoringRun(Tenant $tenant, Client $client, string $service): FiscalMonitoringRun
     {
         return FiscalMonitoringRun::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'system_code' => 'INTEGRA_MEI',
             'service_code' => $service,

@@ -30,7 +30,7 @@ async function load() {
   const seq = ++loadSeq
   const epoch = sessionEpoch.value
   try {
-    const response = await api.office.onboardingStatus()
+    const response = await api.tenant.onboardingStatus()
     if (seq !== loadSeq || epoch !== sessionEpoch.value) return
     decision.value = response.data.modules?.find(
       module => module.module_key === canonicalModuleKey.value

@@ -8,7 +8,7 @@ use App\Http\Requests\Clients\ReplaceClientCategoriesRequest;
 use App\Models\Client;
 use App\Models\ClientCategory;
 use App\Services\Audit\AuditLogger;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -19,21 +19,20 @@ class ClientCategoryAssignmentController extends Controller
     public function replace(
         ReplaceClientCategoriesRequest $request,
         Client $client,
-        CurrentOffice $currentOffice,
+        CurrentTenant $currentTenant,
         AuditLogger $audit,
     ): JsonResponse {
         $this->authorize('update', $client);
-        $this->assertRootClient($client);
 
         $categoryIds = array_values(array_map('intval', $request->validated('category_ids')));
         $actorId = $request->user()?->id;
-        $officeId = (int) $currentOffice->id();
+        $tenantId = (int) $currentTenant->id();
 
-        $result = DB::transaction(function () use ($client, $categoryIds, $actorId, $officeId): array {
+        $result = DB::transaction(function () use ($client, $categoryIds, $actorId, $tenantId): array {
             Client::query()->whereKey($client->id)->lockForUpdate()->firstOrFail();
             $categories = $this->categoriesForIds($categoryIds, true);
             $existingIds = DB::table('client_category_assignments')
-                ->where('office_id', $officeId)
+                ->where('tenant_id', $tenantId)
                 ->where('client_id', $client->id)
                 ->lockForUpdate()
                 ->pluck('client_category_id')
@@ -56,7 +55,7 @@ class ClientCategoryAssignmentController extends Controller
 
             if ($toRemove !== []) {
                 DB::table('client_category_assignments')
-                    ->where('office_id', $officeId)
+                    ->where('tenant_id', $tenantId)
                     ->where('client_id', $client->id)
                     ->whereIn('client_category_id', $toRemove)
                     ->delete();
@@ -66,7 +65,7 @@ class ClientCategoryAssignmentController extends Controller
             if ($toAdd !== []) {
                 DB::table('client_category_assignments')->insert(array_map(
                     static fn (int $categoryId): array => [
-                        'office_id' => $officeId,
+                        'tenant_id' => $tenantId,
                         'client_id' => $client->id,
                         'client_category_id' => $categoryId,
                         'assigned_by' => $actorId,
@@ -101,7 +100,7 @@ class ClientCategoryAssignmentController extends Controller
 
     public function bulk(
         BulkUpdateClientCategoriesRequest $request,
-        CurrentOffice $currentOffice,
+        CurrentTenant $currentTenant,
         AuditLogger $audit,
     ): JsonResponse {
         $data = $request->validated();
@@ -109,7 +108,7 @@ class ClientCategoryAssignmentController extends Controller
         $clientIds = array_values(array_map('intval', $data['client_ids']));
         $categoryIds = array_values(array_map('intval', $data['category_ids']));
         $actorId = $request->user()?->id;
-        $officeId = (int) $currentOffice->id();
+        $tenantId = (int) $currentTenant->id();
 
         /** @var Collection<int, Client> $clients */
         $clients = collect();
@@ -118,11 +117,10 @@ class ClientCategoryAssignmentController extends Controller
             $clientIds,
             $categoryIds,
             $actorId,
-            $officeId,
+            $tenantId,
             &$clients,
         ): array {
             $clients = Client::query()
-                ->whereNull('matrix_client_id')
                 ->whereKey($clientIds)
                 ->lockForUpdate()
                 ->get()
@@ -147,7 +145,7 @@ class ClientCategoryAssignmentController extends Controller
 
             if ($operation === 'remove') {
                 $removed = DB::table('client_category_assignments')
-                    ->where('office_id', $officeId)
+                    ->where('tenant_id', $tenantId)
                     ->whereIn('client_id', $clientIds)
                     ->whereIn('client_category_id', $categoryIds)
                     ->delete();
@@ -160,7 +158,7 @@ class ClientCategoryAssignmentController extends Controller
             foreach ($clientIds as $clientId) {
                 foreach ($categoryIds as $categoryId) {
                     $rows[] = [
-                        'office_id' => $officeId,
+                        'tenant_id' => $tenantId,
                         'client_id' => $clientId,
                         'client_category_id' => $categoryId,
                         'assigned_by' => $actorId,
@@ -213,15 +211,6 @@ class ClientCategoryAssignmentController extends Controller
         }
 
         return $categories;
-    }
-
-    private function assertRootClient(Client $client): void
-    {
-        if ($client->matrix_client_id !== null) {
-            throw ValidationException::withMessages([
-                'client' => ['Categorias só podem ser atribuídas ao cliente-raiz canônico.'],
-            ]);
-        }
     }
 
     /** @return list<array{id: int, name: string, color: string, is_active: bool}> */

@@ -7,7 +7,7 @@ use App\Http\Requests\Clients\StoreClientCategoryRequest;
 use App\Http\Requests\Clients\UpdateClientCategoryRequest;
 use App\Models\ClientCategory;
 use App\Services\Audit\AuditLogger;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -34,14 +34,14 @@ class ClientCategoryController extends Controller
 
     public function store(
         StoreClientCategoryRequest $request,
-        CurrentOffice $currentOffice,
+        CurrentTenant $currentTenant,
         AuditLogger $audit,
     ): JsonResponse {
         $this->authorize('create', ClientCategory::class);
         $data = $request->validated();
 
         $category = ClientCategory::query()->create([
-            'office_id' => $currentOffice->id(),
+            'tenant_id' => $currentTenant->id(),
             'name' => $data['name'],
             'name_key' => $data['_name_key'],
             'color' => $data['color'],

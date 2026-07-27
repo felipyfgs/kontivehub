@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
-use App\Models\Office;
 use App\Models\PlatformMembership;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Auth\RecentPasswordConfirmationGate;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -31,34 +31,34 @@ class PlatformFiscalModuleControlApiTest extends TestCase
         Sanctum::actingAs(User::factory()->create());
 
         $this->getJson('/api/v1/platform/fiscal/modules')->assertForbidden();
-        $this->patchJson('/api/v1/platform/fiscal/modules/caixa_postal/restriction', [
+        $this->patchJson('/api/v1/platform/fiscal/modules/mailbox/restriction', [
             'restricted' => true,
             'reason' => 'Pausa',
         ])->assertForbidden();
     }
 
-    public function test_global_and_office_endpoints_restrict_immediately_and_release_with_recent_password(): void
+    public function test_global_and_tenant_endpoints_restrict_immediately_and_release_with_recent_password(): void
     {
         $actor = $this->platformAdmin();
-        $office = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
         Sanctum::actingAs($actor);
 
-        $this->patchJson('/api/v1/platform/fiscal/modules/caixa_postal/restriction', [
+        $this->patchJson('/api/v1/platform/fiscal/modules/mailbox/restriction', [
             'restricted' => true,
             'reason' => 'Pausa operacional',
         ])->assertOk()->assertJsonPath('data.state', 'GLOBALLY_RESTRICTED');
 
-        $this->getJson("/api/v1/platform/tenants/{$office->id}/fiscal/modules")
+        $this->getJson("/api/v1/platform/tenants/{$tenant->id}/fiscal/modules")
             ->assertOk()
             ->assertJsonPath('data.modules.4.state', 'GLOBALLY_RESTRICTED');
 
-        $this->patchJson('/api/v1/platform/fiscal/modules/caixa_postal/restriction', [
+        $this->patchJson('/api/v1/platform/fiscal/modules/mailbox/restriction', [
             'restricted' => false,
             'reason' => 'Operação normalizada',
         ])->assertForbidden()->assertJsonPath('code', 'password_confirmation_required');
 
         app(RecentPasswordConfirmationGate::class)->markConfirmed($actor);
-        $this->patchJson('/api/v1/platform/fiscal/modules/caixa_postal/restriction', [
+        $this->patchJson('/api/v1/platform/fiscal/modules/mailbox/restriction', [
             'restricted' => false,
             'reason' => 'Operação normalizada',
         ])->assertOk()->assertJsonPath('data.state', 'AVAILABLE');

@@ -12,7 +12,7 @@ use App\Exceptions\EsocialBxException;
 use App\Models\Client;
 use App\Models\ClientCredential;
 use App\Models\EsocialBxAccessLedger;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Esocial\HttpEsocialBxEventClient;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -40,8 +40,8 @@ class HttpEsocialBxEventClientTest extends TestCase
 
     public function test_official_flow_queries_s5013_and_s1299_downloads_and_persists_sanitized_ledger(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create(['root_cnpj' => '48123272']);
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create(['root_cnpj' => '48123272']);
         [$pfx, $password] = $this->makePfx();
         $fingerprint = str_repeat('b', 64);
         $store = app(SecureObjectStore::class);
@@ -49,12 +49,12 @@ class HttpEsocialBxEventClientTest extends TestCase
             'pfx' => base64_encode($pfx),
             'password' => $password,
         ], JSON_THROW_ON_ERROR), [
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'fingerprint' => $fingerprint,
         ]);
         ClientCredential::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'status' => CredentialStatus::Active,
             'subject_name' => 'eSocial BX fixture',
@@ -74,7 +74,7 @@ class HttpEsocialBxEventClientTest extends TestCase
         $this->app->instance(EsocialBxSoapTransport::class, $transport);
 
         $result = app(HttpEsocialBxEventClient::class)->fetchEvents(new EsocialFetchRequest(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             competencePeriodKey: '2026-06',
             correlationId: 'fgts-bx-test',
@@ -100,7 +100,7 @@ class HttpEsocialBxEventClientTest extends TestCase
 
     public function test_empty_official_results_are_successful_without_false_partiality(): void
     {
-        [$office, $client, $password] = $this->readyContext();
+        [$tenant, $client, $password] = $this->readyContext();
         $transport = new QueueEsocialBxTransport([
             new EsocialBxHttpResponse(200, $this->soap($this->identifiersResult('406'))),
             new EsocialBxHttpResponse(200, $this->soap($this->identifiersResult('406'))),
@@ -108,7 +108,7 @@ class HttpEsocialBxEventClientTest extends TestCase
         $this->app->instance(EsocialBxSoapTransport::class, $transport);
 
         $result = app(HttpEsocialBxEventClient::class)->fetchEvents(new EsocialFetchRequest(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             competencePeriodKey: '2026-06',
             eventCodes: [EsocialEventCode::S5013, EsocialEventCode::S1299],
@@ -123,7 +123,7 @@ class HttpEsocialBxEventClientTest extends TestCase
 
     public function test_partial_download_is_deduplicated_by_official_event_id(): void
     {
-        [$office, $client, $password] = $this->readyContext();
+        [$tenant, $client, $password] = $this->readyContext();
         $transport = new QueueEsocialBxTransport([
             new EsocialBxHttpResponse(200, $this->soap($this->identifiersResult('203', true))),
             new EsocialBxHttpResponse(200, $this->soap($this->duplicateDownloadResult())),
@@ -131,7 +131,7 @@ class HttpEsocialBxEventClientTest extends TestCase
         $this->app->instance(EsocialBxSoapTransport::class, $transport);
 
         $result = app(HttpEsocialBxEventClient::class)->fetchEvents(new EsocialFetchRequest(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             competencePeriodKey: '2026-06',
             eventCodes: [EsocialEventCode::S1299, EsocialEventCode::S1299],
@@ -145,14 +145,14 @@ class HttpEsocialBxEventClientTest extends TestCase
 
     public function test_official_blocker_is_sanitized_and_persisted_without_secret(): void
     {
-        [$office, $client, $password] = $this->readyContext();
+        [$tenant, $client, $password] = $this->readyContext();
         $transport = new QueueEsocialBxTransport([
             new EsocialBxHttpResponse(200, $this->soap($this->identifiersResult('405'))),
         ], $password);
         $this->app->instance(EsocialBxSoapTransport::class, $transport);
 
         $result = app(HttpEsocialBxEventClient::class)->fetchEvents(new EsocialFetchRequest(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             competencePeriodKey: '2026-06',
             eventCodes: [EsocialEventCode::S1299],
@@ -171,10 +171,10 @@ class HttpEsocialBxEventClientTest extends TestCase
 
     public function test_s5003_without_worker_identifier_never_materializes_pfx_or_calls_transport(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create(['root_cnpj' => '48123272']);
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create(['root_cnpj' => '48123272']);
         ClientCredential::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'status' => CredentialStatus::Active,
             'subject_name' => 'Metadata only',
@@ -189,7 +189,7 @@ class HttpEsocialBxEventClientTest extends TestCase
         $this->app->instance(EsocialBxSoapTransport::class, $transport);
 
         $result = app(HttpEsocialBxEventClient::class)->fetchEvents(new EsocialFetchRequest(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             competencePeriodKey: '2026-06',
             eventCodes: [EsocialEventCode::S5003],
@@ -204,14 +204,14 @@ class HttpEsocialBxEventClientTest extends TestCase
 
     public function test_http_failure_releases_flow_with_sanitized_error_and_failed_ledger(): void
     {
-        [$office, $client, $password] = $this->readyContext();
+        [$tenant, $client, $password] = $this->readyContext();
         $transport = new QueueEsocialBxTransport([
             new EsocialBxHttpResponse(503, '<untrusted>secret remote body</untrusted>'),
         ], $password);
         $this->app->instance(EsocialBxSoapTransport::class, $transport);
 
         $result = app(HttpEsocialBxEventClient::class)->fetchEvents(new EsocialFetchRequest(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             competencePeriodKey: '2026-06',
             eventCodes: [EsocialEventCode::S1299],
@@ -282,11 +282,11 @@ XML;
             .'</arquivos></retornoSolicDownloadEvts></download></eSocial>';
     }
 
-    /** @return array{Office,Client,string} */
+    /** @return array{Tenant,Client,string} */
     private function readyContext(): array
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create(['root_cnpj' => '48123272']);
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create(['root_cnpj' => '48123272']);
         [$pfx, $password] = $this->makePfx();
         $fingerprint = hash('sha256', $pfx);
         $store = app(SecureObjectStore::class);
@@ -294,12 +294,12 @@ XML;
             'pfx' => base64_encode($pfx),
             'password' => $password,
         ], JSON_THROW_ON_ERROR), [
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'fingerprint' => $fingerprint,
         ]);
         ClientCredential::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'status' => CredentialStatus::Active,
             'subject_name' => 'eSocial BX fixture',
@@ -311,7 +311,7 @@ XML;
             'activated_at' => now(),
         ]);
 
-        return [$office, $client, $password];
+        return [$tenant, $client, $password];
     }
 
     private function soap(string $body): string

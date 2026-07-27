@@ -11,14 +11,14 @@ use App\Models\EsocialEventEvidence;
 use App\Models\Establishment;
 use App\Models\FiscalEvidenceArtifact;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\FiscalMonitoring\FiscalEvidenceStore;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Persiste evidências de eventos eSocial (S-5003, S-5013, S-1299) por competência/estabelecimento.
- * Idempotente por office+client+competência+event_code+sha256.
+ * Idempotente por tenant+client+competência+event_code+sha256.
  */
 final class EsocialEvidencePersistence
 {
@@ -32,7 +32,7 @@ final class EsocialEvidencePersistence
      * @return list<EsocialEventEvidence>
      */
     public function persistMany(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         array $events,
         ?FiscalMonitoringRun $run = null,
@@ -45,7 +45,7 @@ final class EsocialEvidencePersistence
                 continue;
             }
             $row = $this->persistOne(
-                $office,
+                $tenant,
                 $client,
                 $event,
                 $run,
@@ -61,7 +61,7 @@ final class EsocialEvidencePersistence
     }
 
     public function persistOne(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         EsocialEventDto $event,
         ?FiscalMonitoringRun $run = null,
@@ -72,7 +72,7 @@ final class EsocialEvidencePersistence
             return null;
         }
 
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new \RuntimeException('Cliente não pertence ao escritório.');
         }
 
@@ -81,7 +81,7 @@ final class EsocialEvidencePersistence
 
         $existing = EsocialEventEvidence::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('competence_period_key', $event->competencePeriodKey)
             ->where('event_code', $event->eventCode->value)
@@ -101,7 +101,7 @@ final class EsocialEvidencePersistence
         }
 
         return DB::transaction(function () use (
-            $office,
+            $tenant,
             $client,
             $event,
             $run,
@@ -111,7 +111,7 @@ final class EsocialEvidencePersistence
             $isSynthetic,
         ) {
             $aad = SecureObjectPurpose::FiscalEvidence->aadBase([
-                'office_id' => (int) $office->id,
+                'tenant_id' => (int) $tenant->id,
                 'sha256' => $sha,
                 'esocial_event' => $event->eventCode->value,
             ]);
@@ -145,7 +145,7 @@ final class EsocialEvidencePersistence
             }
 
             return EsocialEventEvidence::query()->create([
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'client_id' => $client->id,
                 'establishment_id' => $estId,
                 'run_id' => $run?->id,
@@ -183,7 +183,7 @@ final class EsocialEvidencePersistence
      * @return list<EsocialEventEvidence>
      */
     public function listForCompetence(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $competencePeriodKey,
         ?int $establishmentId = null,
@@ -191,7 +191,7 @@ final class EsocialEvidencePersistence
         $q = EsocialEventEvidence::query()
             ->withoutGlobalScopes()
             ->operationallyEligible()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('competence_period_key', $competencePeriodKey)
             ->orderBy('event_code')

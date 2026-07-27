@@ -5,11 +5,9 @@ import type {
   ClosingSavedFilterPayload,
   DocsSavedFilterPayload,
   MonitoringSavedFilterPayload,
-  SavedListFilterPayload,
   WorkProcessesSavedFilterPayload,
   WorkQueueSavedFilterPayload
 } from '~/types/saved-list-filters'
-import { SAVED_LIST_SCHEMA_VERSION } from '~/types/saved-list-filters'
 import {
   modelsToMonitoringFilters,
   monitoringFiltersToModels,
@@ -20,8 +18,8 @@ import {
   emptyDocsFilters,
   FILTER_ALL,
   isActiveFilterValue,
-  type NotesFilterState
-} from '~/utils/notes-filters'
+  type DocumentFilterState
+} from '~/utils/document-filters'
 import type { WorkQueueFilters } from '~/composables/useWorkQueueFilters'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -87,7 +85,6 @@ export function stripEmptyMonitoringPayload(
     : []
 
   return {
-    schema_version: SAVED_LIST_SCHEMA_VERSION,
     q,
     filters
   }
@@ -105,7 +102,6 @@ export function monitoringFiltersToPayload(
   const normalized = normalizeMonitoringFilters(filters)
   const models = monitoringFiltersToModels(normalized, config, clientLabel)
   return stripEmptyMonitoringPayload({
-    schema_version: SAVED_LIST_SCHEMA_VERSION,
     q: normalized.q,
     filters: models
   })
@@ -113,10 +109,10 @@ export function monitoringFiltersToPayload(
 
 /**
  * Payload → MonitoringFilterValue (hidrata chips + q).
- * Chaves desconhecidas no payload são ignoradas (soft migrate).
+ * Converte o payload canônico em estado de filtros do monitoramento.
  */
 export function monitoringPayloadToFilters(
-  payload: SavedListFilterPayload | null | undefined,
+  payload: unknown,
   config: MonitoringFilterConfig | null | undefined,
   base?: Partial<MonitoringFilterValue> | null
 ): MonitoringFilterValue {
@@ -203,7 +199,6 @@ export function clientsFiltersToPayload(
   state: ClientsFilterState
 ): ClientsSavedFilterPayload {
   return {
-    schema_version: SAVED_LIST_SCHEMA_VERSION,
     q: String(state.q ?? '').trim(),
     status: CLIENT_STATUSES.has(state.status) ? state.status : 'all',
     operational_filter: CLIENT_OPERATIONAL.has(state.operational_filter)
@@ -219,7 +214,7 @@ export function clientsFiltersToPayload(
 }
 
 export function clientsPayloadToFilters(
-  payload: SavedListFilterPayload | null | undefined
+  payload: unknown
 ): ClientsFilterState {
   const empty = emptyClientsFilters()
   if (!isRecord(payload)) return empty
@@ -257,7 +252,7 @@ export function hasActiveClientsFiltersForSave(state: ClientsFilterState): boole
 
 // ── docs.catalog ──────────────────────────────────────────────────────────
 
-const DOCS_FILTER_KEYS: (keyof NotesFilterState)[] = [
+const DOCS_FILTER_KEYS: (keyof DocumentFilterState)[] = [
   'q',
   'kind',
   'direction',
@@ -276,11 +271,9 @@ const DOCS_FILTER_KEYS: (keyof NotesFilterState)[] = [
   'missing_party_name'
 ]
 
-/** NotesFilterState → payload (só chaves ativas; defaults omitidos). */
-export function docsFiltersToPayload(filters: NotesFilterState): DocsSavedFilterPayload {
-  const payload: DocsSavedFilterPayload = {
-    schema_version: SAVED_LIST_SCHEMA_VERSION
-  }
+/** DocumentFilterState → payload (só chaves ativas; defaults omitidos). */
+export function docsFiltersToPayload(filters: DocumentFilterState): DocsSavedFilterPayload {
+  const payload: DocsSavedFilterPayload = {}
   for (const key of DOCS_FILTER_KEYS) {
     const value = filters[key]
     if (!isActiveFilterValue(value)) continue
@@ -289,10 +282,10 @@ export function docsFiltersToPayload(filters: NotesFilterState): DocsSavedFilter
   return payload
 }
 
-/** Payload → NotesFilterState (soft migrate: chaves desconhecidas ignoradas). */
+/** Payload canônico → DocumentFilterState. */
 export function docsPayloadToFilters(
-  payload: SavedListFilterPayload | null | undefined
-): NotesFilterState {
+  payload: unknown
+): DocumentFilterState {
   const next = emptyDocsFilters()
   if (!isRecord(payload)) return next
   for (const key of DOCS_FILTER_KEYS) {
@@ -314,7 +307,7 @@ export function hasDocsPayloadContent(
   })
 }
 
-export function hasActiveDocsFiltersForSave(filters: NotesFilterState): boolean {
+export function hasActiveDocsFiltersForSave(filters: DocumentFilterState): boolean {
   return hasDocsPayloadContent(docsFiltersToPayload(filters))
 }
 
@@ -327,7 +320,6 @@ export function workQueueFiltersToPayload(
   const scope = String(filters.scope || 'default') || 'default'
   const perPage = Math.min(100, Math.max(1, Number(filters.per_page) || 10))
   const payload: WorkQueueSavedFilterPayload = {
-    schema_version: SAVED_LIST_SCHEMA_VERSION,
     tab,
     q: String(filters.q || '').trim(),
     department_id: filters.department_id && filters.department_id > 0
@@ -348,7 +340,7 @@ export function workQueueFiltersToPayload(
  * Payload → patch de WorkQueueFilters (page sempre 1 ao aplicar).
  */
 export function workQueuePayloadToFilters(
-  payload: SavedListFilterPayload | null | undefined
+  payload: unknown
 ): Pick<
   WorkQueueFilters,
   'tab' | 'q' | 'department_id' | 'assignee_membership_id' | 'client_id' | 'scope' | 'page' | 'per_page'
@@ -424,7 +416,6 @@ export function workProcessesFiltersToPayload(
   state: WorkProcessesFilterState
 ): WorkProcessesSavedFilterPayload {
   const payload: WorkProcessesSavedFilterPayload = {
-    schema_version: SAVED_LIST_SCHEMA_VERSION,
     q: String(state.q ?? '').trim(),
     competence: String(state.competence ?? '').trim(),
     status: state.status && state.status !== 'all' ? state.status : 'all',
@@ -438,7 +429,7 @@ export function workProcessesFiltersToPayload(
 }
 
 export function workProcessesPayloadToFilters(
-  payload: SavedListFilterPayload | null | undefined
+  payload: unknown
 ): WorkProcessesFilterState {
   const empty = emptyWorkProcessesFilters()
   if (!isRecord(payload)) return empty
@@ -498,7 +489,6 @@ export function closingFiltersToPayload(
   state: ClosingFilterState
 ): ClosingSavedFilterPayload {
   return {
-    schema_version: SAVED_LIST_SCHEMA_VERSION,
     competence: String(state.competence ?? '').trim(),
     band: state.band && state.band !== FILTER_ALL ? state.band : FILTER_ALL,
     model: state.model && state.model !== FILTER_ALL ? state.model : FILTER_ALL,
@@ -509,7 +499,7 @@ export function closingFiltersToPayload(
 }
 
 export function closingPayloadToFilters(
-  payload: SavedListFilterPayload | null | undefined,
+  payload: unknown,
   defaultCompetence = ''
 ): ClosingFilterState {
   const empty = emptyClosingFilters(defaultCompetence)
@@ -550,10 +540,4 @@ export function hasClosingPayloadContent(
 
 export function hasActiveClosingFiltersForSave(state: ClosingFilterState): boolean {
   return hasClosingPayloadContent(closingFiltersToPayload(state))
-}
-
-/** Parse defensivo de resposta API. */
-export function parseSavedFilterPayload(raw: unknown): SavedListFilterPayload {
-  if (!isRecord(raw)) return { schema_version: SAVED_LIST_SCHEMA_VERSION }
-  return raw as SavedListFilterPayload
 }

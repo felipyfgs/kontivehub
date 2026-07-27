@@ -40,7 +40,7 @@ final class MutationAuthorization
         string $operationKey,
     ): self {
         $eligibility = $operation->eligibility_snapshot ?? [];
-        $persistedKey = trim((string) $operation->provider_operation_key);
+        $persistedKey = trim((string) $operation->operation_key);
         $digest = trim((string) $operation->request_payload_digest);
         $eligible = ($eligibility['allowed'] ?? false) === true;
 

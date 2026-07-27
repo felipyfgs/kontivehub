@@ -1,5 +1,5 @@
 import { createSharedComposable, useDebounceFn } from '@vueuse/core'
-import type { OfficeMember } from '~/types/api'
+import type { TenantMember } from '~/types/api'
 import type {
   CommunicationAutomationMeta,
   CommunicationAutomationPolicy,
@@ -46,13 +46,13 @@ import type {
 const EMPTY_FEATURE_META: CommunicationFeatureMeta = {
   global_enabled: false,
   gateway_enabled: false,
-  office_enabled: false
+  tenant_enabled: false
 }
 
 const EMPTY_AUTOMATION_META: CommunicationAutomationMeta = {
   supported_scopes: [],
   inboxes: [],
-  office_enabled: false,
+  tenant_enabled: false,
   global_enabled: false
 }
 
@@ -92,7 +92,7 @@ const _useCommunicationWorkspace = () => {
   const cursor = ref(0)
   const policies = ref<CommunicationAutomationPolicy[]>([])
   const automationMeta = ref<CommunicationAutomationMeta>({ ...EMPTY_AUTOMATION_META })
-  const officeMembers = ref<OfficeMember[]>([])
+  const tenantMembers = ref<TenantMember[]>([])
   const departments = ref<WorkDepartment[]>([])
   const chatPresenceByConversation = ref<Record<number, CommunicationChatPresenceSignal>>({})
   const contactPresenceByConversation = ref<Record<number, CommunicationContactPresenceSignal>>({})
@@ -150,7 +150,7 @@ const _useCommunicationWorkspace = () => {
   const communicationOperational = computed(() => Boolean(
     featureMeta.value.global_enabled
     && featureMeta.value.gateway_enabled
-    && featureMeta.value.office_enabled
+    && featureMeta.value.tenant_enabled
     && selectedInbox.value?.is_enabled
   ))
   const outboundOperational = computed(() =>
@@ -162,7 +162,7 @@ const _useCommunicationWorkspace = () => {
     if (!featureMeta.value.gateway_enabled) {
       return 'O gateway do WhatsApp está desativado neste ambiente.'
     }
-    if (!featureMeta.value.office_enabled) {
+    if (!featureMeta.value.tenant_enabled) {
       return 'A comunicação deste escritório está desativada.'
     }
     if (!selectedInbox.value) return 'Selecione uma sessão WhatsApp para continuar.'
@@ -182,7 +182,7 @@ const _useCommunicationWorkspace = () => {
   const signalTimers = new Map<string, ReturnType<typeof setTimeout>>()
   const presenceSubscriptions = new Set<number>()
   const detailRequests = new Map<number, Promise<boolean>>()
-  let officeSubscription: (() => void) | null = null
+  let tenantSubscription: (() => void) | null = null
   let synchronizeAgain = false
   let selectionEpoch = 0
   let conversationQueryGeneration = 0
@@ -530,18 +530,18 @@ const _useCommunicationWorkspace = () => {
       unsubscribe()
       subscriptions.delete(inboxId)
     }
-    if (force && officeSubscription !== null) {
-      officeSubscription()
-      officeSubscription = null
+    if (force && tenantSubscription !== null) {
+      tenantSubscription()
+      tenantSubscription = null
     }
     if (!realtime.enabled) return
     for (const inboxId of visibleIds) {
       if (subscriptions.has(inboxId)) continue
       subscriptions.set(inboxId, realtime.subscribeInbox(inboxId, onRealtimeEvent))
     }
-    const officeId = me.value?.current_office?.id ?? me.value?.office?.id
-    if (canManage.value && officeId && officeSubscription === null) {
-      officeSubscription = realtime.subscribeOffice(officeId, onRealtimeEvent)
+    const tenantId = me.value?.current_tenant?.id
+    if (canManage.value && tenantId && tenantSubscription === null) {
+      tenantSubscription = realtime.subscribeTenant(tenantId, onRealtimeEvent)
     }
   }
 
@@ -773,12 +773,12 @@ const _useCommunicationWorkspace = () => {
     try {
       const [automation, members, departmentResponse] = await Promise.all([
         api.communication.automation.list(),
-        api.office.members.list(),
+        api.tenant.members.list(),
         api.work.departments.list({ per_page: 100, is_active: true })
       ])
       policies.value = automation.data
       automationMeta.value = automation.meta
-      officeMembers.value = members.data.filter(member => member.is_active)
+      tenantMembers.value = members.data.filter(member => member.is_active)
       departments.value = departmentResponse.data
     } catch (caught) {
       toast.add({ title: apiErrorMessage(caught, 'Falha ao carregar administração.'), color: 'error' })
@@ -875,7 +875,7 @@ const _useCommunicationWorkspace = () => {
 
   async function getPairing(inboxId: number): Promise<CommunicationPairingState | null> {
     try {
-      return (await api.communication.inboxes.pairing(inboxId)).data
+      return (await api.communication.inboxes.sessionStatus(inboxId)).data.pairing ?? null
     } catch (caught) {
       toast.add({ title: apiErrorMessage(caught, 'Falha ao consultar pareamento.'), color: 'error' })
       return null
@@ -893,9 +893,9 @@ const _useCommunicationWorkspace = () => {
     }
   }
 
-  async function updateOfficeEnabled(enabled: boolean): Promise<boolean> {
+  async function updateTenantEnabled(enabled: boolean): Promise<boolean> {
     try {
-      await api.communication.inboxes.updateOfficeSettings(enabled)
+      await api.communication.inboxes.updateTenantSettings(enabled)
       await loadInboxes()
       return true
     } catch (caught) {
@@ -1041,8 +1041,8 @@ const _useCommunicationWorkspace = () => {
     presenceSubscriptions.clear()
     chatPresenceByConversation.value = {}
     contactPresenceByConversation.value = {}
-    officeSubscription?.()
-    officeSubscription = null
+    tenantSubscription?.()
+    tenantSubscription = null
     initialized.value = false
   }
 
@@ -1094,7 +1094,7 @@ const _useCommunicationWorkspace = () => {
     loadRecipients,
     loading: readonly(loading),
     messageActionLoadingId: readonly(messageActionLoadingId),
-    officeMembers,
+    tenantMembers,
     openingConversationId: readonly(openingConversationId),
     outboundOperational,
     policies,
@@ -1126,7 +1126,7 @@ const _useCommunicationWorkspace = () => {
     unassignedOnly,
     updateConversation,
     updateInbox,
-    updateOfficeEnabled,
+    updateTenantEnabled,
     revokeMessage,
     votePoll
   }

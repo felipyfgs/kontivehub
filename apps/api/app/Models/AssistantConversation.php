@@ -2,21 +2,21 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'user_id',
     'membership_id',
     'title',
 ])]
 class AssistantConversation extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     public function user(): BelongsTo
     {
@@ -25,7 +25,7 @@ class AssistantConversation extends Model
 
     public function membership(): BelongsTo
     {
-        return $this->belongsTo(OfficeMembership::class, 'membership_id');
+        return $this->belongsTo(TenantMembership::class, 'membership_id');
     }
 
     public function messages(): HasMany

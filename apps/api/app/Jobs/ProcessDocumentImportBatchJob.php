@@ -85,7 +85,7 @@ class ProcessDocumentImportBatchJob implements ShouldQueue
             }
 
             $aad = [
-                'office_id' => $batch->office_id,
+                'tenant_id' => $batch->tenant_id,
                 'purpose' => 'import-spool',
                 'sha256' => $spool['sha256'],
             ];
@@ -93,7 +93,7 @@ class ProcessDocumentImportBatchJob implements ShouldQueue
                 $bytes = $store->get($spool['object_id'], $aad);
             } catch (Throwable) {
                 $bytes = $store->get($spool['object_id'], [
-                    'office_id' => $batch->office_id,
+                    'tenant_id' => $batch->tenant_id,
                     'purpose' => 'import-spool',
                     'sha256' => (string) $spool['sha256'],
                 ]);
@@ -103,7 +103,7 @@ class ProcessDocumentImportBatchJob implements ShouldQueue
             $uploadName = $item->source_name ?: 'upload.bin';
             $file = UploadedFile::fake()->createWithContent($uploadName, $bytes);
             $report = $ingestion->ingestUploads(
-                (int) $batch->office_id,
+                (int) $batch->tenant_id,
                 $batch->client_id,
                 [$file],
             );

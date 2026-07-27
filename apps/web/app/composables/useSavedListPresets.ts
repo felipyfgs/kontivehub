@@ -1,13 +1,15 @@
 /**
  * CRUD + aplicar presets de filtros de lista por surface.
- * Nunca envia office_id — escopo só no servidor (CurrentOffice).
+ * Nunca envia tenant_id — escopo só no servidor (CurrentTenant).
  */
 import type { MaybeRefOrGetter } from 'vue'
 import type {
   SavedFilterVisibility,
   SavedListFilter,
-  SavedListFilterPayload
+  SavedListFilterPayload,
+  SavedListSurface
 } from '~/types/saved-list-filters'
+import { isSavedListSurface } from '~/types/saved-list-filters'
 import { useApi } from '~/composables/useApi'
 import { useDashboard } from '~/composables/useDashboard'
 import { apiErrorMessage } from '~/utils/api-error'
@@ -15,8 +17,8 @@ import { canCreateExport } from '~/utils/permissions'
 
 export interface UseSavedListPresetsOptions {
   /** Surface estável (ex. clients.index). Vazio desliga. */
-  surface: MaybeRefOrGetter<string | null | undefined>
-  /** VIEWER não publica (default: ADMIN|OPERATOR via canCreateExport). */
+  surface: MaybeRefOrGetter<SavedListSurface | null | undefined>
+  /** Compartilhamento exige a permissão efetiva de exportação por padrão. */
   canShare?: MaybeRefOrGetter<boolean | undefined>
   /** sessionEpoch / troca de lista — limpa cache de presets. */
   resetKey?: MaybeRefOrGetter<string | number | null | undefined>
@@ -35,7 +37,7 @@ export function useSavedListPresets(options: UseSavedListPresetsOptions) {
 
   const surfaceValue = computed(() => {
     const raw = toValue(options.surface)
-    return raw && String(raw).trim() ? String(raw).trim() : null
+    return raw && isSavedListSurface(raw) ? raw : null
   })
 
   const enabled = computed(() => Boolean(surfaceValue.value))
@@ -116,7 +118,7 @@ export function useSavedListPresets(options: UseSavedListPresetsOptions) {
       })
       return
     }
-    options.onApply(filter.payload ?? { schema_version: 1 }, filter)
+    options.onApply(filter.payload, filter)
   }
 
   async function onSaveConfirm(payload: { name: string, share: boolean }) {
@@ -127,9 +129,8 @@ export function useSavedListPresets(options: UseSavedListPresetsOptions) {
       const res = await api.savedListFilters.create({
         surface: surfaceValue.value,
         name: payload.name,
-        visibility: payload.share ? 'office' : 'personal',
-        payload: options.getPayload(),
-        schema_version: 1
+        visibility: payload.share ? 'tenant' : 'personal',
+        payload: options.getPayload()
       })
       if (res?.data) {
         presets.value = [

@@ -3,7 +3,7 @@
 namespace Tests\Unit\Models;
 
 use App\Enums\TenantPermission;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\TenantPermissionProfile;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use InvalidArgumentException;
@@ -16,8 +16,8 @@ final class TenantPermissionProfileTest extends TestCase
 
     public function test_sync_replaces_a_loaded_relation_and_increments_version(): void
     {
-        $office = Office::factory()->create();
-        $profile = TenantPermissionProfile::factory()->forOffice($office)->create();
+        $tenant = Tenant::factory()->create();
+        $profile = TenantPermissionProfile::factory()->forTenant($tenant)->create();
         $profile->syncPermissionKeys([TenantPermission::ClientsView]);
         $profile->load('permissionRows');
         $beforeVersion = (int) $profile->authorization_version;
@@ -34,8 +34,8 @@ final class TenantPermissionProfileTest extends TestCase
 
     public function test_invalid_input_preserves_permissions_and_version(): void
     {
-        $office = Office::factory()->create();
-        $profile = TenantPermissionProfile::factory()->forOffice($office)->create();
+        $tenant = Tenant::factory()->create();
+        $profile = TenantPermissionProfile::factory()->forTenant($tenant)->create();
         $profile->syncPermissionKeys([TenantPermission::ClientsView]);
         $beforeVersion = (int) $profile->authorization_version;
 
@@ -50,8 +50,8 @@ final class TenantPermissionProfileTest extends TestCase
 
     public function test_unpersisted_profile_fails_before_writing_rows(): void
     {
-        $office = Office::factory()->create();
-        $profile = TenantPermissionProfile::factory()->forOffice($office)->make();
+        $tenant = Tenant::factory()->create();
+        $profile = TenantPermissionProfile::factory()->forTenant($tenant)->make();
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Perfil de permissão persistido é obrigatório.');

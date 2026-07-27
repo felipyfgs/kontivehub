@@ -18,7 +18,7 @@ use LogicException;
  */
 #[Fillable([
     'actor_user_id',
-    'office_id',
+    'tenant_id',
     'action',
     'target_type',
     'target_id',
@@ -38,9 +38,9 @@ class PlatformPrivilegedAuditEvent extends Model
 
     public const RESULT_FAILURE = 'FAILURE';
 
-    public const ACTION_SELECT_OFFICE = 'platform.privileged.select_office';
+    public const ACTION_SELECT_TENANT = 'platform.privileged.select_tenant';
 
-    public const ACTION_CLEAR_OFFICE = 'platform.privileged.clear_office';
+    public const ACTION_CLEAR_TENANT = 'platform.privileged.clear_tenant';
 
     public const ACTION_READ = 'platform.privileged.read';
 
@@ -91,7 +91,7 @@ class PlatformPrivilegedAuditEvent extends Model
      */
     public static function record(
         int $actorUserId,
-        int $officeId,
+        int $tenantId,
         string $action,
         string $result = self::RESULT_SUCCESS,
         ?string $targetType = null,
@@ -101,7 +101,7 @@ class PlatformPrivilegedAuditEvent extends Model
     ): self {
         return static::query()->create([
             'actor_user_id' => $actorUserId,
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'action' => $action,
             'result' => $result,
             'target_type' => $targetType,
@@ -117,8 +117,8 @@ class PlatformPrivilegedAuditEvent extends Model
         return $this->belongsTo(User::class, 'actor_user_id');
     }
 
-    public function office(): BelongsTo
+    public function tenant(): BelongsTo
     {
-        return $this->belongsTo(Office::class);
+        return $this->belongsTo(Tenant::class);
     }
 }

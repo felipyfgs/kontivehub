@@ -7,7 +7,6 @@ use App\Models\DfeDocument;
 use App\Models\DocumentAcquisition;
 use App\Models\DocumentInterest;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * Grava document_acquisition na mesma transação da chegada e liga ao interesse.
@@ -30,7 +29,7 @@ final class DocumentAcquisitionRecorder
     ): DocumentAcquisition {
         $wantsCanonical = $document->sha256 === $sha256;
         $attrs = array_merge([
-            'office_id' => $document->office_id,
+            'tenant_id' => $document->tenant_id,
             'dfe_document_id' => $document->id,
             'access_key' => $document->access_key,
             'source' => $source->value,
@@ -97,14 +96,14 @@ final class DocumentAcquisitionRecorder
             }
         }
 
-        if ($interest !== null && Schema::hasTable('document_acquisition_interests')) {
+        if ($interest !== null) {
             DB::table('document_acquisition_interests')->updateOrInsert(
                 [
                     'document_acquisition_id' => $acquisition->id,
                     'document_interest_id' => $interest->id,
                 ],
                 [
-                    'office_id' => $document->office_id,
+                    'tenant_id' => $document->tenant_id,
                     'updated_at' => now(),
                     'created_at' => now(),
                 ],

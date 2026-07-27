@@ -5,11 +5,11 @@ namespace App\Services\Fiscal\SimplesMei\Pgmei;
 use App\Enums\PgmeiDebtState;
 use App\Jobs\Fiscal\ExecuteFiscalMonitoringRunJob;
 use App\Models\Client;
-use App\Models\Office;
 use App\Models\PgmeiDebtItem;
 use App\Models\PgmeiDebtObservation;
 use App\Models\PgmeiDebtProjection;
 use App\Models\TaxGuide;
+use App\Models\Tenant;
 use App\Services\FiscalMonitoring\FiscalMonitoringRunService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -33,14 +33,14 @@ final class PgmeiMonitoringQueryService
      * @param  list<int>  $clientIds
      * @return array<int, array<string, mixed>>
      */
-    public function portfolioDetails(Office $office, array $clientIds, ?int $year = null): array
+    public function portfolioDetails(Tenant $tenant, array $clientIds, ?int $year = null): array
     {
         if ($clientIds === []) {
             return [];
         }
 
-        $tz = is_string($office->timezone) && $office->timezone !== ''
-            ? $office->timezone
+        $tz = is_string($tenant->timezone) && $tenant->timezone !== ''
+            ? $tenant->timezone
             : 'America/Sao_Paulo';
         $year ??= (int) CarbonImmutable::now($tz)->year;
         $year = PgmeiYear::assertValid($year);
@@ -48,13 +48,13 @@ final class PgmeiMonitoringQueryService
 
         $projections = PgmeiDebtProjection::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->where('calendar_year', $year)
             ->get()
             ->keyBy('client_id');
 
-        $communications = $this->communication->summariesForClients($office, $clientIds);
+        $communications = $this->communication->summariesForClients($tenant, $clientIds);
 
         $map = [];
         foreach ($clientIds as $cid) {
@@ -71,11 +71,9 @@ final class PgmeiMonitoringQueryService
             if ($proj === null) {
                 $pgmei = [
                     'year' => $year,
-                    'calendar_year' => $year,
                     'debt_state' => PgmeiDebtState::Unverified->value,
                     'freshness_state' => 'OUTDATED',
                     'debt_count' => 0,
-                    'items_count' => 0,
                     'total_cents' => 0,
                     'last_valid_query_at' => null,
                     'communication' => $comm,
@@ -88,15 +86,7 @@ final class PgmeiMonitoringQueryService
             $map[$cid] = [
                 'module_key' => 'simples_mei',
                 'submodule' => 'PGMEI',
-                'calendar_year' => $year,
-                'period_key' => PgmeiYear::toPeriodKey($year),
                 'pgmei' => $pgmei,
-                'debt_state' => $pgmei['debt_state'],
-                'freshness_state' => $pgmei['freshness_state'],
-                'items_count' => $pgmei['items_count'] ?? $pgmei['debt_count'] ?? 0,
-                'total_cents' => $pgmei['total_cents'],
-                'last_valid_query_at' => $pgmei['last_valid_query_at'],
-                'communication' => $comm,
                 'links' => [
                     'history' => "/api/v1/fiscal/simples-mei/pgmei/clients/{$cid}/history",
                     'preferences' => "/api/v1/fiscal/simples-mei/pgmei/clients/{$cid}/communication-preference",
@@ -115,26 +105,26 @@ final class PgmeiMonitoringQueryService
      *
      * @return array<string, mixed>
      */
-    public function history(Office $office, Client $client, ?int $year = null): array
+    public function history(Tenant $tenant, Client $client, ?int $year = null): array
     {
-        $this->assertClient($office, $client);
+        $this->assertClient($tenant, $client);
 
-        $tz = is_string($office->timezone) && $office->timezone !== ''
-            ? $office->timezone
+        $tz = is_string($tenant->timezone) && $tenant->timezone !== ''
+            ? $tenant->timezone
             : 'America/Sao_Paulo';
         $year ??= (int) CarbonImmutable::now($tz)->year;
         $year = PgmeiYear::assertValid($year);
 
         $projection = PgmeiDebtProjection::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('calendar_year', $year)
             ->first();
 
         $observations = PgmeiDebtObservation::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('calendar_year', $year)
             ->orderByDesc('observed_at')
@@ -145,7 +135,7 @@ final class PgmeiMonitoringQueryService
         $observationIds = $observations->pluck('id')->all();
         $itemsByObs = PgmeiDebtItem::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('observation_id', $observationIds !== [] ? $observationIds : [0])
             ->orderBy('position')
             ->get()
@@ -155,7 +145,7 @@ final class PgmeiMonitoringQueryService
         if ($projection?->last_valid_observation_id) {
             $latestItems = PgmeiDebtItem::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('observation_id', $projection->last_valid_observation_id)
                 ->orderBy('position')
                 ->get()
@@ -166,7 +156,7 @@ final class PgmeiMonitoringQueryService
         // DAS já existentes na Central de Guias (somente leitura local).
         $guides = TaxGuide::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where(function ($q) use ($year): void {
                 $q->where('competence_period_key', 'like', sprintf('%04d%%', $year))
@@ -203,7 +193,7 @@ final class PgmeiMonitoringQueryService
 
         $current = $projection?->toPortfolioArray();
         if ($current !== null) {
-            $current['communication'] = $this->communication->summary($office, $client);
+            $current['communication'] = $this->communication->summary($tenant, $client);
         }
 
         return [
@@ -213,18 +203,14 @@ final class PgmeiMonitoringQueryService
                 'legal_name' => $client->legal_name,
             ],
             'year' => $year,
-            'calendar_year' => $year,
             'current' => $current,
-            'projection' => $current,
             'items' => $latestItems,
             'observations' => $history,
-            'history' => $history,
             'guides' => $guides,
             'provenance' => [
                 'source' => 'local_projection',
                 'serpro_called' => false,
             ],
-            'source' => 'local',
         ];
     }
 
@@ -235,7 +221,7 @@ final class PgmeiMonitoringQueryService
      * @return list<array<string, mixed>>
      */
     public function enqueueManualConsult(
-        Office $office,
+        Tenant $tenant,
         array $clientIds,
         int $year,
         bool $confirmed,
@@ -256,7 +242,7 @@ final class PgmeiMonitoringQueryService
 
         $clients = Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('id', $clientIds)
             ->get()
             ->keyBy('id');
@@ -266,13 +252,13 @@ final class PgmeiMonitoringQueryService
         }
 
         // Valida o lote inteiro antes da primeira escrita (já feito acima); cria runs atomicamente.
-        $models = DB::transaction(function () use ($office, $clientIds, $clients, $year, $actorUserId): array {
+        $models = DB::transaction(function () use ($tenant, $clientIds, $clients, $year, $actorUserId): array {
             $created = [];
             foreach ($clientIds as $clientId) {
                 /** @var Client $client */
                 $client = $clients->get($clientId);
                 $run = $this->runs->enqueueManual(
-                    office: $office,
+                    tenant: $tenant,
                     client: $client,
                     systemCode: 'INTEGRA_MEI',
                     serviceCode: 'PGMEI',
@@ -301,7 +287,7 @@ final class PgmeiMonitoringQueryService
                 ->onQueue((string) config('fiscal_monitoring.job.queue', 'default'));
             if (method_exists($run, 'toPublicArray')) {
                 $data = $run->toPublicArray();
-                unset($data['office_id'], $data['idempotency_key']);
+                unset($data['tenant_id'], $data['idempotency_key']);
                 $out[] = $data;
             } else {
                 $out[] = [
@@ -318,9 +304,9 @@ final class PgmeiMonitoringQueryService
         return $out;
     }
 
-    private function assertClient(Office $office, Client $client): void
+    private function assertClient(Tenant $tenant, Client $client): void
     {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new RuntimeException('Cliente não pertence ao escritório ativo.');
         }
     }

@@ -7,30 +7,30 @@ use App\Enums\TaxGuideEmissionStatus;
 use App\Enums\TaxGuidePaymentStatus;
 use App\Enums\TaxGuideRiskLevel;
 use App\Models\Client;
-use App\Models\Office;
 use App\Models\TaxGuide;
 use App\Models\TaxGuideVersion;
 use App\Models\TaxInstallmentParcel;
+use App\Models\Tenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 /**
  * Integra documentos de parcela à central de guias (schema 11.x).
- * Idempotente por office + logical_key; pagamento permanece independente.
+ * Idempotente por tenant + logical_key; pagamento permanece independente.
  */
 final class StubTaxGuideEnrollment implements TaxGuideEnrollment
 {
     public function enrollFromInstallmentDocument(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         TaxInstallmentParcel $parcel,
         array $document,
     ): array {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new RuntimeException('Cliente não pertence ao escritório.');
         }
-        if ((int) $parcel->office_id !== (int) $office->id
+        if ((int) $parcel->tenant_id !== (int) $tenant->id
             || (int) $parcel->client_id !== (int) $client->id) {
             throw new RuntimeException('Parcela de outro tenant/contribuinte.');
         }
@@ -38,11 +38,15 @@ final class StubTaxGuideEnrollment implements TaxGuideEnrollment
         $modality = (string) ($document['modality'] ?? $parcel->modality?->value ?? '');
         $orderExt = (string) ($document['order_external_id'] ?? $parcel->order?->external_order_id ?? '');
         $parcelKey = (string) ($document['parcel_key'] ?? $parcel->parcel_key);
+        $operationKey = trim((string) ($document['operation_key'] ?? ''));
+        if ($operationKey === '') {
+            throw new RuntimeException('Documento de parcela exige operation_key canônica.');
+        }
         $logical = $this->logicalKey($modality, $orderExt, $parcelKey, $document);
         $versionIdem = hash('sha256', 'v|'.$logical);
 
         return DB::transaction(function () use (
-            $office,
+            $tenant,
             $client,
             $parcel,
             $document,
@@ -50,10 +54,11 @@ final class StubTaxGuideEnrollment implements TaxGuideEnrollment
             $versionIdem,
             $modality,
             $parcelKey,
+            $operationKey,
         ) {
             $existingVersion = TaxGuideVersion::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('idempotency_key', $versionIdem)
                 ->lockForUpdate()
                 ->first();
@@ -64,7 +69,7 @@ final class StubTaxGuideEnrollment implements TaxGuideEnrollment
             ) {
                 $guide = TaxGuide::query()
                     ->withoutGlobalScopes()
-                    ->where('office_id', $office->id)
+                    ->where('tenant_id', $tenant->id)
                     ->whereKey($existingVersion->tax_guide_id)
                     ->firstOrFail();
 
@@ -77,15 +82,16 @@ final class StubTaxGuideEnrollment implements TaxGuideEnrollment
 
             $guide = TaxGuide::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('logical_key', $logical)
                 ->lockForUpdate()
                 ->first();
 
             if ($guide === null) {
                 $guide = TaxGuide::query()->create([
-                    'office_id' => $office->id,
+                    'tenant_id' => $tenant->id,
                     'client_id' => $client->id,
+                    'operation_key' => $operationKey,
                     'system_code' => (string) ($document['source_system'] ?? ParcelamentoServiceCatalog::SOLUTION),
                     'service_code' => (string) ($document['source_service'] ?? $modality),
                     'operation_code' => (string) ($document['source_operation'] ?? 'EMITIR_DOCUMENTO'),
@@ -102,7 +108,7 @@ final class StubTaxGuideEnrollment implements TaxGuideEnrollment
                         : $parcel->due_at,
                     'identifier_code' => $document['identifier'] ?? null,
                     'metadata' => [
-                        'source_module' => 'parcelamentos',
+                        'source_module' => 'installments',
                         'installment_order_id' => $parcel->order_id,
                         'installment_parcel_id' => $parcel->id,
                         'payment_independent' => true,
@@ -112,7 +118,7 @@ final class StubTaxGuideEnrollment implements TaxGuideEnrollment
 
             $previous = TaxGuideVersion::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('tax_guide_id', $guide->id)
                 ->where('is_current', true)
                 ->lockForUpdate()
@@ -124,7 +130,7 @@ final class StubTaxGuideEnrollment implements TaxGuideEnrollment
                 : CarbonImmutable::now()->addDays(5);
 
             $version = TaxGuideVersion::query()->create([
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'tax_guide_id' => $guide->id,
                 'version_number' => $nextVersion,
                 'is_current' => true,
@@ -148,7 +154,7 @@ final class StubTaxGuideEnrollment implements TaxGuideEnrollment
                 'risk_level' => TaxGuideRiskLevel::Standard,
                 'finished_at' => CarbonImmutable::now(),
                 'metadata' => array_merge($document['metadata'] ?? [], [
-                    'source_module' => 'parcelamentos',
+                    'source_module' => 'installments',
                     'payment_independent' => true,
                 ]),
             ]);

@@ -14,8 +14,8 @@ import {
 describe('identidade da sessão', () => {
   const user = {
     id: 42,
-    role: 'ADMIN'
-  } as MeUser
+    effective_permissions: []
+  } as unknown as MeUser
 
   it('aceita tanto o usuário direto quanto o envelope da API', () => {
     expect(unwrapMeUser(user)).toBe(user)
@@ -31,12 +31,11 @@ describe('identidade da sessão', () => {
 })
 
 describe('helpers Work (effective_permissions)', () => {
-  it('preferem chaves canônicas quando o payload traz effective_permissions', () => {
+  it('autoriza somente pelas permissões efetivas', () => {
     const viewer = {
       id: 1,
-      role: 'OPERATOR',
       effective_permissions: ['work.view']
-    } as MeUser
+    } as unknown as MeUser
 
     expect(canViewWork(viewer)).toBe(true)
     expect(canExecuteWorkTasks(viewer)).toBe(false)
@@ -48,7 +47,6 @@ describe('helpers Work (effective_permissions)', () => {
 
     const executor = {
       id: 2,
-      role: 'OPERATOR',
       effective_permissions: [
         'work.view',
         'work.tasks.execute',
@@ -56,7 +54,7 @@ describe('helpers Work (effective_permissions)', () => {
         'work.exports.create',
         'work.evidence.download'
       ]
-    } as MeUser
+    } as unknown as MeUser
 
     expect(canExecuteWorkTasks(executor)).toBe(true)
     expect(canCreateWorkProcesses(executor)).toBe(true)
@@ -66,66 +64,45 @@ describe('helpers Work (effective_permissions)', () => {
     expect(canAdministerWork(executor)).toBe(false)
   })
 
-  it('OPERATOR com effective_permissions sem chave de execução falha fail-closed', () => {
-    const operatorWithoutExecute = {
+  it('nega execução quando a permissão efetiva não está presente', () => {
+    const memberWithoutExecute = {
       id: 3,
-      role: 'OPERATOR',
       effective_permissions: ['work.view', 'work.processes.create']
-    } as MeUser
+    } as unknown as MeUser
 
-    expect(canViewWork(operatorWithoutExecute)).toBe(true)
-    expect(canCreateWorkProcesses(operatorWithoutExecute)).toBe(true)
-    expect(canExecuteWorkTasks(operatorWithoutExecute)).toBe(false)
-    expect(canManageWorkCatalog(operatorWithoutExecute)).toBe(false)
+    expect(canViewWork(memberWithoutExecute)).toBe(true)
+    expect(canCreateWorkProcesses(memberWithoutExecute)).toBe(true)
+    expect(canExecuteWorkTasks(memberWithoutExecute)).toBe(false)
+    expect(canManageWorkCatalog(memberWithoutExecute)).toBe(false)
   })
 
-  it('ADMIN com work.catalog.manage habilita catálogo; sem a chave nega', () => {
-    const adminWithCatalog = {
+  it('separa administração do catálogo da execução de tarefas', () => {
+    const catalogManager = {
       id: 4,
-      role: 'ADMIN',
       effective_permissions: ['work.view', 'work.catalog.manage', 'work.administer']
-    } as MeUser
+    } as unknown as MeUser
 
-    expect(canManageWorkCatalog(adminWithCatalog)).toBe(true)
-    expect(canAdministerWork(adminWithCatalog)).toBe(true)
-    expect(canExecuteWorkTasks(adminWithCatalog)).toBe(false)
+    expect(canManageWorkCatalog(catalogManager)).toBe(true)
+    expect(canAdministerWork(catalogManager)).toBe(true)
+    expect(canExecuteWorkTasks(catalogManager)).toBe(false)
 
-    const adminWithoutCatalog = {
+    const taskExecutor = {
       id: 5,
-      role: 'ADMIN',
       effective_permissions: ['work.view', 'work.tasks.execute']
-    } as MeUser
+    } as unknown as MeUser
 
-    expect(canManageWorkCatalog(adminWithoutCatalog)).toBe(false)
-    expect(canExecuteWorkTasks(adminWithoutCatalog)).toBe(true)
+    expect(canManageWorkCatalog(taskExecutor)).toBe(false)
+    expect(canExecuteWorkTasks(taskExecutor)).toBe(true)
   })
 
-  it('sem effective_permissions usa fallback legado por papel', () => {
-    const legacyViewer = { id: 6, role: 'VIEWER' } as MeUser
-    expect(canViewWork(legacyViewer)).toBe(true)
-    expect(canExecuteWorkTasks(legacyViewer)).toBe(false)
-    expect(canCreateWorkProcesses(legacyViewer)).toBe(false)
-    expect(canManageWorkCatalog(legacyViewer)).toBe(false)
-    expect(canAdministerWork(legacyViewer)).toBe(false)
-    expect(canExportWork(legacyViewer)).toBe(false)
-    expect(canDownloadWorkEvidence(legacyViewer)).toBe(false)
-
-    const legacyOperator = { id: 7, role: 'OPERATOR' } as MeUser
-    expect(canViewWork(legacyOperator)).toBe(true)
-    expect(canExecuteWorkTasks(legacyOperator)).toBe(true)
-    expect(canCreateWorkProcesses(legacyOperator)).toBe(true)
-    expect(canExportWork(legacyOperator)).toBe(true)
-    expect(canDownloadWorkEvidence(legacyOperator)).toBe(true)
-    expect(canManageWorkCatalog(legacyOperator)).toBe(false)
-    expect(canAdministerWork(legacyOperator)).toBe(false)
-
-    const legacyAdmin = { id: 8, role: 'ADMIN' } as MeUser
-    expect(canViewWork(legacyAdmin)).toBe(true)
-    expect(canExecuteWorkTasks(legacyAdmin)).toBe(true)
-    expect(canCreateWorkProcesses(legacyAdmin)).toBe(true)
-    expect(canManageWorkCatalog(legacyAdmin)).toBe(true)
-    expect(canAdministerWork(legacyAdmin)).toBe(true)
-    expect(canExportWork(legacyAdmin)).toBe(true)
-    expect(canDownloadWorkEvidence(legacyAdmin)).toBe(true)
+  it('falha fechado quando effective_permissions não existe', () => {
+    const member = { id: 6 } as unknown as MeUser
+    expect(canViewWork(member)).toBe(false)
+    expect(canExecuteWorkTasks(member)).toBe(false)
+    expect(canCreateWorkProcesses(member)).toBe(false)
+    expect(canManageWorkCatalog(member)).toBe(false)
+    expect(canAdministerWork(member)).toBe(false)
+    expect(canExportWork(member)).toBe(false)
+    expect(canDownloadWorkEvidence(member)).toBe(false)
   })
 })

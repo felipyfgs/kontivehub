@@ -5,10 +5,10 @@ namespace App\Services\Fiscal\SimplesMei\Pgmei;
 use App\Enums\PgmeiDebtState;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
 use App\Models\PgmeiDebtItem;
 use App\Models\PgmeiDebtObservation;
 use App\Models\PgmeiDebtProjection;
+use App\Models\Tenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -36,14 +36,14 @@ final class PgmeiDebtProjector
      * @return array{observation: PgmeiDebtObservation, projection: PgmeiDebtProjection, created: bool}
      */
     public function projectValid(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         array $decoded,
         ?int $sourceRunId,
         ?CarbonImmutable $observedAt = null,
         ?int $sourceSnapshotId = null,
     ): array {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new RuntimeException('Cliente não pertence ao escritório da projeção PGMEI.');
         }
 
@@ -56,7 +56,7 @@ final class PgmeiDebtProjector
         $state = $count > 0 ? PgmeiDebtState::HasActiveDebt : PgmeiDebtState::NoActiveDebt;
 
         return DB::transaction(function () use (
-            $office,
+            $tenant,
             $client,
             $year,
             $digest,
@@ -73,7 +73,7 @@ final class PgmeiDebtProjector
                 && ! FiscalMonitoringRun::query()
                     ->withoutGlobalScopes()
                     ->whereKey($sourceRunId)
-                    ->where('office_id', $office->id)
+                    ->where('tenant_id', $tenant->id)
                     ->where('client_id', $client->id)
                     ->exists()
             ) {
@@ -82,7 +82,7 @@ final class PgmeiDebtProjector
 
             $existingQuery = PgmeiDebtObservation::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('client_id', $client->id)
                 ->where('calendar_year', $year)
                 ->where('digest', $digest)
@@ -91,7 +91,7 @@ final class PgmeiDebtProjector
             if ($sourceRunId !== null) {
                 $byRun = PgmeiDebtObservation::query()
                     ->withoutGlobalScopes()
-                    ->where('office_id', $office->id)
+                    ->where('tenant_id', $tenant->id)
                     ->where('client_id', $client->id)
                     ->where('calendar_year', $year)
                     ->where('source_run_id', $sourceRunId)
@@ -112,7 +112,7 @@ final class PgmeiDebtProjector
             $created = false;
             if ($existing === null) {
                 $observation = PgmeiDebtObservation::query()->create([
-                    'office_id' => $office->id,
+                    'tenant_id' => $tenant->id,
                     'client_id' => $client->id,
                     'calendar_year' => $year,
                     'debt_state' => $state->value,
@@ -141,7 +141,7 @@ final class PgmeiDebtProjector
                     ]));
 
                     PgmeiDebtItem::query()->create([
-                        'office_id' => $office->id,
+                        'tenant_id' => $tenant->id,
                         'client_id' => $client->id,
                         'observation_id' => $observation->id,
                         'position' => $position,
@@ -161,7 +161,7 @@ final class PgmeiDebtProjector
 
             $projection = PgmeiDebtProjection::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('client_id', $client->id)
                 ->where('calendar_year', $year)
                 ->lockForUpdate()
@@ -179,7 +179,7 @@ final class PgmeiDebtProjector
 
             if ($projection === null) {
                 $projection = PgmeiDebtProjection::query()->create([
-                    'office_id' => $office->id,
+                    'tenant_id' => $tenant->id,
                     'client_id' => $client->id,
                     'calendar_year' => $year,
                     ...$payload,

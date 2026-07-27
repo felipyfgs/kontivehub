@@ -8,12 +8,12 @@ use App\DTO\FgtsDigital\FgtsDigitalPortalResult;
 use App\Enums\FgtsDigitalGuideType;
 use App\Enums\FgtsDigitalRunStatus;
 use App\Enums\FiscalMutationStatus;
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Models\Client;
 use App\Models\FiscalMutationOperation;
-use App\Models\Office;
 use App\Models\TaxGuide;
 use App\Models\TaxGuideVersion;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\FgtsDigital\FgtsDigitalPortalService;
 use App\Services\Fiscal\Guides\ClientGuidesQueryService;
@@ -37,32 +37,32 @@ class FgtsDigitalGuideFlowTest extends TestCase
 
     public function test_fixture_query_persists_downloadable_pdf_and_central_guide_source_with_dedupe(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
-        $user = User::factory()->forOffice($office)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
+        $user = User::factory()->forTenant($tenant)->create();
         $service = app(FgtsDigitalPortalService::class);
 
-        $first = $service->executeRun($service->createQueryRun($office, $client, $user));
+        $first = $service->executeRun($service->createQueryRun($tenant, $client, $user));
         $this->assertSame(FgtsDigitalRunStatus::Succeeded, $first->status);
         $this->assertSame('DEBT-202607-0001', $first->result_sanitized['data']['debts'][0]['identifier']);
         $this->assertDatabaseHas('tax_guides', [
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'system_code' => 'FGTS_DIGITAL',
             'identifier_code' => 'GFD-202607-0001',
         ]);
-        $guide = TaxGuide::query()->withoutGlobalScopes()->where('office_id', $office->id)->firstOrFail();
+        $guide = TaxGuide::query()->withoutGlobalScopes()->where('tenant_id', $tenant->id)->firstOrFail();
         $version = TaxGuideVersion::query()->withoutGlobalScopes()->where('tax_guide_id', $guide->id)->firstOrFail();
-        $bytes = app(GuideStorageService::class)->readDocumentAuthorized($version, (int) $office->id);
+        $bytes = app(GuideStorageService::class)->readDocumentAuthorized($version, (int) $tenant->id);
         $this->assertStringStartsWith('%PDF-', $bytes);
         $this->assertFalse($guide->payment_status->isOfficiallyPaid());
         $this->assertSame('2026-07-22T12:00:00+00:00', $guide->metadata['checked_at']);
 
-        $central = app(ClientGuidesQueryService::class)->paginate($office, (int) $client->id, 20)['page'];
+        $central = app(ClientGuidesQueryService::class)->paginate($tenant, (int) $client->id, 20)['page'];
         $this->assertSame('FGTS_DIGITAL_PORTAL', $central->items()[0]['source']);
         $this->assertTrue($central->items()[0]['current_version']['has_document']);
 
-        $second = $service->executeRun($service->createQueryRun($office, $client, $user));
+        $second = $service->executeRun($service->createQueryRun($tenant, $client, $user));
         $this->assertSame(FgtsDigitalRunStatus::Succeeded, $second->status);
         $this->assertSame(1, TaxGuide::query()->withoutGlobalScopes()->count());
         $this->assertSame(1, TaxGuideVersion::query()->withoutGlobalScopes()->count());
@@ -71,13 +71,13 @@ class FgtsDigitalGuideFlowTest extends TestCase
     public function test_pdf_is_delivered_by_existing_one_time_descriptor_and_emit_updates_mutation(): void
     {
         config()->set('fgts_digital.mutations_enabled', true);
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
         Sanctum::actingAs($admin);
         $service = app(FgtsDigitalPortalService::class);
 
-        $query = $service->executeRun($service->createQueryRun($office, $client, $admin));
+        $query = $service->executeRun($service->createQueryRun($tenant, $client, $admin));
         $guideId = (int) $query->tax_guide_id;
         $token = $this->postJson('/api/v1/fiscal/guides/'.$guideId.'/download-token')
             ->assertOk()
@@ -86,14 +86,14 @@ class FgtsDigitalGuideFlowTest extends TestCase
         $this->assertStringStartsWith('%PDF-', $download->streamedContent());
 
         $preview = $service->preview(
-            $office,
+            $tenant,
             $client,
             $admin,
             FgtsDigitalGuideType::Monthly,
             ['competence_period_key' => '2026-07', 'amount_cents' => 184250],
         );
         $authorized = $service->authorizeEmission(
-            $office,
+            $tenant,
             $preview['run'],
             $admin,
             (string) $preview['preview_token'],
@@ -128,20 +128,20 @@ class FgtsDigitalGuideFlowTest extends TestCase
                 );
             }
         });
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
         $service = app(FgtsDigitalPortalService::class);
 
         $preview = $service->preview(
-            $office,
+            $tenant,
             $client,
             $admin,
             FgtsDigitalGuideType::Monthly,
             ['competence_period_key' => '2026-07', 'amount_cents' => 184250],
         );
         $authorized = $service->authorizeEmission(
-            $office,
+            $tenant,
             $preview['run'],
             $admin,
             (string) $preview['preview_token'],

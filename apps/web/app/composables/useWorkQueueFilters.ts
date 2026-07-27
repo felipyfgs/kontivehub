@@ -5,7 +5,7 @@
  * - **Recurso (tarefa selecionada)** → path: `/work/tasks/{id}`
  * - **Filtros de lista** (tab, q, page, view, …) → query string
  *
- * Nunca colocar `task` / `office_id` na query.
+ * Nunca colocar `task` / `tenant_id` na query.
  */
 
 export type WorkQueueView = 'fila' | 'lista' | 'kanban'
@@ -147,8 +147,7 @@ export function useWorkQueueFilters() {
     if (typeof raw === 'string' && raw !== '') {
       return numOrNull(raw)
     }
-    // Compat legado: ?task=N → redirecionar (middleware na página)
-    return numOrNull((route.query as Record<string, unknown>).task)
+    return null
   })
 
   async function patch(partial: Partial<WorkQueueFilters>, opts?: { resetPage?: boolean }) {

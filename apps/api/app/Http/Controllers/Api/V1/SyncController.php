@@ -65,7 +65,7 @@ class SyncController extends Controller
                 'environment' => $env,
             ],
             [
-                'office_id' => $establishment->office_id,
+                'tenant_id' => $establishment->tenant_id,
                 'last_nsu' => 0,
                 'status' => SyncCursorStatus::Idle,
                 'next_sync_at' => now(),

@@ -4,7 +4,7 @@ namespace App\Services\Fiscal\Mutations;
 
 /**
  * Liberação por solução/operação/coorte (13.7).
- * Defaults OFF — allowlist vazia não libera ninguém salvo allow_all_offices.
+ * Defaults OFF — allowlist vazia não libera ninguém salvo allow_all_tenants.
  */
 final class FiscalMutationCohort
 {
@@ -21,7 +21,7 @@ final class FiscalMutationCohort
         return is_array($map) && isset($map[$key]) ? (string) $map[$key] : 'mutacoes';
     }
 
-    public static function isOperationEnabled(string $solution, string $service, string $operation, int $officeId): bool
+    public static function isOperationEnabled(string $solution, string $service, string $operation, int $tenantId): bool
     {
         if (! (bool) config('fiscal_mutations.enabled', false)) {
             return false;
@@ -52,15 +52,15 @@ final class FiscalMutationCohort
         }
 
         /** @var list<int>|mixed $allowlist */
-        $allowlist = $cfg['office_allowlist'] ?? [];
+        $allowlist = $cfg['tenant_allowlist'] ?? [];
         if (! is_array($allowlist)) {
             $allowlist = [];
         }
 
         if ($allowlist === []) {
-            return (bool) ($cfg['allow_all_offices'] ?? false);
+            return (bool) ($cfg['allow_all_tenants'] ?? false);
         }
 
-        return in_array($officeId, $allowlist, true);
+        return in_array($tenantId, $allowlist, true);
     }
 }

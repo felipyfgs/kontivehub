@@ -3,15 +3,14 @@
 namespace Tests\Feature\Assistant;
 
 use App\Contracts\AssistantLlmGateway;
-use App\Enums\OfficeRole;
 use App\Enums\TenantPermission;
 use App\Enums\TenantRole;
 use App\Models\AssistantConversation;
-use App\Models\Office;
-use App\Models\OfficeMembership;
-use App\Models\ProcessTemplate;
+use App\Models\Tenant;
+use App\Models\TenantMembership;
 use App\Models\TenantPermissionProfile;
 use App\Models\User;
+use App\Models\WorkProcessTemplate;
 use App\Services\Assistant\FakeAssistantLlmGateway;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -36,7 +35,7 @@ class AssistantApiTest extends TestCase
             'assistant.enabled' => false,
             'assistant.openai.api_key' => '',
         ]);
-        [$admin] = $this->actor(OfficeRole::Admin);
+        [$admin] = $this->actor(TenantRole::TenantAdmin);
         Sanctum::actingAs($admin);
 
         $this->getJson('/api/v1/assistant/conversations')
@@ -52,7 +51,7 @@ class AssistantApiTest extends TestCase
 
     public function test_me_exposes_assistant_enabled_meta(): void
     {
-        [$admin] = $this->actor(OfficeRole::Admin);
+        [$admin] = $this->actor(TenantRole::TenantAdmin);
         Sanctum::actingAs($admin);
 
         config([
@@ -75,22 +74,22 @@ class AssistantApiTest extends TestCase
     public function test_chat_persists_messages_with_fake_llm_and_isolates_tenants(): void
     {
         $this->enableAssistant();
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
-        $otherOffice = Office::factory()->create();
-        $otherUser = User::factory()->forOffice($otherOffice, OfficeRole::Admin)->create();
-        $otherUser->forceFill(['selected_office_id' => $otherOffice->id])->saveQuietly();
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $otherTenant = Tenant::factory()->create();
+        $otherUser = User::factory()->forTenant($otherTenant, TenantRole::TenantAdmin)->create();
+        $otherUser->forceFill(['selected_tenant_id' => $otherTenant->id])->saveQuietly();
 
         Sanctum::actingAs($admin);
         $conversationId = $this->postJson('/api/v1/assistant/conversations', [
             'title' => 'Ajuda Work',
-            'office_id' => $otherOffice->id,
+            'tenant_id' => $otherTenant->id,
         ])->assertCreated()
             ->assertJsonPath('data.title', 'Ajuda Work')
             ->json('data.id');
 
         $this->assertDatabaseHas('assistant_conversations', [
             'id' => $conversationId,
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'user_id' => $admin->id,
         ]);
 
@@ -122,7 +121,7 @@ class AssistantApiTest extends TestCase
     public function test_create_tool_without_approval_does_not_persist_template(): void
     {
         $this->enableAssistant();
-        [$admin] = $this->actor(OfficeRole::Admin);
+        [$admin] = $this->actor(TenantRole::TenantAdmin);
         Sanctum::actingAs($admin);
 
         $conversationId = $this->postJson('/api/v1/assistant/conversations')
@@ -144,14 +143,14 @@ class AssistantApiTest extends TestCase
         ])->assertOk();
 
         $this->assertNotEmpty($response->json('data.pending_approvals'));
-        $this->assertDatabaseMissing('process_templates', ['name' => 'Modelo Pendente']);
-        $this->assertSame(0, ProcessTemplate::query()->where('name', 'Modelo Pendente')->count());
+        $this->assertDatabaseMissing('work_process_templates', ['name' => 'Modelo Pendente']);
+        $this->assertSame(0, WorkProcessTemplate::query()->where('name', 'Modelo Pendente')->count());
     }
 
     public function test_create_with_approval_and_permission_persists(): void
     {
         $this->enableAssistant();
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
         Sanctum::actingAs($admin);
 
         $conversationId = $this->postJson('/api/v1/assistant/conversations')
@@ -178,7 +177,7 @@ class AssistantApiTest extends TestCase
             ->json('data.pending_approvals.0.approval_token');
 
         $this->assertNotEmpty($token);
-        $this->assertDatabaseMissing('process_templates', ['name' => 'Modelo Aprovado']);
+        $this->assertDatabaseMissing('work_process_templates', ['name' => 'Modelo Aprovado']);
 
         $this->postJson("/api/v1/assistant/conversations/{$conversationId}/approve-tool", [
             'approval_token' => $token,
@@ -186,8 +185,8 @@ class AssistantApiTest extends TestCase
             ->assertJsonPath('data.status', 'ok')
             ->assertJsonPath('data.result.name', 'Modelo Aprovado');
 
-        $this->assertDatabaseHas('process_templates', [
-            'office_id' => $office->id,
+        $this->assertDatabaseHas('work_process_templates', [
+            'tenant_id' => $tenant->id,
             'name' => 'Modelo Aprovado',
         ]);
     }
@@ -195,7 +194,7 @@ class AssistantApiTest extends TestCase
     public function test_create_approval_without_catalog_manage_returns_403(): void
     {
         $this->enableAssistant();
-        [$admin] = $this->actor(OfficeRole::Admin);
+        [$admin] = $this->actor(TenantRole::TenantAdmin);
         Sanctum::actingAs($admin);
 
         $conversationId = $this->postJson('/api/v1/assistant/conversations')
@@ -216,10 +215,10 @@ class AssistantApiTest extends TestCase
         ])->assertOk()
             ->json('data.pending_approvals.0.approval_token');
 
-        $officeId = AssistantConversation::query()->findOrFail($conversationId)->office_id;
-        $office = Office::query()->findOrFail($officeId);
-        $viewer = User::factory()->forOffice($office, OfficeRole::Viewer)->create();
-        $viewer->forceFill(['selected_office_id' => $office->id])->saveQuietly();
+        $tenantId = AssistantConversation::query()->findOrFail($conversationId)->tenant_id;
+        $tenant = Tenant::query()->findOrFail($tenantId);
+        $viewer = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $viewer->forceFill(['selected_tenant_id' => $tenant->id])->saveQuietly();
 
         // Viewer sem work.catalog.manage: 403 mesmo com token de outra conversa
         Sanctum::actingAs($viewer);
@@ -254,7 +253,7 @@ class AssistantApiTest extends TestCase
             'approval_token' => $viewerToken,
         ])->assertForbidden();
 
-        $this->assertDatabaseMissing('process_templates', ['name' => 'Negado Viewer']);
+        $this->assertDatabaseMissing('work_process_templates', ['name' => 'Negado Viewer']);
     }
 
     public function test_assistant_enabled_without_api_key_returns_503(): void
@@ -263,7 +262,7 @@ class AssistantApiTest extends TestCase
             'assistant.enabled' => true,
             'assistant.openai.api_key' => '',
         ]);
-        [$admin] = $this->actor(OfficeRole::Admin);
+        [$admin] = $this->actor(TenantRole::TenantAdmin);
         Sanctum::actingAs($admin);
 
         $this->getJson('/api/v1/assistant/conversations')
@@ -278,7 +277,7 @@ class AssistantApiTest extends TestCase
     public function test_approve_invalid_token_returns_422_and_does_not_persist(): void
     {
         $this->enableAssistant();
-        [$admin] = $this->actor(OfficeRole::Admin);
+        [$admin] = $this->actor(TenantRole::TenantAdmin);
         Sanctum::actingAs($admin);
 
         $conversationId = $this->postJson('/api/v1/assistant/conversations')
@@ -291,13 +290,13 @@ class AssistantApiTest extends TestCase
             ->assertJsonPath('data.status', 'rejected')
             ->assertJsonPath('data.error', 'APPROVAL_INVALID');
 
-        $this->assertSame(0, ProcessTemplate::query()->count());
+        $this->assertSame(0, WorkProcessTemplate::query()->count());
     }
 
     public function test_deny_tool_invalidates_token_so_approve_does_not_persist(): void
     {
         $this->enableAssistant();
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
         Sanctum::actingAs($admin);
 
         $conversationId = $this->postJson('/api/v1/assistant/conversations')
@@ -331,30 +330,29 @@ class AssistantApiTest extends TestCase
         ])->assertStatus(422)
             ->assertJsonPath('data.status', 'rejected');
 
-        $this->assertDatabaseMissing('process_templates', [
-            'office_id' => $office->id,
+        $this->assertDatabaseMissing('work_process_templates', [
+            'tenant_id' => $tenant->id,
             'name' => 'Modelo Negado',
         ]);
     }
 
     public function test_list_tool_without_work_view_returns_403(): void
     {
-        config(['features.canonical_multitenant_rbac.enabled' => true]);
         $this->enableAssistant();
-        $office = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
         $user = User::factory()->create();
-        $profile = TenantPermissionProfile::factory()->forOffice($office)->create();
+        $profile = TenantPermissionProfile::factory()->forTenant($tenant)->create();
         $profile->syncPermissionKeys([TenantPermission::TenantDashboardView]);
-        OfficeMembership::factory()->create([
-            'office_id' => $office->id,
+        TenantMembership::factory()->create([
+            'tenant_id' => $tenant->id,
             'user_id' => $user->id,
-            'role' => OfficeRole::Viewer,
-            'tenant_role' => TenantRole::TenantUser,
+            'role' => TenantRole::TenantUser,
+            'role' => TenantRole::TenantUser,
             'permission_profile_id' => $profile->id,
             'authorization_version' => 1,
             'is_active' => true,
         ]);
-        $user->forceFill(['selected_office_id' => $office->id])->saveQuietly();
+        $user->forceFill(['selected_tenant_id' => $tenant->id])->saveQuietly();
         Sanctum::actingAs($user);
 
         $conversationId = $this->postJson('/api/v1/assistant/conversations')
@@ -364,7 +362,7 @@ class AssistantApiTest extends TestCase
         $this->llm->enqueue([
             'tool_calls' => [[
                 'id' => 'call_list_1',
-                'name' => 'list_process_templates',
+                'name' => 'list_work_process_templates',
                 'arguments' => [],
             ]],
         ]);
@@ -384,13 +382,13 @@ class AssistantApiTest extends TestCase
         ]);
     }
 
-    /** @return array{User, Office} */
-    private function actor(OfficeRole $role): array
+    /** @return array{User, Tenant} */
+    private function actor(TenantRole $role): array
     {
-        $office = Office::factory()->create();
-        $user = User::factory()->forOffice($office, $role)->create();
-        $user->forceFill(['selected_office_id' => $office->id])->saveQuietly();
+        $tenant = Tenant::factory()->create();
+        $user = User::factory()->forTenant($tenant, $role)->create();
+        $user->forceFill(['selected_tenant_id' => $tenant->id])->saveQuietly();
 
-        return [$user, $office];
+        return [$user, $tenant];
     }
 }

@@ -18,10 +18,10 @@ final class NfeXmlUnlockService
     /**
      * @return array{status: string, has_full_xml: bool, message: string, c_stat?: string|null, protocol?: string|null, manifestation_status?: string|null, type?: string|null, x_motivo?: string|null}
      */
-    public function unlock(string $accessKey, int $officeId): array
+    public function unlock(string $accessKey, int $tenantId): array
     {
         $full = NfeDocument::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('access_key', $accessKey)
             ->where('is_summary', false)
             ->first();
@@ -35,7 +35,7 @@ final class NfeXmlUnlockService
         }
 
         $summary = NfeDocument::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('access_key', $accessKey)
             ->where('is_summary', true)
             ->first();
@@ -50,7 +50,7 @@ final class NfeXmlUnlockService
 
         return $this->manifestation->manifest(
             $accessKey,
-            $officeId,
+            $tenantId,
             NfeManifestationType::Ciencia,
             purpose: 'UNLOCK_XML',
         );

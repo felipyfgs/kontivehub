@@ -38,7 +38,7 @@ describe('FGTS Digital portal', () => {
         confirmation_phrase: 'EMITIR FGTS 2026-07 PARAMETERIZED'
       }
     })
-    expect(JSON.stringify(clientMock.mock.calls)).not.toContain('office_id')
+    expect(JSON.stringify(clientMock.mock.calls)).not.toContain('tenant_id')
 
     const types = readFileSync(resolve(process.cwd(), 'app/types/api.ts'), 'utf8')
     const publicTypes = types.slice(

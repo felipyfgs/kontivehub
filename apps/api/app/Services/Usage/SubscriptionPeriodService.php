@@ -2,7 +2,7 @@
 
 namespace App\Services\Usage;
 
-use App\Models\OfficeSubscription;
+use App\Models\TenantSubscription;
 use Carbon\CarbonImmutable;
 use InvalidArgumentException;
 
@@ -20,7 +20,7 @@ final class SubscriptionPeriodService
      *   ends_at: CarbonImmutable
      * }
      */
-    public function resolve(OfficeSubscription $subscription, CarbonImmutable|string|null $at = null): array
+    public function resolve(TenantSubscription $subscription, CarbonImmutable|string|null $at = null): array
     {
         $subscription = $this->ensureCurrent($subscription, $at);
 
@@ -38,9 +38,9 @@ final class SubscriptionPeriodService
      * Avança períodos vencidos até cobrir $at (sem rollover — só janela corrente).
      */
     public function ensureCurrent(
-        OfficeSubscription $subscription,
+        TenantSubscription $subscription,
         CarbonImmutable|string|null $at = null,
-    ): OfficeSubscription {
+    ): TenantSubscription {
         $at = $this->asImmutable($at);
 
         if ($subscription->current_period_starts_at === null || $subscription->current_period_ends_at === null) {

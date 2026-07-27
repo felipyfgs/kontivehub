@@ -9,7 +9,7 @@ use App\Enums\Communication\MessageKind;
 use App\Enums\Communication\MessageSource;
 use App\Enums\Communication\MessageStatus;
 use App\Enums\CommunicationChannel;
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Events\CommunicationEventCommitted;
 use App\Models\Client;
 use App\Models\CommunicationAttachment;
@@ -21,11 +21,11 @@ use App\Models\CommunicationInbox;
 use App\Models\CommunicationInboxMember;
 use App\Models\CommunicationMessage;
 use App\Models\CommunicationOutboxEntry;
-use App\Models\Office;
-use App\Models\OfficeMembership;
+use App\Models\Tenant;
+use App\Models\TenantMembership;
 use App\Models\User;
 use App\Services\Communication\Media\CommunicationMediaStore;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use GuzzleHttp\Psr7\Utils;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -59,22 +59,22 @@ final class CommunicationApiTest extends TestCase
         }
     }
 
-    public function test_rbac_limits_non_admin_to_membership_and_hides_foreign_office(): void
+    public function test_rbac_limits_non_admin_to_membership_and_hides_foreign_tenant(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $foreignOffice = Office::factory()->create(['communication_enabled' => true]);
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
-        $operator = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $viewer = User::factory()->forOffice($office, OfficeRole::Viewer)->create();
-        $foreignAdmin = User::factory()->forOffice($foreignOffice, OfficeRole::Admin)->create();
-        $visible = $this->inbox($office, 'Fila fiscal');
-        $restricted = $this->inbox($office, 'Fila diretoria');
-        $foreign = $this->inbox($foreignOffice, 'Fila estrangeira');
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $foreignTenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $operator = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $viewer = User::factory()->forTenant($tenant, TenantRole::TenantUser, 'viewer')->create();
+        $foreignAdmin = User::factory()->forTenant($foreignTenant, TenantRole::TenantAdmin)->create();
+        $visible = $this->inbox($tenant, 'Fila fiscal');
+        $restricted = $this->inbox($tenant, 'Fila diretoria');
+        $foreign = $this->inbox($foreignTenant, 'Fila estrangeira');
         $this->member($visible, $operator);
         $this->member($visible, $viewer);
-        $visibleConversation = $this->conversation($office, $visible, '+5511999991001');
-        $restrictedConversation = $this->conversation($office, $restricted, '+5511999991002');
-        $foreignConversation = $this->conversation($foreignOffice, $foreign, '+5511999991003');
+        $visibleConversation = $this->conversation($tenant, $visible, '+5511999991001');
+        $restrictedConversation = $this->conversation($tenant, $restricted, '+5511999991002');
+        $foreignConversation = $this->conversation($foreignTenant, $foreign, '+5511999991003');
 
         $this->authenticate($operator);
         $this->getJson('/api/v1/communication/inboxes')
@@ -110,23 +110,23 @@ final class CommunicationApiTest extends TestCase
 
     public function test_conversation_list_projects_only_latest_message_with_private_attachments(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $operator = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $visible = $this->inbox($office, 'Atendimento');
-        $restricted = $this->inbox($office, 'Diretoria');
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $operator = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $visible = $this->inbox($tenant, 'Atendimento');
+        $restricted = $this->inbox($tenant, 'Diretoria');
         $this->member($visible, $operator);
-        $conversation = $this->conversation($office, $visible, '+5511999991051');
-        $restrictedConversation = $this->conversation($office, $restricted, '+5511999991052');
+        $conversation = $this->conversation($tenant, $visible, '+5511999991051');
+        $restrictedConversation = $this->conversation($tenant, $restricted, '+5511999991052');
         $occurredAt = now()->startOfSecond();
-        $older = $this->message($office, $visible, $conversation, 'Mensagem anterior');
+        $older = $this->message($tenant, $visible, $conversation, 'Mensagem anterior');
         $older->forceFill(['occurred_at' => $occurredAt])->save();
-        $image = $this->message($office, $visible, $conversation, 'Comprovante recebido');
+        $image = $this->message($tenant, $visible, $conversation, 'Comprovante recebido');
         $image->forceFill([
             'kind' => MessageKind::Image,
             'occurred_at' => $occurredAt,
         ])->save();
         $attachment = CommunicationAttachment::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'message_id' => $image->id,
             'object_id' => (string) Str::ulid(),
             'original_name_encrypted' => 'comprovante.webp',
@@ -135,7 +135,7 @@ final class CommunicationApiTest extends TestCase
             'sha256' => hash('sha256', 'comprovante'),
         ]);
         $conversation->forceFill(['last_message_at' => $occurredAt])->save();
-        $restrictedImage = $this->message($office, $restricted, $restrictedConversation, 'Imagem restrita');
+        $restrictedImage = $this->message($tenant, $restricted, $restrictedConversation, 'Imagem restrita');
         $restrictedImage->forceFill(['kind' => MessageKind::Image, 'occurred_at' => $occurredAt])->save();
 
         $this->authenticate($operator);
@@ -159,28 +159,28 @@ final class CommunicationApiTest extends TestCase
 
     public function test_conversation_search_matches_linked_client_names_without_leaking_other_conversations(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $foreignOffice = Office::factory()->create(['communication_enabled' => true]);
-        $operator = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $foreignOperator = User::factory()->forOffice($foreignOffice, OfficeRole::Operator)->create();
-        $inbox = $this->inbox($office, 'Atendimento');
-        $foreignInbox = $this->inbox($foreignOffice, 'Atendimento estrangeiro');
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $foreignTenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $operator = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $foreignOperator = User::factory()->forTenant($foreignTenant, TenantRole::TenantUser)->create();
+        $inbox = $this->inbox($tenant, 'Atendimento');
+        $foreignInbox = $this->inbox($foreignTenant, 'Atendimento estrangeiro');
         $this->member($inbox, $operator);
         $this->member($foreignInbox, $foreignOperator);
-        $matched = $this->conversation($office, $inbox, '+5511999991101');
-        $other = $this->conversation($office, $inbox, '+5511999991102');
-        $foreign = $this->conversation($foreignOffice, $foreignInbox, '+5511999991103');
+        $matched = $this->conversation($tenant, $inbox, '+5511999991101');
+        $other = $this->conversation($tenant, $inbox, '+5511999991102');
+        $foreign = $this->conversation($foreignTenant, $foreignInbox, '+5511999991103');
         $client = Client::factory()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'display_name' => 'Mercado Aurora',
             'legal_name' => 'Aurora Comércio de Alimentos Ltda',
         ]);
         $foreignClient = Client::factory()->create([
-            'office_id' => $foreignOffice->id,
+            'tenant_id' => $foreignTenant->id,
             'display_name' => 'Mercado Aurora Exterior',
         ]);
-        $matched->clients()->attach($client->id, ['office_id' => $office->id]);
-        $foreign->clients()->attach($foreignClient->id, ['office_id' => $foreignOffice->id]);
+        $matched->clients()->attach($client->id, ['tenant_id' => $tenant->id]);
+        $foreign->clients()->attach($foreignClient->id, ['tenant_id' => $foreignTenant->id]);
 
         $this->authenticate($operator);
         $this->getJson('/api/v1/communication/conversations?q=aurora')
@@ -199,11 +199,11 @@ final class CommunicationApiTest extends TestCase
 
     public function test_composer_notes_idempotency_and_optimistic_lock_are_enforced(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $operator = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $inbox = $this->inbox($office, 'Atendimento');
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $operator = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $inbox = $this->inbox($tenant, 'Atendimento');
         $this->member($inbox, $operator);
-        $conversation = $this->conversation($office, $inbox, '+5511999992001');
+        $conversation = $this->conversation($tenant, $inbox, '+5511999992001');
         $this->authenticate($operator);
 
         $this->postJson('/api/v1/communication/conversations/'.$conversation->id.'/messages', [
@@ -257,12 +257,12 @@ final class CommunicationApiTest extends TestCase
 
     public function test_composer_preserves_remote_quote_audio_ptt_and_sticker_kind(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $operator = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $inbox = $this->inbox($office, 'Atendimento rico');
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $operator = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $inbox = $this->inbox($tenant, 'Atendimento rico');
         $this->member($inbox, $operator);
-        $conversation = $this->conversation($office, $inbox, '+5511999992101');
-        $quoted = $this->message($office, $inbox, $conversation, 'Mensagem anterior');
+        $conversation = $this->conversation($tenant, $inbox, '+5511999992101');
+        $quoted = $this->message($tenant, $inbox, $conversation, 'Mensagem anterior');
         $this->authenticate($operator);
         $capabilities = $this->getJson('/api/v1/communication/outbound-capabilities')
             ->assertOk()
@@ -413,23 +413,23 @@ final class CommunicationApiTest extends TestCase
 
     public function test_cursor_sync_broadcast_and_private_download_follow_inbox_access(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $foreignOffice = Office::factory()->create(['communication_enabled' => true]);
-        $operator = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
-        $foreignAdmin = User::factory()->forOffice($foreignOffice, OfficeRole::Admin)->create();
-        $visible = $this->inbox($office, 'Visível');
-        $restricted = $this->inbox($office, 'Restrita');
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $foreignTenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $operator = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $foreignAdmin = User::factory()->forTenant($foreignTenant, TenantRole::TenantAdmin)->create();
+        $visible = $this->inbox($tenant, 'Visível');
+        $restricted = $this->inbox($tenant, 'Restrita');
         $this->member($visible, $operator);
-        $conversation = $this->conversation($office, $visible, '+5511999993001');
-        $restrictedConversation = $this->conversation($office, $restricted, '+5511999993002');
-        $message = $this->message($office, $visible, $conversation, 'anexo privado');
-        $this->message($office, $restricted, $restrictedConversation, 'segredo restrito');
-        $first = $this->event($office, $visible, $conversation, $message, 'MESSAGE_CREATED');
-        $this->event($office, $restricted, $restrictedConversation, null, 'RESTRICTED_EVENT');
+        $conversation = $this->conversation($tenant, $visible, '+5511999993001');
+        $restrictedConversation = $this->conversation($tenant, $restricted, '+5511999993002');
+        $message = $this->message($tenant, $visible, $conversation, 'anexo privado');
+        $this->message($tenant, $restricted, $restrictedConversation, 'segredo restrito');
+        $first = $this->event($tenant, $visible, $conversation, $message, 'MESSAGE_CREATED');
+        $this->event($tenant, $restricted, $restrictedConversation, null, 'RESTRICTED_EVENT');
 
         $metadata = [
-            'office_id' => (int) $office->id,
+            'tenant_id' => (int) $tenant->id,
             'inbox_id' => (int) $visible->id,
             'gateway_event_id' => 'gateway-download-0001',
             'sha256' => hash('sha256', 'conteudo privado'),
@@ -439,7 +439,7 @@ final class CommunicationApiTest extends TestCase
             $metadata,
         );
         $attachment = CommunicationAttachment::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'message_id' => $message->id,
             'object_id' => $stored['object_id'],
             'original_name_encrypted' => 'documento.txt',
@@ -450,7 +450,7 @@ final class CommunicationApiTest extends TestCase
         ]);
         $imageBytes = "\x89PNG\r\n\x1a\npreview privado";
         $imageMetadata = [
-            'office_id' => (int) $office->id,
+            'tenant_id' => (int) $tenant->id,
             'inbox_id' => (int) $visible->id,
             'gateway_event_id' => 'gateway-preview-0001',
             'sha256' => hash('sha256', $imageBytes),
@@ -460,7 +460,7 @@ final class CommunicationApiTest extends TestCase
             $imageMetadata,
         );
         $imageAttachment = CommunicationAttachment::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'message_id' => $message->id,
             'object_id' => $storedImage['object_id'],
             'original_name_encrypted' => 'comprovante.png',
@@ -509,7 +509,7 @@ final class CommunicationApiTest extends TestCase
         ])->assertOk();
         $this->post('/api/broadcasting/auth', [
             'socket_id' => '123.459',
-            'channel_name' => 'private-communication.office.'.$office->id,
+            'channel_name' => 'private-communication.tenant.'.$tenant->id,
         ])->assertOk();
 
         $this->authenticate($foreignAdmin);
@@ -535,19 +535,19 @@ final class CommunicationApiTest extends TestCase
         $this->assertTrue(app(CommunicationMediaStore::class)->exists($stored['object_id']));
     }
 
-    public function test_platform_privileged_broadcast_auth_follows_active_office(): void
+    public function test_platform_privileged_broadcast_auth_follows_active_tenant(): void
     {
         config(['features.platform_privileged_context.enabled' => true]);
 
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $otherOffice = Office::factory()->create(['communication_enabled' => true]);
-        $inbox = $this->inbox($office, 'Privileged');
-        $otherInbox = $this->inbox($otherOffice, 'Outro');
-        $actor = User::factory()->asPlatformAdmin($office->id)->create();
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $otherTenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $inbox = $this->inbox($tenant, 'Privileged');
+        $otherInbox = $this->inbox($otherTenant, 'Outro');
+        $actor = User::factory()->asPlatformAdmin($tenant->id)->create();
 
         Sanctum::actingAs($actor);
-        app(CurrentOffice::class)->clear();
-        app(CurrentOffice::class)->bindPlatformPrivileged($actor, $office);
+        app(CurrentTenant::class)->clear();
+        app(CurrentTenant::class)->bindPlatformPrivileged($actor, $tenant);
 
         $this->post('/api/broadcasting/auth', [
             'socket_id' => '321.100',
@@ -555,7 +555,7 @@ final class CommunicationApiTest extends TestCase
         ])->assertOk();
         $this->post('/api/broadcasting/auth', [
             'socket_id' => '321.101',
-            'channel_name' => 'private-communication.office.'.$office->id,
+            'channel_name' => 'private-communication.tenant.'.$tenant->id,
         ])->assertOk();
         $this->post('/api/broadcasting/auth', [
             'socket_id' => '321.102',
@@ -565,14 +565,14 @@ final class CommunicationApiTest extends TestCase
 
     public function test_admin_export_and_purge_remove_recoverable_content_and_keep_tombstone(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
-        $inbox = $this->inbox($office, 'Privacidade');
-        $conversation = $this->conversation($office, $inbox, '+5511999994001');
-        $message = $this->message($office, $inbox, $conversation, 'conteúdo pessoal');
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $inbox = $this->inbox($tenant, 'Privacidade');
+        $conversation = $this->conversation($tenant, $inbox, '+5511999994001');
+        $message = $this->message($tenant, $inbox, $conversation, 'conteúdo pessoal');
         $contact = $conversation->identity->contact;
         $metadata = [
-            'office_id' => (int) $office->id,
+            'tenant_id' => (int) $tenant->id,
             'inbox_id' => (int) $inbox->id,
             'gateway_event_id' => 'gateway-purge-0001',
             'sha256' => hash('sha256', 'blob a remover'),
@@ -582,7 +582,7 @@ final class CommunicationApiTest extends TestCase
             $metadata,
         );
         CommunicationAttachment::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'message_id' => $message->id,
             'object_id' => $stored['object_id'],
             'original_name_encrypted' => 'privado.txt',
@@ -611,13 +611,13 @@ final class CommunicationApiTest extends TestCase
     private function authenticate(User $user): void
     {
         Sanctum::actingAs($user);
-        app(CurrentOffice::class)->clear();
+        app(CurrentTenant::class)->clear();
     }
 
-    private function inbox(Office $office, string $name): CommunicationInbox
+    private function inbox(Tenant $tenant, string $name): CommunicationInbox
     {
         return CommunicationInbox::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => $name,
             'session_id' => 'session-'.Str::ulid(),
             'status' => InboxStatus::Connected,
@@ -627,27 +627,27 @@ final class CommunicationApiTest extends TestCase
 
     private function member(CommunicationInbox $inbox, User $user): void
     {
-        $membership = OfficeMembership::query()->withoutGlobalScopes()
-            ->where('office_id', $inbox->office_id)
+        $membership = TenantMembership::query()->withoutGlobalScopes()
+            ->where('tenant_id', $inbox->tenant_id)
             ->where('user_id', $user->id)
             ->firstOrFail();
         CommunicationInboxMember::query()->withoutGlobalScopes()->create([
-            'office_id' => $inbox->office_id,
+            'tenant_id' => $inbox->tenant_id,
             'inbox_id' => $inbox->id,
-            'office_membership_id' => $membership->id,
+            'tenant_membership_id' => $membership->id,
             'is_active' => true,
         ]);
     }
 
-    private function conversation(Office $office, CommunicationInbox $inbox, string $address): CommunicationConversation
+    private function conversation(Tenant $tenant, CommunicationInbox $inbox, string $address): CommunicationConversation
     {
         $contact = CommunicationContact::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => 'Contato '.substr($address, -4),
             'is_active' => true,
         ]);
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'contact_id' => $contact->id,
             'channel' => CommunicationChannel::Whatsapp,
             'address_encrypted' => $address,
@@ -656,23 +656,27 @@ final class CommunicationApiTest extends TestCase
             'is_active' => true,
         ]);
 
-        return CommunicationConversation::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+        $conversation = CommunicationConversation::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
             'inbox_id' => $inbox->id,
             'identity_id' => $identity->id,
             'status' => ConversationStatus::Open,
             'last_message_at' => now(),
         ]);
+        $identity->setRelation('contact', $contact);
+        $conversation->setRelation('identity', $identity);
+
+        return $conversation;
     }
 
     private function message(
-        Office $office,
+        Tenant $tenant,
         CommunicationInbox $inbox,
         CommunicationConversation $conversation,
         string $body,
     ): CommunicationMessage {
         return CommunicationMessage::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'inbox_id' => $inbox->id,
             'conversation_id' => $conversation->id,
             'identity_id' => $conversation->identity_id,
@@ -688,14 +692,14 @@ final class CommunicationApiTest extends TestCase
     }
 
     private function event(
-        Office $office,
+        Tenant $tenant,
         CommunicationInbox $inbox,
         CommunicationConversation $conversation,
         ?CommunicationMessage $message,
         string $type,
     ): CommunicationEvent {
         return CommunicationEvent::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'inbox_id' => $inbox->id,
             'conversation_id' => $conversation->id,
             'message_id' => $message?->id,

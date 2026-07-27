@@ -3,7 +3,7 @@
  * Detalhe do processo — shell Settings com seções reproduzíveis na URL.
  */
 import SectionNavigation from '~/components/navigation/SectionNavigation.vue'
-import type { OperationalProcess } from '~/types/work'
+import type { WorkProcess } from '~/types/work'
 import { apiErrorMessage } from '~/utils/api-error'
 import { workProcessContextNav } from '~/utils/work-navigation'
 import {
@@ -22,7 +22,7 @@ const route = useRoute()
 const toast = useToast()
 const { sessionEpoch } = useDashboard()
 
-const process = ref<OperationalProcess | null>(null)
+const process = ref<WorkProcess | null>(null)
 const timeline = ref<Array<Record<string, unknown>>>([])
 const loading = ref(true)
 const loadError = ref<string | null>(null)

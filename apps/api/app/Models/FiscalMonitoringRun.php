@@ -2,15 +2,15 @@
 
 namespace App\Models;
 
-use App\Casts\FiscalSourceProvenanceCast;
 use App\Enums\FiscalCoverage;
 use App\Enums\FiscalMutability;
 use App\Enums\FiscalRunResult;
 use App\Enums\FiscalRunStatus;
 use App\Enums\FiscalSituation;
+use App\Enums\FiscalSourceProvenance;
 use App\Enums\FiscalTrigger;
 use App\Enums\FiscalVerificationState;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'client_id',
     'fiscal_category_id',
     'competence_id',
@@ -56,7 +56,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 ])]
 class FiscalMonitoringRun extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {
@@ -67,7 +67,7 @@ class FiscalMonitoringRun extends Model
             'situation' => FiscalSituation::class,
             'coverage' => FiscalCoverage::class,
             'mutability' => FiscalMutability::class,
-            'source_provenance' => FiscalSourceProvenanceCast::class,
+            'source_provenance' => FiscalSourceProvenance::class,
             'verification_state' => FiscalVerificationState::class,
             'attempt' => 'integer',
             'progress' => 'array',
@@ -137,7 +137,7 @@ class FiscalMonitoringRun extends Model
     {
         return [
             'id' => $this->id,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'client_id' => $this->client_id,
             'fiscal_category_id' => $this->fiscal_category_id,
             'competence_id' => $this->competence_id,

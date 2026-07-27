@@ -6,8 +6,8 @@ use App\Enums\ClientProcuracaoSyncStatus;
 use App\Enums\SerproEnvironment;
 use App\Jobs\Serpro\SyncClientProcuracaoJob;
 use App\Models\Client;
-use App\Models\ClientProcuracaoSnapshot;
-use App\Models\Office;
+use App\Models\ClientProcuracaoSync;
+use App\Models\Tenant;
 use App\Services\Integra\ClientProcuracaoSyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
@@ -17,19 +17,20 @@ class ClientProcuracaoFreshnessTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_missing_or_stale_snapshot_is_queued_without_network_access(): void
+    public function test_missing_or_stale_sync_is_queued_without_network_access(): void
     {
         Queue::fake();
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
         $service = app(ClientProcuracaoSyncService::class);
 
-        $missing = $service->enqueueRefreshIfNeeded($office, $client, SerproEnvironment::Trial);
+        $missing = $service->enqueueRefreshIfNeeded($tenant, $client, SerproEnvironment::Trial);
         $this->assertTrue($missing['queued']);
-        $this->assertSame('SNAPSHOT_MISSING', $missing['code']);
+        $this->assertSame('SYNC_MISSING', $missing['code']);
 
-        ClientProcuracaoSnapshot::query()
-            ->where('office_id', $office->id)
+        ClientProcuracaoSync::query()
+            ->withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('environment', SerproEnvironment::Trial->value)
             ->firstOrFail()
@@ -39,25 +40,25 @@ class ClientProcuracaoFreshnessTest extends TestCase
                 'valid_to' => now()->addMonth(),
                 'power_codes' => ['00103'],
             ])->save();
-        $stale = $service->enqueueRefreshIfNeeded($office, $client, SerproEnvironment::Trial);
+        $stale = $service->enqueueRefreshIfNeeded($tenant, $client, SerproEnvironment::Trial);
 
         $this->assertTrue($stale['queued']);
-        $this->assertSame('SNAPSHOT_STALE', $stale['code']);
+        $this->assertSame('SYNC_STALE', $stale['code']);
         $this->assertSame(
             ClientProcuracaoSyncStatus::Verifying,
-            ClientProcuracaoSnapshot::query()->firstOrFail()->status,
+            ClientProcuracaoSync::query()->withoutGlobalScopes()->firstOrFail()->status,
         );
         // ShouldBeUnique evita duplicar o mesmo par escritório/cliente/ambiente.
         Queue::assertPushed(SyncClientProcuracaoJob::class, 1);
     }
 
-    public function test_recent_snapshot_is_reused_for_seven_days(): void
+    public function test_recent_sync_is_reused_for_seven_days(): void
     {
         Queue::fake();
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
-        ClientProcuracaoSnapshot::query()->create([
-            'office_id' => $office->id,
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
+        ClientProcuracaoSync::query()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'environment' => SerproEnvironment::Trial,
             'status' => ClientProcuracaoSyncStatus::Authorized,
@@ -67,10 +68,10 @@ class ClientProcuracaoFreshnessTest extends TestCase
         ]);
 
         $result = app(ClientProcuracaoSyncService::class)
-            ->enqueueRefreshIfNeeded($office, $client, SerproEnvironment::Trial);
+            ->enqueueRefreshIfNeeded($tenant, $client, SerproEnvironment::Trial);
 
         $this->assertFalse($result['queued']);
-        $this->assertSame('SNAPSHOT_FRESH', $result['code']);
+        $this->assertSame('SYNC_FRESH', $result['code']);
         Queue::assertNothingPushed();
     }
 }

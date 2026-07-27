@@ -12,7 +12,7 @@ use App\Enums\FiscalMutability;
 use App\Enums\FiscalRunResult;
 use App\Models\Client;
 use App\Models\FiscalModuleControl;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\FiscalMonitoring\FiscalAdapterRegistry;
 use App\Services\FiscalMonitoring\FiscalMonitoringRunService;
@@ -30,8 +30,8 @@ class FiscalModuleRuntimeRestrictionTest extends TestCase
             'fiscal.kill_switch' => false,
             'fiscal_monitoring.kill_switch' => false,
         ]);
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
         $adapter = new class implements FiscalSourceAdapter
         {
             public int $calls = 0;
@@ -82,7 +82,7 @@ class FiscalModuleRuntimeRestrictionTest extends TestCase
 
         $runs = app(FiscalMonitoringRunService::class);
         $run = $runs->enqueueManual(
-            $office,
+            $tenant,
             $client,
             'TEST_GOVERNANCE',
             'MAILBOX_READ',
@@ -91,8 +91,8 @@ class FiscalModuleRuntimeRestrictionTest extends TestCase
 
         FiscalModuleControl::query()->create([
             'module_key' => FiscalControlModule::Mailbox,
-            'scope' => FiscalModuleControlScope::Office,
-            'office_id' => $office->id,
+            'scope' => FiscalModuleControlScope::Tenant,
+            'tenant_id' => $tenant->id,
             'restricted' => true,
             'reason' => 'Pausa após enfileiramento',
             'updated_by_user_id' => User::factory()->create()->id,
@@ -102,9 +102,9 @@ class FiscalModuleRuntimeRestrictionTest extends TestCase
 
         $this->assertSame(0, $adapter->calls);
         $this->assertSame(FiscalRunResult::Blocked, $finished->result);
-        $this->assertSame('OFFICE_RESTRICTION', $finished->error_code);
+        $this->assertSame('TENANT_RESTRICTION', $finished->error_code);
         $this->assertDatabaseHas('fiscal_module_controls', [
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'blocked_jobs_count' => 1,
         ]);
     }

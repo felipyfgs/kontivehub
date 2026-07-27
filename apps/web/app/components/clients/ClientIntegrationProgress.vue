@@ -25,7 +25,7 @@ const steps = computed((): Step[] => {
   const hasCert = certStatus === 'active'
   const hasProcuracao = props.client.procuracao_status === 'authorized'
     || props.client.procuracao_status === 'expiring'
-  const primary = props.client.establishments?.find(e => e.is_matrix)
+  const primary = props.client.establishments?.find(e => e.is_headquarters)
     || props.client.establishments?.[0]
   const hasCapture = Boolean(primary?.capture_enabled)
   const hasNotes = Boolean(props.client.notes?.trim())

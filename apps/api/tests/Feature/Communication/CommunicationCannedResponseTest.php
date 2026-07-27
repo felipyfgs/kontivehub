@@ -5,7 +5,6 @@ namespace Tests\Feature\Communication;
 use App\Enums\Communication\ConversationStatus;
 use App\Enums\Communication\InboxStatus;
 use App\Enums\CommunicationChannel;
-use App\Enums\OfficeRole;
 use App\Enums\TenantPermission;
 use App\Enums\TenantRole;
 use App\Events\CommunicationEventCommitted;
@@ -17,11 +16,11 @@ use App\Models\CommunicationEvent;
 use App\Models\CommunicationIdentity;
 use App\Models\CommunicationIdentityLink;
 use App\Models\CommunicationInbox;
-use App\Models\Office;
-use App\Models\OfficeMembership;
+use App\Models\Tenant;
+use App\Models\TenantMembership;
 use App\Models\TenantPermissionProfile;
 use App\Models\User;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
@@ -56,13 +55,13 @@ final class CommunicationCannedResponseTest extends TestCase
 
     public function test_composer_lists_only_active_and_manage_lists_inactive_with_pagination(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $foreign = Office::factory()->create(['communication_enabled' => true]);
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
-        $foreignAdmin = User::factory()->forOffice($foreign, OfficeRole::Admin)->create();
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $foreign = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $foreignAdmin = User::factory()->forTenant($foreign, TenantRole::TenantAdmin)->create();
 
-        $active = $this->canned($office, 'saudacao', 'Saudação', 'Olá {{contato.nome}}', active: true);
-        $inactive = $this->canned($office, 'encerrar', 'Encerrar', 'Até logo', active: false);
+        $active = $this->canned($tenant, 'saudacao', 'Saudação', 'Olá {{contato.nome}}', active: true);
+        $inactive = $this->canned($tenant, 'encerrar', 'Encerrar', 'Até logo', active: false);
         $this->canned($foreign, 'outro', 'Outro', 'X', active: true);
 
         $this->authenticate($admin);
@@ -102,28 +101,27 @@ final class CommunicationCannedResponseTest extends TestCase
 
     public function test_mutations_require_manage_quick_replies_not_inboxes_or_contacts(): void
     {
-        config(['features.canonical_multitenant_rbac.enabled' => true]);
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $viewer = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $inboxManager = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $contactManager = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $quickManager = User::factory()->forOffice($office, OfficeRole::Operator)->create();
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $viewer = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $inboxManager = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $contactManager = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $quickManager = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
 
-        $this->assignProfile($viewer, $office, [TenantPermission::CommunicationView]);
-        $this->assignProfile($inboxManager, $office, [
+        $this->assignProfile($viewer, $tenant, [TenantPermission::CommunicationView]);
+        $this->assignProfile($inboxManager, $tenant, [
             TenantPermission::CommunicationView,
             TenantPermission::CommunicationManageInboxes,
         ]);
-        $this->assignProfile($contactManager, $office, [
+        $this->assignProfile($contactManager, $tenant, [
             TenantPermission::CommunicationView,
             TenantPermission::CommunicationManageContacts,
         ]);
-        $this->assignProfile($quickManager, $office, [
+        $this->assignProfile($quickManager, $tenant, [
             TenantPermission::CommunicationView,
             TenantPermission::CommunicationManageQuickReplies,
         ]);
 
-        $item = $this->canned($office, 'base', 'Base', 'Corpo', active: true);
+        $item = $this->canned($tenant, 'base', 'Base', 'Corpo', active: true);
 
         $mutations = [
             fn () => $this->postJson('/api/v1/communication/canned-responses', [
@@ -192,8 +190,8 @@ final class CommunicationCannedResponseTest extends TestCase
 
     public function test_shortcut_uniqueness_version_conflict_and_audit_without_body(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
         $this->authenticate($admin);
 
         $first = $this->postJson('/api/v1/communication/canned-responses', [
@@ -229,7 +227,7 @@ final class CommunicationCannedResponseTest extends TestCase
         ])->assertStatus(422)->assertJsonValidationErrors(['body']);
 
         $events = CommunicationEvent::query()->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('type', 'CANNED_RESPONSE_CREATED')
             ->get();
         $this->assertNotEmpty($events);
@@ -242,29 +240,29 @@ final class CommunicationCannedResponseTest extends TestCase
         }
     }
 
-    public function test_render_resolves_allowlist_and_rejects_cross_office(): void
+    public function test_render_resolves_allowlist_and_rejects_cross_tenant(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $foreign = Office::factory()->create(['communication_enabled' => true]);
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create([
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $foreign = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create([
             'name' => 'Atendente Silva',
         ]);
-        $foreignAdmin = User::factory()->forOffice($foreign, OfficeRole::Admin)->create();
+        $foreignAdmin = User::factory()->forTenant($foreign, TenantRole::TenantAdmin)->create();
 
         $inbox = CommunicationInbox::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => 'Inbox Principal',
             'session_id' => 'session-'.Str::ulid(),
             'status' => InboxStatus::Connected,
             'is_enabled' => true,
         ]);
         $contact = CommunicationContact::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => 'Maria Contato',
             'is_active' => true,
         ]);
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'contact_id' => $contact->id,
             'channel' => CommunicationChannel::Whatsapp,
             'address_encrypted' => '+5511999990000',
@@ -273,11 +271,11 @@ final class CommunicationCannedResponseTest extends TestCase
             'is_active' => true,
         ]);
         $client = Client::factory()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'display_name' => 'Cliente Beta',
         ]);
         CommunicationIdentityLink::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'identity_id' => $identity->id,
             'client_id' => $client->id,
             'client_contact_id' => null,
@@ -285,7 +283,7 @@ final class CommunicationCannedResponseTest extends TestCase
             'receives_automatic' => true,
         ]);
         $conversation = CommunicationConversation::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'inbox_id' => $inbox->id,
             'identity_id' => $identity->id,
             'status' => ConversationStatus::Open,
@@ -293,27 +291,27 @@ final class CommunicationCannedResponseTest extends TestCase
         ]);
 
         $canned = $this->canned(
-            $office,
+            $tenant,
             'ctx',
             'Contextual',
             'Oi {{contato.nome}} / {{cliente.nome}} / {{atendente.nome}} / {{inbox.nome}}',
             active: true,
         );
-        $inactive = $this->canned($office, 'off', 'Off', 'x', active: false);
+        $inactive = $this->canned($tenant, 'off', 'Off', 'x', active: false);
         $foreignCanned = $this->canned($foreign, 'fx', 'Foreign', 'Oi {{contato.nome}}', active: true);
         $foreignConversation = CommunicationConversation::query()->withoutGlobalScopes()->create([
-            'office_id' => $foreign->id,
+            'tenant_id' => $foreign->id,
             'inbox_id' => CommunicationInbox::query()->withoutGlobalScopes()->create([
-                'office_id' => $foreign->id,
+                'tenant_id' => $foreign->id,
                 'name' => 'Foreign Inbox',
                 'session_id' => 'session-'.Str::ulid(),
                 'status' => InboxStatus::Connected,
                 'is_enabled' => true,
             ])->id,
             'identity_id' => CommunicationIdentity::query()->withoutGlobalScopes()->create([
-                'office_id' => $foreign->id,
+                'tenant_id' => $foreign->id,
                 'contact_id' => CommunicationContact::query()->withoutGlobalScopes()->create([
-                    'office_id' => $foreign->id,
+                    'tenant_id' => $foreign->id,
                     'name' => 'Outro',
                     'is_active' => true,
                 ])->id,
@@ -354,16 +352,16 @@ final class CommunicationCannedResponseTest extends TestCase
     }
 
     /** @param list<TenantPermission> $permissions */
-    private function assignProfile(User $user, Office $office, array $permissions): void
+    private function assignProfile(User $user, Tenant $tenant, array $permissions): void
     {
-        $profile = TenantPermissionProfile::factory()->forOffice($office)->create();
+        $profile = TenantPermissionProfile::factory()->forTenant($tenant)->create();
         $profile->syncPermissionKeys($permissions);
-        $membership = OfficeMembership::query()->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+        $membership = TenantMembership::query()->withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
             ->where('user_id', $user->id)
             ->firstOrFail();
         $membership->forceFill([
-            'tenant_role' => TenantRole::TenantUser,
+            'role' => TenantRole::TenantUser,
             'permission_profile_id' => $profile->id,
             'authorization_version' => (int) $membership->authorization_version + 1,
         ])->save();
@@ -372,18 +370,18 @@ final class CommunicationCannedResponseTest extends TestCase
     private function authenticate(User $user): void
     {
         Sanctum::actingAs($user);
-        app(CurrentOffice::class)->clear();
+        app(CurrentTenant::class)->clear();
     }
 
     private function canned(
-        Office $office,
+        Tenant $tenant,
         string $shortcut,
         string $title,
         string $body,
         bool $active,
     ): CommunicationCannedResponse {
         return CommunicationCannedResponse::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'title' => $title,
             'shortcut' => $shortcut,
             'body_encrypted' => $body,

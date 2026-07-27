@@ -22,8 +22,8 @@ final class CommunicationRecipientResolver
             ->select('communication_identities.*')
             ->join('communication_identity_links as links', 'links.identity_id', '=', 'communication_identities.id')
             ->join('communication_contacts as contacts', 'contacts.id', '=', 'communication_identities.contact_id')
-            ->where('communication_identities.office_id', $preference->office_id)
-            ->where('links.office_id', $preference->office_id)
+            ->where('communication_identities.tenant_id', $preference->tenant_id)
+            ->where('links.tenant_id', $preference->tenant_id)
             ->where('links.client_id', $preference->client_id)
             ->where('links.receives_automatic', true)
             ->where('communication_identities.channel', CommunicationChannel::Whatsapp->value)
@@ -40,13 +40,13 @@ final class CommunicationRecipientResolver
                     ->from('communication_preference_recipients as recipients')
                     ->whereColumn('recipients.identity_id', 'communication_identities.id')
                     ->where('recipients.preference_id', $preference->id)
-                    ->where('recipients.office_id', $preference->office_id);
+                    ->where('recipients.tenant_id', $preference->tenant_id);
             });
         }
 
-        return $query->orderByDesc('links.is_primary')
+        return $query->groupBy('communication_identities.id')
+            ->orderByRaw('MAX(links.is_primary::int) DESC')
             ->orderBy('communication_identities.id')
-            ->distinct()
             ->get();
     }
 }

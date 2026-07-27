@@ -4,15 +4,15 @@ namespace Tests\Feature;
 
 use App\Enums\ClientProcuracaoSyncStatus;
 use App\Enums\CredentialStatus;
-use App\Enums\OfficeRole;
 use App\Enums\SyncCursorStatus;
 use App\Enums\TaxRegimeCode;
+use App\Enums\TenantRole;
 use App\Models\Client;
 use App\Models\ClientCredential;
 use App\Models\ClientProcuracaoSync;
 use App\Models\Establishment;
-use App\Models\Office;
 use App\Models\SyncCursor;
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -25,22 +25,22 @@ class ClientListFiltersApiTest extends TestCase
 
     public function test_operational_filter_credential_expired_and_capture_problem(): void
     {
-        [$user, $office] = $this->actor(OfficeRole::Viewer);
+        [$user, $tenant] = $this->actor(TenantRole::TenantUser);
         Sanctum::actingAs($user);
 
-        $expired = Client::factory()->forOffice($office)->create(['legal_name' => 'Cliente A1 Vencido']);
+        $expired = Client::factory()->forTenant($tenant)->create(['legal_name' => 'Cliente certificado Vencido']);
         $this->credential($expired, CredentialStatus::Expired, now()->subDay());
 
-        $activePastValidTo = Client::factory()->forOffice($office)->create(['legal_name' => 'Cliente A1 Ativo Vencido']);
+        $activePastValidTo = Client::factory()->forTenant($tenant)->create(['legal_name' => 'Cliente certificado Ativo Vencido']);
         $this->credential($activePastValidTo, CredentialStatus::Active, now()->subHour());
 
-        $ok = Client::factory()->forOffice($office)->create(['legal_name' => 'Cliente A1 Ok']);
+        $ok = Client::factory()->forTenant($tenant)->create(['legal_name' => 'Cliente certificado Ok']);
         $this->credential($ok, CredentialStatus::Active, now()->addYear());
 
-        $captureProblem = Client::factory()->forOffice($office)->create(['legal_name' => 'Cliente Captura Ruim']);
+        $captureProblem = Client::factory()->forTenant($tenant)->create(['legal_name' => 'Cliente Captura Ruim']);
         $est = Establishment::factory()->forClient($captureProblem)->create();
         SyncCursor::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'establishment_id' => $est->id,
             'environment' => 'PROD',
             'last_nsu' => 0,
@@ -64,36 +64,36 @@ class ClientListFiltersApiTest extends TestCase
 
     public function test_procuracao_statuses_filter_uses_projected_rules(): void
     {
-        [$user, $office] = $this->actor(OfficeRole::Viewer);
+        [$user, $tenant] = $this->actor(TenantRole::TenantUser);
         Sanctum::actingAs($user);
 
-        $authorized = Client::factory()->forOffice($office)->create(['legal_name' => 'Proc Autorizada']);
+        $authorized = Client::factory()->forTenant($tenant)->create(['legal_name' => 'Proc Autorizada']);
         ClientProcuracaoSync::factory()->forClient($authorized)->authorized()->create();
 
-        $expiring = Client::factory()->forOffice($office)->create(['legal_name' => 'Proc A Vencer']);
+        $expiring = Client::factory()->forTenant($tenant)->create(['legal_name' => 'Proc A Vencer']);
         ClientProcuracaoSync::factory()->forClient($expiring)->authorized()->create([
             'valid_to' => now()->addDays(10),
         ]);
 
-        $expired = Client::factory()->forOffice($office)->create(['legal_name' => 'Proc Vencida']);
+        $expired = Client::factory()->forTenant($tenant)->create(['legal_name' => 'Proc Vencida']);
         ClientProcuracaoSync::factory()->forClient($expired)->expired()->create();
 
-        $missing = Client::factory()->forOffice($office)->create(['legal_name' => 'Proc Ausente']);
+        $missing = Client::factory()->forTenant($tenant)->create(['legal_name' => 'Proc Ausente']);
         ClientProcuracaoSync::factory()->forClient($missing)->missing()->create();
 
-        $unverifiedExplicit = Client::factory()->forOffice($office)->create(['legal_name' => 'Proc Nao Verificada']);
+        $unverifiedExplicit = Client::factory()->forTenant($tenant)->create(['legal_name' => 'Proc Nao Verificada']);
         ClientProcuracaoSync::factory()->forClient($unverifiedExplicit)->create([
             'status' => ClientProcuracaoSyncStatus::Unverified,
         ]);
 
-        $unverifiedAbsent = Client::factory()->forOffice($office)->create(['legal_name' => 'Proc Sem Sync']);
+        $unverifiedAbsent = Client::factory()->forTenant($tenant)->create(['legal_name' => 'Proc Sem Sync']);
 
-        $verifying = Client::factory()->forOffice($office)->create(['legal_name' => 'Proc Verificando']);
+        $verifying = Client::factory()->forTenant($tenant)->create(['legal_name' => 'Proc Verificando']);
         ClientProcuracaoSync::factory()->forClient($verifying)->create([
             'status' => ClientProcuracaoSyncStatus::Verifying,
         ]);
 
-        $failed = Client::factory()->forOffice($office)->create(['legal_name' => 'Proc Falha']);
+        $failed = Client::factory()->forTenant($tenant)->create(['legal_name' => 'Proc Falha']);
         ClientProcuracaoSync::factory()->forClient($failed)->create([
             'status' => ClientProcuracaoSyncStatus::Failed,
         ]);
@@ -142,20 +142,20 @@ class ClientListFiltersApiTest extends TestCase
         $this->assertEqualsCanonicalizing([$missing->id, $expiring->id], $multi);
     }
 
-    public function test_tax_regimes_filter_matches_legacy_storage_labels(): void
+    public function test_tax_regimes_filter_accepts_only_canonical_values(): void
     {
-        [$user, $office] = $this->actor(OfficeRole::Viewer);
+        [$user, $tenant] = $this->actor(TenantRole::TenantUser);
         Sanctum::actingAs($user);
 
-        $canonical = Client::factory()->forOffice($office)->create([
+        $canonical = Client::factory()->forTenant($tenant)->create([
             'legal_name' => 'Regime Canonico',
             'tax_regime' => TaxRegimeCode::SimplesNacional->value,
         ]);
-        $legacy = Client::factory()->forOffice($office)->create([
-            'legal_name' => 'Regime Legado',
-            'tax_regime' => 'SIMPLES',
+        $unknown = Client::factory()->forTenant($tenant)->create([
+            'legal_name' => 'Regime não informado',
+            'tax_regime' => TaxRegimeCode::Unknown->value,
         ]);
-        $other = Client::factory()->forOffice($office)->create([
+        $other = Client::factory()->forTenant($tenant)->create([
             'legal_name' => 'Regime MEI',
             'tax_regime' => TaxRegimeCode::Mei->value,
         ]);
@@ -164,23 +164,28 @@ class ClientListFiltersApiTest extends TestCase
             ->assertOk()
             ->json('data.*.id');
 
-        $this->assertEqualsCanonicalizing([$canonical->id, $legacy->id], $ids);
+        $this->assertSame([$canonical->id], $ids);
         $this->assertNotContains($other->id, $ids);
+
+        $unknownIds = $this->getJson('/api/v1/clients?tax_regimes=UNKNOWN&per_page=50')
+            ->assertOk()
+            ->json('data.*.id');
+        $this->assertSame([$unknown->id], $unknownIds);
     }
 
-    /** @return array{User, Office} */
-    private function actor(OfficeRole $role): array
+    /** @return array{User, Tenant} */
+    private function actor(TenantRole $role): array
     {
-        $office = Office::factory()->create();
-        $user = User::factory()->forOffice($office, $role)->create();
+        $tenant = Tenant::factory()->create();
+        $user = User::factory()->forTenant($tenant, $role)->create();
 
-        return [$user, $office];
+        return [$user, $tenant];
     }
 
     private function credential(Client $client, CredentialStatus $status, mixed $validTo): ClientCredential
     {
         return ClientCredential::query()->create([
-            'office_id' => $client->office_id,
+            'tenant_id' => $client->tenant_id,
             'client_id' => $client->id,
             'status' => $status,
             'subject_name' => $client->legal_name,

@@ -72,7 +72,7 @@ export function buildPgdasdColumns(options: {
     const summary = pgdasdSummary(row)
     const meta = pgdasdDeclarationMeta(summary?.declaration_state)
     const period = pgdasdDeclarationPeriod(summary)
-    const reason = summary?.declaration_state_reason || summary?.declaration_reason
+    const reason = summary?.declaration_state_reason
     const lastQuery = summary?.last_valid_query_at
     return [
       meta.label,
@@ -180,7 +180,7 @@ export function buildPgdasdColumns(options: {
         return h(DeclarationIndicator, {
           period: pgdasdDeclarationPeriod(summary),
           state: summary?.declaration_state,
-          reason: summary?.declaration_state_reason || summary?.declaration_reason,
+          reason: summary?.declaration_state_reason,
           tooltipText: declarationTooltip(row.original)
         })
       }
@@ -212,7 +212,6 @@ export function buildPgdasdColumns(options: {
         name: row.original.legal_name,
         legalName: row.original.legal_name,
         cnpj: row.original.cnpj,
-        cnpjMasked: row.original.cnpj_masked,
         to: `/monitoring/clients/${row.original.client_id}`
       })
     },

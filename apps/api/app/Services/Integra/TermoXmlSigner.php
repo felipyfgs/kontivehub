@@ -10,7 +10,7 @@ use Throwable;
 
 /**
  * Assinatura XMLDSig Enveloped do Termo (RSA-SHA256, SHA-256, C14N, X509 final).
- * Usado pelo job A1 gerenciado e por fixtures de teste.
+ * Usado pelo job certificado gerenciado e por fixtures de teste.
  */
 final class TermoXmlSigner
 {

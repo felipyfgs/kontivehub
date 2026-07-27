@@ -73,7 +73,7 @@ final class ParcelamentoMutatingAdapter implements FiscalSourceAdapter
         }
 
         // Gate 2: feature flags do módulo
-        if (! FeatureFlags::isMutatingEnabled(ParcelamentoServiceCatalog::MODULE_KEY, $request->office->id)) {
+        if (! FeatureFlags::isMutatingEnabled(ParcelamentoServiceCatalog::MODULE_KEY, $request->tenant->id)) {
             return $this->disabled($op, $modality, 'MUTATING_DISABLED', 'Adesão/reparcelamento/desistência não habilitados no piloto.');
         }
 

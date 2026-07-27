@@ -3,7 +3,7 @@
 namespace App\Services\FiscalMonitoring\ModulePortfolio;
 
 use App\Enums\FiscalDataOrigin;
-use App\Models\Office;
+use App\Models\Tenant;
 
 /**
  * Proveniência sanitizada (DEMO/SIMULATED/LIVE).
@@ -12,16 +12,16 @@ use App\Models\Office;
  */
 final class DataOriginResolver
 {
-    public function resolve(Office $office): FiscalDataOrigin
+    public function resolve(Tenant $tenant): FiscalDataOrigin
     {
         $env = (string) app()->environment();
-        $demoSlug = (string) config('fiscal_monitoring.demo.office_slug', 'demo');
-        $officeSlug = (string) ($office->slug ?? '');
+        $demoSlug = (string) config('fiscal_monitoring.demo.tenant_slug', 'demo');
+        $tenantSlug = (string) ($tenant->slug ?? '');
 
         if (in_array($env, ['local', 'testing'], true)
             && $demoSlug !== ''
-            && $officeSlug !== ''
-            && strcasecmp($officeSlug, $demoSlug) === 0
+            && $tenantSlug !== ''
+            && strcasecmp($tenantSlug, $demoSlug) === 0
         ) {
             return FiscalDataOrigin::Demo;
         }

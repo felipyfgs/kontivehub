@@ -3,7 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Client;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Serpro\E2e\SerproE2eProbeService;
 use Illuminate\Console\Command;
 
@@ -11,13 +11,13 @@ use Illuminate\Console\Command;
  * Probe e2e PRODUCTION via executor real (opt-in).
  *
  * Uso piloto:
- *   php artisan serpro:e2e-probe --office=2 --client=1 --all --artifact-dir=/path
- *   php artisan serpro:e2e-probe --office=2 --client=1 --only=sitfis.solicitar_protocolo,pgdasd.consdeclaracao
+ *   php artisan serpro:e2e-probe --tenant=2 --client=1 --all --artifact-dir=/path
+ *   php artisan serpro:e2e-probe --tenant=2 --client=1 --only=sitfis.solicitar_protocolo,pgdasd.consdeclaracao
  */
 final class SerproE2eProbeCommand extends Command
 {
     protected $signature = 'serpro:e2e-probe
-        {--office= : Office ID (piloto)}
+        {--tenant= : Tenant ID (piloto)}
         {--client= : Client ID (contribuinte)}
         {--all : Todas as ops PRODUCTION}
         {--only= : Lista CSV de operation_key}
@@ -28,23 +28,23 @@ final class SerproE2eProbeCommand extends Command
 
     public function handle(SerproE2eProbeService $probe): int
     {
-        $officeId = (int) $this->option('office');
+        $tenantId = (int) $this->option('tenant');
         $clientId = (int) $this->option('client');
-        if ($officeId <= 0 || $clientId <= 0) {
-            $this->error('--office e --client são obrigatórios.');
+        if ($tenantId <= 0 || $clientId <= 0) {
+            $this->error('--tenant e --client são obrigatórios.');
 
             return self::FAILURE;
         }
 
-        $office = Office::query()->find($officeId);
+        $tenant = Tenant::query()->find($tenantId);
         $client = Client::query()->withoutGlobalScopes()->find($clientId);
-        if ($office === null || $client === null) {
-            $this->error('Office/client não encontrados.');
+        if ($tenant === null || $client === null) {
+            $this->error('Tenant/client não encontrados.');
 
             return self::FAILURE;
         }
-        if ((int) $client->office_id !== (int) $office->id) {
-            $this->error('Cliente não pertence ao office.');
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
+            $this->error('Cliente não pertence ao tenant.');
 
             return self::FAILURE;
         }
@@ -59,8 +59,8 @@ final class SerproE2eProbeCommand extends Command
             return self::FAILURE;
         }
 
-        $this->info("Probe e2e office={$office->id} client={$client->id} dir={$artifactDir}");
-        $batch = $probe->probeAllProduction($office, $client, $artifactDir, $only);
+        $this->info("Probe e2e tenant={$tenant->id} client={$client->id} dir={$artifactDir}");
+        $batch = $probe->probeAllProduction($tenant, $client, $artifactDir, $only);
 
         if ($this->option('json')) {
             $this->line(json_encode([

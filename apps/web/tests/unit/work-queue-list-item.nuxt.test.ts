@@ -2,7 +2,7 @@ import { mountSuspended } from '@nuxt/test-utils/runtime'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { VueWrapper } from '@vue/test-utils'
 import WorkQueueListItem from '../../app/components/work/WorkQueueListItem.vue'
-import type { OperationalTaskSummary } from '../../app/types/work'
+import type { WorkTaskSummary } from '../../app/types/work'
 import { restoreWorkSelectionFocus } from '../../app/utils/work-focus'
 
 let wrapper: VueWrapper | null = null
@@ -26,7 +26,7 @@ const item = {
     title: 'Fechamento mensal',
     client: { id: 7, name: 'Empresa Exemplo' }
   }
-} as OperationalTaskSummary
+} as WorkTaskSummary
 
 describe('WorkQueueListItem — teclado e foco', () => {
   it('seleciona a tarefa por Enter e Espaço', async () => {

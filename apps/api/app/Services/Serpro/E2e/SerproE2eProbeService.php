@@ -7,8 +7,8 @@ use App\DTO\Serpro\SerproOperationCommand;
 use App\Enums\SerproEnvironment;
 use App\Enums\SerproReadinessGate;
 use App\Models\Client;
-use App\Models\Office;
 use App\Models\SerproReadinessRun;
+use App\Models\Tenant;
 use App\Services\Serpro\Catalog\OfficialServiceCatalogManifest;
 use App\Services\Serpro\SerproOperationService;
 use Illuminate\Support\Str;
@@ -51,7 +51,7 @@ final class SerproE2eProbeService
      * @return array<string, mixed>
      */
     public function probe(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $operationKey,
         array $ctx = [],
@@ -62,7 +62,7 @@ final class SerproE2eProbeService
         $isMutating = (bool) ($entry['is_mutating'] ?? false);
         $correlationId = (string) Str::uuid();
         $built = $this->payloads->forOperation($operationKey, $client, $ctx);
-        $preflight = $this->canaryPreflight($office, $client, $operationKey, $official);
+        $preflight = $this->canaryPreflight($tenant, $client, $operationKey, $official);
 
         $attempts = [];
         $response = null;
@@ -73,11 +73,10 @@ final class SerproE2eProbeService
                 throw new \RuntimeException((string) $preflight['reason']);
             }
             $response = $this->runOnce(
-                $office,
+                $tenant,
                 $client,
                 $operationKey,
                 $built['business_data'],
-                $built['payload'],
                 $correlationId,
                 idempotencySuffix: 'a',
             );
@@ -86,11 +85,10 @@ final class SerproE2eProbeService
             // 304 vazio: 1 retry com idempotency distinto (padrão SITFIS / cache SERPRO).
             if ($this->isEmptyNotModified($response)) {
                 $response = $this->runOnce(
-                    $office,
+                    $tenant,
                     $client,
                     $operationKey,
                     $built['business_data'],
-                    $built['payload'],
                     $correlationId,
                     idempotencySuffix: 'b-'.Str::lower(Str::random(6)),
                 );
@@ -118,7 +116,7 @@ final class SerproE2eProbeService
             'id_sistema' => $entry['id_sistema'] ?? null,
             'id_servico' => $entry['id_servico'] ?? null,
             'is_mutating' => $isMutating,
-            'office_id' => (int) $office->id,
+            'tenant_id' => (int) $tenant->id,
             'client_id' => (int) $client->id,
             'correlation_id' => $correlationId,
             'classification' => $classification['status'],
@@ -160,7 +158,7 @@ final class SerproE2eProbeService
      * @return array{summary: array<string, int>, results: list<array<string, mixed>>, sitfis_protocol: string|null}
      */
     public function probeAllProduction(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $artifactDir,
         ?array $onlyKeys = null,
@@ -219,7 +217,7 @@ final class SerproE2eProbeService
                 $ctx['protocol'] = $sitfisProtocol;
             }
 
-            $row = $this->probe($office, $client, $key, $ctx, $artifactDir);
+            $row = $this->probe($tenant, $client, $key, $ctx, $artifactDir);
             $results[] = $row;
             $summary['total']++;
             $status = (string) $row['classification'];
@@ -265,23 +263,20 @@ final class SerproE2eProbeService
 
     /**
      * @param  array<string, mixed>  $businessData
-     * @param  array<string, mixed>  $payload
      */
     private function runOnce(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $operationKey,
         array $businessData,
-        array $payload,
         string $correlationId,
         string $idempotencySuffix,
     ): IntegraResponse {
         $command = new SerproOperationCommand(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             operationKey: $operationKey,
             businessData: $businessData,
-            payload: $payload,
             idempotencyKey: 'e2e-probe:'.$operationKey.':'.$idempotencySuffix.':'.now()->format('YmdHis'),
             correlationId: $correlationId,
             environment: (string) config('serpro.default_environment', 'TRIAL'),
@@ -391,7 +386,7 @@ final class SerproE2eProbeService
     /**
      * @return array{eligible: bool, reason: string}
      */
-    private function canaryPreflight(Office $office, Client $client, string $operationKey, string $official): array
+    private function canaryPreflight(Tenant $tenant, Client $client, string $operationKey, string $official): array
     {
         if ($official !== 'PRODUCTION') {
             return ['eligible' => false, 'reason' => 'OFFICIAL_STATE_NOT_PRODUCTION'];
@@ -413,7 +408,7 @@ final class SerproE2eProbeService
         }
 
         $run = SerproReadinessRun::query()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('operation_key', $operationKey)
             ->where('environment', SerproEnvironment::Production->value)

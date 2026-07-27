@@ -21,6 +21,7 @@ import {
 } from '~/utils/declarations-table'
 import { MONITORING_SHARED_COLUMN_LABELS } from '~/utils/monitoring-table-columns'
 import { apiErrorMessage } from '~/utils/api-error'
+import { formatCnpj } from '~/utils/format'
 
 const submodule = ref(normalizeDeclarationsSubmodule('PGDAS'))
 const api = useApi()
@@ -171,15 +172,15 @@ function closeModals() {
 function openOperations(row?: DeclarationsClientRow) {
   operationClientId.value = row?.client_id || null
   operationClientName.value = row
-    ? row.legal_name || row.name || row.display_name || null
+    ? row.display_name || row.legal_name || null
     : null
   operationModalOpen.value = true
 }
 
 function openModalClient(row: DeclarationsClientRow) {
   modalClientId.value = row.client_id
-  modalClientName.value = row.legal_name || row.name || null
-  modalCnpjMasked.value = row.cnpj_masked || null
+  modalClientName.value = row.display_name || row.legal_name || null
+  modalCnpjMasked.value = row.cnpj ? formatCnpj(row.cnpj) : null
 }
 
 function openPgdasHistory(row: DeclarationsClientRow) {

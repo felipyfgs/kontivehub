@@ -43,10 +43,10 @@ class SerproDteCanaryController extends Controller
 
     public function selectTarget(Request $request, SerproDteCanaryRequest $serproDteCanaryRequest): JsonResponse
     {
-        // Aceita office_id e client_id somente neste comando de seleção global
+        // Aceita tenant_id e client_id somente neste comando de seleção global
         // (não no execute / approve). Rejeita operação/coordenadas livres.
         $data = $request->validate([
-            'office_id' => ['required', 'integer', 'min:1'],
+            'tenant_id' => ['required', 'integer', 'min:1'],
             'client_id' => ['required', 'integer', 'min:1'],
             'operation_key' => ['prohibited'],
             'id_sistema' => ['prohibited'],
@@ -59,7 +59,7 @@ class SerproDteCanaryController extends Controller
         try {
             $row = $this->canary->selectTarget(
                 $serproDteCanaryRequest,
-                (int) $data['office_id'],
+                (int) $data['tenant_id'],
                 (int) $data['client_id'],
                 (int) $request->user()->id,
             );
@@ -104,7 +104,7 @@ class SerproDteCanaryController extends Controller
         }
 
         // Rejeitar qualquer override de escopo/operação
-        foreach (['office_id', 'client_id', 'operation_key', 'id_sistema', 'id_servico', 'payload', 'business_data'] as $forbidden) {
+        foreach (['tenant_id', 'client_id', 'operation_key', 'id_sistema', 'id_servico', 'payload', 'business_data'] as $forbidden) {
             if ($request->exists($forbidden)) {
                 return response()->json([
                     'message' => "Campo {$forbidden} não é aceito na execução do canário DTE.",

@@ -5,19 +5,19 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\Platform\TenantSwitchService;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
  * Troca explícita de tenant + listagem de memberships.
- * Fora de EnsureOfficeContext para aceitar office_id de destino validado por membership.
+ * Fora de EnsureTenantContext para aceitar tenant_id de destino validado por membership.
  */
 class TenantSwitchController extends Controller
 {
     public function __construct(
         private readonly TenantSwitchService $switcher,
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
     ) {}
 
     public function memberships(Request $request): JsonResponse
@@ -27,7 +27,7 @@ class TenantSwitchController extends Controller
 
         return response()->json([
             'data' => [
-                'current_office_id' => $this->currentOffice->resolve($user)?->id,
+                'current_tenant_id' => $this->currentTenant->resolve($user)?->id,
                 'memberships' => $this->switcher->listMemberships($user),
             ],
         ]);
@@ -39,18 +39,18 @@ class TenantSwitchController extends Controller
         $user = $request->user();
 
         $validated = $request->validate([
-            'office_id' => ['required', 'integer', 'min:1'],
+            'tenant_id' => ['required', 'integer', 'min:1'],
         ]);
 
-        $office = $this->switcher->switchTo($user, (int) $validated['office_id'], $request);
-        $role = $this->currentOffice->role();
+        $tenant = $this->switcher->switchTo($user, (int) $validated['tenant_id'], $request);
+        $role = $this->currentTenant->role();
 
         return response()->json([
             'data' => [
-                'office' => [
-                    'id' => $office->id,
-                    'name' => $office->name,
-                    'slug' => $office->slug,
+                'tenant' => [
+                    'id' => $tenant->id,
+                    'name' => $tenant->name,
+                    'slug' => $tenant->slug,
                 ],
                 'role' => $role?->value,
             ],

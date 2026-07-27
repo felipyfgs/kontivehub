@@ -1,9 +1,16 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const root = (path: string) => resolve(process.cwd(), path)
 const read = (path: string) => readFileSync(root(path), 'utf8')
+const repositoryFile = (mountedPath: string, repositoryPath: string) =>
+  readFileSync(
+    existsSync(mountedPath)
+      ? mountedPath
+      : resolve(process.cwd(), '../..', repositoryPath),
+    'utf8'
+  )
 
 describe('identidade pública KontiveHub', () => {
   it('usa a marca canônica nos metadados globais e no manifesto PWA', () => {
@@ -18,7 +25,7 @@ describe('identidade pública KontiveHub', () => {
     expect(nuxt).not.toContain('name: \'NFS-e ADN\'')
   })
 
-  it('identifica autenticação e onboarding sem a marca ou domínio legados', () => {
+  it('identifica autenticação e onboarding somente com a marca atual', () => {
     const sources = [
       'app/layouts/auth.vue',
       'app/pages/login.vue',
@@ -60,9 +67,9 @@ describe('identidade pública KontiveHub', () => {
   })
 
   it('integra o build produtivo às origens públicas KontiveHub', () => {
-    const compose = read('../../docker-compose.prod.yml')
-    const dockerfile = read('../../infra/docker/nginx/Dockerfile')
-    const nginx = read('../../infra/docker/nginx/conf/prod.conf')
+    const compose = repositoryFile('/workspace/docker-compose.prod.yml', 'docker-compose.prod.yml')
+    const dockerfile = repositoryFile('/workspace/nginx/Dockerfile', 'infra/docker/nginx/Dockerfile')
+    const nginx = repositoryFile('/workspace/nginx/conf/prod.conf', 'infra/docker/nginx/conf/prod.conf')
 
     expect(compose).toContain('NUXT_PUBLIC_API_BASE: https://api.kontivehub.com.br')
     expect(compose).toContain('NUXT_PUBLIC_REVERB_HOST: api.kontivehub.com.br')

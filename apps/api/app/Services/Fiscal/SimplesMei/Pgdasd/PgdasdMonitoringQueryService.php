@@ -12,13 +12,13 @@ use App\Models\Client;
 use App\Models\FiscalEvidenceArtifact;
 use App\Models\FiscalMonitoringRun;
 use App\Models\FiscalSnapshot;
-use App\Models\Office;
 use App\Models\PgdasdArtifact;
 use App\Models\PgdasdOperation;
 use App\Models\PgdasdRbt12Projection;
 use App\Models\TaxGuide;
 use App\Models\TaxObligationDefinition;
 use App\Models\TaxObligationProjection;
+use App\Models\Tenant;
 use App\Services\FiscalMonitoring\FiscalEvidenceStore;
 use App\Services\FiscalMonitoring\FiscalMonitoringRunService;
 use RuntimeException;
@@ -43,33 +43,32 @@ final class PgdasdMonitoringQueryService
      * @param  list<int>  $clientIds
      * @return array<int, array<string, mixed>>
      */
-    public function portfolioDetails(Office $office, array $clientIds): array
+    public function portfolioDetails(Tenant $tenant, array $clientIds): array
     {
         if ($clientIds === []) {
             return [];
         }
 
-        $tz = is_string($office->timezone) && $office->timezone !== ''
-            ? $office->timezone
+        $tz = is_string($tenant->timezone) && $tenant->timezone !== ''
+            ? $tenant->timezone
             : 'America/Sao_Paulo';
-        $expectedPa = PgdasdPeriod::toPeriodoApuracao(PgdasdPeriod::expectedPa(null, $tz));
-        $periodKey = PgdasdPeriod::periodKeyFromPeriodoApuracao($expectedPa);
+        $periodKey = PgdasdPeriod::toPeriodKey(PgdasdPeriod::expectedPa(null, $tz));
 
         $definition = TaxObligationDefinition::query()->where('code', 'PGDAS_D')->first();
         $projections = TaxObligationProjection::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->where('period_key', $periodKey)
             ->where('obligation_definition_id', $definition?->id ?? 0)
             ->get()
             ->keyBy('client_id');
 
-        $communications = $this->communication->summariesForClients($office, $clientIds);
+        $communications = $this->communication->summariesForClients($tenant, $clientIds);
 
         $lastOps = PgdasdOperation::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->where('kind', 'DECLARATION')
             ->orderByDesc('transmitted_at')
@@ -79,7 +78,7 @@ final class PgdasdMonitoringQueryService
 
         $dasByClient = PgdasdOperation::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->where('kind', PgdasdOperationKind::Das->value)
             ->where('period_key', $periodKey)
@@ -88,12 +87,12 @@ final class PgdasdMonitoringQueryService
             ->get()
             ->groupBy('client_id');
 
-        $openPaymentCompetencies = $this->openPaymentCompetencies($office, $clientIds);
+        $openPaymentCompetencies = $this->openPaymentCompetencies($tenant, $clientIds);
 
         $rbt12 = PgdasdRbt12Projection::query()
             ->withoutGlobalScopes()
-            ->with('projection')
-            ->where('office_id', $office->id)
+            ->with(['projection' => fn ($query) => $query->withoutGlobalScopes()])
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->orderByDesc('id')
             ->get()
@@ -103,7 +102,7 @@ final class PgdasdMonitoringQueryService
         // consulta, job ou qualquer chamada ao Integra Contador.
         $documents = PgdasdArtifact::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->whereNotNull('fiscal_evidence_artifact_id')
             ->orderByDesc('observed_at')
@@ -161,9 +160,7 @@ final class PgdasdMonitoringQueryService
             $map[$cid] = [
                 'module_key' => 'simples_mei',
                 'submodule' => 'PGDASD',
-                'expected_periodo_apuracao' => $expectedPa,
                 'expected_period_key' => $periodKey,
-                'period_key' => $periodKey,
                 'declaration_state' => $state,
                 'declaration_state_reason' => $this->stateReason($proj),
                 'payment_state' => $paymentPack['state']->value,
@@ -172,12 +169,10 @@ final class PgdasdMonitoringQueryService
                 'payment_unpaid_count' => $paymentPack['unpaid_count'],
                 'payment_paid_count' => $paymentPack['paid_count'],
                 'payment_open_competencies' => $openPaymentCompetencies[$cid] ?? [],
-                'last_declaration' => $lastPublic,
                 'latest_declaration' => $lastPublic === null ? null : [
                     'period_key' => $lastPublic['period_key'] ?? null,
-                    'declaration_number' => $lastPublic['numero_declaracao'] ?? null,
-                    'number' => $lastPublic['numero_declaracao'] ?? null,
-                    'operation_type' => $lastPublic['operation_kind'] ?? null,
+                    'declaration_number' => $lastPublic['declaration_number'] ?? null,
+                    'normalized_operation_type' => $lastPublic['normalized_operation_type'] ?? null,
                     'transmitted_at' => $lastPublic['transmitted_at'] ?? null,
                 ],
                 'rbt12' => $rbtPublic,
@@ -185,7 +180,6 @@ final class PgdasdMonitoringQueryService
                     ->map(static fn (PgdasdArtifact $artifact): array => $artifact->toTenantDocumentArray())
                     ->values()
                     ->all(),
-                'last_productive_consulted_at' => $proj?->last_valid_query_at?->toIso8601String(),
                 'last_valid_query_at' => $proj?->last_valid_query_at?->toIso8601String(),
                 'calendar_verified' => (bool) ($proj?->pgdasd_calendar_verified ?? false),
                 'communication' => $comm,
@@ -207,7 +201,7 @@ final class PgdasdMonitoringQueryService
      * @param  list<int>  $clientIds
      * @return array<int, list<array{period_key: string, amount_cents: ?int}>>
      */
-    private function openPaymentCompetencies(Office $office, array $clientIds): array
+    private function openPaymentCompetencies(Tenant $tenant, array $clientIds): array
     {
         $ttl = max(60, (int) config(
             'fiscal_monitoring.pgdasd_pagtoweb_reconciliation.negative_ttl_seconds',
@@ -216,7 +210,7 @@ final class PgdasdMonitoringQueryService
         $freshAfter = now()->subSeconds($ttl);
         $operations = PgdasdOperation::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->where('kind', PgdasdOperationKind::Das->value)
             ->whereNotNull('period_key')
@@ -264,7 +258,7 @@ final class PgdasdMonitoringQueryService
 
         $guideAmounts = TaxGuide::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->when(
                 $dasNumbers !== [],
@@ -307,7 +301,7 @@ final class PgdasdMonitoringQueryService
             }
         }
 
-        $gerarDasAmounts = $this->gerarDasLocalAmounts($office, array_values($gaps));
+        $gerarDasAmounts = $this->gerarDasLocalAmounts($tenant, array_values($gaps));
 
         $aggregate = [];
         foreach ($operations as $operation) {
@@ -365,7 +359,7 @@ final class PgdasdMonitoringQueryService
      * @param  list<array{client_id: int, das_number: string}>  $gaps
      * @return array<string, int> keyed by "{client_id}|{das_number}"
      */
-    private function gerarDasLocalAmounts(Office $office, array $gaps): array
+    private function gerarDasLocalAmounts(Tenant $tenant, array $gaps): array
     {
         if ($gaps === []) {
             return [];
@@ -383,7 +377,7 @@ final class PgdasdMonitoringQueryService
 
         $snapshots = FiscalSnapshot::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->where('service_code', 'PGDASD')
             ->where('operation_code', 'GERAR_DAS')
@@ -411,7 +405,7 @@ final class PgdasdMonitoringQueryService
 
         $runs = FiscalMonitoringRun::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->where('service_code', 'PGDASD')
             ->where('operation_code', 'GERAR_DAS')
@@ -432,7 +426,7 @@ final class PgdasdMonitoringQueryService
 
         $artifacts = FiscalEvidenceArtifact::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('run_id', $runs->pluck('id'))
             ->where('content_type', 'application/json')
             ->orderByDesc('id')
@@ -444,7 +438,7 @@ final class PgdasdMonitoringQueryService
                 continue;
             }
             try {
-                $bytes = $this->evidenceStore->readAuthorized($artifact, (int) $office->id);
+                $bytes = $this->evidenceStore->readAuthorized($artifact, (int) $tenant->id);
             } catch (Throwable) {
                 continue;
             }
@@ -522,9 +516,9 @@ final class PgdasdMonitoringQueryService
      *
      * @return array<string, mixed>
      */
-    public function history(Office $office, Client $client, ?int $year = null): array
+    public function history(Tenant $tenant, Client $client, ?int $year = null): array
     {
-        $this->assertClient($office, $client);
+        $this->assertClient($tenant, $client);
         if ($year !== null && ($year < 2000 || $year > 2100)) {
             throw new RuntimeException('Ano do histórico inválido.');
         }
@@ -532,7 +526,7 @@ final class PgdasdMonitoringQueryService
 
         $operations = PgdasdOperation::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->whereHas('projection', fn ($query) => $query->where('obligation_definition_id', $definitionId ?? 0))
             ->when($year !== null, function ($q) use ($year): void {
@@ -546,7 +540,7 @@ final class PgdasdMonitoringQueryService
         $artifacts = PgdasdArtifact::query()
             ->withoutGlobalScopes()
             ->with('evidenceArtifact')
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->whereHas('projection', function ($query) use ($definitionId, $year): void {
                 $query->where('obligation_definition_id', $definitionId ?? 0)
@@ -557,7 +551,7 @@ final class PgdasdMonitoringQueryService
 
         $rbt12 = PgdasdRbt12Projection::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->whereHas('projection', function ($query) use ($definitionId, $year): void {
                 $query->where('obligation_definition_id', $definitionId ?? 0)
@@ -566,9 +560,9 @@ final class PgdasdMonitoringQueryService
             ->orderByDesc('id')
             ->get();
 
-        $proj = $this->currentProjection($office, $client);
-        $tz = is_string($office->timezone) && $office->timezone !== ''
-            ? $office->timezone
+        $proj = $this->currentProjection($tenant, $client);
+        $tz = is_string($tenant->timezone) && $tenant->timezone !== ''
+            ? $tenant->timezone
             : 'America/Sao_Paulo';
         $expectedPeriodKey = PgdasdPeriod::toPeriodKey(PgdasdPeriod::expectedPa(null, $tz));
 
@@ -583,7 +577,6 @@ final class PgdasdMonitoringQueryService
                     'last_valid_query_at' => null,
                     'declarations' => [],
                     'das' => [],
-                    'documents' => [],
                     'artifacts' => [],
                     'rbt12' => null,
                 ];
@@ -622,14 +615,12 @@ final class PgdasdMonitoringQueryService
                         'last_valid_query_at' => null,
                         'declarations' => [],
                         'das' => [],
-                        'documents' => [],
                         'artifacts' => [],
                         'rbt12' => null,
                     ];
                 }
             }
             $doc = $art->toPublicArray();
-            $byPeriod[$pk]['documents'][] = $doc;
             $byPeriod[$pk]['artifacts'][] = $doc;
         }
 
@@ -645,7 +636,6 @@ final class PgdasdMonitoringQueryService
                     'last_valid_query_at' => null,
                     'declarations' => [],
                     'das' => [],
-                    'documents' => [],
                     'artifacts' => [],
                     'rbt12' => null,
                 ];
@@ -679,14 +669,6 @@ final class PgdasdMonitoringQueryService
             'declaration_state_reason' => $this->stateReason($proj),
             'last_valid_query_at' => $lastValid,
             'periods' => $periods,
-            'history' => $periods,
-            // campos aditivos legados (modal simples)
-            'client_id' => $client->id,
-            'legal_name' => $client->legal_name,
-            'last_productive_consulted_at' => $lastValid,
-            'operations' => $operations->map->toPublicArray()->values()->all(),
-            'artifacts' => $artifacts->map->toPublicArray()->values()->all(),
-            'rbt12_projections' => $rbt12->map->toPublicArray()->values()->all(),
             'provenance' => [
                 'source' => 'LOCAL_PROJECTION',
                 'serpro_called' => false,
@@ -694,23 +676,23 @@ final class PgdasdMonitoringQueryService
         ];
     }
 
-    public function findArtifact(Office $office, Client $client, int $artifactId): ?PgdasdArtifact
+    public function findArtifact(Tenant $tenant, Client $client, int $artifactId): ?PgdasdArtifact
     {
         return PgdasdArtifact::query()
             ->withoutGlobalScopes()
             ->with('evidenceArtifact')
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->whereKey($artifactId)
             ->first();
     }
 
-    public function findArtifactForOffice(Office $office, int $artifactId): ?PgdasdArtifact
+    public function findArtifactForTenant(Tenant $tenant, int $artifactId): ?PgdasdArtifact
     {
         return PgdasdArtifact::query()
             ->withoutGlobalScopes()
             ->with('evidenceArtifact')
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($artifactId)
             ->first();
     }
@@ -721,13 +703,13 @@ final class PgdasdMonitoringQueryService
      * @param  array<string, mixed>  $params
      */
     public function enqueueDocumentCollect(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $operation,
         array $params,
         ?int $actorId,
     ): FiscalMonitoringRun {
-        $this->assertClient($office, $client);
+        $this->assertClient($tenant, $client);
 
         $op = strtoupper($operation);
         $operationCode = match ($op) {
@@ -750,7 +732,7 @@ final class PgdasdMonitoringQueryService
 
             $observed = PgdasdOperation::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('client_id', $client->id)
                 ->where('kind', PgdasdOperationKind::Declaration->value)
                 ->where('declaration_number', $declarationNumber)
@@ -768,7 +750,7 @@ final class PgdasdMonitoringQueryService
         }
 
         $run = $this->runs->enqueueManual(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             systemCode: 'INTEGRA_SN',
             serviceCode: 'PGDASD',
@@ -811,10 +793,10 @@ final class PgdasdMonitoringQueryService
         $client = Client::query()
             ->withoutGlobalScopes()
             ->find($rbt12->client_id);
-        $office = Office::query()->find($rbt12->office_id);
-        if ($projection === null || $client === null || $office === null
-            || (int) $projection->office_id !== (int) $office->id
-            || (int) $client->office_id !== (int) $office->id
+        $tenant = Tenant::query()->find($rbt12->tenant_id);
+        if ($projection === null || $client === null || $tenant === null
+            || (int) $projection->tenant_id !== (int) $tenant->id
+            || (int) $client->tenant_id !== (int) $tenant->id
             || $rbt12->status?->value !== 'PENDING'
         ) {
             throw new RuntimeException('Reserva RBT12 inválida para consulta documental.');
@@ -839,7 +821,7 @@ final class PgdasdMonitoringQueryService
         $operationKey = $hasDas ? 'pgdasd.consextrato' : 'pgdasd.consdecrec';
 
         $run = $this->runs->enqueueManual(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             systemCode: 'INTEGRA_SN',
             serviceCode: 'PGDASD',
@@ -913,10 +895,10 @@ final class PgdasdMonitoringQueryService
         return $run->fresh() ?? $run;
     }
 
-    private function currentProjection(Office $office, Client $client): ?TaxObligationProjection
+    private function currentProjection(Tenant $tenant, Client $client): ?TaxObligationProjection
     {
-        $tz = is_string($office->timezone) && $office->timezone !== ''
-            ? $office->timezone
+        $tz = is_string($tenant->timezone) && $tenant->timezone !== ''
+            ? $tenant->timezone
             : 'America/Sao_Paulo';
         $periodKey = PgdasdPeriod::toPeriodKey(PgdasdPeriod::expectedPa(null, $tz));
 
@@ -926,7 +908,7 @@ final class PgdasdMonitoringQueryService
 
         $q = TaxObligationProjection::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('period_key', $periodKey);
 
@@ -935,9 +917,9 @@ final class PgdasdMonitoringQueryService
         return $q->first();
     }
 
-    private function assertClient(Office $office, Client $client): void
+    private function assertClient(Tenant $tenant, Client $client): void
     {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new RuntimeException('Cliente não pertence ao escritório ativo.');
         }
     }
@@ -975,7 +957,7 @@ final class PgdasdMonitoringQueryService
     private function historyCnpjMasked(Client $client): string
     {
         $cnpj = $client->establishments()
-            ->orderByDesc('is_matrix')
+            ->orderByDesc('is_headquarters')
             ->orderBy('id')
             ->value('cnpj');
 

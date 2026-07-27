@@ -5,7 +5,6 @@ namespace App\Services\Audit;
 use App\Models\AuditLog;
 use App\Services\Operations\OperationsMetrics;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * Verifica integridade da cadeia de auditoria append-only.
@@ -28,16 +27,6 @@ final class AuditIntegrityService
      */
     public function verify(?int $limit = null): array
     {
-        if (! Schema::hasColumn('audit_logs', 'entry_hash')) {
-            return [
-                'ok' => true,
-                'checked' => 0,
-                'broken_at_seq' => null,
-                'reason_code' => 'CHAIN_COLUMNS_ABSENT',
-                'genesis_hash' => str_repeat('0', 64),
-            ];
-        }
-
         $q = AuditLog::query()
             ->whereNotNull('entry_hash')
             ->orderBy('chain_seq')
@@ -61,7 +50,7 @@ final class AuditIntegrityService
 
             $payload = [
                 'chain_seq' => (int) $row->chain_seq,
-                'office_id' => $row->office_id !== null ? (int) $row->office_id : null,
+                'tenant_id' => $row->tenant_id !== null ? (int) $row->tenant_id : null,
                 'user_id' => $row->user_id !== null ? (int) $row->user_id : null,
                 'action' => $row->action,
                 'subject_type' => $row->subject_type,

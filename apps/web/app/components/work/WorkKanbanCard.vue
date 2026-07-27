@@ -3,7 +3,7 @@
  * Card arrastável do board Kanban de tarefas.
  * DnD via makeDraggable (filho de DnDProvider no board).
  */
-import type { OperationalTaskSummary } from '~/types/work'
+import type { WorkTaskSummary } from '~/types/work'
 import {
   formatDueDate,
   highestRiskColor,
@@ -15,10 +15,10 @@ import {
 import type { WorkKanbanColumnStatus } from '~/utils/work-kanban-transition'
 
 const props = defineProps<{
-  item: OperationalTaskSummary
+  item: WorkTaskSummary
   columnStatus: WorkKanbanColumnStatus
   /** Array mutável da coluna — payload do vue-dnd-kit. */
-  columnItems: OperationalTaskSummary[]
+  columnItems: WorkTaskSummary[]
   selected?: boolean
   disabled?: boolean
 }>()

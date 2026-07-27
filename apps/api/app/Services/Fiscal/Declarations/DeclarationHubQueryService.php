@@ -2,10 +2,10 @@
 
 namespace App\Services\Fiscal\Declarations;
 
-use App\Models\Office;
 use App\Models\TaxDeliveryEvidence;
 use App\Models\TaxObligationDefinition;
 use App\Models\TaxObligationProjection;
+use App\Models\Tenant;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 /**
@@ -30,7 +30,7 @@ final class DeclarationHubQueryService
      * }  $filters
      * @return LengthAwarePaginator<int, TaxObligationProjection>
      */
-    public function list(Office $office, array $filters = []): LengthAwarePaginator
+    public function list(Tenant $tenant, array $filters = []): LengthAwarePaginator
     {
         $perPage = min(100, max(1, (int) ($filters['per_page'] ?? 50)));
 
@@ -42,7 +42,7 @@ final class DeclarationHubQueryService
                 'calendarVersion',
                 'conclusiveEvidence',
             ])
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->orderByDesc('period_year')
             ->orderByDesc('period_month')
             ->orderBy('obligation_definition_id');
@@ -86,7 +86,7 @@ final class DeclarationHubQueryService
         return $q->paginate($perPage);
     }
 
-    public function find(Office $office, int $id): ?TaxObligationProjection
+    public function find(Tenant $tenant, int $id): ?TaxObligationProjection
     {
         return TaxObligationProjection::query()
             ->withoutGlobalScopes()
@@ -98,16 +98,16 @@ final class DeclarationHubQueryService
                 'evidences',
                 'client',
             ])
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($id)
             ->first();
     }
 
-    public function findEvidence(Office $office, int $projectionId, int $evidenceId): ?TaxDeliveryEvidence
+    public function findEvidence(Tenant $tenant, int $projectionId, int $evidenceId): ?TaxDeliveryEvidence
     {
         return TaxDeliveryEvidence::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('projection_id', $projectionId)
             ->whereKey($evidenceId)
             ->first();
@@ -118,12 +118,12 @@ final class DeclarationHubQueryService
      *
      * @return list<array<string, mixed>>
      */
-    public function summaryByObligation(Office $office, ?int $clientId = null, ?string $periodKey = null): array
+    public function summaryByObligation(Tenant $tenant, ?int $clientId = null, ?string $periodKey = null): array
     {
         $q = TaxObligationProjection::query()
             ->withoutGlobalScopes()
             ->selectRaw('obligation_definition_id, applicability, delivery_status, COUNT(*) as total')
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->groupBy('obligation_definition_id', 'applicability', 'delivery_status');
 
         if ($clientId !== null) {

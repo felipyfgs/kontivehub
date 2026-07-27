@@ -5,9 +5,9 @@ namespace App\Http\Controllers\Api\V1\Platform;
 use App\Enums\SubscriptionPlan;
 use App\Enums\SubscriptionStatus;
 use App\Http\Controllers\Controller;
-use App\Models\Office;
-use App\Models\OfficeSubscription;
-use App\Services\Platform\OfficeSubscriptionService;
+use App\Models\Tenant;
+use App\Models\TenantSubscription;
+use App\Services\Platform\TenantSubscriptionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -20,14 +20,14 @@ use InvalidArgumentException;
 class TenantAdminController extends Controller
 {
     public function __construct(
-        private readonly OfficeSubscriptionService $subscriptions,
+        private readonly TenantSubscriptionService $subscriptions,
     ) {}
 
     public function index(Request $request): JsonResponse
     {
         $status = $request->query('status');
 
-        $query = Office::query()
+        $query = Tenant::query()
             ->with('subscription')
             ->orderBy('id');
 
@@ -35,23 +35,23 @@ class TenantAdminController extends Controller
             $query->whereHas('subscription', fn ($q) => $q->where('status', strtoupper($status)));
         }
 
-        $tenants = $query->get()->map(fn (Office $office) => $this->sanitizeTenant($office));
+        $tenants = $query->get()->map(fn (Tenant $tenant) => $this->sanitizeTenant($tenant));
 
         return response()->json([
             'data' => $tenants,
         ]);
     }
 
-    public function show(Office $office): JsonResponse
+    public function show(Tenant $tenant): JsonResponse
     {
-        $office->load('subscription');
+        $tenant->load('subscription');
 
         return response()->json([
-            'data' => $this->sanitizeTenant($office),
+            'data' => $this->sanitizeTenant($tenant),
         ]);
     }
 
-    public function updateSubscription(Request $request, Office $office): JsonResponse
+    public function updateSubscription(Request $request, Tenant $tenant): JsonResponse
     {
         $validated = $request->validate([
             'status' => ['sometimes', 'string', Rule::enum(SubscriptionStatus::class)],
@@ -61,7 +61,7 @@ class TenantAdminController extends Controller
             'negotiated_client_limit' => ['sometimes', 'nullable', 'integer', 'min:201', 'max:100000'],
         ]);
 
-        $subscription = OfficeSubscription::query()->where('office_id', $office->id)->first();
+        $subscription = TenantSubscription::query()->where('tenant_id', $tenant->id)->first();
 
         if ($subscription === null) {
             $plan = isset($validated['plan'])
@@ -71,7 +71,7 @@ class TenantAdminController extends Controller
                 ? SubscriptionStatus::from($validated['status'])
                 : SubscriptionStatus::Active;
 
-            $subscription = $this->subscriptions->create($office, $plan, $status);
+            $subscription = $this->subscriptions->create($tenant, $plan, $status);
         } else {
             try {
                 if (isset($validated['plan'])) {
@@ -106,7 +106,7 @@ class TenantAdminController extends Controller
                             notes: $validated['notes'] ?? null,
                         ),
                         SubscriptionStatus::PendingActivation => throw new InvalidArgumentException(
-                            'PENDING_ACTIVATION só é definido na criação de Office; use o fluxo de ativação.',
+                            'PENDING_ACTIVATION só é definido na criação de Tenant; use o fluxo de ativação.',
                         ),
                     };
                 }
@@ -136,10 +136,10 @@ class TenantAdminController extends Controller
             }
         }
 
-        $office->load('subscription');
+        $tenant->load('subscription');
 
         return response()->json([
-            'data' => $this->sanitizeTenant($office->fresh(['subscription'])),
+            'data' => $this->sanitizeTenant($tenant->fresh(['subscription'])),
         ]);
     }
 
@@ -148,19 +148,19 @@ class TenantAdminController extends Controller
      *
      * @return array<string, mixed>
      */
-    private function sanitizeTenant(Office $office): array
+    private function sanitizeTenant(Tenant $tenant): array
     {
-        $subscription = $office->subscription;
+        $subscription = $tenant->subscription;
 
         return [
-            'id' => $office->id,
-            'name' => $office->name,
-            'slug' => $office->slug,
-            'is_active' => $office->is_active,
-            'created_at' => $office->created_at?->toIso8601String(),
+            'id' => $tenant->id,
+            'name' => $tenant->name,
+            'slug' => $tenant->slug,
+            'is_active' => $tenant->is_active,
+            'created_at' => $tenant->created_at?->toIso8601String(),
             'subscription' => $subscription?->toSanitizedAdminArray(),
             // Contagens agregadas não-fiscais (sem listar clientes/docs)
-            'memberships_count' => $office->memberships()->count(),
+            'memberships_count' => $tenant->memberships()->count(),
         ];
     }
 }

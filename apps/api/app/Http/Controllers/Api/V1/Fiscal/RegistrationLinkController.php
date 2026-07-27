@@ -2,29 +2,29 @@
 
 namespace App\Http\Controllers\Api\V1\Fiscal;
 
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Http\Controllers\Controller;
 use App\Jobs\Fiscal\RefreshRegistrationLinksJob;
 use App\Models\Client;
 use App\Models\FiscalRegistrationLink;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * APIs tenant-scoped de Cadastro/Vínculos (office da sessão).
+ * APIs tenant-scoped de Cadastro/Vínculos (tenant da sessão).
  */
 final class RegistrationLinkController extends Controller
 {
-    public function index(Request $request, CurrentOffice $currentOffice): JsonResponse
+    public function index(Request $request, CurrentTenant $currentTenant): JsonResponse
     {
-        $office = $currentOffice->office();
-        abort_if($office === null, 403);
+        $tenant = $currentTenant->tenant();
+        abort_if($tenant === null, 403);
 
-        // office_id do client é ignorado (EnsureOfficeContext)
+        // tenant_id do client é ignorado (EnsureTenantContext)
         $query = FiscalRegistrationLink::query()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->orderByDesc('refreshed_at')
             ->orderByDesc('id');
 
@@ -40,12 +40,12 @@ final class RegistrationLinkController extends Controller
             $like = '%'.addcslashes($search, '%_\\').'%';
             $normalizedDigits = preg_replace('/\D+/', '', $search) ?: '';
             $digits = strlen($normalizedDigits) >= 8 ? $normalizedDigits : null;
-            $query->where(function (Builder $filter) use ($search, $like, $digits, $office): void {
+            $query->where(function (Builder $filter) use ($search, $like, $digits, $tenant): void {
                 $filter->where('link_key', 'like', $like)
                     ->orWhere('source_provenance', 'like', $like)
                     ->when(ctype_digit($search), fn (Builder $q) => $q->orWhere('client_id', (int) $search))
-                    ->orWhereHas('client', function (Builder $client) use ($like, $digits, $office): void {
-                        $client->where('office_id', $office->id)
+                    ->orWhereHas('client', function (Builder $client) use ($like, $digits, $tenant): void {
+                        $client->where('tenant_id', $tenant->id)
                             ->where(function (Builder $identity) use ($like, $digits): void {
                                 $identity->where('legal_name', 'like', $like)
                                     ->orWhere('display_name', 'like', $like);
@@ -74,18 +74,18 @@ final class RegistrationLinkController extends Controller
         ]);
     }
 
-    public function showForClient(int $clientId, CurrentOffice $currentOffice): JsonResponse
+    public function showForClient(int $clientId, CurrentTenant $currentTenant): JsonResponse
     {
-        $office = $currentOffice->office();
-        abort_if($office === null, 403);
+        $tenant = $currentTenant->tenant();
+        abort_if($tenant === null, 403);
 
         $client = Client::query()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($clientId)
             ->firstOrFail();
 
         $rows = FiscalRegistrationLink::query()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->orderByDesc('refreshed_at')
             ->get();
@@ -98,22 +98,22 @@ final class RegistrationLinkController extends Controller
         ]);
     }
 
-    public function refresh(int $clientId, CurrentOffice $currentOffice): JsonResponse
+    public function refresh(int $clientId, CurrentTenant $currentTenant): JsonResponse
     {
-        $office = $currentOffice->office();
-        abort_if($office === null, 403);
-        $role = $currentOffice->role();
-        if ($role === null || ! in_array($role, [OfficeRole::Admin, OfficeRole::Operator], true)) {
+        $tenant = $currentTenant->tenant();
+        abort_if($tenant === null, 403);
+        $role = $currentTenant->role();
+        if ($role === null || ! in_array($role, [TenantRole::TenantAdmin, TenantRole::TenantUser], true)) {
             abort(403);
         }
 
         $client = Client::query()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($clientId)
             ->firstOrFail();
 
         $job = RefreshRegistrationLinksJob::dispatchIfAllowed(
-            (int) $office->id,
+            (int) $tenant->id,
             (int) $client->id,
             bin2hex(random_bytes(8)),
         );

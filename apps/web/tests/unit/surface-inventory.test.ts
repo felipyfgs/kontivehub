@@ -42,7 +42,7 @@ describe('surface inventory (web)', () => {
     expect(inventory.every(page => page.route.startsWith('/'))).toBe(true)
   })
 
-  it('redirect-only notes count matches summary.pagesRedirectOnly', () => {
+  it('não contém páginas exclusivas de redirecionamento', () => {
     const summary = JSON.parse(readFileSync(join(fixturesDir, 'summary.json'), 'utf8')) as {
       pagesRedirectOnly: number
     }
@@ -50,10 +50,7 @@ describe('surface inventory (web)', () => {
       notes?: string
       redirectOnly?: boolean
     }>
-    const redirectCount = pages.filter((page) => {
-      if (typeof page.redirectOnly === 'boolean') return page.redirectOnly
-      return String(page.notes || '').toLowerCase().includes('redirect-only')
-    }).length
-    expect(redirectCount).toBe(summary.pagesRedirectOnly)
+    expect(summary.pagesRedirectOnly).toBe(0)
+    expect(pages.every(page => page.redirectOnly !== true)).toBe(true)
   })
 })

@@ -8,6 +8,7 @@ use App\Enums\Communication\MessageDirection;
 use App\Enums\Communication\MessageSource;
 use App\Jobs\Communication\AdvanceCommunicationFlowRunJob;
 use App\Models\CommunicationConversation;
+use App\Models\CommunicationFlow;
 use App\Models\CommunicationFlowInboxBinding;
 use App\Models\CommunicationFlowRun;
 use App\Models\CommunicationMessage;
@@ -23,7 +24,7 @@ final class CommunicationFlowCorrelator
         private readonly CommunicationEventRecorder $events,
     ) {}
 
-    public function correlateMessage(int $officeId, int $conversationId, int $messageId, string $eventKey): void
+    public function correlateMessage(int $tenantId, int $conversationId, int $messageId, string $eventKey): void
     {
         if (! $this->availability->runtimeEnabled()) {
             return;
@@ -31,7 +32,7 @@ final class CommunicationFlowCorrelator
 
         $message = CommunicationMessage::query()->withoutGlobalScopes()->find($messageId);
         if ($message === null
-            || (int) $message->office_id !== $officeId
+            || (int) $message->tenant_id !== $tenantId
             || (int) $message->conversation_id !== $conversationId) {
             return;
         }
@@ -40,9 +41,9 @@ final class CommunicationFlowCorrelator
             return;
         }
 
-        $advanceRunId = DB::transaction(function () use ($officeId, $conversationId, $message, $eventKey): ?int {
+        $advanceRunId = DB::transaction(function () use ($tenantId, $conversationId, $message, $eventKey): ?int {
             if (! $this->consumptions->consumeOnce(
-                officeId: $officeId,
+                tenantId: $tenantId,
                 eventKey: $eventKey,
                 conversationId: $conversationId,
                 eventDigest: is_string($message->content_digest) ? $message->content_digest : null,
@@ -76,7 +77,7 @@ final class CommunicationFlowCorrelator
             }
 
             $this->consumptions->consumeOnce(
-                officeId: $officeId,
+                tenantId: $tenantId,
                 eventKey: $eventKey.'.run:'.$run->id,
                 runId: (int) $run->id,
                 conversationId: $conversationId,
@@ -113,7 +114,7 @@ final class CommunicationFlowCorrelator
     {
         $binding = CommunicationFlowInboxBinding::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $conversation->office_id)
+            ->where('tenant_id', $conversation->tenant_id)
             ->where('inbox_id', $conversation->inbox_id)
             ->where('enabled', true)
             ->lockForUpdate()
@@ -123,7 +124,10 @@ final class CommunicationFlowCorrelator
             return null;
         }
 
-        $binding->loadMissing(['flow', 'publishedVersion']);
+        $binding->loadMissing([
+            'flow' => fn ($query) => $query->withoutGlobalScopes(),
+            'publishedVersion' => fn ($query) => $query->withoutGlobalScopes(),
+        ]);
         $flow = $binding->flow;
         if ($flow === null || $flow->status === FlowStatus::Paused) {
             return null;
@@ -141,7 +145,7 @@ final class CommunicationFlowCorrelator
         }
 
         $run = CommunicationFlowRun::query()->withoutGlobalScopes()->create([
-            'office_id' => $conversation->office_id,
+            'tenant_id' => $conversation->tenant_id,
             'flow_id' => $binding->flow_id,
             'flow_version_id' => $version->id,
             'binding_id' => $binding->id,
@@ -153,7 +157,7 @@ final class CommunicationFlowCorrelator
         ]);
 
         $this->events->record(
-            (int) $conversation->office_id,
+            (int) $conversation->tenant_id,
             'COMMUNICATION_FLOW_RUN_STARTED',
             [
                 'run_id' => (int) $run->id,
@@ -228,12 +232,17 @@ final class CommunicationFlowCorrelator
      */
     private function stopIfFlowOrBindingIneligible(CommunicationFlowRun $run): bool
     {
-        $run->loadMissing(['flow', 'binding']);
+        $flow = CommunicationFlow::query()
+            ->withoutGlobalScopes()
+            ->find($run->flow_id);
+        $binding = CommunicationFlowInboxBinding::query()
+            ->withoutGlobalScopes()
+            ->find($run->binding_id);
 
         $reason = null;
-        if ($run->flow?->status === FlowStatus::Paused) {
+        if ($flow?->status === FlowStatus::Paused) {
             $reason = 'flow_paused';
-        } elseif ($run->binding?->enabled !== true) {
+        } elseif ($binding?->enabled !== true) {
             $reason = 'binding_disabled';
         }
 
@@ -250,7 +259,7 @@ final class CommunicationFlowCorrelator
         ])->save();
 
         $this->events->record(
-            (int) $run->office_id,
+            (int) $run->tenant_id,
             'COMMUNICATION_FLOW_RUN_STOPPED',
             [
                 'run_id' => (int) $run->id,

@@ -8,8 +8,8 @@ use App\DTO\Serpro\MutationAuthorization;
 use App\Enums\SerproCapabilityDriver;
 use App\Enums\SerproEnvironment;
 use App\Models\Client;
-use App\Models\Office;
-use App\Models\OfficeSerproAuthorization;
+use App\Models\Tenant;
+use App\Models\TenantSerproAuthorization;
 use App\Services\Fiscal\Guides\DTO\GuideEmissionRequest;
 use App\Services\Fiscal\Guides\DTO\GuideEmissionResult;
 use App\Services\Fiscal\Guides\DTO\GuidePaymentLookupRequest;
@@ -19,7 +19,6 @@ use App\Services\Fiscal\Guides\DTO\GuideReconcileResult;
 use App\Services\Fiscal\Guides\Exceptions\GuideTransportTimeoutException;
 use App\Services\Integra\ContributorCnpjResolver;
 use App\Services\Serpro\CapabilityDriverResolver;
-use App\Services\Serpro\Catalog\OperationKeyMap;
 use App\Services\Serpro\SerproContractService;
 use App\Services\Serpro\SerproOperationService;
 use RuntimeException;
@@ -27,8 +26,7 @@ use RuntimeException;
 /**
  * Adapter real da central de guias para SICALC/PAGTOWEB.
  *
- * O adapter nunca aceita coordenadas HTTP vindas do consumidor: converte apenas
- * códigos de domínio conhecidos em operation_key e deixa rota/serviço/versão
+ * O adapter recebe somente operation_key canônica e deixa rota/serviço/versão
  * para o catálogo oficial. Emissão ambígua não é repetida na reconciliação.
  */
 final class SerproGuideEmissionClient implements GuideEmissionClient
@@ -46,17 +44,12 @@ final class SerproGuideEmissionClient implements GuideEmissionClient
 
     public function emit(GuideEmissionRequest $request): GuideEmissionResult
     {
-        [$office, $client] = $this->context(
-            $request->officeId,
+        [$tenant, $client] = $this->context(
+            $request->tenantId,
             $request->clientId,
         );
 
-        $operationKey = OperationKeyMap::require(
-            null,
-            $request->systemCode,
-            $request->serviceCode,
-            $request->operationCode,
-        );
+        $operationKey = $request->operationKey;
         if ($operationKey !== self::EMISSION_OPERATION) {
             throw new RuntimeException('Operação de emissão não suportada pelo adapter SICALC.');
         }
@@ -64,14 +57,14 @@ final class SerproGuideEmissionClient implements GuideEmissionClient
         $businessData = $this->emissionData($request);
         // Mutante: executor aplica MutationAuthorization tipada (bloqueado nesta change).
         $response = $this->operations->execute(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             operationKey: $operationKey,
             businessData: $businessData,
             idempotencyKey: $request->idempotencyKey,
             correlationId: $request->correlationId,
             mutationAuth: MutationAuthorization::none(),
-            module: 'guias',
+            module: 'guides',
         );
 
         if ($response->errorCode === 'MUTATION_TIMEOUT_PENDING' || $response->httpStatus === 0) {
@@ -127,8 +120,8 @@ final class SerproGuideEmissionClient implements GuideEmissionClient
 
     public function lookupPayment(GuidePaymentLookupRequest $request): GuidePaymentLookupResult
     {
-        [$office, $client] = $this->context(
-            $request->officeId,
+        [$tenant, $client] = $this->context(
+            $request->tenantId,
             $request->clientId,
         );
 
@@ -141,7 +134,7 @@ final class SerproGuideEmissionClient implements GuideEmissionClient
         }
 
         $response = $this->operations->execute(
-            $office,
+            $tenant,
             $client,
             self::PAYMENT_OPERATION,
             $businessData,
@@ -180,16 +173,16 @@ final class SerproGuideEmissionClient implements GuideEmissionClient
         );
     }
 
-    /** @return array{Office,Client} */
-    private function context(int $officeId, int $clientId): array
+    /** @return array{Tenant,Client} */
+    private function context(int $tenantId, int $clientId): array
     {
         if ($this->drivers->forCapability('guides') !== SerproCapabilityDriver::Real) {
             throw new RuntimeException('Adapter real de guias está desabilitado.');
         }
 
-        $office = Office::query()->withoutGlobalScopes()->findOrFail($officeId);
+        $tenant = Tenant::query()->withoutGlobalScopes()->findOrFail($tenantId);
         $client = Client::query()->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereKey($clientId)
             ->firstOrFail();
         $environment = SerproEnvironment::tryFrom(strtoupper((string) config('serpro.default_environment', 'TRIAL')))
@@ -198,8 +191,9 @@ final class SerproGuideEmissionClient implements GuideEmissionClient
         if ($contract === null || ! $contract->isUsable()) {
             throw new RuntimeException('Contrato SERPRO indisponível para guias.');
         }
-        $authorization = OfficeSerproAuthorization::query()
-            ->where('office_id', $officeId)
+        $authorization = TenantSerproAuthorization::query()
+            ->withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
             ->where('environment', $environment->value)
             ->first();
         $author = strtoupper(trim((string) ($authorization?->author_identity ?? '')));
@@ -208,7 +202,7 @@ final class SerproGuideEmissionClient implements GuideEmissionClient
         }
         $this->contributors->resolve($client);
 
-        return [$office, $client];
+        return [$tenant, $client];
     }
 
     /** @return array<string, mixed> */

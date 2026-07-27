@@ -3,7 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\CommunicationCannedResponse;
-use App\Models\Office;
+use App\Models\Tenant;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -16,7 +16,7 @@ class CommunicationCannedResponseFactory extends Factory
     public function definition(): array
     {
         return [
-            'office_id' => Office::factory(),
+            'tenant_id' => Tenant::factory(),
             'title' => fake()->sentence(3),
             'shortcut' => fake()->unique()->slug(2),
             'body_encrypted' => fake()->paragraph(),
@@ -26,10 +26,10 @@ class CommunicationCannedResponseFactory extends Factory
         ];
     }
 
-    public function forOffice(Office $office): static
+    public function forTenant(Tenant $tenant): static
     {
         return $this->state(fn (): array => [
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
         ]);
     }
 

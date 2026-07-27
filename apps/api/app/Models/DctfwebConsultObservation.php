@@ -5,7 +5,7 @@ namespace App\Models;
 use App\Enums\DctfwebCategory;
 use App\Enums\DctfwebConsultOutcome;
 use App\Enums\DctfwebDeclarationState;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * Observação imutável de consulta DCTFWeb (sem payload fiscal / Base64).
  */
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'client_id',
     'declaration_id',
     'run_id',
@@ -34,7 +34,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class DctfwebConsultObservation extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     public $timestamps = false;
 

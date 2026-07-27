@@ -5,8 +5,8 @@ namespace App\Services\FiscalMonitoring;
 use App\Enums\FiscalModuleKey;
 use App\Enums\TaxRegimeCode;
 use App\Models\Client;
-use App\Models\Office;
-use App\Models\OfficeMonitoringModuleExclusion;
+use App\Models\Tenant;
+use App\Models\TenantMonitoringModuleExclusion;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection;
@@ -33,7 +33,7 @@ final class MonitoringModuleMembershipService
             return false;
         }
 
-        if (! $client->is_active || $client->matrix_client_id !== null) {
+        if (! $client->is_active) {
             return false;
         }
 
@@ -48,11 +48,7 @@ final class MonitoringModuleMembershipService
                 return false;
             }
 
-            return in_array(
-                (string) $client->tax_regime,
-                $regime->storageFilterValues(),
-                true,
-            );
+            return (string) $client->tax_regime === $regime->value;
         }
 
         return true;
@@ -63,7 +59,7 @@ final class MonitoringModuleMembershipService
      * @return array{excluded:int, errors:list<array{client_id:int, message:string}>}
      */
     public function exclude(
-        Office $office,
+        Tenant $tenant,
         FiscalModuleKey $module,
         array $clientIds,
         ?string $submodule = null,
@@ -85,7 +81,7 @@ final class MonitoringModuleMembershipService
             try {
                 $client = Client::query()
                     ->withoutGlobalScopes()
-                    ->where('office_id', $office->id)
+                    ->where('tenant_id', $tenant->id)
                     ->whereKey($clientId)
                     ->first();
                 if ($client === null) {
@@ -99,9 +95,9 @@ final class MonitoringModuleMembershipService
                     continue;
                 }
 
-                OfficeMonitoringModuleExclusion::query()->updateOrCreate(
+                TenantMonitoringModuleExclusion::query()->updateOrCreate(
                     [
-                        'office_id' => $office->id,
+                        'tenant_id' => $tenant->id,
                         'client_id' => $clientId,
                         'module_key' => $module->value,
                         'submodule' => $sub,
@@ -126,7 +122,7 @@ final class MonitoringModuleMembershipService
      * @return array{included:int, errors:list<array{client_id:int, message:string}>}
      */
     public function include(
-        Office $office,
+        Tenant $tenant,
         FiscalModuleKey $module,
         array $clientIds,
         ?string $submodule = null,
@@ -147,7 +143,7 @@ final class MonitoringModuleMembershipService
             try {
                 $client = Client::query()
                     ->withoutGlobalScopes()
-                    ->where('office_id', $office->id)
+                    ->where('tenant_id', $tenant->id)
                     ->whereKey($clientId)
                     ->first();
                 if ($client === null) {
@@ -164,9 +160,9 @@ final class MonitoringModuleMembershipService
                     continue;
                 }
 
-                OfficeMonitoringModuleExclusion::query()
+                TenantMonitoringModuleExclusion::query()
                     ->withoutGlobalScopes()
-                    ->where('office_id', $office->id)
+                    ->where('tenant_id', $tenant->id)
                     ->where('client_id', $clientId)
                     ->where('module_key', $module->value)
                     ->where('submodule', $sub)
@@ -182,17 +178,17 @@ final class MonitoringModuleMembershipService
     }
 
     /**
-     * @return Collection<int, OfficeMonitoringModuleExclusion>
+     * @return Collection<int, TenantMonitoringModuleExclusion>
      */
     public function listExclusions(
-        Office $office,
+        Tenant $tenant,
         FiscalModuleKey $module,
         ?string $submodule = null,
     ): Collection {
         $sub = $this->normalizeSubmodule($submodule);
-        $q = OfficeMonitoringModuleExclusion::query()
+        $q = TenantMonitoringModuleExclusion::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('module_key', $module->value)
             ->orderByDesc('id');
 
@@ -211,7 +207,7 @@ final class MonitoringModuleMembershipService
      */
     public function applyExclusionScope(
         Builder|QueryBuilder $q,
-        Office $office,
+        Tenant $tenant,
         FiscalModuleKey $module,
         ?string $submodule,
     ): void {
@@ -221,11 +217,11 @@ final class MonitoringModuleMembershipService
 
         $sub = $this->normalizeSubmodule($submodule);
 
-        $q->whereNotExists(function (QueryBuilder $exists) use ($office, $module, $sub): void {
+        $q->whereNotExists(function (QueryBuilder $exists) use ($tenant, $module, $sub): void {
             $exists->selectRaw('1')
-                ->from('office_monitoring_module_exclusions as ome')
+                ->from('tenant_monitoring_module_exclusions as ome')
                 ->whereColumn('ome.client_id', 'clients.id')
-                ->where('ome.office_id', $office->id)
+                ->where('ome.tenant_id', $tenant->id)
                 ->where('ome.module_key', $module->value);
 
             if ($sub !== '') {

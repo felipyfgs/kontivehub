@@ -17,14 +17,15 @@ use App\Enums\TaxProxyPowerSource;
 use App\Enums\TaxProxyPowerStatus;
 use App\Jobs\Fiscal\ExecuteFiscalMonitoringRunJob;
 use App\Models\Client;
+use App\Models\ClientProcuracaoSync;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
 use App\Models\PagtowebPaymentListItem;
 use App\Models\PagtowebPaymentListObservation;
 use App\Models\PgdasdOperation;
 use App\Models\TaxObligationDefinition;
 use App\Models\TaxObligationProjection;
 use App\Models\TaxProxyPower;
+use App\Models\Tenant;
 use App\Services\Fiscal\Guides\PagtowebPaymentListAdapter;
 use App\Services\Fiscal\Guides\PagtowebPaymentListCodec;
 use App\Services\Fiscal\Guides\PagtowebPaymentListProjector;
@@ -96,23 +97,23 @@ class PgdasdPagtowebReconciliationTest extends TestCase
 
     public function test_projector_matches_digest_and_marks_only_consulted_documents(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->for($office)->create(['is_active' => true]);
-        $projection = $this->projection($office, $client, '2026-06');
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->for($tenant)->create(['is_active' => true]);
+        $projection = $this->projection($tenant, $client, '2026-06');
         $paidDocument = '07202619183811980';
         $missingDocument = '07202619183811981';
         $unconsultedDocument = '07202619183811982';
-        $paid = $this->das($office, $client, $projection, $paidDocument);
-        $missing = $this->das($office, $client, $projection, $missingDocument);
-        $unconsulted = $this->das($office, $client, $projection, $unconsultedDocument);
+        $paid = $this->das($tenant, $client, $projection, $paidDocument);
+        $missing = $this->das($tenant, $client, $projection, $missingDocument);
+        $unconsulted = $this->das($tenant, $client, $projection, $unconsultedDocument);
 
-        $otherOffice = Office::factory()->create();
-        $otherClient = Client::factory()->for($otherOffice)->create(['is_active' => true]);
-        $otherProjection = $this->projection($otherOffice, $otherClient, '2026-06');
-        $crossTenant = $this->das($otherOffice, $otherClient, $otherProjection, $paidDocument);
+        $otherTenant = Tenant::factory()->create();
+        $otherClient = Client::factory()->for($otherTenant)->create(['is_active' => true]);
+        $otherProjection = $this->projection($otherTenant, $otherClient, '2026-06');
+        $crossTenant = $this->das($otherTenant, $otherClient, $otherProjection, $paidDocument);
 
         $run = $this->monitoringRun(
-            $office,
+            $tenant,
             $client,
             PagtowebPaymentListAdapter::SERVICE,
             PagtowebPaymentListAdapter::OPERATION,
@@ -133,7 +134,7 @@ class PgdasdPagtowebReconciliationTest extends TestCase
         ]);
 
         $projected = app(PagtowebPaymentListProjector::class)->project(
-            $office,
+            $tenant,
             $client,
             $items,
             $normalized['filter_summary'],
@@ -161,7 +162,7 @@ class PgdasdPagtowebReconciliationTest extends TestCase
             'per_page' => 100,
         ]);
         app(PagtowebPaymentListProjector::class)->project(
-            $office,
+            $tenant,
             $client,
             [],
             $unverified['filter_summary'],
@@ -187,12 +188,12 @@ class PgdasdPagtowebReconciliationTest extends TestCase
             $codec->documentDigest($pagtowebDocument),
         );
 
-        $office = Office::factory()->create();
-        $client = Client::factory()->for($office)->create(['is_active' => true]);
-        $projection = $this->projection($office, $client, '2026-01');
-        $paid = $this->das($office, $client, $projection, $localDas);
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->for($tenant)->create(['is_active' => true]);
+        $projection = $this->projection($tenant, $client, '2026-01');
+        $paid = $this->das($tenant, $client, $projection, $localDas);
         $run = $this->monitoringRun(
-            $office,
+            $tenant,
             $client,
             PagtowebPaymentListAdapter::SERVICE,
             PagtowebPaymentListAdapter::OPERATION,
@@ -212,7 +213,7 @@ class PgdasdPagtowebReconciliationTest extends TestCase
         ]);
 
         app(PagtowebPaymentListProjector::class)->project(
-            $office,
+            $tenant,
             $client,
             $items,
             $normalized['filter_summary'],
@@ -233,13 +234,13 @@ class PgdasdPagtowebReconciliationTest extends TestCase
         $localDas = '07202604328595614';
         $pagtowebDocument = '7202604328595614';
 
-        $office = Office::factory()->create();
-        $client = Client::factory()->for($office)->create(['is_active' => true]);
-        $projection = $this->projection($office, $client, '2026-01');
-        $paid = $this->das($office, $client, $projection, $localDas);
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->for($tenant)->create(['is_active' => true]);
+        $projection = $this->projection($tenant, $client, '2026-01');
+        $paid = $this->das($tenant, $client, $projection, $localDas);
 
         $run = $this->monitoringRun(
-            $office,
+            $tenant,
             $client,
             PagtowebPaymentListAdapter::SERVICE,
             PagtowebPaymentListAdapter::OPERATION,
@@ -254,10 +255,10 @@ class PgdasdPagtowebReconciliationTest extends TestCase
         // Simula evidência já persistida com item (digest canônico da resposta) e DAS ainda NOT_FOUND.
         $itemDigest = $codec->documentDigest($pagtowebDocument);
         $observation = PagtowebPaymentListObservation::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'filter_summary' => [
-                // digests legados (pré-canônico) — reapply deve recomputar via run criptografado
+                // Digests inválidos devem ser recomputados via run criptografado.
                 'numero_documento_digests' => [hash_hmac('sha256', $localDas, (string) config('app.key'))],
                 'page' => 1,
                 'per_page' => 1,
@@ -271,7 +272,7 @@ class PgdasdPagtowebReconciliationTest extends TestCase
         ]);
         PagtowebPaymentListItem::query()->create([
             'observation_id' => $observation->id,
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'document_digest' => $itemDigest,
             'document_masked' => '••••5614',
@@ -285,7 +286,7 @@ class PgdasdPagtowebReconciliationTest extends TestCase
         ])->save();
 
         $summary = app(PgdasdPagtowebEvidenceReapplyService::class)
-            ->reapply((int) $office->id, (int) $client->id);
+            ->reapply((int) $tenant->id, (int) $client->id);
 
         $this->assertSame(1, $summary['observations']);
         $this->assertSame(1, $summary['paid']);
@@ -294,17 +295,17 @@ class PgdasdPagtowebReconciliationTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_productive_monitor_enqueues_one_idempotent_batch_with_power_00004(): void
+    public function test_productive_monitor_enqueues_one_idempotent_batch_with_authorized_procuracao_power(): void
     {
         Queue::fake();
-        $office = Office::factory()->create();
-        $client = Client::factory()->for($office)->create(['is_active' => true]);
-        $projection = $this->projection($office, $client, '2026-06');
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->for($tenant)->create(['is_active' => true]);
+        $projection = $this->projection($tenant, $client, '2026-06');
         $document = '07202619183811980';
-        $this->das($office, $client, $projection, $document);
-        $this->power($office, $client);
+        $this->das($tenant, $client, $projection, $document);
+        $this->authorizeProcuracao($client);
         $sourceRun = $this->monitoringRun(
-            $office,
+            $tenant,
             $client,
             'PGDASD',
             'MONITOR',
@@ -312,8 +313,8 @@ class PgdasdPagtowebReconciliationTest extends TestCase
         );
 
         $service = app(PgdasdPagtowebReconciliationService::class);
-        $first = $service->enqueueAfterProductiveMonitor($office, $client, $sourceRun);
-        $second = $service->enqueueAfterProductiveMonitor($office, $client, $sourceRun);
+        $first = $service->enqueueAfterProductiveMonitor($tenant, $client, $sourceRun);
+        $second = $service->enqueueAfterProductiveMonitor($tenant, $client, $sourceRun);
 
         $this->assertSame(['queued' => 1, 'documents' => 1, 'reason' => 'QUEUED'], $first);
         $this->assertSame('ALREADY_QUEUED', $second['reason']);
@@ -336,12 +337,12 @@ class PgdasdPagtowebReconciliationTest extends TestCase
     public function test_missing_power_does_not_dispatch_and_failed_source_does_not_write_negative_evidence(): void
     {
         Queue::fake();
-        $office = Office::factory()->create();
-        $client = Client::factory()->for($office)->create(['is_active' => true]);
-        $projection = $this->projection($office, $client, '2026-06');
-        $operation = $this->das($office, $client, $projection, '07202619183811980');
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->for($tenant)->create(['is_active' => true]);
+        $projection = $this->projection($tenant, $client, '2026-06');
+        $operation = $this->das($tenant, $client, $projection, '07202619183811980');
         $successfulSource = $this->monitoringRun(
-            $office,
+            $tenant,
             $client,
             'PGDASD',
             'MONITOR',
@@ -349,26 +350,26 @@ class PgdasdPagtowebReconciliationTest extends TestCase
         );
 
         $service = app(PgdasdPagtowebReconciliationService::class);
-        $withoutPower = $service->enqueueAfterProductiveMonitor($office, $client, $successfulSource);
+        $withoutPower = $service->enqueueAfterProductiveMonitor($tenant, $client, $successfulSource);
         $this->assertSame(0, $withoutPower['queued']);
         $this->assertStringContainsString('POWER', $withoutPower['reason']);
 
-        $this->power($office, $client);
+        $this->authorizeProcuracao($client);
         $failedSource = $this->monitoringRun(
-            $office,
+            $tenant,
             $client,
             'PGDASD',
             'MONITOR',
             FiscalRunResult::Failed,
         );
-        $failed = $service->enqueueAfterProductiveMonitor($office, $client, $failedSource);
+        $failed = $service->enqueueAfterProductiveMonitor($tenant, $client, $failedSource);
 
         $this->assertSame('SOURCE_NOT_PRODUCTIVE_PGDASD', $failed['reason']);
         $this->assertNull($operation->refresh()->pagtoweb_payment_status);
         Queue::assertNothingPushed();
     }
 
-    private function projection(Office $office, Client $client, string $periodKey): TaxObligationProjection
+    private function projection(Tenant $tenant, Client $client, string $periodKey): TaxObligationProjection
     {
         $definition = TaxObligationDefinition::query()->firstOrCreate(
             ['code' => 'PGDAS_D'],
@@ -382,7 +383,7 @@ class PgdasdPagtowebReconciliationTest extends TestCase
         );
 
         return TaxObligationProjection::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'obligation_definition_id' => $definition->id,
             'period_key' => $periodKey,
@@ -396,13 +397,13 @@ class PgdasdPagtowebReconciliationTest extends TestCase
     }
 
     private function das(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         TaxObligationProjection $projection,
         string $document,
     ): PgdasdOperation {
         return PgdasdOperation::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'projection_id' => $projection->id,
             'kind' => PgdasdOperationKind::Das,
@@ -417,14 +418,14 @@ class PgdasdPagtowebReconciliationTest extends TestCase
     }
 
     private function monitoringRun(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $service,
         string $operation,
         FiscalRunResult $result,
     ): FiscalMonitoringRun {
         return FiscalMonitoringRun::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'system_code' => $service === 'PGDASD' ? 'INTEGRA_SN' : 'PAGTOWEB',
             'service_code' => $service,
@@ -441,12 +442,16 @@ class PgdasdPagtowebReconciliationTest extends TestCase
         ]);
     }
 
-    private function power(Office $office, Client $client): void
+    private function authorizeProcuracao(Client $client): void
     {
+        ClientProcuracaoSync::factory()->forClient($client)->authorized()->create([
+            'environment' => SerproEnvironment::Production,
+            'power_codes' => ['00004'],
+        ]);
         TaxProxyPower::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $client->tenant_id,
             'client_id' => $client->id,
-            'environment' => SerproEnvironment::Production->value,
+            'environment' => SerproEnvironment::Production,
             'author_identity' => '48123272000105',
             'contributor_cnpj' => '26461528000151',
             'system_code' => 'PAGTOWEB',

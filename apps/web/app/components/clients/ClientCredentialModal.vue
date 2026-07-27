@@ -35,7 +35,7 @@ const state = reactive<Partial<Schema>>({
 })
 
 const title = computed(() =>
-  credential.value ? 'Atualizar certificado A1' : 'Enviar certificado A1'
+  credential.value ? 'Atualizar certificado' : 'Enviar certificado'
 )
 
 const description = computed(() => {
@@ -125,7 +125,7 @@ function submitForm() {
     v-model:open="open"
     :title="title"
     :description="description"
-    :submit-label="credential ? 'Atualizar A1' : 'Validar e ativar'"
+    :submit-label="credential ? 'Atualizar certificado' : 'Validar e ativar'"
     :loading="activating"
     :show-default-footer="canManageCredentials && !loading"
     :disabled="loading"
@@ -141,7 +141,7 @@ function submitForm() {
           class="rounded-lg bg-elevated/50 px-3 py-2 text-sm space-y-1"
         >
           <p class="font-medium text-highlighted truncate">
-            {{ credential.subject_name || 'A1 ativo' }}
+            {{ credential.subject_name || 'certificado ativo' }}
           </p>
           <p class="text-muted tabular-nums">
             Válido até {{ formatDateTime(credential.valid_to) }}

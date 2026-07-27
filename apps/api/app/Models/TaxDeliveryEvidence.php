@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use App\Enums\TaxDeliveryEvidenceKind;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * Evidência de entrega (recibo/protocolo oficial ou artefato interno não conclusivo).
  */
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'projection_id',
     'kind',
     'protocol_number',
@@ -28,7 +28,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class TaxDeliveryEvidence extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     /** @var string "evidence" é uncountable no pluralizer do Laravel. */
     protected $table = 'tax_delivery_evidences';
@@ -65,7 +65,7 @@ class TaxDeliveryEvidence extends Model
     {
         return [
             'id' => $this->id,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'projection_id' => $this->projection_id,
             'kind' => $this->kind?->value,
             'protocol_number' => $this->protocol_number,

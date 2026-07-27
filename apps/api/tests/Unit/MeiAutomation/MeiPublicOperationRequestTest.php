@@ -2,12 +2,12 @@
 
 namespace Tests\Unit\MeiAutomation;
 
-use App\Enums\OfficeRole;
-use App\Http\Middleware\EnsureOfficeContext;
+use App\Enums\TenantRole;
+use App\Http\Middleware\EnsureTenantContext;
 use App\Http\Requests\Fiscal\Mei\ConsultDasnHistoryRequest;
 use App\Http\Requests\Fiscal\Mei\ConsultMeiDebtRequest;
 use App\Http\Requests\Fiscal\Mei\GenerateMeiDasRequest;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Validator;
@@ -19,7 +19,7 @@ class MeiPublicOperationRequestTest extends TestCase
 
     public function test_viewer_cannot_trigger_queries_or_generate_das(): void
     {
-        [$viewer] = $this->actor(OfficeRole::Viewer);
+        [$viewer] = $this->actor(TenantRole::TenantUser, 'viewer');
 
         $this->assertFalse($this->request(ConsultMeiDebtRequest::class, $viewer)->authorize());
         $this->assertFalse($this->request(ConsultDasnHistoryRequest::class, $viewer)->authorize());
@@ -28,7 +28,7 @@ class MeiPublicOperationRequestTest extends TestCase
 
     public function test_operator_can_query_but_cannot_generate_das(): void
     {
-        [$operator] = $this->actor(OfficeRole::Operator);
+        [$operator] = $this->actor(TenantRole::TenantUser);
 
         $this->assertTrue($this->request(ConsultMeiDebtRequest::class, $operator)->authorize());
         $this->assertTrue($this->request(ConsultDasnHistoryRequest::class, $operator)->authorize());
@@ -37,9 +37,9 @@ class MeiPublicOperationRequestTest extends TestCase
 
     public function test_admin_can_generate_das_and_contract_rejects_tenant_override(): void
     {
-        [$admin] = $this->actor(OfficeRole::Admin);
+        [$admin] = $this->actor(TenantRole::TenantAdmin);
         $request = $this->request(GenerateMeiDasRequest::class, $admin);
-        $request->attributes->set(EnsureOfficeContext::CLIENT_OFFICE_ID_SUPPLIED, true);
+        $request->attributes->set(EnsureTenantContext::CLIENT_TENANT_ID_SUPPLIED, true);
 
         $validator = Validator::make([
             'client_id' => 1,
@@ -52,16 +52,16 @@ class MeiPublicOperationRequestTest extends TestCase
 
         $this->assertTrue($request->authorize());
         $this->assertTrue($validator->fails());
-        $this->assertArrayHasKey('office_id', $validator->errors()->toArray());
+        $this->assertArrayHasKey('tenant_id', $validator->errors()->toArray());
     }
 
-    /** @return array{User, Office} */
-    private function actor(OfficeRole $role): array
+    /** @return array{User, Tenant} */
+    private function actor(TenantRole $role, string $permissionProfile = 'operator'): array
     {
-        $office = Office::factory()->create();
-        $user = User::factory()->forOffice($office, $role)->create();
+        $tenant = Tenant::factory()->create();
+        $user = User::factory()->forTenant($tenant, $role, $permissionProfile)->create();
 
-        return [$user, $office];
+        return [$user, $tenant];
     }
 
     /** @param class-string<GenerateMeiDasRequest|ConsultMeiDebtRequest|ConsultDasnHistoryRequest> $class */

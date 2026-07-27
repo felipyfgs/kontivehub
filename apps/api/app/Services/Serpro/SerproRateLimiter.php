@@ -13,11 +13,11 @@ use RuntimeException;
  */
 final class SerproRateLimiter
 {
-    public function attempt(int $officeId, string $operationKey, bool $productiveEgress = false): void
+    public function attempt(int $tenantId, string $operationKey, bool $productiveEgress = false): void
     {
         $version = (string) config('serpro_usage.rate_limit_version', config('serpro.rate_limit.version', 'v1'));
         $global = (int) config('serpro.rate_limit.global_per_minute', 0);
-        $perOffice = (int) config('serpro.rate_limit.per_office_per_minute', 0);
+        $perTenant = (int) config('serpro.rate_limit.per_tenant_per_minute', 0);
 
         /** @var array<string, array{per_minute?: int}> $operations */
         $operations = config('serpro.rate_limit.operations', []);
@@ -25,7 +25,7 @@ final class SerproRateLimiter
             ?? config('serpro.rate_limit.default_operation_per_minute', 0));
 
         if ($productiveEgress && (bool) config('serpro_usage.productive_rate_limit_required', true)) {
-            if ($global <= 0 && $perOffice <= 0 && $perOperation <= 0) {
+            if ($global <= 0 && $perTenant <= 0 && $perOperation <= 0) {
                 throw new RuntimeException(
                     'RATE_LIMIT_NOT_CONFIGURED: limites zero/ausentes não autorizam egress produtivo SERPRO.'
                 );
@@ -36,7 +36,7 @@ final class SerproRateLimiter
             throw new RuntimeException('RATE_LIMIT_LOCAL: limite global SERPRO atingido.');
         }
 
-        if ($perOffice > 0 && ! $this->hit("serpro:rl:{$version}:office:{$officeId}", $perOffice)) {
+        if ($perTenant > 0 && ! $this->hit("serpro:rl:{$version}:tenant:{$tenantId}", $perTenant)) {
             throw new RuntimeException('RATE_LIMIT_LOCAL: limite do escritório SERPRO atingido.');
         }
 

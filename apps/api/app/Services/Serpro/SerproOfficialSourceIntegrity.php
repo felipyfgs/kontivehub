@@ -30,20 +30,6 @@ final class SerproOfficialSourceIntegrity
         'HISTORICAL_REFERENCE',
     ];
 
-    /** Hashes sequenciais publicados no snapshot legado e recusados explicitamente. */
-    private const LEGACY_PLACEHOLDER_HASHES = [
-        'a1b2c3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00',
-        'b2c3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff0011',
-        'c3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff001122',
-        'd4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00112233',
-        'e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff0011223344',
-        'f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff001122334455',
-        '0718293a4b5c6d7e8f90112233445566778899aabbccddeeff00112233445566',
-        '18293a4b5c6d7e8f90112233445566778899aabbccddeeff0011223344556677',
-        '293a4b5c6d7e8f90112233445566778899aabbccddeeff001122334455667788',
-        '3a4b5c6d7e8f90112233445566778899aabbccddeeff00112233445566778899',
-    ];
-
     /**
      * @return array{
      *   manifest: array<string, mixed>,
@@ -262,10 +248,6 @@ final class SerproOfficialSourceIntegrity
         if (preg_match('/^[a-f0-9]{64}$/', $hash) !== 1) {
             throw new RuntimeException("SERPRO_INTEGRITY_HASH_FORMAT:{$key}");
         }
-        if (in_array($hash, self::LEGACY_PLACEHOLDER_HASHES, true)) {
-            throw new RuntimeException("SERPRO_INTEGRITY_HASH_PLACEHOLDER:{$key}");
-        }
-
         foreach ([1, 2, 4, 8] as $unitLength) {
             $unit = substr($hash, 0, $unitLength);
             if (str_repeat($unit, intdiv(64, $unitLength)) === $hash) {

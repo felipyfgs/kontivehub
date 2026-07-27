@@ -15,25 +15,25 @@
  * Chrome do modal: DocsDetailModal (title / footer).
  */
 import type { TableColumn } from '@nuxt/ui'
-import type { NfseEvent, NfseNote, NoteDetail } from '~/types/api'
+import type { FiscalDocumentDetail, FiscalDocumentEvent, FiscalDocument } from '~/types/api'
 import ShellDataTable from '~/components/shell/DataTable.vue'
 import { documentKindLabel } from '~/utils/document-kinds'
 import { DASHBOARD_TABLE_UI } from '~/utils/table-ui'
 
 const props = defineProps<{
   accessKey: string
-  preview?: NfseNote | null
+  preview?: FiscalDocument | null
   embedded?: boolean
 }>()
 
 const emit = defineEmits<{
-  loaded: [note: NfseNote]
+  loaded: [note: FiscalDocument]
 }>()
 
 const api = useApi()
 const toast = useToast()
 const { canTriggerSync } = useDashboard()
-const detail = ref<NoteDetail | null>(null)
+const detail = ref<FiscalDocumentDetail | null>(null)
 const loading = ref(false)
 const refreshing = ref(false)
 const notFound = ref(false)
@@ -85,21 +85,21 @@ const confirmDescription = computed(() => {
 
 const note = computed(() => {
   const key = props.accessKey
-  const fromDetail = detail.value?.note
+  const fromDetail = detail.value?.fiscal_document
   if (fromDetail?.access_key === key) return fromDetail
   if (props.preview?.access_key === key) return props.preview
   return null
 })
 
 const documentMeta = computed(() => {
-  if (detail.value?.note?.access_key === props.accessKey) {
-    return detail.value.document || detail.value.note.document || null
+  if (detail.value?.fiscal_document?.access_key === props.accessKey) {
+    return detail.value.metadata || null
   }
   return note.value?.document || null
 })
 
 const events = computed(() => {
-  if (detail.value?.note?.access_key === props.accessKey) {
+  if (detail.value?.fiscal_document?.access_key === props.accessKey) {
     return detail.value.events || []
   }
   return []
@@ -115,7 +115,7 @@ const parseOk = computed(() => {
 })
 
 /** Linha oficial: cStat + descrição (API ou mapa local). */
-function noteOfficialLine(n: NfseNote): string | null {
+function noteOfficialLine(n: FiscalDocument): string | null {
   const code = n.official_status_code
   const desc = noteOfficialSituation(n.status, code, n.official_status_label)
   if (code && desc) return `cStat ${code} · ${desc}`
@@ -128,14 +128,14 @@ function noteOfficialLine(n: NfseNote): string | null {
  * Nuance operacional no detalhe (substituta / substituída), sem duplicar o cStat.
  * Só aparece quando agrega informação além do chip Autorizada/Cancelada.
  */
-function noteStatusNuance(n: NfseNote): string | null {
+function noteStatusNuance(n: FiscalDocument): string | null {
   const s = (n.status || '').toUpperCase()
   if (s === 'SUBSTITUTE') {
     // Evita repetir se o cStat 101 já diz substituição
     if (n.official_status_code === '101') return null
     return 'Nota de substituição (válida)'
   }
-  if (s === 'SUPERSEDED' || s === 'REPLACED') {
+  if (s === 'SUPERSEDED') {
     return 'Nota substituída — não utilizar na escrituração'
   }
   if (s === 'JUDICIAL' && n.official_status_code !== '102') {
@@ -149,7 +149,7 @@ function noteStatusNuance(n: NfseNote): string | null {
   return null
 }
 
-const eventColumns: TableColumn<NfseEvent>[] = [
+const eventColumns: TableColumn<FiscalDocumentEvent>[] = [
   {
     accessorKey: 'event_type',
     header: 'Tipo',
@@ -194,7 +194,7 @@ async function load() {
   const generation = ++loadGeneration
   notFound.value = false
 
-  const hasMatchingDetail = detail.value?.note?.access_key === key
+  const hasMatchingDetail = detail.value?.fiscal_document?.access_key === key
   const hasMatchingPreview = props.preview?.access_key === key
 
   if (!hasMatchingDetail) detail.value = null
@@ -206,7 +206,7 @@ async function load() {
     const data = (await api.documents.get(key)).data
     if (generation !== loadGeneration) return
     detail.value = data
-    if (data.note) emit('loaded', data.note)
+    emit('loaded', data.fiscal_document)
   } catch (caught) {
     if (generation !== loadGeneration) return
     detail.value = null
@@ -740,7 +740,7 @@ async function submitManifest() {
               v-else
               class="text-sm text-muted"
             >
-              Confirme o envio à SEFAZ com o certificado A1 do cliente destinatário.
+              Confirme o envio à SEFAZ com o certificado do cliente destinatário.
             </p>
           </div>
         </template>

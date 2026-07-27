@@ -5,7 +5,7 @@ namespace Tests\Feature;
 use App\Models\Client;
 use App\Models\ClientProcuracaoSync;
 use App\Models\Establishment;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Integra\Mailbox\MailboxContributorBatchBuilder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -14,14 +14,14 @@ class MailboxContributorBatchBuilderTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_builds_deterministic_authorized_batches_without_cross_office_leak(): void
+    public function test_builds_deterministic_authorized_batches_without_cross_tenant_leak(): void
     {
-        $office = Office::factory()->create();
-        $otherOffice = Office::factory()->create();
-        $eligible = Client::factory()->for($office)->create();
-        $inactive = Client::factory()->for($office)->create(['is_active' => false]);
-        $unauthorized = Client::factory()->for($office)->create();
-        $foreign = Client::factory()->for($otherOffice)->create();
+        $tenant = Tenant::factory()->create();
+        $otherTenant = Tenant::factory()->create();
+        $eligible = Client::factory()->for($tenant)->create();
+        $inactive = Client::factory()->for($tenant)->create(['is_active' => false]);
+        $unauthorized = Client::factory()->for($tenant)->create();
+        $foreign = Client::factory()->for($otherTenant)->create();
 
         $eligibleEstablishment = Establishment::factory()->forClient($eligible, '11222333000181')->create();
         Establishment::factory()->forClient($inactive, '11365521000169')->create();
@@ -33,22 +33,22 @@ class MailboxContributorBatchBuilderTest extends TestCase
 
         $builder = app(MailboxContributorBatchBuilder::class);
 
-        $this->assertSame([[(string) $eligibleEstablishment->cnpj]], $builder->batches($office, 1));
+        $this->assertSame([[(string) $eligibleEstablishment->cnpj]], $builder->batches($tenant, 1));
         $this->assertSame(
             [(string) $eligibleEstablishment->cnpj => (int) $eligible->id],
-            $builder->clientMap($office),
+            $builder->clientMap($tenant),
         );
     }
 
     public function test_preserves_valid_alphanumeric_cnpj_as_text(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->for($office)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->for($tenant)->create();
         $cnpj = $this->alphanumericCnpj('ABCDEF120001');
         Establishment::factory()->forClient($client, $cnpj)->create();
         ClientProcuracaoSync::factory()->forClient($client)->authorized()->create();
 
-        $this->assertSame([[$cnpj]], app(MailboxContributorBatchBuilder::class)->batches($office));
+        $this->assertSame([[$cnpj]], app(MailboxContributorBatchBuilder::class)->batches($tenant));
     }
 
     private function alphanumericCnpj(string $base): string

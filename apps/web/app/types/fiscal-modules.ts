@@ -209,7 +209,7 @@ export const EMPTY_FISCAL_MODULE_COUNTERS: Readonly<FiscalModuleCounters> = Obje
   not_applicable: 0
 })
 
-/** Normaliza contadores parciais (deploy escalonado / fixtures legados). */
+/** Converte os contadores recebidos em valores numéricos. */
 export function normalizeFiscalModuleCounters(
   value?: Partial<FiscalModuleCounters> | null
 ): FiscalModuleCounters {
@@ -352,8 +352,6 @@ export interface FiscalMonitoringSnapshotReference {
 
 export interface FiscalMonitoringQueryProjection {
   state: FiscalMonitoringQueryState
-  /** Alias transitório emitido pelo backend; deve coincidir com state. */
-  status: FiscalMonitoringQueryState
   state_label: string
   observed_at: string | null
   source_provenance: string
@@ -647,7 +645,7 @@ export function surfaceAllowsDocument(
   return surface.allows_document === true
 }
 
-export interface FiscalModuleOverviewBase<M extends FiscalPortfolioModuleKey = FiscalPortfolioModuleKey> {
+export interface FiscalModuleOverview<M extends FiscalPortfolioModuleKey = FiscalPortfolioModuleKey> {
   module_key: M
   module_label?: string
   data_origin?: FiscalDataOrigin | string | null
@@ -665,9 +663,6 @@ export interface FiscalModuleOverviewBase<M extends FiscalPortfolioModuleKey = F
   surface?: FiscalMonitoringSurfaceSummary | null
 }
 
-export type FiscalModuleOverview<M extends FiscalPortfolioModuleKey = FiscalPortfolioModuleKey>
-  = FiscalModuleOverviewBase<M>
-
 // ---------------------------------------------------------------------------
 // Client rows (carteira) — detail discriminado por module_key
 // ---------------------------------------------------------------------------
@@ -680,20 +675,16 @@ export interface FiscalClientRowBase<
   client_id: number
   legal_name: string
   display_name?: string | null
-  /** display_name || legal_name */
-  name?: string | null
-  /** CNPJ normalizado (14 chars) para exibição/cópia; cnpj_masked permanece por compat. */
+  /** CNPJ normalizado (14 caracteres). */
   cnpj?: string | null
-  cnpj_masked: string
-  root_cnpj_masked?: string | null
   competence?: string | null
   situation: string
   coverage: string
   data_origin?: FiscalDataOrigin | string | null
   last_consulted_at?: string | null
-  /** Último snapshot/consulta lógica (alias operacional). */
+  /** Último snapshot ou consulta lógica. */
   last_snapshot_at?: string | null
-  /** Próxima execução automática do monitor (office+monitor policy). */
+  /** Próxima execução automática do monitor (tenant+monitor policy). */
   next_scheduled_at?: string | null
   next_deadline_at?: string | null
   next_action?: string | null
@@ -761,8 +752,7 @@ export type PgdasdCommunicationChannel = 'EMAIL' | 'WHATSAPP'
 export interface PgdasdLatestDeclaration {
   period_key?: string | null
   declaration_number?: string | null
-  number?: string | null
-  operation_type?: string | null
+  normalized_operation_type?: string | null
   transmitted_at?: string | null
 }
 
@@ -819,8 +809,6 @@ export interface PgdasdClientSummary {
   latest_declaration?: PgdasdLatestDeclaration | null
   declaration_state?: PgdasdDeclarationState | string | null
   declaration_state_reason?: string | null
-  /** Alias transitório aceito durante deploy escalonado. */
-  declaration_reason?: string | null
   /** Pagamento dos DAS do PA esperado (eixo ortogonal à entrega; UI: coluna Situação). */
   payment_state?: PgdasdDasPaymentState | string | null
   payment_state_reason?: string | null
@@ -864,11 +852,6 @@ export interface PgmeiDebtItem {
   amount_cents: number
   federated_entity?: string | null
   original_status?: string | null
-  /** Aliases aceitos durante rollout aditivo do backend. */
-  periodo_apuracao?: string | null
-  tributo?: string | null
-  ente_federado?: string | null
-  situacao_original?: string | null
 }
 
 export interface PgmeiLocalGuideDescriptor {
@@ -878,8 +861,6 @@ export interface PgmeiLocalGuideDescriptor {
   status?: string | null
   amount_cents?: number | null
   due_at?: string | null
-  href?: string | null
-  download_href?: string | null
 }
 
 export interface PgmeiDebtObservation {
@@ -903,7 +884,6 @@ export interface PgmeiHistoryPayload {
   year?: number | null
   current?: PgmeiClientSummary | null
   observations?: PgmeiDebtObservation[]
-  history?: PgmeiDebtObservation[]
   guides?: PgmeiLocalGuideDescriptor[]
   provenance?: {
     source?: string | null
@@ -1192,8 +1172,6 @@ export interface PgdasdArtifactDescriptor {
   observed_at?: string | null
   /** URL same-origin entregue pela API para o download autenticado. */
   download_path?: string | null
-  /** Compatibilidade transitória para contratos anteriores. */
-  download_href?: string | null
 }
 
 export interface PgdasdHistoryDeclaration extends PgdasdLatestDeclaration {
@@ -1216,12 +1194,11 @@ export interface PgdasdHistoryDas {
 export interface PgdasdHistoryPeriod {
   period_key?: string | null
   declaration_state?: PgdasdDeclarationState | string | null
-  declaration_reason?: string | null
+  declaration_state_reason?: string | null
   last_valid_query_at?: string | null
   declarations?: PgdasdHistoryDeclaration[]
   das?: PgdasdHistoryDas[]
   artifacts?: PgdasdArtifactDescriptor[]
-  documents?: PgdasdArtifactDescriptor[]
   rbt12?: PgdasdRbt12Summary | null
 }
 
@@ -1236,7 +1213,6 @@ export interface PgdasdHistoryPayload {
   declaration_state_reason?: string | null
   last_valid_query_at?: string | null
   periods?: PgdasdHistoryPeriod[]
-  history?: PgdasdHistoryPeriod[]
   provenance?: {
     source?: string | null
     serpro_called?: boolean
@@ -1294,23 +1270,6 @@ export interface SimplesMeiClientDetail {
   competence_id?: number | null
   pgdasd?: PgdasdClientSummary | null
   pgmei?: PgmeiClientSummary | null
-  /** Campos espelhados no detail (além de detail.pgdasd) para tabela. */
-  declaration_state?: PgdasdDeclarationState | string | null
-  last_declaration?: PgdasdLatestDeclaration & {
-    numero_declaracao?: string | null
-    operation_kind?: string | null
-  } | null
-  payment_state?: PgdasdDasPaymentState | string | null
-  payment_state_reason?: string | null
-  payment_das_count?: number | null
-  payment_unpaid_count?: number | null
-  payment_paid_count?: number | null
-  payment_open_competencies?: PgdasdPaymentOpenCompetency[]
-  rbt12?: PgdasdRbt12Summary | null
-  last_productive_consulted_at?: string | null
-  /** Alias transitório dos documentos de detail.pgdasd durante deploy escalonado. */
-  documents?: PgdasdArtifactDescriptor[]
-  communication?: PgdasdCommunicationPreference | null
   links?: Record<string, string | null>
   /** Projeção oficial e-CAC (sem egress na listagem). */
   procuracao_status?: 'authorized' | 'expiring' | 'missing' | 'expired' | 'unverified' | 'verifying' | 'failed' | string | null
@@ -1332,21 +1291,17 @@ export interface DctfwebLatestDeclaration {
   declaration_type?: string | null
   transmitted_at?: string | null
   no_movement?: boolean | null
-  declaration_state?: DctfwebDeclarationState | string | null
+  declaration_state?: DctfwebDeclarationState | null
   transmission_status?: string | null
 }
 
 export interface DctfwebClientSummary {
   expected_period_key?: string | null
-  period_key?: string | null
   category?: string | null
-  declaration_state?: DctfwebDeclarationState | string | null
+  declaration_state?: DctfwebDeclarationState | null
   declaration_state_reason?: string | null
-  last_declaration?: DctfwebLatestDeclaration | Record<string, unknown> | null
   latest_declaration?: DctfwebLatestDeclaration | null
   last_search_at?: string | null
-  last_valid_query_at?: string | null
-  last_productive_consulted_at?: string | null
   calendar_verified?: boolean
   communication?: PgdasdCommunicationPreference | null
   has_history?: boolean
@@ -1393,61 +1348,42 @@ export interface MitListaApuracoes317Payload {
 }
 
 export interface DctfwebHistoryPeriod {
-  period_key?: string | null
-  declaration_state?: DctfwebDeclarationState | string | null
+  period_key: string
+  declaration_state?: DctfwebDeclarationState | null
   last_valid_query_at?: string | null
-  declarations?: Array<Record<string, unknown>>
-  observations?: Array<Record<string, unknown>>
-  documents?: DctfwebEvidenceDescriptor[]
-  artifacts?: DctfwebEvidenceDescriptor[]
+  declarations: Array<Record<string, unknown>>
+  observations: Array<Record<string, unknown>>
+  documents: DctfwebEvidenceDescriptor[]
 }
 
 export interface DctfwebHistoryPayload {
-  client?: {
-    id?: number
-    legal_name?: string | null
-    cnpj_masked?: string | null
+  client: {
+    id: number
+    legal_name: string
+    cnpj_masked: string
   }
-  expected_period_key?: string | null
-  category?: string | null
-  declaration_state?: DctfwebDeclarationState | string | null
+  expected_period_key: string
+  category: string
+  declaration_state: DctfwebDeclarationState
   last_valid_query_at?: string | null
-  periods?: DctfwebHistoryPeriod[]
-  history?: DctfwebHistoryPeriod[]
-  declarations?: Array<Record<string, unknown>>
-  observations?: Array<Record<string, unknown>>
-  artifacts?: DctfwebEvidenceDescriptor[]
-  provenance?: {
-    source?: string
-    serpro_called?: boolean
+  periods: DctfwebHistoryPeriod[]
+  provenance: {
+    source: string
+    serpro_called: boolean
   }
 }
 
 export interface DctfwebClientDetail {
-  module_key?: 'dctfweb' | string
+  module_key?: 'dctfweb'
   submodule?: string | null
-  declaration_state?: DctfwebDeclarationState | string | null
-  last_declaration?: DctfwebLatestDeclaration | Record<string, unknown> | null
-  last_search_at?: string | null
-  last_productive_consulted_at?: string | null
-  communication?: PgdasdCommunicationPreference | null
-  has_history?: boolean
-  has_tracking?: boolean
   dctfweb?: {
     id?: number | null
-    period_key?: string | null
     expected_period_key?: string | null
     category?: string | null
-    declaration_state?: DctfwebDeclarationState | string | null
+    declaration_state?: DctfwebDeclarationState | null
     declaration_state_reason?: string | null
-    transmission_status?: string | null
-    payment_status?: string | null
-    receipt_number?: string | null
-    no_movement?: boolean | null
-    situation?: string | null
-    last_declaration?: DctfwebLatestDeclaration | null
+    latest_declaration?: DctfwebLatestDeclaration | null
     last_search_at?: string | null
-    last_valid_query_at?: string | null
     calendar_verified?: boolean
     communication?: PgdasdCommunicationPreference | null
     has_history?: boolean
@@ -1478,7 +1414,7 @@ export interface InstallmentModalityCatalogItem {
 
 export interface InstallmentParcel {
   id: number
-  office_id: number
+  tenant_id: number
   client_id: number
   order_id: number
   modality: string
@@ -1497,7 +1433,7 @@ export interface InstallmentParcel {
 
 export interface InstallmentPayment {
   id: number
-  office_id: number
+  tenant_id: number
   client_id: number
   order_id: number
   modality: string
@@ -1509,7 +1445,7 @@ export interface InstallmentPayment {
 
 export interface InstallmentOrder {
   id: number
-  office_id: number
+  tenant_id: number
   client_id: number
   modality: string
   regime?: string | null
@@ -1664,11 +1600,6 @@ export interface DeclarationsClientDetail {
   next_due_at?: string | null
   next_delivery_status?: string | null
   next_situation?: string | null
-  /** Enriquecimento PGDAS (reuso do domínio PGDAS-D). */
-  declaration_state?: PgdasdDeclarationState | string | null
-  declaration_state_reason?: string | null
-  last_declaration?: PgdasdLatestDeclaration | null
-  last_valid_query_at?: string | null
   pgdasd?: PgdasdClientSummary | null
   /** Enriquecimento parcial FGTS (sem inventar guia/pagamento). */
   fgts?: FgtsClientDetail | null
@@ -1816,31 +1747,6 @@ export type MonitoringStructuredFilterField
     multiple?: boolean
   }
 
-/**
- * @deprecated Preferir `MonitoringStructuredFilterField` / `fields`.
- * Mantido para compatibilidade de imports legados em testes.
- */
-export type MonitoringAdvancedFilterField
-  = | {
-    key: 'competence'
-    kind: 'month'
-    label: string
-    hint?: string
-  }
-  | {
-    key: 'clientId'
-    kind: 'client'
-    label: string
-    hint?: string
-  }
-  | {
-    key: 'deliveryStatus' | 'paymentStatus' | 'status'
-    kind: 'select' | 'option'
-    label: string
-    hint?: string
-    items: Array<{ label: string, value: string }>
-  }
-
 /** Schema visual da toolbar; submódulos continuam sendo identidade da rota. */
 export interface MonitoringFilterConfig {
   search?: false | {
@@ -1852,18 +1758,7 @@ export interface MonitoringFilterConfig {
    * entram aqui — não há mais painel avançado separado.
    */
   fields?: MonitoringStructuredFilterField[]
-  /**
-   * @deprecated Use `fields`. Ainda aceito em migração; normalizado para fields.
-   */
-  situation?: boolean
-  /**
-   * @deprecated Use `fields`.
-   */
-  advanced?: MonitoringAdvancedFilterField[]
 }
-
-/** Alias usado por useApi / páginas. */
-export type FiscalModuleClientsParams = FiscalModulePortfolioFilters
 
 export interface FiscalModuleClientsPage<M extends FiscalPortfolioModuleKey = FiscalPortfolioModuleKey> {
   data: FiscalModuleClientRowFor<M>[]
@@ -1911,13 +1806,8 @@ export const DECLARATIONS_TABS = [
 export type DeclarationsSubmodule = (typeof DECLARATIONS_TABS)[number]['value']
 
 export function normalizeDeclarationsSubmodule(raw?: unknown): DeclarationsSubmodule {
-  const value = String(Array.isArray(raw) ? raw[0] : raw || '')
-    .trim()
-    .toUpperCase()
-    .replaceAll('-', '_')
-  if (value === 'PGDASD' || value === 'PGDAS_D') return 'PGDAS'
-  if (value === 'DASNSIMEI') return 'DASN_SIMEI'
-  if (value === 'DCTF') return 'DCTFWEB'
+  const candidate = Array.isArray(raw) ? raw[0] : raw
+  const value = typeof candidate === 'string' ? candidate : ''
   const found = DECLARATIONS_TABS.find(tab => tab.value === value)
   return found?.value ?? 'PGDAS'
 }

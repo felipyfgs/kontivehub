@@ -39,7 +39,7 @@ func TestCatalogEntriesHaveDispositionOwnerAndEvidence(t *testing.T) {
 	t.Parallel()
 
 	allowed := map[Disposition]bool{
-		Baseline: true, Implemented: true, Internal: true, Excluded: true, Deprecated: true,
+		Baseline: true, Implemented: true, Internal: true, Excluded: true,
 	}
 	assertEntry := func(kind, name string, entry Entry) {
 		t.Helper()

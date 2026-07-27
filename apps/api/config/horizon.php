@@ -204,7 +204,7 @@ return [
             'connection' => 'redis',
             'queue' => [
                 'default',
-                // SERPRO / KontiveHub (RefreshRegistrationLinks, TaxProcesses, Eventos, Termo A1)
+                // SERPRO / KontiveHub (RefreshRegistrationLinks, TaxProcesses, Eventos, Termo certificado)
                 env('SERPRO_QUEUE_FISCAL', 'fiscal'),
                 env('SEFAZ_QUEUE_NFE', 'sync-sefaz-nfe'),
                 env('SEFAZ_QUEUE_MANIFEST', 'manifest-nfe'),

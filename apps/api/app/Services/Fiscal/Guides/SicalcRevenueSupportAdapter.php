@@ -60,7 +60,7 @@ final class SicalcRevenueSupportAdapter implements FiscalSourceAdapter
 
     public function moduleKey(): ?string
     {
-        return 'guias';
+        return 'guides';
     }
 
     public function supports(FiscalAdapterRequest $request): bool
@@ -72,7 +72,7 @@ final class SicalcRevenueSupportAdapter implements FiscalSourceAdapter
 
     public function execute(FiscalAdapterRequest $request): FiscalAdapterResult
     {
-        if (! FeatureFlags::isModuleEnabled('guias', $request->office->id)
+        if (! FeatureFlags::isModuleEnabled('guides', $request->tenant->id)
             && ! (bool) config('fiscal_monitoring.enabled', false)) {
             return FiscalAdapterResult::blocked('Módulo guias desabilitado.', 'FEATURE_DISABLED');
         }
@@ -83,14 +83,14 @@ final class SicalcRevenueSupportAdapter implements FiscalSourceAdapter
 
         try {
             $response = $this->operations->execute(
-                office: $request->office,
+                tenant: $request->tenant,
                 client: $request->client,
                 operationKey: self::OPERATION_KEY,
                 businessData: ['codigoReceita' => $code],
                 idempotencyKey: 'sicalc-support:'.$request->run->idempotency_key,
                 correlationId: $request->run->correlation_id,
                 entityKey: 'fiscal-run:'.$request->run->id,
-                module: 'guias',
+                module: 'guides',
             );
         } catch (Throwable) {
             return FiscalAdapterResult::failed('Falha de transporte Integra Contador.', 'TRANSPORT_ERROR');
@@ -117,14 +117,14 @@ final class SicalcRevenueSupportAdapter implements FiscalSourceAdapter
                     ? FiscalSourceProvenance::SerproTrial->value
                     : FiscalSourceProvenance::Unverified->value);
             $projected = $this->projector->project(
-                $request->office, $request->client, $summary, $request->run->id, $provenance,
+                $request->tenant, $request->client, $summary, $request->run->id, $provenance,
             );
         } catch (InvalidArgumentException $e) {
             return FiscalAdapterResult::failed($e->getMessage(), 'INVALID_SICALC_RESPONSE', $this->coverage());
         } catch (Throwable) {
             Log::warning('sicalc.revenue_support_projection_failed', [
                 'operation_key' => self::OPERATION_KEY,
-                'office_id' => $request->office->id,
+                'tenant_id' => $request->tenant->id,
                 'client_id' => $request->client->id,
                 'reason' => 'PROJECTION_FAILED',
             ]);

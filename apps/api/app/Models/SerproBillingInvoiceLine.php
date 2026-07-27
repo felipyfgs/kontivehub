@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable([
     'cycle_code',
     'reconciliation_id',
-    'office_id',
+    'tenant_id',
     'functional_route',
     'http_status',
     'request_tag',

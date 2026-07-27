@@ -21,13 +21,6 @@ test.beforeEach(async ({ page }) => {
   })
 })
 
-test('legado /monitoring/simples-mei redireciona para /monitoring/simples', async ({ page }) => {
-  await login(page, 'operador@example.com')
-  await page.goto('/monitoring/simples-mei')
-  await expect(page).toHaveURL(/\/monitoring\/simples\/?$/)
-  await expect(page.locator('body')).not.toContainText('500 Internal Server Error')
-})
-
 test('operador vê carteira Simples Nacional sem clientes MEI e sem erro 500', async ({ page }) => {
   await login(page, 'operador@example.com')
   await page.goto('/monitoring/simples')

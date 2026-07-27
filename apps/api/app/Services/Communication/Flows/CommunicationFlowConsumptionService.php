@@ -12,17 +12,17 @@ final class CommunicationFlowConsumptionService
      * @return bool true se consumiu agora; false se já existia (no-op)
      */
     public function consumeOnce(
-        int $officeId,
+        int $tenantId,
         string $eventKey,
         ?int $runId = null,
         ?int $conversationId = null,
         ?string $eventDigest = null,
     ): bool {
         try {
-            return DB::transaction(function () use ($officeId, $eventKey, $runId, $conversationId, $eventDigest): bool {
+            return DB::transaction(function () use ($tenantId, $eventKey, $runId, $conversationId, $eventDigest): bool {
                 $existing = CommunicationFlowConsumption::query()
                     ->withoutGlobalScopes()
-                    ->where('office_id', $officeId)
+                    ->where('tenant_id', $tenantId)
                     ->where('event_key', $eventKey)
                     ->lockForUpdate()
                     ->first();
@@ -31,7 +31,7 @@ final class CommunicationFlowConsumptionService
                 }
 
                 CommunicationFlowConsumption::query()->withoutGlobalScopes()->create([
-                    'office_id' => $officeId,
+                    'tenant_id' => $tenantId,
                     'run_id' => $runId,
                     'conversation_id' => $conversationId,
                     'event_key' => $eventKey,
@@ -50,11 +50,11 @@ final class CommunicationFlowConsumptionService
         }
     }
 
-    public function wasConsumed(int $officeId, string $eventKey): bool
+    public function wasConsumed(int $tenantId, string $eventKey): bool
     {
         return CommunicationFlowConsumption::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('event_key', $eventKey)
             ->exists();
     }

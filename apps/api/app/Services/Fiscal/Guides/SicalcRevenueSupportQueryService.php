@@ -4,9 +4,9 @@ namespace App\Services\Fiscal\Guides;
 
 use App\Jobs\Fiscal\ExecuteFiscalMonitoringRunJob;
 use App\Models\Client;
-use App\Models\Office;
 use App\Models\SicalcRevenueSupportObservation;
 use App\Models\SicalcRevenueSupportProjection;
+use App\Models\Tenant;
 use App\Services\FiscalMonitoring\FiscalMonitoringRunService;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -18,16 +18,16 @@ final class SicalcRevenueSupportQueryService
     public function __construct(private readonly FiscalMonitoringRunService $runs) {}
 
     /** @return array<string, mixed> */
-    public function history(Office $office, Client $client, ?string $revenueCode = null): array
+    public function history(Tenant $tenant, Client $client, ?string $revenueCode = null): array
     {
-        $this->assertClient($office, $client);
+        $this->assertClient($tenant, $client);
         $revenueCode = $revenueCode !== null ? $this->normalizeRevenueCode($revenueCode) : null;
         $projections = SicalcRevenueSupportProjection::query()->withoutGlobalScopes()
-            ->where('office_id', $office->id)->where('client_id', $client->id)
+            ->where('tenant_id', $tenant->id)->where('client_id', $client->id)
             ->when($revenueCode !== null, static fn ($q) => $q->where('revenue_code', $revenueCode))
             ->orderBy('revenue_code')->get()->map(static fn (SicalcRevenueSupportProjection $item): array => $item->toPublicArray())->values()->all();
         $observations = SicalcRevenueSupportObservation::query()->withoutGlobalScopes()
-            ->where('office_id', $office->id)->where('client_id', $client->id)
+            ->where('tenant_id', $tenant->id)->where('client_id', $client->id)
             ->when($revenueCode !== null, static fn ($q) => $q->where('revenue_code', $revenueCode))
             ->orderByDesc('observed_at')->orderByDesc('id')->limit(50)->get()
             ->map(static fn (SicalcRevenueSupportObservation $item): array => $item->toPublicArray())->values()->all();
@@ -37,12 +37,12 @@ final class SicalcRevenueSupportQueryService
     }
 
     /** @return array<string, mixed> */
-    public function enqueueManualConsult(Office $office, Client $client, string $revenueCode, ?int $actorUserId): array
+    public function enqueueManualConsult(Tenant $tenant, Client $client, string $revenueCode, ?int $actorUserId): array
     {
-        $this->assertClient($office, $client);
+        $this->assertClient($tenant, $client);
         $revenueCode = $this->normalizeRevenueCode($revenueCode);
         $run = $this->runs->enqueueManual(
-            office: $office, client: $client, systemCode: SicalcRevenueSupportAdapter::SYSTEM,
+            tenant: $tenant, client: $client, systemCode: SicalcRevenueSupportAdapter::SYSTEM,
             serviceCode: SicalcRevenueSupportAdapter::SERVICE, operationCode: SicalcRevenueSupportAdapter::OPERATION,
             competence: null, actorId: $actorUserId,
             correlationId: sprintf('sicalc-support-%d-%s', $client->id, (string) Str::uuid()), dispatch: false,
@@ -69,9 +69,9 @@ final class SicalcRevenueSupportQueryService
         return $revenueCode;
     }
 
-    private function assertClient(Office $office, Client $client): void
+    private function assertClient(Tenant $tenant, Client $client): void
     {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new HttpException(404, 'Cliente não encontrado no escritório atual.');
         }
     }

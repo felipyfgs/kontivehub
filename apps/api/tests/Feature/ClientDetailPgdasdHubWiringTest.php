@@ -7,11 +7,11 @@ use App\Enums\PgdasdOperationKind;
 use App\Enums\TaxGuidePaymentStatus;
 use App\Enums\TaxObligationApplicability;
 use App\Models\Client;
-use App\Models\Office;
 use App\Models\PgdasdOperation;
 use App\Models\TaxGuide;
 use App\Models\TaxObligationDefinition;
 use App\Models\TaxObligationProjection;
+use App\Models\Tenant;
 use App\Services\Fiscal\Declarations\DeclarationPgdasdEnrichmentService;
 use App\Services\Fiscal\Guides\ClientGuidesQueryService;
 use Carbon\CarbonImmutable;
@@ -24,10 +24,10 @@ class ClientDetailPgdasdHubWiringTest extends TestCase
 
     public function test_declaration_enrichment_marks_consulted_declaration_up_to_date(): void
     {
-        [$office, $client, $withDecl, $withoutDecl] = $this->seedProjections();
+        [$tenant, $client, $withDecl, $withoutDecl] = $this->seedProjections();
 
         PgdasdOperation::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'projection_id' => $withDecl->id,
             'kind' => PgdasdOperationKind::Declaration,
@@ -42,7 +42,7 @@ class ClientDetailPgdasdHubWiringTest extends TestCase
         ]);
 
         $rows = app(DeclarationPgdasdEnrichmentService::class)->enrichPublicList(
-            $office,
+            $tenant,
             [$withDecl->fresh(['obligation']), $withoutDecl->fresh(['obligation'])],
         );
 
@@ -62,15 +62,14 @@ class ClientDetailPgdasdHubWiringTest extends TestCase
 
     public function test_client_guides_list_includes_das_when_tax_guides_empty(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->for($office)->create([
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->for($tenant)->create([
             'is_active' => true,
-            'matrix_client_id' => null,
         ]);
-        $projection = $this->makePgdasProjection($office, $client, '2026-06', 6);
+        $projection = $this->makePgdasProjection($tenant, $client, '2026-06', 6);
 
         PgdasdOperation::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'projection_id' => $projection->id,
             'kind' => PgdasdOperationKind::Das,
@@ -85,7 +84,7 @@ class ClientDetailPgdasdHubWiringTest extends TestCase
             'last_seen_at' => CarbonImmutable::parse('2026-07-10'),
         ]);
 
-        $page = app(ClientGuidesQueryService::class)->paginate($office, (int) $client->id, 20)['page'];
+        $page = app(ClientGuidesQueryService::class)->paginate($tenant, (int) $client->id, 20)['page'];
         $this->assertSame(1, $page->total());
         $row = $page->items()[0];
         $this->assertSame('07202619183811980', $row['identifier_code']);
@@ -96,18 +95,18 @@ class ClientDetailPgdasdHubWiringTest extends TestCase
 
     public function test_client_guides_dedupes_das_already_in_tax_guides(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->for($office)->create([
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->for($tenant)->create([
             'is_active' => true,
-            'matrix_client_id' => null,
         ]);
-        $projection = $this->makePgdasProjection($office, $client, '2026-06', 6);
+        $projection = $this->makePgdasProjection($tenant, $client, '2026-06', 6);
 
         $das = '07202619183811980';
 
         TaxGuide::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
+            'operation_key' => 'pgdasd.gerardas',
             'system_code' => 'INTEGRA_SN',
             'service_code' => 'PGDASD',
             'operation_code' => 'GERAR_DAS',
@@ -119,7 +118,7 @@ class ClientDetailPgdasdHubWiringTest extends TestCase
         ]);
 
         PgdasdOperation::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'projection_id' => $projection->id,
             'kind' => PgdasdOperationKind::Das,
@@ -134,24 +133,23 @@ class ClientDetailPgdasdHubWiringTest extends TestCase
             'last_seen_at' => CarbonImmutable::parse('2026-07-10'),
         ]);
 
-        $page = app(ClientGuidesQueryService::class)->paginate($office, (int) $client->id, 20)['page'];
+        $page = app(ClientGuidesQueryService::class)->paginate($tenant, (int) $client->id, 20)['page'];
         $this->assertSame(1, $page->total());
         $row = $page->items()[0];
         $this->assertSame('TAX_GUIDE', $row['source']);
         $this->assertSame($das, $row['identifier_code']);
     }
 
-    public function test_office_wide_list_includes_das_without_tax_guides(): void
+    public function test_tenant_wide_list_includes_das_without_tax_guides(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->for($office)->create([
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->for($tenant)->create([
             'is_active' => true,
-            'matrix_client_id' => null,
         ]);
-        $projection = $this->makePgdasProjection($office, $client, '2026-06', 6);
+        $projection = $this->makePgdasProjection($tenant, $client, '2026-06', 6);
 
         PgdasdOperation::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'projection_id' => $projection->id,
             'kind' => PgdasdOperationKind::Das,
@@ -166,7 +164,7 @@ class ClientDetailPgdasdHubWiringTest extends TestCase
             'last_seen_at' => CarbonImmutable::parse('2026-07-10'),
         ]);
 
-        $result = app(ClientGuidesQueryService::class)->paginate($office, null, 20);
+        $result = app(ClientGuidesQueryService::class)->paginate($tenant, null, 20);
         $page = $result['page'];
         $this->assertSame(1, $page->total());
         $this->assertSame(1, $result['payment_counters'][TaxGuidePaymentStatus::NotConfirmed->value]);
@@ -176,7 +174,7 @@ class ClientDetailPgdasdHubWiringTest extends TestCase
         $this->assertSame('07202619183811980', $row['identifier_code']);
     }
 
-    private function makePgdasProjection(Office $office, Client $client, string $periodKey, int $month): TaxObligationProjection
+    private function makePgdasProjection(Tenant $tenant, Client $client, string $periodKey, int $month): TaxObligationProjection
     {
         $def = TaxObligationDefinition::query()->firstOrCreate(
             ['code' => 'PGDAS_D'],
@@ -190,7 +188,7 @@ class ClientDetailPgdasdHubWiringTest extends TestCase
         );
 
         return TaxObligationProjection::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'obligation_definition_id' => $def->id,
             'period_key' => $periodKey,
@@ -204,19 +202,18 @@ class ClientDetailPgdasdHubWiringTest extends TestCase
     }
 
     /**
-     * @return array{0: Office, 1: Client, 2: TaxObligationProjection, 3: TaxObligationProjection}
+     * @return array{0: Tenant, 1: Client, 2: TaxObligationProjection, 3: TaxObligationProjection}
      */
     private function seedProjections(): array
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->for($office)->create([
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->for($tenant)->create([
             'is_active' => true,
-            'matrix_client_id' => null,
         ]);
 
-        $withDecl = $this->makePgdasProjection($office, $client, '2026-06', 6);
-        $withoutDecl = $this->makePgdasProjection($office, $client, '2026-05', 5);
+        $withDecl = $this->makePgdasProjection($tenant, $client, '2026-06', 6);
+        $withoutDecl = $this->makePgdasProjection($tenant, $client, '2026-05', 5);
 
-        return [$office, $client, $withDecl, $withoutDecl];
+        return [$tenant, $client, $withDecl, $withoutDecl];
     }
 }

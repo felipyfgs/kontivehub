@@ -82,7 +82,7 @@ final class ReceitaPortalProvider implements MeiOperationProvider
     ): MeiAutomationAttempt {
         $attemptId = $request->progress['mei_automation_attempt_id'] ?? null;
         if (is_int($attemptId) || (is_string($attemptId) && ctype_digit($attemptId))) {
-            $attempt = $this->attempts->findForOffice((int) $request->office->id, (int) $attemptId);
+            $attempt = $this->attempts->findForTenant((int) $request->tenant->id, (int) $attemptId);
             if ((int) $attempt->client_id !== (int) $request->client->id
                 || (string) $attempt->operation_key !== $operationKey) {
                 throw new \RuntimeException('Tentativa portal incompatível com a execução fiscal.');
@@ -97,7 +97,7 @@ final class ReceitaPortalProvider implements MeiOperationProvider
             : MeiProvider::ReceitaPortal;
 
         return $this->attemptService->start(
-            office: $request->office,
+            tenant: $request->tenant,
             client: $request->client,
             operationKey: $operationKey,
             provider: $provider,

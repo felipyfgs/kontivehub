@@ -11,7 +11,6 @@ describe('work-routines-ui', () => {
     expect(WORK_ROUTINES_GLOSSARY.rotina.plural).toBe('Rotinas')
     expect(WORK_ROUTINES_GLOSSARY.coordenador.singular).toBe('Coordenador')
     expect(WORK_ROUTINES_GLOSSARY.executor.singular).toBe('Executor')
-    expect(WORK_ROUTINES_GLOSSARY.modeloLegacyForbiddenAsPrimaryLabel).toBe('Modelo')
   })
 
   it('usa Rotinas na navegação Work mantendo path técnico /work/templates', () => {
@@ -84,21 +83,21 @@ describe('work-routines-ui', () => {
     const templates = source('app/pages/work/templates/index.vue')
     const catalogTable = templates.split('test-id="work-template-catalog-table"')[1]
       ?.split('</ShellDataTable>')[0] ?? ''
-    const officeTable = templates.split('test-id="work-templates-table"')[1]
+    const tenantTable = templates.split('test-id="work-templates-table"')[1]
       ?.split('</ShellDataTable>')[0] ?? ''
 
     expect(templates).toContain('O catálogo é uma coleção local curta e não paginada pela API.')
     expect(catalogTable).toContain(':show-per-page="false"')
     expect(catalogTable).toContain(':show-pagination="false"')
     expect(catalogTable).toContain(':total="filteredCatalog.length"')
-    expect(officeTable).toContain(':manual-sorting="true"')
-    expect(officeTable).toContain(':sorting="officeSortingState"')
-    expect(officeTable).toContain('@update:sorting="onOfficeSortingUpdate"')
-    expect(officeTable).toContain('@update:page="page = $event"')
-    expect(officeTable).toContain('@update:items-per-page="setPerPage"')
-    expect(templates).toContain('OFFICE_TEMPLATE_SORTS')
-    expect(templates).toContain('sort: officeSort.value || undefined')
-    expect(templates).toContain('direction: officeSort.value ? officeSortDirection.value : undefined')
+    expect(tenantTable).toContain(':manual-sorting="true"')
+    expect(tenantTable).toContain(':sorting="tenantSortingState"')
+    expect(tenantTable).toContain('@update:sorting="onTenantSortingUpdate"')
+    expect(tenantTable).toContain('@update:page="page = $event"')
+    expect(tenantTable).toContain('@update:items-per-page="setPerPage"')
+    expect(templates).toContain('TENANT_TEMPLATE_SORTS')
+    expect(templates).toContain('sort: tenantSort.value || undefined')
+    expect(templates).toContain('direction: tenantSort.value ? tenantSortDirection.value : undefined')
   })
 
   it('remove catálogo e preview decorativos sem perder estados, ações e permissões', () => {
@@ -110,7 +109,7 @@ describe('work-routines-ui', () => {
     expect(templates).toContain('<dl')
     expect(templates).toContain('data-testid="work-generation-preview-summary"')
     expect(templates).toContain('catalogEmptyKind')
-    expect(templates).toContain('officeEmptyKind')
+    expect(templates).toContain('tenantEmptyKind')
     expect(templates).toContain('v-if="catalogError && catalog.length"')
     expect(templates).toContain('v-if="catalogError && !catalog.length"')
     expect(templates).toContain('work-template-catalog-stale-error')

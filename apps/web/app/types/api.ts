@@ -1,4 +1,12 @@
-export type OfficeRole = 'ADMIN' | 'OPERATOR' | 'VIEWER'
+import type { components as PublicApiComponents } from '~/types/generated/public-api'
+
+export type TenantRole = PublicApiComponents['schemas']['TenantRole']
+export type PlatformRole = PublicApiComponents['schemas']['PlatformRole']
+export type Tenant = PublicApiComponents['schemas']['Tenant']
+export type TenantAccessMode = PublicApiComponents['schemas']['TenantAccessMode']
+export type TenantMembership = PublicApiComponents['schemas']['TenantMembership']
+export type MeUser = PublicApiComponents['schemas']['MeUser']
+export type MeResponse = PublicApiComponents['schemas']['MeResponse']
 export type FiscalRole
   = | 'ISSUER'
     | 'TAKER'
@@ -11,7 +19,7 @@ export type FiscalRole
 
 /** Direção fiscal no catálogo: entrada / saída. */
 export type DocumentDirection = 'IN' | 'OUT' | 'UNKNOWN'
-export type RegistrationSource = 'LEGACY' | 'MANUAL' | 'CNPJ_WS' | 'SERPRO_CONSULTA'
+export type RegistrationSource = 'MANUAL' | 'CNPJ_WS' | 'SERPRO_CONSULTA'
 
 export interface CnaePayload {
   code: string
@@ -40,6 +48,7 @@ export type ClientTaxRegimeCode
     | 'LUCRO_REAL'
     | 'IMUNE_ISENTO'
     | 'OUTRO'
+    | 'UNKNOWN'
 export type ClientCategoryColor
   = | 'primary'
     | 'secondary'
@@ -60,52 +69,6 @@ export type ClientCategoryColor
     | 'lime'
     | 'yellow'
 
-export interface Office {
-  id: number
-  name: string
-  slug: string
-}
-
-/** Modo de resolução do CurrentOffice na sessão. */
-export type OfficeAccessMode = 'membership' | 'platform_privileged'
-
-export interface MeUser {
-  id: number
-  name: string
-  email: string
-  two_factor_confirmed: boolean
-  two_factor_required: boolean
-  requires_two_factor_setup: boolean
-  /** Autorização global PLATFORM_ADMIN — não implica membership fiscal. */
-  is_platform_admin?: boolean
-  /**
-   * Contexto de office resolvido no servidor.
-   * `platform_privileged` = PLATFORM_ADMIN com seletor global (sem membership fictícia).
-   */
-  access_mode?: OfficeAccessMode | null
-  /** Papel real da OfficeMembership (null se admin global puro). */
-  real_office_role?: OfficeRole | null
-  has_real_membership?: boolean
-  /** ok | office_context_required */
-  context_status?: string | null
-  /** Nome da organização (platform_settings) — somente leitura. */
-  platform_organization_name?: string | null
-  /** Alias de current_office (legado). */
-  office: Office | null
-  current_office?: Office | null
-  role: OfficeRole | null
-  default_office_id?: number | null
-  /** Chaves efetivas resolvidas pelo backend para o office corrente. */
-  effective_permissions?: string[]
-  /**
-   * Meta pública do assistente de produto.
-   * `enabled` = ASSISTANT_ENABLED && OPENAI_API_KEY no servidor (fail-closed).
-   */
-  assistant?: {
-    enabled: boolean
-  }
-}
-
 /** GET /api/v1/onboarding/status */
 export interface OnboardingStatusResult {
   available: boolean
@@ -124,10 +87,6 @@ export interface CompleteInitialOnboardingResult {
   user_id: number
   redirect: string
   platform_organization_name?: string | null
-}
-
-export interface MeResponse {
-  data: MeUser
 }
 
 export interface AccountProfile {
@@ -162,11 +121,11 @@ export interface CaptureEligibility {
 
 export interface Establishment {
   id: number
-  office_id?: number
+  tenant_id?: number
   client_id: number
   cnpj: string
   trade_name?: string | null
-  is_matrix: boolean
+  is_headquarters: boolean
   is_active: boolean
   registration_status?: RegistrationStatus | string | null
   registration_status_at?: string | null
@@ -277,9 +236,9 @@ export interface ClientCategory extends ClientCategorySummary {
   clients_count: number
 }
 
-export type OfficeAutXmlEnrollmentStatus = 'NONE' | 'PENDING' | 'CONFIRMED' | 'INACTIVE'
+export type TenantAutXmlEnrollmentStatus = 'NONE' | 'PENDING' | 'CONFIRMED' | 'INACTIVE'
 
-export interface OfficeAutXmlEnrollment {
+export interface TenantAutXmlEnrollment {
   id: number | null
   establishment_id: number
   establishment_cnpj: string
@@ -287,7 +246,7 @@ export interface OfficeAutXmlEnrollment {
   trade_name: string | null
   client_id: number
   client_name: string | null
-  status: OfficeAutXmlEnrollmentStatus
+  status: TenantAutXmlEnrollmentStatus
   activated_at: string | null
   first_seen_at: string | null
   last_seen_at: string | null
@@ -298,7 +257,7 @@ export interface OfficeAutXmlEnrollment {
   erp_instruction: string
 }
 
-export interface OfficeAutXmlStream {
+export interface TenantAutXmlStream {
   stream_ready: boolean
   stream_reason: string | null
   quiet_hours: number
@@ -306,7 +265,7 @@ export interface OfficeAutXmlStream {
   ready_at: string | null
 }
 
-export interface OfficeAutXmlCoverage {
+export interface TenantAutXmlCoverage {
   channel: string
   model: string
   label: string
@@ -314,44 +273,22 @@ export interface OfficeAutXmlCoverage {
   nfce_note: string
 }
 
-export interface OfficeAutXmlOverview {
+export interface TenantAutXmlOverview {
   identity: Record<string, unknown> | null
-  office_cnpj: string | null
+  tenant_cnpj: string | null
   cursor: Record<string, unknown> | null
-  stream: OfficeAutXmlStream
-  coverage: OfficeAutXmlCoverage
-  enrollments: OfficeAutXmlEnrollment[]
+  stream: TenantAutXmlStream
+  coverage: TenantAutXmlCoverage
+  enrollments: TenantAutXmlEnrollment[]
   checklist?: Record<string, unknown>
-}
-
-/** Resumo de matriz/filial vinculada (cada uma tem cadastro próprio). */
-export interface LinkedClientSummary {
-  id: number
-  legal_name: string
-  display_name?: string | null
-  name: string
-  root_cnpj: string
-  matrix_client_id?: number | null
-  cnpj?: string | null
-  trade_name?: string | null
-  is_matrix: boolean
-  is_active: boolean
-  credential_summary?: { status: string, valid_to?: string | null } | null
 }
 
 export interface Client {
   id: number
-  office_id?: number
-  /** Preferencial para UI (display_name ou legal_name) — backend mantém compat */
-  name: string
+  tenant_id?: number
   legal_name: string
   display_name?: string | null
   root_cnpj: string
-  /** Matriz vinculada (se este cliente for filial) */
-  matrix_client_id?: number | null
-  /** CNPJ completo do único estabelecimento (1 cliente = 1 CNPJ) */
-  cnpj?: string | null
-  trade_name?: string | null
   legal_nature_code?: string | null
   legal_nature_name?: string | null
   company_size_code?: string | null
@@ -371,12 +308,8 @@ export interface Client {
   registration_source?: RegistrationSource | string | null
   registration_refreshed_at?: string | null
   establishments_count?: number
-  /** Sempre 0 ou 1 no produto; mantido para captura ADN (cursor por CNPJ). */
+  /** Unidades registradas da raiz CNPJ do cliente. */
   establishments?: Establishment[]
-  /** Matriz (quando este registro é filial) */
-  matrix?: LinkedClientSummary | null
-  /** Filiais vinculadas a esta matriz (cada uma com cadastro próprio) */
-  branches?: LinkedClientSummary[]
   contacts?: ClientContact[]
   custom_fields?: ClientCustomField[]
   credential_summary?: ClientCredentialSummary | null
@@ -411,7 +344,7 @@ export interface CnpjLookupClient {
 export interface CnpjLookupEstablishment {
   cnpj: string
   trade_name?: string | null
-  is_matrix: boolean
+  is_headquarters: boolean
   registration_status: RegistrationStatus | string
   registration_status_at?: string | null
   registration_status_reason?: string | null
@@ -448,10 +381,8 @@ export interface CreateClientPayload {
   notes?: string | null
   is_active?: boolean
   inactive_reason?: string | null
-  /** ID da matriz (cadastro de filial com vínculo) */
-  matrix_client_id?: number | null
   trade_name?: string | null
-  is_matrix?: boolean
+  is_headquarters?: boolean
   establishment_is_active?: boolean
   registration_status?: string | null
   registration_status_at?: string | null
@@ -535,7 +466,7 @@ export type DocumentKind = 'NFSE' | 'NFE' | 'NFCE' | 'CTE'
 
 export type DocumentSource = 'ADN' | 'SEFAZ' | string
 
-/** Item do catálogo unificado (hoje projeção NFS-e + kind). */
+/** Item do catálogo fiscal unificado. */
 export interface FiscalDocument {
   id: number
   /** Tipo DF-e (NFSE, NFE, CTE, …). */
@@ -595,10 +526,7 @@ export interface FiscalDocument {
   document?: DfeDocumentMetadata
 }
 
-/** @deprecated Preferir FiscalDocument — alias de compat. */
-export type NfseNote = FiscalDocument
-
-export interface NfseEvent {
+export interface FiscalDocumentEvent {
   id: number
   access_key: string
   event_type?: string | null
@@ -606,10 +534,10 @@ export interface NfseEvent {
   status?: string | null
 }
 
-export interface NoteDetail {
-  note: NfseNote
-  events: NfseEvent[]
-  document: DfeDocumentMetadata | null
+export interface FiscalDocumentDetail {
+  fiscal_document: FiscalDocument
+  events: FiscalDocumentEvent[]
+  metadata: DfeDocumentMetadata | null
 }
 
 export type ExportScope = 'documents' | 'fiscal_portfolio'
@@ -635,20 +563,20 @@ export interface ExportFilters {
   situation?: string
   q?: string
   submodule?: string
-  /** Marcação de demonstração (servidor também infere do office). */
+  /** Marcação de demonstração (servidor também infere do tenant). */
   is_demo?: boolean
   data_origin?: 'DEMO' | 'SIMULATED' | 'LIVE' | string
 }
 
 /** Agregação por cliente do escritório (aba Clientes). */
-export interface NoteClientAggregate {
+export interface FiscalDocumentClientAggregate {
   client_id: number
   legal_name: string
   display_name?: string | null
   name: string
   root_cnpj: string
   cnpj?: string | null
-  notes_count: number
+  documents_count: number
   service_amount_sum?: string | null
   cancelled_count?: number
   review_count?: number
@@ -656,7 +584,7 @@ export interface NoteClientAggregate {
 }
 
 /** Contagens reais de triagem (chips) no escopo dos filtros. */
-export interface NotesInsights {
+export interface FiscalDocumentInsights {
   total: number
   active: number
   cancelled: number
@@ -719,7 +647,7 @@ export interface CtePublicIdentity {
 
 export interface CtePublicCredential {
   id: number
-  office_fiscal_identity_id: number
+  tenant_fiscal_identity_id: number
   purpose: string
   status: string
   subject_name: string
@@ -735,7 +663,7 @@ export interface CtePublicCredential {
 }
 
 export interface CteOnboarding {
-  office_cnpj?: string | null
+  tenant_cnpj?: string | null
   identity?: CtePublicIdentity | null
   credential?: CtePublicCredential | null
   enabled: boolean
@@ -768,7 +696,7 @@ export interface CteChannelCursor {
 
 export interface CteHealth {
   channels: Record<'CTE_DISTDFE' | 'CTE_AUTXML_DISTDFE', CteChannelCursor[]>
-  summary: { client_streams: number, office_streams: number, blocked: number }
+  summary: { client_streams: number, tenant_streams: number, blocked: number }
 }
 
 export interface CteCoverageSnapshot {
@@ -902,7 +830,7 @@ export type InboxItemType
     | 'outbound_xml_divergent'
     | 'outbound_authorized_unexpected'
     | 'outbound_cancel_failed'
-    | 'svrs_nfce_a1'
+    | 'svrs_nfce_certificate'
     | 'svrs_nfce_auth'
     | 'svrs_nfce_rate_limit'
     | 'svrs_nfce_multiple_queries'
@@ -912,7 +840,7 @@ export type InboxItemType
     | 'svrs_nfce_divergent'
     | 'svrs_nfce_breaker'
     | 'svrs_nfce_exhausted'
-    | 'cte_a1_missing'
+    | 'cte_certificate_missing'
     | 'cte_593'
     | 'cte_656'
     | 'cte_decode_failures'
@@ -1014,11 +942,8 @@ export interface InboxItemLinks {
   client?: string
   sync?: string
   credential?: string
-  /** Paths canônicos tenant-safe (podem vir legados e serem normalizados no FE). */
   serpro_authorization?: string
-  proxy?: string
   usage?: string
-  run?: string
   monitoring?: string
 }
 
@@ -1137,7 +1062,7 @@ export interface OperationsCommunicationSummary {
   available: boolean
   global_enabled?: boolean
   gateway_enabled?: boolean
-  office_enabled?: boolean
+  tenant_enabled?: boolean
   inboxes_by_status?: Record<string, number>
   outbox_retry?: number
   outbox_dead?: number
@@ -1324,38 +1249,22 @@ export interface AppNotification {
   color?: 'error' | 'warning' | 'info' | 'neutral'
 }
 
-export interface TwoFactorQrCode {
-  svg: string
-}
-
-export interface LoginResponse {
-  two_factor?: boolean
-}
-
 // ─── Tenancy / memberships ───────────────────────────────────────────────────
 
-export interface OfficeMembership {
-  office_id: number
-  office_name: string | null
-  office_slug: string | null
-  role: OfficeRole | string
-  is_current: boolean
-}
-
 export interface TenantMembershipsPayload {
-  current_office_id: number | null
-  memberships: OfficeMembership[]
+  current_tenant_id: number | null
+  memberships: TenantMembership[]
 }
 
 export interface TenantSwitchResult {
-  office: Office
-  role: OfficeRole | string | null
+  tenant: Tenant
+  role: TenantRole | null
 }
 
 // ─── Configuração unificada do escritório (OpenSpec) ─────────────────────────
 
-/** Perfil institucional do Office (4 campos). */
-export interface OfficeInstitutionalProfile {
+/** Perfil institucional do Tenant (4 campos). */
+export interface TenantInstitutionalProfile {
   cnpj: string | null
   legal_name: string | null
   institutional_email: string | null
@@ -1363,8 +1272,8 @@ export interface OfficeInstitutionalProfile {
   updated_at?: string | null
 }
 
-/** Consentimento técnico versionado para uso do A1. */
-export interface OfficeTechnicalConsent {
+/** Consentimento técnico versionado para uso do certificado. */
+export interface TenantTechnicalConsent {
   version: string
   accepted: boolean
   accepted_at?: string | null
@@ -1374,8 +1283,8 @@ export interface OfficeTechnicalConsent {
   text_summary?: string | null
 }
 
-/** Credencial canônica e-CNPJ A1 (somente metadados públicos). */
-export interface OfficeCanonicalCredential {
+/** Certificado do escritório (somente metadados públicos). */
+export interface TenantCertificate {
   id?: number | null
   status: string
   subject_name?: string | null
@@ -1391,7 +1300,7 @@ export interface OfficeCanonicalCredential {
 }
 
 /** Estado de onboarding acionável (sem jargão técnico SERPRO). */
-export type OfficeOnboardingStatus
+export type TenantOnboardingStatus
   = | 'incomplete'
     | 'configuring'
     | 'validating'
@@ -1405,8 +1314,8 @@ export type OfficeOnboardingStatus
     | 'technical_error'
     | 'revoked'
 
-export interface OfficeOnboardingActionable {
-  status: OfficeOnboardingStatus | string
+export interface TenantOnboardingActionable {
+  status: TenantOnboardingStatus | string
   stage?:
     | 'CONFIGURANDO'
     | 'VALIDANDO'
@@ -1442,7 +1351,7 @@ export interface OfficeOnboardingActionable {
 }
 
 /** Política mensal de execução automática por monitor (dia 1–28). */
-export interface OfficeMonitorSchedulePolicy {
+export interface TenantMonitorSchedulePolicy {
   monitor_key: string
   monitor_label?: string | null
   day_of_month: number
@@ -1463,8 +1372,8 @@ export interface MonitorCommercialBalance {
   inaugural_available?: boolean
 }
 
-/** Office listado no seletor global da plataforma. */
-export interface PlatformOfficeSummary {
+/** Tenant listado no seletor global da plataforma. */
+export interface PlatformTenantSummary {
   id: number
   name: string
   slug: string
@@ -1474,26 +1383,26 @@ export interface PlatformOfficeSummary {
   plan?: string | null
 }
 
-/** Envelope canônico de GET /api/v1/platform/offices */
-export interface PlatformOfficesEnvelope {
-  offices: PlatformOfficeSummary[]
-  selected_office_id: number | null
-  default_office_id: number | null
+/** Envelope canônico de GET /api/v1/platform/tenants */
+export interface PlatformTenantsEnvelope {
+  tenants: PlatformTenantSummary[]
+  selected_tenant_id: number | null
+  default_tenant_id: number | null
 }
 
-export interface PlatformOfficeSelectResult {
-  office: Office
-  access_mode: OfficeAccessMode
-  role?: OfficeRole | string | null
-  real_office_role?: OfficeRole | string | null
-  has_real_membership?: boolean
-  default_office_id?: number | null
+export interface PlatformTenantSelectResult {
+  tenant: Tenant
+  access_mode: TenantAccessMode
+  tenant_role: TenantRole | null
+  real_tenant_role: TenantRole | null
+  has_real_membership: boolean
+  default_tenant_id: number | null
 }
 
 export type FiscalModuleAvailabilityState
   = | 'AVAILABLE'
     | 'GLOBALLY_RESTRICTED'
-    | 'OFFICE_RESTRICTED'
+    | 'TENANT_RESTRICTED'
     | 'AWAITING_CONFIGURATION'
     | 'TECHNICAL_FAILURE'
 
@@ -1519,7 +1428,7 @@ export interface FiscalModuleAdminItem {
   control_id: number | null
   historical_data_visible: true
   global_restriction: FiscalModuleRestrictionControl | null
-  office_restriction: FiscalModuleRestrictionControl | null
+  tenant_restriction: FiscalModuleRestrictionControl | null
   blocked_jobs_count: number
 }
 
@@ -1529,8 +1438,8 @@ export interface PlatformFiscalModulesEnvelope {
   modules: FiscalModuleAdminItem[]
 }
 
-export interface PlatformOfficeFiscalModulesEnvelope extends PlatformFiscalModulesEnvelope {
-  office: Pick<PlatformOfficeSummary, 'id' | 'name' | 'slug' | 'is_active'>
+export interface PlatformTenantFiscalModulesEnvelope extends PlatformFiscalModulesEnvelope {
+  tenant: Pick<PlatformTenantSummary, 'id' | 'name' | 'slug' | 'is_active'>
 }
 
 export interface FiscalModuleRestrictionBody {
@@ -1540,9 +1449,9 @@ export interface FiscalModuleRestrictionBody {
 
 // ─── Assinatura / Integra Contador (tenant) ──────────────────────────────────
 
-export interface OfficeSubscription {
+export interface TenantSubscription {
   id: number
-  office_id: number
+  tenant_id: number
   plan: string
   status: string
   trial_ends_at?: string | null
@@ -1559,21 +1468,15 @@ export interface OfficeSubscription {
   allows_external_calls: boolean
 }
 
-export interface OfficeSerproAuthorization {
+export interface TenantSerproAuthorization {
   id: number
-  office_id: number
+  tenant_id: number
   environment: string
   status: string
   author_identity_type: string
   author_identity_masked: string | null
   author_name?: string | null
   certificate_mode: string
-  managed_a1_consent?: boolean
-  managed_a1_consented_at?: string | null
-  has_managed_a1: boolean
-  author_fingerprint_sha256?: string | null
-  author_cert_valid_from?: string | null
-  author_cert_valid_to?: string | null
   has_termo: boolean
   termo_sha256?: string | null
   termo_valid_from?: string | null
@@ -1598,7 +1501,7 @@ export interface OfficeSerproAuthorization {
 
 export interface TaxProxyPower {
   id: number
-  office_id: number
+  tenant_id: number
   client_id: number
   author_identity_masked?: string | null
   contributor_cnpj_masked?: string | null
@@ -1715,7 +1618,7 @@ export type SerproProductionOnboardingStep
     | 'STORE_PENDING'
     | 'VERIFY_VAULT'
     | 'TEST_OAUTH'
-    | 'CONFIRM_CUTOVER'
+    | 'CONFIRM_ACTIVATION'
     | 'ACTIVATE_AUTHORIZATION'
     | 'QUEUE_READ_SYNC'
     | 'COMPLETED'
@@ -1756,7 +1659,7 @@ export interface SerproProductionOnboardingState {
 
 export interface SerproProductionOnboardingEnvelope {
   enabled: boolean
-  office_id?: number | null
+  tenant_id?: number | null
   consent?: {
     version: string
     text: string
@@ -1799,18 +1702,18 @@ export interface SerproPlatformConfiguration {
   external_gates_blocking?: boolean
   usage_limits?: {
     config?: Record<string, unknown>
-    office_limits?: Array<Record<string, unknown>>
+    tenant_limits?: Array<Record<string, unknown>>
     usage?: Record<string, unknown>
   }
   runtime_controls?: Array<Record<string, unknown>>
   kill_switch?: SerproKillSwitchStatus
   readiness?: SerproReadinessSnapshot | Record<string, unknown> | null
-  pending_offices?: {
+  pending_tenants?: {
     count: number
     items: Array<{
-      office_id: number
-      office_name?: string | null
-      office_slug?: string | null
+      tenant_id: number
+      tenant_name?: string | null
+      tenant_slug?: string | null
       status?: string
       actionable_code?: string | null
       settings_path?: string
@@ -1859,7 +1762,7 @@ export interface SerproReadinessSnapshot {
   environment?: SerproEnvironmentCode
   gates?: Array<{
     code: string
-    scope?: 'global' | 'office' | 'client' | 'operation' | string
+    scope?: 'global' | 'tenant' | 'client' | 'operation' | string
     status: 'PASS' | 'FAIL' | 'SKIP' | 'WARN' | string
     message?: string | null
     expires_at?: string | null
@@ -1889,7 +1792,7 @@ export interface SerproUsageConsolidation {
   period_month: number
   global?: Array<Record<string, unknown>>
   by_tenant?: Array<{
-    office_id: number
+    tenant_id: number
     entry_count?: number
     total_quantity?: number
     total_estimated_cost_micros?: number
@@ -1922,41 +1825,10 @@ export interface SerproRolloutState {
   [key: string]: unknown
 }
 
-/** Passos do checklist tenant de onboarding Integra. */
-export type SerproChecklistStepId
-  = | 'environment'
-    | 'author'
-    | 'certificate_termo'
-    | 'token'
-    | 'proxy_power'
-    | 'client_operation'
-
-export type SerproChecklistStepStatus = 'done' | 'current' | 'blocked' | 'pending' | 'skipped'
-
-export interface SerproChecklistStep {
-  id: SerproChecklistStepId
-  label: string
-  description: string
-  status: SerproChecklistStepStatus
-  href?: string
-  reasons: string[]
-  next_actions: SerproNextAction[]
-}
-
-export interface SerproNextAction {
-  code: string
-  label: string
-  href?: string
-  /** Papéis que podem executar (omitido = qualquer com acesso à tela). */
-  roles?: OfficeRole[]
-  requires_2fa?: boolean
-  severity?: 'info' | 'warning' | 'error'
-}
-
 // ─── Consumo SERPRO (tenant) ─────────────────────────────────────────────────
 
-export interface OfficeUsageSummarySnapshot {
-  office_id?: number
+export interface TenantUsageSummarySnapshot {
+  tenant_id?: number
   period_year: number
   period_month: number
   used_quantity: number
@@ -1970,7 +1842,7 @@ export interface OfficeUsageSummarySnapshot {
   policy?: Record<string, unknown>
 }
 
-export interface OfficeUsageServiceAggregate {
+export interface TenantUsageServiceAggregate {
   scope?: string
   period_year: number
   period_month: number
@@ -1985,14 +1857,14 @@ export interface OfficeUsageServiceAggregate {
   recomputed_at?: string | null
 }
 
-export interface OfficeUsageSummary {
-  summary: OfficeUsageSummarySnapshot
-  by_service: OfficeUsageServiceAggregate[]
+export interface TenantUsageSummary {
+  summary: TenantUsageSummarySnapshot
+  by_service: TenantUsageServiceAggregate[]
 }
 
-export interface OfficeUsageEntry {
+export interface TenantUsageEntry {
   id: number
-  office_id: number
+  tenant_id: number
   client_id?: number | null
   system_code?: string | null
   service_code?: string | null
@@ -2038,7 +1910,7 @@ export interface FiscalCategory {
 
 export interface FiscalMonitoringRun {
   id: number
-  office_id: number
+  tenant_id: number
   client_id?: number | null
   fiscal_category_id?: number | null
   competence_id?: number | null
@@ -2068,7 +1940,7 @@ export interface FiscalMonitoringRun {
 
 export interface FiscalSnapshot {
   id: number
-  office_id: number
+  tenant_id: number
   run_id?: number | null
   client_id?: number | null
   competence_id?: number | null
@@ -2090,7 +1962,7 @@ export interface FiscalSnapshot {
 
 export interface FiscalFinding {
   id: number
-  office_id: number
+  tenant_id: number
   snapshot_id?: number | null
   run_id?: number | null
   client_id?: number | null
@@ -2106,7 +1978,7 @@ export interface FiscalFinding {
 
 export interface FiscalPendingItem {
   id: number
-  office_id: number
+  tenant_id: number
   client_id?: number | null
   snapshot_id?: number | null
   run_id?: number | null
@@ -2126,7 +1998,7 @@ export interface FiscalPendingItem {
 
 export interface FiscalEvidenceArtifact {
   id: number
-  office_id: number
+  tenant_id: number
   run_id?: number | null
   content_sha256: string
   content_type?: string | null
@@ -2241,9 +2113,9 @@ export interface FgtsDigitalCoverage {
 
 export interface FgtsDigitalSessionDescriptor {
   id: number
-  office_id: number
+  tenant_id: number
   client_id: number
-  credential_source: 'CLIENT' | 'OFFICE'
+  credential_source: 'CLIENT' | 'TENANT'
   profile_type: 'EMPREGADOR' | 'PROCURADOR' | 'PROCURADOR_PJ' | 'RESPONSAVEL_LEGAL' | string
   status: 'READY' | 'CHALLENGE' | 'EXPIRED' | 'REVOKED' | string
   expires_at?: string | null
@@ -2256,7 +2128,7 @@ export interface FgtsDigitalReadiness {
   ready_for_read: boolean
   ready_for_mutation: boolean
   mutations_enabled: boolean
-  credential_source?: 'CLIENT' | 'OFFICE' | null
+  credential_source?: 'CLIENT' | 'TENANT' | null
   has_authorized_session: boolean
   session?: FgtsDigitalSessionDescriptor | null
   human_challenge_possible: boolean
@@ -2274,7 +2146,7 @@ export interface FgtsDigitalReadiness {
 
 export interface FgtsDigitalRun {
   id: number
-  office_id: number
+  tenant_id: number
   client_id: number
   operation: 'READINESS' | 'AUTHENTICATE' | 'QUERY_GUIDES' | 'QUERY_PAYMENT' | 'PREVIEW' | 'EMIT_GUIDE' | 'DOWNLOAD_GUIDE' | string
   guide_type?: 'MONTHLY' | 'TERMINATION' | 'CONSIGNMENT' | 'MIXED' | 'PARAMETERIZED' | string | null
@@ -2320,7 +2192,7 @@ export interface FiscalMutationPreflight {
 
 export interface FiscalMutationOperation {
   id: number
-  office_id: number
+  tenant_id: number
   client_id: number
   status: string
   status_label?: string | null
@@ -2344,20 +2216,20 @@ export interface FiscalMutationOperation {
   [key: string]: unknown
 }
 
-// ─── Ativação / cadastro de Offices e equipe ─────────────────────────────────
+// ─── Ativação / cadastro de Tenants e equipe ─────────────────────────────────
 
 export type ActivationMethod = 'MANUAL_LINK' | 'TEMPORARY_PASSWORD'
-export type ActivationPurpose = 'OFFICE_FIRST_ADMIN' | 'OFFICE_MEMBER' | 'PLATFORM_ADMIN'
+export type ActivationPurpose = 'TENANT_FIRST_ADMIN' | 'TENANT_MEMBER' | 'PLATFORM_ADMIN'
 export type ActivationPublicStatus = 'pending' | 'consumed' | 'expired' | 'revoked' | string
 export type CredentialDelivery = 'delivered' | 'regeneration_required' | 'not_required' | string
-export type OfficeLifecycleStatus
+export type TenantLifecycleStatus
   = | 'PENDING_ACTIVATION'
     | 'ACTIVE'
     | 'SUSPENDED'
     | 'DEPROVISIONED'
     | string
 export type SubscriptionPlanCode = 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE'
-export type OfficeMemberStatus = 'active' | 'pending' | 'expired' | 'deactivated' | string
+export type TenantMemberStatus = 'active' | 'pending' | 'expired' | 'deactivated' | string
 
 /** Ativação sanitizada (sem hash/segredo). */
 export interface ActivationSanitized {
@@ -2387,19 +2259,19 @@ export interface ActivationCompleteResult {
   purpose: ActivationPurpose | string
 }
 
-/** Item da lista admin de offices (inclui pendentes). */
-export interface PlatformOfficeAdminSummary {
+/** Item da lista admin de tenants (inclui pendentes). */
+export interface PlatformTenantAdminSummary {
   id: number
   name: string
   slug: string
   is_active: boolean
-  lifecycle_status: OfficeLifecycleStatus
-  subscription?: OfficeSubscription | null
+  lifecycle_status: TenantLifecycleStatus
+  subscription?: TenantSubscription | null
   activation?: ActivationSanitized | null
   created_at?: string | null
 }
 
-export interface PlatformOfficeFirstAdmin {
+export interface PlatformTenantFirstAdmin {
   membership_id: number
   user_id: number
   name?: string | null
@@ -2407,7 +2279,7 @@ export interface PlatformOfficeFirstAdmin {
   is_active: boolean
 }
 
-export interface PlatformOfficeInstitutionalProfile {
+export interface PlatformTenantInstitutionalProfile {
   id?: number
   cnpj: string
   legal_name: string
@@ -2417,21 +2289,21 @@ export interface PlatformOfficeInstitutionalProfile {
   updated_at?: string | null
 }
 
-/** Detalhe sanitizado de office (GET show / create payload.office). */
-export interface PlatformOfficeAdminDetail {
+/** Detalhe sanitizado de tenant (GET show / create payload.tenant). */
+export interface PlatformTenantAdminDetail {
   id: number
   name: string
   slug: string
   is_active: boolean
-  lifecycle_status: OfficeLifecycleStatus
+  lifecycle_status: TenantLifecycleStatus
   created_at?: string | null
-  profile?: PlatformOfficeInstitutionalProfile | null
-  subscription?: OfficeSubscription | null
-  first_admin?: PlatformOfficeFirstAdmin | null
+  profile?: PlatformTenantInstitutionalProfile | null
+  subscription?: TenantSubscription | null
+  first_admin?: PlatformTenantFirstAdmin | null
   activation?: ActivationSanitized | null
 }
 
-export interface CreatePlatformOfficeBody {
+export interface CreatePlatformTenantBody {
   name: string
   profile: {
     cnpj: string
@@ -2456,8 +2328,8 @@ export interface CredentialDeliveryPayload {
   activation?: ActivationSanitized
 }
 
-export interface CreatePlatformOfficeResult extends CredentialDeliveryPayload {
-  office: PlatformOfficeAdminDetail
+export interface CreatePlatformTenantResult extends CredentialDeliveryPayload {
+  tenant: PlatformTenantAdminDetail
 }
 
 /** Proprietário singleton da instalação (PLATFORM_ADMIN). */
@@ -2468,8 +2340,8 @@ export interface PlatformOwner {
   is_active: boolean
   membership_active?: boolean
   password_change_required?: boolean
-  default_office_id?: number | null
-  default_office?: {
+  default_tenant_id?: number | null
+  default_tenant?: {
     id: number
     name: string
     slug: string
@@ -2480,36 +2352,38 @@ export interface PlatformOwner {
 export interface UpdatePlatformOwnerBody {
   name?: string
   email?: string
-  default_office_id?: number | null
+  default_tenant_id?: number | null
 }
 
-/** @deprecated Removido — use PlatformOwner. Mantido só se algum tipo residual importar. */
-export type PlatformAdminUser = PlatformOwner
-
-export interface OfficeMember {
+export interface TenantMember {
   id: number
   user_id: number
   name?: string | null
   email?: string | null
-  role: OfficeRole
+  role: TenantRole
+  permission_profile: {
+    id: number
+    key: string
+    name: string
+  } | null
   is_active: boolean
-  status: OfficeMemberStatus
+  status: TenantMemberStatus
   activation?: ActivationSanitized | null
 }
 
-export interface OfficeMembersMeta {
+export interface TenantMembersMeta {
   occupied_seats: number
   max_users?: number | null
 }
 
-export interface CreateOfficeMemberBody {
+export interface CreateTenantMemberBody {
   name: string
   email: string
-  role: OfficeRole
+  role: TenantRole
   method: ActivationMethod
 }
 
-export interface CreateOfficeMemberResult extends CredentialDeliveryPayload {
-  membership?: OfficeMember
-  member?: OfficeMember
+export interface CreateTenantMemberResult extends CredentialDeliveryPayload {
+  membership?: TenantMember
+  member?: TenantMember
 }

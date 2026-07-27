@@ -84,7 +84,7 @@ final class ParcelamentoReadAdapter implements FiscalSourceAdapter
             );
         }
 
-        if (! FeatureFlags::isModuleEnabled(ParcelamentoServiceCatalog::MODULE_KEY, $request->office->id)
+        if (! FeatureFlags::isModuleEnabled(ParcelamentoServiceCatalog::MODULE_KEY, $request->tenant->id)
             && ! (bool) config('fiscal_monitoring.enabled', false)) {
             return FiscalAdapterResult::blocked(
                 'Módulo parcelamentos desabilitado.',
@@ -122,7 +122,7 @@ final class ParcelamentoReadAdapter implements FiscalSourceAdapter
         $sha = hash('sha256', $evidence);
 
         $projected = $this->projection->projectFromMonitorBody(
-            $request->office,
+            $request->tenant,
             $request->client,
             $modality,
             $this->enrichBodyForProjection($modality, $operation, $body, $payload),
@@ -227,7 +227,7 @@ final class ParcelamentoReadAdapter implements FiscalSourceAdapter
         $sha = hash('sha256', $evidence);
 
         $projected = $this->projection->projectFromMonitorBody(
-            $request->office,
+            $request->tenant,
             $request->client,
             $modality,
             $consolidated,
@@ -339,7 +339,7 @@ final class ParcelamentoReadAdapter implements FiscalSourceAdapter
         }
 
         $power = $this->proxyPowers->findUsablePower(
-            (int) $request->office->id,
+            (int) $request->tenant->id,
             (int) $request->client->id,
             $modality->requiredPowerCode(),
             $author,

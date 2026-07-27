@@ -6,7 +6,7 @@ use App\Enums\DctfwebDeclarationState;
 use App\Enums\FiscalSituation;
 use App\Enums\PgdasdDeclarationState;
 use App\Enums\TaxObligationApplicability;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * Projeção de obrigação por tenant/contribuinte/competência.
  */
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'client_id',
     'obligation_definition_id',
     'obligation_version_id',
@@ -55,7 +55,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 ])]
 class TaxObligationProjection extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {
@@ -163,7 +163,7 @@ class TaxObligationProjection extends Model
     {
         $data = [
             'id' => $this->id,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'client_id' => $this->client_id,
             'obligation_definition_id' => $this->obligation_definition_id,
             'obligation_code' => $this->relationLoaded('obligation')

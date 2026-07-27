@@ -5,10 +5,10 @@ namespace Tests\Feature;
 use App\Enums\FiscalFindingSeverity;
 use App\Enums\FiscalPendingStatus;
 use App\Enums\FiscalSituation;
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Models\Client;
 use App\Models\FiscalPendingItem;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -20,13 +20,13 @@ class MonitoringInsightsApiTest extends TestCase
 
     public function test_viewer_can_read_monitoring_insights_shape(): void
     {
-        $office = Office::factory()->create();
-        $viewer = User::factory()->forOffice($office, OfficeRole::Viewer)->create();
-        $client = Client::factory()->for($office)->create();
+        $tenant = Tenant::factory()->create();
+        $viewer = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $client = Client::factory()->for($tenant)->create();
         Sanctum::actingAs($viewer);
 
         FiscalPendingItem::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'code' => 'PEND_TEST',
             'title' => 'Pendência de teste',
@@ -65,11 +65,11 @@ class MonitoringInsightsApiTest extends TestCase
         $this->assertArrayHasKey('completed', $dirf);
         $this->assertNull($dirf['completed']);
         $this->assertNull($dirf['total']);
-        $this->assertArrayNotHasKey('office_id', $payload['pending']['items'][0] ?? []);
+        $this->assertArrayNotHasKey('tenant_id', $payload['pending']['items'][0] ?? []);
         $this->assertNull($payload['partial_errors'] ?? null);
     }
 
-    public function test_insights_require_authentication_and_office_membership(): void
+    public function test_insights_require_authentication_and_tenant_membership(): void
     {
         $this->getJson('/api/v1/fiscal/monitoring/insights')->assertUnauthorized();
 
@@ -77,17 +77,17 @@ class MonitoringInsightsApiTest extends TestCase
         $this->getJson('/api/v1/fiscal/monitoring/insights')->assertForbidden();
     }
 
-    public function test_insights_do_not_leak_other_office_pending(): void
+    public function test_insights_do_not_leak_other_tenant_pending(): void
     {
-        $office = Office::factory()->create();
-        $other = Office::factory()->create();
-        $viewer = User::factory()->forOffice($office, OfficeRole::Viewer)->create();
-        $client = Client::factory()->for($office)->create();
+        $tenant = Tenant::factory()->create();
+        $other = Tenant::factory()->create();
+        $viewer = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $client = Client::factory()->for($tenant)->create();
         $otherClient = Client::factory()->for($other)->create();
         Sanctum::actingAs($viewer);
 
         FiscalPendingItem::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'code' => 'OWN',
             'title' => 'Própria',
@@ -98,10 +98,10 @@ class MonitoringInsightsApiTest extends TestCase
             'open_dedupe_key' => 'own-1-open',
         ]);
         FiscalPendingItem::query()->create([
-            'office_id' => $other->id,
+            'tenant_id' => $other->id,
             'client_id' => $otherClient->id,
             'code' => 'OTHER',
-            'title' => 'Outra office',
+            'title' => 'Outra tenant',
             'severity' => FiscalFindingSeverity::Critical,
             'status' => FiscalPendingStatus::Open,
             'situation' => FiscalSituation::Pending,

@@ -9,13 +9,12 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Contrato SERPRO global (plano de controle). SEM office_id.
+ * Contrato SERPRO global (plano de controle). SEM tenant_id.
  */
 #[Fillable([
     'environment',
     'status',
     'active_credential_version_id',
-    'credentials_exposed',
     'segregation_class',
     'contractor_cnpj',
     'contractor_name',
@@ -52,7 +51,6 @@ class SerproContract extends Model
         return [
             'environment' => SerproEnvironment::class,
             'status' => SerproContractStatus::class,
-            'credentials_exposed' => 'boolean',
             'cert_valid_from' => 'immutable_datetime',
             'cert_valid_to' => 'immutable_datetime',
             'activated_at' => 'immutable_datetime',
@@ -96,7 +94,6 @@ class SerproContract extends Model
             'health_message' => $this->health_message,
             'token_expires_at' => $this->token_expires_at?->toIso8601String(),
             'consumer_key_hint' => $this->consumer_key_hint,
-            'credentials_exposed' => (bool) ($this->credentials_exposed ?? false),
             'segregation_class' => $this->segregation_class,
             'active_credential_version_id' => $this->active_credential_version_id,
             'has_pfx' => $this->pfx_vault_object_id !== null,

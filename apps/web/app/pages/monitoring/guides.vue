@@ -28,8 +28,6 @@ const PAYMENT_STATUS_ITEMS: Array<{ label: string, value: string }> = [
 ]
 
 const api = useApi()
-const route = useRoute()
-const router = useRouter()
 const { sessionEpoch, canAccessAdministration } = useDashboard()
 const toast = useToast()
 const {
@@ -58,7 +56,7 @@ const paymentStatus = ref('all')
 const rows = ref<Record<string, unknown>[]>([])
 const overview = ref<FiscalModuleOverview | null>(null)
 const overviewError = ref<string | null>(null)
-/** Contadores de payment_status do read-model unificado (office/cliente). */
+/** Contadores de payment_status do read-model unificado (tenant/cliente). */
 const paymentCounters = ref<{
   UNKNOWN: number
   NOT_CONFIRMED: number
@@ -142,6 +140,7 @@ const downloading = ref(false)
 const mutationOpen = ref(false)
 const mutationRequest = ref<{
   client_id: number
+  operation_key: string
   solution_code: string
   service_code: string
   operation_code: string
@@ -219,20 +218,12 @@ async function loadOverview() {
   }
 }
 
-/** URL Nuxt path-only — limpa query residual (bookmarks legados). */
-async function syncGuidesUrl() {
-  if (Object.keys(route.query).length > 0) {
-    await router.replace({ path: route.path })
-  }
-}
-
 async function load() {
   const seq = ++listSeq
   const epoch = sessionEpoch.value
   loading.value = true
   loadError.value = null
   try {
-    await syncGuidesUrl()
     if (!stillCurrent(seq, 'list', epoch)) return
     const sort = sorting.value[0]
     const res = await api.fiscal.guides.list({
@@ -456,6 +447,7 @@ const columns: TableColumn<Record<string, unknown>>[] = [
             onClick: () => {
               mutationRequest.value = {
                 client_id: Number(original.client_id),
+                operation_key: emissionCodes.operation_key,
                 solution_code: emissionCodes.solution_code,
                 service_code: emissionCodes.service_code,
                 operation_code: emissionCodes.operation_code,

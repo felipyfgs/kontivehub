@@ -9,14 +9,14 @@ use App\Models\FiscalFinding;
 use App\Models\FiscalPendingItem;
 use App\Models\MailboxAlert;
 use App\Models\MailboxMessage;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Fiscal\Declarations\DeclarationHubQueryService;
 use App\Services\FiscalMonitoring\ModulePortfolio\ModulePortfolioQueryService;
 use App\Services\Integra\Mailbox\MailboxQueryService;
 use Throwable;
 
 /**
- * Agrega read models locais do office para o dashboard de insights.
+ * Agrega read models locais do tenant para o dashboard de insights.
  * Somente leitura; sem dispatch SERPRO; fail-closed parcial via partial_errors.
  */
 final class MonitoringInsightsQueryService
@@ -37,7 +37,7 @@ final class MonitoringInsightsQueryService
     /**
      * @return array<string, mixed>
      */
-    public function forOffice(Office $office): array
+    public function forTenant(Tenant $tenant): array
     {
         $partialErrors = [];
         $asOf = now()->toIso8601String();
@@ -47,28 +47,28 @@ final class MonitoringInsightsQueryService
             $partialErrors,
             fn () => Client::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->count(),
         );
-        $pending = $this->safeSection('pending', $partialErrors, fn () => $this->buildPending($office));
-        $findingsPreview = $this->safeSection('findings', $partialErrors, fn () => $this->buildFindingsPreview($office));
-        $rbt12 = $this->safeSection('rbt12', $partialErrors, fn () => $this->buildRbt12($office));
-        $mailbox = $this->safeSection('mailbox', $partialErrors, fn () => $this->buildMailbox($office));
+        $pending = $this->safeSection('pending', $partialErrors, fn () => $this->buildPending($tenant));
+        $findingsPreview = $this->safeSection('findings', $partialErrors, fn () => $this->buildFindingsPreview($tenant));
+        $rbt12 = $this->safeSection('rbt12', $partialErrors, fn () => $this->buildRbt12($tenant));
+        $mailbox = $this->safeSection('mailbox', $partialErrors, fn () => $this->buildMailbox($tenant));
         $notifications = $this->safeSection(
             'notifications',
             $partialErrors,
-            fn () => $this->buildNotifications($office, $pending, $findingsPreview),
+            fn () => $this->buildNotifications($tenant, $pending, $findingsPreview),
         );
         $declarationsAbsence = $this->safeSection(
             'declarations_absence',
             $partialErrors,
-            fn () => $this->buildDeclarationsAbsence($office),
+            fn () => $this->buildDeclarationsAbsence($tenant),
         );
-        $sitfis = $this->safeSection('sitfis', $partialErrors, fn () => $this->buildSitfis($office));
+        $sitfis = $this->safeSection('sitfis', $partialErrors, fn () => $this->buildSitfis($tenant));
         $obligationsProgress = $this->safeSection(
             'obligations_progress',
             $partialErrors,
-            fn () => $this->buildObligationsProgress($office),
+            fn () => $this->buildObligationsProgress($tenant),
         );
 
         $modulesWithError = null;
@@ -127,19 +127,19 @@ final class MonitoringInsightsQueryService
     /**
      * @return array<string, mixed>
      */
-    private function buildPending(Office $office): array
+    private function buildPending(Tenant $tenant): array
     {
-        $page = $this->fiscalQueries->pendingItems($office, self::PREVIEW_LIMIT, null, 'OPEN');
+        $page = $this->fiscalQueries->pendingItems($tenant, self::PREVIEW_LIMIT, null, 'OPEN');
         $items = $page->getCollection()->map(static function (FiscalPendingItem $item): array {
             $row = $item->toPublicArray();
-            unset($row['office_id']);
+            unset($row['tenant_id']);
 
             return $row;
         })->values()->all();
 
         $bySeverity = FiscalPendingItem::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('status', 'OPEN')
             ->selectRaw('severity, COUNT(*) as total')
             ->groupBy('severity')
@@ -157,12 +157,12 @@ final class MonitoringInsightsQueryService
     /**
      * @return array{total: int, items: list<array<string, mixed>>}
      */
-    private function buildFindingsPreview(Office $office): array
+    private function buildFindingsPreview(Tenant $tenant): array
     {
-        $page = $this->fiscalQueries->findings($office, self::PREVIEW_LIMIT, null, true);
+        $page = $this->fiscalQueries->findings($tenant, self::PREVIEW_LIMIT, null, true);
         $items = $page->getCollection()->map(static function (FiscalFinding $item): array {
             $row = $item->toPublicArray();
-            unset($row['office_id']);
+            unset($row['tenant_id']);
 
             return $row;
         })->values()->all();
@@ -176,7 +176,7 @@ final class MonitoringInsightsQueryService
     /**
      * @return array{clients: list<array<string, mixed>>}
      */
-    private function buildRbt12(Office $office): array
+    private function buildRbt12(Tenant $tenant): array
     {
         $filters = new ModulePortfolioFilters(
             page: 1,
@@ -185,7 +185,7 @@ final class MonitoringInsightsQueryService
             sort: 'legal_name',
             sortDirection: 'asc',
         );
-        $page = $this->portfolio->clients($office, FiscalModuleKey::SimplesMei, $filters);
+        $page = $this->portfolio->clients($tenant, FiscalModuleKey::SimplesMei, $filters);
         $clients = [];
 
         foreach ($page->items() as $row) {
@@ -224,14 +224,14 @@ final class MonitoringInsightsQueryService
     /**
      * @return array<string, mixed>
      */
-    private function buildMailbox(Office $office): array
+    private function buildMailbox(Tenant $tenant): array
     {
         $critical = array_map(
             static fn ($c) => strtoupper((string) $c),
             (array) config('fiscal_monitoring.mailbox.critical_categories', ['INTIMACAO', 'NOTIFICACAO', 'COBRANCA', 'URGENTE']),
         );
 
-        $page = $this->mailbox->messages($office, self::MAILBOX_SCAN_LIMIT);
+        $page = $this->mailbox->messages($tenant, self::MAILBOX_SCAN_LIMIT);
         $important = 0;
         $upToDate = 0;
         $other = 0;
@@ -243,7 +243,7 @@ final class MonitoringInsightsQueryService
                 continue;
             }
             $row = $message->toListArray();
-            unset($row['office_id']);
+            unset($row['tenant_id']);
 
             $triage = strtoupper((string) ($row['triage_status'] ?? ''));
             $category = strtoupper((string) ($row['category_code'] ?? ''));
@@ -302,7 +302,7 @@ final class MonitoringInsightsQueryService
      * @param  array{total: int, items: list<array<string, mixed>>}|null  $findings
      * @return array{items: list<array<string, mixed>>}
      */
-    private function buildNotifications(Office $office, mixed $pending, mixed $findings): array
+    private function buildNotifications(Tenant $tenant, mixed $pending, mixed $findings): array
     {
         $items = [];
 
@@ -340,7 +340,7 @@ final class MonitoringInsightsQueryService
             }
         }
 
-        $alerts = $this->mailbox->alerts($office, self::PREVIEW_LIMIT, true);
+        $alerts = $this->mailbox->alerts($tenant, self::PREVIEW_LIMIT, true);
         foreach ($alerts->items() as $alert) {
             if (! $alert instanceof MailboxAlert) {
                 continue;
@@ -368,9 +368,9 @@ final class MonitoringInsightsQueryService
     /**
      * @return array<string, mixed>
      */
-    private function buildDeclarationsAbsence(Office $office): array
+    private function buildDeclarationsAbsence(Tenant $tenant): array
     {
-        $rows = $this->declarations->summaryByObligation($office);
+        $rows = $this->declarations->summaryByObligation($tenant);
         $upToDate = 0;
         $open = 0;
         $byObligation = [];
@@ -409,10 +409,10 @@ final class MonitoringInsightsQueryService
     /**
      * @return array<string, mixed>
      */
-    private function buildSitfis(Office $office): array
+    private function buildSitfis(Tenant $tenant): array
     {
         $overview = $this->portfolio->overview(
-            $office,
+            $tenant,
             FiscalModuleKey::Sitfis,
             new ModulePortfolioFilters(submodule: 'SITFIS'),
         );
@@ -431,7 +431,7 @@ final class MonitoringInsightsQueryService
     /**
      * @return list<array<string, mixed>>
      */
-    private function buildObligationsProgress(Office $office): array
+    private function buildObligationsProgress(Tenant $tenant): array
     {
         $specs = [
             ['code' => 'PGDAS', 'label' => 'PGDAS', 'module' => FiscalModuleKey::Declarations, 'submodule' => 'PGDAS'],
@@ -444,7 +444,7 @@ final class MonitoringInsightsQueryService
         $out = [];
         foreach ($specs as $spec) {
             $overview = $this->portfolio->overview(
-                $office,
+                $tenant,
                 $spec['module'],
                 new ModulePortfolioFilters(submodule: $spec['submodule']),
             );

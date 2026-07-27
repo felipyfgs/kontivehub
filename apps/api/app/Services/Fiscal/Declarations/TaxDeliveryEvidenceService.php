@@ -5,9 +5,9 @@ namespace App\Services\Fiscal\Declarations;
 use App\Enums\FiscalSituation;
 use App\Enums\TaxDeliveryEvidenceKind;
 use App\Enums\TaxObligationApplicability;
-use App\Models\Office;
 use App\Models\TaxDeliveryEvidence;
 use App\Models\TaxObligationProjection;
+use App\Models\Tenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -34,9 +34,9 @@ final class TaxDeliveryEvidenceService
      *   metadata?: array<string, mixed>|null
      * }  $input
      */
-    public function attach(Office $office, TaxObligationProjection $projection, array $input): TaxDeliveryEvidence
+    public function attach(Tenant $tenant, TaxObligationProjection $projection, array $input): TaxDeliveryEvidence
     {
-        if ((int) $projection->office_id !== (int) $office->id) {
+        if ((int) $projection->tenant_id !== (int) $tenant->id) {
             throw new RuntimeException('Projeção não pertence ao escritório ativo.');
         }
 
@@ -49,7 +49,7 @@ final class TaxDeliveryEvidenceService
         $isConclusive = $this->isConclusive($kind, $protocol, $receipt);
 
         return DB::transaction(function () use (
-            $office,
+            $tenant,
             $projection,
             $kind,
             $protocol,
@@ -59,13 +59,13 @@ final class TaxDeliveryEvidenceService
         ) {
             $locked = TaxObligationProjection::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->whereKey($projection->id)
                 ->lockForUpdate()
                 ->firstOrFail();
 
             $evidence = TaxDeliveryEvidence::query()->create([
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'projection_id' => $locked->id,
                 'kind' => $kind,
                 'protocol_number' => $protocol,
@@ -124,7 +124,7 @@ final class TaxDeliveryEvidenceService
         if ((int) $evidence->projection_id !== (int) $projection->id) {
             throw new RuntimeException('Evidência não pertence à projeção.');
         }
-        if ((int) $evidence->office_id !== (int) $projection->office_id) {
+        if ((int) $evidence->tenant_id !== (int) $projection->tenant_id) {
             throw new RuntimeException('Tenant da evidência diverge da projeção.');
         }
 

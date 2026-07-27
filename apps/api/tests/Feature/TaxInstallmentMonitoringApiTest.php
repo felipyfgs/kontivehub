@@ -2,11 +2,11 @@
 
 namespace Tests\Feature;
 
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Jobs\Fiscal\ExecuteFiscalMonitoringRunJob;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
@@ -19,18 +19,18 @@ class TaxInstallmentMonitoringApiTest extends TestCase
 
     public function test_admin_can_monitor_all_productive_modalities(): void
     {
-        $this->assertRoleCanMonitor(OfficeRole::Admin);
+        $this->assertRoleCanMonitor(TenantRole::TenantAdmin);
     }
 
     public function test_operator_can_monitor_all_productive_modalities(): void
     {
-        $this->assertRoleCanMonitor(OfficeRole::Operator);
+        $this->assertRoleCanMonitor(TenantRole::TenantUser);
     }
 
     public function test_viewer_can_read_catalog_but_cannot_enqueue_monitoring(): void
     {
         Queue::fake();
-        [$user, $client] = $this->actorAndClient(OfficeRole::Viewer);
+        [$user, $client] = $this->actorAndClient(TenantRole::TenantUser, 'viewer');
         Sanctum::actingAs($user);
 
         $catalog = $this->getJson('/api/v1/fiscal/installments/modalities')
@@ -52,8 +52,8 @@ class TaxInstallmentMonitoringApiTest extends TestCase
     public function test_bulk_monitor_rejects_cross_tenant_clients_before_any_run(): void
     {
         Queue::fake();
-        [$user, $client] = $this->actorAndClient(OfficeRole::Operator);
-        $otherClient = Client::factory()->forOffice(Office::factory()->create())->create();
+        [$user, $client] = $this->actorAndClient(TenantRole::TenantUser);
+        $otherClient = Client::factory()->forTenant(Tenant::factory()->create())->create();
         Sanctum::actingAs($user);
 
         $this->postJson('/api/v1/fiscal/installments/monitor', [
@@ -68,7 +68,7 @@ class TaxInstallmentMonitoringApiTest extends TestCase
     public function test_prospection_modality_cannot_be_enqueued_directly(): void
     {
         Queue::fake();
-        [$user, $client] = $this->actorAndClient(OfficeRole::Admin);
+        [$user, $client] = $this->actorAndClient(TenantRole::TenantAdmin);
         Sanctum::actingAs($user);
 
         $this->postJson('/api/v1/fiscal/installments/runs', [
@@ -81,7 +81,7 @@ class TaxInstallmentMonitoringApiTest extends TestCase
         $this->assertDatabaseCount('fiscal_monitoring_runs', 0);
     }
 
-    private function assertRoleCanMonitor(OfficeRole $role): void
+    private function assertRoleCanMonitor(TenantRole $role): void
     {
         Queue::fake();
         [$user, $client] = $this->actorAndClient($role);
@@ -103,11 +103,11 @@ class TaxInstallmentMonitoringApiTest extends TestCase
     }
 
     /** @return array{User, Client} */
-    private function actorAndClient(OfficeRole $role): array
+    private function actorAndClient(TenantRole $role, string $permissionProfile = 'operator'): array
     {
-        $office = Office::factory()->create();
-        $user = User::factory()->forOffice($office, $role)->create();
-        $client = Client::factory()->forOffice($office)->create();
+        $tenant = Tenant::factory()->create();
+        $user = User::factory()->forTenant($tenant, $role, $permissionProfile)->create();
+        $client = Client::factory()->forTenant($tenant)->create();
 
         return [$user, $client];
     }

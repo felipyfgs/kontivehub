@@ -10,7 +10,7 @@ export function monitoringAssociateClientListFilters(
   const module = String(moduleKey || '').toLowerCase()
   const sub = String(submodule || '').toUpperCase()
 
-  if (module === 'simples_mei' || module === 'simples-mei') {
+  if (module === 'simples_mei') {
     if (['PGMEI', 'MEI'].includes(sub)) {
       return { ...base, tax_regimes: 'MEI' }
     }

@@ -13,7 +13,7 @@ use App\Models\Client;
 use App\Models\FiscalModuleControl;
 use App\Models\FiscalMonitoringRun;
 use App\Models\FiscalSnapshot;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Integra\Sitfis\SitfisSnapshotService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -25,25 +25,22 @@ class SitfisSnapshotRefreshPolicyTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_global_restriction_cannot_be_reopened_by_legacy_flags(): void
+    public function test_global_restriction_blocks_refresh(): void
     {
         config([
             'fiscal.profile' => 'dev',
             'fiscal.kill_switch' => false,
-            'features.global_enabled' => true,
-            'features.modules.sitfis.enabled' => true,
-            'features.modules.sitfis.allow_all_offices' => true,
             'fiscal_monitoring.enabled' => true,
         ]);
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
         $this->restrict(FiscalModuleControlScope::Global, null);
 
         $before = FiscalMonitoringRun::query()->count();
 
         try {
             app(SitfisSnapshotService::class)->refresh(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 dispatch: false,
             );
@@ -55,31 +52,28 @@ class SitfisSnapshotRefreshPolicyTest extends TestCase
         $this->assertSame($before, FiscalMonitoringRun::query()->count());
     }
 
-    public function test_office_restriction_cannot_be_reopened_by_legacy_flags(): void
+    public function test_tenant_restriction_blocks_refresh(): void
     {
         config([
             'fiscal.profile' => 'dev',
             'fiscal.kill_switch' => false,
-            'features.global_enabled' => true,
-            'features.modules.sitfis.enabled' => true,
-            'features.modules.sitfis.allow_all_offices' => true,
             'fiscal_monitoring.enabled' => true,
         ]);
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
-        $this->restrict(FiscalModuleControlScope::Office, $office);
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
+        $this->restrict(FiscalModuleControlScope::Tenant, $tenant);
 
         $before = FiscalMonitoringRun::query()->count();
 
         try {
             app(SitfisSnapshotService::class)->refresh(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 dispatch: false,
             );
-            $this->fail('A restrição fiscal do office deveria bloquear o refresh SITFIS.');
+            $this->fail('A restrição fiscal do tenant deveria bloquear o refresh SITFIS.');
         } catch (RuntimeException $exception) {
-            $this->assertStringContainsString('Pausa do office de teste', $exception->getMessage());
+            $this->assertStringContainsString('Pausa do tenant de teste', $exception->getMessage());
         }
 
         $this->assertSame($before, FiscalMonitoringRun::query()->count());
@@ -87,12 +81,12 @@ class SitfisSnapshotRefreshPolicyTest extends TestCase
 
     public function test_error_snapshot_within_ttl_still_enqueues(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->create(['office_id' => $office->id]);
-        $run = $this->makeRun($office, $client);
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->create(['tenant_id' => $tenant->id]);
+        $run = $this->makeRun($tenant, $client);
 
         FiscalSnapshot::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'run_id' => $run->id,
             'client_id' => $client->id,
             'system_code' => 'INTEGRA_SITFIS',
@@ -110,7 +104,7 @@ class SitfisSnapshotRefreshPolicyTest extends TestCase
         ]);
 
         $result = app(SitfisSnapshotService::class)->refresh(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             force: false,
             actorId: null,
@@ -124,12 +118,12 @@ class SitfisSnapshotRefreshPolicyTest extends TestCase
 
     public function test_force_enqueues_even_when_verified_within_ttl(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->create(['office_id' => $office->id]);
-        $run = $this->makeRun($office, $client);
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->create(['tenant_id' => $tenant->id]);
+        $run = $this->makeRun($tenant, $client);
 
         FiscalSnapshot::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'run_id' => $run->id,
             'client_id' => $client->id,
             'system_code' => 'INTEGRA_SITFIS',
@@ -148,7 +142,7 @@ class SitfisSnapshotRefreshPolicyTest extends TestCase
 
         // Sem evidência → display_only; force ainda deve enfileirar.
         $result = app(SitfisSnapshotService::class)->refresh(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             force: true,
             actorId: null,
@@ -158,10 +152,10 @@ class SitfisSnapshotRefreshPolicyTest extends TestCase
         $this->assertTrue($result['enqueued']);
     }
 
-    private function makeRun(Office $office, Client $client): FiscalMonitoringRun
+    private function makeRun(Tenant $tenant, Client $client): FiscalMonitoringRun
     {
         return FiscalMonitoringRun::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'system_code' => 'INTEGRA_SITFIS',
             'service_code' => 'SITFIS',
@@ -179,14 +173,14 @@ class SitfisSnapshotRefreshPolicyTest extends TestCase
         ]);
     }
 
-    private function restrict(FiscalModuleControlScope $scope, ?Office $office): void
+    private function restrict(FiscalModuleControlScope $scope, ?Tenant $tenant): void
     {
         FiscalModuleControl::query()->create([
             'module_key' => FiscalControlModule::FiscalSituation,
             'scope' => $scope,
-            'office_id' => $office?->id,
+            'tenant_id' => $tenant?->id,
             'restricted' => true,
-            'reason' => $office === null ? 'Pausa global de teste' : 'Pausa do office de teste',
+            'reason' => $tenant === null ? 'Pausa global de teste' : 'Pausa do tenant de teste',
             'updated_by_user_id' => User::factory()->create()->id,
         ]);
     }

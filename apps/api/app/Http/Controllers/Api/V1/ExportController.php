@@ -7,11 +7,11 @@ use App\Enums\FiscalSituation;
 use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
 use App\Jobs\BuildExportZipJob;
-use App\Models\Export;
+use App\Models\DocumentExport;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use App\Services\Authorization\TenantAuthorization;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use App\Support\FeatureFlags;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,7 +23,7 @@ class ExportController extends Controller
 {
     public function __construct(private readonly TenantAuthorization $authorization) {}
 
-    public function index(Request $request, CurrentOffice $currentOffice): JsonResponse
+    public function index(Request $request, CurrentTenant $currentTenant): JsonResponse
     {
         $perPage = min(max((int) $request->input('per_page', 20), 1), 100);
         $sort = match ($request->string('sort')->toString()) {
@@ -34,8 +34,8 @@ class ExportController extends Controller
         };
         $direction = $request->string('direction')->lower()->toString() === 'asc' ? 'asc' : 'desc';
 
-        $query = Export::query()
-            ->where('office_id', $currentOffice->id())
+        $query = DocumentExport::query()
+            ->where('tenant_id', $currentTenant->id())
             ->where('user_id', auth()->id())
             ->orderBy($sort, $direction);
         if ($sort !== 'id') {
@@ -44,7 +44,7 @@ class ExportController extends Controller
         $paginator = $query->paginate($perPage);
 
         return response()->json([
-            'data' => collect($paginator->items())->map(fn (Export $e) => $this->public($e)),
+            'data' => collect($paginator->items())->map(fn (DocumentExport $e) => $this->public($e)),
             'meta' => [
                 'current_page' => $paginator->currentPage(),
                 'last_page' => $paginator->lastPage(),
@@ -54,18 +54,18 @@ class ExportController extends Controller
         ]);
     }
 
-    public function store(Request $request, CurrentOffice $currentOffice, AuditLogger $audit): JsonResponse
+    public function store(Request $request, CurrentTenant $currentTenant, AuditLogger $audit): JsonResponse
     {
         $actor = $request->user();
         if (! $actor instanceof User || ! $this->authorization->allows($actor, TenantPermission::ExportsCreate)) {
             abort(403);
         }
 
-        // office_id nunca do client (top-level já stripado; reforço em filters).
-        $request->request->remove('office_id');
-        $request->query->remove('office_id');
+        // tenant_id nunca do client (top-level já stripado; reforço em filters).
+        $request->request->remove('tenant_id');
+        $request->query->remove('tenant_id');
         if ($request->isJson() && $request->json() !== null) {
-            $request->json()->remove('office_id');
+            $request->json()->remove('tenant_id');
         }
 
         $data = $request->validate([
@@ -93,14 +93,14 @@ class ExportController extends Controller
         ]);
 
         $rawFilters = $data['filters'] ?? [];
-        // Nunca persistir office_id fornecido pelo cliente.
-        unset($rawFilters['office_id']);
+        // Nunca persistir tenant_id fornecido pelo cliente.
+        unset($rawFilters['tenant_id']);
 
         $filters = $this->normalizeFilters($rawFilters);
         $scope = $filters['export_scope'] ?? 'documents';
 
         if ($scope === 'fiscal_portfolio') {
-            $this->assertFiscalPortfolioFilters($filters, $currentOffice);
+            $this->assertFiscalPortfolioFilters($filters, $currentTenant);
             // include_events não se aplica à carteira.
             $data['include_events'] = false;
         }
@@ -111,8 +111,8 @@ class ExportController extends Controller
             ]);
         }
 
-        $export = Export::query()->create([
-            'office_id' => $currentOffice->office()->id,
+        $export = DocumentExport::query()->create([
+            'tenant_id' => $currentTenant->tenant()->id,
             'user_id' => auth()->id(),
             'status' => 'PENDING',
             'filters' => $filters,
@@ -133,7 +133,7 @@ class ExportController extends Controller
     /**
      * @param  array<string, mixed>  $filters
      */
-    private function assertFiscalPortfolioFilters(array $filters, CurrentOffice $currentOffice): void
+    private function assertFiscalPortfolioFilters(array $filters, CurrentTenant $currentTenant): void
     {
         $module = FiscalModuleKey::tryFromRoute((string) ($filters['module_key'] ?? ''));
         if ($module === null || $module === FiscalModuleKey::Dashboard) {
@@ -155,8 +155,8 @@ class ExportController extends Controller
         }
 
         $flag = $module->featureFlagKey();
-        $officeId = (int) $currentOffice->id();
-        if ($flag === null || ! FeatureFlags::isModuleEnabled($flag, $officeId)) {
+        $tenantId = (int) $currentTenant->id();
+        if ($flag === null || ! FeatureFlags::isModuleEnabled($flag, $tenantId)) {
             abort(403, 'Módulo fiscal desabilitado para este escritório.');
         }
     }
@@ -167,7 +167,7 @@ class ExportController extends Controller
      */
     private function normalizeFilters(array $filters): array
     {
-        unset($filters['office_id']);
+        unset($filters['tenant_id']);
 
         $scope = isset($filters['export_scope']) && is_string($filters['export_scope'])
             ? strtolower(trim($filters['export_scope']))
@@ -277,10 +277,10 @@ class ExportController extends Controller
         return $out;
     }
 
-    public function download(Export $export, AuditLogger $audit, CurrentOffice $currentOffice): BinaryFileResponse
+    public function download(DocumentExport $export, AuditLogger $audit, CurrentTenant $currentTenant): BinaryFileResponse
     {
-        // Isolamento por escritório + dono — paths privados sob storage/app/private/exports/{office_id}
-        if ((int) $export->office_id !== (int) $currentOffice->id() || $export->user_id !== auth()->id()) {
+        // Isolamento por escritório + dono — paths privados sob storage/app/private/exports/{tenant_id}
+        if ((int) $export->tenant_id !== (int) $currentTenant->id() || $export->user_id !== auth()->id()) {
             abort(404);
         }
         if ($export->status !== 'READY' || ! $export->storage_path || ! is_file($export->storage_path)) {
@@ -290,8 +290,8 @@ class ExportController extends Controller
             abort(410, 'Exportação expirada.');
         }
 
-        // Recusa path fora do diretório privado do office
-        $root = realpath(storage_path('app/private/exports/'.$export->office_id));
+        // Recusa path fora do diretório privado do tenant
+        $root = realpath(storage_path('app/private/exports/'.$export->tenant_id));
         $real = realpath($export->storage_path);
         if ($root === false || $real === false
             || (! str_starts_with($real, $root.DIRECTORY_SEPARATOR) && $real !== $root)) {
@@ -309,7 +309,7 @@ class ExportController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function public(Export $export): array
+    private function public(DocumentExport $export): array
     {
         return [
             'id' => $export->id,

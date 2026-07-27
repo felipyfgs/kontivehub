@@ -19,19 +19,9 @@ class PlatformMembershipFactory extends Factory
         return [
             'user_id' => User::factory(),
             'role' => PlatformRole::PlatformAdmin,
-            'platform_role' => null,
             'is_active' => true,
-            'default_office_id' => null,
+            'default_tenant_id' => null,
         ];
-    }
-
-    /** Dual-write canônico preenchido (sem cutover de autoridade). */
-    public function withCanonicalRole(): static
-    {
-        return $this->state(fn () => [
-            'role' => PlatformRole::PlatformAdmin,
-            'platform_role' => PlatformRole::PlatformAdmin->canonicalValue(),
-        ]);
     }
 
     public function inactive(): static
@@ -44,8 +34,8 @@ class PlatformMembershipFactory extends Factory
         return $this->state(fn () => ['user_id' => $user->id]);
     }
 
-    public function withDefaultOffice(int $officeId): static
+    public function withDefaultTenant(int $tenantId): static
     {
-        return $this->state(fn () => ['default_office_id' => $officeId]);
+        return $this->state(fn () => ['default_tenant_id' => $tenantId]);
     }
 }

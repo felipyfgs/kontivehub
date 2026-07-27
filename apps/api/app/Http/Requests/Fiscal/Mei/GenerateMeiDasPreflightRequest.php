@@ -27,7 +27,7 @@ final class GenerateMeiDasPreflightRequest extends MeiPublicOperationRequest
             'due_date' => ['sometimes', 'date_format:Y-m-d', 'after_or_equal:today'],
             'output_format' => ['required', 'string', Rule::in(['PDF', 'BARCODE'])],
             'idempotency_key' => ['required', 'string', 'min:8', 'max:160'],
-            'office_id' => ['prohibited'],
+            'tenant_id' => ['prohibited'],
         ];
     }
 

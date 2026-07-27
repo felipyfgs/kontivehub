@@ -43,19 +43,7 @@ enum FiscalModuleKey: string
      */
     public function featureFlagKey(): ?string
     {
-        return match ($this) {
-            self::Dashboard => null,
-            self::SimplesMei => 'simples_mei',
-            self::Dctfweb => 'dctfweb_mit',
-            self::Installments => 'parcelamentos',
-            self::Sitfis => 'sitfis',
-            self::Mailbox => 'mailbox',
-            self::Declarations => 'declaracoes',
-            self::Guides => 'guias',
-            self::Fgts => 'fgts',
-            self::Registrations => 'registrations',
-            self::TaxProcesses => 'tax_processes',
-        };
+        return $this === self::Dashboard ? null : $this->value;
     }
 
     /** Path canônico da SPA de monitoramento. */
@@ -63,7 +51,7 @@ enum FiscalModuleKey: string
     {
         return match ($this) {
             self::Dashboard => '/monitoring',
-            self::SimplesMei => '/monitoring/simples-mei',
+            self::SimplesMei => '/monitoring/simples',
             self::Dctfweb => '/monitoring/dctfweb',
             self::Installments => '/monitoring/installments',
             self::Sitfis => '/monitoring/sitfis',
@@ -99,32 +87,15 @@ enum FiscalModuleKey: string
 
     public static function tryFromRoute(string $module): ?self
     {
-        $normalized = strtolower(trim($module));
-        $normalized = str_replace('-', '_', $normalized);
-
-        // Aliases de feature flag / categorias
-        $aliases = [
-            'dctfweb_mit' => self::Dctfweb,
-            'parcelamentos' => self::Installments,
-            'declaracoes' => self::Declarations,
-            'guias' => self::Guides,
-            'simples' => self::SimplesMei,
-            'cadastro' => self::Registrations,
-            'vinculos' => self::Registrations,
-            'eprocesso' => self::TaxProcesses,
-            'processos' => self::TaxProcesses,
-        ];
-
-        if (isset($aliases[$normalized])) {
-            return $aliases[$normalized];
-        }
-
-        return self::tryFrom($normalized);
+        return self::tryFrom(trim($module));
     }
 
     public static function tryFromPath(string $path): ?self
     {
         $path = '/'.trim($path, '/');
+        if ($path === '/monitoring/mei') {
+            return self::SimplesMei;
+        }
         foreach (self::cases() as $case) {
             if ($case->monitoringPath() === $path) {
                 return $case;
@@ -147,7 +118,6 @@ enum FiscalModuleKey: string
             self::Installments => ['PARCELAMENTOS'],
             self::Sitfis => ['SITFIS'],
             self::Mailbox => ['CAIXA_POSTAL'],
-            // Abas do hub Declarações + agregado legado DECLARACOES.
             self::Declarations => [
                 'PGDAS',
                 'DEFIS',
@@ -156,7 +126,6 @@ enum FiscalModuleKey: string
                 'MIT',
                 'FGTS',
                 'DIRF',
-                'DECLARACOES',
             ],
             self::Guides => ['GUIAS'],
             self::Fgts => ['FGTS'],

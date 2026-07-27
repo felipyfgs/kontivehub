@@ -15,7 +15,7 @@ use App\Models\User;
 use App\Services\Communication\Authorization\CommunicationAccess;
 use App\Services\Communication\Events\CommunicationEventRecorder;
 use App\Services\Communication\WhatsappAddressNormalizer;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,7 +24,7 @@ use Illuminate\Support\Facades\DB;
 final class CommunicationContactController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly CommunicationAccess $access,
         private readonly WhatsappAddressNormalizer $normalizer,
         private readonly CommunicationEventRecorder $events,
@@ -80,22 +80,22 @@ final class CommunicationContactController extends Controller
     public function store(StoreContactRequest $request): JsonResponse
     {
         $this->access->assertManageContacts($this->actor($request));
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
         $data = $request->validated();
         $address = $this->normalizer->normalize($data['phone']);
         if (CommunicationIdentity::query()->where('channel', CommunicationChannel::Whatsapp->value)
             ->where('address_hash', hash('sha256', $address))->exists()) {
             return response()->json(['message' => 'Este WhatsApp já pertence a um contato.', 'code' => 'identity_conflict'], 409);
         }
-        [$contact, $identity] = DB::transaction(function () use ($office, $data, $address): array {
+        [$contact, $identity] = DB::transaction(function () use ($tenant, $data, $address): array {
             $contact = CommunicationContact::query()->create([
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'name' => isset($data['name']) ? trim((string) $data['name']) : null,
                 'is_provisional' => empty($data['name']),
                 'is_active' => true,
             ]);
             $identity = CommunicationIdentity::query()->create([
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'contact_id' => $contact->id,
                 'channel' => CommunicationChannel::Whatsapp,
                 'address_encrypted' => $address,
@@ -109,10 +109,10 @@ final class CommunicationContactController extends Controller
 
             return [$contact, $identity];
         });
-        $this->events->record((int) $office->id, 'CONTACT_CREATED', [
+        $this->events->record((int) $tenant->id, 'CONTACT_CREATED', [
             'contact_id' => (int) $contact->id,
             'identity_id' => (int) $identity->id,
-        ], actorMembershipId: $this->currentOffice->realMembership()?->id);
+        ], actorMembershipId: $this->currentTenant->realMembership()?->id);
 
         return (new CommunicationContactResource($contact->load([
             'identities.clientLinks.client',
@@ -151,7 +151,7 @@ final class CommunicationContactController extends Controller
             return response()->json(['message' => 'Identidade já cadastrada.', 'code' => 'identity_conflict'], 409);
         }
         $identity = CommunicationIdentity::query()->create([
-            'office_id' => $model->office_id,
+            'tenant_id' => $model->tenant_id,
             'contact_id' => $model->id,
             'channel' => CommunicationChannel::Whatsapp,
             'address_encrypted' => $address,
@@ -215,7 +215,7 @@ final class CommunicationContactController extends Controller
             'client_id' => $client->id,
             'client_contact_id' => $clientContactId,
         ], [
-            'office_id' => $identity->office_id,
+            'tenant_id' => $identity->tenant_id,
             'is_primary' => (bool) ($data['is_primary'] ?? false),
             'receives_automatic' => (bool) ($data['receives_automatic'] ?? true),
         ]);

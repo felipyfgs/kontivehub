@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
-use App\Casts\FiscalSourceProvenanceCast;
+use App\Enums\FiscalSourceProvenance;
 use App\Enums\FiscalVerificationState;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -15,7 +15,7 @@ use LogicException;
  * Evidência oficial imutável (bytes no cofre; metadados sem paths internos).
  */
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'run_id',
     'vault_object_id',
     'content_sha256',
@@ -34,7 +34,7 @@ use LogicException;
 ])]
 class FiscalEvidenceArtifact extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     public $timestamps = false;
 
@@ -42,7 +42,7 @@ class FiscalEvidenceArtifact extends Model
     {
         return [
             'byte_size' => 'integer',
-            'source_provenance' => FiscalSourceProvenanceCast::class,
+            'source_provenance' => FiscalSourceProvenance::class,
             'verification_state' => FiscalVerificationState::class,
             'observed_at' => 'immutable_datetime',
             'retention_until' => 'immutable_datetime',
@@ -57,7 +57,7 @@ class FiscalEvidenceArtifact extends Model
         static::updating(function (self $model): bool {
             if ($model->is_immutable) {
                 $protected = [
-                    'office_id', 'run_id', 'vault_object_id', 'content_sha256',
+                    'tenant_id', 'run_id', 'vault_object_id', 'content_sha256',
                     'content_type', 'byte_size', 'source', 'source_version',
                     'observed_at', 'is_immutable',
                 ];
@@ -98,7 +98,7 @@ class FiscalEvidenceArtifact extends Model
     {
         return [
             'id' => $this->id,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'run_id' => $this->run_id,
             'content_sha256' => $this->content_sha256,
             'content_type' => $this->content_type,

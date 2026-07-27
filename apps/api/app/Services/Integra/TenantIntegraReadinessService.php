@@ -3,7 +3,7 @@
 namespace App\Services\Integra;
 
 use App\Enums\SerproEnvironment;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Serpro\SerproReadinessService;
 
 /**
@@ -19,9 +19,9 @@ final class TenantIntegraReadinessService
     /**
      * @return array<string, mixed>
      */
-    public function forOffice(Office $office, ?SerproEnvironment $environment = null): array
+    public function forTenant(Tenant $tenant, ?SerproEnvironment $environment = null): array
     {
-        $result = $this->readiness->evaluateOffice($office, $environment, persist: false);
+        $result = $this->readiness->evaluateTenant($tenant, $environment, persist: false);
 
         // Não vazar orçamento global nem readiness de outros tenants embutidos em detalhe sensível
         if (isset($result['global']) && is_array($result['global'])) {

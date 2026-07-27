@@ -7,7 +7,7 @@ use InvalidArgumentException;
 /**
  * Filtros oficiais de MIT/LISTAAPURACOES317.
  *
- * Não recebe identidades, office_id, tokens ou parâmetros técnicos: estes são
+ * Não recebe identidades, tenant_id, tokens ou parâmetros técnicos: estes são
  * sempre resolvidos pelo executor central a partir do contexto do escritório.
  */
 final readonly class MitListaApuracoesRequest

@@ -16,15 +16,13 @@ use App\Services\Usage\CommercialEntitlementService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Illuminate\Validation\ValidationException;
 use Throwable;
 
 /**
  * Cria/atualiza o agregado canônico Cliente (raiz) + Estabelecimento (CNPJ completo).
  *
- * - Um Cliente por (office_id, root_cnpj) para a raiz (matrix_client_id null).
+ * - Um Cliente por (tenant_id, root_cnpj).
  * - Vários Estabelecimentos por Cliente; no máximo uma matriz ativa.
- * - Payload legado `matrix_client_id` reutiliza o Cliente-raiz em vez de criar cliente-filial.
  */
 final class CreateClientWithEstablishment
 {
@@ -39,11 +37,11 @@ final class CreateClientWithEstablishment
      * @param  array<string, mixed>  $payload
      * @return array{client: Client, establishment: Establishment, contact: ClientContact|null, custom_fields: list<ClientCustomField>}
      *
-     * @throws ClientRootConflictException
+     * @throws DuplicateEstablishmentException
      * @throws ValidationException
      * @throws \InvalidArgumentException
      */
-    public function handle(int $officeId, array $payload): array
+    public function handle(int $tenantId, array $payload): array
     {
         $cnpj = Cnpj::parse((string) $payload['cnpj']);
         $root = $cnpj->root();
@@ -51,25 +49,25 @@ final class CreateClientWithEstablishment
         $newVaultObjects = [];
 
         try {
-            return DB::transaction(function () use ($officeId, $payload, $cnpj, $root, &$newVaultObjects): array {
+            return DB::transaction(function () use ($tenantId, $payload, $cnpj, $root, &$newVaultObjects): array {
                 // Unicidade de negócio: CNPJ completo (14), não a raiz.
                 $duplicateEstablishment = Establishment::query()
-                    ->where('office_id', $officeId)
+                    ->where('tenant_id', $tenantId)
                     ->where('cnpj', $cnpj->value())
                     ->lockForUpdate()
                     ->first();
 
                 if ($duplicateEstablishment !== null) {
                     $existingClient = Client::query()
-                        ->where('office_id', $officeId)
+                        ->where('tenant_id', $tenantId)
                         ->where('id', $duplicateEstablishment->client_id)
                         ->first();
 
                     if ($existingClient !== null) {
-                        throw new ClientRootConflictException($existingClient);
+                        throw new DuplicateEstablishmentException($existingClient);
                     }
 
-                    throw new ClientRootConflictException(null);
+                    throw new DuplicateEstablishmentException(null);
                 }
 
                 $cached = $this->lookup->getCached($cnpj->value());
@@ -103,20 +101,18 @@ final class CreateClientWithEstablishment
                         : true;
                 }
 
-                // Resolve Cliente-raiz canônico: (office, root) ou matrix_client_id legado.
-                $client = $this->resolveRootClient($officeId, $root, $payload);
+                $client = $this->resolveRootClient($tenantId, $root);
                 $createdNewClient = $client === null;
 
                 if ($createdNewClient) {
                     // Franquia comercial de carteira — só no novo Cliente-raiz (não em filial/estabelecimento).
-                    $this->commercialEntitlements->assertCanCreateClient($officeId);
+                    $this->commercialEntitlements->assertCanCreateClient($tenantId);
 
                     $client = Client::query()->create([
-                        'office_id' => $officeId,
+                        'tenant_id' => $tenantId,
                         'legal_name' => (string) $payload['legal_name'],
                         'display_name' => $payload['display_name'] ?? null,
                         'root_cnpj' => $root,
-                        'matrix_client_id' => null,
                         'legal_nature_code' => $payload['legal_nature_code'] ?? null,
                         'legal_nature_name' => $payload['legal_nature_name'] ?? null,
                         'company_size_code' => $payload['company_size_code'] ?? null,
@@ -136,14 +132,14 @@ final class CreateClientWithEstablishment
                 }
 
                 $hasMatrixEstablishment = Establishment::query()
-                    ->where('office_id', $officeId)
+                    ->where('tenant_id', $tenantId)
                     ->where('client_id', $client->id)
-                    ->where('is_matrix', true)
+                    ->where('is_headquarters', true)
                     ->lockForUpdate()
                     ->exists();
 
                 // Novo estabelecimento é matriz só se ainda não houver matriz ativa no Cliente.
-                $wantsMatrix = (bool) ($payload['is_matrix'] ?? ! $hasMatrixEstablishment);
+                $wantsMatrix = (bool) ($payload['is_headquarters'] ?? ! $hasMatrixEstablishment);
                 $isMatrixEstablishment = $wantsMatrix && ! $hasMatrixEstablishment;
 
                 $address = is_array($payload['address'] ?? null) ? $payload['address'] : [];
@@ -162,11 +158,11 @@ final class CreateClientWithEstablishment
                         : null);
 
                 $establishment = Establishment::query()->create([
-                    'office_id' => $officeId,
+                    'tenant_id' => $tenantId,
                     'client_id' => $client->id,
                     'cnpj' => $cnpj->value(),
                     'trade_name' => $payload['trade_name'] ?? null,
-                    'is_matrix' => $isMatrixEstablishment,
+                    'is_headquarters' => $isMatrixEstablishment,
                     'is_active' => $payload['establishment_is_active'] ?? true,
                     'registration_status' => $status,
                     'registration_status_at' => $payload['registration_status_at'] ?? null,
@@ -208,9 +204,9 @@ final class CreateClientWithEstablishment
                 $contact = null;
                 $customFields = [];
                 if ($createdNewClient) {
-                    $contact = $this->createInitialContact($officeId, $client, $payload);
+                    $contact = $this->createInitialContact($tenantId, $client, $payload);
                     $customFields = $this->createCustomFields(
-                        $officeId,
+                        $tenantId,
                         $client,
                         $payload,
                         $newVaultObjects,
@@ -231,8 +227,8 @@ final class CreateClientWithEstablishment
 
                 $this->audit->record('establishment.create', 'SUCCESS', $establishment, [
                     'client_id' => $client->id,
-                    'fields' => ['cnpj', 'is_matrix', 'registration_status', 'capture_enabled'],
-                    'is_matrix' => $establishment->is_matrix,
+                    'fields' => ['cnpj', 'is_headquarters', 'registration_status', 'capture_enabled'],
+                    'is_headquarters' => $establishment->is_headquarters,
                     'registration_status' => $status->value,
                     'capture_enabled' => $captureEnabled,
                 ]);
@@ -266,57 +262,13 @@ final class CreateClientWithEstablishment
     }
 
     /**
-     * Localiza Cliente-raiz canônico no escritório (mesmo root ou matrix_client_id legado).
-     *
-     * @param  array<string, mixed>  $payload
+     * Localiza o Cliente do tenant pela raiz do CNPJ.
      */
-    private function resolveRootClient(int $officeId, string $root, array $payload): ?Client
+    private function resolveRootClient(int $tenantId, string $root): ?Client
     {
-        $matrixIdRaw = $payload['matrix_client_id'] ?? null;
-        if ($matrixIdRaw !== null && $matrixIdRaw !== '') {
-            $matrix = Client::query()
-                ->where('office_id', $officeId)
-                ->whereKey((int) $matrixIdRaw)
-                ->lockForUpdate()
-                ->first();
-
-            if ($matrix === null) {
-                throw ValidationException::withMessages([
-                    'matrix_client_id' => ['Matriz não encontrada neste escritório.'],
-                ]);
-            }
-
-            // Cliente-filial legado: sobe para a raiz.
-            if ($matrix->matrix_client_id !== null) {
-                $rootClient = Client::query()
-                    ->where('office_id', $officeId)
-                    ->whereKey((int) $matrix->matrix_client_id)
-                    ->lockForUpdate()
-                    ->first();
-
-                if ($rootClient === null) {
-                    throw ValidationException::withMessages([
-                        'matrix_client_id' => ['Vincule à matriz (raiz), não a outra filial.'],
-                    ]);
-                }
-
-                $matrix = $rootClient;
-            }
-
-            if ($matrix->root_cnpj !== $root) {
-                throw ValidationException::withMessages([
-                    'matrix_client_id' => ['A matriz informada tem raiz de CNPJ diferente deste cadastro.'],
-                    'cnpj' => ['O CNPJ da filial deve ter a mesma raiz da matriz vinculada.'],
-                ]);
-            }
-
-            return $matrix;
-        }
-
         return Client::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('root_cnpj', $root)
-            ->whereNull('matrix_client_id')
             ->lockForUpdate()
             ->first();
     }
@@ -324,7 +276,7 @@ final class CreateClientWithEstablishment
     /**
      * @param  array<string, mixed>  $payload
      */
-    private function createInitialContact(int $officeId, Client $client, array $payload): ?ClientContact
+    private function createInitialContact(int $tenantId, Client $client, array $payload): ?ClientContact
     {
         $data = $payload['initial_contact'] ?? null;
 
@@ -333,7 +285,7 @@ final class CreateClientWithEstablishment
         }
 
         return ClientContact::query()->create([
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'client_id' => $client->id,
             'name' => (string) $data['name'],
             'role' => $data['role'] ?? null,
@@ -353,7 +305,7 @@ final class CreateClientWithEstablishment
      * @return list<ClientCustomField>
      */
     private function createCustomFields(
-        int $officeId,
+        int $tenantId,
         Client $client,
         array $payload,
         array &$newVaultObjects,
@@ -372,7 +324,7 @@ final class CreateClientWithEstablishment
 
             if ($type === 'SECRET' && $value !== '') {
                 $objectId = $this->secureObjectStore->put($value, [
-                    'office_id' => $officeId,
+                    'tenant_id' => $tenantId,
                     'client_id' => $client->id,
                     'field_key' => $fieldKey,
                 ]);
@@ -380,7 +332,7 @@ final class CreateClientWithEstablishment
             }
 
             $field = ClientCustomField::query()->create([
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'client_id' => $client->id,
                 'field_key' => $fieldKey,
                 'label' => (string) $data['label'],

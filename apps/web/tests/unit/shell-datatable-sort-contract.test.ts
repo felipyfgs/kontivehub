@@ -21,9 +21,10 @@ describe('shell-datatable-sort-contract', () => {
     expect(source).not.toContain('sortHeader(\'ID\'')
     expect(source).toMatch(/id:\s*'id'[\s\S]*?enableSorting:\s*false/)
     expect(source).toContain('watch(sorting')
-    expect(source).toContain('syncGuidesUrl')
-    expect(source).toContain('Object.keys(route.query).length > 0')
-    expect(source).not.toMatch(/router\.replace\(\{\s*path:\s*route\.path,\s*query/)
+    expect(source).not.toContain('useRoute()')
+    expect(source).not.toContain('useRouter()')
+    expect(source).not.toContain('route.query')
+    expect(source).not.toContain('router.replace')
   })
 
   it('registrations e tax-processes: sem sortHeader fantasma', () => {

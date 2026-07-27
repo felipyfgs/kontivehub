@@ -2,15 +2,15 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['office_id', 'preference_id', 'identity_id'])]
+#[Fillable(['tenant_id', 'preference_id', 'identity_id'])]
 class CommunicationPreferenceRecipient extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     public function preference(): BelongsTo
     {

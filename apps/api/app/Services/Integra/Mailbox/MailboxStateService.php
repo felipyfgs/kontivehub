@@ -8,7 +8,7 @@ use App\Enums\MailboxMessagesConsultStatus;
 use App\Enums\MailboxSource;
 use App\Models\Client;
 use App\Models\MailboxContributorState;
-use App\Models\Office;
+use App\Models\Tenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -17,11 +17,11 @@ use Illuminate\Support\Facades\DB;
  */
 final class MailboxStateService
 {
-    public function getOrCreate(Office $office, Client $client): MailboxContributorState
+    public function getOrCreate(Tenant $tenant, Client $client): MailboxContributorState
     {
         $state = MailboxContributorState::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->first();
 
@@ -30,7 +30,7 @@ final class MailboxStateService
         }
 
         return MailboxContributorState::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'dte_status' => MailboxDteStatus::Unknown,
             'messages_status' => MailboxMessagesConsultStatus::Unknown,
@@ -38,22 +38,22 @@ final class MailboxStateService
     }
 
     public function applyDte(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         DteIndicatorResult $result,
         ?int $runId = null,
     ): MailboxContributorState {
-        return DB::transaction(function () use ($office, $client, $result, $runId) {
+        return DB::transaction(function () use ($tenant, $client, $result, $runId) {
             $state = MailboxContributorState::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('client_id', $client->id)
                 ->lockForUpdate()
                 ->first();
 
             if ($state === null) {
                 $state = MailboxContributorState::query()->create([
-                    'office_id' => $office->id,
+                    'tenant_id' => $tenant->id,
                     'client_id' => $client->id,
                 ]);
             }
@@ -71,17 +71,17 @@ final class MailboxStateService
         });
     }
 
-    public function findForOffice(Office $office, int $clientId): ?MailboxContributorState
+    public function findForTenant(Tenant $tenant, int $clientId): ?MailboxContributorState
     {
         return MailboxContributorState::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $clientId)
             ->first();
     }
 
     public function applyNewMessagesIndicator(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         int $indicator,
         ?int $runId = null,
@@ -90,16 +90,16 @@ final class MailboxStateService
             throw new \InvalidArgumentException('Indicador de mensagens novas inválido.');
         }
 
-        return DB::transaction(function () use ($office, $client, $indicator, $runId) {
+        return DB::transaction(function () use ($tenant, $client, $indicator, $runId) {
             $state = MailboxContributorState::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('client_id', $client->id)
                 ->lockForUpdate()
                 ->first();
             if ($state === null) {
                 $state = MailboxContributorState::query()->create([
-                    'office_id' => $office->id,
+                    'tenant_id' => $tenant->id,
                     'client_id' => $client->id,
                     'dte_status' => MailboxDteStatus::Unknown,
                     'messages_status' => MailboxMessagesConsultStatus::Unknown,

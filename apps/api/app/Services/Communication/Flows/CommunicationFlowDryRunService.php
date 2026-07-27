@@ -26,9 +26,9 @@ final class CommunicationFlowDryRunService
      *   question_answers?: array<string, string>
      * }  $context
      */
-    public function simulate(array $graph, int $officeId, array $context = []): CommunicationFlowDryRunResult
+    public function simulate(array $graph, int $tenantId, array $context = []): CommunicationFlowDryRunResult
     {
-        $validation = $this->validator->validate($graph, $officeId);
+        $validation = $this->validator->validate($graph, $tenantId);
         if (! $validation->valid) {
             return CommunicationFlowDryRunResult::invalid($validation->digest, $validation->errors);
         }
@@ -179,7 +179,7 @@ final class CommunicationFlowDryRunService
             }
 
             if (in_array($type, ['message', 'quick_reply'], true)) {
-                $body = $this->resolveMessageBody($type, $data, $officeId);
+                $body = $this->resolveMessageBody($type, $data, $tenantId);
                 $steps[] = $this->step(++$seq, $current, $type, 'simulated_send', [
                     'body_preview' => $this->masker->preview($body),
                     'body_digest' => hash('sha256', $body),
@@ -311,14 +311,14 @@ final class CommunicationFlowDryRunService
     /**
      * @param  array<string, mixed>  $data
      */
-    private function resolveMessageBody(string $type, array $data, int $officeId): string
+    private function resolveMessageBody(string $type, array $data, int $tenantId): string
     {
         if ($type === 'quick_reply' || isset($data['canned_response_id'])) {
             $cannedId = (int) ($data['canned_response_id'] ?? 0);
             if ($cannedId > 0) {
                 $canned = CommunicationCannedResponse::query()
                     ->withoutGlobalScopes()
-                    ->where('office_id', $officeId)
+                    ->where('tenant_id', $tenantId)
                     ->whereKey($cannedId)
                     ->first();
                 if ($canned !== null) {

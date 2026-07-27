@@ -25,7 +25,7 @@ const personal = computed(() =>
   props.items.filter(item => item.visibility === 'personal')
 )
 const team = computed(() =>
-  props.items.filter(item => item.visibility === 'office')
+  props.items.filter(item => item.visibility === 'tenant')
 )
 
 function itemLabel(filter: SavedListFilter): string {
@@ -46,7 +46,7 @@ const menuItems = computed<DropdownMenuItem[][]>(() => {
         disabled: true
       }]
 
-  const office: DropdownMenuItem[] = team.value.length
+  const tenant: DropdownMenuItem[] = team.value.length
     ? team.value.map(filter => ({
         label: itemLabel(filter),
         icon: 'i-lucide-users',
@@ -63,7 +63,7 @@ const menuItems = computed<DropdownMenuItem[][]>(() => {
   ])
   groups.push([
     { label: 'Equipe', type: 'label' as const },
-    ...office
+    ...tenant
   ])
   groups.push([{
     label: 'Gerenciar…',

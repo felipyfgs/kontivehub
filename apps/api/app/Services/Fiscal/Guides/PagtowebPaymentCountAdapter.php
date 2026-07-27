@@ -54,7 +54,7 @@ final class PagtowebPaymentCountAdapter implements FiscalSourceAdapter
 
     public function moduleKey(): ?string
     {
-        return 'guias';
+        return 'guides';
     }
 
     public function supports(FiscalAdapterRequest $request): bool
@@ -64,7 +64,7 @@ final class PagtowebPaymentCountAdapter implements FiscalSourceAdapter
 
     public function execute(FiscalAdapterRequest $request): FiscalAdapterResult
     {
-        if (! FeatureFlags::isModuleEnabled('guias', $request->office->id) && ! (bool) config('fiscal_monitoring.enabled', false)) {
+        if (! FeatureFlags::isModuleEnabled('guides', $request->tenant->id) && ! (bool) config('fiscal_monitoring.enabled', false)) {
             return FiscalAdapterResult::blocked('Módulo guias desabilitado.', 'FEATURE_DISABLED');
         }
         try {
@@ -73,7 +73,7 @@ final class PagtowebPaymentCountAdapter implements FiscalSourceAdapter
             return FiscalAdapterResult::failed('Filtros de contagem de pagamentos inválidos.', 'INVALID_PAYMENT_COUNT_FILTERS');
         }
         try {
-            $response = $this->operations->execute(office: $request->office, client: $request->client, operationKey: self::OPERATION_KEY, businessData: $normalized['business_data'], idempotencyKey: 'pagtoweb-payment-count:'.$request->run->idempotency_key, correlationId: $request->run->correlation_id, entityKey: 'fiscal-run:'.$request->run->id, module: 'guias');
+            $response = $this->operations->execute(tenant: $request->tenant, client: $request->client, operationKey: self::OPERATION_KEY, businessData: $normalized['business_data'], idempotencyKey: 'pagtoweb-payment-count:'.$request->run->idempotency_key, correlationId: $request->run->correlation_id, entityKey: 'fiscal-run:'.$request->run->id, module: 'guides');
         } catch (Throwable) {
             return FiscalAdapterResult::failed('Falha de transporte Integra Contador.', 'TRANSPORT_ERROR');
         }
@@ -90,9 +90,9 @@ final class PagtowebPaymentCountAdapter implements FiscalSourceAdapter
                 : ($response->sourceProvenance === FiscalSourceProvenance::SerproTrial->value
                     ? FiscalSourceProvenance::SerproTrial->value
                     : FiscalSourceProvenance::Unverified->value);
-            $projected = $this->projector->project($request->office, $request->client, $summary, $request->run->id, $provenance);
+            $projected = $this->projector->project($request->tenant, $request->client, $summary, $request->run->id, $provenance);
         } catch (Throwable) {
-            Log::warning('pagtoweb.payment_count_projection_failed', ['operation_key' => self::OPERATION_KEY, 'office_id' => $request->office->id, 'client_id' => $request->client->id, 'reason' => 'PROJECTION_FAILED']);
+            Log::warning('pagtoweb.payment_count_projection_failed', ['operation_key' => self::OPERATION_KEY, 'tenant_id' => $request->tenant->id, 'client_id' => $request->client->id, 'reason' => 'PROJECTION_FAILED']);
 
             return FiscalAdapterResult::failed('Não foi possível registrar a contagem de pagamentos.', 'PROJECTION_FAILED', $this->coverage());
         }

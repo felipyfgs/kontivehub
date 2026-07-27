@@ -46,7 +46,7 @@ final class DefisLatestDeclarationPostConsultService
                 );
                 $digest = hash('sha256', $decoded['calendar_year'].'|'.$document['kind'].'|'.$evidence->content_sha256);
                 $artifact = DefisLatestDeclarationArtifact::query()->firstOrCreate([
-                    'office_id' => $request->office->id,
+                    'tenant_id' => $request->tenant->id,
                     'client_id' => $request->client->id,
                     'calendar_year' => $decoded['calendar_year'],
                     'kind' => $document['kind'],
@@ -81,7 +81,7 @@ final class DefisLatestDeclarationPostConsultService
             )];
         } catch (Throwable $e) {
             Log::warning('defis.consultimadecrec.decode_failed', [
-                'office_id' => $request->office->id,
+                'tenant_id' => $request->tenant->id,
                 'client_id' => $request->client->id,
                 'run_id' => $request->run->id,
                 'code' => 'DEFIS_143_INVALID_RESPONSE',

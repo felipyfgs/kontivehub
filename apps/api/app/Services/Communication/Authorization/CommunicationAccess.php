@@ -2,18 +2,18 @@
 
 namespace App\Services\Communication\Authorization;
 
-use App\Enums\OfficeRole;
 use App\Enums\TenantPermission;
+use App\Enums\TenantRole;
 use App\Models\CommunicationInbox;
 use App\Models\User;
 use App\Services\Authorization\TenantAuthorization;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Auth\Access\AuthorizationException;
 
 final readonly class CommunicationAccess
 {
     public function __construct(
-        private CurrentOffice $currentOffice,
+        private CurrentTenant $currentTenant,
         private TenantAuthorization $authorization,
     ) {}
 
@@ -76,28 +76,28 @@ final readonly class CommunicationAccess
     /** @return list<int> */
     public function visibleInboxIds(User $actor): array
     {
-        $office = $this->currentOffice->resolve($actor);
-        if ($office === null
+        $tenant = $this->currentTenant->resolve($actor);
+        if ($tenant === null
             || ! $this->authorization->allows($actor, TenantPermission::CommunicationView)) {
             return [];
         }
-        if ($this->currentOffice->role() === OfficeRole::Admin || $this->currentOffice->isPlatformPrivileged()) {
-            return CommunicationInbox::query()->withoutGlobalScope('office')
-                ->where('office_id', $office->id)
+        if ($this->currentTenant->role() === TenantRole::TenantAdmin || $this->currentTenant->isPlatformPrivileged()) {
+            return CommunicationInbox::query()->withoutGlobalScope('tenant')
+                ->where('tenant_id', $tenant->id)
                 ->pluck('id')
                 ->map(static fn ($id): int => (int) $id)
                 ->all();
         }
-        $membership = $this->currentOffice->realMembership();
+        $membership = $this->currentTenant->realMembership();
         if ($membership === null) {
             return [];
         }
 
-        return CommunicationInbox::query()->withoutGlobalScope('office')
-            ->where('office_id', $office->id)
+        return CommunicationInbox::query()->withoutGlobalScope('tenant')
+            ->where('tenant_id', $tenant->id)
             ->whereHas('members', fn ($query) => $query
                 ->withoutGlobalScopes()
-                ->where('office_membership_id', $membership->id)
+                ->where('tenant_membership_id', $membership->id)
                 ->where('is_active', true))
             ->pluck('id')
             ->map(static fn ($id): int => (int) $id)
@@ -107,7 +107,7 @@ final readonly class CommunicationAccess
     /** Auth de canal privado alinhada à visibilidade REST (Admin / platform privileged / member). */
     public function canAuthorizeInboxBroadcast(User $actor, int $inboxId): bool
     {
-        $inbox = CommunicationInbox::query()->withoutGlobalScope('office')->find($inboxId);
+        $inbox = CommunicationInbox::query()->withoutGlobalScope('tenant')->find($inboxId);
         if ($inbox === null) {
             return false;
         }
@@ -118,35 +118,35 @@ final readonly class CommunicationAccess
         return $this->canAccessInbox($actor, $inbox);
     }
 
-    /** Canal de office: manage + Office ativo correspondente (Admin ou platform privileged). */
-    public function canAuthorizeOfficeBroadcast(User $actor, int $officeId): bool
+    /** Canal de tenant: manage + Tenant ativo correspondente (Admin ou platform privileged). */
+    public function canAuthorizeTenantBroadcast(User $actor, int $tenantId): bool
     {
         if (! $this->authorization->allows($actor, TenantPermission::CommunicationManageInboxes)) {
             return false;
         }
-        $office = $this->currentOffice->resolve($actor);
-        if ($office === null || (int) $office->id !== $officeId) {
+        $tenant = $this->currentTenant->resolve($actor);
+        if ($tenant === null || (int) $tenant->id !== $tenantId) {
             return false;
         }
 
-        return $this->currentOffice->role() === OfficeRole::Admin
-            || $this->currentOffice->isPlatformPrivileged();
+        return $this->currentTenant->role() === TenantRole::TenantAdmin
+            || $this->currentTenant->isPlatformPrivileged();
     }
 
     private function canAccessInbox(User $actor, CommunicationInbox $inbox): bool
     {
-        $office = $this->currentOffice->resolve($actor);
-        if ($office === null || (int) $inbox->office_id !== (int) $office->id) {
+        $tenant = $this->currentTenant->resolve($actor);
+        if ($tenant === null || (int) $inbox->tenant_id !== (int) $tenant->id) {
             return false;
         }
-        if ($this->currentOffice->role() === OfficeRole::Admin || $this->currentOffice->isPlatformPrivileged()) {
+        if ($this->currentTenant->role() === TenantRole::TenantAdmin || $this->currentTenant->isPlatformPrivileged()) {
             return true;
         }
-        $membership = $this->currentOffice->realMembership();
+        $membership = $this->currentTenant->realMembership();
 
         return $membership !== null && $inbox->members()
             ->withoutGlobalScopes()
-            ->where('office_membership_id', $membership->id)
+            ->where('tenant_membership_id', $membership->id)
             ->where('is_active', true)
             ->exists();
     }

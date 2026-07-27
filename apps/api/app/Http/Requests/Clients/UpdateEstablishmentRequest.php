@@ -20,7 +20,7 @@ class UpdateEstablishmentRequest extends FormRequest
     {
         return [
             'trade_name' => ['nullable', 'string', 'max:255'],
-            'is_matrix' => ['sometimes', 'boolean'],
+            'is_headquarters' => ['sometimes', 'boolean'],
             'is_active' => ['sometimes', 'boolean'],
             'registration_status' => ['nullable', 'string', Rule::enum(RegistrationStatus::class)],
             'registration_status_at' => ['nullable', 'date'],
@@ -45,7 +45,7 @@ class UpdateEstablishmentRequest extends FormRequest
             'address.country' => ['nullable', 'string', 'max:64'],
             // imutáveis
             'cnpj' => ['prohibited'],
-            'office_id' => ['prohibited'],
+            'tenant_id' => ['prohibited'],
             'client_id' => ['prohibited'],
             'registration_source' => ['prohibited'],
         ];

@@ -4,20 +4,20 @@ namespace App\Models;
 
 use App\Enums\FgtsDigitalCredentialSource;
 use App\Enums\FgtsDigitalSessionStatus;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Model;
 
 #[Fillable([
-    'office_id', 'client_id', 'representation_id', 'credential_source', 'credential_fingerprint',
+    'tenant_id', 'client_id', 'representation_id', 'credential_source', 'credential_fingerprint',
     'profile_type', 'target_identifier_hash', 'contract_version', 'status', 'vault_object_id',
     'expires_at', 'last_used_at', 'metadata',
 ])]
 #[Hidden(['vault_object_id', 'credential_fingerprint', 'target_identifier_hash', 'metadata'])]
 class FgtsDigitalSession extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {
@@ -41,7 +41,7 @@ class FgtsDigitalSession extends Model
     {
         return [
             'id' => $this->id,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'client_id' => $this->client_id,
             'credential_source' => $this->credential_source->value,
             'profile_type' => $this->profile_type,

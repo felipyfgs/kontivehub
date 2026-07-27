@@ -25,7 +25,7 @@ class AutoCienciaNfeJob implements ShouldBeUnique, ShouldQueue
     public int $uniqueFor = 600;
 
     public function __construct(
-        public int $officeId,
+        public int $tenantId,
         public string $accessKey,
     ) {
         $this->onQueue((string) config('sefaz.queues.manifest', 'manifest-nfe'));
@@ -33,7 +33,7 @@ class AutoCienciaNfeJob implements ShouldBeUnique, ShouldQueue
 
     public function uniqueId(): string
     {
-        return $this->officeId.':'.$this->accessKey;
+        return $this->tenantId.':'.$this->accessKey;
     }
 
     public function backoff(): array
@@ -48,7 +48,7 @@ class AutoCienciaNfeJob implements ShouldBeUnique, ShouldQueue
         }
 
         $hasFull = NfeDocument::query()
-            ->where('office_id', $this->officeId)
+            ->where('tenant_id', $this->tenantId)
             ->where('access_key', $this->accessKey)
             ->where('is_summary', false)
             ->exists();
@@ -58,7 +58,7 @@ class AutoCienciaNfeJob implements ShouldBeUnique, ShouldQueue
         }
 
         $summary = NfeDocument::query()
-            ->where('office_id', $this->officeId)
+            ->where('tenant_id', $this->tenantId)
             ->where('access_key', $this->accessKey)
             ->where('is_summary', true)
             ->first();
@@ -74,14 +74,14 @@ class AutoCienciaNfeJob implements ShouldBeUnique, ShouldQueue
 
         $result = $manifestation->manifest(
             $this->accessKey,
-            $this->officeId,
+            $this->tenantId,
             NfeManifestationType::Ciencia,
             purpose: 'AUTO_UNLOCK',
         );
 
         Log::info('sefaz.auto_ciencia.done', [
             'access_key' => $this->accessKey,
-            'office_id' => $this->officeId,
+            'tenant_id' => $this->tenantId,
             'status' => $result['status'] ?? null,
             'c_stat' => $result['c_stat'] ?? null,
         ]);

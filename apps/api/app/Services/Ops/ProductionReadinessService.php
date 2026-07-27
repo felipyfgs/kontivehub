@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Schema;
 use Laravel\Horizon\Contracts\MasterSupervisorRepository;
 
 /**
- * Readiness global de plataforma — sem Office, sem office_id, sem egress fiscal.
+ * Readiness global de plataforma — sem Tenant, sem tenant_id, sem egress fiscal.
  */
 final class ProductionReadinessService
 {

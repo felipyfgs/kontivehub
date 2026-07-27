@@ -65,7 +65,6 @@ function emptyDocuments(): PgdasdHistoryOperationDocuments {
 function collectPeriodArtifacts(period: PgdasdHistoryPeriod): PgdasdArtifactDescriptor[] {
   const artifacts = [
     ...(period.artifacts || []),
-    ...(period.documents || []),
     ...(period.declarations || []).flatMap(item => item.documents || []),
     ...(period.das || []).flatMap(item => item.documents || [])
   ]
@@ -74,7 +73,7 @@ function collectPeriodArtifacts(period: PgdasdHistoryPeriod): PgdasdArtifactDesc
 }
 
 function declarationOperationLabel(declaration: PgdasdHistoryDeclaration): string {
-  const raw = declaration.normalized_operation_type || declaration.operation_type
+  const raw = declaration.normalized_operation_type
   if (!raw) return 'Declaração'
 
   const normalized = raw.trim().toUpperCase().replaceAll('-', '_').replaceAll(' ', '_')
@@ -91,7 +90,7 @@ function declarationOperationLabel(declaration: PgdasdHistoryDeclaration): strin
 }
 
 function declarationOperationRank(declaration: PgdasdHistoryDeclaration): number {
-  const raw = declaration.normalized_operation_type || declaration.operation_type || ''
+  const raw = declaration.normalized_operation_type || ''
   const normalized = raw.trim().toUpperCase().replaceAll('-', '_').replaceAll(' ', '_')
   if (['ORIGINAL', 'DECLARACAO_ORIGINAL'].includes(normalized)) return 0
   if (['RECTIFIER', 'RECTIFYING', 'RETIFICADORA', 'DECLARACAO_RETIFICADORA'].includes(normalized)) return 1
@@ -134,14 +133,12 @@ export function buildPgdasdHistoryOperationRows(
     if (byOperation !== 0) return byOperation
     const byDate = String(a.transmitted_at || '').localeCompare(String(b.transmitted_at || ''))
     if (byDate !== 0) return byDate
-    return String(a.declaration_number || a.number || '')
-      .localeCompare(String(b.declaration_number || b.number || ''))
+    return String(a.declaration_number || '')
+      .localeCompare(String(b.declaration_number || ''))
   })
 
   const declarationRows: PgdasdHistoryOperationRow[] = declarations.map((declaration, index) => {
-    const declarationNumber = normalizeIdentifier(
-      declaration.declaration_number || declaration.number
-    )
+    const declarationNumber = normalizeIdentifier(declaration.declaration_number)
     const documents = emptyDocuments()
 
     if (declarationNumber) {

@@ -2,12 +2,11 @@
 
 namespace App\Models;
 
-use App\Casts\FiscalSourceProvenanceCast;
 use App\Enums\FiscalCoverage;
 use App\Enums\FiscalSituation;
 use App\Enums\FiscalSourceProvenance;
 use App\Enums\FiscalVerificationState;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -18,7 +17,7 @@ use LogicException;
  * Snapshot imutável de situação fiscal (finalizado não se altera silenciosamente).
  */
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'run_id',
     'client_id',
     'competence_id',
@@ -39,7 +38,7 @@ use LogicException;
 ])]
 class FiscalSnapshot extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     public $timestamps = false;
 
@@ -48,7 +47,7 @@ class FiscalSnapshot extends Model
         return [
             'situation' => FiscalSituation::class,
             'coverage' => FiscalCoverage::class,
-            'source_provenance' => FiscalSourceProvenanceCast::class,
+            'source_provenance' => FiscalSourceProvenance::class,
             'verification_state' => FiscalVerificationState::class,
             'version' => 'integer',
             'is_current' => 'boolean',
@@ -79,7 +78,7 @@ class FiscalSnapshot extends Model
         static::updating(function (self $model): bool {
             // is_current pode ser desligado ao criar snapshot sucessor; demais campos imutáveis.
             $protected = [
-                'office_id', 'run_id', 'client_id', 'competence_id', 'evidence_artifact_id',
+                'tenant_id', 'run_id', 'client_id', 'competence_id', 'evidence_artifact_id',
                 'system_code', 'service_code', 'operation_code', 'situation', 'coverage',
                 'version', 'normalized', 'observed_at',
             ];
@@ -127,7 +126,7 @@ class FiscalSnapshot extends Model
     {
         return [
             'id' => $this->id,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'run_id' => $this->run_id,
             'client_id' => $this->client_id,
             'competence_id' => $this->competence_id,

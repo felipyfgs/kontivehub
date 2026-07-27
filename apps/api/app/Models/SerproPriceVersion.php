@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
- * Versão de tabela de preços SERPRO (plano de controle — sem office_id).
+ * Versão de tabela de preços SERPRO (plano de controle — sem tenant_id).
  * Somente eligibility=PRODUCTION e authorizes_production=true liberam egress real.
  */
 #[Fillable([

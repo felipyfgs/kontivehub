@@ -6,16 +6,15 @@ use App\Enums\SerproEnvironment;
 use App\Enums\SerproUsageReservationStatus;
 use App\Models\SerproApiUsageEntry;
 use App\Models\SerproApiUsageReservation;
-use App\Models\SerproOfficeQuantityUsageLimit;
 use App\Models\SerproQuantityUsageLimit;
+use App\Models\SerproTenantQuantityUsageLimit;
 use App\Services\Audit\AuditLogger;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 
 /**
- * Limites quantitativos por ambiente/Office sobre o ledger local.
+ * Limites quantitativos por ambiente/Tenant sobre o ledger local.
  * null / zero / ausente = fail-closed (nunca ilimitado).
  */
 final class SerproQuantityUsageLimitService
@@ -24,7 +23,7 @@ final class SerproQuantityUsageLimitService
 
     public const BLOCK_GLOBAL = 'QUANTITY_GLOBAL_EXCEEDED';
 
-    public const BLOCK_OFFICE = 'QUANTITY_OFFICE_EXCEEDED';
+    public const BLOCK_TENANT = 'QUANTITY_TENANT_EXCEEDED';
 
     public function __construct(
         private readonly AuditLogger $audit,
@@ -44,14 +43,14 @@ final class SerproQuantityUsageLimitService
     }
 
     /**
-     * @param  list<array{office_id: int, limit_quantity: int|null}>  $officeLimits
+     * @param  list<array{tenant_id: int, limit_quantity: int|null}>  $tenantLimits
      */
     public function upsert(
         SerproEnvironment $environment,
         int $cycleStartDay,
         int $alertPercent,
         ?int $globalLimitQuantity,
-        array $officeLimits = [],
+        array $tenantLimits = [],
         ?int $actorUserId = null,
     ): SerproQuantityUsageLimit {
         if ($cycleStartDay < 1 || $cycleStartDay > 28) {
@@ -71,7 +70,7 @@ final class SerproQuantityUsageLimitService
             $cycleStartDay,
             $alertPercent,
             $globalLimitQuantity,
-            $officeLimits,
+            $tenantLimits,
             $actorUserId,
         ): SerproQuantityUsageLimit {
             $row = $this->getOrDefault($environment);
@@ -83,20 +82,20 @@ final class SerproQuantityUsageLimitService
                 'updated_by_user_id' => $actorUserId,
             ])->save();
 
-            foreach ($officeLimits as $item) {
-                $officeId = (int) ($item['office_id'] ?? 0);
-                if ($officeId <= 0) {
-                    throw new RuntimeException('office_id inválido em limites por Office.');
+            foreach ($tenantLimits as $item) {
+                $tenantId = (int) ($item['tenant_id'] ?? 0);
+                if ($tenantId <= 0) {
+                    throw new RuntimeException('tenant_id inválido em limites por Tenant.');
                 }
 
                 $limit = $item['limit_quantity'] ?? null;
                 if ($limit !== null && (int) $limit <= 0) {
-                    throw new RuntimeException('Limite por Office deve ser positivo ou nulo (bloqueante).');
+                    throw new RuntimeException('Limite por Tenant deve ser positivo ou nulo (bloqueante).');
                 }
 
-                SerproOfficeQuantityUsageLimit::query()->updateOrCreate(
+                SerproTenantQuantityUsageLimit::query()->updateOrCreate(
                     [
-                        'office_id' => $officeId,
+                        'tenant_id' => $tenantId,
                         'environment' => $environment->value,
                     ],
                     [
@@ -112,7 +111,7 @@ final class SerproQuantityUsageLimitService
                 'cycle_start_day' => $cycleStartDay,
                 'alert_percent' => $alertPercent,
                 'global_limit_quantity' => $globalLimitQuantity,
-                'office_limits_count' => count($officeLimits),
+                'tenant_limits_count' => count($tenantLimits),
             ], $actorUserId, null);
 
             return $row->refresh();
@@ -131,7 +130,7 @@ final class SerproQuantityUsageLimitService
      *   reserved_quantity: int,
      *   projected: int,
      *   global_limit: int|null,
-     *   office_limit: int|null,
+     *   tenant_limit: int|null,
      *   applicable_limit: int|null,
      *   ratio: float|null,
      *   alert_percent: int
@@ -139,7 +138,7 @@ final class SerproQuantityUsageLimitService
      */
     public function evaluate(
         SerproEnvironment $environment,
-        ?int $officeId,
+        ?int $tenantId,
         int $reserveQuantity = 1,
         Carbon|string|null $at = null,
     ): array {
@@ -149,52 +148,52 @@ final class SerproQuantityUsageLimitService
 
         $usedGlobal = $this->billableQuantity(null, $environment, $cycle['period_start'], $cycle['period_end']);
         $reservedGlobal = $this->openReservedQuantity(null, $environment, $cycle['period_start'], $cycle['period_end']);
-        $usedOffice = $officeId !== null
-            ? $this->billableQuantity($officeId, $environment, $cycle['period_start'], $cycle['period_end'])
+        $usedTenant = $tenantId !== null
+            ? $this->billableQuantity($tenantId, $environment, $cycle['period_start'], $cycle['period_end'])
             : 0;
-        $reservedOffice = $officeId !== null
-            ? $this->openReservedQuantity($officeId, $environment, $cycle['period_start'], $cycle['period_end'])
+        $reservedTenant = $tenantId !== null
+            ? $this->openReservedQuantity($tenantId, $environment, $cycle['period_start'], $cycle['period_end'])
             : 0;
 
         $globalLimit = $config->isConfiguredPositive() ? (int) $config->global_limit_quantity : null;
-        $officeLimit = null;
-        if ($officeId !== null) {
-            $officeRow = SerproOfficeQuantityUsageLimit::query()
-                ->where('office_id', $officeId)
+        $tenantLimit = null;
+        if ($tenantId !== null) {
+            $tenantRow = SerproTenantQuantityUsageLimit::query()
+                ->where('tenant_id', $tenantId)
                 ->where('environment', $environment->value)
                 ->where('is_active', true)
                 ->first();
-            $officeLimit = ($officeRow !== null && $officeRow->isConfiguredPositive())
-                ? (int) $officeRow->limit_quantity
+            $tenantLimit = ($tenantRow !== null && $tenantRow->isConfiguredPositive())
+                ? (int) $tenantRow->limit_quantity
                 : null;
         }
 
         $qty = max(0, $reserveQuantity);
         $projectedGlobal = $usedGlobal + $reservedGlobal + $qty;
-        $projectedOffice = $usedOffice + $reservedOffice + $qty;
+        $projectedTenant = $usedTenant + $reservedTenant + $qty;
 
         $blockReason = null;
         if ($globalLimit === null) {
             $blockReason = self::BLOCK_NOT_CONFIGURED;
         } elseif ($projectedGlobal > $globalLimit) {
             $blockReason = self::BLOCK_GLOBAL;
-        } elseif ($officeId !== null && $officeLimit === null) {
+        } elseif ($tenantId !== null && $tenantLimit === null) {
             $blockReason = self::BLOCK_NOT_CONFIGURED;
-        } elseif ($officeId !== null && $officeLimit !== null && $projectedOffice > $officeLimit) {
-            $blockReason = self::BLOCK_OFFICE;
+        } elseif ($tenantId !== null && $tenantLimit !== null && $projectedTenant > $tenantLimit) {
+            $blockReason = self::BLOCK_TENANT;
         }
 
         $applicable = $globalLimit;
-        if ($officeLimit !== null) {
-            $applicable = $applicable === null ? $officeLimit : min($applicable, $officeLimit);
+        if ($tenantLimit !== null) {
+            $applicable = $applicable === null ? $tenantLimit : min($applicable, $tenantLimit);
         }
 
-        $projected = $officeId !== null
-            ? min($projectedGlobal, $projectedOffice)
+        $projected = $tenantId !== null
+            ? min($projectedGlobal, $projectedTenant)
             : $projectedGlobal;
 
         $ratio = ($applicable !== null && $applicable > 0)
-            ? (($officeId !== null ? ($usedOffice + $reservedOffice) : ($usedGlobal + $reservedGlobal)) / $applicable)
+            ? (($tenantId !== null ? ($usedTenant + $reservedTenant) : ($usedGlobal + $reservedGlobal)) / $applicable)
             : null;
 
         $alertPercent = (int) $config->alert_percent;
@@ -207,11 +206,11 @@ final class SerproQuantityUsageLimitService
             'cycle_code' => $cycle['cycle_code'],
             'period_start' => $cycle['period_start']->toIso8601String(),
             'period_end' => $cycle['period_end']->toIso8601String(),
-            'used_quantity' => $officeId !== null ? $usedOffice : $usedGlobal,
-            'reserved_quantity' => $officeId !== null ? $reservedOffice : $reservedGlobal,
+            'used_quantity' => $tenantId !== null ? $usedTenant : $usedGlobal,
+            'reserved_quantity' => $tenantId !== null ? $reservedTenant : $reservedGlobal,
             'projected' => $projected,
             'global_limit' => $globalLimit,
-            'office_limit' => $officeLimit,
+            'tenant_limit' => $tenantLimit,
             'applicable_limit' => $applicable,
             'ratio' => $ratio,
             'alert_percent' => $alertPercent,
@@ -221,11 +220,11 @@ final class SerproQuantityUsageLimitService
     /**
      * @return list<array<string, mixed>>
      */
-    public function listOfficeLimits(SerproEnvironment $environment): array
+    public function listTenantLimits(SerproEnvironment $environment): array
     {
-        return SerproOfficeQuantityUsageLimit::query()
+        return SerproTenantQuantityUsageLimit::query()
             ->where('environment', $environment->value)
-            ->orderBy('office_id')
+            ->orderBy('tenant_id')
             ->get()
             ->map->toSanitizedArray()
             ->all();
@@ -265,50 +264,35 @@ final class SerproQuantityUsageLimitService
     }
 
     private function billableQuantity(
-        ?int $officeId,
+        ?int $tenantId,
         SerproEnvironment $environment,
         Carbon $from,
         Carbon $to,
     ): int {
-        if (! class_exists(SerproApiUsageEntry::class)) {
-            return 0;
-        }
-
         $q = SerproApiUsageEntry::query()
+            ->where('environment', $environment->value)
             ->whereBetween('occurred_at', [$from, $to]);
 
-        if ($officeId !== null) {
-            $q->where('office_id', $officeId);
-        }
-
-        // environment column may not exist on all ledger shapes; filter when present.
-        if (Schema::hasColumn('serpro_api_usage_entries', 'environment')) {
-            $q->where('environment', $environment->value);
+        if ($tenantId !== null) {
+            $q->where('tenant_id', $tenantId);
         }
 
         return (int) $q->sum('quantity');
     }
 
     private function openReservedQuantity(
-        ?int $officeId,
+        ?int $tenantId,
         SerproEnvironment $environment,
         Carbon $from,
         Carbon $to,
     ): int {
-        if (! class_exists(SerproApiUsageReservation::class)) {
-            return 0;
-        }
-
         $q = SerproApiUsageReservation::query()
             ->where('status', SerproUsageReservationStatus::Reserved->value)
+            ->where('environment', $environment->value)
             ->whereBetween('created_at', [$from, $to]);
 
-        if ($officeId !== null) {
-            $q->where('office_id', $officeId);
-        }
-
-        if (Schema::hasColumn('serpro_api_usage_reservations', 'environment')) {
-            $q->where('environment', $environment->value);
+        if ($tenantId !== null) {
+            $q->where('tenant_id', $tenantId);
         }
 
         return (int) $q->sum('quantity');

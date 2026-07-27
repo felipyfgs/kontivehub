@@ -74,10 +74,10 @@ final class CaptureEligibilityService
             ->first();
 
         if ($credential === null) {
-            $reasons[] = 'Credencial A1 ausente ou inativa.';
+            $reasons[] = 'certificado ausente ou inativa.';
             $codes[] = 'credential_missing';
         } elseif ($credential->valid_to !== null && $credential->valid_to->isPast()) {
-            $reasons[] = 'Credencial A1 expirada.';
+            $reasons[] = 'certificado expirada.';
             $codes[] = 'credential_expired';
         }
 

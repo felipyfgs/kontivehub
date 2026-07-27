@@ -19,7 +19,7 @@ final class ExecuteFgtsDigitalRunJob implements ShouldQueue
     public int $timeout = 180;
 
     public function __construct(
-        public readonly int $officeId,
+        public readonly int $tenantId,
         public readonly int $runId,
     ) {
         $this->onQueue((string) config('fgts_digital.queue', 'default'));
@@ -29,7 +29,7 @@ final class ExecuteFgtsDigitalRunJob implements ShouldQueue
     {
         $run = FgtsDigitalRun::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $this->officeId)
+            ->where('tenant_id', $this->tenantId)
             ->whereKey($this->runId)
             ->first();
         if ($run === null || $run->status->isTerminal()) {
@@ -46,7 +46,7 @@ final class ExecuteFgtsDigitalRunJob implements ShouldQueue
                 'finished_at' => now(),
             ])->save();
             Log::warning('fgts_digital.run_failed', [
-                'office_id' => $this->officeId,
+                'tenant_id' => $this->tenantId,
                 'run_id' => $this->runId,
                 'error_class' => $e::class,
             ]);
@@ -57,6 +57,6 @@ final class ExecuteFgtsDigitalRunJob implements ShouldQueue
     /** @return list<string> */
     public function tags(): array
     {
-        return ['fgts-digital', 'office:'.$this->officeId, 'run:'.$this->runId];
+        return ['fgts-digital', 'tenant:'.$this->tenantId, 'run:'.$this->runId];
     }
 }

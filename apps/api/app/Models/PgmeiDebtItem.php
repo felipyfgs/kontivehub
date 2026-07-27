@@ -2,14 +2,14 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use LogicException;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'client_id',
     'observation_id',
     'position',
@@ -22,7 +22,7 @@ use LogicException;
 ])]
 class PgmeiDebtItem extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     public $timestamps = false;
 
@@ -63,16 +63,11 @@ class PgmeiDebtItem extends Model
         return [
             'id' => $this->id,
             'position' => (int) $this->position,
-            'periodo_apuracao' => $this->periodo_apuracao,
             'period_key' => substr((string) $this->periodo_apuracao, 0, 4)
                 .'-'.substr((string) $this->periodo_apuracao, 4, 2),
-            'tributo' => $this->tributo,
             'tribute' => $this->tributo,
             'amount_cents' => (int) $this->amount_cents,
-            'ente_federado' => $this->ente_federado,
             'federated_entity' => $this->ente_federado,
-            'situacao_debito' => $this->situacao_debito,
-            'situacao_original' => $this->situacao_debito,
             'original_status' => $this->situacao_debito,
         ];
     }

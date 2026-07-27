@@ -8,7 +8,7 @@ use App\Http\Requests\Clients\UpdateClientContactRequest;
 use App\Models\Client;
 use App\Models\ClientContact;
 use App\Services\Audit\AuditLogger;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -31,14 +31,14 @@ class ClientContactController extends Controller
     public function store(
         StoreClientContactRequest $request,
         Client $client,
-        CurrentOffice $currentOffice,
+        CurrentTenant $currentTenant,
         AuditLogger $audit,
     ): JsonResponse {
         $this->authorize('update', $client);
         $this->authorize('create', ClientContact::class);
 
         $data = $request->validated();
-        $officeId = $currentOffice->office()->id;
+        $tenantId = $currentTenant->tenant()->id;
 
         $isPrimary = (bool) ($data['is_primary'] ?? false);
         $isActive = array_key_exists('is_active', $data) ? (bool) $data['is_active'] : true;
@@ -51,7 +51,7 @@ class ClientContactController extends Controller
             ]);
         }
 
-        $contact = DB::transaction(function () use ($data, $client, $officeId, $isPrimary, $isActive): ClientContact {
+        $contact = DB::transaction(function () use ($data, $client, $tenantId, $isPrimary, $isActive): ClientContact {
             if ($isPrimary) {
                 ClientContact::query()
                     ->where('client_id', $client->id)
@@ -62,7 +62,7 @@ class ClientContactController extends Controller
             }
 
             return ClientContact::query()->create([
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'client_id' => $client->id,
                 'name' => $data['name'],
                 'role' => $data['role'] ?? null,

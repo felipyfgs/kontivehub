@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * Confirmação reforçada de mutação fiscal (15.10):
- * preflight → consequência → custo → TOTP → frase de confirmação.
+ * senha recente → preflight → consequência → custo → frase de confirmação.
  */
 import type { FiscalMutationPreflight } from '~/types/api'
 
@@ -11,6 +11,7 @@ const props = defineProps<{
   /** Payload base enviado a preflight/execute. */
   request: {
     client_id: number
+    operation_key: string
     solution_code: string
     service_code: string
     operation_code: string
@@ -32,12 +33,12 @@ const emit = defineEmits<{
 
 const api = useApi()
 const toast = useToast()
-const { canAccessAdministration } = useDashboard()
+const { canExecuteHighRiskMutation } = useDashboard()
 
 const step = ref<'idle' | 'preflight' | 'confirm' | 'submitting'>('idle')
 const preflight = ref<FiscalMutationPreflight | null>(null)
 const preflightError = ref<string | null>(null)
-const totpCode = ref('')
+const password = ref('')
 const confirmationPhrase = ref('')
 const confirmed = ref(false)
 const loading = ref(false)
@@ -70,18 +71,17 @@ watch(open, async (isOpen) => {
     preflightError.value = 'Pedido de mutação incompleto.'
     return
   }
-  if (!canAccessAdministration.value) {
-    preflightError.value = 'Somente ADMIN com 2FA pode executar mutações fiscais.'
+  if (!canExecuteHighRiskMutation.value) {
+    preflightError.value = 'Sem permissão para executar mutações fiscais.'
     return
   }
-  await runPreflight()
 })
 
 function reset() {
   step.value = 'idle'
   preflight.value = null
   preflightError.value = null
-  totpCode.value = ''
+  password.value = ''
   confirmationPhrase.value = ''
   confirmed.value = false
   loading.value = false
@@ -89,10 +89,16 @@ function reset() {
 
 async function runPreflight() {
   if (!props.request) return
+  if (!password.value) {
+    preflightError.value = 'Confirme sua senha para continuar.'
+    return
+  }
   loading.value = true
   step.value = 'preflight'
   preflightError.value = null
   try {
+    await api.confirmPassword(password.value)
+    password.value = ''
     const res = await api.fiscal.mutations.preflight({
       ...props.request,
       payload: props.request.payload || {}
@@ -123,15 +129,9 @@ async function submit() {
     toast.add({ title: 'Frase de confirmação incorreta.', color: 'warning' })
     return
   }
-  if (totpCode.value.trim().length < 6) {
-    toast.add({ title: 'Informe o código TOTP recente (6 dígitos).', color: 'warning' })
-    return
-  }
-
   loading.value = true
   step.value = 'submitting'
   try {
-    await api.fiscal.mutations.confirmTotp(totpCode.value.trim())
     const res = await api.fiscal.mutations.execute({
       ...props.request,
       payload: props.request.payload || {},
@@ -158,7 +158,7 @@ async function submit() {
   <UModal
     v-model:open="open"
     title="Confirmar operação fiscal"
-    description="Preflight, consequência, custo estimado e 2FA são obrigatórios."
+    description="Senha recente, preflight, consequência e custo estimado são obrigatórios."
     :ui="{ content: 'sm:max-w-lg' }"
   >
     <template #body>
@@ -231,22 +231,22 @@ async function submit() {
           </div>
         </dl>
 
-        <template v-if="eligible">
-          <UFormField
-            label="Código TOTP (2FA recente)"
-            name="totp"
-            required
-          >
-            <UInput
-              v-model="totpCode"
-              inputmode="numeric"
-              autocomplete="one-time-code"
-              placeholder="000000"
-              maxlength="16"
-              :disabled="loading"
-            />
-          </UFormField>
+        <UFormField
+          v-if="!preflight || !eligible"
+          label="Sua senha"
+          name="password"
+          required
+          description="Reconfirmação para a operação sensível."
+        >
+          <UInput
+            v-model="password"
+            type="password"
+            autocomplete="current-password"
+            :disabled="loading"
+          />
+        </UFormField>
 
+        <template v-if="eligible">
           <UFormField
             :label="`Digite a frase: ${requiredPhrase}`"
             name="phrase"
@@ -295,7 +295,7 @@ async function submit() {
           v-else
           color="neutral"
           variant="soft"
-          label="Tentar preflight de novo"
+          :label="preflight ? 'Tentar preflight de novo' : 'Confirmar senha e analisar'"
           :loading="loading"
           @click="runPreflight"
         />

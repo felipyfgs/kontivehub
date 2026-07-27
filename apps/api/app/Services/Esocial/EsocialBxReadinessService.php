@@ -7,7 +7,7 @@ use App\Enums\FiscalControlModule;
 use App\Enums\FiscalOperationClass;
 use App\Exceptions\EsocialBxException;
 use App\Models\Client;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Fiscal\Availability\FiscalModuleAvailabilityService;
 use Carbon\CarbonImmutable;
 
@@ -20,7 +20,7 @@ final class EsocialBxReadinessService
         private readonly FiscalModuleAvailabilityService $availability,
     ) {}
 
-    public function check(Office $office, Client $client, ?CarbonImmutable $now = null): EsocialBxReadiness
+    public function check(Tenant $tenant, Client $client, ?CarbonImmutable $now = null): EsocialBxReadiness
     {
         $now = ($now ?? CarbonImmutable::now($this->config->timezone()))
             ->setTimezone($this->config->timezone());
@@ -28,7 +28,7 @@ final class EsocialBxReadinessService
         $environment = (string) config('fgts_esocial.environment', 'restricted');
         $limit = max(1, min(10, (int) config('fgts_esocial.official_bx.daily_access_limit', 10)));
         $blockers = $this->config->blockers();
-        $sameTenant = (int) $client->office_id === (int) $office->id;
+        $sameTenant = (int) $client->tenant_id === (int) $tenant->id;
 
         if ($driver === 'disabled') {
             $blockers[] = ['code' => 'ESOCIAL_BX_DISABLED', 'message' => 'Provider eSocial BX desabilitado.'];
@@ -43,13 +43,13 @@ final class EsocialBxReadinessService
         if ($blockers === []) {
             $decision = $this->availability->resolve(
                 FiscalControlModule::Fgts,
-                $office,
+                $tenant,
                 FiscalOperationClass::Read,
             );
             if (! $decision->allowed) {
                 $blockers[] = [
                     'code' => 'ESOCIAL_BX_FEATURE_DISABLED',
-                    'message' => 'Módulo FGTS indisponível para este office.',
+                    'message' => 'Módulo FGTS indisponível para este tenant.',
                 ];
             }
         }
@@ -74,13 +74,13 @@ final class EsocialBxReadinessService
 
         $credential = null;
         if ($blockers === []) {
-            $credential = $this->credentials->active($office, $client);
+            $credential = $this->credentials->active($tenant, $client);
             if ($credential === null) {
-                $blockers[] = ['code' => 'ESOCIAL_BX_CREDENTIAL_MISSING', 'message' => 'Certificado A1 ativo não encontrado.'];
+                $blockers[] = ['code' => 'ESOCIAL_BX_CREDENTIAL_MISSING', 'message' => 'certificado ativo não encontrado.'];
             } elseif ($credential->valid_to === null || $credential->valid_to->lessThanOrEqualTo($now)) {
-                $blockers[] = ['code' => 'ESOCIAL_BX_CREDENTIAL_EXPIRED', 'message' => 'Certificado A1 expirado.'];
+                $blockers[] = ['code' => 'ESOCIAL_BX_CREDENTIAL_EXPIRED', 'message' => 'certificado expirado.'];
             } elseif ($credential->valid_from !== null && $credential->valid_from->isAfter($now)) {
-                $blockers[] = ['code' => 'ESOCIAL_BX_CREDENTIAL_NOT_YET_VALID', 'message' => 'Certificado A1 ainda não está válido.'];
+                $blockers[] = ['code' => 'ESOCIAL_BX_CREDENTIAL_NOT_YET_VALID', 'message' => 'certificado ainda não está válido.'];
             } elseif (substr(preg_replace('/\D/', '', (string) $credential->holder_cnpj) ?? '', 0, 8)
                 !== (string) $client->root_cnpj) {
                 $blockers[] = ['code' => 'ESOCIAL_BX_CREDENTIAL_IDENTITY_MISMATCH', 'message' => 'Identidade do certificado diverge do empregador.'];

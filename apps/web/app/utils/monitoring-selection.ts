@@ -23,7 +23,7 @@ export function pruneMonitoringSelection<T>(
 }
 
 export function monitoringSelectionScope(input: {
-  officeEpoch: number
+  tenantEpoch: number
   route: string
   page: number
   filters: string
@@ -32,7 +32,7 @@ export function monitoringSelectionScope(input: {
   submodule?: string
 }): string {
   return JSON.stringify([
-    input.officeEpoch,
+    input.tenantEpoch,
     input.route,
     input.page,
     input.filters,

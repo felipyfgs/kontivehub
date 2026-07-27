@@ -99,12 +99,12 @@ class SyncSefazCteDistDfeJob implements ShouldQueue
                 ->where('status', CredentialStatus::Active)
                 ->first();
             if (! $credential) {
-                throw new AdnPermanentException('Credencial A1 ativa ausente para CT-e DistDFe.');
+                throw new AdnPermanentException('certificado ativa ausente para CT-e DistDFe.');
             }
 
             $material = $credentials->loadPfxMaterial($credential);
             if ($material === null) {
-                throw new AdnPermanentException('Não foi possível materializar A1 para CT-e DistDFe.');
+                throw new AdnPermanentException('Não foi possível materializar certificado para CT-e DistDFe.');
             }
             $cUf = $this->resolveUfAutor($establishment);
             $maxPages = (int) config('sefaz.max_pages_per_job', 12);
@@ -160,7 +160,7 @@ class SyncSefazCteDistDfeJob implements ShouldQueue
                 'last_nsu' => $cursor->last_nsu,
                 'cstat' => $lastCstat,
                 'trigger' => $this->trigger,
-            ], $cursor->office_id);
+            ], $cursor->tenant_id);
             $metrics->increment('cte.sync.pages', $pages, [
                 'channel' => CaptureChannel::CteDistDfe->value,
                 'stream' => 'client',
@@ -243,7 +243,7 @@ class SyncSefazCteDistDfeJob implements ShouldQueue
             'cursor_id' => $cursor->id,
             'permanent' => $permanent,
             'status' => $cursor->status->value,
-        ], $cursor->office_id);
+        ], $cursor->tenant_id);
         $metrics?->increment('cte.sync', 1, [
             'channel' => CaptureChannel::CteDistDfe->value,
             'result' => $permanent ? 'blocked' : 'error',

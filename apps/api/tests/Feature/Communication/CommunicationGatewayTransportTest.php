@@ -11,12 +11,12 @@ use App\Enums\Communication\GatewayQueryType;
 use App\Enums\Communication\InboxStatus;
 use App\Enums\Communication\OutboxStatus;
 use App\Enums\Communication\SignatureVerificationResult;
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Exceptions\CommunicationTransportException;
 use App\Models\CommunicationInbox;
 use App\Models\CommunicationInboxMember;
-use App\Models\Office;
-use App\Models\OfficeMembership;
+use App\Models\Tenant;
+use App\Models\TenantMembership;
 use App\Models\User;
 use App\Services\Communication\Gateway\CommunicationGatewayOperationPolicy;
 use App\Services\Communication\Gateway\CommunicationGatewayOperations;
@@ -25,7 +25,7 @@ use App\Services\Communication\Outbox\CommunicationOutboxService;
 use App\Services\Communication\Security\CommunicationHmacCanonicalizer;
 use App\Services\Communication\Security\CommunicationHmacVerifier;
 use App\Services\Communication\Transport\HttpCommunicationTransport;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use DomainException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
@@ -190,23 +190,23 @@ final class CommunicationGatewayTransportTest extends TestCase
 
         try {
             $transport->sessionStatus('session-status-0001');
-            $this->fail('O transporte não pode expor status legado.');
+            $this->fail('O transporte não pode expor status fora do contrato.');
         } catch (CommunicationTransportException $error) {
             $this->assertSame('GATEWAY_INVALID_SESSION_STATUS', $error->errorCode);
             $this->assertTrue($error->retryable);
         }
     }
 
-    public function test_operations_apply_reply_manage_and_office_inbox_boundaries(): void
+    public function test_operations_apply_reply_manage_and_tenant_inbox_boundaries(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $foreignOffice = Office::factory()->create(['communication_enabled' => true]);
-        $operator = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
-        $foreignAdmin = User::factory()->forOffice($foreignOffice, OfficeRole::Admin)->create();
-        $inbox = $this->inbox($office, 'session-own-0001');
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $foreignTenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $operator = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $foreignAdmin = User::factory()->forTenant($foreignTenant, TenantRole::TenantAdmin)->create();
+        $inbox = $this->inbox($tenant, 'session-own-0001');
         $this->member($inbox, $operator);
-        $foreignInbox = $this->inbox($foreignOffice, 'session-foreign-0001');
+        $foreignInbox = $this->inbox($foreignTenant, 'session-foreign-0001');
         $transport = new GatewayTransportProbe;
         $this->app->instance(CommunicationTransport::class, $transport);
         $operations = app(CommunicationGatewayOperations::class);
@@ -217,7 +217,7 @@ final class CommunicationGatewayTransportTest extends TestCase
             'message_ids' => ['message-target-0001'],
             'receipt' => 'READ',
         ]);
-        $this->assertSame((int) $office->id, (int) $entry->office_id);
+        $this->assertSame((int) $tenant->id, (int) $entry->tenant_id);
         $this->assertSame((int) $inbox->id, (int) $entry->inbox_id);
         $this->assertSame($inbox->session_id, $entry->session_id);
 
@@ -251,7 +251,7 @@ final class CommunicationGatewayTransportTest extends TestCase
                 [],
                 'query-tenant-foreign-0001',
             );
-            $this->fail('Office estrangeiro não deveria consultar esta inbox.');
+            $this->fail('Tenant estrangeiro não deveria consultar esta inbox.');
         } catch (AuthorizationException) {
             $this->assertCount(1, $transport->queries);
         }
@@ -265,7 +265,7 @@ final class CommunicationGatewayTransportTest extends TestCase
                 [],
                 'query-foreign-inbox-0001',
             );
-            $this->fail('Inbox estrangeira não deveria ser acessível pelo Office ativo.');
+            $this->fail('Inbox estrangeira não deveria ser acessível pelo Tenant ativo.');
         } catch (AuthorizationException) {
             $this->assertCount(1, $transport->queries);
         }
@@ -273,8 +273,8 @@ final class CommunicationGatewayTransportTest extends TestCase
 
     public function test_worker_rechecks_kill_switch_and_never_calls_transport_after_enqueue(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $inbox = $this->inbox($office, 'session-kill-switch-0001');
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $inbox = $this->inbox($tenant, 'session-kill-switch-0001');
         $entry = app(CommunicationOutboxService::class)->enqueue(
             $inbox,
             GatewayCommandType::MarkMessage,
@@ -288,18 +288,18 @@ final class CommunicationGatewayTransportTest extends TestCase
         $transport = new GatewayTransportProbe;
         $this->app->instance(CommunicationTransport::class, $transport);
 
-        $office->forceFill(['communication_enabled' => false])->save();
+        $tenant->forceFill(['communication_enabled' => false])->save();
         app(CommunicationOutboxDispatcher::class)->dispatch((int) $entry->id);
 
         $this->assertSame(OutboxStatus::Dead, $entry->refresh()->status);
-        $this->assertSame('OFFICE_COMMUNICATION_DISABLED', $entry->last_error_code);
+        $this->assertSame('TENANT_COMMUNICATION_DISABLED', $entry->last_error_code);
         $this->assertCount(0, $transport->commands);
     }
 
     public function test_worker_dispatches_disconnect_and_logout_after_administrative_switches_close(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $inbox = $this->inbox($office, 'session-admin-off-0001');
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $inbox = $this->inbox($tenant, 'session-admin-off-0001');
         $outbox = app(CommunicationOutboxService::class);
         $disconnect = $outbox->enqueue(
             $inbox,
@@ -313,7 +313,7 @@ final class CommunicationGatewayTransportTest extends TestCase
             [],
             commandId: 'command-logout-admin-off-0001',
         );
-        $office->forceFill(['communication_enabled' => false])->save();
+        $tenant->forceFill(['communication_enabled' => false])->save();
         $inbox->forceFill(['is_enabled' => false, 'status' => InboxStatus::Disconnected])->save();
         $transport = new GatewayTransportProbe;
         $this->app->instance(CommunicationTransport::class, $transport);
@@ -331,9 +331,9 @@ final class CommunicationGatewayTransportTest extends TestCase
 
     public function test_outbox_rejects_disabled_enqueue_and_worker_rejects_tenant_tampering(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $foreignOffice = Office::factory()->create(['communication_enabled' => true]);
-        $inbox = $this->inbox($office, 'session-tenant-worker-0001');
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $foreignTenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $inbox = $this->inbox($tenant, 'session-tenant-worker-0001');
         $outbox = app(CommunicationOutboxService::class);
         config(['communication.gateway.enabled' => false]);
 
@@ -355,7 +355,7 @@ final class CommunicationGatewayTransportTest extends TestCase
             'message_ids' => ['message-target-0001'],
             'receipt' => 'READ',
         ], commandId: 'command-tenant-worker-0001');
-        $entry->forceFill(['office_id' => $foreignOffice->id])->save();
+        $entry->forceFill(['tenant_id' => $foreignTenant->id])->save();
         $transport = new GatewayTransportProbe;
         $this->app->instance(CommunicationTransport::class, $transport);
 
@@ -376,10 +376,10 @@ final class CommunicationGatewayTransportTest extends TestCase
         }
     }
 
-    private function inbox(Office $office, string $sessionId): CommunicationInbox
+    private function inbox(Tenant $tenant, string $sessionId): CommunicationInbox
     {
         return CommunicationInbox::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => 'Inbox '.Str::random(6),
             'session_id' => $sessionId,
             'status' => InboxStatus::Connected,
@@ -389,22 +389,22 @@ final class CommunicationGatewayTransportTest extends TestCase
 
     private function member(CommunicationInbox $inbox, User $user): void
     {
-        $membership = OfficeMembership::query()->withoutGlobalScopes()
-            ->where('office_id', $inbox->office_id)
+        $membership = TenantMembership::query()->withoutGlobalScopes()
+            ->where('tenant_id', $inbox->tenant_id)
             ->where('user_id', $user->id)
             ->firstOrFail();
         CommunicationInboxMember::query()->withoutGlobalScopes()->create([
-            'office_id' => $inbox->office_id,
+            'tenant_id' => $inbox->tenant_id,
             'inbox_id' => $inbox->id,
-            'office_membership_id' => $membership->id,
+            'tenant_membership_id' => $membership->id,
             'is_active' => true,
         ]);
     }
 
     private function bindActor(User $actor): void
     {
-        app(CurrentOffice::class)->clear();
-        app(CurrentOffice::class)->resolve($actor);
+        app(CurrentTenant::class)->clear();
+        app(CurrentTenant::class)->resolve($actor);
     }
 
     private function header(Request $request, string $name): string

@@ -118,10 +118,8 @@ export function pgmeiTotalLabel(summary?: PgmeiClientSummary | null): string {
 }
 
 export function pgmeiHistoryObservations(
-  payload?: PgmeiHistoryPayload | PgmeiDebtObservation[] | null
+  payload?: PgmeiHistoryPayload | null
 ): PgmeiDebtObservation[] {
-  if (Array.isArray(payload)) return payload
   if (Array.isArray(payload?.observations)) return payload.observations
-  if (Array.isArray(payload?.history)) return payload.history
   return []
 }

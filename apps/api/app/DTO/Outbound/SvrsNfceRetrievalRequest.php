@@ -12,7 +12,7 @@ final readonly class SvrsNfceRetrievalRequest
         public string $accessKey,
         public string $environment, // production | homologation
         public string $correlationId,
-        public int $officeId,
+        public int $tenantId,
         public int $profileId,
         public int $clientId,
         public int $establishmentId,

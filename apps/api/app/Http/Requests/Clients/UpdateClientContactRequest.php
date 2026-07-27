@@ -26,7 +26,7 @@ class UpdateClientContactRequest extends FormRequest
             'receives_alerts' => ['sometimes', 'boolean'],
             'notes' => ['nullable', 'string'],
             'is_active' => ['sometimes', 'boolean'],
-            'office_id' => ['prohibited'],
+            'tenant_id' => ['prohibited'],
             'client_id' => ['prohibited'],
         ];
     }

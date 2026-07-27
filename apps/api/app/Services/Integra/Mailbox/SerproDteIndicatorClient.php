@@ -8,7 +8,7 @@ use App\DTO\Mailbox\DteIndicatorResult;
 use App\Enums\MailboxDteStatus;
 use App\Enums\SerproCapabilityDriver;
 use App\Models\Client;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Serpro\CapabilityDriverResolver;
 
 final class SerproDteIndicatorClient implements DteIndicatorClient
@@ -31,14 +31,14 @@ final class SerproDteIndicatorClient implements DteIndicatorClient
                 errorMessage: 'DTE desabilitado.',
             );
         }
-        $officeId = (int) ($context['office_id'] ?? 0);
+        $tenantId = (int) ($context['tenant_id'] ?? 0);
         $clientId = (int) ($context['client_id'] ?? 0);
-        $office = Office::query()->withoutGlobalScopes()->find($officeId);
+        $tenant = Tenant::query()->withoutGlobalScopes()->find($tenantId);
         $client = Client::query()->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereKey($clientId)
             ->first();
-        if ($office === null || $client === null) {
+        if ($tenant === null || $client === null) {
             return new DteIndicatorResult(
                 success: false,
                 status: MailboxDteStatus::Unknown,
@@ -48,7 +48,7 @@ final class SerproDteIndicatorClient implements DteIndicatorClient
         }
 
         $response = $this->operations->execute(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             operationKey: self::OPERATION_KEY,
             businessData: [],

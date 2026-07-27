@@ -5,7 +5,7 @@ namespace App\Jobs\Fiscal;
 use App\Enums\FiscalControlModule;
 use App\Enums\FiscalOperationClass;
 use App\Models\FiscalMonitoringSchedule;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Audit\AuditLogger;
 use App\Services\Fiscal\Availability\FiscalModuleAvailabilityService;
 use App\Services\FiscalMonitoring\FiscalMonitoringScheduler;
@@ -29,7 +29,7 @@ final class RecoverFiscalModuleJob implements ShouldBeUnique, ShouldQueue
 
     public function __construct(
         public readonly string $moduleKey,
-        public readonly ?int $officeId,
+        public readonly ?int $tenantId,
         public readonly int $actorUserId,
     ) {
         $this->onQueue((string) config('fiscal_monitoring.job.queue', 'default'));
@@ -37,7 +37,7 @@ final class RecoverFiscalModuleJob implements ShouldBeUnique, ShouldQueue
 
     public function uniqueId(): string
     {
-        return sprintf('fiscal-module-recovery:%s:%s', $this->moduleKey, $this->officeId ?? 'global');
+        return sprintf('fiscal-module-recovery:%s:%s', $this->moduleKey, $this->tenantId ?? 'global');
     }
 
     public function handle(
@@ -47,21 +47,21 @@ final class RecoverFiscalModuleJob implements ShouldBeUnique, ShouldQueue
     ): void {
         $module = FiscalControlModule::fromRuntimeKey($this->moduleKey);
 
-        if ($this->officeId === null) {
-            Office::query()
+        if ($this->tenantId === null) {
+            Tenant::query()
                 ->where('is_active', true)
                 ->select('id')
-                ->chunkById(100, function ($offices): void {
-                    foreach ($offices as $office) {
-                        self::dispatch($this->moduleKey, (int) $office->id, $this->actorUserId);
+                ->chunkById(100, function ($tenants): void {
+                    foreach ($tenants as $tenant) {
+                        self::dispatch($this->moduleKey, (int) $tenant->id, $this->actorUserId);
                     }
                 });
 
             return;
         }
 
-        $office = Office::query()->find($this->officeId);
-        if ($office === null || ! $availability->resolve($module, $office, FiscalOperationClass::Read)->allowed) {
+        $tenant = Tenant::query()->find($this->tenantId);
+        if ($tenant === null || ! $availability->resolve($module, $tenant, FiscalOperationClass::Read)->allowed) {
             return;
         }
 
@@ -71,7 +71,7 @@ final class RecoverFiscalModuleJob implements ShouldBeUnique, ShouldQueue
 
         FiscalMonitoringSchedule::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('is_enabled', true)
             ->orderBy('id')
             ->chunkById(100, function ($schedules) use ($module, $scheduler, $now, &$dispatched, &$skipped): void {
@@ -93,10 +93,10 @@ final class RecoverFiscalModuleJob implements ShouldBeUnique, ShouldQueue
                 }
             });
 
-        $audit->record('fiscal.module.recovery_scheduled', 'SUCCESS', $office, [
+        $audit->record('fiscal.module.recovery_scheduled', 'SUCCESS', $tenant, [
             'module_key' => $module->value,
             'runs_dispatched' => $dispatched,
             'schedules_skipped' => $skipped,
-        ], $this->actorUserId, (int) $office->id);
+        ], $this->actorUserId, (int) $tenant->id);
     }
 }

@@ -11,7 +11,7 @@ use App\Http\Resources\Communication\CommunicationInboxResource;
 use App\Models\CommunicationInbox;
 use App\Models\CommunicationInboxMember;
 use App\Models\CommunicationOutboxEntry;
-use App\Models\OfficeMembership;
+use App\Models\TenantMembership;
 use App\Models\User;
 use App\Models\WorkDepartment;
 use App\Services\Communication\Authorization\CommunicationAccess;
@@ -19,7 +19,7 @@ use App\Services\Communication\CommunicationAvailability;
 use App\Services\Communication\Events\CommunicationEventRecorder;
 use App\Services\Communication\Outbox\CommunicationOutboxService;
 use App\Services\Communication\Pairing\CommunicationPairingStateStore;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -29,7 +29,7 @@ use Throwable;
 final class CommunicationInboxController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly CommunicationAccess $access,
         private readonly CommunicationOutboxService $outbox,
         private readonly CommunicationPairingStateStore $pairing,
@@ -56,7 +56,7 @@ final class CommunicationInboxController extends Controller
             'meta' => [
                 'global_enabled' => (bool) config('communication.enabled'),
                 'gateway_enabled' => (bool) config('communication.gateway.enabled'),
-                'office_enabled' => (bool) $this->currentOffice->office()->communication_enabled,
+                'tenant_enabled' => (bool) $this->currentTenant->tenant()->communication_enabled,
                 'departments' => WorkDepartment::query()->where('is_active', true)
                     ->orderBy('name')->get(['id', 'name', 'code', 'color'])
                     ->map(fn (WorkDepartment $department) => [
@@ -74,17 +74,17 @@ final class CommunicationInboxController extends Controller
     {
         $actor = $this->actor($request);
         $this->access->assertManage($actor);
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
         $data = $request->validated();
-        $departmentId = $this->departmentId($data['work_department_id'] ?? null, (int) $office->id);
+        $departmentId = $this->departmentId($data['work_department_id'] ?? null, (int) $tenant->id);
 
-        $inbox = DB::transaction(function () use ($office, $data, $departmentId): CommunicationInbox {
+        $inbox = DB::transaction(function () use ($tenant, $data, $departmentId): CommunicationInbox {
             if (($data['is_default'] ?? false) === true) {
-                CommunicationInbox::query()->where('office_id', $office->id)->update(['is_default' => false]);
+                CommunicationInbox::query()->where('tenant_id', $tenant->id)->update(['is_default' => false]);
             }
 
             return CommunicationInbox::query()->create([
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'name' => trim((string) $data['name']),
                 'session_id' => 'session-'.strtolower((string) Str::ulid()),
                 'status' => InboxStatus::Disconnected,
@@ -93,10 +93,10 @@ final class CommunicationInboxController extends Controller
                 'work_department_id' => $departmentId,
             ]);
         });
-        $this->events->record((int) $office->id, 'INBOX_CREATED', [
+        $this->events->record((int) $tenant->id, 'INBOX_CREATED', [
             'inbox_id' => (int) $inbox->id,
             'name' => $inbox->name,
-        ], inboxId: (int) $inbox->id, actorMembershipId: $this->currentOffice->realMembership()?->id);
+        ], inboxId: (int) $inbox->id, actorMembershipId: $this->currentTenant->realMembership()?->id);
 
         return (new CommunicationInboxResource($inbox))->response()->setStatusCode(201);
     }
@@ -108,12 +108,12 @@ final class CommunicationInboxController extends Controller
         $this->access->assertManage($actor, $model);
         $data = $request->validated();
         $departmentId = array_key_exists('work_department_id', $data)
-            ? $this->departmentId($data['work_department_id'], (int) $model->office_id)
+            ? $this->departmentId($data['work_department_id'], (int) $model->tenant_id)
             : $model->work_department_id;
 
         $updated = DB::transaction(function () use ($model, $data, $departmentId): ?CommunicationInbox {
             if (($data['is_default'] ?? false) === true) {
-                CommunicationInbox::query()->where('office_id', $model->office_id)
+                CommunicationInbox::query()->where('tenant_id', $model->tenant_id)
                     ->where('id', '<>', $model->id)->update(['is_default' => false]);
             }
             $attributes = array_intersect_key($data, array_flip(['name', 'is_enabled', 'is_default']));
@@ -136,25 +136,25 @@ final class CommunicationInboxController extends Controller
         if ($updated === null) {
             return response()->json(['message' => 'Inbox foi alterada por outro usuário.', 'code' => 'version_conflict'], 409);
         }
-        $this->events->record((int) $updated->office_id, 'INBOX_UPDATED', [
+        $this->events->record((int) $updated->tenant_id, 'INBOX_UPDATED', [
             'inbox_id' => (int) $updated->id,
             'lock_version' => (int) $updated->lock_version,
-        ], inboxId: (int) $updated->id, actorMembershipId: $this->currentOffice->realMembership()?->id);
+        ], inboxId: (int) $updated->id, actorMembershipId: $this->currentTenant->realMembership()?->id);
 
         return (new CommunicationInboxResource($updated))->response();
     }
 
-    public function updateOfficeSettings(Request $request): JsonResponse
+    public function updateTenantSettings(Request $request): JsonResponse
     {
         $actor = $this->actor($request);
         $this->access->assertManage($actor);
         $data = $request->validate(['enabled' => ['required', 'boolean']]);
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
-        if ($office->communication_enabled && ! $data['enabled']
+        if ($tenant->communication_enabled && ! $data['enabled']
             && config('communication.enabled') && config('communication.gateway.enabled')) {
             CommunicationInbox::query()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('is_enabled', true)
                 ->each(function (CommunicationInbox $inbox): void {
                     $this->outbox->enqueue($inbox, GatewayCommandType::DisconnectSession, []);
@@ -165,12 +165,12 @@ final class CommunicationInboxController extends Controller
                     $this->pairing->forget((int) $inbox->id);
                 });
         }
-        $office->forceFill(['communication_enabled' => (bool) $data['enabled']])->save();
-        $this->events->record((int) $office->id, 'OFFICE_COMMUNICATION_SWITCH_CHANGED', [
-            'enabled' => (bool) $office->communication_enabled,
-        ], actorMembershipId: $this->currentOffice->realMembership()?->id);
+        $tenant->forceFill(['communication_enabled' => (bool) $data['enabled']])->save();
+        $this->events->record((int) $tenant->id, 'TENANT_COMMUNICATION_SWITCH_CHANGED', [
+            'enabled' => (bool) $tenant->communication_enabled,
+        ], actorMembershipId: $this->currentTenant->realMembership()?->id);
 
-        return response()->json(['data' => ['enabled' => (bool) $office->communication_enabled]]);
+        return response()->json(['data' => ['enabled' => (bool) $tenant->communication_enabled]]);
     }
 
     public function startPairing(Request $request, int $inbox): JsonResponse
@@ -224,18 +224,6 @@ final class CommunicationInboxController extends Controller
         return response()->json(['data' => $state], 202);
     }
 
-    public function pairing(Request $request, int $inbox): JsonResponse
-    {
-        $model = $this->inbox($inbox);
-        $this->access->assertManage($this->actor($request), $model);
-        $state = $this->pairing->get((int) $model->id);
-
-        return response()->json(['data' => $state ?? [
-            'event' => null,
-            'status' => $model->status?->value ?? $model->status,
-        ]])->header('Cache-Control', 'private, no-store');
-    }
-
     public function revoke(Request $request, int $inbox): JsonResponse
     {
         $model = $this->inbox($inbox);
@@ -268,7 +256,7 @@ final class CommunicationInboxController extends Controller
         $this->access->assertManage($this->actor($request), $model);
         $data = $request->validate(['membership_ids' => ['present', 'array', 'max:500'], 'membership_ids.*' => ['integer', 'min:1']]);
         $ids = array_values(array_unique(array_map('intval', $data['membership_ids'])));
-        $valid = OfficeMembership::query()->where('office_id', $model->office_id)
+        $valid = TenantMembership::query()->where('tenant_id', $model->tenant_id)
             ->where('is_active', true)->whereIn('id', $ids)->pluck('id')->map(fn ($id) => (int) $id)->all();
         if (count($valid) !== count($ids)) {
             return response()->json(['message' => 'Membership inválida para este escritório.'], 422);
@@ -278,9 +266,9 @@ final class CommunicationInboxController extends Controller
             CommunicationInboxMember::query()->withoutGlobalScopes()->where('inbox_id', $model->id)->delete();
             foreach ($ids as $membershipId) {
                 CommunicationInboxMember::query()->withoutGlobalScopes()->create([
-                    'office_id' => $model->office_id,
+                    'tenant_id' => $model->tenant_id,
                     'inbox_id' => $model->id,
-                    'office_membership_id' => $membershipId,
+                    'tenant_membership_id' => $membershipId,
                     'is_active' => true,
                 ]);
             }
@@ -293,15 +281,15 @@ final class CommunicationInboxController extends Controller
     {
         $model = $this->inbox($inbox);
         $this->access->assertManage($this->actor($request), $model);
-        $actorMembershipId = $this->currentOffice->realMembership()?->id;
-        $officeId = (int) $model->office_id;
+        $actorMembershipId = $this->currentTenant->realMembership()?->id;
+        $tenantId = (int) $model->tenant_id;
         $inboxId = (int) $model->id;
 
         $entry = DB::transaction(function () use ($model): CommunicationOutboxEntry {
             $locked = CommunicationInbox::query()->lockForUpdate()->findOrFail($model->id);
             $entry = $this->outbox->enqueue($locked, GatewayCommandType::LogoutSession, []);
             $wasDefault = (bool) $locked->is_default;
-            $lockedOfficeId = (int) $locked->office_id;
+            $lockedTenantId = (int) $locked->tenant_id;
 
             // Preserva o Logout despachável: session_id fica na outbox sem FK para a inbox.
             CommunicationOutboxEntry::query()->withoutGlobalScopes()
@@ -309,12 +297,12 @@ final class CommunicationInboxController extends Controller
                 ->update(['inbox_id' => null]);
 
             // Hard delete antes de promover o default — o índice parcial
-            // comm_inboxes_one_default_per_office não permite dois is_default=true.
+            // comm_inboxes_one_default_per_tenant não permite dois is_default=true.
             $locked->delete();
 
             if ($wasDefault) {
                 $replacement = CommunicationInbox::query()
-                    ->where('office_id', $lockedOfficeId)
+                    ->where('tenant_id', $lockedTenantId)
                     ->orderBy('id')
                     ->lockForUpdate()
                     ->first();
@@ -330,7 +318,7 @@ final class CommunicationInboxController extends Controller
         });
 
         $this->pairing->forget($inboxId);
-        $this->events->record($officeId, 'INBOX_DELETED', [
+        $this->events->record($tenantId, 'INBOX_DELETED', [
             'inbox_id' => $inboxId,
             'history_preserved' => false,
         ], inboxId: null, actorMembershipId: $actorMembershipId);
@@ -356,13 +344,13 @@ final class CommunicationInboxController extends Controller
         return $actor;
     }
 
-    private function departmentId(mixed $id, int $officeId): ?int
+    private function departmentId(mixed $id, int $tenantId): ?int
     {
         if ($id === null) {
             return null;
         }
         $exists = WorkDepartment::query()->withoutGlobalScopes()
-            ->where('office_id', $officeId)->whereKey((int) $id)->exists();
+            ->where('tenant_id', $tenantId)->whereKey((int) $id)->exists();
         abort_unless($exists, 422, 'Departamento inválido para este escritório.');
 
         return (int) $id;

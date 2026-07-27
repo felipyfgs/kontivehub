@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Model;
     'action',
     'approval_policy',
     'environment',
-    'office_id',
+    'tenant_id',
     'status',
     'reason',
     'confirmation_phrase',

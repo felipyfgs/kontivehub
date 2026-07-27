@@ -6,7 +6,7 @@
  */
 import { CalendarDate, type DateValue } from '@internationalized/date'
 import { breakpointsTailwind } from '@vueuse/core'
-import type { OperationalTaskSummary } from '~/types/work'
+import type { WorkTaskSummary } from '~/types/work'
 import { apiErrorMessage } from '~/utils/api-error'
 import {
   formatDueDate,
@@ -30,7 +30,7 @@ interface DayAgg {
   completed?: number
   open?: number
   max_severity?: number
-  items?: OperationalTaskSummary[]
+  items?: WorkTaskSummary[]
 }
 
 const api = useApi()
@@ -45,7 +45,7 @@ const breakpoints = useBreakpoints(breakpointsTailwind)
 const isMobile = breakpoints.smaller('lg')
 
 const days = ref<DayAgg[]>([])
-const dayItems = ref<OperationalTaskSummary[]>([])
+const dayItems = ref<WorkTaskSummary[]>([])
 const loading = ref(false)
 const dayLoading = ref(false)
 const loadError = ref<string | null>(null)
@@ -184,7 +184,7 @@ async function loadDay() {
       || epoch !== sessionEpoch.value
       || requestedKey !== calendarLoadKeys.value.day
     ) return
-    dayItems.value = res.data as OperationalTaskSummary[]
+    dayItems.value = res.data as WorkTaskSummary[]
   } catch (e) {
     if (
       seq !== dayLoadSeq
@@ -212,7 +212,7 @@ async function openDay(d: string) {
 const weekLanes = computed(() => weekDates(date.value).map(d => ({
   date: d,
   agg: dayMap.value.get(d),
-  items: (dayMap.value.get(d)?.items || []) as OperationalTaskSummary[]
+  items: (dayMap.value.get(d)?.items || []) as WorkTaskSummary[]
 })))
 
 const monthCells = computed(() => {
@@ -241,7 +241,7 @@ const severityClass = (agg?: DayAgg) => {
   return 'bg-primary/10 text-primary'
 }
 
-const taskContext = (item: OperationalTaskSummary) => [
+const taskContext = (item: WorkTaskSummary) => [
   item.process?.client?.name,
   item.process?.title
 ].filter(Boolean).join(' · ')

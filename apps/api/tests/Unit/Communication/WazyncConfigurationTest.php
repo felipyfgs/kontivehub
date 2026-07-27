@@ -15,7 +15,7 @@ final class WazyncConfigurationTest extends TestCase
 
     public function test_versioned_configuration_uses_only_wazync_environment_variables(): void
     {
-        $legacyPrefix = implode('_', ['WHATSAPP', 'GATEWAY']);
+        $removedPrefix = implode('_', ['WHATSAPP', 'GATEWAY']);
 
         foreach ([
             base_path('.env.example'),
@@ -26,7 +26,7 @@ final class WazyncConfigurationTest extends TestCase
 
             $this->assertIsString($contents);
             $this->assertStringContainsString('WAZYNC_', $contents);
-            $this->assertStringNotContainsString($legacyPrefix, $contents);
+            $this->assertStringNotContainsString($removedPrefix, $contents);
         }
     }
 }

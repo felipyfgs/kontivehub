@@ -13,7 +13,7 @@ use App\Exceptions\MeiAutomationTransportException;
 use App\Models\Client;
 use App\Models\FiscalMutationOperation;
 use App\Models\MeiAutomationAttempt;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Fiscal\Mutations\FiscalMutationIntegraRequestFactory;
 
 final class MeiPortalFiscalMutationTransport implements FiscalMutationTransport
@@ -34,24 +34,24 @@ final class MeiPortalFiscalMutationTransport implements FiscalMutationTransport
             return $this->serpro->execute($request);
         }
 
-        $office = Office::query()->findOrFail($request->officeId);
+        $tenant = Tenant::query()->findOrFail($request->tenantId);
         $operationKey = $this->operationKey($request);
-        $providers = $this->policy->providers($office, $operationKey);
+        $providers = $this->policy->providers($tenant, $operationKey);
         if (($providers[0] ?? MeiProvider::Serpro) === MeiProvider::Serpro) {
             return $this->serpro->execute($request);
         }
 
         $client = Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($request->clientId)
             ->firstOrFail();
         $mutation = $this->mutation($request);
         $input = [
             'cnpj' => $request->contributorCnpj,
-            'competencies' => array_values((array) ($request->payload['competencies'] ?? [])),
+            'competencies' => array_values((array) ($request->businessData['competencies'] ?? [])),
         ];
-        $dueDate = $request->payload['due_date'] ?? null;
+        $dueDate = $request->businessData['due_date'] ?? null;
         if (is_string($dueDate) && $dueDate !== '') {
             $input['due_date'] = $dueDate;
         }
@@ -60,7 +60,7 @@ final class MeiPortalFiscalMutationTransport implements FiscalMutationTransport
             ? MeiProvider::Fixture
             : MeiProvider::ReceitaPortal;
         $attempt = $this->attemptService->start(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             operationKey: $operationKey,
             provider: $provider,
@@ -105,7 +105,7 @@ final class MeiPortalFiscalMutationTransport implements FiscalMutationTransport
         $mutation = $this->mutation($request);
         $attempt = MeiAutomationAttempt::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $request->officeId)
+            ->where('tenant_id', $request->tenantId)
             ->where('fiscal_mutation_operation_id', $mutation->id)
             ->latest('id')
             ->first();
@@ -211,27 +211,31 @@ final class MeiPortalFiscalMutationTransport implements FiscalMutationTransport
 
     private function mutation(IntegraRequest $request): FiscalMutationOperation
     {
-        $id = $request->payload['mutation_operation_id'] ?? null;
+        $id = $request->mutationOperationId;
+        if ($id === null) {
+            throw new \RuntimeException('Mutação fiscal canônica ausente no pedido Integra.');
+        }
 
         return FiscalMutationOperation::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $request->officeId)
+            ->where('tenant_id', $request->tenantId)
             ->where('client_id', $request->clientId)
-            ->findOrFail((int) $id);
+            ->findOrFail($id);
     }
 
     private function operationKey(IntegraRequest $request): string
     {
-        return strtoupper((string) ($request->payload['output_format'] ?? 'PDF')) === 'BARCODE'
+        return strtoupper((string) ($request->businessData['output_format'] ?? 'PDF')) === 'BARCODE'
             ? 'pgmei.gerardascodbarra'
             : 'pgmei.gerardaspdf';
     }
 
     private function isMeiDas(IntegraRequest $request): bool
     {
-        return strtoupper((string) $request->solutionCode) === 'INTEGRA_MEI'
-            && strtoupper((string) $request->serviceCode) === 'PGMEI'
-            && strtoupper((string) $request->operationCode) === 'GERAR_DAS';
+        return in_array(strtolower($request->operationKey), [
+            'pgmei.gerardaspdf',
+            'pgmei.gerardascodbarra',
+        ], true);
     }
 
     /** @param list<MeiProvider> $providers */

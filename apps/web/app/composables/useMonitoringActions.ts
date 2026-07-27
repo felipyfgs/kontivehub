@@ -284,7 +284,7 @@ export function useMonitoringActions(moduleKey: MaybeRefOrGetter<FiscalModuleKey
   }
 
   /**
-   * Export assíncrono da carteira via POST /exports (export_scope=fiscal_portfolio).
+   * DocumentExport assíncrono da carteira via POST /exports (export_scope=fiscal_portfolio).
    * Campos sanitizados + proveniência + marcação demo no job.
    */
   async function exportPortfolio(

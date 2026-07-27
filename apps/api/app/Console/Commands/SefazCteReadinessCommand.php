@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Sefaz\CteOperationsMetrics;
 use Illuminate\Console\Command;
 
@@ -13,7 +13,7 @@ use Illuminate\Console\Command;
 class SefazCteReadinessCommand extends Command
 {
     protected $signature = 'sefaz:cte-readiness
-                            {--office= : ID do escritório para incluir cursores/cobertura}
+                            {--tenant= : ID do escritório para incluir cursores/cobertura}
                             {--period= : Competência YYYY-MM das métricas}
                             {--json : Saída JSON sanitizada}';
 
@@ -23,20 +23,20 @@ class SefazCteReadinessCommand extends Command
     {
         $checks = $this->evaluate();
         $ok = ! collect($checks)->contains(fn (array $c) => $c['status'] === 'fail');
-        $officeId = (int) ($this->option('office') ?: 0);
+        $tenantId = (int) ($this->option('tenant') ?: 0);
         $period = (string) ($this->option('period') ?: '');
         if ($period !== '' && preg_match('/^\d{4}-\d{2}$/', $period) !== 1) {
             $this->error('Período inválido; use YYYY-MM.');
 
             return self::FAILURE;
         }
-        if ($officeId > 0 && ! Office::query()->whereKey($officeId)->exists()) {
+        if ($tenantId > 0 && ! Tenant::query()->whereKey($tenantId)->exists()) {
             $this->error('Escritório não encontrado.');
 
             return self::FAILURE;
         }
-        $operations = $officeId > 0
-            ? $metrics->snapshot($officeId, $period !== '' ? $period : null)
+        $operations = $tenantId > 0
+            ? $metrics->snapshot($tenantId, $period !== '' ? $period : null)
             : null;
 
         if ($this->option('json')) {

@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Database\Factories\CommunicationCannedResponseFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'title',
     'shortcut',
     'body_encrypted',
@@ -21,7 +21,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class CommunicationCannedResponse extends Model
 {
     /** @use HasFactory<CommunicationCannedResponseFactory> */
-    use BelongsToOffice, HasFactory;
+    use BelongsToTenant, HasFactory;
 
     protected function casts(): array
     {
@@ -34,6 +34,6 @@ class CommunicationCannedResponse extends Model
 
     public function createdBy(): BelongsTo
     {
-        return $this->belongsTo(OfficeMembership::class, 'created_by_membership_id');
+        return $this->belongsTo(TenantMembership::class, 'created_by_membership_id');
     }
 }

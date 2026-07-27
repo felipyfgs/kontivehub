@@ -11,7 +11,6 @@ import {
 } from '~/composables/useClientsCatalogChrome'
 
 const route = useRoute()
-const router = useRouter()
 const { canManageClients, openClientCreate } = useDashboard()
 const catalogChrome = createClientsCatalogChrome()
 provide(clientsCatalogChromeKey, catalogChrome)
@@ -33,21 +32,6 @@ const isDashboard = computed(() => {
   const path = route.path.replace(/\/$/, '') || '/'
   return path === '/clients/dashboard'
 })
-
-/**
- * Compatibilidade: `?new=1` abre o modal uma vez e some da URL.
- * Demais query params (filtros da lista) são preservados.
- */
-watch(
-  () => route.fullPath,
-  async () => {
-    if (!isCatalog.value || route.path !== '/clients' || route.query.new !== '1') return
-    const { new: _new, ...rest } = route.query
-    await router.replace({ path: route.path, query: rest })
-    await openClientCreate()
-  },
-  { immediate: true }
-)
 </script>
 
 <template>

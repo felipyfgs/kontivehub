@@ -18,7 +18,7 @@ use App\Enums\FiscalSituation;
 use App\Enums\FiscalTrigger;
 use App\Enums\MeiAutomationStatus;
 use App\Enums\MeiProvider;
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Models\Client;
 use App\Models\CommunicationContact;
 use App\Models\CommunicationConversation;
@@ -28,9 +28,9 @@ use App\Models\CommunicationMessage;
 use App\Models\CommunicationOutboxEntry;
 use App\Models\FiscalMonitoringRun;
 use App\Models\MeiAutomationAttempt;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
@@ -51,8 +51,8 @@ final class OperationsSummaryApiTest extends TestCase
 
     public function test_summary_returns_typed_contract_keys_without_forbidden_fields(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $user = User::factory()->forOffice($office, OfficeRole::Operator)->create();
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $user = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
         $this->authenticate($user);
 
         $response = $this->getJson('/api/v1/operations/summary');
@@ -108,7 +108,7 @@ final class OperationsSummaryApiTest extends TestCase
         $this->assertTrue($data['communication']['available']);
         $this->assertTrue($data['communication']['global_enabled']);
         $this->assertTrue($data['communication']['gateway_enabled']);
-        $this->assertTrue($data['communication']['office_enabled']);
+        $this->assertTrue($data['communication']['tenant_enabled']);
         $this->assertTrue($data['mei_automation']['available']);
         $this->assertTrue($data['fiscal_runs']['available']);
 
@@ -117,20 +117,20 @@ final class OperationsSummaryApiTest extends TestCase
         }
     }
 
-    public function test_summary_communication_and_light_counters_are_office_scoped(): void
+    public function test_summary_communication_and_light_counters_are_tenant_scoped(): void
     {
-        $officeA = Office::factory()->create(['communication_enabled' => true]);
-        $officeB = Office::factory()->create(['communication_enabled' => true]);
-        $userA = User::factory()->forOffice($officeA, OfficeRole::Admin)->create();
+        $tenantA = Tenant::factory()->create(['communication_enabled' => true]);
+        $tenantB = Tenant::factory()->create(['communication_enabled' => true]);
+        $userA = User::factory()->forTenant($tenantA, TenantRole::TenantAdmin)->create();
 
-        $this->seedCommunicationRollup($officeA, InboxStatus::Connected, ConversationStatus::Open, OutboxStatus::Dead);
-        $this->seedCommunicationRollup($officeA, InboxStatus::Connecting, ConversationStatus::Pending, OutboxStatus::Retry);
-        $this->seedCommunicationRollup($officeB, InboxStatus::Connected, ConversationStatus::Open, OutboxStatus::Dead);
+        $this->seedCommunicationRollup($tenantA, InboxStatus::Connected, ConversationStatus::Open, OutboxStatus::Dead);
+        $this->seedCommunicationRollup($tenantA, InboxStatus::Connecting, ConversationStatus::Pending, OutboxStatus::Retry);
+        $this->seedCommunicationRollup($tenantB, InboxStatus::Connected, ConversationStatus::Open, OutboxStatus::Dead);
 
-        $clientA = Client::factory()->forOffice($officeA)->create();
-        $clientB = Client::factory()->forOffice($officeB)->create();
+        $clientA = Client::factory()->forTenant($tenantA)->create();
+        $clientB = Client::factory()->forTenant($tenantB)->create();
         MeiAutomationAttempt::query()->withoutGlobalScopes()->create([
-            'office_id' => $officeA->id,
+            'tenant_id' => $tenantA->id,
             'client_id' => $clientA->id,
             'operation_key' => 'pgmei.dividaativa',
             'provider' => MeiProvider::ReceitaPortal,
@@ -139,7 +139,7 @@ final class OperationsSummaryApiTest extends TestCase
             'request_fingerprint' => str_repeat('a', 64),
         ]);
         MeiAutomationAttempt::query()->withoutGlobalScopes()->create([
-            'office_id' => $officeB->id,
+            'tenant_id' => $tenantB->id,
             'client_id' => $clientB->id,
             'operation_key' => 'pgmei.dividaativa',
             'provider' => MeiProvider::ReceitaPortal,
@@ -149,7 +149,7 @@ final class OperationsSummaryApiTest extends TestCase
         ]);
 
         FiscalMonitoringRun::query()->withoutGlobalScopes()->create([
-            'office_id' => $officeA->id,
+            'tenant_id' => $tenantA->id,
             'client_id' => $clientA->id,
             'system_code' => 'INTEGRA_SN',
             'service_code' => 'PGDASD',
@@ -163,7 +163,7 @@ final class OperationsSummaryApiTest extends TestCase
             'mutability' => FiscalMutability::ReadOnly,
         ]);
         FiscalMonitoringRun::query()->withoutGlobalScopes()->create([
-            'office_id' => $officeB->id,
+            'tenant_id' => $tenantB->id,
             'client_id' => $clientB->id,
             'system_code' => 'INTEGRA_SN',
             'service_code' => 'PGDASD',
@@ -193,30 +193,30 @@ final class OperationsSummaryApiTest extends TestCase
     private function authenticate(User $user): void
     {
         Sanctum::actingAs($user);
-        app(CurrentOffice::class)->clear();
+        app(CurrentTenant::class)->clear();
     }
 
     private function seedCommunicationRollup(
-        Office $office,
+        Tenant $tenant,
         InboxStatus $inboxStatus,
         ConversationStatus $conversationStatus,
         OutboxStatus $outboxStatus,
     ): void {
         $inbox = CommunicationInbox::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => 'Inbox '.$inboxStatus->value,
             'session_id' => 'session-'.Str::ulid(),
             'status' => $inboxStatus,
             'is_enabled' => true,
         ]);
         $contact = CommunicationContact::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => 'Contato',
             'is_active' => true,
         ]);
         $address = '+5511'.random_int(100000000, 999999999);
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'contact_id' => $contact->id,
             'channel' => CommunicationChannel::Whatsapp,
             'address_encrypted' => $address,
@@ -225,14 +225,14 @@ final class OperationsSummaryApiTest extends TestCase
             'is_active' => true,
         ]);
         $conversation = CommunicationConversation::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'inbox_id' => $inbox->id,
             'identity_id' => $identity->id,
             'status' => $conversationStatus,
             'last_message_at' => now(),
         ]);
         $message = CommunicationMessage::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'inbox_id' => $inbox->id,
             'conversation_id' => $conversation->id,
             'identity_id' => $identity->id,
@@ -247,7 +247,7 @@ final class OperationsSummaryApiTest extends TestCase
         ]);
         $payload = ['to' => $address, 'kind' => 'TEXT', 'text' => 'teste'];
         CommunicationOutboxEntry::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'inbox_id' => $inbox->id,
             'message_id' => $message->id,
             'command_id' => 'command-'.Str::ulid(),

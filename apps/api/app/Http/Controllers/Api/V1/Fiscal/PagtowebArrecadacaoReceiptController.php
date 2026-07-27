@@ -4,14 +4,14 @@ namespace App\Http\Controllers\Api\V1\Fiscal;
 
 use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
-use App\Http\Middleware\EnsureOfficeContext;
+use App\Http\Middleware\EnsureTenantContext;
 use App\Models\Client;
 use App\Models\PagtowebArrecadacaoReceipt;
 use App\Models\User;
 use App\Services\Authorization\TenantAuthorization;
 use App\Services\Fiscal\Guides\PagtowebArrecadacaoReceiptProjector;
 use App\Services\Fiscal\Guides\PagtowebArrecadacaoReceiptQueryService;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use App\Support\FeatureFlags;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,7 +22,7 @@ use RuntimeException;
 final class PagtowebArrecadacaoReceiptController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $office,
+        private readonly CurrentTenant $tenant,
         private readonly PagtowebArrecadacaoReceiptQueryService $receipts,
         private readonly PagtowebArrecadacaoReceiptProjector $projector,
         private readonly TenantAuthorization $auth,
@@ -30,7 +30,7 @@ final class PagtowebArrecadacaoReceiptController extends Controller
 
     public function history(Request $request, int $client): JsonResponse
     {
-        if ($rejection = $this->rejectClientOfficeId($request)) {
+        if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
         $model = $this->client($client);
@@ -39,13 +39,13 @@ final class PagtowebArrecadacaoReceiptController extends Controller
         }
         $this->allows($request, $model, TenantPermission::FiscalMonitoringView);
 
-        return response()->json(['data' => $this->receipts->history($this->office->office(), $model)]);
+        return response()->json(['data' => $this->receipts->history($this->tenant->tenant(), $model)]);
     }
 
     public function request(Request $request, int $client): JsonResponse
     {
         $this->enabled();
-        if ($rejection = $this->rejectClientOfficeId($request)) {
+        if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
         $request->validate(['confirmed' => ['required', 'accepted'], 'numeroDocumento' => ['required', 'string', 'max:17']]);
@@ -56,7 +56,7 @@ final class PagtowebArrecadacaoReceiptController extends Controller
         $this->allows($request, $model, TenantPermission::FiscalSyncTrigger);
         try {
             return response()->json(['data' => $this->receipts->request(
-                $this->office->office(),
+                $this->tenant->tenant(),
                 $model,
                 $request->string('numeroDocumento')->toString(),
                 $request->user()?->id,
@@ -70,7 +70,7 @@ final class PagtowebArrecadacaoReceiptController extends Controller
 
     public function download(Request $request, int $client, int $receipt): Response|JsonResponse
     {
-        if ($rejection = $this->rejectClientOfficeId($request)) {
+        if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
         $model = $this->client($client);
@@ -79,7 +79,7 @@ final class PagtowebArrecadacaoReceiptController extends Controller
         }
         $this->allows($request, $model, TenantPermission::FiscalMonitoringView);
         $document = PagtowebArrecadacaoReceipt::query()->withoutGlobalScopes()
-            ->where('office_id', $this->office->office()->id)
+            ->where('tenant_id', $this->tenant->tenant()->id)
             ->where('client_id', $model->id)
             ->whereKey($receipt)
             ->first();
@@ -88,7 +88,7 @@ final class PagtowebArrecadacaoReceiptController extends Controller
         }
 
         try {
-            $bytes = $this->projector->readAuthorized($document, $this->office->office()->id);
+            $bytes = $this->projector->readAuthorized($document, $this->tenant->tenant()->id);
         } catch (RuntimeException) {
             return $this->notFound();
         }
@@ -105,7 +105,7 @@ final class PagtowebArrecadacaoReceiptController extends Controller
     private function client(int $id): ?Client
     {
         return Client::query()->withoutGlobalScopes()
-            ->where('office_id', $this->office->office()->id)
+            ->where('tenant_id', $this->tenant->tenant()->id)
             ->whereKey($id)
             ->first();
     }
@@ -125,32 +125,32 @@ final class PagtowebArrecadacaoReceiptController extends Controller
 
     private function enabled(): void
     {
-        $office = $this->office->office();
-        if (! FeatureFlags::isModuleEnabled('guias', $office->id) && ! (bool) config('fiscal_monitoring.enabled', false)) {
+        $tenant = $this->tenant->tenant();
+        if (! FeatureFlags::isModuleEnabled('guides', $tenant->id) && ! (bool) config('fiscal_monitoring.enabled', false)) {
             abort(403, 'Módulo guias desabilitado.');
         }
     }
 
-    private function rejectClientOfficeId(Request $request): ?JsonResponse
+    private function rejectClientTenantId(Request $request): ?JsonResponse
     {
-        $supplied = $request->attributes->get(EnsureOfficeContext::CLIENT_OFFICE_ID_SUPPLIED) === true
-            || $this->hasOfficeId($request->query->all())
-            || $this->hasOfficeId($request->request->all())
-            || ($request->isJson() && $request->json() !== null && $this->hasOfficeId($request->json()->all()));
+        $supplied = $request->attributes->get(EnsureTenantContext::CLIENT_TENANT_ID_SUPPLIED) === true
+            || $this->hasTenantId($request->query->all())
+            || $this->hasTenantId($request->request->all())
+            || ($request->isJson() && $request->json() !== null && $this->hasTenantId($request->json()->all()));
 
         return $supplied
-            ? response()->json(['message' => 'office_id não é aceito; o escritório é obtido do contexto autenticado.', 'code' => 'CLIENT_OFFICE_ID_REJECTED'], 422)
+            ? response()->json(['message' => 'tenant_id não é aceito; o escritório é obtido do contexto autenticado.', 'code' => 'CLIENT_TENANT_ID_REJECTED'], 422)
             : null;
     }
 
     /** @param array<array-key, mixed> $values */
-    private function hasOfficeId(array $values): bool
+    private function hasTenantId(array $values): bool
     {
         foreach ($values as $key => $value) {
-            if (is_string($key) && strtolower($key) === 'office_id') {
+            if (is_string($key) && strtolower($key) === 'tenant_id') {
                 return true;
             }
-            if (is_array($value) && $this->hasOfficeId($value)) {
+            if (is_array($value) && $this->hasTenantId($value)) {
                 return true;
             }
         }

@@ -24,13 +24,13 @@ const expanded = ref(true)
 const checklist = computed(() => [
   {
     label: 'CNPJ do escritório cadastrado',
-    done: Boolean(onboarding.value?.identity?.cnpj || onboarding.value?.office_cnpj),
-    detail: onboarding.value?.office_cnpj || onboarding.value?.identity?.cnpj
-      ? formatCnpj(onboarding.value.office_cnpj || onboarding.value.identity?.cnpj)
+    done: Boolean(onboarding.value?.identity?.cnpj || onboarding.value?.tenant_cnpj),
+    detail: onboarding.value?.tenant_cnpj || onboarding.value?.identity?.cnpj
+      ? formatCnpj(onboarding.value.tenant_cnpj || onboarding.value.identity?.cnpj)
       : 'Cadastre a identidade fiscal do escritório.'
   },
   {
-    label: 'Certificado A1 operacional',
+    label: 'certificado operacional',
     done: onboarding.value?.credential?.status === 'ACTIVE',
     detail: onboarding.value?.credential
       ? `${statusLabel(onboarding.value.credential.status)} · válido até ${formatDateTime(onboarding.value.credential.valid_to)}`
@@ -87,8 +87,8 @@ async function load() {
   }
 }
 
-async function copyOfficeCnpj() {
-  const cnpj = onboarding.value?.office_cnpj || onboarding.value?.identity?.cnpj
+async function copyTenantCnpj() {
+  const cnpj = onboarding.value?.tenant_cnpj || onboarding.value?.identity?.cnpj
   if (!cnpj) return
   try {
     await navigator.clipboard.writeText(cnpj)
@@ -238,27 +238,27 @@ defineExpose({ reload: load, clearState })
             <div class="flex flex-wrap items-center gap-3">
               <code
                 class="rounded-md bg-elevated px-3 py-2 text-sm text-highlighted"
-                data-testid="cte-office-cnpj"
+                data-testid="cte-tenant-cnpj"
               >
-                {{ onboarding.office_cnpj ? formatCnpj(onboarding.office_cnpj) : 'Não configurado' }}
+                {{ onboarding.tenant_cnpj ? formatCnpj(onboarding.tenant_cnpj) : 'Não configurado' }}
               </code>
               <UButton
-                v-if="onboarding.office_cnpj"
+                v-if="onboarding.tenant_cnpj"
                 color="neutral"
                 variant="outline"
                 size="sm"
                 icon="i-lucide-copy"
                 label="Copiar"
                 aria-label="Copiar CNPJ do escritório para autXML"
-                @click="copyOfficeCnpj"
+                @click="copyTenantCnpj"
               />
             </div>
           </UPageCard>
 
-          <div data-testid="cte-a1-metadata">
+          <div data-testid="cte-certificate-metadata">
             <UPageCard
               v-if="credential"
-              title="Certificado A1 (metadados seguros)"
+              title="certificado (metadados seguros)"
               description="Somente status e validade pública — nunca PFX, senha, PEM ou chave privada."
               variant="subtle"
             >
@@ -306,7 +306,7 @@ defineExpose({ reload: load, clearState })
             </UPageCard>
             <UPageCard
               v-else
-              title="Certificado A1"
+              title="certificado"
               description="Nenhum certificado público ativo."
               variant="subtle"
             >
@@ -448,7 +448,7 @@ defineExpose({ reload: load, clearState })
               </li>
             </ul>
             <p class="mt-3 text-xs text-muted">
-              VIEWER só consulta. ADMIN e OPERATOR resolvem na quarentena; ações de cofre (A1/token) exigem ADMIN com 2FA em Administração.
+              A consulta, a resolução da quarentena e as ações de cofre dependem de permissões efetivas; certificado e token também exigem autenticação recente.
             </p>
           </UPageCard>
         </div>

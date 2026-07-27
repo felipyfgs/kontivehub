@@ -2,19 +2,18 @@
 
 namespace Tests\Feature;
 
-use App\Enums\OfficeRole;
 use App\Enums\TenantPermission;
 use App\Enums\TenantRole;
 use App\Enums\Work\ProcessStatus;
 use App\Enums\Work\TaskStatus;
 use App\Models\Client;
-use App\Models\Office;
-use App\Models\OfficeMembership;
-use App\Models\OperationalProcess;
-use App\Models\OperationalTask;
-use App\Models\ProcessTemplate;
+use App\Models\Tenant;
+use App\Models\TenantMembership;
 use App\Models\TenantPermissionProfile;
 use App\Models\User;
+use App\Models\WorkProcess;
+use App\Models\WorkProcessTemplate;
+use App\Models\WorkTask;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -25,52 +24,52 @@ class WorkProcessGroupApiTest extends TestCase
 
     public function test_groups_by_client_with_aggregates(): void
     {
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
-        $alpha = Client::factory()->forOffice($office)->create([
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $alpha = Client::factory()->forTenant($tenant)->create([
             'legal_name' => 'Alpha Contábil LTDA',
             'display_name' => 'Alpha',
         ]);
-        $beta = Client::factory()->forOffice($office)->create([
+        $beta = Client::factory()->forTenant($tenant)->create([
             'legal_name' => 'Beta Serviços SA',
             'display_name' => 'Beta',
         ]);
 
-        $p1 = OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        $p1 = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $alpha->id,
             'title' => 'DAS Alpha',
             'status' => ProcessStatus::AFazer,
             'due_date' => '2026-07-20',
         ]);
-        OperationalTask::factory()->create([
-            'office_id' => $office->id,
-            'operational_process_id' => $p1->id,
+        WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $p1->id,
             'sort_order' => 1,
             'status' => TaskStatus::AFazer,
         ]);
-        OperationalTask::factory()->create([
-            'office_id' => $office->id,
-            'operational_process_id' => $p1->id,
+        WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $p1->id,
             'sort_order' => 2,
             'status' => TaskStatus::Concluida,
         ]);
 
-        $p2 = OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        $p2 = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $alpha->id,
             'title' => 'DEFIS Alpha',
             'status' => ProcessStatus::EmProgresso,
             'due_date' => '2026-07-10',
         ]);
-        OperationalTask::factory()->create([
-            'office_id' => $office->id,
-            'operational_process_id' => $p2->id,
+        WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $p2->id,
             'sort_order' => 1,
             'status' => TaskStatus::EmProgresso,
         ]);
 
-        OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $beta->id,
             'title' => 'Folha Beta',
             'status' => ProcessStatus::AFazer,
@@ -102,40 +101,40 @@ class WorkProcessGroupApiTest extends TestCase
 
     public function test_groups_by_routine_includes_manual_bucket(): void
     {
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
-        $client = Client::factory()->forOffice($office)->create();
-        $template = ProcessTemplate::factory()->create([
-            'office_id' => $office->id,
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $client = Client::factory()->forTenant($tenant)->create();
+        $template = WorkProcessTemplate::factory()->create([
+            'tenant_id' => $tenant->id,
             'name' => 'PGDAS Mensal',
         ]);
 
-        $fromTemplate = OperationalProcess::factory()->fromTemplate()->create([
-            'office_id' => $office->id,
+        $fromTemplate = WorkProcess::factory()->fromTemplate()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
-            'process_template_id' => $template->id,
+            'work_process_template_id' => $template->id,
             'title' => 'Gerado PGDAS',
         ]);
-        OperationalTask::factory()->create([
-            'office_id' => $office->id,
-            'operational_process_id' => $fromTemplate->id,
+        WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $fromTemplate->id,
         ]);
 
-        $manual = OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        $manual = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
-            'process_template_id' => null,
+            'work_process_template_id' => null,
             'title' => 'Avulso sem rotina',
         ]);
-        OperationalTask::factory()->create([
-            'office_id' => $office->id,
-            'operational_process_id' => $manual->id,
+        WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $manual->id,
         ]);
 
         // Mesmo título de rotina, mas sem template — NÃO deve criar grupo por título.
-        OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
-            'process_template_id' => null,
+            'work_process_template_id' => null,
             'title' => 'PGDAS Mensal',
         ]);
 
@@ -163,82 +162,82 @@ class WorkProcessGroupApiTest extends TestCase
 
     public function test_sort_by_progress_percent_desc(): void
     {
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
-        $low = Client::factory()->forOffice($office)->create([
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $low = Client::factory()->forTenant($tenant)->create([
             'display_name' => 'Baixo Progresso',
         ]);
-        $mid = Client::factory()->forOffice($office)->create([
+        $mid = Client::factory()->forTenant($tenant)->create([
             'display_name' => 'Medio Progresso',
         ]);
-        $high = Client::factory()->forOffice($office)->create([
+        $high = Client::factory()->forTenant($tenant)->create([
             'display_name' => 'Alto Progresso',
         ]);
-        $empty = Client::factory()->forOffice($office)->create([
+        $empty = Client::factory()->forTenant($tenant)->create([
             'display_name' => 'Sem Tarefas',
         ]);
 
-        $lowProcess = OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        $lowProcess = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $low->id,
             'title' => 'Low',
         ]);
-        OperationalTask::factory()->create([
-            'office_id' => $office->id,
-            'operational_process_id' => $lowProcess->id,
+        WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $lowProcess->id,
             'sort_order' => 1,
             'status' => TaskStatus::AFazer,
         ]);
-        OperationalTask::factory()->create([
-            'office_id' => $office->id,
-            'operational_process_id' => $lowProcess->id,
+        WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $lowProcess->id,
             'sort_order' => 2,
             'status' => TaskStatus::Concluida,
         ]);
 
-        $midProcess = OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        $midProcess = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $mid->id,
             'title' => 'Mid',
         ]);
-        OperationalTask::factory()->create([
-            'office_id' => $office->id,
-            'operational_process_id' => $midProcess->id,
+        WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $midProcess->id,
             'sort_order' => 1,
             'status' => TaskStatus::Concluida,
         ]);
-        OperationalTask::factory()->create([
-            'office_id' => $office->id,
-            'operational_process_id' => $midProcess->id,
+        WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $midProcess->id,
             'sort_order' => 2,
             'status' => TaskStatus::AFazer,
         ]);
-        OperationalTask::factory()->create([
-            'office_id' => $office->id,
-            'operational_process_id' => $midProcess->id,
+        WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $midProcess->id,
             'sort_order' => 3,
             'status' => TaskStatus::Concluida,
         ]);
 
-        $highProcess = OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        $highProcess = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $high->id,
             'title' => 'High',
         ]);
-        OperationalTask::factory()->create([
-            'office_id' => $office->id,
-            'operational_process_id' => $highProcess->id,
+        WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $highProcess->id,
             'sort_order' => 1,
             'status' => TaskStatus::Concluida,
         ]);
-        OperationalTask::factory()->create([
-            'office_id' => $office->id,
-            'operational_process_id' => $highProcess->id,
+        WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $highProcess->id,
             'sort_order' => 2,
             'status' => TaskStatus::Dispensada,
         ]);
 
-        OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $empty->id,
             'title' => 'Empty',
         ]);
@@ -261,35 +260,35 @@ class WorkProcessGroupApiTest extends TestCase
 
     public function test_forbidden_without_work_view(): void
     {
-        [$office, $actor] = $this->actorWithoutWorkView();
-        Client::factory()->forOffice($office)->create();
+        [$tenant, $actor] = $this->actorWithoutWorkView();
+        Client::factory()->forTenant($tenant)->create();
         Sanctum::actingAs($actor);
 
         $this->getJson('/api/v1/work/process-groups?group_by=client')
             ->assertForbidden();
     }
 
-    public function test_multi_tenant_isolation_and_ignores_client_office_id(): void
+    public function test_multi_tenant_isolation_and_ignores_client_tenant_id(): void
     {
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
-        $otherOffice = Office::factory()->create();
-        $ownClient = Client::factory()->forOffice($office)->create(['display_name' => 'Próprio']);
-        $otherClient = Client::factory()->forOffice($otherOffice)->create(['display_name' => 'Externo']);
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $otherTenant = Tenant::factory()->create();
+        $ownClient = Client::factory()->forTenant($tenant)->create(['display_name' => 'Próprio']);
+        $otherClient = Client::factory()->forTenant($otherTenant)->create(['display_name' => 'Externo']);
 
-        OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $ownClient->id,
             'title' => 'Local',
         ]);
-        OperationalProcess::factory()->create([
-            'office_id' => $otherOffice->id,
+        WorkProcess::factory()->create([
+            'tenant_id' => $otherTenant->id,
             'client_id' => $otherClient->id,
             'title' => 'Vazado',
         ]);
 
         Sanctum::actingAs($admin);
 
-        $keys = $this->getJson('/api/v1/work/process-groups?group_by=client&office_id='.$otherOffice->id)
+        $keys = $this->getJson('/api/v1/work/process-groups?group_by=client&tenant_id='.$otherTenant->id)
             ->assertOk()
             ->json('data.*.key');
 
@@ -299,22 +298,22 @@ class WorkProcessGroupApiTest extends TestCase
 
     public function test_processes_include_tasks_default_and_omission(): void
     {
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
-        $client = Client::factory()->forOffice($office)->create();
-        $process = OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $client = Client::factory()->forTenant($tenant)->create();
+        $process = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
         ]);
-        OperationalTask::factory()->create([
-            'office_id' => $office->id,
-            'operational_process_id' => $process->id,
+        WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $process->id,
             'sort_order' => 1,
             'title' => 'Tarefa compacta',
             'status' => TaskStatus::AFazer,
         ]);
-        OperationalTask::factory()->create([
-            'office_id' => $office->id,
-            'operational_process_id' => $process->id,
+        WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $process->id,
             'sort_order' => 2,
             'title' => 'Feita',
             'status' => TaskStatus::Concluida,
@@ -340,25 +339,25 @@ class WorkProcessGroupApiTest extends TestCase
 
     public function test_processes_filter_by_template_and_without_template(): void
     {
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
-        $client = Client::factory()->forOffice($office)->create();
-        $template = ProcessTemplate::factory()->create(['office_id' => $office->id]);
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $client = Client::factory()->forTenant($tenant)->create();
+        $template = WorkProcessTemplate::factory()->create(['tenant_id' => $tenant->id]);
 
-        $withTemplate = OperationalProcess::factory()->fromTemplate()->create([
-            'office_id' => $office->id,
+        $withTemplate = WorkProcess::factory()->fromTemplate()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
-            'process_template_id' => $template->id,
+            'work_process_template_id' => $template->id,
             'title' => 'Com rotina',
         ]);
-        $manual = OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        $manual = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
-            'process_template_id' => null,
+            'work_process_template_id' => null,
             'title' => 'Manual',
         ]);
         Sanctum::actingAs($admin);
 
-        $byTemplate = $this->getJson('/api/v1/work/processes?process_template_id='.$template->id.'&include_tasks=0')
+        $byTemplate = $this->getJson('/api/v1/work/processes?work_process_template_id='.$template->id.'&include_tasks=0')
             ->assertOk()
             ->json('data.*.id');
         $this->assertSame([$withTemplate->id], $byTemplate);
@@ -371,44 +370,43 @@ class WorkProcessGroupApiTest extends TestCase
 
     public function test_processes_rejects_without_template_combined_with_template_id(): void
     {
-        [$admin] = $this->actor(OfficeRole::Admin);
+        [$admin] = $this->actor(TenantRole::TenantAdmin);
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v1/work/processes?without_template=1&process_template_id=12')
+        $this->getJson('/api/v1/work/processes?without_template=1&work_process_template_id=12')
             ->assertStatus(422)
             ->assertJsonValidationErrors(['without_template']);
     }
 
-    /** @return array{User, Office} */
-    private function actor(OfficeRole $role): array
+    /** @return array{User, Tenant} */
+    private function actor(TenantRole $role): array
     {
-        $office = Office::factory()->create();
-        $user = User::factory()->forOffice($office, $role)->create();
-        $user->forceFill(['selected_office_id' => $office->id])->saveQuietly();
+        $tenant = Tenant::factory()->create();
+        $user = User::factory()->forTenant($tenant, $role)->create();
+        $user->forceFill(['selected_tenant_id' => $tenant->id])->saveQuietly();
 
-        return [$user, $office];
+        return [$user, $tenant];
     }
 
-    /** @return array{Office, User} */
+    /** @return array{Tenant, User} */
     private function actorWithoutWorkView(): array
     {
-        config(['features.canonical_multitenant_rbac.enabled' => true]);
 
-        $office = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
         $actor = User::factory()->create();
-        $actor->forceFill(['selected_office_id' => $office->id])->saveQuietly();
-        $profile = TenantPermissionProfile::factory()->forOffice($office)->create();
+        $actor->forceFill(['selected_tenant_id' => $tenant->id])->saveQuietly();
+        $profile = TenantPermissionProfile::factory()->forTenant($tenant)->create();
         $profile->syncPermissionKeys([TenantPermission::ClientsView]);
-        OfficeMembership::factory()->create([
-            'office_id' => $office->id,
+        TenantMembership::factory()->create([
+            'tenant_id' => $tenant->id,
             'user_id' => $actor->id,
-            'role' => OfficeRole::Viewer,
-            'tenant_role' => TenantRole::TenantUser,
+            'role' => TenantRole::TenantUser,
+            'role' => TenantRole::TenantUser,
             'permission_profile_id' => $profile->id,
             'authorization_version' => 1,
             'is_active' => true,
         ]);
 
-        return [$office, $actor];
+        return [$tenant, $actor];
     }
 }

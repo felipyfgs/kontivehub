@@ -4,7 +4,6 @@ namespace App\Services\Serpro\E2e;
 
 use App\Models\Client;
 use App\Models\Establishment;
-use App\Services\Serpro\Catalog\OfficialServiceCatalogManifest;
 
 /**
  * Monta businessData mínimo por operation_key a partir do catálogo + contexto piloto.
@@ -12,19 +11,13 @@ use App\Services\Serpro\Catalog\OfficialServiceCatalogManifest;
  */
 final class SerproE2ePayloadFactory
 {
-    public function __construct(
-        private readonly OfficialServiceCatalogManifest $catalog,
-    ) {}
-
     /**
      * @param  array{protocol?: string|null, period?: string|null, context?: array<string, mixed>}  $ctx
-     * @return array{business_data: array<string, mixed>, payload: array<string, mixed>, notes: list<string>}
+     * @return array{business_data: array<string, mixed>, notes: list<string>}
      */
     public function forOperation(string $operationKey, Client $client, array $ctx = []): array
     {
-        $entry = $this->entry($operationKey);
         $notes = [];
-        $dadosMode = (string) ($entry['dados_mode'] ?? 'JSON_STRING');
         $cnpj = $this->contributorCnpj($client);
         $period = (string) ($ctx['period'] ?? now()->subMonth()->format('Y-m'));
         $year = (int) substr($period, 0, 4);
@@ -152,20 +145,11 @@ final class SerproE2ePayloadFactory
             $notes[] = 'protocolo_ausente_no_contexto';
         }
 
-        if ($dadosMode === 'EMPTY') {
-            return [
-                'business_data' => [],
-                'payload' => ['dados' => ''],
-                'notes' => $notes,
-            ];
-        }
-
         if ($operationKey === 'autentica_procurador.envio_xml_assinado') {
             $notes[] = 'requer_xml_assinado_do_fluxo_termo';
 
             return [
                 'business_data' => ['xml' => ''],
-                'payload' => ['dados' => json_encode(['xml' => ''], JSON_THROW_ON_ERROR)],
                 'notes' => $notes,
             ];
         }
@@ -175,26 +159,8 @@ final class SerproE2ePayloadFactory
 
         return [
             'business_data' => $business,
-            'payload' => [
-                'dados' => json_encode($business, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
-            ],
             'notes' => $notes,
         ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function entry(string $operationKey): array
-    {
-        $manifest = $this->catalog->load();
-        foreach ($manifest['entries'] as $entry) {
-            if (($entry['operation_key'] ?? null) === $operationKey) {
-                return $entry;
-            }
-        }
-
-        return [];
     }
 
     private function contributorCnpj(Client $client): string
@@ -202,7 +168,7 @@ final class SerproE2ePayloadFactory
         $est = Establishment::query()
             ->withoutGlobalScopes()
             ->where('client_id', $client->id)
-            ->where('is_matrix', true)
+            ->where('is_headquarters', true)
             ->where('is_active', true)
             ->first();
 

@@ -9,6 +9,5 @@ enum AdnDocumentType: string
     case Nfe = 'NFE';
     case NfeEvent = 'NFE_EVENTO';
     case Cte = 'CTE';
-    case Mdfe = 'MDFE';
     case Unknown = 'UNKNOWN';
 }

@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Enums\CredentialStatus;
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Jobs\Fiscal\SyncFgtsEsocialCompetenceJob;
 use App\Models\Client;
 use App\Models\ClientCredential;
 use App\Models\EsocialBxAccessLedger;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Esocial\EsocialBxAccessGuard;
 use Carbon\CarbonImmutable;
@@ -44,7 +44,7 @@ class FgtsEsocialApiPreflightTest extends TestCase
 
     public function test_missing_credential_blocks_sync_before_run_job_or_ledger(): void
     {
-        [, $client] = $this->tenant(OfficeRole::Admin);
+        [, $client] = $this->tenant(TenantRole::TenantAdmin);
 
         $response = $this->postJson('/api/v1/fiscal/fgts/sync', $this->payload($client))
             ->assertStatus(422)
@@ -59,7 +59,7 @@ class FgtsEsocialApiPreflightTest extends TestCase
 
     public function test_window_quota_and_production_gate_have_stable_http_statuses(): void
     {
-        [$office, $client] = $this->tenant(OfficeRole::Admin);
+        [$tenant, $client] = $this->tenant(TenantRole::TenantAdmin);
 
         CarbonImmutable::setTestNow('2026-08-05 12:00:00-03:00');
         $this->postJson('/api/v1/fiscal/fgts/sync-now', $this->payload($client))
@@ -71,7 +71,7 @@ class FgtsEsocialApiPreflightTest extends TestCase
         $guard = app(EsocialBxAccessGuard::class);
         for ($index = 0; $index < 10; $index++) {
             EsocialBxAccessLedger::query()->withoutGlobalScopes()->create([
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'client_id' => $client->id,
                 'employer_hash' => $guard->employerHash($client),
                 'environment' => 'restricted',
@@ -97,8 +97,8 @@ class FgtsEsocialApiPreflightTest extends TestCase
 
     public function test_ready_sync_queues_only_after_preflight_and_viewer_cannot_write(): void
     {
-        [$office, $client] = $this->tenant(OfficeRole::Admin);
-        $this->credential($office, $client);
+        [$tenant, $client] = $this->tenant(TenantRole::TenantAdmin);
+        $this->credential($tenant, $client);
 
         $this->postJson('/api/v1/fiscal/fgts/sync', [
             ...$this->payload($client),
@@ -110,20 +110,20 @@ class FgtsEsocialApiPreflightTest extends TestCase
 
         Queue::assertPushed(
             SyncFgtsEsocialCompetenceJob::class,
-            static fn ($job): bool => $job->officeId === $office->id && $job->clientId === $client->id,
+            static fn ($job): bool => $job->tenantId === $tenant->id && $job->clientId === $client->id,
         );
         $this->assertDatabaseCount('fiscal_monitoring_runs', 0);
         $this->assertDatabaseCount('esocial_bx_access_ledgers', 0);
 
-        Sanctum::actingAs(User::factory()->forOffice($office, OfficeRole::Viewer)->create());
+        Sanctum::actingAs(User::factory()->forTenant($tenant, TenantRole::TenantUser, 'viewer')->create());
         $this->postJson('/api/v1/fiscal/fgts/sync', $this->payload($client))->assertForbidden();
     }
 
     public function test_foreign_client_and_establishment_are_not_disclosed(): void
     {
-        [$office, $client] = $this->tenant(OfficeRole::Admin);
-        $foreign = Client::factory()->forOffice(Office::factory()->create())->create();
-        $this->credential($office, $client);
+        [$tenant, $client] = $this->tenant(TenantRole::TenantAdmin);
+        $foreign = Client::factory()->forTenant(Tenant::factory()->create())->create();
+        $this->credential($tenant, $client);
 
         $this->postJson('/api/v1/fiscal/fgts/sync', $this->payload($foreign))->assertNotFound();
         $this->postJson('/api/v1/fiscal/fgts/sync-now', [
@@ -133,14 +133,14 @@ class FgtsEsocialApiPreflightTest extends TestCase
         $this->assertNoSideEffects();
     }
 
-    /** @return array{Office,Client} */
-    private function tenant(OfficeRole $role): array
+    /** @return array{Tenant,Client} */
+    private function tenant(TenantRole $role): array
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create(['root_cnpj' => '48123272']);
-        Sanctum::actingAs(User::factory()->forOffice($office, $role)->create());
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create(['root_cnpj' => '48123272']);
+        Sanctum::actingAs(User::factory()->forTenant($tenant, $role)->create());
 
-        return [$office, $client];
+        return [$tenant, $client];
     }
 
     /** @return array<string, mixed> */
@@ -154,18 +154,18 @@ class FgtsEsocialApiPreflightTest extends TestCase
         ];
     }
 
-    private function credential(Office $office, Client $client): void
+    private function credential(Tenant $tenant, Client $client): void
     {
         ClientCredential::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'status' => CredentialStatus::Active,
-            'subject_name' => 'A1 metadata',
+            'subject_name' => 'certificado metadata',
             'holder_cnpj' => '48123272000105',
             'fingerprint_sha256' => str_repeat('d', 64),
             'valid_from' => now()->subDay(),
             'valid_to' => now()->addYear(),
-            'vault_object_id' => 'NOT-MATERIALIZED-IN-PREFLIGHT',
+            'vault_object_id' => '01J00000000000000000000000',
             'activated_at' => now(),
         ]);
     }

@@ -72,7 +72,7 @@ class FgtsDigitalCaptchaConfigTest extends TestCase
         $this->enableSolver();
         $transport = (new FgtsDigitalPortalRequest(
             operation: FgtsDigitalOperation::Authenticate,
-            officeId: 10,
+            tenantId: 10,
             clientId: 20,
             targetIdentifier: '12345678',
         ))->toTransportArray();

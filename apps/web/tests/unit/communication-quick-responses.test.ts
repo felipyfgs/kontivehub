@@ -376,7 +376,7 @@ describe('communication quick-responses — catálogo extraído', () => {
     scope.stop()
   })
 
-  it('descarta resposta atrasada e reinicia dados ao trocar de Office', async () => {
+  it('descarta resposta atrasada e reinicia dados ao trocar de Tenant', async () => {
     let resolveFirst: ((value: {
       data: CommunicationCannedResponse[]
       meta: { current_page: number, last_page: number, total: number }

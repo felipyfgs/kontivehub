@@ -17,12 +17,12 @@ const FORM_OR_CONFIRM = [
   'app/components/fiscal/AssociateCategoriesModal.vue',
   'app/components/data-table-filter/ManageSavedFiltersModal.vue',
   'app/components/monitoring/RecentRefreshConfirmModal.vue',
-  'app/components/settings/OfficeCredentialSection.vue',
+  'app/components/settings/TenantCredentialSection.vue',
   'app/pages/work/templates/index.vue',
   'app/pages/exports.vue',
   'app/pages/closing.vue',
   'app/components/monitoring/simples-mei/Portfolio.vue',
-  'app/components/settings/OfficeProfileSection.vue',
+  'app/components/settings/TenantProfileSection.vue',
   'app/components/communication/CommunicationWorkspacePage.vue',
   'app/components/communication/TimelinePanel.vue'
 ] as const

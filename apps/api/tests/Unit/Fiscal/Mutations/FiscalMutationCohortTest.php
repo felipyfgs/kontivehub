@@ -15,8 +15,8 @@ final class FiscalMutationCohortTest extends TestCase
             'fiscal_mutations.operations' => [
                 'INTEGRA_MEI.PGMEI.GERAR_DAS' => [
                     'enabled' => true,
-                    'office_allowlist' => [17],
-                    'allow_all_offices' => false,
+                    'tenant_allowlist' => [17],
+                    'allow_all_tenants' => false,
                 ],
             ],
         ]);

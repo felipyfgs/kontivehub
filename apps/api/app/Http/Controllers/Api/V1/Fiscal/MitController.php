@@ -3,17 +3,17 @@
 namespace App\Http\Controllers\Api\V1\Fiscal;
 
 use App\DTO\Integra\MitListaApuracoesRequest;
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Http\Controllers\Controller;
-use App\Http\Middleware\EnsureOfficeContext;
+use App\Http\Middleware\EnsureTenantContext;
 use App\Jobs\Fiscal\ExecuteFiscalMonitoringRunJob;
 use App\Models\Client;
 use App\Services\FiscalMonitoring\FiscalMonitoringRunService;
 use App\Services\Integra\Dctfweb\DctfwebCodes;
 use App\Services\Integra\Dctfweb\DctfwebMutationGuard;
-use App\Services\Integra\Dctfweb\MitApuracaoService;
+use App\Services\Integra\Dctfweb\MitAssessmentService;
 use App\Services\Integra\Dctfweb\MitListaApuracoesQueryService;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use RuntimeException;
@@ -21,8 +21,8 @@ use RuntimeException;
 class MitController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
-        private readonly MitApuracaoService $mit,
+        private readonly CurrentTenant $currentTenant,
+        private readonly MitAssessmentService $mit,
         private readonly FiscalMonitoringRunService $runs,
         private readonly DctfwebMutationGuard $mutations,
         private readonly MitListaApuracoesQueryService $listaApuracoes,
@@ -31,12 +31,12 @@ class MitController extends Controller
     public function index(Request $request): JsonResponse
     {
         $this->assertCanRead();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
         $perPage = min(100, max(1, (int) $request->query('per_page', 50)));
         $clientId = $request->query('client_id');
 
         $page = $this->mit->paginate(
-            $office,
+            $tenant,
             $perPage,
             is_numeric($clientId) ? (int) $clientId : null,
         );
@@ -48,8 +48,8 @@ class MitController extends Controller
     public function show(int $apuracao): JsonResponse
     {
         $this->assertCanRead();
-        $office = $this->currentOffice->office();
-        $model = $this->mit->findForOffice($office, $apuracao);
+        $tenant = $this->currentTenant->tenant();
+        $model = $this->mit->findForTenant($tenant, $apuracao);
         if ($model === null) {
             return response()->json(['message' => 'Apuração MIT não encontrada.'], 404);
         }
@@ -60,7 +60,7 @@ class MitController extends Controller
     public function enqueueConsult(Request $request): JsonResponse
     {
         $this->assertCanWrite();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
         $data = $request->validate([
             'client_id' => ['required', 'integer'],
@@ -87,7 +87,7 @@ class MitController extends Controller
 
         $client = Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($data['client_id'])
             ->first();
 
@@ -95,7 +95,7 @@ class MitController extends Controller
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
 
-        $apuracao = $this->mit->findOrCreate($office, $client, $data['period_key']);
+        $apuracao = $this->mit->findOrCreate($tenant, $client, $data['period_key']);
         $metadata = is_array($apuracao->metadata) ? $apuracao->metadata : [];
         $listMetadata = is_array($metadata['lista_apuracoes_317'] ?? null)
             ? $metadata['lista_apuracoes_317']
@@ -120,7 +120,7 @@ class MitController extends Controller
 
         try {
             $run = $this->runs->enqueueManual(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 systemCode: DctfwebCodes::SYSTEM_MIT,
                 serviceCode: DctfwebCodes::SERVICE_MIT,
@@ -155,10 +155,10 @@ class MitController extends Controller
     public function enqueueListaApuracoes(Request $request): JsonResponse
     {
         $this->assertCanWrite();
-        if ($rejection = $this->rejectClientOfficeId($request)) {
+        if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
         $data = $request->validate([
             'client_id' => ['required', 'integer'],
@@ -178,14 +178,14 @@ class MitController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        $client = $this->findClient((int) $office->id, (int) $data['client_id']);
+        $client = $this->findClient((int) $tenant->id, (int) $data['client_id']);
         if ($client === null) {
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
 
         try {
             $run = $this->listaApuracoes->enqueue(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 filters: $filters,
                 actorId: $request->user()?->id,
@@ -205,23 +205,23 @@ class MitController extends Controller
     public function indexListaApuracoes(Request $request): JsonResponse
     {
         $this->assertCanRead();
-        if ($rejection = $this->rejectClientOfficeId($request)) {
+        if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
         $data = $request->validate([
             'client_id' => ['required', 'integer'],
             'year' => ['sometimes', 'nullable', 'integer', 'between:2000,2100'],
         ]);
 
-        $client = $this->findClient((int) $office->id, (int) $data['client_id']);
+        $client = $this->findClient((int) $tenant->id, (int) $data['client_id']);
         if ($client === null) {
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
 
         return response()->json([
             'data' => $this->listaApuracoes->localList(
-                $office,
+                $tenant,
                 $client,
                 isset($data['year']) ? (int) $data['year'] : null,
             ),
@@ -238,7 +238,7 @@ class MitController extends Controller
     public function encerrar(Request $request): JsonResponse
     {
         $this->assertCanWrite();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
         $data = $request->validate([
             'client_id' => ['required', 'integer'],
@@ -249,7 +249,7 @@ class MitController extends Controller
 
         $client = Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($data['client_id'])
             ->first();
 
@@ -258,7 +258,7 @@ class MitController extends Controller
         }
 
         $gate = $this->mutations->assertMayMutate(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             systemCode: DctfwebCodes::SYSTEM_MIT,
             serviceCode: DctfwebCodes::SERVICE_MIT,
@@ -274,11 +274,11 @@ class MitController extends Controller
             ], 403);
         }
 
-        $apuracao = $this->mit->findOrCreate($office, $client, $data['period_key']);
+        $apuracao = $this->mit->findOrCreate($tenant, $client, $data['period_key']);
 
         try {
             $run = $this->runs->enqueueManual(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 systemCode: DctfwebCodes::SYSTEM_MIT,
                 serviceCode: DctfwebCodes::SERVICE_MIT,
@@ -297,48 +297,48 @@ class MitController extends Controller
 
     private function assertCanRead(): void
     {
-        if ($this->currentOffice->role() === null) {
+        if ($this->currentTenant->role() === null) {
             abort(403, 'Perfil não resolvido.');
         }
     }
 
-    private function findClient(int $officeId, int $clientId): ?Client
+    private function findClient(int $tenantId, int $clientId): ?Client
     {
         return Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereKey($clientId)
             ->first();
     }
 
-    private function rejectClientOfficeId(Request $request): ?JsonResponse
+    private function rejectClientTenantId(Request $request): ?JsonResponse
     {
         $suppliedAtTopLevel = $request->attributes->get(
-            EnsureOfficeContext::CLIENT_OFFICE_ID_SUPPLIED,
+            EnsureTenantContext::CLIENT_TENANT_ID_SUPPLIED,
         ) === true;
-        $suppliedNested = $this->containsOfficeIdKey($request->query->all())
-            || $this->containsOfficeIdKey($request->request->all())
+        $suppliedNested = $this->containsTenantIdKey($request->query->all())
+            || $this->containsTenantIdKey($request->request->all())
             || ($request->isJson() && $request->json() !== null
-                && $this->containsOfficeIdKey($request->json()->all()));
+                && $this->containsTenantIdKey($request->json()->all()));
 
         if (! $suppliedAtTopLevel && ! $suppliedNested) {
             return null;
         }
 
         return response()->json([
-            'message' => 'office_id não é aceito; o escritório é obtido do contexto autenticado.',
-            'code' => 'CLIENT_OFFICE_ID_REJECTED',
+            'message' => 'tenant_id não é aceito; o escritório é obtido do contexto autenticado.',
+            'code' => 'CLIENT_TENANT_ID_REJECTED',
         ], 422);
     }
 
     /** @param array<array-key, mixed> $values */
-    private function containsOfficeIdKey(array $values): bool
+    private function containsTenantIdKey(array $values): bool
     {
         foreach ($values as $key => $value) {
-            if (is_string($key) && strtolower($key) === 'office_id') {
+            if (is_string($key) && strtolower($key) === 'tenant_id') {
                 return true;
             }
-            if (is_array($value) && $this->containsOfficeIdKey($value)) {
+            if (is_array($value) && $this->containsTenantIdKey($value)) {
                 return true;
             }
         }
@@ -348,8 +348,8 @@ class MitController extends Controller
 
     private function assertCanWrite(): void
     {
-        $role = $this->currentOffice->role();
-        if ($role === null || ! in_array($role, [OfficeRole::Admin, OfficeRole::Operator], true)) {
+        $role = $this->currentTenant->role();
+        if ($role === null || ! in_array($role, [TenantRole::TenantAdmin, TenantRole::TenantUser], true)) {
             abort(403, 'Ação não autorizada para o perfil atual.');
         }
     }

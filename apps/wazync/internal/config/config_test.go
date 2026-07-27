@@ -101,28 +101,6 @@ func TestLoadRejectsWeakPreviousHMACSecret(t *testing.T) {
 	}
 }
 
-func TestLoadDoesNotReadLegacyEnvironmentAliases(t *testing.T) {
-	t.Setenv("WAZYNC_ENABLED", "")
-	t.Setenv("WAZYNC_DATABASE_URL", "")
-	t.Setenv("WAZYNC_HMAC_KEY_ID", "")
-	t.Setenv("WAZYNC_HMAC_SECRET", "")
-	t.Setenv("WAZYNC_DATA_KEY", "")
-	legacyPrefix := "WHATSAPP_" + "GATEWAY_"
-	t.Setenv(legacyPrefix+"ENABLED", "true")
-	t.Setenv(legacyPrefix+"DATABASE_URL", "postgres://legacy@postgres/nfse")
-	t.Setenv(legacyPrefix+"HMAC_KEY_ID", "legacy-v1")
-	t.Setenv(legacyPrefix+"HMAC_SECRET", strings.Repeat("s", 32))
-	t.Setenv(legacyPrefix+"DATA_KEY", base64.StdEncoding.EncodeToString([]byte(strings.Repeat("k", 32))))
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("load without canonical configuration: %v", err)
-	}
-	if cfg.Enabled || cfg.DatabaseURL != "" || cfg.CurrentKeyID != "" || cfg.CurrentSecret != "" || len(cfg.DataKey) != 0 {
-		t.Fatalf("legacy environment affected config: %+v", cfg)
-	}
-}
-
 func TestLoadAcceptsCompleteEnabledWazyncConfiguration(t *testing.T) {
 	setCompleteEnabledConfiguration(t)
 

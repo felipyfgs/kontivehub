@@ -183,7 +183,7 @@ function findListContractIssues(file, text) {
         violations.push(`${rel}: MonitoringModuleTable sem contrato (${token})`)
       }
     }
-    if (/\boffice_id\s*:/.test(text)) violations.push(`${rel}: request controla office_id`)
+    if (/\btenant_id\s*:/.test(text)) violations.push(`${rel}: request controla tenant_id`)
     violations.push(...findNonCanonicalAlerts(file, text))
     return violations
   }
@@ -194,7 +194,7 @@ function findListContractIssues(file, text) {
   if (text.includes('<UTable') && !hasCustomersTableUi(text)) {
     violations.push(`${rel}: LIST sem :ui de customers.vue (literal ou DASHBOARD_TABLE_UI)`)
   }
-  if (/\boffice_id\s*:/.test(text)) violations.push(`${rel}: request controla office_id`)
+  if (/\btenant_id\s*:/.test(text)) violations.push(`${rel}: request controla tenant_id`)
   violations.push(...findNonCanonicalAlerts(file, text))
   return violations
 }

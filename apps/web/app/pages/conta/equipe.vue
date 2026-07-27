@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import OfficeTeamPage from '../settings/team.vue'
+import TenantTeamPage from '~/components/settings/TenantTeamPage.vue'
 </script>
 
 <template>
-  <OfficeTeamPage />
+  <TenantTeamPage />
 </template>

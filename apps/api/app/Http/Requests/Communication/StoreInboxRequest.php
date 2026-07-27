@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -15,7 +15,7 @@ final class StoreInboxRequest extends FormRequest
 
     public function rules(): array
     {
-        $officeId = (int) app(CurrentOffice::class)->office()->id;
+        $tenantId = (int) app(CurrentTenant::class)->tenant()->id;
 
         return [
             'name' => [
@@ -25,7 +25,7 @@ final class StoreInboxRequest extends FormRequest
                 'max:120',
                 Rule::unique('communication_inboxes', 'name')
                     ->where(fn ($query) => $query
-                        ->where('office_id', $officeId)),
+                        ->where('tenant_id', $tenantId)),
             ],
             'is_enabled' => ['sometimes', 'boolean'],
             'is_default' => ['sometimes', 'boolean'],

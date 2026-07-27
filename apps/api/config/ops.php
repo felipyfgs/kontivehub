@@ -2,7 +2,7 @@
 
 /**
  * Gates operacionais de produção (readiness, heartbeat, evidências).
- * Sem segredos e sem contexto de Office.
+ * Sem segredos e sem contexto de Tenant.
  */
 return [
     /*

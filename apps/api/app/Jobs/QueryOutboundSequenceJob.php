@@ -53,7 +53,7 @@ class QueryOutboundSequenceJob implements ShouldQueue
         }
 
         $run = OutboundCaptureRun::query()->create([
-            'office_id' => $series->office_id,
+            'tenant_id' => $series->tenant_id,
             'outbound_capture_profile_id' => $series->outbound_capture_profile_id,
             'outbound_series_cursor_id' => $series->id,
             'run_type' => 'SEQUENCE_QUERY',

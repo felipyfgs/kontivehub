@@ -10,11 +10,11 @@ use App\Enums\FiscalDataOrigin;
 use App\Enums\FiscalModuleKey;
 use App\Enums\FiscalRole;
 use App\Models\CteDocument;
-use App\Models\Export;
+use App\Models\DocumentExport;
 use App\Models\NfeDocument;
+use App\Models\NfseDocument;
 use App\Models\NfseEvent;
-use App\Models\NfseNote;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\FiscalMonitoring\ModulePortfolio\ModulePortfolioQueryService;
 use App\Services\Vault\DocumentVaultReader;
 use App\Support\LogSanitizer;
@@ -41,7 +41,7 @@ class BuildExportZipJob implements ShouldQueue
         SecureObjectStore $store,
         ?ModulePortfolioQueryService $portfolio = null,
     ): void {
-        $export = Export::query()->find($this->exportId);
+        $export = DocumentExport::query()->find($this->exportId);
         if ($export === null) {
             return;
         }
@@ -49,7 +49,7 @@ class BuildExportZipJob implements ShouldQueue
         $export->status = 'PROCESSING';
         $export->save();
 
-        $dir = storage_path('app/private/exports/'.$export->office_id);
+        $dir = storage_path('app/private/exports/'.$export->tenant_id);
         File::ensureDirectoryExists($dir, 0700);
         $path = $dir.'/export-'.$export->id.'.zip';
 
@@ -78,7 +78,7 @@ class BuildExportZipJob implements ShouldQueue
             $skipped = [];
 
             if ($kinds === [] || in_array(DocumentKind::Nfse, $kinds, true)) {
-                $query = NfseNote::query()->where('office_id', $export->office_id)->with('document');
+                $query = NfseDocument::query()->where('tenant_id', $export->tenant_id)->with('document');
                 $this->applySharedFilters($query, $filters, nfse: true);
                 $query->orderBy('id')->chunkById(100, function ($notes) use ($store, $zip, &$count, &$seen, &$skipped, $export): void {
                     foreach ($notes as $note) {
@@ -92,7 +92,7 @@ class BuildExportZipJob implements ShouldQueue
 
                             continue;
                         }
-                        $bytes = $this->readVaultXml($store, $doc->vault_object_id, (int) $doc->office_id, (string) $doc->sha256, $skipped, 'nfse', $note->access_key);
+                        $bytes = $this->readVaultXml($store, $doc->vault_object_id, (int) $doc->tenant_id, (string) $doc->sha256, $skipped, 'nfse', $note->access_key);
                         if ($bytes === null) {
                             continue;
                         }
@@ -109,7 +109,7 @@ class BuildExportZipJob implements ShouldQueue
 
                         if ($export->include_events) {
                             $events = NfseEvent::query()
-                                ->where('office_id', $export->office_id)
+                                ->where('tenant_id', $export->tenant_id)
                                 ->where('access_key', $note->access_key)
                                 ->with('document')
                                 ->get();
@@ -121,7 +121,7 @@ class BuildExportZipJob implements ShouldQueue
                                 $ebytes = $this->readVaultXml(
                                     $store,
                                     $edoc->vault_object_id,
-                                    (int) $edoc->office_id,
+                                    (int) $edoc->tenant_id,
                                     (string) $edoc->sha256,
                                     $skipped,
                                     'nfse-event',
@@ -149,14 +149,14 @@ class BuildExportZipJob implements ShouldQueue
             }
 
             if ($kinds === [] || in_array(DocumentKind::Nfe, $kinds, true) || in_array(DocumentKind::Nfce, $kinds, true)) {
-                $query = NfeDocument::query()->where('office_id', $export->office_id)->with('document');
+                $query = NfeDocument::query()->where('tenant_id', $export->tenant_id)->with('document');
                 // Prefer full over summary for same key
                 $query->where(function (Builder $q): void {
                     $q->where('is_summary', false)
                         ->orWhereNotExists(function ($sub): void {
                             $sub->selectRaw('1')
                                 ->from('nfe_documents as full')
-                                ->whereColumn('full.office_id', 'nfe_documents.office_id')
+                                ->whereColumn('full.tenant_id', 'nfe_documents.tenant_id')
                                 ->whereColumn('full.access_key', 'nfe_documents.access_key')
                                 ->where('full.is_summary', false);
                         });
@@ -186,7 +186,7 @@ class BuildExportZipJob implements ShouldQueue
                         $bytes = $this->readVaultXml(
                             $store,
                             $doc->vault_object_id,
-                            (int) $doc->office_id,
+                            (int) $doc->tenant_id,
                             (string) $doc->sha256,
                             $skipped,
                             $kindSeg,
@@ -216,14 +216,14 @@ class BuildExportZipJob implements ShouldQueue
             }
 
             if ($kinds === [] || in_array(DocumentKind::Cte, $kinds, true)) {
-                $query = CteDocument::query()->where('office_id', $export->office_id)->with('document');
+                $query = CteDocument::query()->where('tenant_id', $export->tenant_id)->with('document');
                 // Prefer full over summary for same access_key (espelho NF-e).
                 $query->where(function (Builder $q): void {
                     $q->where('is_summary', false)
                         ->orWhereNotExists(function ($sub): void {
                             $sub->selectRaw('1')
                                 ->from('cte_documents as full')
-                                ->whereColumn('full.office_id', 'cte_documents.office_id')
+                                ->whereColumn('full.tenant_id', 'cte_documents.tenant_id')
                                 ->whereColumn('full.access_key', 'cte_documents.access_key')
                                 ->where('full.is_summary', false);
                         });
@@ -244,7 +244,7 @@ class BuildExportZipJob implements ShouldQueue
                         $bytes = $this->readVaultXml(
                             $store,
                             $doc->vault_object_id,
-                            (int) $doc->office_id,
+                            (int) $doc->tenant_id,
                             (string) $doc->sha256,
                             $skipped,
                             'cte',
@@ -273,14 +273,12 @@ class BuildExportZipJob implements ShouldQueue
                 });
             }
 
-            // MDF-e legado nunca entra nos ramos de consulta ou no vault.
-
             // Manifesto de ausências (exportação mensal parcial) — nunca inventa XML.
             $manifestPath = is_string($filters['absence_manifest_path'] ?? null)
                 ? (string) $filters['absence_manifest_path']
                 : null;
             if ($manifestPath !== null && $manifestPath !== '' && is_file($manifestPath)) {
-                $root = realpath(storage_path('app/private/exports/'.$export->office_id));
+                $root = realpath(storage_path('app/private/exports/'.$export->tenant_id));
                 $real = realpath($manifestPath);
                 if ($root !== false && $real !== false
                     && (str_starts_with($real, $root.DIRECTORY_SEPARATOR) || $real === $root)) {
@@ -340,7 +338,7 @@ class BuildExportZipJob implements ShouldQueue
      */
     private function addFiscalPortfolioEntries(
         ZipArchive $zip,
-        Export $export,
+        DocumentExport $export,
         array $filters,
         ModulePortfolioQueryService $portfolio,
     ): int {
@@ -349,8 +347,8 @@ class BuildExportZipJob implements ShouldQueue
             throw new \RuntimeException('Módulo fiscal inválido no export.');
         }
 
-        $office = Office::query()->find($export->office_id);
-        if ($office === null) {
+        $tenant = Tenant::query()->find($export->tenant_id);
+        if ($tenant === null) {
             throw new \RuntimeException('Escritório do export não encontrado.');
         }
 
@@ -367,7 +365,7 @@ class BuildExportZipJob implements ShouldQueue
             'delivery_status' => $filters['delivery_status'] ?? null,
         ]);
 
-        $payload = $portfolio->exportSanitizedRows($office, $module, $portfolioFilters);
+        $payload = $portfolio->exportSanitizedRows($tenant, $module, $portfolioFilters);
         /** @var FiscalDataOrigin $origin */
         $origin = $payload['data_origin'];
         $isDemo = (bool) $payload['is_demonstration'];
@@ -402,7 +400,7 @@ class BuildExportZipJob implements ShouldQueue
                 'no_xml' => true,
                 'no_vault_ids' => true,
             ],
-            // office_id NÃO é exposto no manifesto público do ZIP além do path de storage
+            // tenant_id NÃO é exposto no manifesto público do ZIP além do path de storage
             // (já isolado). Identidade comercial do tenant fica fora do artefato.
         ];
 
@@ -487,7 +485,7 @@ class BuildExportZipJob implements ShouldQueue
         return $csv;
     }
 
-    private function markReady(Export $export, string $path, int $count): void
+    private function markReady(DocumentExport $export, string $path, int $count): void
     {
         $export->status = 'READY';
         $export->storage_path = $path;
@@ -506,7 +504,7 @@ class BuildExportZipJob implements ShouldQueue
     private function readVaultXml(
         SecureObjectStore $store,
         ?string $objectId,
-        int $officeId,
+        int $tenantId,
         string $sha256,
         array &$skipped,
         string $kind,
@@ -519,7 +517,7 @@ class BuildExportZipJob implements ShouldQueue
         }
 
         try {
-            $bytes = DocumentVaultReader::get($store, $objectId, $officeId, $sha256);
+            $bytes = DocumentVaultReader::get($store, $objectId, $tenantId, $sha256);
             // Nunca embutir envelope JSON do cofre no ZIP — só XML/texto fiscal.
             $trim = ltrim($bytes);
             if ($trim !== '' && ($trim[0] === '{' || $trim[0] === '[')) {

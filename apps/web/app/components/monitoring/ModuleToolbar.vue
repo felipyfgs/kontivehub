@@ -8,7 +8,10 @@ import type {
   MonitoringFilterConfig,
   MonitoringFilterValue
 } from '~/types/fiscal-modules'
-import type { SavedListFilterPayload } from '~/types/saved-list-filters'
+import type {
+  SavedListFilterPayload,
+  SavedListSurface
+} from '~/types/saved-list-filters'
 import {
   modelsToMonitoringFilters,
   monitoringFieldsToDefinitions,
@@ -33,7 +36,7 @@ const props = withDefaults(defineProps<{
   canExport?: boolean
   showTotal?: boolean
   resetKey?: string | number | null
-  surface?: string | null
+  surface?: SavedListSurface | null
   canShareFilters?: boolean
 }>(), {
   filterConfig: () => ({}),
@@ -150,26 +153,24 @@ function onApplyPreset(payload: SavedListFilterPayload) {
 function onClientPicked(client: {
   display_name?: string | null
   legal_name?: string | null
-  name?: string | null
 } | null) {
   if (!client) {
     clientLabelCache.value = null
     return
   }
-  clientLabelCache.value = client.display_name || client.legal_name || client.name || null
+  clientLabelCache.value = client.display_name || client.legal_name || null
 }
 
 function onClientsPicked(clients: Array<{
   display_name?: string | null
   legal_name?: string | null
-  name?: string | null
 }>) {
   if (!clients.length) {
     clientLabelCache.value = null
     return
   }
   clientLabelCache.value = clients
-    .map(c => c.display_name || c.legal_name || c.name || 'Cliente')
+    .map(c => c.display_name || c.legal_name || 'Cliente')
     .join(', ')
 }
 </script>

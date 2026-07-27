@@ -13,7 +13,7 @@ use App\Models\Client;
 use App\Models\FiscalModuleControl;
 use App\Models\FiscalMonitoringRun;
 use App\Models\MailboxMessage;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Integra\Mailbox\MailboxDetailEnqueueService;
 use App\Services\Integra\Mailbox\MailboxIdempotency;
@@ -38,13 +38,13 @@ class MailboxDetailEnqueueServiceTest extends TestCase
     public function test_enqueues_up_to_configured_limit(): void
     {
         Queue::fake();
-        [$office, $client] = $this->seedTenant();
+        [$tenant, $client] = $this->seedTenant();
 
         foreach (['A', 'B', 'C'] as $i => $ext) {
-            $this->seedMessage($office, $client, $ext, unread: $i === 0);
+            $this->seedMessage($tenant, $client, $ext, unread: $i === 0);
         }
 
-        $runs = app(MailboxDetailEnqueueService::class)->enqueueAfterList($office, $client);
+        $runs = app(MailboxDetailEnqueueService::class)->enqueueAfterList($tenant, $client);
 
         $this->assertCount(2, $runs);
         Queue::assertPushed(ExecuteFiscalMonitoringRunJob::class, 2);
@@ -54,19 +54,19 @@ class MailboxDetailEnqueueServiceTest extends TestCase
     public function test_fail_closed_when_module_restricted(): void
     {
         Queue::fake();
-        [$office, $client] = $this->seedTenant();
-        $this->seedMessage($office, $client, 'X');
+        [$tenant, $client] = $this->seedTenant();
+        $this->seedMessage($tenant, $client, 'X');
 
         FiscalModuleControl::query()->create([
             'module_key' => FiscalControlModule::Mailbox,
-            'scope' => FiscalModuleControlScope::Office,
-            'office_id' => $office->id,
+            'scope' => FiscalModuleControlScope::Tenant,
+            'tenant_id' => $tenant->id,
             'restricted' => true,
             'reason' => 'Pausa teste',
             'updated_by_user_id' => User::factory()->create()->id,
         ]);
 
-        $runs = app(MailboxDetailEnqueueService::class)->enqueueAfterList($office, $client);
+        $runs = app(MailboxDetailEnqueueService::class)->enqueueAfterList($tenant, $client);
 
         $this->assertSame([], $runs);
         Queue::assertNothingPushed();
@@ -75,11 +75,11 @@ class MailboxDetailEnqueueServiceTest extends TestCase
     public function test_skips_when_open_detail_run_exists(): void
     {
         Queue::fake();
-        [$office, $client] = $this->seedTenant();
-        $msg = $this->seedMessage($office, $client, 'DUP');
+        [$tenant, $client] = $this->seedTenant();
+        $msg = $this->seedMessage($tenant, $client, 'DUP');
 
         FiscalMonitoringRun::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'system_code' => 'INTEGRA_CAIXAPOSTAL',
             'service_code' => 'CAIXA_POSTAL',
@@ -98,7 +98,7 @@ class MailboxDetailEnqueueServiceTest extends TestCase
             ],
         ]);
 
-        $runs = app(MailboxDetailEnqueueService::class)->enqueueAfterList($office, $client);
+        $runs = app(MailboxDetailEnqueueService::class)->enqueueAfterList($tenant, $client);
 
         $this->assertSame([], $runs);
         $this->assertDatabaseCount('fiscal_monitoring_runs', 1);
@@ -109,33 +109,33 @@ class MailboxDetailEnqueueServiceTest extends TestCase
     {
         Queue::fake();
         config(['fiscal_monitoring.mailbox.max_detail_fetches_per_sync' => 0]);
-        [$office, $client] = $this->seedTenant();
-        $this->seedMessage($office, $client, 'Z');
+        [$tenant, $client] = $this->seedTenant();
+        $this->seedMessage($tenant, $client, 'Z');
 
-        $runs = app(MailboxDetailEnqueueService::class)->enqueueAfterList($office, $client);
+        $runs = app(MailboxDetailEnqueueService::class)->enqueueAfterList($tenant, $client);
 
         $this->assertSame([], $runs);
         Queue::assertNothingPushed();
     }
 
-    /** @return array{0: Office, 1: Client} */
+    /** @return array{0: Tenant, 1: Client} */
     private function seedTenant(): array
     {
-        $office = Office::factory()->create(['is_active' => true]);
-        $client = Client::factory()->for($office)->create();
+        $tenant = Tenant::factory()->create(['is_active' => true]);
+        $client = Client::factory()->for($tenant)->create();
 
-        return [$office, $client];
+        return [$tenant, $client];
     }
 
-    private function seedMessage(Office $office, Client $client, string $suffix, bool $unread = true): MailboxMessage
+    private function seedMessage(Tenant $tenant, Client $client, string $suffix, bool $unread = true): MailboxMessage
     {
         $externalId = 'EXT-'.$suffix;
 
         return MailboxMessage::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'external_id' => $externalId,
-            'message_hash' => MailboxIdempotency::messageHash((int) $office->id, (int) $client->id, $externalId),
+            'message_hash' => MailboxIdempotency::messageHash((int) $tenant->id, (int) $client->id, $externalId),
             'source' => MailboxSource::CaixaPostal,
             'sensitivity_class' => 'FISCAL_RESTRICTED',
             'subject_preview' => 'Assunto '.$suffix,

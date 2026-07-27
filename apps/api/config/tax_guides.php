@@ -2,7 +2,7 @@
 
 /**
  * Central de guias fiscais (tax-guide-management).
- * Mutações OFF por default — FeatureFlags::isMutatingEnabled('guias').
+ * Mutações OFF por default — FeatureFlags::isMutatingEnabled('guides').
  */
 return [
     'enabled' => filter_var(env('TAX_GUIDES_ENABLED', false), FILTER_VALIDATE_BOOL),
@@ -30,22 +30,21 @@ return [
     'high_risk' => [
         /** Operações EMITIR_* com valor acima deste limiar (centavos) são HIGH. 0 = sempre HIGH se mutante. */
         'amount_threshold_cents' => (int) env('TAX_GUIDES_HIGH_RISK_CENTS', 0),
-        /** Janela de 2FA/confirmação recente (segundos). */
+        /** Janela de reconfirmação de senha (segundos). */
         'challenge_window_seconds' => (int) env('TAX_GUIDES_CHALLENGE_WINDOW', 300),
-        /** Exige revalidação TOTP no desafio (em testing pode desligar e usar markConfirmed). */
-        'require_totp' => filter_var(env('TAX_GUIDES_REQUIRE_TOTP', true), FILTER_VALIDATE_BOOL),
         /** Papel mínimo para emissão mutante. */
-        'required_role' => 'ADMIN',
+        'required_role' => 'tenant_admin',
     ],
 
     /**
      * Catálogo local de operações de guia suportadas (além do catálogo SERPRO).
-     * system|service|operation|risk|label
+     * operation_key|system|service|operation|risk|label
      *
-     * @var list<array{system:string,service:string,operation:string,risk:string,label:string}>
+     * @var list<array{operation_key:string,system:string,service:string,operation:string,risk:string,label:string}>
      */
     'operations' => [
         [
+            'operation_key' => 'sicalc.consolidargerardarf',
             'system' => 'INTEGRA_PAGAMENTO',
             'service' => 'SICALC',
             'operation' => 'EMITIR_GUIA',
@@ -53,42 +52,7 @@ return [
             'label' => 'Emitir guia Sicalc',
         ],
         [
-            'system' => 'INTEGRA_CONTADOR',
-            'service' => 'GUIAS',
-            'operation' => 'EMITIR_GUIA',
-            'risk' => 'HIGH',
-            'label' => 'Emitir guia (catálogo genérico)',
-        ],
-        [
-            'system' => 'INTEGRA_SN',
-            'service' => 'PGDASD',
-            'operation' => 'EMITIR_DAS',
-            'risk' => 'HIGH',
-            'label' => 'Emitir DAS PGDAS-D',
-        ],
-        [
-            'system' => 'INTEGRA_MEI',
-            'service' => 'PGMEI',
-            'operation' => 'EMITIR_DAS',
-            'risk' => 'HIGH',
-            'label' => 'Emitir DAS MEI',
-        ],
-        // Documentos de parcela (Integra-Parcelamento) — risco standard (assistida/idempotente)
-        [
-            'system' => 'INTEGRA_PARCELAMENTO',
-            'service' => 'PARCSN',
-            'operation' => 'EMITIR_DOCUMENTO',
-            'risk' => 'STANDARD',
-            'label' => 'Emitir documento de parcela PARCSN',
-        ],
-        [
-            'system' => 'INTEGRA_PARCELAMENTO',
-            'service' => 'PARCMEI',
-            'operation' => 'EMITIR_DOCUMENTO',
-            'risk' => 'STANDARD',
-            'label' => 'Emitir documento de parcela PARCMEI',
-        ],
-        [
+            'operation_key' => 'pagtoweb.pagamentos',
             'system' => 'INTEGRA_PAGAMENTO',
             'service' => 'SICALC',
             'operation' => 'CONSULTAR_PAGAMENTO',

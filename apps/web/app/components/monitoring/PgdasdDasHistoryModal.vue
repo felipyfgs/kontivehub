@@ -36,13 +36,11 @@ const apiBase = useRuntimeConfig().public.apiBase as string
 
 const loading = ref(false)
 const error = ref<string | null>(null)
-const history = ref<PgdasdHistoryPayload | PgdasdHistoryPeriod[] | null>(null)
+const history = ref<PgdasdHistoryPayload | null>(null)
 const yearFilter = ref<number | 'all'>('all')
 let requestGeneration = 0
 
-const payload = computed<PgdasdHistoryPayload>(() =>
-  Array.isArray(history.value) ? { periods: history.value } : history.value || {}
-)
+const payload = computed<PgdasdHistoryPayload>(() => history.value || {})
 
 const allPeriods = computed(() =>
   [...pgdasdHistoryPeriods(history.value)].sort((a, b) =>
@@ -84,7 +82,6 @@ const description = computed(() => `${clientLabel.value} · ${cnpjLabel.value}`)
 function periodArtifacts(period: PgdasdHistoryPeriod): PgdasdArtifactDescriptor[] {
   const all = [
     ...(period.artifacts || []),
-    ...(period.documents || []),
     ...(period.declarations || []).flatMap(item => item.documents || []),
     ...(period.das || []).flatMap(item => item.documents || [])
   ]
@@ -93,7 +90,7 @@ function periodArtifacts(period: PgdasdHistoryPeriod): PgdasdArtifactDescriptor[
 
 function artifactHref(artifact: PgdasdArtifactDescriptor | null | undefined): string | null {
   if (!artifact) return null
-  const path = artifact.download_path?.trim() || artifact.download_href?.trim()
+  const path = artifact.download_path?.trim()
   if (path) return resolveApiUrl(path, apiBase)
   if (artifact.id) return artifactDownloadUrl(artifact.id)
   return null

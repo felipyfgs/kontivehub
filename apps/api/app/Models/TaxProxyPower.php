@@ -4,16 +4,16 @@ namespace App\Models;
 
 use App\Enums\TaxProxyPowerSource;
 use App\Enums\TaxProxyPowerStatus;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'client_id',
-    'office_serpro_authorization_id',
+    'tenant_serpro_authorization_id',
     'environment',
     'author_identity',
     'contributor_cnpj',
@@ -37,7 +37,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class TaxProxyPower extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {
@@ -61,7 +61,7 @@ class TaxProxyPower extends Model
 
     public function authorization(): BelongsTo
     {
-        return $this->belongsTo(OfficeSerproAuthorization::class, 'office_serpro_authorization_id');
+        return $this->belongsTo(TenantSerproAuthorization::class, 'tenant_serpro_authorization_id');
     }
 
     public function isCurrentlyValid(): bool
@@ -146,7 +146,7 @@ class TaxProxyPower extends Model
     {
         return [
             'id' => $this->id,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'client_id' => $this->client_id,
             'author_identity_masked' => $this->mask($this->author_identity),
             'contributor_cnpj_masked' => $this->mask($this->contributor_cnpj),

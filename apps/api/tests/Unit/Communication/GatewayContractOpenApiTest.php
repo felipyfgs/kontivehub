@@ -62,7 +62,6 @@ class GatewayContractOpenApiTest extends TestCase
             'EmptyPayload',
             'SessionProvisionPayload',
             'PairPhonePayload',
-            'LegacyMessageSendPayload',
             'TextMessageSendPayload',
             'MediaMessageSendPayload',
             'MessageTargetPayload',
@@ -86,15 +85,8 @@ class GatewayContractOpenApiTest extends TestCase
         }
     }
 
-    public function test_legacy_message_send_is_explicit_and_rich_variants_require_kind(): void
+    public function test_every_message_variant_requires_kind(): void
     {
-        $legacy = $this->schemaBlock('LegacyMessageSendPayload');
-        $this->assertStringContainsString('required: [to]', $legacy);
-        $this->assertStringContainsString('text:', $legacy);
-        $this->assertStringContainsString('media:', $legacy);
-        $this->assertStringContainsString('minProperties: 2', $legacy);
-        $this->assertStringNotContainsString('kind:', $legacy);
-
         foreach ([
             'TextMessageSendPayload',
             'MediaMessageSendPayload',
@@ -105,6 +97,11 @@ class GatewayContractOpenApiTest extends TestCase
         ] as $schema) {
             $this->assertMatchesRegularExpression('/required: \[[^\]]*kind[^\]]*\]/', $this->schemaBlock($schema));
         }
+
+        $description = strtolower($this->yaml());
+        $this->assertStringContainsString('todo `message_send` exige `kind` explícito', $description);
+        $this->assertStringNotContainsString('payload sem tipagem', $description);
+        $this->assertStringNotContainsString('tipo é inferido', $description);
     }
 
     public function test_query_endpoint_documents_all_hmac_headers_and_replay_before_provider(): void

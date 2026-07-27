@@ -4,7 +4,6 @@ namespace App\Services\Communication\Events;
 
 use App\Contracts\CommunicationTransport;
 use App\DTO\Communication\CommunicationPayloadDigest;
-use App\DTO\Communication\GatewayContractPayload;
 use App\DTO\Communication\GatewayEventData;
 use App\DTO\Communication\MessageSemanticContent;
 use App\Enums\Communication\ConversationStatus;
@@ -61,7 +60,7 @@ final readonly class GatewayEventIngestor
             return 'duplicate';
         }
 
-        $inbox = CommunicationInbox::query()->withoutGlobalScope('office')
+        $inbox = CommunicationInbox::query()->withoutGlobalScope('tenant')
             ->where('session_id', $incoming->sessionId)
             ->first();
         if ($inbox === null) {
@@ -80,7 +79,7 @@ final readonly class GatewayEventIngestor
             $storedMedia = $this->media->putStream(
                 $this->transport->downloadMedia((string) $incoming->payload['spool_id']),
                 [
-                    'office_id' => (int) $inbox->office_id,
+                    'tenant_id' => (int) $inbox->tenant_id,
                     'inbox_id' => (int) $inbox->id,
                     'gateway_event_id' => $incoming->gatewayEventId,
                     'sha256' => $expectedSha,
@@ -93,7 +92,7 @@ final readonly class GatewayEventIngestor
         }
 
         try {
-            /** @var array{office_id:int,conversation_id:int,message_id:int,event_key:string}|null $flowCorrelation */
+            /** @var array{tenant_id:int,conversation_id:int,message_id:int,event_key:string}|null $flowCorrelation */
             $flowCorrelation = null;
             $result = DB::transaction(function () use ($incoming, $digest, $inbox, $storedMedia, &$flowCorrelation): string {
                 $duplicate = CommunicationEvent::query()->withoutGlobalScopes()
@@ -136,7 +135,7 @@ final readonly class GatewayEventIngestor
                     && strtoupper((string) ($safePayload['direction'] ?? 'INBOUND')) === 'INBOUND'
                 ) {
                     $flowCorrelation = [
-                        'office_id' => (int) $inbox->office_id,
+                        'tenant_id' => (int) $inbox->tenant_id,
                         'conversation_id' => (int) $conversationId,
                         'message_id' => (int) $messageId,
                         'event_key' => 'gw:'.$incoming->gatewayEventId,
@@ -144,7 +143,7 @@ final readonly class GatewayEventIngestor
                 }
 
                 $this->events->record(
-                    officeId: (int) $inbox->office_id,
+                    tenantId: (int) $inbox->tenant_id,
                     type: $incoming->type->value,
                     payload: $safePayload,
                     inboxId: (int) $inbox->id,
@@ -164,7 +163,7 @@ final readonly class GatewayEventIngestor
             if ($result === 'processed' && $flowCorrelation !== null
                 && app(CommunicationFlowAvailability::class)->runtimeEnabled()) {
                 CorrelateCommunicationFlowEventJob::dispatch(
-                    $flowCorrelation['office_id'],
+                    $flowCorrelation['tenant_id'],
                     $flowCorrelation['conversation_id'],
                     $flowCorrelation['message_id'],
                     $flowCorrelation['event_key'],
@@ -209,19 +208,19 @@ final readonly class GatewayEventIngestor
         $address = $this->normalizer->normalize((string) ($incoming->payload['from'] ?? ''));
         $addressHash = hash('sha256', $address);
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()
-            ->where('office_id', $inbox->office_id)
+            ->where('tenant_id', $inbox->tenant_id)
             ->where('channel', CommunicationChannel::Whatsapp->value)
             ->where('address_hash', $addressHash)
             ->lockForUpdate()
             ->first();
         if ($identity === null) {
             $contact = CommunicationContact::query()->withoutGlobalScopes()->create([
-                'office_id' => $inbox->office_id,
+                'tenant_id' => $inbox->tenant_id,
                 'is_provisional' => true,
                 'is_active' => true,
             ]);
             $identity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
-                'office_id' => $inbox->office_id,
+                'tenant_id' => $inbox->tenant_id,
                 'contact_id' => $contact->id,
                 'channel' => CommunicationChannel::Whatsapp,
                 'address_encrypted' => $address,
@@ -245,7 +244,7 @@ final readonly class GatewayEventIngestor
         $conversation = $conversationQuery->orderByDesc('last_message_at')->orderByDesc('id')->first();
         if ($conversation === null) {
             $conversation = CommunicationConversation::query()->withoutGlobalScopes()->create([
-                'office_id' => $inbox->office_id,
+                'tenant_id' => $inbox->tenant_id,
                 'inbox_id' => $inbox->id,
                 'identity_id' => $identity->id,
                 'status' => $history ? ConversationStatus::Resolved : ConversationStatus::Open,
@@ -256,7 +255,7 @@ final readonly class GatewayEventIngestor
             $clientIds = $identity->clientLinks()->withoutGlobalScopes()->pluck('client_id');
             foreach ($clientIds as $clientId) {
                 DB::table('communication_conversation_clients')->insertOrIgnore([
-                    'office_id' => $inbox->office_id,
+                    'tenant_id' => $inbox->tenant_id,
                     'conversation_id' => $conversation->id,
                     'client_id' => $clientId,
                     'created_at' => now(),
@@ -265,9 +264,9 @@ final readonly class GatewayEventIngestor
             }
         }
 
-        $payload = GatewayContractPayload::normalizeLegacyMessagePayload($incoming->payload);
+        $payload = $incoming->payload;
         $kind = MessageKind::from(strtoupper((string) ($payload['kind'] ?? '')));
-        $providerType = (string) ($payload['provider_type'] ?? 'conversation');
+        $providerType = (string) $payload['provider_type'];
         $content = MessageSemanticContent::fromEvent($payload, $kind);
         $body = trim((string) ($payload['text'] ?? $payload['caption'] ?? ''));
         $occurredAt = isset($incoming->payload['occurred_at'])
@@ -301,7 +300,7 @@ final readonly class GatewayEventIngestor
                 : null,
         ], static fn (mixed $value): bool => $value !== null);
         $message = CommunicationMessage::query()->withoutGlobalScopes()->create([
-            'office_id' => $inbox->office_id,
+            'tenant_id' => $inbox->tenant_id,
             'inbox_id' => $inbox->id,
             'conversation_id' => $conversation->id,
             'identity_id' => $identity->id,
@@ -330,7 +329,7 @@ final readonly class GatewayEventIngestor
 
         if ($storedMedia !== null) {
             CommunicationAttachment::query()->withoutGlobalScopes()->create([
-                'office_id' => $inbox->office_id,
+                'tenant_id' => $inbox->tenant_id,
                 'message_id' => $message->id,
                 'object_id' => $storedMedia['object_id'],
                 'original_name_encrypted' => $this->safeFilename(
@@ -341,7 +340,7 @@ final readonly class GatewayEventIngestor
                 'size_bytes' => $storedMedia['size_bytes'],
                 'sha256' => $storedMedia['sha256'],
                 'storage_context' => [
-                    'office_id' => (int) $inbox->office_id,
+                    'tenant_id' => (int) $inbox->tenant_id,
                     'inbox_id' => (int) $inbox->id,
                     'gateway_event_id' => $incoming->gatewayEventId,
                     'sha256' => $storedMedia['sha256'],
@@ -508,7 +507,7 @@ final readonly class GatewayEventIngestor
         $providerId = (string) ($incoming->payload['provider_message_id'] ?? '');
         $status = strtoupper((string) ($incoming->payload['status'] ?? ''));
         $message = CommunicationMessage::query()->withoutGlobalScopes()
-            ->where('office_id', $inbox->office_id)
+            ->where('tenant_id', $inbox->tenant_id)
             ->where('inbox_id', $inbox->id)
             ->where('provider_message_id', $providerId)
             ->lockForUpdate()
@@ -532,12 +531,12 @@ final readonly class GatewayEventIngestor
             }
             unset($metadata['media_error_code']);
             $attachment = CommunicationAttachment::query()->withoutGlobalScopes()
-                ->where('office_id', $inbox->office_id)
+                ->where('tenant_id', $inbox->tenant_id)
                 ->where('message_id', $message->id)
                 ->orderBy('id')
                 ->first();
             $attributes = [
-                'office_id' => $inbox->office_id,
+                'tenant_id' => $inbox->tenant_id,
                 'message_id' => $message->id,
                 'object_id' => $storedMedia['object_id'],
                 'original_name_encrypted' => $this->safeFilename(
@@ -548,7 +547,7 @@ final readonly class GatewayEventIngestor
                 'size_bytes' => $storedMedia['size_bytes'],
                 'sha256' => $storedMedia['sha256'],
                 'storage_context' => [
-                    'office_id' => (int) $inbox->office_id,
+                    'tenant_id' => (int) $inbox->tenant_id,
                     'inbox_id' => (int) $inbox->id,
                     'gateway_event_id' => $incoming->gatewayEventId,
                     'sha256' => $storedMedia['sha256'],
@@ -642,7 +641,7 @@ final readonly class GatewayEventIngestor
     {
         $normalized = $this->normalizer->normalize($address);
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()
-            ->where('office_id', $inbox->office_id)
+            ->where('tenant_id', $inbox->tenant_id)
             ->where('channel', CommunicationChannel::Whatsapp->value)
             ->where('address_hash', hash('sha256', $normalized))
             ->first();
@@ -729,7 +728,9 @@ final readonly class GatewayEventIngestor
     /** @return array{0:null,1:null,2:array<string,mixed>} */
     private function ingestSessionStatus(GatewayEventData $incoming, CommunicationInbox $inbox): array
     {
-        $status = InboxStatus::normalize($incoming->payload['status'] ?? null);
+        $status = is_string($incoming->payload['status'] ?? null)
+            ? InboxStatus::tryFrom($incoming->payload['status'])
+            : null;
         if ($status === null) {
             throw new RuntimeException('Status de sessão inválido.');
         }

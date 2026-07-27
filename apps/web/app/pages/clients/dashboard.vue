@@ -40,7 +40,7 @@ async function load() {
       page: 1,
       per_page: 8,
       sort: 'created_at',
-      direction: 'desc',
+      sort_direction: 'desc',
       dashboard: true
     })
     if (seq !== loadSeq || epoch !== sessionEpoch.value) return

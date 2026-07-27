@@ -3,7 +3,7 @@ import type { ApiClient, ApiUrl } from './api/types'
 import { createAuthApi } from './api/createAuthApi'
 import { createActivationApi } from './api/createActivationApi'
 import { createOnboardingApi } from './api/createOnboardingApi'
-import { createOfficeApi } from './api/createOfficeApi'
+import { createTenantApi } from './api/createTenantApi'
 import { createFiscalApi } from './api/createFiscalApi'
 import { createClientsApi } from './api/createClientsApi'
 import { createDocumentsApi } from './api/createDocumentsApi'
@@ -15,7 +15,7 @@ import { createSavedListFiltersApi } from './api/createSavedListFiltersApi'
 import { createCommunicationApi } from './api/createCommunicationApi'
 import { createAssistantApi } from './api/createAssistantApi'
 
-export type { ClientListParams, InboxListParams, NoteListParams } from './api/types'
+export type { ClientListParams, DocumentListParams, InboxListParams } from './api/types'
 
 /**
  * Fachada pública da API SPA — mesma árvore de chaves de topo.
@@ -29,7 +29,7 @@ export function useApi() {
   const auth = createAuthApi(client)
   const activationApi = createActivationApi(client)
   const onboardingApi = createOnboardingApi(client)
-  const officeApi = createOfficeApi(client)
+  const tenantApi = createTenantApi(client)
   const fiscalApi = createFiscalApi(client, apiUrl)
   const clientsApi = createClientsApi(client)
   const documentsApi = createDocumentsApi(client, apiUrl)
@@ -49,7 +49,7 @@ export function useApi() {
     confirmPassword: auth.confirmPassword,
     activations: activationApi.activations,
     onboarding: onboardingApi.onboarding,
-    office: officeApi.office,
+    tenant: tenantApi.tenant,
     fiscal: fiscalApi.fiscal,
     clients: clientsApi.clients,
     clientCategories: clientsApi.clientCategories,
@@ -58,10 +58,8 @@ export function useApi() {
     contacts: clientsApi.contacts,
     credentials: clientsApi.credentials,
     documents: documentsApi.documents,
-    officeFiscal: officeApi.officeFiscal,
     quarantine: operationsApi.quarantine,
-    officeAutXml: officeApi.officeAutXml,
-    notes: documentsApi.notes,
+    tenantAutXml: tenantApi.tenantAutXml,
     sync: operationsApi.sync,
     cte: operationsApi.cte,
     exports: operationsApi.exports,
@@ -71,7 +69,6 @@ export function useApi() {
     platform: platformApi.platform,
     savedListFilters: savedListFiltersApi.savedListFilters,
     communication: communicationApi.communication,
-    assistant: assistantApi.assistant,
-    twoFactor: auth.twoFactor
+    assistant: assistantApi.assistant
   }
 }

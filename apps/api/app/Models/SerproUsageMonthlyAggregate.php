@@ -9,11 +9,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * Agregado mensal recomputável a partir do ledger.
- * scope=TENANT exige office_id; scope=GLOBAL tem office_id null.
+ * scope=TENANT exige tenant_id; scope=GLOBAL tem tenant_id null.
  */
 #[Fillable([
     'scope',
-    'office_id',
+    'tenant_id',
     'period_year',
     'period_month',
     'cycle_code',
@@ -50,15 +50,15 @@ class SerproUsageMonthlyAggregate extends Model
         ];
     }
 
-    public function office(): BelongsTo
+    public function tenant(): BelongsTo
     {
-        return $this->belongsTo(Office::class);
+        return $this->belongsTo(Tenant::class);
     }
 
     /**
      * @return array<string, mixed>
      */
-    public function toPublicArray(bool $includeOfficeId = true): array
+    public function toPublicArray(bool $includeTenantId = true): array
     {
         $data = [
             'scope' => $this->scope,
@@ -75,8 +75,8 @@ class SerproUsageMonthlyAggregate extends Model
             'recomputed_at' => $this->recomputed_at?->toIso8601String(),
         ];
 
-        if ($includeOfficeId) {
-            $data['office_id'] = $this->office_id;
+        if ($includeTenantId) {
+            $data['tenant_id'] = $this->tenant_id;
         }
 
         return $data;

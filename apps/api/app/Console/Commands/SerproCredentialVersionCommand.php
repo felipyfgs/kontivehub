@@ -19,7 +19,7 @@ use Throwable;
 class SerproCredentialVersionCommand extends Command
 {
     protected $signature = 'serpro:credential-version
-        {action : list|show|register-pending|verify|approve-cutover|cutover|retire|compromise}
+        {action : list|show|register-pending|verify|approve-activation|activate|retire|compromise}
         {--id= : ID da versão}
         {--contract-id= : ID do contrato}
         {--serpro-env=TRIAL : Ambiente SERPRO}
@@ -27,12 +27,12 @@ class SerproCredentialVersionCommand extends Command
         {--consumer-key-file= : Arquivo com Consumer Key (uma linha)}
         {--consumer-secret-file= : Arquivo com Consumer Secret (uma linha)}
         {--approver-user-id= : ID do proprietário PLATFORM_ADMIN (consumo)}
-        {--approval-id= : ID de confirmação OWNER HTTP vigente (cutover)}
+        {--approval-id= : ID de confirmação OWNER HTTP vigente (ativação)}
         {--reason= : Motivo (retire/compromise)}
         {--notes= : Notas}
         {--skip-oauth : Apenas em local/testing}';
 
-    protected $description = 'Versões de credencial SERPRO (PENDING/VERIFIED/cutover) sem segredo em argv/resposta';
+    protected $description = 'Versões de credencial SERPRO (PENDING/VERIFIED/ativação) sem segredo em argv/resposta';
 
     public function handle(SerproCredentialVersionService $versions): int
     {
@@ -44,8 +44,8 @@ class SerproCredentialVersionCommand extends Command
                 'show' => $this->doShow(),
                 'register-pending' => $this->doRegisterPending($versions),
                 'verify' => $this->doVerify($versions),
-                'approve-cutover' => $this->doApproveCutover($versions),
-                'cutover' => $this->doCutover($versions),
+                'approve-activation' => $this->doApproveActivation($versions),
+                'activate' => $this->doActivate($versions),
                 'retire' => $this->doRetire($versions),
                 'compromise' => $this->doCompromise($versions),
                 default => $this->invalid($action),
@@ -161,18 +161,18 @@ class SerproCredentialVersionCommand extends Command
         return self::SUCCESS;
     }
 
-    private function doApproveCutover(SerproCredentialVersionService $versions): int
+    private function doApproveActivation(SerproCredentialVersionService $versions): int
     {
         unset($versions);
         // CLI NÃO fabrica confirmação humana (OWNER_CONFIRMATION).
         throw new RuntimeException(
-            'approve-cutover via CLI é bloqueado: confirmação do proprietário só via API HTTP '.
+            'approve-activation via CLI é bloqueado: confirmação do proprietário só via API HTTP '.
             '(POST /platform/serpro/rollouts + approve com senha recente, frase, motivo e janela). '.
-            'Para executar cutover técnico, use action=cutover com --approval-id= da aprovação HTTP vigente.'
+            'Para ativar tecnicamente, use action=activate com --approval-id= da aprovação HTTP vigente.'
         );
     }
 
-    private function doCutover(SerproCredentialVersionService $versions): int
+    private function doActivate(SerproCredentialVersionService $versions): int
     {
         $version = $this->resolveVersion();
         $contract = null;
@@ -185,7 +185,7 @@ class SerproCredentialVersionCommand extends Command
         $approvalId = $this->option('approval-id') ? (int) $this->option('approval-id') : null;
         if ($approvalId === null || $approvalId <= 0) {
             throw new RuntimeException(
-                'Cutover via CLI exige --approval-id= de confirmação OWNER HTTP persistida e vigente; CLI não fabrica aprovação.'
+                'Ativação via CLI exige --approval-id= de confirmação OWNER HTTP persistida e vigente; CLI não fabrica aprovação.'
             );
         }
 
@@ -194,7 +194,7 @@ class SerproCredentialVersionCommand extends Command
             throw new RuntimeException('Informe --approver-user-id= do proprietário que confirmou a aprovação.');
         }
 
-        $version = $versions->cutover(
+        $version = $versions->activate(
             $version,
             $contract,
             actorUserId: $actorId,
@@ -204,7 +204,7 @@ class SerproCredentialVersionCommand extends Command
 
         $payload = $version->toSanitizedArray();
         $this->assertNoSecrets($payload);
-        $this->info('Cutover ACTIVE id='.$version->id.' ver='.$version->version_number);
+        $this->info('Credencial ACTIVE id='.$version->id.' ver='.$version->version_number);
         $this->line(json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 
         return self::SUCCESS;
@@ -274,7 +274,7 @@ class SerproCredentialVersionCommand extends Command
     }
 
     /**
-     * Detecta tentativas de passar segredo por flags legadas/argv.
+     * Detecta tentativas de passar segredo por flags proibidas no argv.
      */
     private function optionWasPassedAsSecretArg(): bool
     {

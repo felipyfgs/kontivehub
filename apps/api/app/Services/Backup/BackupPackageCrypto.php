@@ -10,11 +10,11 @@ use RuntimeException;
  *
  * Formato binário v1:
  *   magic(8) | version(1) | nonce(24) | pt_len_u64_be(8) | ciphertext+tag
- * AAD: "nfse-backup-package-v1|len={pt_len}"
+ * AAD: "kontivehub-backup-package-v1|len={pt_len}"
  */
 final class BackupPackageCrypto
 {
-    public const MAGIC = 'NFSEBKP1';
+    public const MAGIC = 'KHBKP001';
 
     public const FORMAT_VERSION = 1;
 
@@ -26,11 +26,11 @@ final class BackupPackageCrypto
         }
     }
 
-    public static function fromConfig(): ?self
+    public static function fromConfig(): self
     {
         $encoded = (string) config('backup.package_key', '');
         if ($encoded === '') {
-            return null;
+            throw new RuntimeException('BACKUP_PACKAGE_KEY é obrigatória.');
         }
 
         return self::fromBase64($encoded);
@@ -79,7 +79,7 @@ final class BackupPackageCrypto
 
         $version = ord($package[8]);
         if ($version !== self::FORMAT_VERSION) {
-            throw new RuntimeException("Versão de pacote de backup incompatível: {$version}.");
+            throw new RuntimeException("Versão de pacote de backup não suportada: {$version}.");
         }
 
         $nonceLen = SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_NPUBBYTES;
@@ -120,6 +120,6 @@ final class BackupPackageCrypto
 
     private function aad(int $plaintextLength): string
     {
-        return 'nfse-backup-package-v1|len='.$plaintextLength;
+        return 'kontivehub-backup-package-v1|len='.$plaintextLength;
     }
 }

@@ -38,7 +38,7 @@ final class OutboundKillSwitchService
         return $profile !== null && $profile->kill_switch;
     }
 
-    public function activateGlobal(string $reason, int $userId, ?int $officeId = null): void
+    public function activateGlobal(string $reason, int $userId, ?int $tenantId = null): void
     {
         Cache::forever(self::CACHE_KEY, true);
         $this->audit->record(
@@ -47,11 +47,11 @@ final class OutboundKillSwitchService
             null,
             ['reason' => mb_substr($reason, 0, 500)],
             $userId,
-            $officeId,
+            $tenantId,
         );
     }
 
-    public function deactivateGlobal(string $reason, int $userId, ?int $officeId = null): void
+    public function deactivateGlobal(string $reason, int $userId, ?int $tenantId = null): void
     {
         Cache::forget(self::CACHE_KEY);
         $this->audit->record(
@@ -60,7 +60,7 @@ final class OutboundKillSwitchService
             null,
             ['reason' => mb_substr($reason, 0, 500)],
             $userId,
-            $officeId,
+            $tenantId,
         );
     }
 
@@ -79,7 +79,7 @@ final class OutboundKillSwitchService
             $profile,
             ['profile_id' => $profile->id, 'reason' => mb_substr($reason, 0, 500)],
             $userId,
-            $profile->office_id,
+            $profile->tenant_id,
         );
     }
 
@@ -98,7 +98,7 @@ final class OutboundKillSwitchService
             $profile,
             ['profile_id' => $profile->id, 'reason' => mb_substr($reason, 0, 500)],
             $userId,
-            $profile->office_id,
+            $profile->tenant_id,
         );
     }
 

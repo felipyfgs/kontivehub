@@ -35,7 +35,7 @@ final class SerproTokenCache
         try {
             $aad = $this->aad($contract);
             $json = $this->store->get($contract->token_vault_object_id, $aad);
-            /** @var array{access_token: string, token_type: string, expires_at: string, jwt?: string|null} $data */
+            /** @var array{access_token: string, token_type: string, expires_at: string, jwt_token: string} $data */
             $data = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
 
             $expiresAt = CarbonImmutable::parse((string) $data['expires_at']);
@@ -43,20 +43,12 @@ final class SerproTokenCache
                 return null;
             }
 
-            $jwt = null;
-            if (! empty($data['jwt_token'])) {
-                $jwt = (string) $data['jwt_token'];
-            } elseif (! empty($data['jwt'])) {
-                $jwt = (string) $data['jwt'];
-            }
-
             return new SerproAuthToken(
                 accessToken: (string) $data['access_token'],
                 tokenType: (string) ($data['token_type'] ?? 'Bearer'),
                 expiresAt: $expiresAt,
-                jwtToken: $jwt,
+                jwtToken: (string) $data['jwt_token'],
                 fromCache: true,
-                jwt: $jwt,
             );
         } catch (Throwable) {
             return null;
@@ -72,7 +64,6 @@ final class SerproTokenCache
             'token_type' => $token->tokenType,
             'expires_at' => $token->expiresAt->toIso8601String(),
             'jwt_token' => $jwt,
-            'jwt' => $jwt, // legado de leitura
         ], JSON_THROW_ON_ERROR);
 
         $previous = $contract->token_vault_object_id;

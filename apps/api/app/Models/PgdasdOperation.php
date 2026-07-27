@@ -3,14 +3,14 @@
 namespace App\Models;
 
 use App\Enums\PgdasdOperationKind;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'client_id',
     'projection_id',
     'kind',
@@ -43,7 +43,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 ])]
 class PgdasdOperation extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {
@@ -86,28 +86,9 @@ class PgdasdOperation extends Model
 
     public function operationKind(): ?PgdasdOperationKind
     {
-        if ($this->kind instanceof PgdasdOperationKind) {
-            return $this->kind;
-        }
-
-        if ($this->kind !== null && $this->kind !== '') {
-            $fromKind = PgdasdOperationKind::tryFrom((string) $this->kind);
-            if ($fromKind !== null) {
-                return $fromKind;
-            }
-        }
-
-        // Fallback a partir do tipo normalizado (ORIGINAL/RECTIFIER → declaração; DAS_* → DAS).
-        $normalized = strtoupper(trim((string) $this->normalized_operation_type));
-        if ($normalized === '') {
-            return null;
-        }
-
-        return match (true) {
-            in_array($normalized, ['ORIGINAL', 'RECTIFIER', 'DECLARATION'], true) => PgdasdOperationKind::Declaration,
-            str_starts_with($normalized, 'DAS') => PgdasdOperationKind::Das,
-            default => null,
-        };
+        return $this->kind instanceof PgdasdOperationKind
+            ? $this->kind
+            : PgdasdOperationKind::tryFrom((string) $this->kind);
     }
 
     /**
@@ -119,15 +100,13 @@ class PgdasdOperation extends Model
             'id' => $this->id,
             'client_id' => $this->client_id,
             'period_key' => $this->period_key,
-            'periodo_apuracao' => str_replace('-', '', (string) $this->period_key),
             'kind' => $this->operationKind()?->value,
             'normalized_operation_type' => $this->normalized_operation_type,
-            'operation_kind' => $this->normalized_operation_type ?? $this->operationKind()?->value,
-            'tipo_operacao_raw' => $this->raw_operation_type,
-            'numero_declaracao' => $this->declaration_number,
-            'numero_das' => $this->das_number,
+            'raw_operation_type' => $this->raw_operation_type,
+            'declaration_number' => $this->declaration_number,
+            'das_number' => $this->das_number,
             'transmitted_at' => $this->transmitted_at?->toIso8601String(),
-            'das_emitted_at' => $this->issued_at?->toIso8601String(),
+            'issued_at' => $this->issued_at?->toIso8601String(),
             'payment_located' => $this->payment_located,
             'payment_observation' => $this->payment_located === false
                 ? 'Pagamento não localizado até a consulta.'

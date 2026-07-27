@@ -49,7 +49,7 @@ export interface CommunicationInbox {
 export interface CommunicationFeatureMeta {
   global_enabled: boolean
   gateway_enabled: boolean
-  office_enabled: boolean
+  tenant_enabled: boolean
   departments?: Array<{
     id: number
     name: string
@@ -537,7 +537,7 @@ export interface CommunicationAutomationMeta {
     status: CommunicationInboxStatus
     enabled: boolean
   }>
-  office_enabled: boolean
+  tenant_enabled: boolean
   global_enabled: boolean
 }
 
@@ -576,8 +576,8 @@ export interface CommunicationRealtimeService {
     inboxId: number,
     handler: (event: CommunicationRealtimeEvent) => void
   ) => () => void
-  subscribeOffice: (
-    officeId: number,
+  subscribeTenant: (
+    tenantId: number,
     handler: (event: CommunicationRealtimeEvent) => void
   ) => () => void
   disconnect: () => void

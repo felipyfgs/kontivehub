@@ -44,9 +44,9 @@ class FiscalProfilePolicyTest extends TestCase
         FiscalProfile::configured();
     }
 
-    public function test_runtime_aliases_resolve_to_canonical_module_keys(): void
+    public function test_runtime_keys_are_strictly_canonical(): void
     {
-        $this->assertSame(FiscalControlModule::Dctfweb, FiscalControlModule::fromRuntimeKey('dctfweb_mit'));
+        $this->assertSame(FiscalControlModule::Dctfweb, FiscalControlModule::fromRuntimeKey('dctfweb'));
         $this->assertSame(FiscalControlModule::Mailbox, FiscalControlModule::fromRuntimeKey('mailbox'));
         $this->assertCount(10, FiscalControlModule::cases());
     }

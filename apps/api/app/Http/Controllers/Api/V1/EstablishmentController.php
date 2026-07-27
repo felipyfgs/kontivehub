@@ -10,7 +10,7 @@ use App\Models\Client;
 use App\Models\Establishment;
 use App\Services\Audit\AuditLogger;
 use App\Services\Clients\CaptureEligibilityService;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -24,7 +24,7 @@ class EstablishmentController extends Controller
     public function store(
         StoreEstablishmentRequest $request,
         Client $client,
-        CurrentOffice $currentOffice,
+        CurrentTenant $currentTenant,
         AuditLogger $audit,
     ): JsonResponse {
         $this->authorize('create', Establishment::class);
@@ -75,27 +75,16 @@ class EstablishmentController extends Controller
             $establishment = DB::transaction(function () use ($data, $establishment, $status): Establishment {
                 $locked = Establishment::query()->whereKey($establishment->id)->lockForUpdate()->firstOrFail();
 
-                if (array_key_exists('is_matrix', $data) && $data['is_matrix'] && ! $locked->is_matrix) {
-                    // Cliente-filial (matrix_client_id ≠ null) não pode ser marcado como matriz.
-                    $client = Client::query()
-                        ->whereKey($locked->client_id)
-                        ->lockForUpdate()
-                        ->first();
-                    if ($client !== null && $client->matrix_client_id !== null) {
-                        throw ValidationException::withMessages([
-                            'is_matrix' => ['Cliente vinculado como filial não pode ter estabelecimento matriz. Desvincule a matriz ou cadastre a matriz no cliente raiz.'],
-                        ]);
-                    }
-
+                if (array_key_exists('is_headquarters', $data) && $data['is_headquarters'] && ! $locked->is_headquarters) {
                     $hasOtherMatrix = Establishment::query()
                         ->where('client_id', $locked->client_id)
-                        ->where('is_matrix', true)
+                        ->where('is_headquarters', true)
                         ->where('id', '!=', $locked->id)
                         ->lockForUpdate()
                         ->exists();
                     if ($hasOtherMatrix) {
                         throw ValidationException::withMessages([
-                            'is_matrix' => ['Já existe uma matriz para este cliente.'],
+                            'is_headquarters' => ['Já existe uma matriz para este cliente.'],
                         ]);
                     }
                 }
@@ -168,11 +157,11 @@ class EstablishmentController extends Controller
     {
         return [
             'id' => $est->id,
-            'office_id' => $est->office_id,
+            'tenant_id' => $est->tenant_id,
             'client_id' => $est->client_id,
             'cnpj' => $est->cnpj,
             'trade_name' => $est->trade_name,
-            'is_matrix' => $est->is_matrix,
+            'is_headquarters' => $est->is_headquarters,
             'is_active' => $est->is_active,
             'registration_status' => $est->registration_status?->value ?? $est->registration_status,
             'registration_status_at' => $est->registration_status_at?->toDateString(),

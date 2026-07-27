@@ -26,7 +26,7 @@ final class HttpEsocialBxEventClient implements EsocialEventClient
 
     public function fetchEvents(EsocialFetchRequest $request): EsocialFetchResult
     {
-        $readiness = $this->readiness->check($request->office, $request->client);
+        $readiness = $this->readiness->check($request->tenant, $request->client);
         if (! $readiness->ready) {
             $blocker = $readiness->blockers[0] ?? [
                 'code' => 'ESOCIAL_BX_NOT_READY',
@@ -65,7 +65,7 @@ final class HttpEsocialBxEventClient implements EsocialEventClient
                 $request->client,
                 $environment,
                 function () use ($request, $environment, $automatic, $requested): EsocialFetchResult {
-                    $material = $this->credentials->material($request->office, $request->client);
+                    $material = $this->credentials->material($request->tenant, $request->client);
                     $events = [];
                     $partial = count($automatic) !== count($requested);
 
@@ -216,7 +216,7 @@ final class HttpEsocialBxEventClient implements EsocialEventClient
         callable $parse,
     ): mixed {
         $entry = $this->guard->reserve(
-            $request->office,
+            $request->tenant,
             $request->client,
             $environment,
             $soap['operation'],

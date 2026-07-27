@@ -10,9 +10,9 @@ import { documentKindFilterItems } from '~/utils/document-kinds'
 import {
   FILTER_ALL,
   emptyDocsFilters,
-  type NotesFilterState,
+  type DocumentFilterState,
   type NotesViewMode
-} from '~/utils/notes-filters'
+} from '~/utils/document-filters'
 import {
   docsFiltersToPayload,
   docsPayloadToFilters,
@@ -21,7 +21,7 @@ import {
 import { createFilterModel, findDefinition } from '~/utils/data-table-filters'
 import ShellListFilterToolbar from '~/components/shell/ListFilterToolbar.vue'
 
-const filters = defineModel<NotesFilterState>('filters', { required: true })
+const filters = defineModel<DocumentFilterState>('filters', { required: true })
 const operationalFilter = defineModel<string>('operationalFilter', { default: 'total' })
 
 const props = defineProps<{
@@ -52,7 +52,7 @@ const searchPlaceholder = computed(() =>
 
 const clientItems = computed(() =>
   props.clients.map(client => ({
-    label: client.display_name || client.legal_name || client.name,
+    label: client.display_name || client.legal_name,
     value: String(client.id)
   }))
 )
@@ -285,7 +285,7 @@ function onModelsUpdate(models: DataTableFilterModel[]) {
   next.taker_cnpj = filters.value.taker_cnpj
   next.missing_party_name = filters.value.missing_party_name
 
-  const assignableKeys = new Set<keyof NotesFilterState>([
+  const assignableKeys = new Set<keyof DocumentFilterState>([
     'kind',
     'client_id',
     'establishment_id',
@@ -305,8 +305,8 @@ function onModelsUpdate(models: DataTableFilterModel[]) {
       next.issued_to = to?.trim() || ''
       continue
     }
-    if (assignableKeys.has(model.key as keyof NotesFilterState)) {
-      next[model.key as keyof NotesFilterState] = String(model.value)
+    if (assignableKeys.has(model.key as keyof DocumentFilterState)) {
+      next[model.key as keyof DocumentFilterState] = String(model.value)
     }
   }
 

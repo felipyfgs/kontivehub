@@ -50,7 +50,7 @@ final class FiscalDispatchStatusProjector
         }
         $dispatch->forceFill($attributes)->save();
         ClientCommunicationEvent::query()->withoutGlobalScopes()->create([
-            'office_id' => $dispatch->office_id,
+            'tenant_id' => $dispatch->tenant_id,
             'dispatch_id' => $dispatch->id,
             'status' => $incoming->value,
             'occurred_at' => $occurredAt,

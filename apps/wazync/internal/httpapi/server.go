@@ -143,7 +143,7 @@ func (s *Server) sessionStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"session_id":        session.SessionID,
-		"status":            domain.NormalizeSessionStatus(string(session.Status)),
+		"status":            session.Status,
 		"desired_connected": session.DesiredConnected,
 		"reconnect_count":   session.ReconnectCount,
 		"connected":         state.Connected,

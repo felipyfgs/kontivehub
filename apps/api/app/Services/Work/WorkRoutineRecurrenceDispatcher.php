@@ -6,12 +6,12 @@ use App\Domain\Work\ReferencePeriod;
 use App\Domain\Work\WorkRoutineRecurrenceSchedule;
 use App\Enums\Work\GenerationBatchStatus;
 use App\Enums\Work\RecurrencePeriodOffset;
-use App\Models\Office;
-use App\Models\ProcessGenerationBatch;
-use App\Models\ProcessTemplate;
+use App\Models\Tenant;
+use App\Models\WorkProcessGenerationBatch;
+use App\Models\WorkProcessTemplate;
 use App\Services\Audit\AuditLogger;
-use App\Support\CurrentOffice;
-use App\Support\Work\OfficeTimezone;
+use App\Support\CurrentTenant;
+use App\Support\Work\TenantTimezone;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -24,8 +24,8 @@ use Throwable;
 final class WorkRoutineRecurrenceDispatcher
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
-        private readonly OperationalProcessGenerationService $generation,
+        private readonly CurrentTenant $currentTenant,
+        private readonly WorkProcessGenerationService $generation,
         private readonly AuditLogger $audit,
     ) {}
 
@@ -40,14 +40,15 @@ final class WorkRoutineRecurrenceDispatcher
         $failed = 0;
         $catch_up = 0;
 
-        $templates = ProcessTemplate::query()
+        $templates = WorkProcessTemplate::query()
+            ->withoutGlobalScopes()
             ->where('recurrence_enabled', true)
             ->where('is_active', true)
             ->whereNotNull('next_run_at')
             ->where('next_run_at', '<=', $nowUtc)
             ->orderBy('next_run_at')
             ->orderBy('id')
-            ->with('office')
+            ->with('tenant')
             ->limit(100)
             ->get();
 
@@ -60,7 +61,7 @@ final class WorkRoutineRecurrenceDispatcher
             } catch (Throwable $e) {
                 $failed++;
                 Log::warning('work.recurrence.dispatch_failed', [
-                    'office_id' => $template->office_id,
+                    'tenant_id' => $template->tenant_id,
                     'template_id' => $template->id,
                     'error' => mb_substr($e->getMessage(), 0, 200),
                 ]);
@@ -73,20 +74,21 @@ final class WorkRoutineRecurrenceDispatcher
     /**
      * @return array{dispatched: int, skipped: int}
      */
-    public function dispatchTemplate(ProcessTemplate $template, ?CarbonImmutable $nowUtc = null): array
+    public function dispatchTemplate(WorkProcessTemplate $template, ?CarbonImmutable $nowUtc = null): array
     {
         $nowUtc ??= CarbonImmutable::now('UTC');
-        $office = $template->office ?? Office::query()->findOrFail($template->office_id);
+        $tenant = $template->tenant
+            ?? Tenant::query()->withoutGlobalScopes()->findOrFail($template->tenant_id);
 
-        $this->currentOffice->clear();
-        $this->currentOffice->bindSystem($office);
+        $this->currentTenant->clear();
+        $this->currentTenant->bindSystem($tenant);
 
         $schedule = $this->scheduleFromTemplate($template);
         if (! $schedule->enabled || $schedule->frequency === null || ! $template->is_active) {
             return ['dispatched' => 0, 'skipped' => 1];
         }
 
-        $tz = OfficeTimezone::for($office);
+        $tz = TenantTimezone::for($tenant);
         $dispatched = 0;
         $skipped = 0;
         $iterations = 0;
@@ -110,7 +112,7 @@ final class WorkRoutineRecurrenceDispatcher
                 }
             } catch (Throwable $e) {
                 Log::warning('work.recurrence.period_failed', [
-                    'office_id' => $office->id,
+                    'tenant_id' => $tenant->id,
                     'template_id' => $template->id,
                     'period' => $period->value(),
                     'error' => mb_substr($e->getMessage(), 0, 200),
@@ -120,7 +122,7 @@ final class WorkRoutineRecurrenceDispatcher
                 $dispatched++;
             }
 
-            $next = $schedule->nextRunAtUtc($office, $runAtUtc);
+            $next = $schedule->nextRunAtUtc($tenant, $runAtUtc);
             $template->forceFill(['next_run_at' => $next])->save();
             $template->refresh();
         }
@@ -134,17 +136,18 @@ final class WorkRoutineRecurrenceDispatcher
         return compact('dispatched', 'skipped');
     }
 
-    public static function idempotencyKey(int $officeId, int $templateId, ReferencePeriod $period): string
+    public static function idempotencyKey(int $tenantId, int $templateId, ReferencePeriod $period): string
     {
-        return sprintf('recurrence:%d:%d:%s', $officeId, $templateId, $period->value());
+        return sprintf('recurrence:%d:%d:%s', $tenantId, $templateId, $period->value());
     }
 
-    private function runGeneration(ProcessTemplate $template, ReferencePeriod $period): ?ProcessGenerationBatch
+    private function runGeneration(WorkProcessTemplate $template, ReferencePeriod $period): ?WorkProcessGenerationBatch
     {
-        $key = self::idempotencyKey((int) $template->office_id, (int) $template->id, $period);
+        $key = self::idempotencyKey((int) $template->tenant_id, (int) $template->id, $period);
 
-        $existing = ProcessGenerationBatch::query()
-            ->where('office_id', $template->office_id)
+        $existing = WorkProcessGenerationBatch::query()
+            ->withoutGlobalScopes()
+            ->where('tenant_id', $template->tenant_id)
             ->where('idempotency_key', $key)
             ->first();
 
@@ -176,16 +179,15 @@ final class WorkRoutineRecurrenceDispatcher
         $batch = $this->generation->preview(
             $template,
             $period->value(),
-            [],
+            $selection,
             [],
             $key,
-            $selection,
         );
 
         return $this->confirmIfReady($batch);
     }
 
-    private function confirmIfReady(ProcessGenerationBatch $batch): ?ProcessGenerationBatch
+    private function confirmIfReady(WorkProcessGenerationBatch $batch): ?WorkProcessGenerationBatch
     {
         $batch->loadMissing('items');
         $ready = $batch->items->where('is_blocked', false)->count();
@@ -215,7 +217,7 @@ final class WorkRoutineRecurrenceDispatcher
         }
     }
 
-    private function scheduleFromTemplate(ProcessTemplate $template): WorkRoutineRecurrenceSchedule
+    private function scheduleFromTemplate(WorkProcessTemplate $template): WorkRoutineRecurrenceSchedule
     {
         try {
             return WorkRoutineRecurrenceSchedule::fromArray([

@@ -99,12 +99,12 @@ class SyncSefazDistDfeJob implements ShouldQueue
                 ->where('status', CredentialStatus::Active)
                 ->first();
             if (! $credential) {
-                throw new AdnPermanentException('Credencial A1 ativa ausente para DistDFe.');
+                throw new AdnPermanentException('certificado ativa ausente para DistDFe.');
             }
 
             $material = $credentials->loadPfxMaterial($credential);
             if ($material === null) {
-                throw new AdnPermanentException('Não foi possível materializar A1 para DistDFe.');
+                throw new AdnPermanentException('Não foi possível materializar certificado para DistDFe.');
             }
             $cUf = $this->resolveUfAutor($establishment);
             $maxPages = (int) config('sefaz.max_pages_per_job', 12);

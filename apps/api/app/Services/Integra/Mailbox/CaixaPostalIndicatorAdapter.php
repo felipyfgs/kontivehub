@@ -58,7 +58,7 @@ final class CaixaPostalIndicatorAdapter implements FiscalSourceAdapter
     public function execute(FiscalAdapterRequest $request): FiscalAdapterResult
     {
         $result = $this->client->getIndicator([
-            'office_id' => $request->office->id,
+            'tenant_id' => $request->tenant->id,
             'client_id' => $request->client->id,
             'correlation_id' => $request->run->correlation_id,
         ]);
@@ -80,7 +80,7 @@ final class CaixaPostalIndicatorAdapter implements FiscalSourceAdapter
         }
 
         $this->states->applyNewMessagesIndicator(
-            $request->office,
+            $request->tenant,
             $request->client,
             $result->indicator,
             $request->run->id,

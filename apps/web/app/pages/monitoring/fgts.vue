@@ -461,10 +461,9 @@ const columns = computed<TableColumn<FgtsClientRow>[]>(() => [
     meta: { ...MONITORING_CLIENT_COLUMN_META },
     cell: ({ row }) => h(FiscalClientCell, {
       clientId: row.original.client_id,
-      name: row.original.name || row.original.display_name,
+      name: row.original.display_name || row.original.legal_name,
       legalName: row.original.legal_name,
       cnpj: row.original.cnpj,
-      cnpjMasked: row.original.cnpj_masked,
       to: clientHref(row.original.client_id)
     })
   },
@@ -520,7 +519,7 @@ const columns = computed<TableColumn<FgtsClientRow>[]>(() => [
     enableSorting: false,
     meta: { ...MONITORING_ACTIONS_META },
     cell: ({ row }) => {
-      const name = row.original.name || row.original.legal_name || `cliente ${row.original.client_id}`
+      const name = row.original.display_name || row.original.legal_name || `cliente ${row.original.client_id}`
       return buildMonitoringActionsMenuCell({
         ariaLabel: `Mais ações de ${name}`,
         testId: 'fgts-row-actions',
@@ -663,7 +662,7 @@ onMounted(() => {
       <USlideover
         v-model:open="detailOpen"
         :title="detailClient
-          ? (detailClient.name || detailClient.legal_name || `Cliente #${detailClient.client_id}`)
+          ? (detailClient.display_name || detailClient.legal_name || `Cliente #${detailClient.client_id}`)
           : 'Detalhe FGTS / eSocial'"
       >
         <template #body>
@@ -689,7 +688,7 @@ onMounted(() => {
               :title="detailReadiness.ready ? 'eSocial BX pronto para consultar' : 'Consulta oficial bloqueada'"
               :description="detailReadiness.ready
                 ? `${detailReadiness.locally_remaining} de ${detailReadiness.daily_limit} acessos locais restantes hoje.`
-                : `${detailReadiness.blockers[0]?.message || 'Revise a configuração e a credencial A1.'} Código: ${detailReadiness.blockers[0]?.code || 'ESOCIAL_BX_NOT_READY'}.`"
+                : `${detailReadiness.blockers[0]?.message || 'Revise a configuração e o certificado.'} Código: ${detailReadiness.blockers[0]?.code || 'ESOCIAL_BX_NOT_READY'}.`"
               data-testid="fgts-esocial-readiness"
             />
             <p
@@ -697,7 +696,7 @@ onMounted(() => {
               class="text-xs text-muted"
               data-testid="fgts-esocial-credential-summary"
             >
-              Certificado A1 •••{{ detailReadiness.credential.fingerprint_suffix }}
+              certificado •••{{ detailReadiness.credential.fingerprint_suffix }}
               <template v-if="detailReadiness.credential.expires_at">
                 · válido até {{ formatDateTime(detailReadiness.credential.expires_at) }}
               </template>
@@ -748,7 +747,7 @@ onMounted(() => {
                 :icon="detailDigitalReadiness.ready_for_read ? 'i-lucide-circle-check' : 'i-lucide-shield-alert'"
                 :title="detailDigitalReadiness.ready_for_read ? 'Portal pronto para consulta' : 'Portal bloqueado antes do browser'"
                 :description="detailDigitalReadiness.ready_for_read
-                  ? `${detailDigitalReadiness.credential_source === 'OFFICE' ? 'Procuração do escritório' : 'A1 do cliente'} · sessão ${detailDigitalReadiness.has_authorized_session ? 'autorizada' : 'será criada no login'} · CAPTCHA ${detailDigitalReadiness.captcha.driver}.`
+                  ? `${detailDigitalReadiness.credential_source === 'TENANT' ? 'Procuração do escritório' : 'certificado do cliente'} · sessão ${detailDigitalReadiness.has_authorized_session ? 'autorizada' : 'será criada no login'} · CAPTCHA ${detailDigitalReadiness.captcha.driver}.`
                   : `${detailDigitalReadiness.blockers[0]?.message || 'Revise a configuração.'} Código: ${detailDigitalReadiness.blockers[0]?.code || 'FGTS_DIGITAL_NOT_READY'}.`"
                 data-testid="fgts-digital-readiness"
               />
@@ -1137,7 +1136,7 @@ onMounted(() => {
     v-model:prefs-open="communicationPreferencesOpen"
     context="FGTS"
     :client-id="communicationRow?.client_id || null"
-    :client-name="communicationRow?.name || communicationRow?.legal_name"
+    :client-name="communicationRow?.display_name || communicationRow?.legal_name"
     :preference="communicationRow ? detailOf(communicationRow).communication : null"
     :period-key="communicationRow
       ? (detailOf(communicationRow).competence_period_key || filters.competence)

@@ -3,19 +3,19 @@
 namespace App\Models;
 
 use App\Enums\CteCoverageStatus;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'office_id', 'client_id', 'period', 'status',
+    'tenant_id', 'client_id', 'period', 'status',
     'documents_count', 'original_count', 'autxml_redacted_count', 'pending_import_count',
     'metadata', 'computed_at',
 ])]
 class CteCoverageSnapshot extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {

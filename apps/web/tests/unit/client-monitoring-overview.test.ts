@@ -8,7 +8,7 @@ import type { FiscalSnapshot } from '~/types/api'
 function snap(partial: Partial<FiscalSnapshot>): FiscalSnapshot {
   return {
     id: partial.id ?? 1,
-    office_id: partial.office_id ?? 1,
+    tenant_id: partial.tenant_id ?? 1,
     ...partial
   }
 }

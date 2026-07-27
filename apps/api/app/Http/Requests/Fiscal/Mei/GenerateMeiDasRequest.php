@@ -30,7 +30,7 @@ final class GenerateMeiDasRequest extends MeiPublicOperationRequest
             'idempotency_key' => ['required', 'string', 'min:8', 'max:160'],
             'preflight_token' => ['required', 'string', 'max:64'],
             'confirmation_phrase' => ['required', 'string', 'max:120'],
-            'office_id' => ['prohibited'],
+            'tenant_id' => ['prohibited'],
         ];
     }
 

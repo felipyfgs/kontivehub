@@ -11,7 +11,7 @@ use Illuminate\Console\Command;
 class EnqueueAutoCienciaCommand extends Command
 {
     protected $signature = 'sefaz:enqueue-auto-ciencia
-        {--office= : Filtrar por office_id}
+        {--tenant= : Filtrar por tenant_id}
         {--establishment= : Filtrar por establishment_id}
         {--limit=100 : Máximo de chaves a enfileirar}';
 
@@ -25,11 +25,11 @@ class EnqueueAutoCienciaCommand extends Command
             return self::SUCCESS;
         }
 
-        $office = $this->option('office') !== null ? (int) $this->option('office') : null;
+        $tenant = $this->option('tenant') !== null ? (int) $this->option('tenant') : null;
         $establishment = $this->option('establishment') !== null ? (int) $this->option('establishment') : null;
         $limit = max(1, (int) $this->option('limit'));
 
-        $n = $scheduler->enqueuePending($office, $establishment, $limit);
+        $n = $scheduler->enqueuePending($tenant, $establishment, $limit);
         $this->info("Ciências enfileiradas: {$n}");
 
         return self::SUCCESS;

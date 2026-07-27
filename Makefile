@@ -1,5 +1,5 @@
 .PHONY: help init-env setup up dev down build logs shell migrate seed \
-	composer-install frontend-generate wazync-test \
+	api-test composer-install frontend-generate wazync-test \
 	prod-config prod-build prod-up prod-down \
 	backup restore prod-backup prod-restore \
 	frontend-prepare-generated frontend-install frontend-dev seed-dev seed-pilot \
@@ -30,6 +30,7 @@ help:
 	@echo "  make shell              Shell no PHP"
 	@echo "  make migrate            Migrations"
 	@echo "  make seed               Seed de desenvolvimento"
+	@echo "  make api-test           Suíte Laravel no PostgreSQL isolado"
 	@echo ""
 	@echo "Produção"
 	@echo "  make prod-config        Valida .env + compose prod"
@@ -78,6 +79,17 @@ migrate:
 
 seed seed-dev:
 	docker compose exec php php artisan db:seed --force
+
+api-test:
+	docker compose --profile test up -d --wait postgres-test
+	docker compose --profile test run --rm --no-deps \
+		--user "$(LOCAL_UID):$(LOCAL_GID)" \
+		-e APP_ENV=testing \
+		-e LOG_CHANNEL=stderr \
+		-e CACHE_STORE=array \
+		-e SESSION_DRIVER=array \
+		-e QUEUE_CONNECTION=sync \
+		php php artisan test
 
 # -----------------------------------------------------------------------------
 # Produção

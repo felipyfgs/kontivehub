@@ -3,23 +3,25 @@
 namespace App\Services\Serpro;
 
 use App\Enums\ClientProcuracaoSyncStatus;
+use App\Enums\CredentialStatus;
 use App\Enums\SerproAuthorizationStatus;
 use App\Enums\TaxProxyPowerStatus;
 use App\Enums\TermRePresentationStrategy;
-use App\Jobs\Serpro\RenewOfficeProcuradorTokenJob;
-use App\Models\ClientProcuracaoSnapshot;
+use App\Jobs\Serpro\RenewTenantProcuradorTokenJob;
 use App\Models\ClientProcuracaoSync;
-use App\Models\OfficeSerproAuthorization;
 use App\Models\SerproContract;
 use App\Models\TaxProxyPower;
+use App\Models\TenantCredential;
+use App\Models\TenantSerproAuthorization;
 use App\Services\Audit\AuditLogger;
-use App\Services\Integra\OfficeSerproAuthorizationService;
+use App\Services\Integra\TenantSerproAuthorizationService;
+use App\Support\FiscalDataModel\PrivilegedTenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Verifica PFX contratante, A1, Termo, token e procurações.
+ * Verifica PFX contratante, certificado do tenant, Termo, token e procurações.
  * Renova token do procurador somente quando a estratégia for REUSE_STORED_TERM.
  * NUNCA assina Termo, renova procuração ou muta fiscal além do token permitido.
  */
@@ -27,7 +29,7 @@ final class SerproLifecycleMonitor
 {
     public function __construct(
         private readonly AuditLogger $audit,
-        private readonly OfficeSerproAuthorizationService $authorizations,
+        private readonly TenantSerproAuthorizationService $authorizations,
     ) {}
 
     /**
@@ -50,6 +52,8 @@ final class SerproLifecycleMonitor
             ];
         }
 
+        PrivilegedTenantContext::enter('service:SerproLifecycleMonitor');
+
         try {
             $alertDays = config('serpro.lifecycle.alert_days', [30, 7, 1]);
             if (! is_array($alertDays)) {
@@ -69,7 +73,7 @@ final class SerproLifecycleMonitor
                     $alerts = array_merge($alerts, $this->windowAlerts(
                         kind: 'CONTRACTOR_PFX',
                         subjectId: (int) $contract->id,
-                        officeId: null,
+                        tenantId: null,
                         validTo: CarbonImmutable::parse((string) $contract->cert_valid_to),
                         now: $now,
                         alertDays: $alertDays,
@@ -80,25 +84,30 @@ final class SerproLifecycleMonitor
                 }
             }
 
+            $tenantCredentials = 0;
+            foreach (TenantCredential::query()
+                ->where('status', CredentialStatus::Active)
+                ->orderBy('id')
+                ->cursor() as $credential) {
+                $tenantCredentials++;
+                $alerts = array_merge($alerts, $this->windowAlerts(
+                    kind: 'TENANT_CERTIFICATE',
+                    subjectId: (int) $credential->id,
+                    tenantId: (int) $credential->tenant_id,
+                    validTo: CarbonImmutable::parse((string) $credential->valid_to),
+                    now: $now,
+                    alertDays: $alertDays,
+                ));
+            }
+
             $auths = 0;
-            foreach (OfficeSerproAuthorization::query()->orderBy('id')->get() as $auth) {
+            foreach (TenantSerproAuthorization::query()->orderBy('id')->get() as $auth) {
                 $auths++;
-                if ($auth->author_cert_valid_to !== null) {
-                    $alerts = array_merge($alerts, $this->windowAlerts(
-                        kind: 'AUTHOR_A1',
-                        subjectId: (int) $auth->id,
-                        officeId: (int) $auth->office_id,
-                        validTo: CarbonImmutable::parse((string) $auth->author_cert_valid_to),
-                        now: $now,
-                        alertDays: $alertDays,
-                        meta: ['environment' => $auth->environment->value ?? (string) $auth->environment],
-                    ));
-                }
                 if ($auth->termo_valid_to !== null) {
                     $alerts = array_merge($alerts, $this->windowAlerts(
                         kind: 'TERMO',
                         subjectId: (int) $auth->id,
-                        officeId: (int) $auth->office_id,
+                        tenantId: (int) $auth->tenant_id,
                         validTo: CarbonImmutable::parse((string) $auth->termo_valid_to),
                         now: $now,
                         alertDays: $alertDays,
@@ -115,7 +124,7 @@ final class SerproLifecycleMonitor
                         $alerts[] = [
                             'kind' => 'PROCURADOR_TOKEN',
                             'subject_id' => (int) $auth->id,
-                            'office_id' => (int) $auth->office_id,
+                            'tenant_id' => (int) $auth->tenant_id,
                             'days_left' => 0,
                             'severity' => $secondsLeft <= 0
                                 ? ($canAutoRenew ? 'AUTO_RENEW' : 'EXPIRED')
@@ -131,8 +140,8 @@ final class SerproLifecycleMonitor
                         ];
 
                         if ($canAutoRenew) {
-                            RenewOfficeProcuradorTokenJob::dispatch(
-                                (int) $auth->office_id,
+                            RenewTenantProcuradorTokenJob::dispatch(
+                                (int) $auth->tenant_id,
                                 $auth->environment->value ?? (string) $auth->environment,
                             );
                         } elseif ($secondsLeft <= 0 && $auth->status === SerproAuthorizationStatus::TokenActive) {
@@ -158,7 +167,7 @@ final class SerproLifecycleMonitor
                     $alerts = array_merge($alerts, $this->windowAlerts(
                         kind: 'PROXY_POWER',
                         subjectId: (int) $power->id,
-                        officeId: (int) $power->office_id,
+                        tenantId: (int) $power->tenant_id,
                         validTo: CarbonImmutable::parse((string) $power->valid_to),
                         now: $now,
                         alertDays: $alertDays,
@@ -170,33 +179,24 @@ final class SerproLifecycleMonitor
                 }
             }
 
-            $snapshotsExpired = 0;
-            foreach (ClientProcuracaoSnapshot::query()
+            $procuracaoSyncsExpired = 0;
+            foreach (ClientProcuracaoSync::query()
                 ->where('status', ClientProcuracaoSyncStatus::Authorized->value)
                 ->whereNotNull('valid_to')
                 ->where('valid_to', '<=', $now)
                 ->orderBy('id')
-                ->cursor() as $snapshot) {
-                $snapshot->status = ClientProcuracaoSyncStatus::Expired;
-                $snapshot->last_check_result = 'EXPIRED_LOCAL';
-                $snapshot->save();
-                ClientProcuracaoSync::query()
-                    ->where('office_id', $snapshot->office_id)
-                    ->where('client_id', $snapshot->client_id)
-                    ->where('status', ClientProcuracaoSyncStatus::Authorized->value)
-                    ->update([
-                        'status' => ClientProcuracaoSyncStatus::Expired->value,
-                        'last_check_result' => 'EXPIRED_LOCAL',
-                        'updated_at' => now(),
-                    ]);
-                $snapshotsExpired++;
+                ->cursor() as $sync) {
+                $sync->status = ClientProcuracaoSyncStatus::Expired;
+                $sync->last_check_result = 'EXPIRED_LOCAL';
+                $sync->save();
+                $procuracaoSyncsExpired++;
             }
 
             foreach ($alerts as $alert) {
                 Log::info('serpro.lifecycle.alert', [
                     'kind' => $alert['kind'],
                     'subject_id' => $alert['subject_id'],
-                    'office_id' => $alert['office_id'],
+                    'tenant_id' => $alert['tenant_id'],
                     'days_left' => $alert['days_left'],
                     'severity' => $alert['severity'],
                     // sem PII/segredos
@@ -214,14 +214,16 @@ final class SerproLifecycleMonitor
                 'alerts' => $alerts,
                 'scanned' => [
                     'contracts' => $contracts,
+                    'tenant_credentials' => $tenantCredentials,
                     'authorizations' => $auths,
                     'proxy_powers' => $powers,
-                    'procuracao_snapshots_expired' => $snapshotsExpired,
+                    'procuracao_syncs_expired' => $procuracaoSyncsExpired,
                 ],
                 'lock_acquired' => true,
             ];
         } finally {
             $lock->release();
+            PrivilegedTenantContext::leave();
         }
     }
 
@@ -233,7 +235,7 @@ final class SerproLifecycleMonitor
     private function windowAlerts(
         string $kind,
         int $subjectId,
-        ?int $officeId,
+        ?int $tenantId,
         CarbonImmutable $validTo,
         CarbonImmutable $now,
         array $alertDays,
@@ -245,7 +247,7 @@ final class SerproLifecycleMonitor
             return [[
                 'kind' => $kind,
                 'subject_id' => $subjectId,
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'days_left' => $daysLeft,
                 'severity' => 'EXPIRED',
                 'message' => "{$kind} expirado.",
@@ -270,7 +272,7 @@ final class SerproLifecycleMonitor
         return [[
             'kind' => $kind,
             'subject_id' => $subjectId,
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'days_left' => $daysLeft,
             'severity' => 'D'.$matched,
             'message' => "{$kind} vence em {$daysLeft} dia(s) (janela {$matched}).",

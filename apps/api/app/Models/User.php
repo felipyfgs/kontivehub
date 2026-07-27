@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use App\Enums\OfficeRole;
 use App\Enums\PlatformRole;
+use App\Enums\TenantRole;
 use App\Notifications\ResetPasswordNotification;
 use App\Services\Platform\PlatformOwnerService;
 use Database\Factories\UserFactory;
@@ -15,15 +15,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Laravel\Fortify\TwoFactorAuthenticatable;
 use Laravel\Sanctum\HasApiTokens;
 
 #[Fillable(['name', 'email', 'password', 'is_active', 'password_change_required'])]
-#[Hidden(['password', 'remember_token', 'two_factor_secret', 'two_factor_recovery_codes'])]
+#[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasApiTokens, HasFactory, Notifiable, TwoFactorAuthenticatable;
+    use HasApiTokens, HasFactory, Notifiable;
 
     protected static function booted(): void
     {
@@ -39,7 +38,6 @@ class User extends Authenticatable
             'password' => 'hashed',
             'is_active' => 'boolean',
             'password_change_required' => 'boolean',
-            'two_factor_confirmed_at' => 'datetime',
         ];
     }
 
@@ -53,22 +51,33 @@ class User extends Authenticatable
         return $this->hasMany(AccountActivation::class);
     }
 
-    public function selectedOffice(): BelongsTo
+    public function selectedTenant(): BelongsTo
     {
-        return $this->belongsTo(Office::class, 'selected_office_id');
+        return $this->belongsTo(Tenant::class, 'selected_tenant_id');
     }
 
-    public function offices(): BelongsToMany
+    public function tenants(): BelongsToMany
     {
-        return $this->belongsToMany(Office::class)
-            ->using(OfficeMembership::class)
-            ->withPivot(['role', 'is_active'])
+        return $this->belongsToMany(
+            Tenant::class,
+            'tenant_memberships',
+            'user_id',
+            'tenant_id',
+        )
+            ->using(TenantMembership::class)
+            ->withPivot([
+                'role',
+                'permission_profile_id',
+                'authorization_version',
+                'is_active',
+                'work_department_id',
+            ])
             ->withTimestamps();
     }
 
     public function memberships(): HasMany
     {
-        return $this->hasMany(OfficeMembership::class);
+        return $this->hasMany(TenantMembership::class);
     }
 
     public function platformMemberships(): HasMany
@@ -82,7 +91,7 @@ class User extends Authenticatable
     }
 
     /**
-     * PLATFORM_ADMIN é autorização global separada — NÃO implica membership de office
+     * PLATFORM_ADMIN é autorização global separada — NÃO implica membership de tenant
      * nem leitura fiscal de qualquer tenant.
      */
     public function isPlatformAdmin(): bool
@@ -93,52 +102,35 @@ class User extends Authenticatable
             ->exists();
     }
 
-    public function activeMembership(): ?OfficeMembership
+    public function activeMembership(): ?TenantMembership
     {
         return $this->memberships()
             ->where('is_active', true)
-            ->whereHas('office', fn ($q) => $q->where('is_active', true))
+            ->whereHas('tenant', fn ($q) => $q->where('is_active', true))
             ->orderBy('id')
             ->first();
     }
 
-    public function hasActiveMembershipIn(int $officeId): bool
+    public function hasActiveMembershipIn(int $tenantId): bool
     {
         return $this->memberships()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('is_active', true)
-            ->whereHas('office', fn ($q) => $q->where('is_active', true))
+            ->whereHas('tenant', fn ($q) => $q->where('is_active', true))
             ->exists();
     }
 
-    public function roleIn(?Office $office): ?OfficeRole
+    public function roleIn(?Tenant $tenant): ?TenantRole
     {
-        if ($office === null) {
+        if ($tenant === null) {
             return null;
         }
 
         $membership = $this->memberships()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('is_active', true)
             ->first();
 
         return $membership?->role;
-    }
-
-    /**
-     * Dados TOTP legados podem existir; o produto não exige mais 2FA.
-     */
-    public function hasConfirmedTwoFactor(): bool
-    {
-        return $this->two_factor_confirmed_at !== null
-            && $this->two_factor_secret !== null;
-    }
-
-    /**
-     * TOTP/2FA descontinuado — sempre false.
-     */
-    public function requiresTwoFactorForAdmin(): bool
-    {
-        return false;
     }
 }

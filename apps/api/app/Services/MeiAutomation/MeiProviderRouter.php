@@ -11,7 +11,6 @@ use App\Enums\FiscalMutability;
 use App\Enums\MeiProvider;
 use App\Services\Fiscal\SimplesMei\SimplesMeiCatalog;
 use App\Services\MeiAutomation\Providers\MeiOperationProvider;
-use App\Services\Serpro\Catalog\OperationKeyMap;
 
 final readonly class MeiProviderRouter implements FiscalSourceAdapter
 {
@@ -70,13 +69,8 @@ final readonly class MeiProviderRouter implements FiscalSourceAdapter
 
     public function execute(FiscalAdapterRequest $request): FiscalAdapterResult
     {
-        $operationKey = OperationKeyMap::require(
-            null,
-            $this->definition->systemCode,
-            $this->definition->serviceCode,
-            $this->definition->operationCode,
-        );
-        $providers = $this->policy->providers($request->office, $operationKey);
+        $operationKey = $this->definition->operationKey;
+        $providers = $this->policy->providers($request->tenant, $operationKey);
 
         foreach ($providers as $index => $providerName) {
             $outcome = $this->provider($providerName)->execute($request, $operationKey);

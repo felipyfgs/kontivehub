@@ -11,8 +11,6 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * Exige reconfirmação recente de senha (15 min, sessão corrente) para ações sensíveis.
  * Aplica-se a todos os perfis (Plataforma e Escritório).
- *
- * Alias legado: EnsurePrivilegedPasswordConfirmation (mantido como subclass).
  */
 class EnsureRecentPasswordConfirmation
 {

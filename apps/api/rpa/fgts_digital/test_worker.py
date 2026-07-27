@@ -220,7 +220,7 @@ class WorkerContractTest(unittest.TestCase):
                 select_profile_and_employer(
                     page,
                     {
-                        "credential_source": "OFFICE",
+                        "credential_source": "TENANT",
                         "profile_type": "PROCURADOR_PJ",
                         "target_identifier": "12.345.678/0001-90",
                     },

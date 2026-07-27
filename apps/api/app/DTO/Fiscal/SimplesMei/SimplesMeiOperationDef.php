@@ -18,6 +18,7 @@ final readonly class SimplesMeiOperationDef
         public string $systemCode,
         public string $serviceCode,
         public string $operationCode,
+        public string $operationKey,
         public string $dtoVersion,
         public FiscalMutability $mutability,
         public FiscalCoverage $coverage,

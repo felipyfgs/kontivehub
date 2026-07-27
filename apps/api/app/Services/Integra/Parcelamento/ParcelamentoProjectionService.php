@@ -9,10 +9,10 @@ use App\Enums\TaxInstallmentParcelStatus;
 use App\Enums\TaxInstallmentPaymentStatus;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
 use App\Models\TaxInstallmentOrder;
 use App\Models\TaxInstallmentParcel;
 use App\Models\TaxInstallmentPayment;
+use App\Models\Tenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -33,14 +33,14 @@ final class ParcelamentoProjectionService
      * }
      */
     public function projectFromMonitorBody(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         TaxInstallmentModality $modality,
         array $sourceBody,
         ?FiscalMonitoringRun $run = null,
         ?string $evidenceSha256 = null,
     ): array {
-        return DB::transaction(function () use ($office, $client, $modality, $sourceBody, $run, $evidenceSha256) {
+        return DB::transaction(function () use ($tenant, $client, $modality, $sourceBody, $run, $evidenceSha256) {
             $orders = [];
             $parcels = [];
             $payments = [];
@@ -66,7 +66,7 @@ final class ParcelamentoProjectionService
                 $orderSituation = $this->mapOrderSituation($sourceStatus);
                 $order = TaxInstallmentOrder::query()->updateOrCreate(
                     [
-                        'office_id' => $office->id,
+                        'tenant_id' => $tenant->id,
                         'client_id' => $client->id,
                         'modality' => $modality->value,
                         'external_order_id' => $externalId,
@@ -114,7 +114,7 @@ final class ParcelamentoProjectionService
                         continue;
                     }
                     $projected = $this->projectParcel(
-                        $office,
+                        $tenant,
                         $client,
                         $order,
                         $modality,
@@ -180,7 +180,7 @@ final class ParcelamentoProjectionService
      * }
      */
     public function projectParcel(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         TaxInstallmentOrder $order,
         TaxInstallmentModality $modality,
@@ -214,7 +214,7 @@ final class ParcelamentoProjectionService
 
         $parcel = TaxInstallmentParcel::query()->updateOrCreate(
             [
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'order_id' => $order->id,
                 'parcel_key' => $key,
             ],
@@ -250,7 +250,7 @@ final class ParcelamentoProjectionService
             $ref = (string) ($paymentRow['referencia'] ?? ('CONF-'.$key));
             $payment = TaxInstallmentPayment::query()->updateOrCreate(
                 [
-                    'office_id' => $office->id,
+                    'tenant_id' => $tenant->id,
                     'parcel_id' => $parcel->id,
                     'payment_ref' => $ref,
                 ],

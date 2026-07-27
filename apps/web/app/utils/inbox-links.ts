@@ -2,12 +2,9 @@ import type { InboxItem, InboxItemLinks } from '~/types/api'
 
 /**
  * Rotas tenant-safe canônicas do painel (SPA).
- * Links legados da API (ex.: /settings/integracao-serpro) são normalizados aqui.
  */
 export const SERPRO_INBOX_ROUTES = {
   authorization: '/conta/escritorio',
-  /** Importação manual de procurações removida — redireciona ao settings unificado. */
-  proxies: '/conta/escritorio',
   usage: '/conta/consumo',
   subscription: '/conta/assinatura',
   monitoring: '/monitoring',
@@ -16,34 +13,17 @@ export const SERPRO_INBOX_ROUTES = {
   syncs: '/syncs'
 } as const
 
-const LEGACY_PATH_REWRITES: Array<{ pattern: RegExp, to: string | ((m: RegExpMatchArray) => string) }> = [
-  { pattern: /^\/settings\/integracao-serpro\/?$/i, to: SERPRO_INBOX_ROUTES.authorization },
-  { pattern: /^\/settings\/proxies\/?$/i, to: SERPRO_INBOX_ROUTES.authorization },
-  { pattern: /^\/settings\/consumo\/?$/i, to: SERPRO_INBOX_ROUTES.usage },
-  { pattern: /^\/settings\/usage\/?$/i, to: SERPRO_INBOX_ROUTES.usage },
-  { pattern: /^\/clients\/(\d+)\/procuracoes\/?$/i, to: m => `/clients/${m[1]}` },
-  { pattern: /^\/fiscal\/runs\/\d+\/?$/i, to: SERPRO_INBOX_ROUTES.monitoring },
-  { pattern: /^\/integracao-serpro\/?$/i, to: SERPRO_INBOX_ROUTES.authorization }
-]
-
-/** Reescreve path legado para rota existente no SPA. */
-export function normalizeTenantPath(path?: string | null): string | null {
+/** Aceita apenas deep-links internos emitidos pelo contrato atual. */
+export function validateTenantPath(path?: string | null): string | null {
   if (!path || typeof path !== 'string') return null
   const trimmed = path.trim()
   if (!trimmed.startsWith('/')) return null
 
-  for (const rule of LEGACY_PATH_REWRITES) {
-    const match = rule.pattern.exec(trimmed)
-    if (match) {
-      return typeof rule.to === 'function' ? rule.to(match) : rule.to
-    }
-  }
-
-  // Paths absolutos já canônicos
   if (
     trimmed === SERPRO_INBOX_ROUTES.authorization
     || trimmed === '/conta'
     || trimmed.startsWith('/conta/')
+    || trimmed === '/clients'
     || trimmed.startsWith('/clients/')
     || trimmed.startsWith('/monitoring')
     || trimmed.startsWith('/health')
@@ -58,20 +38,18 @@ export function normalizeTenantPath(path?: string | null): string | null {
   return null
 }
 
-function firstNormalizedLink(links?: InboxItemLinks | null): string | null {
+function firstValidLink(links?: InboxItemLinks | null): string | null {
   if (!links) return null
   const candidates = [
     links.serpro_authorization,
-    links.proxy,
     links.usage,
-    links.run,
     links.monitoring,
     links.credential,
     links.sync,
     links.client
   ]
   for (const c of candidates) {
-    const n = normalizeTenantPath(c)
+    const n = validateTenantPath(c)
     if (n) return n
   }
   return null
@@ -82,7 +60,7 @@ function firstNormalizedLink(links?: InboxItemLinks | null): string | null {
  * Nunca devolve rota inexistente; fallback /health.
  */
 export function resolveInboxItemLink(item: Pick<InboxItem, 'type' | 'links' | 'client_id' | 'reasons'>): string {
-  const fromLinks = firstNormalizedLink(item.links)
+  const fromLinks = firstValidLink(item.links)
   if (fromLinks) return fromLinks
 
   const type = String(item.type || '')
@@ -92,9 +70,9 @@ export function resolveInboxItemLink(item: Pick<InboxItem, 'type' | 'links' | 'c
   }
   if (type.startsWith('proxy_power')) {
     if (item.client_id) {
-      return `/clients/${item.client_id}`
+      return `/clients/${item.client_id}/dados-adicionais`
     }
-    return SERPRO_INBOX_ROUTES.proxies
+    return SERPRO_INBOX_ROUTES.authorization
   }
   if (type.startsWith('usage_')) {
     return SERPRO_INBOX_ROUTES.usage
@@ -105,7 +83,7 @@ export function resolveInboxItemLink(item: Pick<InboxItem, 'type' | 'links' | 'c
       : SERPRO_INBOX_ROUTES.monitoring
   }
   if (type.startsWith('credential')) {
-    return item.client_id ? `/clients/${item.client_id}` : SERPRO_INBOX_ROUTES.clients
+    return item.client_id ? `/clients/${item.client_id}/dados-adicionais` : SERPRO_INBOX_ROUTES.clients
   }
   if (type.startsWith('sync') || type.startsWith('cursor')) {
     return SERPRO_INBOX_ROUTES.syncs
@@ -114,7 +92,7 @@ export function resolveInboxItemLink(item: Pick<InboxItem, 'type' | 'links' | 'c
     return SERPRO_INBOX_ROUTES.health
   }
   if (type.startsWith('outbound') || type.startsWith('svrs_') || type.startsWith('cte_')) {
-    return item.client_id ? `/clients/${item.client_id}` : SERPRO_INBOX_ROUTES.clients
+    return item.client_id ? `/clients/${item.client_id}/cadastro` : SERPRO_INBOX_ROUTES.clients
   }
   if (type.startsWith('quarantine')) {
     return '/docs/imports'

@@ -79,19 +79,19 @@ watch(
 )
 
 function itemPeriod(item: PgmeiDebtItem): string {
-  return item.period_key || item.periodo_apuracao || '—'
+  return item.period_key || '—'
 }
 
 function itemTribute(item: PgmeiDebtItem): string {
-  return item.tribute || item.tributo || '—'
+  return item.tribute || '—'
 }
 
 function itemEntity(item: PgmeiDebtItem): string {
-  return item.federated_entity || item.ente_federado || '—'
+  return item.federated_entity || '—'
 }
 
 function itemStatus(item: PgmeiDebtItem): string {
-  return item.original_status || item.situacao_original || '—'
+  return item.original_status || '—'
 }
 </script>
 
@@ -270,18 +270,6 @@ function itemStatus(item: PgmeiDebtItem): string {
                     {{ guide.status || 'Situação não informada' }} · {{ formatAmountCents(guide.amount_cents) }}
                   </p>
                 </div>
-                <UButton
-                  v-if="guide.download_href || guide.href"
-                  size="xs"
-                  color="neutral"
-                  variant="outline"
-                  icon="i-lucide-download"
-                  label="Baixar existente"
-                  :to="guide.download_href || guide.href || undefined"
-                  external
-                  target="_blank"
-                  rel="noopener noreferrer"
-                />
               </li>
             </ul>
             <p v-else class="text-sm text-muted">

@@ -10,9 +10,8 @@ import {
   canManageCredentials as userCanManageCredentials,
   canTriageMailbox as userCanTriageMailbox,
   canTriggerSync as userCanTriggerSync,
-  canAccessOfficeSettings as userCanAccessOfficeSettings,
+  canAccessTenantSettings as userCanAccessTenantSettings,
   canAccessPlatformAdmin as userCanAccessPlatformAdmin,
-  canAccessPlatformSerproConsole as userCanAccessPlatformSerproConsole,
   isPlatformPrivilegedContext as userIsPlatformPrivilegedContext,
   unwrapMeUser
 } from '~/utils/permissions'
@@ -45,22 +44,18 @@ const _useDashboard = () => {
   const canManageClients = computed(() => userCanManageClients(me.value))
   const canManageClientCategoryCatalog = computed(() => userCanManageClientCategoryCatalog(me.value))
   const canAssignClientCategories = computed(() => userCanAssignClientCategories(me.value))
-  const canManageCredentials = computed(() =>
-    userCanManageCredentials(me.value) || userIsPlatformPrivilegedContext(me.value)
-  )
+  const canManageCredentials = computed(() => userCanManageCredentials(me.value))
   const canTriggerSync = computed(() => userCanTriggerSync(me.value))
   const canCreateExport = computed(() => userCanCreateExport(me.value))
   const canImportDocuments = computed(() => userCanImportDocuments(me.value))
-  /** Configuração do escritório (perfil/A1) — não é mais sinônimo de /admin. */
-  const canAccessAdministration = computed(() => userCanAccessOfficeSettings(me.value))
+  /** Configuração do escritório (perfil/certificado) — não é mais sinônimo de /admin. */
+  const canAccessAdministration = computed(() => userCanAccessTenantSettings(me.value))
   const canAccessPlatformAdmin = computed(() => userCanAccessPlatformAdmin(me.value))
-  const canAccessPlatformSerpro = computed(() => userCanAccessPlatformSerproConsole(me.value))
+  const canAccessPlatformSerpro = computed(() => userCanAccessPlatformAdmin(me.value))
   const isPlatformPrivileged = computed(() => userIsPlatformPrivilegedContext(me.value))
   const canAssociateCategories = computed(() => userCanAssociateCategories(me.value))
   const canTriageMailbox = computed(() => userCanTriageMailbox(me.value))
-  const canExecuteHighRiskMutation = computed(() =>
-    userCanExecuteHighRiskMutation(me.value) || userIsPlatformPrivilegedContext(me.value)
-  )
+  const canExecuteHighRiskMutation = computed(() => userCanExecuteHighRiskMutation(me.value))
 
   async function openClientCreate() {
     if (!canManageClients.value) return
@@ -117,7 +112,7 @@ const _useDashboard = () => {
     'g-u': () => router.push('/conta/consumo'),
     'g-a': () => {
       if (canAccessPlatformAdmin.value) {
-        void router.push('/admin')
+        void router.push('/admin/tenants')
       } else if (canAccessAdministration.value) {
         void router.push('/conta/escritorio')
       }

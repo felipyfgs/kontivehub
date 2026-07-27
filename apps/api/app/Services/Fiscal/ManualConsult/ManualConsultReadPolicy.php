@@ -4,19 +4,19 @@ namespace App\Services\Fiscal\ManualConsult;
 
 use App\Enums\FiscalOperationClass;
 use App\Enums\ManualConsultEligibility;
-use App\Enums\OfficeRole;
 use App\Enums\SerproOfficialState;
 use App\Enums\TenantPermission;
+use App\Enums\TenantRole;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
-use App\Models\OfficeMembership;
+use App\Models\Tenant;
+use App\Models\TenantMembership;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use App\Services\Authorization\TenantAuthorization;
 use App\Services\FiscalMonitoring\Surfaces\MonitoringActionContract;
 use App\Services\FiscalMonitoring\Surfaces\MonitoringSurfaceRegistry;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -29,24 +29,24 @@ final class ManualConsultReadPolicy
         private readonly MonitoringSurfaceRegistry $surfaces,
         private readonly ManualConsultActionCatalog $catalog,
         private readonly ManualConsultEligibilityGate $eligibility,
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly TenantAuthorization $authorization,
         private readonly AuditLogger $audit,
     ) {}
 
     public function authorizeDispatch(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $actionId,
         ?int $actorUserId,
     ): ManualConsultActionDefinition {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             $this->reject(
                 reasonCode: 'MANUAL_CLIENT_CROSS_TENANT',
                 statusCode: 404,
                 message: 'Cliente não encontrado no escritório atual.',
                 actionId: $actionId,
-                officeId: (int) $office->id,
+                tenantId: (int) $tenant->id,
                 userId: $actorUserId,
                 subject: $client,
                 boundary: 'dispatcher',
@@ -55,7 +55,7 @@ final class ManualConsultReadPolicy
 
         $contract = $this->assertReadContract(
             actionId: $actionId,
-            officeId: (int) $office->id,
+            tenantId: (int) $tenant->id,
             userId: $actorUserId,
             subject: $client,
             boundary: 'dispatcher',
@@ -64,14 +64,14 @@ final class ManualConsultReadPolicy
         $actor = $actorUserId !== null
             ? User::query()->find($actorUserId)
             : null;
-        if (! $actor instanceof User || ! $this->canTrigger($office, $client, $actor)) {
+        if (! $actor instanceof User || ! $this->canTrigger($tenant, $client, $actor)) {
             $this->reject(
                 reasonCode: 'MANUAL_ROLE_DENIED',
                 statusCode: 403,
                 message: 'Sem permissão para executar consultas fiscais.',
                 actionId: $actionId,
                 operationClass: $contract->operationClass,
-                officeId: (int) $office->id,
+                tenantId: (int) $tenant->id,
                 userId: $actorUserId,
                 subject: $client,
                 boundary: 'dispatcher',
@@ -82,12 +82,12 @@ final class ManualConsultReadPolicy
     }
 
     public function assertDispatchReady(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         ManualConsultActionDefinition $definition,
         ?int $actorUserId,
     ): void {
-        $eligibility = $this->eligibility->evaluate($office, $definition, $client);
+        $eligibility = $this->eligibility->evaluate($tenant, $definition, $client);
         if ($eligibility === ManualConsultEligibility::Ready) {
             return;
         }
@@ -96,7 +96,7 @@ final class ManualConsultReadPolicy
             actionId: $definition->actionId,
             reasonCode: 'MANUAL_'.strtoupper($eligibility->value),
             operationClass: FiscalOperationClass::Read,
-            officeId: (int) $office->id,
+            tenantId: (int) $tenant->id,
             userId: $actorUserId,
             subject: $client,
             boundary: 'dispatcher',
@@ -105,23 +105,23 @@ final class ManualConsultReadPolicy
         throw new ManualConsultNotReadyException($eligibility);
     }
 
-    public function canTrigger(Office $office, ?Client $client, User $actor): bool
+    public function canTrigger(Tenant $tenant, ?Client $client, User $actor): bool
     {
         if (! $actor->is_active) {
             return false;
         }
 
-        $resolved = $this->currentOffice->resolve($actor);
-        if ($resolved === null || (int) $resolved->id !== (int) $office->id) {
+        $resolved = $this->currentTenant->resolve($actor);
+        if ($resolved === null || (int) $resolved->id !== (int) $tenant->id) {
             return false;
         }
 
-        $membership = $this->currentOffice->realMembership();
+        $membership = $this->currentTenant->realMembership();
         if ($membership === null
             || ! $membership->is_active
-            || (int) $membership->office_id !== (int) $office->id
+            || (int) $membership->tenant_id !== (int) $tenant->id
             || (int) $membership->user_id !== (int) $actor->id
-            || ! in_array($membership->role, [OfficeRole::Admin, OfficeRole::Operator], true)
+            || ! in_array($membership->role, [TenantRole::TenantAdmin, TenantRole::TenantUser], true)
         ) {
             return false;
         }
@@ -143,20 +143,20 @@ final class ManualConsultReadPolicy
         $actionId = is_string($progress['action_id'] ?? null)
             ? trim($progress['action_id'])
             : '';
-        $office = Office::query()->find($run->office_id);
+        $tenant = Tenant::query()->find($run->tenant_id);
         $client = Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $run->office_id)
+            ->where('tenant_id', $run->tenant_id)
             ->whereKey($run->client_id)
             ->first();
 
-        if ($office === null || $client === null) {
+        if ($tenant === null || $client === null) {
             $this->reject(
                 reasonCode: 'MANUAL_TENANT_CONTEXT_MISSING',
                 statusCode: 403,
                 message: 'Contexto da consulta indisponível.',
                 actionId: $actionId,
-                officeId: (int) $run->office_id,
+                tenantId: (int) $run->tenant_id,
                 userId: $run->triggered_by !== null ? (int) $run->triggered_by : null,
                 subject: $run,
                 boundary: 'job',
@@ -164,7 +164,7 @@ final class ManualConsultReadPolicy
         }
 
         $this->assertQueuedExecution(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             actionId: $actionId,
             actorUserId: $run->triggered_by !== null ? (int) $run->triggered_by : null,
@@ -174,14 +174,14 @@ final class ManualConsultReadPolicy
     }
 
     public function assertAsyncJobMayExecute(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $actionId,
         ?int $actorUserId,
         Model $subject,
     ): void {
         $this->assertQueuedExecution(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             actionId: $actionId,
             actorUserId: $actorUserId,
@@ -190,20 +190,20 @@ final class ManualConsultReadPolicy
     }
 
     private function assertQueuedExecution(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $actionId,
         ?int $actorUserId,
         Model $subject,
         ?FiscalMonitoringRun $run = null,
     ): void {
-        if ((int) $client->office_id !== (int) $office->id) {
-            $this->rejectQueued('MANUAL_CLIENT_CROSS_TENANT', $actionId, $office, $actorUserId, $subject);
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
+            $this->rejectQueued('MANUAL_CLIENT_CROSS_TENANT', $actionId, $tenant, $actorUserId, $subject);
         }
 
         $contract = $this->assertReadContract(
             actionId: $actionId,
-            officeId: (int) $office->id,
+            tenantId: (int) $tenant->id,
             userId: $actorUserId,
             subject: $subject,
             boundary: 'job',
@@ -214,7 +214,7 @@ final class ManualConsultReadPolicy
             $this->rejectQueued(
                 'MANUAL_RUN_COORDINATES_MISMATCH',
                 $actionId,
-                $office,
+                $tenant,
                 $actorUserId,
                 $subject,
                 $contract->operationClass,
@@ -225,32 +225,32 @@ final class ManualConsultReadPolicy
             ? User::query()->find($actorUserId)
             : null;
         $membership = $actor instanceof User
-            ? OfficeMembership::query()
-                ->where('office_id', $office->id)
+            ? TenantMembership::query()
+                ->where('tenant_id', $tenant->id)
                 ->where('user_id', $actor->id)
                 ->where('is_active', true)
-                ->with(['office', 'permissionProfile'])
+                ->with(['tenant', 'permissionProfile'])
                 ->first()
             : null;
 
         if (! $actor instanceof User
             || ! $actor->is_active
             || $membership === null
-            || ! in_array($membership->role, [OfficeRole::Admin, OfficeRole::Operator], true)
+            || ! in_array($membership->role, [TenantRole::TenantAdmin, TenantRole::TenantUser], true)
         ) {
             $this->rejectQueued(
                 'MANUAL_ROLE_DENIED',
                 $actionId,
-                $office,
+                $tenant,
                 $actorUserId,
                 $subject,
                 $contract->operationClass,
             );
         }
 
-        $this->currentOffice->clear();
+        $this->currentTenant->clear();
         try {
-            $this->currentOffice->bind($actor, $membership);
+            $this->currentTenant->bind($actor, $membership);
             if (! $this->authorization->allows(
                 $actor,
                 TenantPermission::FiscalSyncTrigger,
@@ -259,32 +259,32 @@ final class ManualConsultReadPolicy
                 $this->rejectQueued(
                     'MANUAL_ROLE_DENIED',
                     $actionId,
-                    $office,
+                    $tenant,
                     $actorUserId,
                     $subject,
                     $contract->operationClass,
                 );
             }
 
-            $eligibility = $this->eligibility->evaluate($office, $definition, $client);
+            $eligibility = $this->eligibility->evaluate($tenant, $definition, $client);
             if ($eligibility !== ManualConsultEligibility::Ready) {
                 $this->rejectQueued(
                     'MANUAL_'.strtoupper($eligibility->value),
                     $actionId,
-                    $office,
+                    $tenant,
                     $actorUserId,
                     $subject,
                     $contract->operationClass,
                 );
             }
         } finally {
-            $this->currentOffice->clear();
+            $this->currentTenant->clear();
         }
     }
 
     private function assertReadContract(
         string $actionId,
-        int $officeId,
+        int $tenantId,
         ?int $userId,
         Model $subject,
         string $boundary,
@@ -296,7 +296,7 @@ final class ManualConsultReadPolicy
                 statusCode: 404,
                 message: 'Ação de consulta manual desconhecida.',
                 actionId: $actionId,
-                officeId: $officeId,
+                tenantId: $tenantId,
                 userId: $userId,
                 subject: $subject,
                 boundary: $boundary,
@@ -310,7 +310,7 @@ final class ManualConsultReadPolicy
                 message: ManualConsultEligibility::MutatingBlocked->label(),
                 actionId: $actionId,
                 operationClass: $contract->operationClass,
-                officeId: $officeId,
+                tenantId: $tenantId,
                 userId: $userId,
                 subject: $subject,
                 boundary: $boundary,
@@ -324,7 +324,7 @@ final class ManualConsultReadPolicy
                 message: 'Operação não está em PRODUCTION.',
                 actionId: $actionId,
                 operationClass: $contract->operationClass,
-                officeId: $officeId,
+                tenantId: $tenantId,
                 userId: $userId,
                 subject: $subject,
                 boundary: $boundary,
@@ -338,7 +338,7 @@ final class ManualConsultReadPolicy
                 message: ManualConsultEligibility::AdapterMissing->label(),
                 actionId: $actionId,
                 operationClass: $contract->operationClass,
-                officeId: $officeId,
+                tenantId: $tenantId,
                 userId: $userId,
                 subject: $subject,
                 boundary: $boundary,
@@ -382,7 +382,7 @@ final class ManualConsultReadPolicy
     private function rejectQueued(
         string $reasonCode,
         string $actionId,
-        Office $office,
+        Tenant $tenant,
         ?int $userId,
         Model $subject,
         FiscalOperationClass $operationClass = FiscalOperationClass::Read,
@@ -393,7 +393,7 @@ final class ManualConsultReadPolicy
             message: 'A consulta foi bloqueada por política consultiva.',
             actionId: $actionId,
             operationClass: $operationClass,
-            officeId: (int) $office->id,
+            tenantId: (int) $tenant->id,
             userId: $userId,
             subject: $subject,
             boundary: 'job',
@@ -405,7 +405,7 @@ final class ManualConsultReadPolicy
         int $statusCode,
         string $message,
         string $actionId,
-        int $officeId,
+        int $tenantId,
         ?int $userId,
         Model $subject,
         string $boundary,
@@ -415,7 +415,7 @@ final class ManualConsultReadPolicy
             actionId: $actionId,
             reasonCode: $reasonCode,
             operationClass: $operationClass,
-            officeId: $officeId,
+            tenantId: $tenantId,
             userId: $userId,
             subject: $subject,
             boundary: $boundary,
@@ -428,7 +428,7 @@ final class ManualConsultReadPolicy
         string $actionId,
         string $reasonCode,
         ?FiscalOperationClass $operationClass,
-        int $officeId,
+        int $tenantId,
         ?int $userId,
         Model $subject,
         string $boundary,
@@ -444,7 +444,7 @@ final class ManualConsultReadPolicy
                 'boundary' => $boundary,
             ], static fn (mixed $value): bool => $value !== null),
             userId: $userId,
-            officeId: $officeId,
+            tenantId: $tenantId,
         );
     }
 }

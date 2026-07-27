@@ -2,14 +2,16 @@
 
 namespace App\Http\Controllers\Api\V1\Fiscal;
 
-use App\Enums\OfficeRole;
+use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
 use App\Models\Client;
+use App\Models\User;
+use App\Services\Authorization\TenantAuthorization;
 use App\Services\Fiscal\SimplesMei\SimplesMeiCatalog;
 use App\Services\FiscalMonitoring\FiscalMonitoringRunService;
 use App\Services\Integra\Dctfweb\DctfwebCodes;
 use App\Services\Integra\Parcelamento\ParcelamentoServiceCatalog;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use RuntimeException;
@@ -17,21 +19,22 @@ use RuntimeException;
 class FiscalMonitoringRunController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly FiscalMonitoringRunService $runs,
+        private readonly TenantAuthorization $authorization,
     ) {}
 
     public function index(Request $request): JsonResponse
     {
         $this->assertCanRead();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
         $perPage = min(100, max(1, (int) $request->query('per_page', 50)));
         $clientId = $request->query('client_id');
         $status = $request->query('status');
 
         $page = $this->runs->paginate(
-            $office,
+            $tenant,
             $perPage,
             is_numeric($clientId) ? (int) $clientId : null,
             is_string($status) ? $status : null,
@@ -45,8 +48,8 @@ class FiscalMonitoringRunController extends Controller
     public function show(int $run): JsonResponse
     {
         $this->assertCanRead();
-        $office = $this->currentOffice->office();
-        $model = $this->runs->findForOffice($office, $run);
+        $tenant = $this->currentTenant->tenant();
+        $model = $this->runs->findForTenant($tenant, $run);
         if ($model === null) {
             return response()->json(['message' => 'Execução não encontrada.'], 404);
         }
@@ -57,7 +60,7 @@ class FiscalMonitoringRunController extends Controller
     public function store(Request $request): JsonResponse
     {
         $this->assertCanWrite();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
         $data = $request->validate([
             'client_id' => ['required', 'integer'],
@@ -71,7 +74,7 @@ class FiscalMonitoringRunController extends Controller
         $serviceCode = strtoupper($data['service_code']);
         $operationCode = strtoupper($data['operation_code'] ?? 'MONITOR');
 
-        // Enqueue genérico é read-only: mutações usam endpoints dedicados (ADMIN+2FA).
+        // Enqueue genérico é read-only: mutações usam endpoints dedicados com senha recente.
         if ($this->isMutativeOperationCode($systemCode, $serviceCode, $operationCode)) {
             return response()->json([
                 'message' => 'Operações mutantes não podem ser enfileiradas pelo endpoint genérico de runs. Use o endpoint dedicado.',
@@ -81,7 +84,7 @@ class FiscalMonitoringRunController extends Controller
 
         $client = Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($data['client_id'])
             ->first();
 
@@ -91,7 +94,7 @@ class FiscalMonitoringRunController extends Controller
 
         try {
             $run = $this->runs->enqueueManual(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 systemCode: $systemCode,
                 serviceCode: $serviceCode,
@@ -127,15 +130,18 @@ class FiscalMonitoringRunController extends Controller
 
     private function assertCanRead(): void
     {
-        if ($this->currentOffice->role() === null) {
+        $actor = request()->user();
+        if (! $actor instanceof User
+            || ! $this->authorization->allows($actor, TenantPermission::FiscalMonitoringView)) {
             abort(403, 'Perfil não resolvido.');
         }
     }
 
     private function assertCanWrite(): void
     {
-        $role = $this->currentOffice->role();
-        if ($role === null || ! in_array($role, [OfficeRole::Admin, OfficeRole::Operator], true)) {
+        $actor = request()->user();
+        if (! $actor instanceof User
+            || ! $this->authorization->allows($actor, TenantPermission::FiscalSyncTrigger)) {
             abort(403, 'Ação não autorizada para o perfil atual.');
         }
     }

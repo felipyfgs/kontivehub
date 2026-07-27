@@ -43,10 +43,9 @@ final class GatewayContractPayload
         'SESSION_PASSKEY_CONFIRM' => ['allowed' => ['id', 'confirm'], 'required' => ['id', 'confirm']],
         'SESSION_CONNECT' => ['allowed' => [], 'required' => []],
         'SESSION_DISCONNECT' => ['allowed' => [], 'required' => []],
-        'SESSION_RESET' => ['allowed' => [], 'required' => []],
         'SESSION_SET_PASSIVE' => ['allowed' => ['passive'], 'required' => ['passive']],
         'SESSION_LOGOUT' => ['allowed' => [], 'required' => []],
-        'MESSAGE_SEND' => ['allowed' => ['to', 'kind', 'text', 'caption', 'reply_to', 'link_preview', 'media', 'location', 'contact', 'poll', 'interactive'], 'required' => ['to']],
+        'MESSAGE_SEND' => ['allowed' => ['to', 'kind', 'text', 'caption', 'reply_to', 'link_preview', 'media', 'location', 'contact', 'poll', 'interactive'], 'required' => ['to', 'kind']],
         'MESSAGE_EDIT' => ['allowed' => ['to', 'target_message_id', 'sender', 'text'], 'required' => ['to', 'target_message_id', 'text']],
         'MESSAGE_REVOKE' => ['allowed' => ['to', 'target_message_id', 'sender'], 'required' => ['to', 'target_message_id']],
         'MESSAGE_REACT' => ['allowed' => ['to', 'target_message_id', 'sender', 'emoji'], 'required' => ['to', 'target_message_id', 'emoji']],
@@ -104,6 +103,13 @@ final class GatewayContractPayload
     }
 
     /** @param array<string, mixed> $payload */
+    public static function assertSafePayload(array $payload): void
+    {
+        self::assertObject($payload, 'resposta');
+        self::assertSafeValue($payload, 'payload', 0);
+    }
+
+    /** @param array<string, mixed> $payload */
     public static function assertEvent(GatewayEventType $type, array $payload): void
     {
         self::assertObject($payload, 'evento');
@@ -116,13 +122,6 @@ final class GatewayContractPayload
             GatewayEventType::MessageActionReceived => self::assertMessageAction($payload),
             default => null,
         };
-    }
-
-    /** @deprecated Use assertEvent() with the event type. */
-    public static function assertSafeEvent(array $payload): void
-    {
-        self::assertObject($payload, 'evento');
-        self::assertSafeValue($payload, 'payload', 0);
     }
 
     /** @return list<string> */
@@ -225,7 +224,6 @@ final class GatewayContractPayload
     /** @param array<string, mixed> $payload */
     private static function assertMessageReceived(array $payload): void
     {
-        $payload = self::normalizeLegacyMessagePayload($payload);
         $allowed = [
             'provider_message_id', 'from', 'direction', 'history', 'occurred_at', 'kind',
             'provider_type', 'family', 'reply_to', 'reply_to_provider_message_id',
@@ -243,49 +241,6 @@ final class GatewayContractPayload
             throw new InvalidArgumentException('provider_type inválido em MESSAGE_RECEIVED.');
         }
         MessageSemanticContent::fromEvent($payload, $kind);
-    }
-
-    /**
-     * Gateway binário pré-rich-content omite provider_type/family e usa contact singular.
-     *
-     * @param  array<string, mixed>  $payload
-     * @return array<string, mixed>
-     */
-    public static function normalizeLegacyMessagePayload(array $payload): array
-    {
-        if (isset($payload['contact']) && is_array($payload['contact']) && ! isset($payload['contacts'])) {
-            $payload['contacts'] = [$payload['contact']];
-            unset($payload['contact']);
-        }
-
-        $kind = MessageKind::tryFrom(strtoupper((string) ($payload['kind'] ?? '')));
-        if ($kind === null) {
-            return $payload;
-        }
-
-        $providerType = trim((string) ($payload['provider_type'] ?? ''));
-        if ($providerType === '') {
-            $payload['provider_type'] = match ($kind) {
-                MessageKind::Text => 'conversation',
-                MessageKind::Image => 'imageMessage',
-                MessageKind::Audio => 'audioMessage',
-                MessageKind::Video => 'videoMessage',
-                MessageKind::Document => 'documentMessage',
-                MessageKind::Sticker => 'stickerMessage',
-                MessageKind::Location => 'locationMessage',
-                MessageKind::Contact => 'contactMessage',
-                MessageKind::Poll => 'pollCreationMessage',
-                MessageKind::Interactive => 'interactiveResponseMessage',
-                MessageKind::Unsupported => 'unsupported',
-                MessageKind::Note => 'note',
-            };
-        }
-
-        if (trim((string) ($payload['family'] ?? '')) === '') {
-            $payload['family'] = strtolower($kind->value);
-        }
-
-        return $payload;
     }
 
     /** @param array<string, mixed> $payload */
@@ -398,9 +353,6 @@ final class GatewayContractPayload
     /** @param array<string,mixed> $payload */
     private static function assertOutboundMessage(array $payload): void
     {
-        if (! isset($payload['kind']) && (isset($payload['text']) || isset($payload['media']))) {
-            return;
-        }
         $kind = MessageKind::tryFrom(strtoupper((string) ($payload['kind'] ?? '')));
         if ($kind === null || in_array($kind, [MessageKind::Note, MessageKind::Unsupported], true)) {
             throw new InvalidArgumentException('MESSAGE_KIND_UNSUPPORTED');
@@ -430,7 +382,7 @@ final class GatewayContractPayload
                 'attachment_id', 'mime_type', 'filename', 'size_bytes', 'sha256', 'ptt',
             ], 'media');
             $mime = strtolower((string) ($payload['media']['mime_type'] ?? ''));
-            $compatible = match ($kind) {
+            $mimeAllowed = match ($kind) {
                 MessageKind::Image => str_starts_with($mime, 'image/'),
                 MessageKind::Audio => str_starts_with($mime, 'audio/'),
                 MessageKind::Video => str_starts_with($mime, 'video/'),
@@ -438,7 +390,7 @@ final class GatewayContractPayload
                 MessageKind::Document => $mime !== '',
                 default => false,
             };
-            if (! $compatible || (($payload['media']['ptt'] ?? false) && $kind !== MessageKind::Audio)) {
+            if (! $mimeAllowed || (($payload['media']['ptt'] ?? false) && $kind !== MessageKind::Audio)) {
                 throw new InvalidArgumentException('MIME/PTT incompatível com kind.');
             }
         }

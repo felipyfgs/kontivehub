@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 #[Fillable([
     'reconciliation_id',
-    'office_id',
+    'tenant_id',
     'service_code',
     'consumption_class',
     'amount_micros',
@@ -38,9 +38,9 @@ class SerproUsageReconciliationAdjustment extends Model
         return $this->belongsTo(SerproUsageReconciliation::class, 'reconciliation_id');
     }
 
-    public function office(): BelongsTo
+    public function tenant(): BelongsTo
     {
-        return $this->belongsTo(Office::class);
+        return $this->belongsTo(Tenant::class);
     }
 
     /**
@@ -50,7 +50,7 @@ class SerproUsageReconciliationAdjustment extends Model
     {
         return [
             'id' => $this->id,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'service_code' => $this->service_code,
             'consumption_class' => $this->consumption_class?->value,
             'amount_micros' => $this->amount_micros,

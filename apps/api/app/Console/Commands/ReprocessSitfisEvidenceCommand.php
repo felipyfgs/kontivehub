@@ -8,7 +8,7 @@ use Illuminate\Console\Command;
 final class ReprocessSitfisEvidenceCommand extends Command
 {
     protected $signature = 'fiscal:reprocess-sitfis-evidence
-        {--office= : Escritório obrigatório}
+        {--tenant= : Escritório obrigatório}
         {--client= : Cliente opcional do escritório}
         {--dry-run : Apenas relata mudanças (comportamento padrão)}
         {--apply : Cria snapshots sucessores e reconcilia projeções}';
@@ -17,10 +17,10 @@ final class ReprocessSitfisEvidenceCommand extends Command
 
     public function handle(SitfisSnapshotReprocessService $service): int
     {
-        $officeId = (int) $this->option('office');
+        $tenantId = (int) $this->option('tenant');
         $clientId = $this->option('client') !== null ? (int) $this->option('client') : null;
-        if ($officeId < 1 || ($clientId !== null && $clientId < 1)) {
-            $this->error('Informe --office válido; --client, quando usado, também deve ser válido.');
+        if ($tenantId < 1 || ($clientId !== null && $clientId < 1)) {
+            $this->error('Informe --tenant válido; --client, quando usado, também deve ser válido.');
 
             return self::FAILURE;
         }
@@ -31,7 +31,7 @@ final class ReprocessSitfisEvidenceCommand extends Command
         }
 
         $apply = (bool) $this->option('apply');
-        $result = $service->reprocess($officeId, $clientId, $apply);
+        $result = $service->reprocess($tenantId, $clientId, $apply);
         foreach ($result['rows'] as $row) {
             $this->line(sprintf(
                 'snapshot=%d client=%d %s -> %s sections=%d changed=%s',

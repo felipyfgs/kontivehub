@@ -8,7 +8,7 @@ use App\Events\FiscalModuleReleased;
 use App\Exceptions\RecentPasswordRequiredException;
 use App\Jobs\Fiscal\RecoverFiscalModuleJob;
 use App\Models\FiscalModuleControl;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -25,7 +25,7 @@ final class FiscalModuleControlService
     public function setRestriction(
         FiscalControlModule $module,
         FiscalModuleControlScope $scope,
-        ?Office $office,
+        ?Tenant $tenant,
         bool $restricted,
         string $reason,
         User $actor,
@@ -41,22 +41,22 @@ final class FiscalModuleControlService
         if (! $restricted && ! $passwordRecentlyConfirmed) {
             throw new RecentPasswordRequiredException;
         }
-        if ($scope === FiscalModuleControlScope::Office && $office === null) {
-            throw ValidationException::withMessages(['office' => 'Escritório obrigatório para restrição OFFICE.']);
+        if ($scope === FiscalModuleControlScope::Tenant && $tenant === null) {
+            throw ValidationException::withMessages(['tenant' => 'Escritório obrigatório para restrição TENANT.']);
         }
         if ($scope === FiscalModuleControlScope::Global) {
-            $office = null;
+            $tenant = null;
         }
 
-        $control = DB::transaction(function () use ($module, $scope, $office, $restricted, $reason, $actor): FiscalModuleControl {
-            $key = FiscalModuleControl::controlKey($module, $scope, $office?->id);
+        $control = DB::transaction(function () use ($module, $scope, $tenant, $restricted, $reason, $actor): FiscalModuleControl {
+            $key = FiscalModuleControl::controlKey($module, $scope, $tenant?->id);
             $control = FiscalModuleControl::query()->where('control_key', $key)->lockForUpdate()->first()
                 ?? new FiscalModuleControl;
             $wasRestricted = $control->exists && (bool) $control->restricted;
             $control->fill([
                 'module_key' => $module,
                 'scope' => $scope,
-                'office_id' => $office?->id,
+                'tenant_id' => $tenant?->id,
                 'restricted' => $restricted,
                 'reason' => $reason,
                 'updated_by_user_id' => $actor->id,
@@ -71,18 +71,18 @@ final class FiscalModuleControlService
                 [
                     'module_key' => $module->value,
                     'scope' => $scope->value,
-                    'office_id' => $office?->id,
+                    'tenant_id' => $tenant?->id,
                     'reason' => $reason,
                     'previously_restricted' => $wasRestricted,
                 ],
                 $actor->id,
-                $office?->id,
+                $tenant?->id,
             );
 
             if ($wasRestricted && ! $restricted) {
-                DB::afterCommit(static function () use ($module, $scope, $office, $actor): void {
-                    FiscalModuleReleased::dispatch($module, $scope, $office?->id, (int) $actor->id);
-                    RecoverFiscalModuleJob::dispatch($module->value, $office?->id, (int) $actor->id);
+                DB::afterCommit(static function () use ($module, $scope, $tenant, $actor): void {
+                    FiscalModuleReleased::dispatch($module, $scope, $tenant?->id, (int) $actor->id);
+                    RecoverFiscalModuleJob::dispatch($module->value, $tenant?->id, (int) $actor->id);
                 });
             }
 
@@ -94,17 +94,17 @@ final class FiscalModuleControlService
 
     public function recordBlockedJob(
         FiscalControlModule|string $module,
-        Office $office,
+        Tenant $tenant,
         string $reasonCode,
         ?int $jobSubjectId = null,
     ): void {
         $module = is_string($module) ? FiscalControlModule::fromRuntimeKey($module) : $module;
         $globalKey = FiscalModuleControl::controlKey($module, FiscalModuleControlScope::Global, null);
-        $officeKey = FiscalModuleControl::controlKey($module, FiscalModuleControlScope::Office, (int) $office->id);
+        $tenantKey = FiscalModuleControl::controlKey($module, FiscalModuleControlScope::Tenant, (int) $tenant->id);
 
         $control = FiscalModuleControl::query()
             ->where('restricted', true)
-            ->whereIn('control_key', [$globalKey, $officeKey])
+            ->whereIn('control_key', [$globalKey, $tenantKey])
             ->orderByRaw('CASE WHEN scope = ? THEN 0 ELSE 1 END', [FiscalModuleControlScope::Global->value])
             ->first();
         $control?->increment('blocked_jobs_count');
@@ -113,6 +113,6 @@ final class FiscalModuleControlService
             'module_key' => $module->value,
             'reason_code' => $reasonCode,
             'job_subject_id' => $jobSubjectId,
-        ], officeId: (int) $office->id);
+        ], tenantId: (int) $tenant->id);
     }
 }

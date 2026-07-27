@@ -5,7 +5,7 @@ namespace App\Services\Usage;
 use App\Enums\MonitorCommercialDispatchState;
 use App\Enums\MonitorCommercialOrigin;
 use App\Models\MonitorCommercialLedgerEntry;
-use App\Models\OfficeSubscription;
+use App\Models\TenantSubscription;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -47,22 +47,22 @@ final class MonitorCommercialLedgerService
      * }
      */
     public function balance(
-        int $officeId,
+        int $tenantId,
         int $clientId,
         string $monitorKey,
-        ?OfficeSubscription $subscription = null,
+        ?TenantSubscription $subscription = null,
         CarbonImmutable|string|null $at = null,
     ): array {
         $monitorKey = strtolower(trim($monitorKey));
-        $subscription ??= OfficeSubscription::query()->where('office_id', $officeId)->first();
+        $subscription ??= TenantSubscription::query()->where('tenant_id', $tenantId)->first();
         if ($subscription === null) {
             throw new RuntimeException('Assinatura ausente para saldo comercial de monitor.');
         }
 
         $period = $this->periods->resolve($subscription, $at);
         $entitlement = $this->entitlements->monitorUnits($subscription);
-        $used = $this->usedQuotaUnits($officeId, $clientId, $monitorKey, $period['period_key']);
-        $inauguralUsed = $this->hasInaugural($officeId, $clientId, $monitorKey);
+        $used = $this->usedQuotaUnits($tenantId, $clientId, $monitorKey, $period['period_key']);
+        $inauguralUsed = $this->hasInaugural($tenantId, $clientId, $monitorKey);
 
         return [
             'monitor_key' => $monitorKey,
@@ -75,22 +75,22 @@ final class MonitorCommercialLedgerService
         ];
     }
 
-    public function hasInaugural(int $officeId, int $clientId, string $monitorKey): bool
+    public function hasInaugural(int $tenantId, int $clientId, string $monitorKey): bool
     {
         return MonitorCommercialLedgerEntry::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('client_id', $clientId)
             ->where('monitor_key', strtolower(trim($monitorKey)))
             ->where('origin', MonitorCommercialOrigin::Inaugural)
             ->exists();
     }
 
-    public function usedQuotaUnits(int $officeId, int $clientId, string $monitorKey, string $periodKey): int
+    public function usedQuotaUnits(int $tenantId, int $clientId, string $monitorKey, string $periodKey): int
     {
         return (int) MonitorCommercialLedgerEntry::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('client_id', $clientId)
             ->where('monitor_key', strtolower(trim($monitorKey)))
             ->where('period_key', $periodKey)
@@ -111,10 +111,10 @@ final class MonitorCommercialLedgerService
      * Manual no mesmo período NÃO impede o item scheduled (compartilham saldo, mas são itens distintos).
      */
     public function ensureScheduledItem(
-        int $officeId,
+        int $tenantId,
         int $clientId,
         string $monitorKey,
-        OfficeSubscription $subscription,
+        TenantSubscription $subscription,
         CarbonImmutable|string|null $at = null,
     ): MonitorCommercialLedgerEntry {
         $monitorKey = strtolower(trim($monitorKey));
@@ -123,7 +123,7 @@ final class MonitorCommercialLedgerService
         // 1) Scheduled do período (idempotente).
         $existingScheduled = MonitorCommercialLedgerEntry::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('client_id', $clientId)
             ->where('monitor_key', $monitorKey)
             ->where('period_key', $period['period_key'])
@@ -137,7 +137,7 @@ final class MonitorCommercialLedgerService
         // 2) Inaugural ainda pendente serve como execução automática única.
         $existingInaugural = MonitorCommercialLedgerEntry::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('client_id', $clientId)
             ->where('monitor_key', $monitorKey)
             ->where('origin', MonitorCommercialOrigin::Inaugural)
@@ -154,9 +154,9 @@ final class MonitorCommercialLedgerService
             ? MonitorCommercialOrigin::Inaugural
             : MonitorCommercialOrigin::Scheduled;
         $idempotency = $useInaugural
-            ? $this->inauguralIdempotencyKey($officeId, $clientId, $monitorKey)
+            ? $this->inauguralIdempotencyKey($tenantId, $clientId, $monitorKey)
             : $this->scheduledIdempotencyKey(
-                $officeId,
+                $tenantId,
                 $clientId,
                 $monitorKey,
                 $period['period_key'],
@@ -173,7 +173,7 @@ final class MonitorCommercialLedgerService
 
         try {
             return MonitorCommercialLedgerEntry::query()->create([
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'client_id' => $clientId,
                 'monitor_key' => $monitorKey,
                 'origin' => $origin,
@@ -192,7 +192,7 @@ final class MonitorCommercialLedgerService
         } catch (Throwable $e) {
             $again = MonitorCommercialLedgerEntry::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $officeId)
+                ->where('tenant_id', $tenantId)
                 ->where('client_id', $clientId)
                 ->where('monitor_key', $monitorKey)
                 ->where('period_key', $period['period_key'])
@@ -220,13 +220,13 @@ final class MonitorCommercialLedgerService
      * }
      */
     public function authorizeAndDebitBeforeRemoteDispatch(
-        int $officeId,
+        int $tenantId,
         int $clientId,
         string $monitorKey,
         MonitorCommercialOrigin $origin,
         string $idempotencyKey,
         ?string $technicalCorrelationId = null,
-        ?OfficeSubscription $subscription = null,
+        ?TenantSubscription $subscription = null,
         CarbonImmutable|string|null $at = null,
         ?int $existingEntryId = null,
     ): array {
@@ -243,7 +243,7 @@ final class MonitorCommercialLedgerService
             ];
         }
 
-        $subscription ??= OfficeSubscription::query()->where('office_id', $officeId)->first();
+        $subscription ??= TenantSubscription::query()->where('tenant_id', $tenantId)->first();
         if ($subscription === null) {
             return [
                 'allowed' => false,
@@ -256,7 +256,7 @@ final class MonitorCommercialLedgerService
         }
 
         return DB::transaction(function () use (
-            $officeId,
+            $tenantId,
             $clientId,
             $monitorKey,
             $origin,
@@ -266,10 +266,10 @@ final class MonitorCommercialLedgerService
             $at,
             $existingEntryId,
         ) {
-            // Lock por office+client+monitor para concorrência de débito.
+            // Lock por tenant+client+monitor para concorrência de débito.
             $lockRows = MonitorCommercialLedgerEntry::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $officeId)
+                ->where('tenant_id', $tenantId)
                 ->where('client_id', $clientId)
                 ->where('monitor_key', $monitorKey)
                 ->lockForUpdate()
@@ -288,7 +288,7 @@ final class MonitorCommercialLedgerService
                         'block_reason' => null,
                         'inaugural' => $byCorr->origin === MonitorCommercialOrigin::Inaugural,
                         'debited' => false,
-                        'balance' => $this->balance($officeId, $clientId, $monitorKey, $subscription, $at),
+                        'balance' => $this->balance($tenantId, $clientId, $monitorKey, $subscription, $at),
                     ];
                 }
             }
@@ -321,19 +321,19 @@ final class MonitorCommercialLedgerService
             $useInaugural = $origin === MonitorCommercialOrigin::Inaugural
                 || (
                     $origin !== MonitorCommercialOrigin::Scheduled
-                    && ! $this->hasInaugural($officeId, $clientId, $monitorKey)
+                    && ! $this->hasInaugural($tenantId, $clientId, $monitorKey)
                 );
 
             if ($useInaugural) {
                 $origin = MonitorCommercialOrigin::Inaugural;
-                $idempotencyKey = $this->inauguralIdempotencyKey($officeId, $clientId, $monitorKey);
+                $idempotencyKey = $this->inauguralIdempotencyKey($tenantId, $clientId, $monitorKey);
             }
 
-            $balance = $this->balance($officeId, $clientId, $monitorKey, $subscription, $at);
+            $balance = $this->balance($tenantId, $clientId, $monitorKey, $subscription, $at);
 
             if (! $useInaugural && $balance['remaining'] <= 0) {
                 $blocked = $this->createOrGetPending(
-                    officeId: $officeId,
+                    tenantId: $tenantId,
                     clientId: $clientId,
                     monitorKey: $monitorKey,
                     origin: $origin,
@@ -361,7 +361,7 @@ final class MonitorCommercialLedgerService
                 ->exists();
 
             $entry = $this->createOrGetPending(
-                officeId: $officeId,
+                tenantId: $tenantId,
                 clientId: $clientId,
                 monitorKey: $monitorKey,
                 origin: $origin,
@@ -385,7 +385,7 @@ final class MonitorCommercialLedgerService
                 'block_reason' => null,
                 'inaugural' => $entry->origin === MonitorCommercialOrigin::Inaugural,
                 'debited' => $debited,
-                'balance' => $this->balance($officeId, $clientId, $monitorKey, $subscription, $at),
+                'balance' => $this->balance($tenantId, $clientId, $monitorKey, $subscription, $at),
             ];
         });
     }
@@ -469,7 +469,7 @@ final class MonitorCommercialLedgerService
      * }
      */
     public function recentSnapshotStatus(
-        int $officeId,
+        int $tenantId,
         int $clientId,
         string $monitorKey,
         CarbonImmutable|string|null $at = null,
@@ -480,7 +480,7 @@ final class MonitorCommercialLedgerService
 
         $last = MonitorCommercialLedgerEntry::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('client_id', $clientId)
             ->where('monitor_key', $monitorKey)
             ->whereIn('dispatch_state', [
@@ -515,25 +515,25 @@ final class MonitorCommercialLedgerService
     }
 
     public function assertMinIntervalOrBlock(
-        int $officeId,
+        int $tenantId,
         int $clientId,
         string $monitorKey,
         CarbonImmutable|string|null $at = null,
     ): ?string {
-        $status = $this->recentSnapshotStatus($officeId, $clientId, $monitorKey, $at);
+        $status = $this->recentSnapshotStatus($tenantId, $clientId, $monitorKey, $at);
 
         return $status['can_dispatch_without_interval_block'] ? null : self::BLOCK_INTERVAL;
     }
 
     public function scheduledIdempotencyKey(
-        int $officeId,
+        int $tenantId,
         int $clientId,
         string $monitorKey,
         string $periodKey,
     ): string {
         return sprintf(
             'mcle:sched:%d:%d:%s:%s',
-            $officeId,
+            $tenantId,
             $clientId,
             strtolower(trim($monitorKey)),
             $periodKey,
@@ -541,7 +541,7 @@ final class MonitorCommercialLedgerService
     }
 
     public function manualIdempotencyKey(
-        int $officeId,
+        int $tenantId,
         int $clientId,
         string $monitorKey,
         string $periodKey,
@@ -549,7 +549,7 @@ final class MonitorCommercialLedgerService
     ): string {
         return sprintf(
             'mcle:manual:%d:%d:%s:%s:%s',
-            $officeId,
+            $tenantId,
             $clientId,
             strtolower(trim($monitorKey)),
             $periodKey,
@@ -557,11 +557,11 @@ final class MonitorCommercialLedgerService
         );
     }
 
-    public function inauguralIdempotencyKey(int $officeId, int $clientId, string $monitorKey): string
+    public function inauguralIdempotencyKey(int $tenantId, int $clientId, string $monitorKey): string
     {
         return sprintf(
             'mcle:inaugural:%d:%d:%s',
-            $officeId,
+            $tenantId,
             $clientId,
             strtolower(trim($monitorKey)),
         );
@@ -571,7 +571,7 @@ final class MonitorCommercialLedgerService
      * @param  array{period_key: string, starts_at: CarbonImmutable, ends_at: CarbonImmutable}  $period
      */
     private function createOrGetPending(
-        int $officeId,
+        int $tenantId,
         int $clientId,
         string $monitorKey,
         MonitorCommercialOrigin $origin,
@@ -592,10 +592,10 @@ final class MonitorCommercialLedgerService
         }
 
         if ($origin === MonitorCommercialOrigin::Inaugural) {
-            $idempotencyKey = $this->inauguralIdempotencyKey($officeId, $clientId, $monitorKey);
+            $idempotencyKey = $this->inauguralIdempotencyKey($tenantId, $clientId, $monitorKey);
             $existingInaugural = MonitorCommercialLedgerEntry::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $officeId)
+                ->where('tenant_id', $tenantId)
                 ->where('client_id', $clientId)
                 ->where('monitor_key', $monitorKey)
                 ->where('origin', MonitorCommercialOrigin::Inaugural)
@@ -607,7 +607,7 @@ final class MonitorCommercialLedgerService
 
         try {
             return MonitorCommercialLedgerEntry::query()->create([
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'client_id' => $clientId,
                 'monitor_key' => $monitorKey,
                 'origin' => $origin,
@@ -642,7 +642,7 @@ final class MonitorCommercialLedgerService
     private function debitExistingEntry(
         MonitorCommercialLedgerEntry $entry,
         ?string $technicalCorrelationId,
-        OfficeSubscription $subscription,
+        TenantSubscription $subscription,
         CarbonImmutable|string|null $at,
     ): array {
         if ($entry->dispatch_state->consumesQuota()) {
@@ -657,7 +657,7 @@ final class MonitorCommercialLedgerService
                 'inaugural' => $entry->origin === MonitorCommercialOrigin::Inaugural,
                 'debited' => false,
                 'balance' => $this->balance(
-                    (int) $entry->office_id,
+                    (int) $entry->tenant_id,
                     (int) $entry->client_id,
                     $entry->monitor_key,
                     $subscription,
@@ -674,7 +674,7 @@ final class MonitorCommercialLedgerService
                 'inaugural' => false,
                 'debited' => false,
                 'balance' => $this->balance(
-                    (int) $entry->office_id,
+                    (int) $entry->tenant_id,
                     (int) $entry->client_id,
                     $entry->monitor_key,
                     $subscription,
@@ -686,7 +686,7 @@ final class MonitorCommercialLedgerService
         // Pending → debit now if balance allows (scheduled/manual/inaugural).
         $isInaugural = $entry->origin === MonitorCommercialOrigin::Inaugural;
         $balance = $this->balance(
-            (int) $entry->office_id,
+            (int) $entry->tenant_id,
             (int) $entry->client_id,
             $entry->monitor_key,
             $subscription,
@@ -722,7 +722,7 @@ final class MonitorCommercialLedgerService
             'inaugural' => $isInaugural,
             'debited' => true,
             'balance' => $this->balance(
-                (int) $entry->office_id,
+                (int) $entry->tenant_id,
                 (int) $entry->client_id,
                 $entry->monitor_key,
                 $subscription,

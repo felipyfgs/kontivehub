@@ -17,11 +17,11 @@ final class MailboxItemsCollector
     /**
      * @return Collection<int, array<string, mixed>>
      */
-    public function collect(int $officeId, InboxCapabilities $role): Collection
+    public function collect(int $tenantId, InboxCapabilities $role): Collection
     {
         $rows = MailboxAlert::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->orderByDesc('id')
             ->limit(40)

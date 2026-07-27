@@ -135,7 +135,7 @@ final class FiscalMutationStateMachine
         $locked->forceFill($fill)->save();
 
         FiscalMutationOperationEvent::query()->create([
-            'office_id' => $locked->office_id,
+            'tenant_id' => $locked->tenant_id,
             'fiscal_mutation_operation_id' => $locked->id,
             'from_status' => $from->value,
             'to_status' => $to->value,
@@ -160,7 +160,7 @@ final class FiscalMutationStateMachine
                 'client_id' => $locked->client_id,
             ],
             userId: $actorUserId,
-            officeId: (int) $locked->office_id,
+            tenantId: (int) $locked->tenant_id,
         );
 
         return $locked->refresh();

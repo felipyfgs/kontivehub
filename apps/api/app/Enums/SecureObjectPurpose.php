@@ -28,9 +28,6 @@ enum SecureObjectPurpose: string
     /** Termo de Autorização XML assinado (imutável). */
     case SerproTermoXml = 'SERPRO_TERMO_XML';
 
-    /** A1 opcional do Autor do Pedido (consentimento explícito). */
-    case SerproAuthorPfx = 'SERPRO_AUTHOR_PFX';
-
     /** Evidência oficial de monitoramento fiscal (resposta/artefato imutável). */
     case FiscalEvidence = 'FISCAL_EVIDENCE';
 
@@ -56,7 +53,7 @@ enum SecureObjectPurpose: string
     case FgtsDigitalRequest = 'FGTS_DIGITAL_REQUEST';
 
     /** Evidência de tarefa operacional (PDF/imagem/texto — tenant-scoped, sem fiscal). */
-    case OperationalTaskEvidence = 'OPERATIONAL_TASK_EVIDENCE';
+    case WorkTaskEvidence = 'WORK_TASK_EVIDENCE';
 
     /** Mídia privada de conversa; persistência cifrada em chunks. */
     case CommunicationMedia = 'COMMUNICATION_MEDIA';
@@ -70,7 +67,6 @@ enum SecureObjectPurpose: string
             self::SerproBearerToken => 'Token Bearer/JWT contratante',
             self::SerproProcuradorToken => 'Token do procurador',
             self::SerproTermoXml => 'Termo de Autorização XML',
-            self::SerproAuthorPfx => 'Certificado A1 do Autor do Pedido',
             self::FiscalEvidence => 'Evidência fiscal de monitoramento',
             self::FiscalDefisReference => 'Referência protegida de declaração DEFIS',
             self::MailboxMessageBody => 'Corpo de mensagem Caixa Postal',
@@ -79,7 +75,7 @@ enum SecureObjectPurpose: string
             self::TaxGuidePaymentEvidence => 'Evidência de pagamento de guia',
             self::FgtsDigitalSession => 'Sessão autorizada do FGTS Digital',
             self::FgtsDigitalRequest => 'Seleção privada do FGTS Digital',
-            self::OperationalTaskEvidence => 'Evidência de tarefa operacional',
+            self::WorkTaskEvidence => 'Evidência de tarefa operacional',
             self::CommunicationMedia => 'Mídia privada de atendimento',
         };
     }

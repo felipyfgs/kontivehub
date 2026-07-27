@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * Confirmação oficial de pagamento — independente de emissão/download.
  */
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'tax_guide_id',
     'tax_guide_version_id',
     'source',
@@ -30,7 +30,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class TaxGuidePaymentConfirmation extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     public $timestamps = false;
 
@@ -62,7 +62,7 @@ class TaxGuidePaymentConfirmation extends Model
     {
         return [
             'id' => $this->id,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'tax_guide_id' => $this->tax_guide_id,
             'tax_guide_version_id' => $this->tax_guide_version_id,
             'source' => $this->source,

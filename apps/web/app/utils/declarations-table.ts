@@ -99,11 +99,11 @@ export function buildDeclarationsPgdasColumns(options: {
       meta: { class: { th: 'w-36 min-w-28', td: 'w-36 min-w-28' } },
       cell: ({ row }) => {
         const d = detailOf(row.original)
-        const state = d.declaration_state || d.pgdasd?.declaration_state
+        const state = d.pgdasd?.declaration_state
         if (state) {
           const meta = pgdasdDeclarationMeta(String(state))
           return h(UTooltip, {
-            text: d.declaration_state_reason || d.pgdasd?.declaration_state_reason || meta.description
+            text: d.pgdasd?.declaration_state_reason || meta.description
           }, {
             default: () => h('div', { class: 'block w-full min-w-0' }, [
               h(UBadge, tableCellBadgeProps({
@@ -129,13 +129,13 @@ export function buildDeclarationsPgdasColumns(options: {
       meta: { class: { th: 'w-28 min-w-24', td: 'w-28 min-w-24' } },
       cell: ({ row }) => {
         const d = detailOf(row.original)
-        const last = d.last_declaration || d.pgdasd?.latest_declaration
+        const last = d.pgdasd?.latest_declaration
         const period = formatPgdasdPeriod(last?.period_key || d.next_period_key)
-        const state = d.declaration_state || d.pgdasd?.declaration_state
+        const state = d.pgdasd?.declaration_state
         return h(DeclarationIndicator, {
           period: period === '—' ? null : period,
           state,
-          reason: d.declaration_state_reason || d.pgdasd?.declaration_state_reason
+          reason: d.pgdasd?.declaration_state_reason
         })
       }
     },
@@ -146,10 +146,9 @@ export function buildDeclarationsPgdasColumns(options: {
       meta: { ...MONITORING_CLIENT_COLUMN_META },
       cell: ({ row }) => h(FiscalClientCell, {
         clientId: row.original.client_id,
-        name: row.original.name || row.original.display_name,
+        name: row.original.display_name || row.original.legal_name,
         legalName: row.original.legal_name,
         cnpj: row.original.cnpj,
-        cnpjMasked: row.original.cnpj_masked,
         to: clientHref(row.original.client_id)
       })
     },
@@ -166,8 +165,7 @@ export function buildDeclarationsPgdasColumns(options: {
       meta: { ...MONITORING_CONSULTED_META },
       cell: ({ row }) => {
         const d = detailOf(row.original)
-        const at = d.last_valid_query_at
-          || d.pgdasd?.last_valid_query_at
+        const at = d.pgdasd?.last_valid_query_at
           || row.original.last_consulted_at
           || row.original.last_snapshot_at
         return h('span', {
@@ -248,10 +246,9 @@ export function buildDeclarationsObligationColumns(options: {
       meta: { ...MONITORING_CLIENT_COLUMN_META },
       cell: ({ row }) => h(FiscalClientCell, {
         clientId: row.original.client_id,
-        name: row.original.name || row.original.display_name,
+        name: row.original.display_name || row.original.legal_name,
         legalName: row.original.legal_name,
         cnpj: row.original.cnpj,
-        cnpjMasked: row.original.cnpj_masked,
         to: clientHref(row.original.client_id)
       })
     },
@@ -332,10 +329,9 @@ export function buildDeclarationsFgtsColumns(options?: {
       meta: { ...MONITORING_CLIENT_COLUMN_META },
       cell: ({ row }) => h(FiscalClientCell, {
         clientId: row.original.client_id,
-        name: row.original.name || row.original.display_name,
+        name: row.original.display_name || row.original.legal_name,
         legalName: row.original.legal_name,
         cnpj: row.original.cnpj,
-        cnpjMasked: row.original.cnpj_masked,
         to: `/monitoring/clients/${row.original.client_id}/fgts`
       })
     },

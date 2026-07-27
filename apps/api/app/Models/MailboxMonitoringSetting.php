@@ -3,12 +3,12 @@
 namespace App\Models;
 
 use App\Enums\MailboxMonitoringMode;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'enabled',
     'mode',
     'daily_time',
@@ -21,7 +21,7 @@ use Illuminate\Database\Eloquent\Model;
 ])]
 class MailboxMonitoringSetting extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected $attributes = [
         'enabled' => false,

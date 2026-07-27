@@ -120,20 +120,14 @@ final class HttpSerproContractAuthenticator implements SerproContractAuthenticat
             throw new RuntimeException('OAuth SERPRO retornou HTTP '.$response['status'].'.');
         }
 
-        /** @var array{access_token?: string, jwt_token?: string, jwt?: string, token_type?: string, expires_in?: int} $json */
+        /** @var array{access_token?: string, jwt_token?: string, token_type?: string, expires_in?: int} $json */
         $json = json_decode($response['body'], true);
         if (! is_array($json) || empty($json['access_token'])) {
             $this->markUnavailable($contract, 'Resposta OAuth sem access_token.');
             throw new RuntimeException('Resposta OAuth SERPRO inválida (access_token).');
         }
 
-        $jwtToken = null;
-        if (! empty($json['jwt_token'])) {
-            $jwtToken = (string) $json['jwt_token'];
-        } elseif (! empty($json['jwt'])) {
-            // Compat transitória com resposta legada
-            $jwtToken = (string) $json['jwt'];
-        }
+        $jwtToken = ! empty($json['jwt_token']) ? (string) $json['jwt_token'] : null;
 
         $requireJwt = (bool) config('serpro.oauth.require_jwt_token', true);
         if ($requireJwt && ($jwtToken === null || $jwtToken === '')) {
@@ -152,7 +146,6 @@ final class HttpSerproContractAuthenticator implements SerproContractAuthenticat
             expiresAt: CarbonImmutable::now()->addSeconds(max(60, $expiresIn)),
             jwtToken: $jwtToken,
             fromCache: false,
-            jwt: $jwtToken,
         );
 
         $this->tokenCache->put($contract, $token);

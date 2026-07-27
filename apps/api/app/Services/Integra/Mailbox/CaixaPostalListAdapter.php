@@ -59,10 +59,7 @@ final class CaixaPostalListAdapter implements FiscalSourceAdapter
     {
         return strcasecmp($request->systemCode, $this->systemCode()) === 0
             && strcasecmp($request->serviceCode, $this->serviceCode()) === 0
-            && (
-                strcasecmp($request->operationCode, $this->operationCode()) === 0
-                || strcasecmp($request->operationCode, 'MONITOR') === 0
-            );
+            && strcasecmp($request->operationCode, $this->operationCode()) === 0;
     }
 
     public function execute(FiscalAdapterRequest $request): FiscalAdapterResult
@@ -79,7 +76,7 @@ final class CaixaPostalListAdapter implements FiscalSourceAdapter
 
         do {
             $context = [
-                'office_id' => $request->office->id,
+                'tenant_id' => $request->tenant->id,
                 'client_id' => $request->client->id,
                 'correlation_id' => $request->run->correlation_id,
                 'status_leitura' => '0',
@@ -91,9 +88,9 @@ final class CaixaPostalListAdapter implements FiscalSourceAdapter
 
             $list = $this->client->listMessages($context);
             if (! $list->success) {
-                $this->store->markListError($request->office, $request->client, $request->run->id);
+                $this->store->markListError($request->tenant, $request->client, $request->run->id);
                 $this->syncState->markListFailed(
-                    $request->office,
+                    $request->tenant,
                     $request->client,
                     $list->errorCode ?? 'MAILBOX_LIST_FAILED',
                 );
@@ -118,29 +115,31 @@ final class CaixaPostalListAdapter implements FiscalSourceAdapter
 
             $lastPage = strtoupper(trim((string) ($list->rawMeta['indicador_ultima_pagina'] ?? '')));
             $nextPointer = trim((string) ($list->rawMeta['ponteiro_proxima_pagina'] ?? ''));
+            if (! in_array($lastPage, ['S', 'N'], true)) {
+                $this->store->markListError($request->tenant, $request->client, $request->run->id);
+
+                return FiscalAdapterResult::failed(
+                    'SERPRO retornou indicador de última página inválido.',
+                    'MAILBOX_PAGINATION_INDICATOR_INVALID',
+                );
+            }
             if ($lastPage === 'S') {
                 $paginationComplete = true;
                 break;
             }
             if ($nextPointer === '') {
-                if ($lastPage === 'N') {
-                    $this->store->markListError($request->office, $request->client, $request->run->id);
+                $this->store->markListError($request->tenant, $request->client, $request->run->id);
 
-                    return FiscalAdapterResult::failed(
-                        'SERPRO indicou nova página sem fornecer o ponteiro de continuação.',
-                        'MAILBOX_PAGINATION_CURSOR_MISSING',
-                    );
-                }
-
-                // Compatibilidade com respostas antigas que não informavam paginação.
-                $paginationComplete = true;
-                break;
+                return FiscalAdapterResult::failed(
+                    'SERPRO indicou nova página sem fornecer o ponteiro de continuação.',
+                    'MAILBOX_PAGINATION_CURSOR_MISSING',
+                );
             }
             if ($page >= $maxPages) {
                 break;
             }
             if (isset($seenPointers[$nextPointer])) {
-                $this->store->markListError($request->office, $request->client, $request->run->id);
+                $this->store->markListError($request->tenant, $request->client, $request->run->id);
 
                 return FiscalAdapterResult::failed(
                     'SERPRO repetiu o ponteiro de paginação da Caixa Postal.',
@@ -179,19 +178,19 @@ final class CaixaPostalListAdapter implements FiscalSourceAdapter
         );
 
         $applied = $this->store->applyList(
-            $request->office,
+            $request->tenant,
             $request->client,
             $list,
             $request->run->id,
         );
 
         $this->syncState->markListSucceeded(
-            $request->office,
+            $request->tenant,
             $request->client,
             (bool) ($request->run->progress['mailbox_full_reconciliation'] ?? false),
         );
 
-        $detailRuns = $this->detailEnqueue->enqueueAfterList($request->office, $request->client);
+        $detailRuns = $this->detailEnqueue->enqueueAfterList($request->tenant, $request->client);
 
         $evidence = json_encode([
             'operation' => 'LISTAR',

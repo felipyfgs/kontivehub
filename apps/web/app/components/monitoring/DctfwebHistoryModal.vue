@@ -33,14 +33,13 @@ const error = ref<string | null>(null)
 const history = ref<DctfwebHistoryPayload | null>(null)
 let requestGeneration = 0
 
-const payload = computed(() => history.value || {})
 const periods = computed(() =>
   [...dctfwebHistoryPeriods(history.value)].sort((a, b) =>
     String(b.period_key || '').localeCompare(String(a.period_key || ''))
   )
 )
-const stateMeta = computed(() => dctfwebDeclarationMeta(payload.value.declaration_state))
-const serproCalled = computed(() => payload.value.provenance?.serpro_called === true)
+const stateMeta = computed(() => dctfwebDeclarationMeta(history.value?.declaration_state))
+const serproCalled = computed(() => history.value?.provenance.serpro_called === true)
 const provenanceLabel = computed(() =>
   serproCalled.value ? 'Resultado de consulta registrado' : 'Projeção local'
 )
@@ -79,12 +78,7 @@ watch(
 )
 
 function docsOf(period: DctfwebHistoryPeriod): DctfwebEvidenceDescriptor[] {
-  const entries = [
-    ...(period.documents || []),
-    ...(period.artifacts || [])
-  ]
-
-  return [...new Map(entries.map(document => [document.id, document])).values()]
+  return period.documents
 }
 
 function documentDownloadUrl(doc: DctfwebEvidenceDescriptor): string | undefined {
@@ -134,13 +128,13 @@ function documentDownloadUrl(doc: DctfwebEvidenceDescriptor): string | undefined
               class="rounded-sm"
             />
             <span class="text-muted text-sm">
-              PA esperado: {{ formatDctfwebPeriod(payload.expected_period_key) }}
+              PA esperado: {{ formatDctfwebPeriod(history?.expected_period_key) }}
             </span>
             <span
-              v-if="payload.last_valid_query_at"
+              v-if="history?.last_valid_query_at"
               class="text-muted text-sm"
             >
-              · Última busca: {{ formatDateTime(payload.last_valid_query_at) }}
+              · Última busca: {{ formatDateTime(history.last_valid_query_at) }}
             </span>
           </div>
 

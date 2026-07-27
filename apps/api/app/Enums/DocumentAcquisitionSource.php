@@ -8,7 +8,6 @@ namespace App\Enums;
  */
 enum DocumentAcquisitionSource: string
 {
-    case Import = 'IMPORT'; // legado síncrono — preferir MANUAL_XML / MANUAL_ZIP
     case ManualXml = 'MANUAL_XML';
     case ManualZip = 'MANUAL_ZIP';
     case AutXmlDistNsu = 'AUTXML_DIST_NSU';
@@ -22,16 +21,11 @@ enum DocumentAcquisitionSource: string
     case SvrsNfe55DownloadXmlDfe = 'SVRS_NFE55_DOWNLOAD_XML_DFE';
     case Adn = 'ADN';
     case NfeDistDfe = 'NFE_DISTDFE';
-    /** @deprecated Preferir CteDistNsu — mantido para aquisições legadas */
-    case CteDistDfe = 'CTE_DISTDFE';
     case ProtocolQuery = 'PROTOCOL_QUERY'; // só metadados/chave — não XML de guarda
-    /** Aquisição sintética no backfill de proveniência (sem chegada original). */
-    case LegacyBackfill = 'LEGACY_BACKFILL';
 
     public function label(): string
     {
         return match ($this) {
-            self::Import => 'Importação manual',
             self::ManualXml => 'Importação XML',
             self::ManualZip => 'Importação ZIP',
             self::AutXmlDistNsu => 'DistDFe autXML NF-e (NSU)',
@@ -40,13 +34,11 @@ enum DocumentAcquisitionSource: string
             self::EmitterPush => 'Entrega autenticada do emissor',
             self::MaOfficialPackage => 'Pacote oficial SEFAZ-MA',
             self::MaM2mRetrieval => 'Recuperação M2M MA',
-            self::LegacyBackfill => 'Backfill de proveniência (legado)',
             self::MaAssistedUpload => 'Upload assistido MA',
             self::SvrsNfceDownloadXmlDfe => 'Download XML NFC-e SVRS',
             self::SvrsNfe55DownloadXmlDfe => 'Download XML NF-e 55 SVRS',
             self::Adn => 'ADN NFS-e',
             self::NfeDistDfe => 'DistDFe NF-e',
-            self::CteDistDfe => 'DistDFe CT-e (legado)',
             self::ProtocolQuery => 'Consulta de protocolo',
         };
     }
@@ -65,7 +57,6 @@ enum DocumentAcquisitionSource: string
     public function isManualImport(): bool
     {
         return in_array($this, [
-            self::Import,
             self::ManualXml,
             self::ManualZip,
         ], true);
@@ -84,7 +75,6 @@ enum DocumentAcquisitionSource: string
         return in_array($this, [
             self::CteDistNsu,
             self::CteAutXmlDistNsu,
-            self::CteDistDfe,
             self::EmitterPush,
         ], true);
     }

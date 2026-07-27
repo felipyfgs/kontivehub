@@ -12,7 +12,7 @@ use App\Enums\FiscalTrigger;
 use App\Enums\TaxInstallmentModality;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Integra\Parcelamento\ParcelamentoOfficialCodec;
 use App\Services\Integra\Parcelamento\ParcelamentoProjectionService;
 use App\Services\Integra\Parcelamento\ParcelamentoReadAdapter;
@@ -27,9 +27,9 @@ class ParcelamentoReadAdapterTest extends TestCase
     public function test_monitor_follows_official_call_shape_without_payment_n_plus_one(): void
     {
         config()->set('fiscal_monitoring.enabled', true);
-        $office = Office::factory()->create();
-        $client = Client::factory()->for($office)->create();
-        $run = $this->makeRun($office, $client, TaxInstallmentModality::Parcsn);
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->for($tenant)->create();
+        $run = $this->makeRun($tenant, $client, TaxInstallmentModality::Parcsn);
         $source = new RecordingParcelamentoSource([
             'CONSULTAR_PEDIDOS' => [
                 'success' => true,
@@ -60,7 +60,7 @@ class ParcelamentoReadAdapterTest extends TestCase
         ]);
 
         $result = $this->adapter($source)->execute(new FiscalAdapterRequest(
-            $office,
+            $tenant,
             $client,
             $run,
             'INTEGRA_PARCELAMENTO',
@@ -85,9 +85,9 @@ class ParcelamentoReadAdapterTest extends TestCase
     public function test_detail_failure_is_partial_and_other_orders_are_projected(): void
     {
         config()->set('fiscal_monitoring.enabled', true);
-        $office = Office::factory()->create();
-        $client = Client::factory()->for($office)->create();
-        $run = $this->makeRun($office, $client, TaxInstallmentModality::Relpsn);
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->for($tenant)->create();
+        $run = $this->makeRun($tenant, $client, TaxInstallmentModality::Relpsn);
         $source = new RecordingParcelamentoSource([
             'CONSULTAR_PEDIDOS' => [
                 'success' => true,
@@ -113,7 +113,7 @@ class ParcelamentoReadAdapterTest extends TestCase
         ]);
 
         $result = $this->adapter($source)->execute(new FiscalAdapterRequest(
-            $office,
+            $tenant,
             $client,
             $run,
             'INTEGRA_PARCELAMENTO',
@@ -138,10 +138,10 @@ class ParcelamentoReadAdapterTest extends TestCase
         );
     }
 
-    private function makeRun(Office $office, Client $client, TaxInstallmentModality $modality): FiscalMonitoringRun
+    private function makeRun(Tenant $tenant, Client $client, TaxInstallmentModality $modality): FiscalMonitoringRun
     {
         return FiscalMonitoringRun::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'system_code' => 'INTEGRA_PARCELAMENTO',
             'service_code' => $modality->value,

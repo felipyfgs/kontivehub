@@ -12,7 +12,7 @@ final class SvrsEgressReservation
         public readonly string $cohortId,
         public readonly string $rootCnpj,
         public readonly string $channel,
-        public readonly int $officeId,
+        public readonly int $tenantId,
         public readonly int $exchangesReserved,
         public int $exchangesConsumed = 0,
     ) {}

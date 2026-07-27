@@ -56,7 +56,7 @@ final class DctfwebTransmitirAdapter extends AbstractDctfwebAdapter
         $actor = $this->resolveActor($request);
 
         $gate = $this->mutations->assertMayMutate(
-            office: $request->office,
+            tenant: $request->tenant,
             client: $request->client,
             systemCode: $this->systemCode(),
             serviceCode: $this->serviceCode(),
@@ -73,7 +73,7 @@ final class DctfwebTransmitirAdapter extends AbstractDctfwebAdapter
         }
 
         $attempt = $this->mutations->beginAttempt(
-            office: $request->office,
+            tenant: $request->tenant,
             client: $request->client,
             systemCode: $this->systemCode(),
             serviceCode: $this->serviceCode(),
@@ -127,7 +127,7 @@ final class DctfwebTransmitirAdapter extends AbstractDctfwebAdapter
         $bytes = DctfwebIntegraCaller::evidenceBytes($response->body);
         $projected = $this->declarations->projectFromRecibo(
             run: $request->run,
-            office: $request->office,
+            tenant: $request->tenant,
             client: $request->client,
             periodKey: $periodKey,
             evidenceBytes: $bytes,

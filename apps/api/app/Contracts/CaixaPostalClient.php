@@ -12,7 +12,7 @@ use App\DTO\Mailbox\CaixaPostalListResult;
 interface CaixaPostalClient
 {
     /**
-     * @param  array<string, mixed>  $context  office_id, client_id, cnpj, correlation_id…
+     * @param  array<string, mixed>  $context  tenant_id, client_id, cnpj, correlation_id…
      */
     public function listMessages(array $context = []): CaixaPostalListResult;
 

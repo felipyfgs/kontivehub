@@ -5,7 +5,7 @@ namespace App\Services\Fiscal\Declarations;
 use App\Enums\SerproOfficialState;
 use App\Enums\SerproPlatformSupport;
 use App\Models\Client;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Fiscal\ManualConsult\ManualConsultActionCatalog;
 use App\Services\Fiscal\ManualConsult\ManualConsultExecutionService;
 use App\Services\Serpro\Catalog\OfficialServiceCatalogManifest;
@@ -27,7 +27,7 @@ final class DeclarationOperationReadService
      * @return array<string, mixed>
      */
     public function execute(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $actionId,
         array $params,
@@ -56,7 +56,7 @@ final class DeclarationOperationReadService
         }
 
         return $this->manualExecution->execute(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             actionId: $definition->actionId,
             params: $this->toManualParams($operationKey, $this->inputs->validate($operationKey, $params)),

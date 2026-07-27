@@ -15,7 +15,7 @@ final class MailboxCostPolicy
     /**
      * @return array{operation:string,quantity:int,estimated_cost_micros:?int,unit_cost_micros:?int,currency:?string,price_source:string,price_revision:?string,allowed:bool,block_reason:?string,budget_micros:?int,spent_micros:int}
      */
-    public function preview(int $officeId, string $operation, int $quantity = 1): array
+    public function preview(int $tenantId, string $operation, int $quantity = 1): array
     {
         $operation = strtoupper(trim($operation));
         if (! in_array($operation, ['LISTAR', 'DETALHE'], true)) {
@@ -34,11 +34,11 @@ final class MailboxCostPolicy
             ? 'UNKNOWN'
             : ($estimate['authorizes_production'] ? 'OFFICIAL' : 'SHADOW');
         $setting = MailboxMonitoringSetting::query()->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->first();
         $budget = $setting?->monthly_budget_micros;
         $spent = (int) SerproApiUsageEntry::query()->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('is_billable_attempt', true)
             ->whereBetween('occurred_at', [now()->startOfMonth(), now()->endOfMonth()])
             ->sum('estimated_cost_micros');
@@ -65,9 +65,9 @@ final class MailboxCostPolicy
         ];
     }
 
-    public function assertAllowed(int $officeId, string $operation, int $quantity = 1): array
+    public function assertAllowed(int $tenantId, string $operation, int $quantity = 1): array
     {
-        $preview = $this->preview($officeId, $operation, $quantity);
+        $preview = $this->preview($tenantId, $operation, $quantity);
         if (! $preview['allowed']) {
             throw new \RuntimeException((string) $preview['block_reason']);
         }

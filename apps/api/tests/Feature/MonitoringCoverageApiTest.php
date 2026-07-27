@@ -8,11 +8,11 @@ use App\Enums\FiscalRunStatus;
 use App\Enums\FiscalSituation;
 use App\Enums\FiscalSourceProvenance;
 use App\Enums\FiscalTrigger;
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
 use App\Models\FiscalSnapshot;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -24,8 +24,8 @@ class MonitoringCoverageApiTest extends TestCase
 
     public function test_viewer_can_read_the_sanitized_monitoring_contract(): void
     {
-        $office = Office::factory()->create();
-        $viewer = User::factory()->forOffice($office, OfficeRole::Viewer)->create();
+        $tenant = Tenant::factory()->create();
+        $viewer = User::factory()->forTenant($tenant, TenantRole::TenantUser, 'viewer')->create();
         Sanctum::actingAs($viewer);
 
         $response = $this->getJson('/api/v1/fiscal/monitoring/coverage')
@@ -35,12 +35,12 @@ class MonitoringCoverageApiTest extends TestCase
             ->assertJsonPath('data.surfaces.0.surface_key', 'monitoring_dashboard')
             ->assertJsonPath('data.surfaces.1.capabilities.0.actions.0.operation_class', 'READ')
             ->assertJsonMissingPath('data.surfaces.0.operation_key')
-            ->assertJsonMissingPath('data.surfaces.0.office_id');
+            ->assertJsonMissingPath('data.surfaces.0.tenant_id');
 
         $this->assertSanitized($response->json());
     }
 
-    public function test_monitoring_contract_requires_authentication_and_office_membership(): void
+    public function test_monitoring_contract_requires_authentication_and_tenant_membership(): void
     {
         $this->getJson('/api/v1/fiscal/monitoring/coverage')->assertUnauthorized();
 
@@ -48,13 +48,13 @@ class MonitoringCoverageApiTest extends TestCase
         $this->getJson('/api/v1/fiscal/monitoring/coverage')->assertForbidden();
     }
 
-    public function test_manual_inventory_is_sanitized_and_cannot_cross_the_current_office(): void
+    public function test_manual_inventory_is_sanitized_and_cannot_cross_the_current_tenant(): void
     {
-        $office = Office::factory()->create();
-        $otherOffice = Office::factory()->create();
-        $viewer = User::factory()->forOffice($office, OfficeRole::Viewer)->create();
-        $client = Client::factory()->for($office)->create();
-        $otherClient = Client::factory()->for($otherOffice)->create();
+        $tenant = Tenant::factory()->create();
+        $otherTenant = Tenant::factory()->create();
+        $viewer = User::factory()->forTenant($tenant, TenantRole::TenantUser, 'viewer')->create();
+        $client = Client::factory()->for($tenant)->create();
+        $otherClient = Client::factory()->for($otherTenant)->create();
         Sanctum::actingAs($viewer);
 
         $response = $this->getJson('/api/v1/fiscal/manual-consults?client_id='.$client->id)
@@ -79,26 +79,26 @@ class MonitoringCoverageApiTest extends TestCase
             ->assertNotFound()
             ->assertJsonPath('code', 'CLIENT_NOT_FOUND');
 
-        $this->getJson('/api/v1/fiscal/manual-consults?office_id='.$otherOffice->id)
+        $this->getJson('/api/v1/fiscal/manual-consults?tenant_id='.$otherTenant->id)
             ->assertUnprocessable()
-            ->assertJsonPath('code', 'CLIENT_OFFICE_ID_REJECTED');
+            ->assertJsonPath('code', 'CLIENT_TENANT_ID_REJECTED');
     }
 
     public function test_manual_inventory_preserves_last_snapshot_when_refresh_fails(): void
     {
         config()->set('fiscal_monitoring.projection.snapshot_freshness_ttl_seconds', 3600);
-        $office = Office::factory()->create();
-        $viewer = User::factory()->forOffice($office, OfficeRole::Viewer)->create();
-        $client = Client::factory()->for($office)->create();
+        $tenant = Tenant::factory()->create();
+        $viewer = User::factory()->forTenant($tenant, TenantRole::TenantUser, 'viewer')->create();
+        $client = Client::factory()->for($tenant)->create();
         $successful = $this->createPgdasdRun(
-            $office,
+            $tenant,
             $client,
             FiscalRunStatus::Completed,
             FiscalRunResult::Success,
             'monitoring-state:success',
         );
         $snapshot = FiscalSnapshot::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'run_id' => $successful->id,
             'client_id' => $client->id,
             'system_code' => 'INTEGRA_SN',
@@ -114,7 +114,7 @@ class MonitoringCoverageApiTest extends TestCase
             'created_at' => now()->subHours(2),
         ]);
         $this->createPgdasdRun(
-            $office,
+            $tenant,
             $client,
             FiscalRunStatus::Failed,
             FiscalRunResult::Failed,
@@ -143,7 +143,7 @@ class MonitoringCoverageApiTest extends TestCase
     }
 
     private function createPgdasdRun(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         FiscalRunStatus $status,
         FiscalRunResult $result,
@@ -151,7 +151,7 @@ class MonitoringCoverageApiTest extends TestCase
         ?string $errorCode = null,
     ): FiscalMonitoringRun {
         return FiscalMonitoringRun::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'system_code' => 'INTEGRA_SN',
             'service_code' => 'PGDASD',
@@ -178,7 +178,7 @@ class MonitoringCoverageApiTest extends TestCase
             'handler',
             'run_codes',
             'required_proxy_powers',
-            'office_id',
+            'tenant_id',
             'business_data',
         ];
 

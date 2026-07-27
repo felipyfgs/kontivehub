@@ -2,12 +2,12 @@
 
 namespace Tests\Feature\FgtsDigital;
 
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Jobs\Fiscal\ExecuteFgtsDigitalPolicyJob;
 use App\Jobs\Fiscal\ExecuteFgtsDigitalRunJob;
 use App\Models\Client;
 use App\Models\FiscalMonitoringSchedule;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\FgtsDigital\FgtsDigitalPortalService;
 use App\Services\FgtsDigital\FgtsDigitalReadinessService;
@@ -36,9 +36,9 @@ class FgtsDigitalSchedulerTest extends TestCase
     public function test_query_schedule_is_explicit_and_does_nothing_when_global_opt_in_is_off(): void
     {
         Queue::fake();
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
-        $schedule = $this->schedule($office, $client, 'QUERY_GUIDES');
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
+        $schedule = $this->schedule($tenant, $client, 'QUERY_GUIDES');
 
         config()->set('fgts_digital.scheduler.enabled', false);
         $this->assertSame(
@@ -57,10 +57,10 @@ class FgtsDigitalSchedulerTest extends TestCase
     public function test_scheduled_emission_requires_bounded_policy_and_job_revalidates_before_authorizing(): void
     {
         Queue::fake();
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
-        $schedule = $this->schedule($office, $client, 'EMIT_GUIDE', [
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $schedule = $this->schedule($tenant, $client, 'EMIT_GUIDE', [
             'fgts_digital_policy' => [
                 'enabled' => true,
                 'authorized_by_user_id' => $admin->id,
@@ -88,7 +88,7 @@ class FgtsDigitalSchedulerTest extends TestCase
         Queue::assertPushed(ExecuteFgtsDigitalPolicyJob::class, 1);
 
         Queue::fake();
-        (new ExecuteFgtsDigitalPolicyJob((int) $office->id, (int) $schedule->id))->handle(
+        (new ExecuteFgtsDigitalPolicyJob((int) $tenant->id, (int) $schedule->id))->handle(
             app(FgtsDigitalScheduleDispatcher::class),
             app(FgtsDigitalReadinessService::class),
             app(FgtsDigitalPortalService::class),
@@ -98,13 +98,13 @@ class FgtsDigitalSchedulerTest extends TestCase
 
     /** @param array<string, mixed> $metadata */
     private function schedule(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $operation,
         array $metadata = [],
     ): FiscalMonitoringSchedule {
         return FiscalMonitoringSchedule::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'system_code' => 'FGTS_DIGITAL',
             'service_code' => 'FGTS_DIGITAL',

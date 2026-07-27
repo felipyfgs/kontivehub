@@ -1,4 +1,4 @@
-import type { OperationalProcess, OperationalProcessTask } from '~/types/work'
+import type { WorkProcess, WorkProcessTask } from '~/types/work'
 
 export interface WorkSelectionBulkItem {
   id: number
@@ -63,7 +63,7 @@ export function shouldReloadWorkProcessesAfterSessionReset(
 }
 
 /** Tarefas ordenadas de um processo (mesma regra da lista). */
-export function sortedProcessTasks(process: OperationalProcess): OperationalProcessTask[] {
+export function sortedProcessTasks(process: WorkProcess): WorkProcessTask[] {
   return [...(process.tasks || [])].sort((a, b) => a.sort_order - b.sort_order || a.id - b.id)
 }
 
@@ -72,7 +72,7 @@ export function sortedProcessTasks(process: OperationalProcess): OperationalProc
  * todas as tarefas embutidas desses processos.
  */
 export function cascadeProcessTaskSelection(input: {
-  processes: OperationalProcess[]
+  processes: WorkProcess[]
   processSelection: Record<string, boolean>
   taskSelection: Record<string, boolean>
   /** IDs de processo cujo estado acabou de mudar (para sincronizar só o necessário). */
@@ -105,7 +105,7 @@ export function cascadeProcessTaskSelection(input: {
 
 /** Seleciona ou limpa todos os processos da página e todas as tarefas deles. */
 export function cascadeSelectAllProcessesOnPage(input: {
-  processes: OperationalProcess[]
+  processes: WorkProcess[]
   selected: boolean
 }): { processSelection: Record<string, boolean>, taskSelection: Record<string, boolean> } {
   if (!input.selected) {
@@ -124,7 +124,7 @@ export function cascadeSelectAllProcessesOnPage(input: {
 }
 
 export function selectedMaterialisedBulkItems(input: {
-  processes: readonly OperationalProcess[]
+  processes: readonly WorkProcess[]
   processSelection: Record<string, boolean>
   taskSelection: Record<string, boolean>
 }): { processes: WorkSelectionBulkItem[], tasks: WorkSelectionBulkItem[] } {

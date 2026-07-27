@@ -139,9 +139,6 @@ const customersTableUi = Object.freeze({
 
 export const DASHBOARD_TABLE_UI = customersTableUi
 
-/** Alias histórico — mesma anatomia de customers.vue (não reexporta o mesmo nome). */
-export const DENSE_DASHBOARD_TABLE_UI = customersTableUi
-
 /**
  * HomeSales.vue — header/linhas mais apertados que a lista admin.
  * Anula explicitamente px-4/py-3.5/p-4 do tema Nuxt UI.

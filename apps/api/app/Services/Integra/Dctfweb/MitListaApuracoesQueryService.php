@@ -6,8 +6,8 @@ use App\DTO\Integra\MitListaApuracoesRequest;
 use App\Jobs\Fiscal\ExecuteFiscalMonitoringRunJob;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
-use App\Models\MitApuracao;
-use App\Models\Office;
+use App\Models\MitAssessment;
+use App\Models\Tenant;
 use App\Services\FiscalMonitoring\FiscalMonitoringRunService;
 use InvalidArgumentException;
 
@@ -19,16 +19,16 @@ final class MitListaApuracoesQueryService
     ) {}
 
     public function enqueue(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         MitListaApuracoesRequest $filters,
         ?int $actorId,
         ?string $correlationId = null,
     ): FiscalMonitoringRun {
-        $this->assertClient($office, $client);
+        $this->assertClient($tenant, $client);
 
         $run = $this->runs->enqueueManual(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             systemCode: DctfwebCodes::SYSTEM_MIT,
             serviceCode: DctfwebCodes::SERVICE_MIT,
@@ -54,33 +54,33 @@ final class MitListaApuracoesQueryService
     /**
      * @return list<array<string, mixed>>
      */
-    public function localList(Office $office, Client $client, ?int $year = null): array
+    public function localList(Tenant $tenant, Client $client, ?int $year = null): array
     {
-        $this->assertClient($office, $client);
+        $this->assertClient($tenant, $client);
         if ($year !== null && ($year < 2000 || $year > 2100)) {
             throw new InvalidArgumentException('Ano da lista MIT inválido.');
         }
 
-        return MitApuracao::query()
+        return MitAssessment::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->when($year !== null, fn ($q) => $q->where('period_key', 'like', sprintf('%04d-%%', $year)))
             ->orderByDesc('period_key')
             ->get()
-            ->filter(static function (MitApuracao $apuracao): bool {
+            ->filter(static function (MitAssessment $apuracao): bool {
                 $metadata = is_array($apuracao->metadata) ? $apuracao->metadata : [];
 
                 return is_array($metadata['lista_apuracoes_317'] ?? null);
             })
-            ->map(static fn (MitApuracao $apuracao): array => $apuracao->toPublicArray())
+            ->map(static fn (MitAssessment $apuracao): array => $apuracao->toPublicArray())
             ->values()
             ->all();
     }
 
-    private function assertClient(Office $office, Client $client): void
+    private function assertClient(Tenant $tenant, Client $client): void
     {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new InvalidArgumentException('Cliente não pertence ao escritório ativo.');
         }
     }

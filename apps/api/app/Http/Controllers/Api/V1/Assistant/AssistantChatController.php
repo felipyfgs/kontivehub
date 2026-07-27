@@ -8,8 +8,8 @@ use App\Models\AssistantMessage;
 use App\Services\Assistant\AssistantAvailability;
 use App\Services\Assistant\AssistantChatService;
 use App\Services\Assistant\AssistantUiMessageStream;
-use App\Support\CurrentOffice;
-use App\Support\Work\RejectClientOfficeId;
+use App\Support\CurrentTenant;
+use App\Support\Work\RejectClientTenantId;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -25,11 +25,11 @@ class AssistantChatController extends Controller
     public function chat(
         Request $request,
         AssistantConversation $conversation,
-        CurrentOffice $currentOffice,
+        CurrentTenant $currentTenant,
     ): JsonResponse|StreamedResponse {
         $this->availability->assertEnabled();
-        RejectClientOfficeId::strip($request);
-        $this->assertOwned($conversation, $request, $currentOffice);
+        RejectClientTenantId::strip($request);
+        $this->assertOwned($conversation, $request, $currentTenant);
 
         $data = $request->validate([
             'message' => ['required', 'string', 'max:8000'],
@@ -85,11 +85,11 @@ class AssistantChatController extends Controller
     public function approve(
         Request $request,
         AssistantConversation $conversation,
-        CurrentOffice $currentOffice,
+        CurrentTenant $currentTenant,
     ): JsonResponse {
         $this->availability->assertEnabled();
-        RejectClientOfficeId::strip($request);
-        $this->assertOwned($conversation, $request, $currentOffice);
+        RejectClientTenantId::strip($request);
+        $this->assertOwned($conversation, $request, $currentTenant);
 
         $data = $request->validate([
             'approval_token' => ['required', 'string', 'max:64'],
@@ -117,11 +117,11 @@ class AssistantChatController extends Controller
     public function deny(
         Request $request,
         AssistantConversation $conversation,
-        CurrentOffice $currentOffice,
+        CurrentTenant $currentTenant,
     ): JsonResponse {
         $this->availability->assertEnabled();
-        RejectClientOfficeId::strip($request);
-        $this->assertOwned($conversation, $request, $currentOffice);
+        RejectClientTenantId::strip($request);
+        $this->assertOwned($conversation, $request, $currentTenant);
 
         $data = $request->validate([
             'approval_token' => ['required', 'string', 'max:64'],
@@ -148,9 +148,9 @@ class AssistantChatController extends Controller
     private function assertOwned(
         AssistantConversation $conversation,
         Request $request,
-        CurrentOffice $currentOffice,
+        CurrentTenant $currentTenant,
     ): void {
-        if ((int) $conversation->office_id !== (int) $currentOffice->id()
+        if ((int) $conversation->tenant_id !== (int) $currentTenant->id()
             || (int) $conversation->user_id !== (int) $request->user()->id) {
             abort(404);
         }

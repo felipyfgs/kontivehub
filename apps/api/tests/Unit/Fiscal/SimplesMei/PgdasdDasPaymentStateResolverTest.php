@@ -98,7 +98,7 @@ class PgdasdDasPaymentStateResolverTest extends TestCase
         $this->assertSame('PAGTOWEB_COVERAGE_INCOMPLETE', $pack['reason']);
     }
 
-    public function test_legacy_das_pago_does_not_decide_payment_state_without_pagtoweb_auth(): void
+    public function test_payment_projection_does_not_replace_pagtoweb_evidence(): void
     {
         $pack = $this->resolver->resolve([
             $this->das(null, null, true),

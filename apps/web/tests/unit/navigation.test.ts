@@ -18,8 +18,8 @@ import { workProcessContextNav } from '~/utils/work-navigation'
 
 const viewer = {
   id: 10,
-  role: 'VIEWER',
-  context_status: 'ready'
+  effective_permissions: ['fiscal.monitoring.view'],
+  context_status: 'ok'
 } as MeUser
 
 describe('navegação global no sidebar', () => {
@@ -122,8 +122,10 @@ describe('navegação global no sidebar', () => {
   it('expõe Escritórios, Módulos fiscais e um único SERPRO dentro de Admin', () => {
     const user = {
       id: 1,
-      is_platform_admin: true,
-      context_status: 'office_context_required'
+      platform_role: 'platform_admin',
+      access_mode: null,
+      current_tenant: null,
+      context_status: 'tenant_context_required'
     } as MeUser
     const admin = mainDestinations(user, { path: '/admin/serpro/contracts' })[0]
 
@@ -136,6 +138,31 @@ describe('navegação global no sidebar', () => {
     expect(admin?.children?.some(item => item.label?.startsWith('SERPRO ·'))).toBe(false)
     expect(admin?.children?.find(item => item.label === 'SERPRO'))
       .toMatchObject({ active: true, to: '/admin/serpro' })
+  })
+
+  it('mantém os módulos Admin quando a plataforma possui contexto privilegiado', () => {
+    const user = {
+      id: 1,
+      platform_role: 'platform_admin',
+      tenant_role: 'tenant_admin',
+      access_mode: 'platform_privileged',
+      context_status: 'ok',
+      current_tenant: {
+        id: 10,
+        name: 'Plataforma',
+        slug: 'plataforma'
+      },
+      effective_permissions: ['clients.manage']
+    } as MeUser
+
+    const admin = mainDestinations(user, { path: '/' })
+      .find(item => item.id === 'platform-admin')
+
+    expect(admin?.children?.map(item => item.label)).toEqual([
+      'Escritórios',
+      'Módulos fiscais',
+      'SERPRO'
+    ])
   })
 })
 
@@ -263,7 +290,7 @@ describe('tabs locais', () => {
     expect(configuration).not.toContain('ShellScrollableTabs')
     expect(overview).toContain('admin-serpro-overview-secondary-links')
     expect(configuration).toContain('admin-serpro-config-secondary-links')
-    expect(configuration).not.toContain('serpro-config-pending-offices')
+    expect(configuration).not.toContain('serpro-config-pending-tenants')
     expect(configuration).not.toContain('serpro-config-history')
     expect(configuration).toContain('serpro-config-credentials')
     expect(configuration).not.toContain('serpro-production-onboarding')

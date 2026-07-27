@@ -7,7 +7,7 @@ import type { TableColumn } from '@nuxt/ui'
 import type {
   FiscalModuleAdminItem,
   FiscalModuleRestrictionControl,
-  PlatformOfficeSummary
+  PlatformTenantSummary
 } from '~/types/api'
 import ShellDataTable from '~/components/shell/DataTable.vue'
 import ShellFormModal from '~/components/shell/FormModal.vue'
@@ -20,11 +20,11 @@ import {
 } from '~/utils/fiscal-module-controls'
 import { formatDateTime } from '~/utils/format'
 
-type RestrictionScope = 'global' | 'office'
+type RestrictionScope = 'global' | 'tenant'
 type RestrictionTarget = {
   scope: RestrictionScope
   module: FiscalModuleAdminItem
-  officeId?: number
+  tenantId?: number
 }
 
 const api = useApi()
@@ -32,29 +32,29 @@ const toast = useToast()
 const { sessionEpoch, canAccessPlatformAdmin } = useDashboard()
 
 const loadingGlobal = ref(false)
-const loadingOffices = ref(false)
-const loadingOfficeModules = ref(false)
+const loadingTenants = ref(false)
+const loadingTenantModules = ref(false)
 const submitting = ref(false)
 const loadError = ref<string | null>(null)
-const officeLoadError = ref<string | null>(null)
+const tenantLoadError = ref<string | null>(null)
 const profile = ref('dev')
 const killSwitch = ref(false)
 const globalModules = ref<FiscalModuleAdminItem[]>([])
-const officeModules = ref<FiscalModuleAdminItem[]>([])
-const offices = ref<PlatformOfficeSummary[]>([])
-const selectedOfficeId = ref<number | null>(null)
+const tenantModules = ref<FiscalModuleAdminItem[]>([])
+const tenants = ref<PlatformTenantSummary[]>([])
+const selectedTenantId = ref<number | null>(null)
 const target = ref<RestrictionTarget | null>(null)
 const restrictionOpen = ref(false)
 const reason = ref('')
 const password = ref('')
 
-const officeOptions = computed(() => offices.value.map(office => ({
-  id: office.id,
-  label: office.name,
-  description: `${office.slug} · #${office.id}`
+const tenantOptions = computed(() => tenants.value.map(tenant => ({
+  id: tenant.id,
+  label: tenant.name,
+  description: `${tenant.slug} · #${tenant.id}`
 })))
-const selectedOffice = computed(() =>
-  offices.value.find(office => office.id === selectedOfficeId.value) || null
+const selectedTenant = computed(() =>
+  tenants.value.find(tenant => tenant.id === selectedTenantId.value) || null
 )
 const availableCount = computed(() => globalModules.value.filter(item => item.state === 'AVAILABLE').length)
 const restrictedCount = computed(() => globalModules.value.filter(item => item.state === 'GLOBALLY_RESTRICTED').length)
@@ -66,14 +66,14 @@ const targetControl = computed(() => {
   if (!target.value) return null
   return target.value.scope === 'global'
     ? target.value.module.global_restriction
-    : target.value.module.office_restriction
+    : target.value.module.tenant_restriction
 })
 const targetIsRestricted = computed(() => Boolean(targetControl.value?.restricted))
 const restrictionTitle = computed(() => {
   const verb = targetIsRestricted.value ? 'Liberar' : 'Restringir'
   const suffix = target.value?.scope === 'global'
     ? 'para todos'
-    : `para ${selectedOffice.value?.name || 'o escritório'}`
+    : `para ${selectedTenant.value?.name || 'o escritório'}`
   return `${verb} ${target.value?.module.label || 'módulo'} ${suffix}`
 })
 const restrictionDescription = computed(() => targetIsRestricted.value
@@ -90,10 +90,10 @@ const globalColumns: TableColumn<FiscalModuleAdminItem>[] = [
   { id: 'actions', header: 'Ações', enableSorting: false, meta: { class: { th: 'w-32 text-right', td: 'w-32 text-right' } } }
 ]
 
-const officeColumns: TableColumn<FiscalModuleAdminItem>[] = [
+const tenantColumns: TableColumn<FiscalModuleAdminItem>[] = [
   { accessorKey: 'label', header: 'Módulo' },
   { id: 'global', header: 'Global' },
-  { id: 'office', header: 'Escritório' },
+  { id: 'tenant', header: 'Escritório' },
   { id: 'state', header: 'Estado efetivo' },
   { id: 'control', header: 'Motivo / responsável' },
   { accessorKey: 'blocked_jobs_count', header: 'Jobs bloqueados' },
@@ -101,8 +101,8 @@ const officeColumns: TableColumn<FiscalModuleAdminItem>[] = [
 ]
 
 function activeControl(item: FiscalModuleAdminItem): FiscalModuleRestrictionControl | null {
-  return item.office_restriction?.restricted
-    ? item.office_restriction
+  return item.tenant_restriction?.restricted
+    ? item.tenant_restriction
     : item.global_restriction
 }
 
@@ -118,7 +118,7 @@ function openRestriction(module: FiscalModuleAdminItem, scope: RestrictionScope)
   target.value = {
     scope,
     module,
-    officeId: scope === 'office' ? selectedOfficeId.value ?? undefined : undefined
+    tenantId: scope === 'tenant' ? selectedTenantId.value ?? undefined : undefined
   }
   reason.value = ''
   password.value = ''
@@ -147,15 +147,15 @@ async function submitRestriction() {
     }
     const response = target.value.scope === 'global'
       ? await api.platform.fiscalModules.setRestriction(target.value.module.module_key, body)
-      : await api.platform.fiscalModules.setOfficeRestriction(
-          target.value.officeId!,
+      : await api.platform.fiscalModules.setTenantRestriction(
+          target.value.tenantId!,
           target.value.module.module_key,
           body
         )
 
     restrictionOpen.value = false
     toast.add({ title: response.message, color: 'success' })
-    await Promise.all([loadGlobal(), selectedOfficeId.value ? loadOfficeModules() : Promise.resolve()])
+    await Promise.all([loadGlobal(), selectedTenantId.value ? loadTenantModules() : Promise.resolve()])
   } catch (caught) {
     toast.add({
       title: apiErrorMessage(caught, 'Não foi possível alterar a restrição.'),
@@ -188,56 +188,56 @@ async function loadGlobal() {
   }
 }
 
-async function loadOffices() {
+async function loadTenants() {
   if (!canAccessPlatformAdmin.value) return
-  loadingOffices.value = true
+  loadingTenants.value = true
   try {
-    const response = await api.platform.offices.list({ page: 1, per_page: 100 })
-    offices.value = response.data.offices || []
+    const response = await api.platform.tenants.list({ page: 1, per_page: 100 })
+    tenants.value = response.data.tenants || []
   } catch (caught) {
     toast.add({ title: apiErrorMessage(caught, 'Falha ao listar escritórios.'), color: 'error' })
   } finally {
-    loadingOffices.value = false
+    loadingTenants.value = false
   }
 }
 
-let officeLoadSeq = 0
-async function loadOfficeModules() {
-  const officeId = selectedOfficeId.value
-  if (!officeId) {
-    officeModules.value = []
-    officeLoadError.value = null
+let tenantLoadSeq = 0
+async function loadTenantModules() {
+  const tenantId = selectedTenantId.value
+  if (!tenantId) {
+    tenantModules.value = []
+    tenantLoadError.value = null
     return
   }
-  const seq = ++officeLoadSeq
+  const seq = ++tenantLoadSeq
   const epoch = sessionEpoch.value
-  loadingOfficeModules.value = true
-  officeLoadError.value = null
+  loadingTenantModules.value = true
+  tenantLoadError.value = null
   try {
-    const response = await api.platform.fiscalModules.listForOffice(officeId)
-    if (seq !== officeLoadSeq || epoch !== sessionEpoch.value || officeId !== selectedOfficeId.value) return
-    officeModules.value = response.data.modules || []
+    const response = await api.platform.fiscalModules.listForTenant(tenantId)
+    if (seq !== tenantLoadSeq || epoch !== sessionEpoch.value || tenantId !== selectedTenantId.value) return
+    tenantModules.value = response.data.modules || []
   } catch (caught) {
-    if (seq !== officeLoadSeq || epoch !== sessionEpoch.value || officeId !== selectedOfficeId.value) return
-    officeLoadError.value = apiErrorMessage(caught, 'Falha ao carregar a matriz do escritório.')
-    officeModules.value = []
+    if (seq !== tenantLoadSeq || epoch !== sessionEpoch.value || tenantId !== selectedTenantId.value) return
+    tenantLoadError.value = apiErrorMessage(caught, 'Falha ao carregar a matriz do escritório.')
+    tenantModules.value = []
   } finally {
-    if (seq === officeLoadSeq && epoch === sessionEpoch.value) loadingOfficeModules.value = false
+    if (seq === tenantLoadSeq && epoch === sessionEpoch.value) loadingTenantModules.value = false
   }
 }
 
 function reloadAll() {
-  void Promise.all([loadGlobal(), loadOffices(), loadOfficeModules()])
+  void Promise.all([loadGlobal(), loadTenants(), loadTenantModules()])
 }
 
-watch(selectedOfficeId, () => {
-  void loadOfficeModules()
+watch(selectedTenantId, () => {
+  void loadTenantModules()
 })
 watch(sessionEpoch, () => {
   globalModules.value = []
-  officeModules.value = []
-  offices.value = []
-  selectedOfficeId.value = null
+  tenantModules.value = []
+  tenants.value = []
+  selectedTenantId.value = null
   reloadAll()
 })
 onMounted(reloadAll)
@@ -256,7 +256,7 @@ onMounted(reloadAll)
             variant="outline"
             icon="i-lucide-refresh-cw"
             label="Atualizar"
-            :loading="loadingGlobal || loadingOfficeModules"
+            :loading="loadingGlobal || loadingTenantModules"
             @click="reloadAll"
           />
         </template>
@@ -372,10 +372,10 @@ onMounted(reloadAll)
           </ShellDataTable>
         </section>
 
-        <section class="space-y-3" aria-labelledby="office-modules-title">
+        <section class="space-y-3" aria-labelledby="tenant-modules-title">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 id="office-modules-title" class="text-base font-semibold">
+              <h2 id="tenant-modules-title" class="text-base font-semibold">
                 Matriz por escritório
               </h2>
               <p class="text-sm text-muted">
@@ -384,11 +384,11 @@ onMounted(reloadAll)
             </div>
             <UFormField label="Escritório" class="w-full sm:w-96">
               <USelectMenu
-                v-model="selectedOfficeId"
-                :items="officeOptions"
+                v-model="selectedTenantId"
+                :items="tenantOptions"
                 value-key="id"
                 label-key="label"
-                :loading="loadingOffices"
+                :loading="loadingTenants"
                 clear
                 placeholder="Buscar e selecionar escritório"
                 :search-input="{ placeholder: 'Buscar por nome, slug ou ID…', icon: 'i-lucide-search' }"
@@ -398,7 +398,7 @@ onMounted(reloadAll)
           </div>
 
           <UEmpty
-            v-if="!selectedOfficeId"
+            v-if="!selectedTenantId"
             icon="i-lucide-building-2"
             title="Selecione um escritório"
             description="A matriz mostrará as dez regras globais e as exceções desse escritório."
@@ -406,21 +406,21 @@ onMounted(reloadAll)
 
           <ShellDataTable
             v-else
-            test-id="fiscal-office-modules-table"
+            test-id="fiscal-tenant-modules-table"
             ui-preset="monitoring-compact"
             table-class="min-w-[78rem]"
             horizontal-scroll
             :mobile-cards="false"
-            :columns="officeColumns"
-            :data="officeModules"
-            :loading="loadingOfficeModules"
+            :columns="tenantColumns"
+            :data="tenantModules"
+            :loading="loadingTenantModules"
             :page="1"
-            :total="officeModules.length"
-            :items-per-page="officeModules.length || 10"
+            :total="tenantModules.length"
+            :items-per-page="tenantModules.length || 10"
             :show-pagination="false"
             :show-per-page="false"
-            :error="officeLoadError"
-            @retry="loadOfficeModules"
+            :error="tenantLoadError"
+            @retry="loadTenantModules"
           >
             <template #global-cell="{ row }">
               <UBadge
@@ -429,11 +429,11 @@ onMounted(reloadAll)
                 :label="controlLabel(row.original.global_restriction)"
               />
             </template>
-            <template #office-cell="{ row }">
+            <template #tenant-cell="{ row }">
               <UBadge
-                :color="controlColor(row.original.office_restriction)"
+                :color="controlColor(row.original.tenant_restriction)"
                 variant="subtle"
-                :label="controlLabel(row.original.office_restriction)"
+                :label="controlLabel(row.original.tenant_restriction)"
               />
             </template>
             <template #state-cell="{ row }">
@@ -456,13 +456,13 @@ onMounted(reloadAll)
             <template #actions-cell="{ row }">
               <div class="flex justify-end">
                 <UButton
-                  :color="row.original.office_restriction?.restricted ? 'primary' : 'error'"
-                  :variant="row.original.office_restriction?.restricted ? 'soft' : 'outline'"
-                  :icon="row.original.office_restriction?.restricted ? 'i-lucide-play' : 'i-lucide-pause'"
-                  :label="row.original.office_restriction?.restricted ? 'Liberar' : 'Restringir'"
+                  :color="row.original.tenant_restriction?.restricted ? 'primary' : 'error'"
+                  :variant="row.original.tenant_restriction?.restricted ? 'soft' : 'outline'"
+                  :icon="row.original.tenant_restriction?.restricted ? 'i-lucide-play' : 'i-lucide-pause'"
+                  :label="row.original.tenant_restriction?.restricted ? 'Liberar' : 'Restringir'"
                   size="sm"
-                  :disabled="row.original.global_restriction?.restricted && !row.original.office_restriction?.restricted"
-                  @click="openRestriction(row.original, 'office')"
+                  :disabled="row.original.global_restriction?.restricted && !row.original.tenant_restriction?.restricted"
+                  @click="openRestriction(row.original, 'tenant')"
                 />
               </div>
             </template>

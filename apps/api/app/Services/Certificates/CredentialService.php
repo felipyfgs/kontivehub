@@ -10,7 +10,7 @@ use App\Enums\SyncCursorStatus;
 use App\Models\Client;
 use App\Models\ClientCredential;
 use App\Models\SyncCursor;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 use Throwable;
@@ -20,7 +20,7 @@ final class CredentialService
     public function __construct(
         private readonly SecureObjectStore $store,
         private readonly PfxReaderInterface $pfxReader,
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
     ) {}
 
     public function activate(Client $client, string $pfxBinary, string $password): ClientCredential
@@ -32,8 +32,8 @@ final class CredentialService
             throw new RuntimeException('A raiz do CNPJ do certificado diverge da raiz do cliente.');
         }
 
-        $officeId = $this->currentOffice->office()->id;
-        if ($client->office_id !== $officeId) {
+        $tenantId = $this->currentTenant->tenant()->id;
+        if ($client->tenant_id !== $tenantId) {
             abort(404);
         }
 
@@ -43,7 +43,7 @@ final class CredentialService
         ], JSON_THROW_ON_ERROR);
 
         $aad = [
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'client_id' => $client->id,
             'fingerprint' => $meta['fingerprint_sha256'],
         ];
@@ -58,11 +58,11 @@ final class CredentialService
                 $client,
                 $meta,
                 $objectId,
-                $officeId,
+                $tenantId,
                 $holder,
                 &$superseded,
             ): ClientCredential {
-                // Serializa substituições concorrentes mesmo quando ainda não há A1 ativo.
+                // Serializa substituições concorrentes mesmo quando ainda não há certificado ativo.
                 Client::query()->whereKey($client->id)->lockForUpdate()->firstOrFail();
 
                 $previous = ClientCredential::query()
@@ -82,7 +82,7 @@ final class CredentialService
                 }
 
                 return ClientCredential::query()->create([
-                    'office_id' => $officeId,
+                    'tenant_id' => $tenantId,
                     'client_id' => $client->id,
                     'status' => CredentialStatus::Active,
                     'subject_name' => $meta['subject_name'],
@@ -133,13 +133,13 @@ final class CredentialService
         if ($credential->valid_to->isPast()) {
             $credential->status = CredentialStatus::Expired;
             $credential->save();
-            $this->blockCursorsForClient((int) $credential->client_id, 'Credencial A1 expirada.');
+            $this->blockCursorsForClient((int) $credential->client_id, 'certificado expirada.');
 
             return null;
         }
 
         $aad = [
-            'office_id' => $credential->office_id,
+            'tenant_id' => $credential->tenant_id,
             'client_id' => $credential->client_id,
             'fingerprint' => $credential->fingerprint_sha256,
         ];
@@ -180,7 +180,7 @@ final class CredentialService
                         $credentialsUpdated++;
                         $cursorsBlocked += $this->blockCursorsForClient(
                             (int) $credential->client_id,
-                            'Credencial A1 expirada.',
+                            'certificado expirada.',
                         );
 
                         continue;

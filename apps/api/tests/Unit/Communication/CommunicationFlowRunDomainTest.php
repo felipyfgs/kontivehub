@@ -12,7 +12,7 @@ use App\Models\CommunicationFlowRun;
 use App\Models\CommunicationFlowVersion;
 use App\Models\CommunicationIdentity;
 use App\Models\CommunicationInbox;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Communication\Flows\CommunicationFlowConsumptionService;
 use App\Services\Communication\Flows\CommunicationFlowLock;
 use Illuminate\Database\QueryException;
@@ -26,20 +26,20 @@ final class CommunicationFlowRunDomainTest extends TestCase
 
     public function test_consumption_is_idempotent(): void
     {
-        $office = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
         $service = app(CommunicationFlowConsumptionService::class);
 
-        $this->assertTrue($service->consumeOnce((int) $office->id, 'evt-1', eventDigest: hash('sha256', 'a')));
-        $this->assertFalse($service->consumeOnce((int) $office->id, 'evt-1', eventDigest: hash('sha256', 'a')));
+        $this->assertTrue($service->consumeOnce((int) $tenant->id, 'evt-1', eventDigest: hash('sha256', 'a')));
+        $this->assertFalse($service->consumeOnce((int) $tenant->id, 'evt-1', eventDigest: hash('sha256', 'a')));
         $this->assertSame(1, CommunicationFlowConsumption::query()->withoutGlobalScopes()->count());
     }
 
     public function test_only_one_active_run_per_conversation(): void
     {
-        [$office, $conversation, $version, $binding] = $this->seedConversation();
+        [$tenant, $conversation, $version, $binding] = $this->seedConversation();
 
         CommunicationFlowRun::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'flow_id' => $version->flow_id,
             'flow_version_id' => $version->id,
             'binding_id' => $binding->id,
@@ -52,7 +52,7 @@ final class CommunicationFlowRunDomainTest extends TestCase
 
         $this->expectException(QueryException::class);
         CommunicationFlowRun::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'flow_id' => $version->flow_id,
             'flow_version_id' => $version->id,
             'binding_id' => $binding->id,
@@ -65,9 +65,9 @@ final class CommunicationFlowRunDomainTest extends TestCase
 
     public function test_context_is_encrypted_at_rest(): void
     {
-        [$office, $conversation, $version, $binding] = $this->seedConversation();
+        [$tenant, $conversation, $version, $binding] = $this->seedConversation();
         $run = CommunicationFlowRun::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'flow_id' => $version->flow_id,
             'flow_version_id' => $version->id,
             'binding_id' => $binding->id,
@@ -89,9 +89,9 @@ final class CommunicationFlowRunDomainTest extends TestCase
 
     public function test_ordered_lock_helper_loads_conversation_then_run(): void
     {
-        [$office, $conversation, $version, $binding] = $this->seedConversation();
+        [$tenant, $conversation, $version, $binding] = $this->seedConversation();
         $run = CommunicationFlowRun::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'flow_id' => $version->flow_id,
             'flow_version_id' => $version->id,
             'binding_id' => $binding->id,
@@ -109,12 +109,12 @@ final class CommunicationFlowRunDomainTest extends TestCase
         $this->assertSame([(int) $conversation->id, (int) $run->id], $seen);
     }
 
-    /** @return array{0:Office,1:CommunicationConversation,2:CommunicationFlowVersion,3:CommunicationFlowInboxBinding} */
+    /** @return array{0:Tenant,1:CommunicationConversation,2:CommunicationFlowVersion,3:CommunicationFlowInboxBinding} */
     private function seedConversation(): array
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
         $inbox = CommunicationInbox::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => 'Inbox',
             'session_id' => 'session-'.uniqid(),
             'status' => 'CONNECTED',
@@ -122,13 +122,13 @@ final class CommunicationFlowRunDomainTest extends TestCase
             'lock_version' => 1,
         ]);
         $flow = CommunicationFlow::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => 'Fluxo',
             'status' => 'active',
             'lock_version' => 1,
         ]);
         $version = CommunicationFlowVersion::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'flow_id' => $flow->id,
             'version' => 1,
             'graph_encrypted' => [
@@ -139,7 +139,7 @@ final class CommunicationFlowRunDomainTest extends TestCase
             'published_at' => now(),
         ]);
         $binding = CommunicationFlowInboxBinding::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'flow_id' => $flow->id,
             'inbox_id' => $inbox->id,
             'published_version_id' => $version->id,
@@ -147,9 +147,9 @@ final class CommunicationFlowRunDomainTest extends TestCase
             'lock_version' => 1,
         ]);
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'contact_id' => CommunicationContact::query()->withoutGlobalScopes()->create([
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'is_provisional' => true,
                 'is_active' => true,
             ])->id,
@@ -160,13 +160,13 @@ final class CommunicationFlowRunDomainTest extends TestCase
             'is_active' => true,
         ]);
         $conversation = CommunicationConversation::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'inbox_id' => $inbox->id,
             'identity_id' => $identity->id,
             'status' => 'OPEN',
             'lock_version' => 1,
         ]);
 
-        return [$office, $conversation, $version, $binding];
+        return [$tenant, $conversation, $version, $binding];
     }
 }

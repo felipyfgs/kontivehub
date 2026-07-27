@@ -6,10 +6,11 @@ use Tools\CodeQuality\InventoryDriftDetector;
 
 require dirname(__DIR__, 2).'/vendor/autoload.php';
 
-$options = getopt('', ['root:', 'output:', 'python:', 'expected:', 'allow-parse-errors']);
+$options = getopt('', ['root:', 'output:', 'python:', 'python-results:', 'expected:', 'allow-parse-errors']);
 $apiRoot = (string) ($options['root'] ?? dirname(__DIR__, 2));
 $outputPath = isset($options['output']) ? (string) $options['output'] : null;
 $python = (string) ($options['python'] ?? getenv('CODE_QUALITY_PYTHON') ?: 'python3');
+$pythonResultsPath = isset($options['python-results']) ? (string) $options['python-results'] : null;
 $allowParseErrors = array_key_exists('allow-parse-errors', $options);
 $expectedPath = isset($options['expected']) ? (string) $options['expected'] : null;
 
@@ -21,7 +22,11 @@ if ($paths === []) {
 }
 
 $pythonPaths = array_values(array_filter($paths, fn (string $path): bool => str_ends_with(strtolower($path), '.py')));
-$pythonResults = $pythonPaths === [] ? [] : collectPython($python, $apiRoot, $pythonPaths);
+$pythonResults = $pythonPaths === []
+    ? []
+    : ($pythonResultsPath === null
+        ? collectPython($python, $apiRoot, $pythonPaths)
+        : readPythonResults($pythonResultsPath));
 $inventory = (new BackendInventoryBuilder)->build($apiRoot, $paths, $pythonResults);
 $json = json_encode($inventory, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n";
 
@@ -109,6 +114,23 @@ function collectPython(string $python, string $apiRoot, array $paths): array
     $decoded = json_decode($stdout, true, 512, JSON_THROW_ON_ERROR);
     if (! is_array($decoded)) {
         throw new RuntimeException('Coletor Python retornou payload inválido.');
+    }
+
+    return $decoded;
+}
+
+/**
+ * @return array<string, array{symbols: list<array<string, mixed>>, parseErrors: list<array<string, mixed>>}>
+ */
+function readPythonResults(string $path): array
+{
+    $contents = file_get_contents($path);
+    if ($contents === false) {
+        throw new RuntimeException("Resultado do coletor Python ausente: {$path}");
+    }
+    $decoded = json_decode($contents, true, 512, JSON_THROW_ON_ERROR);
+    if (! is_array($decoded)) {
+        throw new RuntimeException('Resultado do coletor Python inválido.');
     }
 
     return $decoded;

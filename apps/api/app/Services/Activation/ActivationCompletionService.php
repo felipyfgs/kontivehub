@@ -4,13 +4,13 @@ namespace App\Services\Activation;
 
 use App\Enums\ActivationMethod;
 use App\Enums\ActivationPurpose;
-use App\Enums\OfficeLifecycleStatus;
 use App\Enums\SubscriptionStatus;
+use App\Enums\TenantLifecycleStatus;
 use App\Models\AccountActivation;
-use App\Models\Office;
-use App\Models\OfficeMembership;
-use App\Models\OfficeSubscription;
 use App\Models\PlatformMembership;
+use App\Models\Tenant;
+use App\Models\TenantMembership;
+use App\Models\TenantSubscription;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use App\Services\Usage\SubscriptionPeriodService;
@@ -150,8 +150,8 @@ final class ActivationCompletionService
             ])->save();
 
             match ($activation->purpose) {
-                ActivationPurpose::OfficeFirstAdmin => $this->activateFirstAdmin($activation),
-                ActivationPurpose::OfficeMember => $this->activateMember($activation),
+                ActivationPurpose::TenantFirstAdmin => $this->activateFirstAdmin($activation),
+                ActivationPurpose::TenantMember => $this->activateMember($activation),
                 ActivationPurpose::PlatformAdmin => $this->activatePlatformAdmin($activation, $user),
             };
 
@@ -170,7 +170,7 @@ final class ActivationCompletionService
                     'email_masked' => AccountActivation::maskEmail($activation->email_normalized),
                 ],
                 userId: $user->id,
-                officeId: $activation->office_id,
+                tenantId: $activation->tenant_id,
             );
 
             $userId = $user->id;
@@ -191,23 +191,23 @@ final class ActivationCompletionService
 
     private function activateFirstAdmin(AccountActivation $activation): void
     {
-        $office = Office::query()->whereKey($activation->office_id)->lockForUpdate()->firstOrFail();
-        $subscription = OfficeSubscription::query()
-            ->where('office_id', $office->id)
+        $tenant = Tenant::query()->whereKey($activation->tenant_id)->lockForUpdate()->firstOrFail();
+        $subscription = TenantSubscription::query()
+            ->where('tenant_id', $tenant->id)
             ->lockForUpdate()
             ->firstOrFail();
 
-        $membership = OfficeMembership::query()
-            ->whereKey($activation->office_membership_id)
+        $membership = TenantMembership::query()
+            ->whereKey($activation->tenant_membership_id)
             ->lockForUpdate()
             ->firstOrFail();
 
         $now = now();
         [$periodStart, $periodEnd] = $this->periods->initialBounds($now->toImmutable());
 
-        $office->forceFill([
+        $tenant->forceFill([
             'is_active' => true,
-            'lifecycle_status' => OfficeLifecycleStatus::Active,
+            'lifecycle_status' => TenantLifecycleStatus::Active,
         ])->save();
 
         $subscription->forceFill([
@@ -223,13 +223,13 @@ final class ActivationCompletionService
 
     private function activateMember(AccountActivation $activation): void
     {
-        $membership = OfficeMembership::query()
-            ->whereKey($activation->office_membership_id)
+        $membership = TenantMembership::query()
+            ->whereKey($activation->tenant_membership_id)
             ->lockForUpdate()
             ->firstOrFail();
 
         $membership->forceFill(['is_active' => true])->save();
-        // Período comercial do Office NÃO é alterado.
+        // Período comercial do Tenant NÃO é alterado.
     }
 
     private function activatePlatformAdmin(AccountActivation $activation, User $user): void
@@ -241,8 +241,8 @@ final class ActivationCompletionService
 
         $pm->forceFill(['is_active' => true])->save();
 
-        if ($pm->default_office_id !== null && $user->selected_office_id === null) {
-            // Não força selected_office_id — contexto privilegiado usa default_office_id.
+        if ($pm->default_tenant_id !== null && $user->selected_tenant_id === null) {
+            // Não força selected_tenant_id — contexto privilegiado usa default_tenant_id.
         }
     }
 

@@ -3,9 +3,10 @@
 namespace Database\Factories;
 
 use App\Enums\ClientProcuracaoSyncStatus;
+use App\Enums\SerproEnvironment;
 use App\Models\Client;
 use App\Models\ClientProcuracaoSync;
-use App\Models\Office;
+use App\Models\Tenant;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -18,34 +19,36 @@ class ClientProcuracaoSyncFactory extends Factory
     public function definition(): array
     {
         return [
-            'office_id' => Office::factory(),
+            'tenant_id' => Tenant::factory(),
             'client_id' => function (array $attributes) {
-                return Client::factory()->forOffice(
-                    Office::query()->findOrFail($attributes['office_id'])
+                return Client::factory()->forTenant(
+                    Tenant::query()->findOrFail($attributes['tenant_id'])
                 )->create()->id;
             },
+            'environment' => SerproEnvironment::Trial,
             'status' => ClientProcuracaoSyncStatus::Unverified,
             'valid_from' => null,
             'valid_to' => null,
             'last_verified_at' => null,
             'evidence_ref' => null,
             'evidence_sha256' => null,
-            'powers_summary' => null,
+            'power_codes' => null,
             'last_check_result' => null,
             'last_sync_error_code' => null,
             'source' => 'official_sync',
+            'metadata' => null,
         ];
     }
 
-    public function forOffice(Office $office): static
+    public function forTenant(Tenant $tenant): static
     {
-        return $this->state(fn () => ['office_id' => $office->id]);
+        return $this->state(fn () => ['tenant_id' => $tenant->id]);
     }
 
     public function forClient(Client $client): static
     {
         return $this->state(fn () => [
-            'office_id' => $client->office_id,
+            'tenant_id' => $client->tenant_id,
             'client_id' => $client->id,
         ]);
     }

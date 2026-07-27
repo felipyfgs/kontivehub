@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api\V1\Communication;
 
 use App\Enums\Communication\ConversationStatus;
 use App\Enums\Communication\FlowRunStatus;
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Http\Controllers\Controller;
 use App\Models\CommunicationAttachment;
 use App\Models\CommunicationContact;
@@ -14,7 +14,7 @@ use App\Services\Communication\Authorization\CommunicationAccess;
 use App\Services\Communication\Events\CommunicationEventRecorder;
 use App\Services\Communication\Flows\CommunicationFlowRunControlService;
 use App\Services\Communication\Media\CommunicationMediaStore;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -25,7 +25,7 @@ final class CommunicationDataController extends Controller
 {
     public function __construct(
         private readonly CommunicationAccess $access,
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly CommunicationMediaStore $media,
         private readonly CommunicationEventRecorder $events,
         private readonly CommunicationFlowRunControlService $flowRuns,
@@ -41,7 +41,7 @@ final class CommunicationDataController extends Controller
         $query = CommunicationEvent::query()->where('id', '>', $after)
             ->where(function ($builder) use ($visibleInboxIds): void {
                 $builder->whereIn('inbox_id', $visibleInboxIds);
-                if ($this->currentOffice->role() === OfficeRole::Admin || $this->currentOffice->isPlatformPrivileged()) {
+                if ($this->currentTenant->role() === TenantRole::TenantAdmin || $this->currentTenant->isPlatformPrivileged()) {
                     $builder->orWhereNull('inbox_id');
                 }
             })
@@ -104,7 +104,7 @@ final class CommunicationDataController extends Controller
     private function streamAttachment(CommunicationAttachment $model, string $disposition): StreamedResponse
     {
         $metadata = is_array($model->storage_context) ? $model->storage_context : [
-            'office_id' => (int) $model->office_id,
+            'tenant_id' => (int) $model->tenant_id,
             'inbox_id' => (int) $model->message->inbox_id,
             'gateway_event_id' => (string) $model->message->gateway_event_id,
             'sha256' => $model->sha256,
@@ -140,10 +140,10 @@ final class CommunicationDataController extends Controller
         ])->findOrFail($contact);
         $this->access->assertManageContacts($this->actor($request), $model);
         $this->events->record(
-            (int) $model->office_id,
+            (int) $model->tenant_id,
             'CONTACT_EXPORTED',
             ['contact_id' => (int) $model->id],
-            actorMembershipId: $this->currentOffice->realMembership()?->id,
+            actorMembershipId: $this->currentTenant->realMembership()?->id,
         );
 
         return response()->streamDownload(static function () use ($model): void {
@@ -242,10 +242,10 @@ final class CommunicationDataController extends Controller
                 'purged_at' => $now,
             ])->save();
             $this->events->record(
-                (int) $model->office_id,
+                (int) $model->tenant_id,
                 'CONTACT_PURGED',
                 ['contact_id' => (int) $model->id, 'tombstone_digest' => $tombstone],
-                actorMembershipId: $this->currentOffice->realMembership()?->id,
+                actorMembershipId: $this->currentTenant->realMembership()?->id,
             );
         });
 

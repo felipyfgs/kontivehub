@@ -60,7 +60,7 @@ final class OutboundXmlCaptureCapacityPlanner implements OutboundXmlCaptureCapac
         int $eligibleSecondAttempts,
         ?CarbonImmutable $from = null,
         ?CarbonImmutable $untilTarget = null,
-        ?int $officeId = null,
+        ?int $tenantId = null,
     ): array {
         $from = ($from ?? CarbonImmutable::now('UTC'))->utc();
         $untilTarget = $untilTarget?->utc();
@@ -109,7 +109,7 @@ final class OutboundXmlCaptureCapacityPlanner implements OutboundXmlCaptureCapac
             'at_risk' => $atRisk,
             'estimated_completion_at' => $completion,
             'items_capacity_at_risk' => $itemsAtRisk,
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'competence' => $competence->value(),
             'days_window' => round($days, 3),
             'safe_daily_exchanges' => $safeDaily,

@@ -6,11 +6,11 @@ use App\Contracts\FiscalMutationTransport;
 use App\DTO\Serpro\IntegraRequest;
 use App\DTO\Serpro\IntegraResponse;
 use App\Enums\FiscalMutationStatus;
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Models\Client;
 use App\Models\Establishment;
 use App\Models\FiscalMutationOperation;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Fiscal\Mutations\FiscalMutationPayload;
 use App\Services\Fiscal\Mutations\FiscalMutationService;
@@ -25,9 +25,9 @@ final class FiscalMutationRecoveryTest extends TestCase
 
     public function test_timeout_becomes_uncertain_and_reconciliation_never_resends_mutation(): void
     {
-        $office = Office::factory()->create();
-        $actor = User::factory()->forOffice($office, OfficeRole::Admin)->create();
-        $client = Client::factory()->forOffice($office)->create();
+        $tenant = Tenant::factory()->create();
+        $actor = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $client = Client::factory()->forTenant($tenant)->create();
         Establishment::factory()->forClient($client)->create();
         $payload = [
             'competencies' => ['2026-07'],
@@ -35,7 +35,7 @@ final class FiscalMutationRecoveryTest extends TestCase
             'output_format' => 'PDF',
         ];
         $operation = FiscalMutationOperation::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'requested_by' => $actor->id,
             'idempotency_key' => (string) Str::uuid(),
@@ -45,7 +45,7 @@ final class FiscalMutationRecoveryTest extends TestCase
             'solution_code' => 'INTEGRA_MEI',
             'service_code' => 'PGMEI',
             'operation_code' => 'GERAR_DAS',
-            'provider_operation_key' => 'pgmei.gerardaspdf',
+            'operation_key' => 'pgmei.gerardaspdf',
             'module_key' => 'simples_mei',
             'competence_period_key' => '2026-07',
             'status' => FiscalMutationStatus::Pending,
@@ -64,7 +64,7 @@ final class FiscalMutationRecoveryTest extends TestCase
             'mei_automation.enabled' => true,
             'mei_automation.kill_switch' => false,
             'mei_automation.live_egress_enabled' => true,
-            'mei_automation.allow_all_offices' => true,
+            'mei_automation.allow_all_tenants' => true,
             'mei_automation.provider_policy.default' => 'portal',
             'mei_automation.provider_policy.operations' => [
                 'pgmei.gerardaspdf' => 'portal',
@@ -84,7 +84,7 @@ final class FiscalMutationRecoveryTest extends TestCase
         self::assertSame(FiscalMutationStatus::UnknownResult, $same->status);
         self::assertSame(1, $transport->executeCalls, 'Resultado incerto não pode reenviar a mutação.');
 
-        $confirmed = $service->reconcile($office, $uncertain, $actor);
+        $confirmed = $service->reconcile($tenant, $uncertain, $actor);
         self::assertSame(FiscalMutationStatus::Confirmed, $confirmed->status);
         self::assertSame(1, $transport->executeCalls);
         self::assertSame(1, $transport->reconcileCalls);

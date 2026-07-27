@@ -10,8 +10,8 @@ use App\Enums\FiscalTrigger;
 use App\Enums\PgmeiDebtState;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
 use App\Models\PgmeiDebtProjection;
+use App\Models\Tenant;
 use App\Services\Fiscal\SimplesMei\Pgmei\PgmeiDebtProjector;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use RuntimeException;
@@ -23,7 +23,7 @@ final class PgmeiDebtProjectorTest extends TestCase
 
     public function test_empty_list_projects_no_active_debt_idempotently(): void
     {
-        [$office, $client, $run] = $this->seedProjectorContext();
+        [$tenant, $client, $run] = $this->seedProjectorContext();
         $decoded = [
             'calendar_year' => 2024,
             'items' => [],
@@ -32,8 +32,8 @@ final class PgmeiDebtProjectorTest extends TestCase
             'digest' => hash('sha256', 'empty-2024'),
         ];
 
-        $first = (new PgmeiDebtProjector)->projectValid($office, $client, $decoded, $run->id);
-        $second = (new PgmeiDebtProjector)->projectValid($office, $client, $decoded, $run->id);
+        $first = (new PgmeiDebtProjector)->projectValid($tenant, $client, $decoded, $run->id);
+        $second = (new PgmeiDebtProjector)->projectValid($tenant, $client, $decoded, $run->id);
 
         $this->assertTrue($first['created']);
         $this->assertFalse($second['created']);
@@ -51,7 +51,7 @@ final class PgmeiDebtProjectorTest extends TestCase
 
     public function test_items_project_has_active_debt(): void
     {
-        [$office, $client, $run] = $this->seedProjectorContext();
+        [$tenant, $client, $run] = $this->seedProjectorContext();
         $decoded = [
             'calendar_year' => 2024,
             'items' => [[
@@ -66,7 +66,7 @@ final class PgmeiDebtProjectorTest extends TestCase
             'digest' => hash('sha256', 'one-debt-2024'),
         ];
 
-        $projected = (new PgmeiDebtProjector)->projectValid($office, $client, $decoded, $run->id);
+        $projected = (new PgmeiDebtProjector)->projectValid($tenant, $client, $decoded, $run->id);
 
         $this->assertSame(PgmeiDebtState::HasActiveDebt, $projected['projection']->debt_state);
         $this->assertSame(1, (int) $projected['projection']->items_count);
@@ -75,13 +75,13 @@ final class PgmeiDebtProjectorTest extends TestCase
 
     public function test_cross_tenant_client_is_rejected(): void
     {
-        [$office, , $run] = $this->seedProjectorContext();
-        $other = Client::factory()->forOffice(Office::factory()->create())->create();
+        [$tenant, , $run] = $this->seedProjectorContext();
+        $other = Client::factory()->forTenant(Tenant::factory()->create())->create();
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Cliente não pertence ao escritório');
 
-        (new PgmeiDebtProjector)->projectValid($office, $other, [
+        (new PgmeiDebtProjector)->projectValid($tenant, $other, [
             'calendar_year' => 2024,
             'items' => [],
             'items_count' => 0,
@@ -90,13 +90,13 @@ final class PgmeiDebtProjectorTest extends TestCase
         ], $run->id);
     }
 
-    /** @return array{Office, Client, FiscalMonitoringRun} */
+    /** @return array{Tenant, Client, FiscalMonitoringRun} */
     private function seedProjectorContext(): array
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
         $run = FiscalMonitoringRun::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'system_code' => 'INTEGRA_MEI',
             'service_code' => 'PGMEI',
@@ -110,6 +110,6 @@ final class PgmeiDebtProjectorTest extends TestCase
             'mutability' => FiscalMutability::ReadOnly,
         ]);
 
-        return [$office, $client, $run];
+        return [$tenant, $client, $run];
     }
 }

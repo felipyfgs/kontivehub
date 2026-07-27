@@ -164,7 +164,7 @@ func TestCatalogedNormalizerAllowsOnlyKnownAncillaryCombination(t *testing.T) {
 		MessageContextInfo: &waE2E.MessageContextInfo{MessageSecret: []byte("secret")},
 	})
 	if ambiguous.Kind != domain.MessageUnsupported || ambiguous.ProviderType != "ambiguous" {
-		t.Fatalf("ancillary field hid incompatible semantic variants: %+v", ambiguous)
+		t.Fatalf("ancillary field hid conflicting semantic variants: %+v", ambiguous)
 	}
 }
 

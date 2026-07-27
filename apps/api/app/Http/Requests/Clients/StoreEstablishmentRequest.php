@@ -22,7 +22,7 @@ class StoreEstablishmentRequest extends FormRequest
         return [
             'cnpj' => ['required', 'string', new ValidCnpj],
             'trade_name' => ['nullable', 'string', 'max:255'],
-            'is_matrix' => ['sometimes', 'boolean'],
+            'is_headquarters' => ['sometimes', 'boolean'],
             'is_active' => ['sometimes', 'boolean'],
             'registration_status' => ['nullable', 'string', Rule::enum(RegistrationStatus::class)],
             'registration_status_at' => ['nullable', 'date'],
@@ -44,7 +44,7 @@ class StoreEstablishmentRequest extends FormRequest
             'address.city_ibge_code' => ['nullable', 'string', 'max:16'],
             'address.state' => ['nullable', 'string', 'size:2'],
             'address.country' => ['nullable', 'string', 'max:64'],
-            'office_id' => ['prohibited'],
+            'tenant_id' => ['prohibited'],
             'client_id' => ['prohibited'],
             'registration_source' => ['prohibited'],
         ];

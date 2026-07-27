@@ -13,7 +13,7 @@ use App\Services\Integra\Dctfweb\DctfwebCodes;
 use App\Services\Integra\Dctfweb\DctfwebCompetenceResolver;
 use App\Services\Integra\Dctfweb\DctfwebIntegraCaller;
 use App\Services\Integra\Dctfweb\DctfwebMutationGuard;
-use App\Services\Integra\Dctfweb\MitApuracaoService;
+use App\Services\Integra\Dctfweb\MitAssessmentService;
 
 /**
  * Encerramento MIT — mutante, desabilitado por flag (9.8).
@@ -24,7 +24,7 @@ final class MitEncerrarAdapter extends AbstractDctfwebAdapter
         DctfwebIntegraCaller $caller,
         DctfwebCompetenceResolver $competences,
         private readonly DctfwebMutationGuard $mutations,
-        private readonly MitApuracaoService $mit,
+        private readonly MitAssessmentService $mit,
     ) {
         parent::__construct($caller, $competences);
     }
@@ -60,7 +60,7 @@ final class MitEncerrarAdapter extends AbstractDctfwebAdapter
         $actor = $this->resolveActor($request);
 
         $gate = $this->mutations->assertMayMutate(
-            office: $request->office,
+            tenant: $request->tenant,
             client: $request->client,
             systemCode: $this->systemCode(),
             serviceCode: $this->serviceCode(),
@@ -77,7 +77,7 @@ final class MitEncerrarAdapter extends AbstractDctfwebAdapter
         }
 
         $attempt = $this->mutations->beginAttempt(
-            office: $request->office,
+            tenant: $request->tenant,
             client: $request->client,
             systemCode: $this->systemCode(),
             serviceCode: $this->serviceCode(),
@@ -128,7 +128,7 @@ final class MitEncerrarAdapter extends AbstractDctfwebAdapter
 
         $bytes = DctfwebIntegraCaller::evidenceBytes($response->body);
         $mit = $this->mit->projectSituacao(
-            $request->office,
+            $request->tenant,
             $request->client,
             $periodKey,
             array_merge($response->body, ['encerrado' => true, 'status' => 'ENCERRADO']),

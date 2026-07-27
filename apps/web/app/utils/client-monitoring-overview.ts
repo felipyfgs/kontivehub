@@ -62,7 +62,7 @@ function processDef(key: ClientMonitoringProcessKey): ProcessDef {
 
 const PROCESS_DEFS: readonly ProcessDef[] = CLIENT_MONITORING_PROCESS_KEYS.map(processDef)
 
-/** service_code (e aliases) → seção do detalhe do cliente. */
+/** Código oficial do serviço → seção do detalhe do cliente. */
 const SERVICE_CODE_TO_SECTION: Record<string, ClientMonitoringProcessKey> = {
   'PGDASD': 'pgdasd',
   'DEFIS': 'pgdasd',

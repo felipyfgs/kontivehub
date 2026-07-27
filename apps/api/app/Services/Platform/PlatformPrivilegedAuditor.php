@@ -2,21 +2,21 @@
 
 namespace App\Services\Platform;
 
-use App\Enums\OfficeAccessMode;
+use App\Enums\TenantAccessMode;
 use App\Models\PlatformPrivilegedAuditEvent;
 use App\Models\User;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
 /**
- * Grava auditoria interna somente quando CurrentOffice está em platform_privileged.
+ * Grava auditoria interna somente quando CurrentTenant está em platform_privileged.
  * A trilha NÃO deve ser exposta em APIs tenant.
  */
 final class PlatformPrivilegedAuditor
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
     ) {}
 
     /**
@@ -29,27 +29,27 @@ final class PlatformPrivilegedAuditor
         array $metadata = [],
         ?User $actor = null,
     ): void {
-        if (! $this->currentOffice->isPlatformPrivileged()) {
+        if (! $this->currentTenant->isPlatformPrivileged()) {
             return;
         }
 
-        $officeId = $this->currentOffice->id();
-        if ($officeId === null) {
+        $tenantId = $this->currentTenant->id();
+        if ($tenantId === null) {
             return;
         }
 
-        $actor ??= $this->currentOffice->actor() ?? auth()->user();
+        $actor ??= $this->currentTenant->actor() ?? auth()->user();
         if (! $actor instanceof User) {
             return;
         }
 
         $metadata = array_merge([
-            'access_mode' => OfficeAccessMode::PlatformPrivileged->value,
+            'access_mode' => TenantAccessMode::PlatformPrivileged->value,
         ], $metadata);
 
         PlatformPrivilegedAuditEvent::record(
             actorUserId: $actor->id,
-            officeId: $officeId,
+            tenantId: $tenantId,
             action: $action,
             result: $result,
             targetType: $target !== null ? $target::class : null,

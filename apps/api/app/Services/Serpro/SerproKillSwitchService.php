@@ -5,7 +5,6 @@ namespace App\Services\Serpro;
 use App\Models\SerproRuntimeControl;
 use App\Services\Audit\AuditLogger;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * Kill switch global e por solução Integra Contador.
@@ -150,10 +149,6 @@ final class SerproKillSwitchService
      */
     public function hydrateCacheFromDurable(): void
     {
-        if (! Schema::hasTable('serpro_runtime_controls')) {
-            return;
-        }
-
         $rows = SerproRuntimeControl::query()
             ->where('control_type', 'KILL_SWITCH')
             ->orWhere('control_type', 'KILL_SWITCH_SOLUTION')
@@ -207,17 +202,15 @@ final class SerproKillSwitchService
             ? array_map('boolval', config('serpro.solution_kill_switches'))
             : [];
 
-        if (Schema::hasTable('serpro_runtime_controls')) {
-            $rows = SerproRuntimeControl::query()
-                ->where('control_type', 'KILL_SWITCH_SOLUTION')
-                ->where('active', true)
-                ->get();
-            foreach ($rows as $row) {
-                $code = str_starts_with($row->control_key, self::SOLUTION_CONTROL_PREFIX)
-                    ? substr($row->control_key, strlen(self::SOLUTION_CONTROL_PREFIX))
-                    : $row->control_key;
-                $solutions[$code] = true;
-            }
+        $rows = SerproRuntimeControl::query()
+            ->where('control_type', 'KILL_SWITCH_SOLUTION')
+            ->where('active', true)
+            ->get();
+        foreach ($rows as $row) {
+            $code = str_starts_with($row->control_key, self::SOLUTION_CONTROL_PREFIX)
+                ? substr($row->control_key, strlen(self::SOLUTION_CONTROL_PREFIX))
+                : $row->control_key;
+            $solutions[$code] = true;
         }
 
         return [
@@ -232,19 +225,11 @@ final class SerproKillSwitchService
 
     private function loadPersistedActive(string $controlKey): bool
     {
-        if (! Schema::hasTable('serpro_runtime_controls')) {
-            return false;
-        }
+        $row = SerproRuntimeControl::query()
+            ->where('control_key', $controlKey)
+            ->first();
 
-        try {
-            $row = SerproRuntimeControl::query()
-                ->where('control_key', $controlKey)
-                ->first();
-
-            return $row !== null && (bool) $row->active;
-        } catch (\Throwable) {
-            return false;
-        }
+        return $row !== null && (bool) $row->active;
     }
 
     /**
@@ -258,27 +243,19 @@ final class SerproKillSwitchService
         ?int $userId,
         array $metadata = [],
     ): void {
-        if (! Schema::hasTable('serpro_runtime_controls')) {
-            return;
-        }
-
-        try {
-            $now = now();
-            SerproRuntimeControl::query()->updateOrCreate(
-                ['control_key' => $controlKey],
-                [
-                    'control_type' => $controlType,
-                    'active' => $active,
-                    'source' => 'runtime',
-                    'reason' => mb_substr($reason, 0, 500),
-                    'updated_by_user_id' => $userId,
-                    'activated_at' => $active ? $now : null,
-                    'deactivated_at' => $active ? null : $now,
-                    'metadata' => $metadata === [] ? null : $metadata,
-                ],
-            );
-        } catch (\Throwable $e) {
-            report($e);
-        }
+        $now = now();
+        SerproRuntimeControl::query()->updateOrCreate(
+            ['control_key' => $controlKey],
+            [
+                'control_type' => $controlType,
+                'active' => $active,
+                'source' => 'runtime',
+                'reason' => mb_substr($reason, 0, 500),
+                'updated_by_user_id' => $userId,
+                'activated_at' => $active ? $now : null,
+                'deactivated_at' => $active ? null : $now,
+                'metadata' => $metadata === [] ? null : $metadata,
+            ],
+        );
     }
 }

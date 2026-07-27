@@ -3,8 +3,8 @@
 namespace App\Services\Integra;
 
 use App\Enums\SerproEnvironment;
-use App\Models\Office;
-use App\Models\OfficeSerproAuthorization;
+use App\Models\Tenant;
+use App\Models\TenantSerproAuthorization;
 use App\Services\Serpro\SerproJobFlagGuard;
 
 /**
@@ -24,7 +24,7 @@ final class ClientProcuracaoAutoSyncPolicy
     }
 
     /** @return array{allowed: bool, code: string} */
-    public function check(Office $office, SerproEnvironment $environment): array
+    public function check(Tenant $tenant, SerproEnvironment $environment): array
     {
         if (! (bool) config('serpro.procuracoes_scheduler.enabled', false)) {
             return ['allowed' => false, 'code' => 'SCHEDULER_DISABLED'];
@@ -34,18 +34,18 @@ final class ClientProcuracaoAutoSyncPolicy
             return ['allowed' => false, 'code' => 'ENVIRONMENT_NOT_CONFIGURED'];
         }
 
-        $allowlist = array_map('intval', (array) config('serpro.procuracoes_scheduler.office_allowlist', []));
-        if (! in_array((int) $office->id, $allowlist, true)) {
-            return ['allowed' => false, 'code' => 'OFFICE_NOT_ALLOWLISTED'];
+        $allowlist = array_map('intval', (array) config('serpro.procuracoes_scheduler.tenant_allowlist', []));
+        if (! in_array((int) $tenant->id, $allowlist, true)) {
+            return ['allowed' => false, 'code' => 'TENANT_NOT_ALLOWLISTED'];
         }
 
-        $flag = $this->jobFlags->assertAllowed('SyncClientProcuracaoJob', (int) $office->id);
+        $flag = $this->jobFlags->assertAllowed('SyncClientProcuracaoJob', (int) $tenant->id);
         if (! $flag['allowed']) {
             return ['allowed' => false, 'code' => (string) $flag['code']];
         }
 
-        $authorization = OfficeSerproAuthorization::query()
-            ->where('office_id', $office->id)
+        $authorization = TenantSerproAuthorization::query()
+            ->where('tenant_id', $tenant->id)
             ->where('environment', $environment->value)
             ->first();
 

@@ -11,13 +11,14 @@ use App\Enums\SerproEnvironment;
 use App\Enums\TaxProxyPowerSource;
 use App\Enums\TaxProxyPowerStatus;
 use App\Models\Client;
-use App\Models\ClientProcuracaoSnapshot;
+use App\Models\ClientProcuracaoSync;
 use App\Models\Establishment;
-use App\Models\Office;
-use App\Models\OfficeSerproAuthorization;
 use App\Models\TaxProxyPower;
+use App\Models\Tenant;
+use App\Models\TenantSerproAuthorization;
 use App\Services\Integra\EnsureClientProcuracaoForConsult;
-use App\Services\Integra\OfficeSerproAuthorizationService;
+use App\Services\Integra\TenantSerproAuthorizationService;
+use App\Support\CurrentTenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -33,16 +34,16 @@ class PreConsultProcuracaoEnsureTest extends TestCase
 
     public function test_usable_local_power_skips_remote_sync(): void
     {
-        [$office, $client, $auth] = $this->seedOfficeClientAuth();
+        [$tenant, $client, $auth] = $this->seedTenantClientAuth();
 
         TaxProxyPower::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
-            'office_serpro_authorization_id' => $auth->id,
+            'tenant_serpro_authorization_id' => $auth->id,
             'author_identity' => $auth->author_identity,
             'contributor_cnpj' => '26461528000151',
             'system_code' => 'PGDASD',
-            'power_code' => 'PGDASD',
+            'power_code' => '00146',
             'source' => TaxProxyPowerSource::IntegraProcuracoes,
             'status' => TaxProxyPowerStatus::Active,
             'environment' => SerproEnvironment::Trial->value,
@@ -56,10 +57,10 @@ class PreConsultProcuracaoEnsureTest extends TestCase
         $before = TaxProxyPower::query()->where('client_id', $client->id)->count();
 
         $result = app(EnsureClientProcuracaoForConsult::class)->ensure(
-            $office,
+            $tenant,
             $client,
             SerproEnvironment::Trial,
-            ['PGDASD'],
+            ['00146'],
         );
 
         $this->assertTrue($result['ok']);
@@ -69,15 +70,15 @@ class PreConsultProcuracaoEnsureTest extends TestCase
 
     public function test_missing_power_syncs_via_fixture_then_ok(): void
     {
-        [$office, $client] = $this->seedOfficeClientAuth();
+        [$tenant, $client] = $this->seedTenantClientAuth();
 
         $this->assertSame(0, TaxProxyPower::query()->where('client_id', $client->id)->count());
 
         $result = app(EnsureClientProcuracaoForConsult::class)->ensure(
-            $office,
+            $tenant,
             $client,
             SerproEnvironment::Trial,
-            ['PGDASD'],
+            ['00146'],
         );
 
         $this->assertTrue($result['ok'], $result['message'] ?? '');
@@ -86,22 +87,22 @@ class PreConsultProcuracaoEnsureTest extends TestCase
             TaxProxyPower::query()
                 ->where('client_id', $client->id)
                 ->where('status', TaxProxyPowerStatus::Active)
-                ->whereIn('power_code', ['PGDASD', '00146'])
+                ->where('power_code', '00146')
                 ->exists(),
         );
     }
 
-    public function test_a1_invalidation_marks_snapshot_unverified_and_ensure_resyncs(): void
+    public function test_certificate_invalidation_marks_sync_unverified_and_ensure_resyncs(): void
     {
-        [$office, $client, $auth] = $this->seedOfficeClientAuth();
+        [$tenant, $client, $auth] = $this->seedTenantClientAuth();
 
         $ensure = app(EnsureClientProcuracaoForConsult::class);
-        $first = $ensure->ensure($office, $client, SerproEnvironment::Trial, ['PGDASD']);
+        $first = $ensure->ensure($tenant, $client, SerproEnvironment::Trial, ['00146']);
         $this->assertTrue($first['ok']);
 
-        ClientProcuracaoSnapshot::query()->updateOrCreate(
+        ClientProcuracaoSync::query()->updateOrCreate(
             [
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'client_id' => $client->id,
                 'environment' => SerproEnvironment::Trial->value,
             ],
@@ -109,16 +110,16 @@ class PreConsultProcuracaoEnsureTest extends TestCase
                 'status' => ClientProcuracaoSyncStatus::Authorized,
                 'last_verified_at' => now(),
                 'valid_to' => now()->addYear(),
-                'power_codes' => ['PGDASD', '00146'],
+                'power_codes' => ['00146'],
                 'last_check_result' => 'OK',
             ],
         );
 
-        app(OfficeSerproAuthorizationService::class)->invalidateDerivedAuthorization(
+        app(TenantSerproAuthorizationService::class)->invalidateDerivedAuthorization(
             $auth,
-            $office,
+            $tenant,
             SerproEnvironment::Trial,
-            'a1_removed',
+            'certificate_removed',
         );
 
         $auth->refresh();
@@ -129,52 +130,52 @@ class PreConsultProcuracaoEnsureTest extends TestCase
                 ->doesntExist(),
         );
 
-        $snap = ClientProcuracaoSnapshot::query()
+        $sync = ClientProcuracaoSync::query()
             ->where('client_id', $client->id)
             ->first();
-        $this->assertSame(ClientProcuracaoSyncStatus::Unverified, $snap?->status);
-        $this->assertStringContainsString('INVALIDATED:a1_removed', (string) $snap?->last_check_result);
+        $this->assertSame(ClientProcuracaoSyncStatus::Unverified, $sync?->status);
+        $this->assertStringContainsString('INVALIDATED:certificate_removed', (string) $sync?->last_check_result);
 
-        $second = $ensure->ensure($office, $client, SerproEnvironment::Trial, ['PGDASD']);
+        $second = $ensure->ensure($tenant, $client, SerproEnvironment::Trial, ['00146']);
         $this->assertTrue($second['ok'], $second['message'] ?? '');
         $this->assertTrue($second['synced']);
         $this->assertTrue(
             TaxProxyPower::query()
                 ->where('client_id', $client->id)
                 ->where('status', TaxProxyPowerStatus::Active)
-                ->whereIn('power_code', ['PGDASD', '00146'])
+                ->where('power_code', '00146')
                 ->exists(),
         );
     }
 
     /**
-     * @return array{0: Office, 1: Client, 2: OfficeSerproAuthorization}
+     * @return array{0: Tenant, 1: Client, 2: TenantSerproAuthorization}
      */
-    private function seedOfficeClientAuth(): array
+    private function seedTenantClientAuth(): array
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create([
+        $tenant = Tenant::factory()->create();
+        app(CurrentTenant::class)->bindSystem($tenant);
+        $client = Client::factory()->forTenant($tenant)->create([
             'root_cnpj' => '26461528',
         ]);
         Establishment::factory()->forClient($client)->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'cnpj' => '26461528000151',
             'is_active' => true,
-            'is_matrix' => true,
+            'is_headquarters' => true,
         ]);
 
-        $auth = OfficeSerproAuthorization::query()->create([
-            'office_id' => $office->id,
+        $auth = TenantSerproAuthorization::query()->create([
+            'tenant_id' => $tenant->id,
             'environment' => SerproEnvironment::Trial,
             'status' => SerproAuthorizationStatus::TokenActive,
             'author_identity_type' => AuthorIdentityType::Cnpj,
             'author_identity' => '48123272000105',
-            'certificate_mode' => AuthorCertificateMode::ManagedA1,
-            'managed_a1_consent' => true,
+            'certificate_mode' => AuthorCertificateMode::ManagedCertificate,
             'procurador_token_vault_object_id' => '01JTOKENFIXTURE00000000000',
             'procurador_token_expires_at' => now()->addHours(12),
         ]);
 
-        return [$office, $client, $auth];
+        return [$tenant, $client, $auth];
     }
 }

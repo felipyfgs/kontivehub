@@ -22,8 +22,6 @@ final readonly class ModuleClientRowDto
         public string $legalName,
         public ?string $displayName,
         public ?string $cnpj,
-        public string $cnpjMasked,
-        public string $rootCnpjMasked,
         public ?string $competence,
         public string $situation,
         public string $coverage,
@@ -46,12 +44,7 @@ final readonly class ModuleClientRowDto
             'client_id' => $this->clientId,
             'legal_name' => $this->legalName,
             'display_name' => $this->displayName,
-            'name' => ($this->displayName !== null && trim($this->displayName) !== '')
-                ? $this->displayName
-                : $this->legalName,
             'cnpj' => $this->cnpj,
-            'cnpj_masked' => $this->cnpjMasked,
-            'root_cnpj_masked' => $this->rootCnpjMasked,
             'competence' => $this->competence,
             'situation' => $this->situation,
             'coverage' => $this->coverage,

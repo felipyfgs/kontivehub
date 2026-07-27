@@ -9,7 +9,7 @@ use Tests\TestCase;
 
 class ModuleClientRowDtoCnpjTest extends TestCase
 {
-    public function test_to_array_exposes_normalized_cnpj_and_keeps_masked(): void
+    public function test_to_array_exposes_only_the_canonical_normalized_cnpj(): void
     {
         $dto = new ModuleClientRowDto(
             moduleKey: FiscalModuleKey::SimplesMei,
@@ -17,8 +17,6 @@ class ModuleClientRowDtoCnpjTest extends TestCase
             legalName: 'Cliente Teste',
             displayName: null,
             cnpj: '26461528000151',
-            cnpjMasked: '2646******0151',
-            rootCnpjMasked: '26461528',
             competence: null,
             situation: 'PENDING',
             coverage: 'UNKNOWN',
@@ -32,6 +30,7 @@ class ModuleClientRowDtoCnpjTest extends TestCase
 
         $this->assertSame('26461528000151', $payload['cnpj']);
         $this->assertSame(14, strlen((string) $payload['cnpj']));
-        $this->assertSame('2646******0151', $payload['cnpj_masked']);
+        $this->assertArrayNotHasKey('cnpj_masked', $payload);
+        $this->assertArrayNotHasKey('root_cnpj_masked', $payload);
     }
 }

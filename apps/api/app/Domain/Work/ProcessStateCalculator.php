@@ -16,7 +16,7 @@ use App\Enums\Work\TaskStatus;
  * - todas A_FAZER → A_FAZER
  * - demais → EM_PROGRESSO
  *
- * Arquivamento é ortogonal ({@see OperationalProcess::$archived_at}) e não entra no enum.
+ * Arquivamento é ortogonal ({@see WorkProcess::$archived_at}) e não entra no enum.
  */
 final class ProcessStateCalculator
 {

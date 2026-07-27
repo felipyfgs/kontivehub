@@ -3,7 +3,7 @@
 namespace App\Http\Requests\Fiscal\Mei;
 
 use App\Enums\TenantPermission;
-use App\Http\Middleware\EnsureOfficeContext;
+use App\Http\Middleware\EnsureTenantContext;
 use App\Models\User;
 use App\Services\Authorization\TenantAuthorization;
 use Illuminate\Foundation\Http\FormRequest;
@@ -24,10 +24,10 @@ abstract class MeiPublicOperationRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
-            if ($this->attributes->get(EnsureOfficeContext::CLIENT_OFFICE_ID_SUPPLIED) === true) {
+            if ($this->attributes->get(EnsureTenantContext::CLIENT_TENANT_ID_SUPPLIED) === true) {
                 $validator->errors()->add(
-                    'office_id',
-                    'O escritório é obtido do contexto autenticado; office_id não é aceito.',
+                    'tenant_id',
+                    'O escritório é obtido do contexto autenticado; tenant_id não é aceito.',
                 );
             }
         });
@@ -37,7 +37,7 @@ abstract class MeiPublicOperationRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'office_id.prohibited' => 'O escritório é obtido do contexto autenticado; office_id não é aceito.',
+            'tenant_id.prohibited' => 'O escritório é obtido do contexto autenticado; tenant_id não é aceito.',
             'confirmed.accepted' => 'A confirmação explícita é obrigatória.',
         ];
     }

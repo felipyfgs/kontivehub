@@ -12,7 +12,7 @@ use DOMXPath;
 
 /**
  * Validação fiscal de import de saída (procNFe / cteProc) e eventos.
- * Não materializa A1/CSC; assinatura: presença de XMLDSig + algoritmos allowlisted.
+ * Não materializa certificado/CSC; assinatura: presença de XMLDSig + algoritmos allowlisted.
  */
 final class ImportFiscalValidator
 {

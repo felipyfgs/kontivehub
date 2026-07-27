@@ -5,7 +5,7 @@ namespace App\Policies\Work\Concerns;
 use App\Enums\TenantPermission;
 use App\Models\User;
 use App\Services\Authorization\TenantAuthorization;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 
 /**
  * Policies Work: leitura e mutação via TenantAuthorization.
@@ -13,9 +13,9 @@ use App\Support\CurrentOffice;
  */
 trait UsesRealWorkRole
 {
-    protected function currentOffice(): CurrentOffice
+    protected function currentTenant(): CurrentTenant
     {
-        return app(CurrentOffice::class);
+        return app(CurrentTenant::class);
     }
 
     protected function auth(): TenantAuthorization
@@ -28,23 +28,23 @@ trait UsesRealWorkRole
         return $this->auth()->allows($user, $permission, $target);
     }
 
-    protected function sameOfficeId(int $modelOfficeId): bool
+    protected function sameTenantId(int $modelTenantId): bool
     {
-        $officeId = $this->currentOffice()->id();
+        $tenantId = $this->currentTenant()->id();
 
-        return $officeId !== null && $officeId === $modelOfficeId;
+        return $tenantId !== null && $tenantId === $modelTenantId;
     }
 
     protected function realMembershipId(): ?int
     {
-        $id = $this->currentOffice()->realMembership()?->id;
+        $id = $this->currentTenant()->realMembership()?->id;
 
         return $id !== null ? (int) $id : null;
     }
 
     protected function realWorkDepartmentId(): ?int
     {
-        $id = $this->currentOffice()->realMembership()?->work_department_id;
+        $id = $this->currentTenant()->realMembership()?->work_department_id;
 
         return $id !== null ? (int) $id : null;
     }

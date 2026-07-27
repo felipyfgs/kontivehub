@@ -9,9 +9,9 @@ use App\Jobs\Fiscal\ExecuteFiscalMonitoringRunJob;
 use App\Models\Client;
 use App\Models\FiscalEvidenceArtifact;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
 use App\Models\PgdasdArtifact;
 use App\Models\PgdasdOperation;
+use App\Models\Tenant;
 use App\Services\FiscalMonitoring\FiscalEvidenceStore;
 use App\Services\FiscalMonitoring\FiscalMonitoringRunService;
 use Carbon\CarbonImmutable;
@@ -30,7 +30,7 @@ final class PgdasdOperationAmountService
     ) {}
 
     public function applyParsedAmount(
-        Office $office,
+        Tenant $tenant,
         int $clientId,
         string $dasNumber,
         int $amountCents,
@@ -40,7 +40,7 @@ final class PgdasdOperationAmountService
     ): bool {
         $operation = PgdasdOperation::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $clientId)
             ->where('kind', PgdasdOperationKind::Das->value)
             ->where('das_number', $dasNumber)
@@ -71,7 +71,7 @@ final class PgdasdOperationAmountService
     }
 
     public function applyFromGerarDasNormalized(
-        Office $office,
+        Tenant $tenant,
         int $clientId,
         array $normalized,
     ): bool {
@@ -86,7 +86,7 @@ final class PgdasdOperationAmountService
         }
 
         return $this->applyParsedAmount(
-            office: $office,
+            tenant: $tenant,
             clientId: $clientId,
             dasNumber: trim($doc),
             amountCents: $cents,
@@ -96,7 +96,7 @@ final class PgdasdOperationAmountService
 
     /** @param list<PgdasdArtifact> $artifacts */
     public function applyFromExtratoArtifacts(
-        Office $office,
+        Tenant $tenant,
         int $clientId,
         ?string $numeroDas,
         array $artifacts,
@@ -110,11 +110,11 @@ final class PgdasdOperationAmountService
         if (! $artifact instanceof PgdasdArtifact) {
             return;
         }
-        $this->applyFromExtratoArtifact($office, $clientId, trim($numeroDas), $artifact);
+        $this->applyFromExtratoArtifact($tenant, $clientId, trim($numeroDas), $artifact);
     }
 
     public function applyFromExtratoArtifact(
-        Office $office,
+        Tenant $tenant,
         int $clientId,
         string $dasNumber,
         PgdasdArtifact $artifact,
@@ -126,18 +126,18 @@ final class PgdasdOperationAmountService
         $evidence = FiscalEvidenceArtifact::query()
             ->withoutGlobalScopes()
             ->whereKey((int) $evidenceId)
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->first();
         if ($evidence === null) {
             return false;
         }
 
         try {
-            $bytes = $this->evidenceStore->readAuthorized($evidence, (int) $office->id);
+            $bytes = $this->evidenceStore->readAuthorized($evidence, (int) $tenant->id);
             $text = $this->pdfText->extract($bytes);
         } catch (Throwable $e) {
             Log::warning('pgdasd.extrato_das_amount.read_failed', [
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'client_id' => $clientId,
                 'das_number' => $dasNumber,
                 'artifact_id' => $artifact->id,
@@ -153,7 +153,7 @@ final class PgdasdOperationAmountService
         }
 
         return $this->applyParsedAmount(
-            office: $office,
+            tenant: $tenant,
             clientId: $clientId,
             dasNumber: $dasNumber,
             amountCents: (int) $parsed['amount_cents'],
@@ -166,16 +166,16 @@ final class PgdasdOperationAmountService
     /**
      * Pós-MONITOR: tenta extratos locais; enfileira CONSEXTRATO para gaps restantes.
      *
-     * @return array{backfilled: int, enqueued: int}
+     * @return array{resolved: int, enqueued: int}
      */
     public function coverAmountGapsAfterMonitor(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         FiscalMonitoringRun $originRun,
     ): array {
         $gaps = PgdasdOperation::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('kind', PgdasdOperationKind::Das->value)
             ->where('payment_located', false)
@@ -187,13 +187,13 @@ final class PgdasdOperationAmountService
             ->limit(40)
             ->get(['id', 'client_id', 'period_key', 'das_number']);
 
-        $backfilled = 0;
+        $resolved = 0;
         $toEnqueue = [];
         foreach ($gaps as $operation) {
             $dasNumber = (string) $operation->das_number;
             $artifact = PgdasdArtifact::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('client_id', $client->id)
                 ->where('kind', 'EXTRATO')
                 ->where('das_number', $dasNumber)
@@ -202,9 +202,9 @@ final class PgdasdOperationAmountService
                 ->first();
 
             if ($artifact instanceof PgdasdArtifact
-                && $this->applyFromExtratoArtifact($office, (int) $client->id, $dasNumber, $artifact)
+                && $this->applyFromExtratoArtifact($tenant, (int) $client->id, $dasNumber, $artifact)
             ) {
-                $backfilled++;
+                $resolved++;
 
                 continue;
             }
@@ -215,7 +215,7 @@ final class PgdasdOperationAmountService
         $enqueued = 0;
         foreach (array_slice($toEnqueue, 0, self::GAP_ENQUEUE_LIMIT) as $operation) {
             if ($this->enqueueExtratoForDas(
-                $office,
+                $tenant,
                 $client,
                 (string) $operation->period_key,
                 (string) $operation->das_number,
@@ -225,18 +225,18 @@ final class PgdasdOperationAmountService
             }
         }
 
-        return ['backfilled' => $backfilled, 'enqueued' => $enqueued];
+        return ['resolved' => $resolved, 'enqueued' => $enqueued];
     }
 
     private function enqueueExtratoForDas(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $periodKey,
         string $dasNumber,
         int $originRunId,
     ): bool {
         $correlationId = 'pgdasd-das-amt-'.substr(hash('sha256', implode('|', [
-            $office->id,
+            $tenant->id,
             $client->id,
             $dasNumber,
         ])), 0, 40);
@@ -244,7 +244,7 @@ final class PgdasdOperationAmountService
         // Resolve lazy: FiscalMonitoringRunService → PgdasdPostConsult → este serviço.
         try {
             $run = app(FiscalMonitoringRunService::class)->enqueueManual(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 systemCode: 'INTEGRA_SN',
                 serviceCode: 'PGDASD',

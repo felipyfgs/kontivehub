@@ -9,16 +9,16 @@ use App\Enums\TaxGuideEmissionStatus;
 use App\Enums\TaxGuidePaymentStatus;
 use App\Models\DctfwebDarfDocument;
 use App\Models\DctfwebEvidenceVersion;
-use App\Models\Office;
 use App\Models\PgdasdArtifact;
 use App\Models\PgdasdOperation;
 use App\Models\TaxGuide;
+use App\Models\Tenant;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\LengthAwarePaginator as Paginator;
 use Illuminate\Support\Collection;
 
 /**
- * Lista guias (cliente ou office) unindo tax_guides + DAS PGDAS-D + DARF DCTFWeb.
+ * Lista guias (cliente ou tenant) unindo tax_guides + DAS PGDAS-D + DARF DCTFWeb.
  *
  * @phpstan-type PaymentCounters array{
  *   UNKNOWN: int,
@@ -35,6 +35,7 @@ use Illuminate\Support\Collection;
  *   competence_period_key: string|null,
  *   amount_cents: int|null,
  *   due_at: string|null,
+ *   operation_key: string,
  *   system_code: string|null
  * }
  */
@@ -44,7 +45,7 @@ final class ClientGuidesQueryService
      * @return array{page: LengthAwarePaginator, payment_counters: PaymentCounters}
      */
     public function paginate(
-        Office $office,
+        Tenant $tenant,
         ?int $clientId = null,
         int $perPage = 50,
         ?string $paymentStatus = null,
@@ -53,7 +54,7 @@ final class ClientGuidesQueryService
     ): array {
         $perPage = min(100, max(1, $perPage));
 
-        $index = $this->buildIndex($office, $clientId);
+        $index = $this->buildIndex($tenant, $clientId);
         $paymentCounters = $this->countPayments($index);
 
         $merged = $index;
@@ -70,7 +71,7 @@ final class ClientGuidesQueryService
         $page = max(1, (int) request()->query('page', 1));
         /** @var Collection<int, GuideIndexRow> $slice */
         $slice = $merged->slice(($page - 1) * $perPage, $perPage)->values();
-        $hydrated = $this->hydratePage($office, $clientId, $slice);
+        $hydrated = $this->hydratePage($tenant, $clientId, $slice);
 
         $paginator = new Paginator(
             $hydrated->all(),
@@ -92,11 +93,11 @@ final class ClientGuidesQueryService
     /**
      * @return Collection<int, GuideIndexRow>
      */
-    private function buildIndex(Office $office, ?int $clientId): Collection
+    private function buildIndex(Tenant $tenant, ?int $clientId): Collection
     {
         $issuedQuery = TaxGuide::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->select([
                 'id',
                 'client_id',
@@ -105,6 +106,7 @@ final class ClientGuidesQueryService
                 'competence_period_key',
                 'amount_cents',
                 'due_at',
+                'operation_key',
                 'system_code',
             ]);
         if ($clientId !== null) {
@@ -132,13 +134,14 @@ final class ClientGuidesQueryService
                 'competence_period_key' => $guide->competence_period_key,
                 'amount_cents' => $guide->amount_cents !== null ? (int) $guide->amount_cents : null,
                 'due_at' => $guide->due_at?->toIso8601String(),
+                'operation_key' => $guide->operation_key,
                 'system_code' => $guide->system_code,
             ];
         });
 
         $dasQuery = PgdasdOperation::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('kind', PgdasdOperationKind::Das->value)
             ->select([
                 'id',
@@ -175,6 +178,7 @@ final class ClientGuidesQueryService
                     'competence_period_key' => $op->period_key,
                     'amount_cents' => null,
                     'due_at' => null,
+                    'operation_key' => 'pgdasd.gerardas',
                     'system_code' => 'INTEGRA_SN',
                 ];
             });
@@ -189,7 +193,7 @@ final class ClientGuidesQueryService
 
         $darfQuery = DctfwebDarfDocument::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->with(['declaration' => fn ($q) => $q->withoutGlobalScopes()->select(['id', 'period_key'])])
             ->select([
                 'id',
@@ -232,6 +236,7 @@ final class ClientGuidesQueryService
                     'competence_period_key' => $darf->declaration?->period_key,
                     'amount_cents' => $amountCents,
                     'due_at' => $darf->due_at?->toIso8601String(),
+                    'operation_key' => 'dctfweb.gerarguia',
                     'system_code' => 'INTEGRA_DCTFWEB',
                 ];
             });
@@ -243,7 +248,7 @@ final class ClientGuidesQueryService
      * @param  Collection<int, GuideIndexRow>  $slice
      * @return Collection<int, array<string, mixed>>
      */
-    private function hydratePage(Office $office, ?int $clientId, Collection $slice): Collection
+    private function hydratePage(Tenant $tenant, ?int $clientId, Collection $slice): Collection
     {
         if ($slice->isEmpty()) {
             return collect();
@@ -257,7 +262,7 @@ final class ClientGuidesQueryService
             ? collect()
             : TaxGuide::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->whereIn('id', $taxIds)
                 ->with(['currentVersion' => fn ($q) => $q->withoutGlobalScopes()])
                 ->get()
@@ -267,7 +272,7 @@ final class ClientGuidesQueryService
             ? collect()
             : PgdasdOperation::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->whereIn('id', $dasIds)
                 ->get()
                 ->keyBy('id');
@@ -276,14 +281,14 @@ final class ClientGuidesQueryService
             ? collect()
             : DctfwebDarfDocument::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->whereIn('id', $darfIds)
                 ->with(['declaration' => fn ($q) => $q->withoutGlobalScopes()])
                 ->get()
                 ->keyBy('id');
 
-        $documentsByDas = $dasIds === [] ? collect() : $this->documentsByDasNumber($office, $clientId);
-        $documentsByDarf = $darfIds === [] ? collect() : $this->documentsByDarfEvidence($office, $clientId);
+        $documentsByDas = $dasIds === [] ? collect() : $this->documentsByDasNumber($tenant, $clientId);
+        $documentsByDarf = $darfIds === [] ? collect() : $this->documentsByDarfEvidence($tenant, $clientId);
 
         return $slice->map(function (array $row) use ($taxGuides, $dasOps, $darfs, $documentsByDas, $documentsByDarf): ?array {
             return match ($row['source_type']) {
@@ -382,9 +387,10 @@ final class ClientGuidesQueryService
 
         return [
             'id' => 'pgdasd-das-'.$op->id,
-            'office_id' => $op->office_id,
+            'tenant_id' => $op->tenant_id,
             'client_id' => $op->client_id,
             'establishment_id' => null,
+            'operation_key' => 'pgdasd.gerardas',
             'system_code' => 'INTEGRA_SN',
             'service_code' => 'PGDASD',
             'operation_code' => 'CONSULTAR_DECLARACAO',
@@ -451,9 +457,10 @@ final class ClientGuidesQueryService
 
         return [
             'id' => 'dctfweb-darf-'.$darf->id,
-            'office_id' => $darf->office_id,
+            'tenant_id' => $darf->tenant_id,
             'client_id' => $darf->client_id,
             'establishment_id' => null,
+            'operation_key' => 'dctfweb.gerarguia',
             'system_code' => 'INTEGRA_DCTFWEB',
             'service_code' => 'DCTFWEB',
             'operation_code' => 'EMITIR_DARF',
@@ -488,11 +495,11 @@ final class ClientGuidesQueryService
     /**
      * @return Collection<int, array<string, mixed>>
      */
-    private function documentsByDarfEvidence(Office $office, ?int $clientId): Collection
+    private function documentsByDarfEvidence(Tenant $tenant, ?int $clientId): Collection
     {
         $query = DctfwebEvidenceVersion::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('artifact_kind', DctfwebArtifactKind::Darf->value)
             ->orderByDesc('observed_at')
             ->orderByDesc('id');
@@ -528,11 +535,11 @@ final class ClientGuidesQueryService
     /**
      * @return Collection<string, array<string, mixed>>
      */
-    private function documentsByDasNumber(Office $office, ?int $clientId): Collection
+    private function documentsByDasNumber(Tenant $tenant, ?int $clientId): Collection
     {
         $query = PgdasdArtifact::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereNotNull('das_number')
             ->orderByDesc('observed_at')
             ->orderByDesc('id');

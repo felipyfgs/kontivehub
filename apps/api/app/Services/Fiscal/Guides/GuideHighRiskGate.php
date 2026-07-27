@@ -2,27 +2,28 @@
 
 namespace App\Services\Fiscal\Guides;
 
-use App\Enums\OfficeRole;
 use App\Enums\TaxGuideRiskLevel;
-use App\Models\Office;
+use App\Enums\TenantPermission;
+use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Auth\RecentPasswordConfirmationGate;
+use App\Services\Authorization\TenantAuthorization;
 use App\Services\Fiscal\Demo\FiscalDataOriginResolver;
 use App\Services\Fiscal\Guides\Exceptions\GuideException;
-use App\Services\Fiscal\Mutations\RecentTwoFactorGate;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use App\Support\FeatureFlags;
 
 /**
- * Confirmação reforçada + 2FA recente para emissões de alto risco.
+ * Confirmação reforçada + senha recente para emissões de alto risco.
  * Deve ser avaliada ANTES de reservar consumo ou chamar a fonte.
- * Reutiliza RecentTwoFactorGate (mesmo challenge que mutações fiscais).
  */
 final class GuideHighRiskGate
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
-        private readonly RecentTwoFactorGate $recent2fa,
+        private readonly CurrentTenant $currentTenant,
+        private readonly RecentPasswordConfirmationGate $recentPassword,
         private readonly FiscalDataOriginResolver $dataOrigin,
+        private readonly TenantAuthorization $authorization,
     ) {}
 
     /**
@@ -39,30 +40,30 @@ final class GuideHighRiskGate
         $reasons = [];
         $codes = [];
 
-        $officeId = $this->currentOffice->id();
-        $office = $officeId !== null ? Office::query()->find($officeId) : null;
-        if ($mutating && $this->dataOrigin->isDemoOfficeContext($office)) {
+        $tenantId = $this->currentTenant->id();
+        $tenant = $tenantId !== null ? Tenant::query()->find($tenantId) : null;
+        if ($mutating && $this->dataOrigin->isDemoTenantContext($tenant)) {
             $reasons[] = 'Modo demonstração/somente leitura: emissão externa bloqueada.';
             $codes[] = 'demo_mode';
         }
 
-        if ($mutating && ! FeatureFlags::isMutatingEnabled('guias', $this->currentOffice->id())) {
+        if ($mutating && ! FeatureFlags::isMutatingEnabled('guides', $this->currentTenant->id())) {
             $reasons[] = 'Feature flag mutante de guias desabilitada.';
             $codes[] = 'mutating_disabled';
         }
 
-        if ($mutating && ! FeatureFlags::isModuleEnabled('guias', $this->currentOffice->id())) {
+        if ($mutating && ! FeatureFlags::isModuleEnabled('guides', $this->currentTenant->id())) {
             $reasons[] = 'Módulo de guias desabilitado.';
             $codes[] = 'module_disabled';
         }
 
-        $role = $this->currentOffice->role();
-        $required = strtoupper((string) config('tax_guides.high_risk.required_role', 'ADMIN'));
+        $canExecute = $user !== null
+            && $this->authorization->allows($user, TenantPermission::FiscalMutationsExecute);
 
         if ($risk->requiresReinforcedConfirmation()) {
-            if ($role?->value !== $required && $role !== OfficeRole::Admin) {
-                $reasons[] = 'Papel insuficiente para emissão de alto risco.';
-                $codes[] = 'role_required';
+            if (! $canExecute) {
+                $reasons[] = 'Permissão insuficiente para emissão de alto risco.';
+                $codes[] = 'permission_required';
             }
 
             if ($user === null) {
@@ -85,9 +86,9 @@ final class GuideHighRiskGate
                 $codes[] = 'confirmation_summary_required';
             }
         } else {
-            if ($role === null || $role === OfficeRole::Viewer) {
-                $reasons[] = 'Visualizadores não emitem guias.';
-                $codes[] = 'role_required';
+            if (! $canExecute) {
+                $reasons[] = 'Permissão insuficiente para emissão de guias.';
+                $codes[] = 'permission_required';
             }
         }
 
@@ -115,7 +116,7 @@ final class GuideHighRiskGate
             return;
         }
 
-        // Flags de mutação/módulo têm precedência sobre o desafio 2FA
+        // Flags de mutação/módulo têm precedência sobre o desafio de senha.
         if (in_array('mutating_disabled', $eval['codes'], true) || in_array('module_disabled', $eval['codes'], true)) {
             throw GuideException::mutatingDisabled();
         }
@@ -129,35 +130,17 @@ final class GuideHighRiskGate
 
     public function hasRecentChallenge(?User $user = null): bool
     {
-        return $this->recent2fa->isRecentlyConfirmed($user);
+        return $this->recentPassword->isRecentlyConfirmed($user);
     }
 
     public function markConfirmed(User $user): void
     {
-        $this->recent2fa->markConfirmed($user);
+        $this->recentPassword->markConfirmed($user);
     }
 
     public function clear(): void
     {
-        $this->recent2fa->clear();
-    }
-
-    /**
-     * Valida TOTP e marca desafio recente (via RecentTwoFactorGate).
-     *
-     * @throws GuideException
-     */
-    public function verifyTotpAndMark(User $user, string $code): void
-    {
-        try {
-            $this->recent2fa->confirmWithCode($user, $code);
-        } catch (\RuntimeException $e) {
-            $msg = $e->getMessage();
-            $codeKey = str_contains(mb_strtolower($msg), 'inválid')
-                ? 'password_invalid'
-                : 'password_confirmation_required';
-            throw GuideException::forbidden($msg, $codeKey);
-        }
+        $this->recentPassword->clear();
     }
 
     public function resolveRisk(TaxGuideRiskLevel $catalogRisk, ?int $amountCents): TaxGuideRiskLevel

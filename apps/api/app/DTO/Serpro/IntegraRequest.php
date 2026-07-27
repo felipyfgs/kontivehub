@@ -13,7 +13,7 @@ use InvalidArgumentException;
  */
 final class IntegraRequest
 {
-    public readonly int $officeId;
+    public readonly int $tenantId;
 
     public readonly int $clientId;
 
@@ -30,9 +30,6 @@ final class IntegraRequest
     /** @var array<string, mixed> */
     public readonly array $businessData;
 
-    /** @var array<string, mixed> */
-    public readonly array $payload;
-
     /** @var array<string, string> */
     public readonly array $headers;
 
@@ -44,14 +41,7 @@ final class IntegraRequest
 
     public readonly bool $isMutating;
 
-    /** @deprecated Coordenadas vêm do catálogo via operationKey */
-    public readonly ?string $solutionCode;
-
-    /** @deprecated */
-    public readonly ?string $serviceCode;
-
-    /** @deprecated */
-    public readonly ?string $operationCode;
+    public readonly ?int $mutationOperationId;
 
     public readonly FiscalIdentity $author;
 
@@ -63,10 +53,9 @@ final class IntegraRequest
     /**
      * @param  array<string, mixed>  $businessData  Dados de negócio (protocolo, filtros…) — não credenciais
      * @param  array<string, string>  $headers  Headers extras não secretos (não sobrescreve oficiais)
-     * @param  array<string, mixed>  $payload  Legado: envelope parcial; preferir businessData
      */
     public function __construct(
-        int $officeId,
+        int $tenantId,
         int $clientId,
         string $environment,
         string $contractorCnpj,
@@ -74,15 +63,12 @@ final class IntegraRequest
         string $contributorCnpj,
         string $operationKey,
         array $businessData = [],
-        array $payload = [],
         array $headers = [],
         ?string $idempotencyKey = null,
         ?string $correlationId = null,
         ?string $requestTag = null,
         bool $isMutating = false,
-        ?string $solutionCode = null,
-        ?string $serviceCode = null,
-        ?string $operationCode = null,
+        ?int $mutationOperationId = null,
         ?FiscalIdentity $author = null,
         ?FiscalIdentity $contributor = null,
         ?EventosBatchContributor $eventosBatchContributor = null,
@@ -92,20 +78,17 @@ final class IntegraRequest
             throw new InvalidArgumentException('operation_key é obrigatório no IntegraRequest.');
         }
 
-        $this->officeId = $officeId;
+        $this->tenantId = $tenantId;
         $this->clientId = $clientId;
         $this->environment = $environment;
         $this->operationKey = $key;
         $this->businessData = $businessData;
-        $this->payload = $payload;
         $this->headers = $headers;
         $this->idempotencyKey = $idempotencyKey;
         $this->correlationId = $correlationId;
         $this->requestTag = $requestTag;
         $this->isMutating = $isMutating;
-        $this->solutionCode = $solutionCode;
-        $this->serviceCode = $serviceCode;
-        $this->operationCode = $operationCode;
+        $this->mutationOperationId = $mutationOperationId;
 
         $this->author = $author === null
             ? FiscalIdentity::fromNumero($authorIdentity)
@@ -130,7 +113,7 @@ final class IntegraRequest
         }
 
         $seed = implode('|', [
-            (string) $this->officeId,
+            (string) $this->tenantId,
             (string) $this->clientId,
             $this->operationKey,
             $this->idempotencyKey ?? '',

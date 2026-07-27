@@ -56,7 +56,7 @@ final class SitfisFlowService
         $now = CarbonImmutable::now();
 
         try {
-            $ids = $this->identities->resolve($request->office, $request->client);
+            $ids = $this->identities->resolve($request->tenant, $request->client);
         } catch (RuntimeException $e) {
             return FiscalAdapterResult::blocked($e->getMessage(), 'SITFIS_IDENTITY');
         }
@@ -124,7 +124,6 @@ final class SitfisFlowService
             (string) ($cfg['solicit_operation_key'] ?? 'sitfis.solicitar_protocolo'),
             (string) ($cfg['solicit_operation'] ?? 'SOLICITARPROTOCOLO91'),
             businessData: [],
-            dadosMode: 'EMPTY',
             correlation: $correlation,
         );
 
@@ -245,7 +244,6 @@ final class SitfisFlowService
             businessData: [
                 'protocoloRelatorio' => $state->protocol,
             ],
-            dadosMode: 'JSON_STRING',
             correlation: $correlation,
         );
 
@@ -375,30 +373,19 @@ final class SitfisFlowService
         FiscalAdapterRequest $request,
         array $ids,
         string $operationKey,
-        string $legacyOperationCode,
+        string $providerOperationCode,
         array $businessData,
-        string $dadosMode,
         string $correlation,
         string $idempotencySuffix = '',
     ): IntegraResponse {
-        $cfg = $this->config();
-        // Domínio/catálogo financeiro: INTEGRA_SITFIS + códigos de domínio
-        $domainSystem = (string) ($cfg['system_code'] ?? 'INTEGRA_SITFIS');
-        $service = (string) ($cfg['service_code'] ?? 'SITFIS');
-        // Elegibilidade/catálogo seed ainda usa códigos de domínio legados no banco
-        $catalogOperation = match ($operationKey) {
-            'sitfis.solicitar_protocolo' => 'SOLICITAR_RELATORIO',
-            'sitfis.emitir_relatorio' => 'EMITIR_RELATORIO',
-            default => $legacyOperationCode,
-        };
         $env = $ids['environment'];
 
         $elig = $this->eligibility->evaluate(
-            $request->office,
+            $request->tenant,
             $request->client,
-            $domainSystem,
-            $service,
-            $catalogOperation,
+            'SITFIS',
+            'SITFIS',
+            $providerOperationCode,
             $env,
             null,
             'sitfis',
@@ -418,30 +405,22 @@ final class SitfisFlowService
             );
         }
 
-        $this->eligibility->touchRateLimit((int) $request->office->id);
+        $this->eligibility->touchRateLimit((int) $request->tenant->id);
 
         $cursor = $request->progressCursor ?? '0';
         if ($idempotencySuffix !== '') {
             $cursor .= ':'.$idempotencySuffix;
         }
         $idempotencyKey = $request->run->idempotency_key.':'.$operationKey.':'.$cursor;
-        $payload = $dadosMode === 'EMPTY'
-            ? ['dados' => '']
-            : ['dados' => json_encode($businessData, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)];
-
         $integraRequest = new IntegraRequest(
-            officeId: (int) $request->office->id,
+            tenantId: (int) $request->tenant->id,
             clientId: (int) $request->client->id,
             environment: $env->value,
             contractorCnpj: $ids['contractor_cnpj'],
             authorIdentity: $ids['author_identity'],
             contributorCnpj: $ids['contributor_cnpj'],
             operationKey: $operationKey,
-            solutionCode: $domainSystem,
-            serviceCode: $service,
-            operationCode: $legacyOperationCode,
             businessData: $businessData,
-            payload: $payload,
             idempotencyKey: $idempotencyKey,
             correlationId: $correlation,
         );
@@ -575,7 +554,7 @@ final class SitfisFlowService
         }
 
         $ensure = $this->procuracaoEnsure->ensure(
-            $request->office,
+            $request->tenant,
             $request->client,
             $ids['environment'],
             [$power],

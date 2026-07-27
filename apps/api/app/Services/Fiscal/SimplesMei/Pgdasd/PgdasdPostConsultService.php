@@ -76,7 +76,7 @@ final class PgdasdPostConsultService
 
         return TaxObligationProjection::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $run->office_id)
+            ->where('tenant_id', $run->tenant_id)
             ->where('client_id', $run->client_id)
             ->where('last_valid_run_id', $run->id)
             ->update([
@@ -118,14 +118,14 @@ final class PgdasdPostConsultService
         try {
             $projected = $this->projector->projectFromDecoded(
                 $request->run,
-                $request->office,
+                $request->tenant,
                 $request->client,
                 $decoded,
             );
             $expectedPeriodKey = PgdasdPeriod::periodKeyFromPeriodoApuracao($expectedPa);
             $expectedProjection = $projected['projections'][$expectedPeriodKey]
                 ?? $this->projector->ensureProjectionForPeriod(
-                    $request->office,
+                    $request->tenant,
                     $request->client,
                     $expectedPeriodKey,
                     $request->competence?->period_key === $expectedPeriodKey
@@ -155,7 +155,7 @@ final class PgdasdPostConsultService
         }
 
         $declaration = $this->projector->latestDeclarationForPeriod(
-            (int) $request->office->id,
+            (int) $request->tenant->id,
             (int) $request->client->id,
             $expectedPeriodKey,
         );
@@ -186,13 +186,13 @@ final class PgdasdPostConsultService
 
         try {
             $this->operationAmounts->coverAmountGapsAfterMonitor(
-                $request->office,
+                $request->tenant,
                 $request->client,
                 $request->run,
             );
         } catch (\Throwable $e) {
             Log::warning('pgdasd.das_amount_gap_cover_failed', [
-                'office_id' => $request->office->id,
+                'tenant_id' => $request->tenant->id,
                 'client_id' => $request->client->id,
                 'run_id' => $request->run->id,
                 'error' => $e->getMessage(),
@@ -258,7 +258,7 @@ final class PgdasdPostConsultService
         }
 
         $projection = $this->projector->ensureProjectionForPeriod(
-            $request->office,
+            $request->tenant,
             $request->client,
             $periodKey,
             $request->competence?->period_key === $periodKey ? $request->competence?->id : null,
@@ -277,7 +277,7 @@ final class PgdasdPostConsultService
         if ($pack['artifacts'] === []) {
             $pack['artifacts'] = PgdasdArtifact::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $request->office->id)
+                ->where('tenant_id', $request->tenant->id)
                 ->where('client_id', $request->client->id)
                 ->where('projection_id', $projection->id)
                 ->where('source_run_id', $request->run->id)
@@ -293,14 +293,14 @@ final class PgdasdPostConsultService
             $this->resolveReservedRbt12($request, $numeroDas, $pack['artifacts']);
             try {
                 $this->operationAmounts->applyFromExtratoArtifacts(
-                    $request->office,
+                    $request->tenant,
                     (int) $request->client->id,
                     $numeroDas,
                     $pack['artifacts'],
                 );
             } catch (\Throwable $e) {
                 Log::warning('pgdasd.extrato_das_amount.apply_failed', [
-                    'office_id' => $request->office->id,
+                    'tenant_id' => $request->tenant->id,
                     'client_id' => $request->client->id,
                     'run_id' => $request->run->id,
                     'error' => $e->getMessage(),
@@ -327,13 +327,13 @@ final class PgdasdPostConsultService
         $normalized = is_array($result->normalized) ? $result->normalized : [];
         try {
             $this->operationAmounts->applyFromGerarDasNormalized(
-                $request->office,
+                $request->tenant,
                 (int) $request->client->id,
                 $normalized,
             );
         } catch (\Throwable $e) {
             Log::warning('pgdasd.gerar_das_amount.apply_failed', [
-                'office_id' => $request->office->id,
+                'tenant_id' => $request->tenant->id,
                 'client_id' => $request->client->id,
                 'run_id' => $request->run->id,
                 'error' => $e->getMessage(),
@@ -366,7 +366,7 @@ final class PgdasdPostConsultService
         $reservation = PgdasdRbt12Projection::query()
             ->withoutGlobalScopes()
             ->whereKey((int) $reservationId)
-            ->where('office_id', $request->office->id)
+            ->where('tenant_id', $request->tenant->id)
             ->where('client_id', $request->client->id)
             ->where('source_das_number', $numeroDas)
             ->where('source_reference_key', $sourceReferenceKey)
@@ -402,7 +402,7 @@ final class PgdasdPostConsultService
         try {
             $bytes = $this->evidenceStore->readAuthorized(
                 $artifact->evidenceArtifact,
-                (int) $request->office->id,
+                (int) $request->tenant->id,
             );
             $this->rbt12->resolveFromPdfBytes(
                 $reservation,
@@ -439,7 +439,7 @@ final class PgdasdPostConsultService
         $reservation = PgdasdRbt12Projection::query()
             ->withoutGlobalScopes()
             ->whereKey((int) $reservationId)
-            ->where('office_id', $request->office->id)
+            ->where('tenant_id', $request->tenant->id)
             ->where('client_id', $request->client->id)
             ->where('source_declaration_number', $declarationNumber)
             ->whereNull('source_das_number')
@@ -481,7 +481,7 @@ final class PgdasdPostConsultService
         try {
             $bytes = $this->evidenceStore->readAuthorized(
                 $artifact->evidenceArtifact,
-                (int) $request->office->id,
+                (int) $request->tenant->id,
             );
             $this->rbt12->resolveFromPdfBytes(
                 $reservation,
@@ -534,7 +534,7 @@ final class PgdasdPostConsultService
         }
         $projection = TaxObligationProjection::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $request->office->id)
+            ->where('tenant_id', $request->tenant->id)
             ->where('client_id', $request->client->id)
             ->where('obligation_definition_id', $definitionId)
             ->where('period_key', PgdasdPeriod::periodKeyFromPeriodoApuracao($expectedPa))
@@ -628,7 +628,7 @@ final class PgdasdPostConsultService
             }
         }
 
-        $timezone = (string) ($request->office->timezone ?: 'America/Sao_Paulo');
+        $timezone = (string) ($request->tenant->timezone ?: 'America/Sao_Paulo');
 
         return PgdasdPeriod::toPeriodoApuracao(PgdasdPeriod::expectedPa(null, $timezone));
     }
@@ -656,7 +656,7 @@ final class PgdasdPostConsultService
         if ($declarationNumber !== null) {
             $resolved = PgdasdOperation::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $request->office->id)
+                ->where('tenant_id', $request->tenant->id)
                 ->where('client_id', $request->client->id)
                 ->where('declaration_number', $declarationNumber)
                 ->orderByDesc('transmitted_at')

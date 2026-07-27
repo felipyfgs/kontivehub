@@ -62,13 +62,8 @@ final readonly class MonitoringActionContract
         ];
     }
 
-    /**
-     * Forma plana transitória consumida pelo painel de cobertura legado.
-     * Coordenadas e metadados de execução internos permanecem ausentes.
-     *
-     * @return array<string, mixed>
-     */
-    public function toCoverageCompatibilityArray(): array
+    /** @return array<string, mixed> */
+    public function toCoverageArray(): array
     {
         return [
             'action_key' => $this->actionKey,

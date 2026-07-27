@@ -15,6 +15,8 @@ use App\Enums\Communication\OutboxStatus;
 use App\Jobs\Communication\AdvanceCommunicationFlowRunJob;
 use App\Models\CommunicationCannedResponse;
 use App\Models\CommunicationConversation;
+use App\Models\CommunicationFlow;
+use App\Models\CommunicationFlowInboxBinding;
 use App\Models\CommunicationFlowRun;
 use App\Models\CommunicationFlowRunStep;
 use App\Models\CommunicationMessage;
@@ -76,7 +78,12 @@ final class CommunicationFlowExecutor
                 return;
             }
 
-            $run->loadMissing(['version', 'conversation.inbox', 'conversation.identity']);
+            $run->loadMissing([
+                'version' => fn ($query) => $query->withoutGlobalScopes(),
+                'conversation' => fn ($query) => $query->withoutGlobalScopes(),
+                'conversation.inbox' => fn ($query) => $query->withoutGlobalScopes(),
+                'conversation.identity' => fn ($query) => $query->withoutGlobalScopes(),
+            ]);
             $graph = is_array($run->version?->graph_encrypted) ? $run->version->graph_encrypted : [];
             $effectApplied = false;
 
@@ -411,7 +418,7 @@ final class CommunicationFlowExecutor
             if ($cannedId > 0) {
                 $canned = CommunicationCannedResponse::query()
                     ->withoutGlobalScopes()
-                    ->where('office_id', $run->office_id)
+                    ->where('tenant_id', $run->tenant_id)
                     ->whereKey($cannedId)
                     ->first();
                 if ($canned !== null) {
@@ -454,10 +461,13 @@ final class CommunicationFlowExecutor
 
             return;
         }
-        $conversation->loadMissing(['inbox', 'identity']);
+        $conversation->loadMissing([
+            'inbox' => fn ($query) => $query->withoutGlobalScopes(),
+            'identity' => fn ($query) => $query->withoutGlobalScopes(),
+        ]);
         $providerId = 'flow-'.strtolower((string) Str::ulid());
         $message = CommunicationMessage::query()->withoutGlobalScopes()->create([
-            'office_id' => $run->office_id,
+            'tenant_id' => $run->tenant_id,
             'inbox_id' => $conversation->inbox_id,
             'conversation_id' => $conversation->id,
             'identity_id' => $conversation->identity_id,
@@ -509,7 +519,7 @@ final class CommunicationFlowExecutor
         ])->save();
 
         $this->events->record(
-            (int) $run->office_id,
+            (int) $run->tenant_id,
             'COMMUNICATION_FLOW_MESSAGE_QUEUED',
             [
                 'run_id' => (int) $run->id,
@@ -538,7 +548,7 @@ final class CommunicationFlowExecutor
             $labelId = (int) ($data['label_id'] ?? 0);
             if ($labelId > 0) {
                 $conversation->labels()->syncWithoutDetaching([$labelId => [
-                    'office_id' => $conversation->office_id,
+                    'tenant_id' => $conversation->tenant_id,
                     'assigned_by_membership_id' => null,
                 ]]);
             }
@@ -627,7 +637,7 @@ final class CommunicationFlowExecutor
     ): void {
         $seq = $this->nextSeq($run, $nodeId);
         CommunicationFlowRunStep::query()->withoutGlobalScopes()->create([
-            'office_id' => $run->office_id,
+            'tenant_id' => $run->tenant_id,
             'run_id' => $run->id,
             'node_id' => $nodeId,
             'node_type' => $nodeType,
@@ -654,7 +664,7 @@ final class CommunicationFlowExecutor
         }
         $seq = $this->nextSeq($run, $nodeId);
         CommunicationFlowRunStep::query()->withoutGlobalScopes()->create([
-            'office_id' => $run->office_id,
+            'tenant_id' => $run->tenant_id,
             'run_id' => $run->id,
             'node_id' => $nodeId,
             'node_type' => $nodeType,
@@ -720,12 +730,17 @@ final class CommunicationFlowExecutor
      */
     private function stopIfFlowOrBindingIneligible(CommunicationFlowRun $run): bool
     {
-        $run->loadMissing(['flow', 'binding']);
+        $flow = CommunicationFlow::query()
+            ->withoutGlobalScopes()
+            ->find($run->flow_id);
+        $binding = CommunicationFlowInboxBinding::query()
+            ->withoutGlobalScopes()
+            ->find($run->binding_id);
 
         $reason = null;
-        if ($run->flow?->status === FlowStatus::Paused) {
+        if ($flow?->status === FlowStatus::Paused) {
             $reason = 'flow_paused';
-        } elseif ($run->binding?->enabled !== true) {
+        } elseif ($binding?->enabled !== true) {
             $reason = 'binding_disabled';
         }
 
@@ -755,7 +770,7 @@ final class CommunicationFlowExecutor
             'waiting_outbox_entry_id' => null,
         ])->save();
         $this->events->record(
-            (int) $run->office_id,
+            (int) $run->tenant_id,
             $eventType,
             array_merge([
                 'run_id' => (int) $run->id,

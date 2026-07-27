@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Models\Client;
-use App\Models\Office;
+use App\Models\Tenant;
+use App\Models\TenantMembership;
 use App\Models\User;
+use App\Services\Authorization\SystemTenantPermissionProfiles;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -14,10 +16,10 @@ class ClientBulkStatusApiTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_operator_can_inactivate_clients_from_current_office_atomically(): void
+    public function test_operator_can_inactivate_clients_from_current_tenant_atomically(): void
     {
-        [$user, $office] = $this->actor(OfficeRole::Operator);
-        $clients = Client::factory()->count(2)->forOffice($office)->create();
+        [$user, $tenant] = $this->actor(TenantRole::TenantUser);
+        $clients = Client::factory()->count(2)->forTenant($tenant)->create();
         Sanctum::actingAs($user);
 
         $response = $this->patchJson('/api/v1/clients/bulk-status', [
@@ -33,7 +35,7 @@ class ClientBulkStatusApiTest extends TestCase
         foreach ($clients as $client) {
             $this->assertDatabaseHas('clients', [
                 'id' => $client->id,
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'is_active' => false,
                 'inactive_reason' => 'Inativado em massa pela lista de clientes',
             ]);
@@ -42,8 +44,8 @@ class ClientBulkStatusApiTest extends TestCase
 
     public function test_reactivation_clears_inactive_reason(): void
     {
-        [$user, $office] = $this->actor(OfficeRole::Admin);
-        $client = Client::factory()->forOffice($office)->create([
+        [$user, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $client = Client::factory()->forTenant($tenant)->create([
             'is_active' => false,
             'inactive_reason' => 'Motivo anterior',
         ]);
@@ -61,12 +63,12 @@ class ClientBulkStatusApiTest extends TestCase
         ]);
     }
 
-    public function test_cross_office_id_rejects_the_entire_batch(): void
+    public function test_cross_tenant_id_rejects_the_entire_batch(): void
     {
-        [$user, $office] = $this->actor(OfficeRole::Admin);
-        $otherOffice = Office::factory()->create();
-        $ownClient = Client::factory()->forOffice($office)->create();
-        $otherClient = Client::factory()->forOffice($otherOffice)->create();
+        [$user, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $otherTenant = Tenant::factory()->create();
+        $ownClient = Client::factory()->forTenant($tenant)->create();
+        $otherClient = Client::factory()->forTenant($otherTenant)->create();
         Sanctum::actingAs($user);
 
         $this->patchJson('/api/v1/clients/bulk-status', [
@@ -85,8 +87,8 @@ class ClientBulkStatusApiTest extends TestCase
 
     public function test_viewer_cannot_update_clients_in_bulk(): void
     {
-        [$user, $office] = $this->actor(OfficeRole::Viewer);
-        $client = Client::factory()->forOffice($office)->create();
+        [$user, $tenant] = $this->actor(TenantRole::TenantUser, 'viewer');
+        $client = Client::factory()->forTenant($tenant)->create();
         Sanctum::actingAs($user);
 
         $this->patchJson('/api/v1/clients/bulk-status', [
@@ -101,12 +103,19 @@ class ClientBulkStatusApiTest extends TestCase
         ]);
     }
 
-    /** @return array{User, Office} */
-    private function actor(OfficeRole $role): array
+    /** @return array{User, Tenant} */
+    private function actor(TenantRole $role, string $permissionProfile = 'operator'): array
     {
-        $office = Office::factory()->create();
-        $user = User::factory()->forOffice($office, $role)->create();
+        $tenant = Tenant::factory()->create();
+        $user = User::factory()->forTenant($tenant, $role)->create();
+        if ($role === TenantRole::TenantUser) {
+            $profiles = app(SystemTenantPermissionProfiles::class)->ensure($tenant);
+            TenantMembership::query()
+                ->where('tenant_id', $tenant->id)
+                ->where('user_id', $user->id)
+                ->update(['permission_profile_id' => $profiles[$permissionProfile]->id]);
+        }
 
-        return [$user, $office];
+        return [$user, $tenant];
     }
 }

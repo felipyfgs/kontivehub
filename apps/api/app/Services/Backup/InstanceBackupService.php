@@ -103,23 +103,17 @@ final class InstanceBackupService
             $required = $kind === InstanceBackupRun::KIND_FULL ? 3 : 1;
             $ok = count($components) >= $required && $errors === [];
 
-            $packageCrypto = BackupPackageCrypto::fromConfig();
-            $packageEncrypted = false;
-            $packageRelative = null;
-            $packageSha = null;
-
-            if ($ok && $packageCrypto !== null && $kind === InstanceBackupRun::KIND_FULL) {
+            if ($ok && $kind === InstanceBackupRun::KIND_FULL) {
                 try {
+                    $packageCrypto = BackupPackageCrypto::fromConfig();
                     $sealed = $this->sealRunDirectory($absoluteRunDir, $components, $packageCrypto);
-                    $packageEncrypted = true;
-                    $packageRelative = $relativeRunDir.'/package.nfsebkp';
-                    $packageSha = $sealed['sha256'];
+                    $packageRelative = $relativeRunDir.'/package.khbkp';
                     $components[] = [
                         'name' => 'package',
                         'path' => $packageRelative,
-                        'sha256' => $packageSha,
+                        'sha256' => $sealed['sha256'],
                         'byte_size' => $sealed['byte_size'],
-                        'format' => 'nfse-backup-package-v1',
+                        'format' => 'kontivehub-backup-package-v1',
                         'encrypted' => true,
                     ];
                 } catch (Throwable $e) {
@@ -131,13 +125,12 @@ final class InstanceBackupService
             $manifestRelative = $relativeRunDir.'/manifest.json';
             $manifestAbsolute = $absoluteRunDir.DIRECTORY_SEPARATOR.'manifest.json';
             $manifest = [
-                'format' => $packageEncrypted ? 'nfse-adn-backup-v3' : 'nfse-adn-backup-v2',
+                'format' => 'kontivehub-backup-v1',
                 'kind' => $kind,
                 'created_at' => now()->toIso8601String(),
                 'app' => config('app.name'),
                 'components' => $components,
                 'master_key_included' => false,
-                'package_encrypted' => $packageEncrypted,
                 'vault_separated' => true,
             ];
 
@@ -230,10 +223,25 @@ final class InstanceBackupService
             /** @var array<string, mixed> $manifest */
             $manifest = json_decode((string) file_get_contents($manifestAbsolute), true, 512, JSON_THROW_ON_ERROR);
             $this->assertManifestSafe($manifest);
-
+            if (($manifest['format'] ?? null) !== 'kontivehub-backup-v1') {
+                throw new RuntimeException('Formato de manifesto de backup inválido.');
+            }
             $components = $manifest['components'] ?? null;
             if (! is_array($components) || $components === []) {
                 throw new RuntimeException('Manifesto sem componentes.');
+            }
+            if ($source->kind === InstanceBackupRun::KIND_FULL) {
+                $packages = array_values(array_filter(
+                    $components,
+                    static fn (mixed $component): bool => is_array($component)
+                        && ($component['name'] ?? null) === 'package',
+                ));
+                if (count($packages) !== 1
+                    || ($packages[0]['format'] ?? null) !== 'kontivehub-backup-package-v1'
+                    || ($packages[0]['encrypted'] ?? null) !== true
+                ) {
+                    throw new RuntimeException('Backup completo sem pacote cifrado canônico.');
+                }
             }
 
             foreach ($components as $component) {
@@ -350,29 +358,14 @@ final class InstanceBackupService
         $fileName = 'database.sql.gz';
         $absolute = $absoluteRunDir.DIRECTORY_SEPARATOR.$fileName;
         $connection = (string) config('database.default');
-        $driver = (string) config("database.connections.{$connection}.driver");
         $format = 'pg_dump_gzip';
 
-        if ($driver === 'pgsql') {
-            // Em produção PostgreSQL, inventário de tabelas NÃO conta como backup restaurável.
-            if (! $this->binaryExists('pg_dump')) {
-                throw new RuntimeException(
-                    'pg_dump indisponível: backup de banco PostgreSQL recusado (evita SUCCESS falso).'
-                );
-            }
-            $this->pgDumpToGzip($absolute, $connection);
-        } elseif ($driver === 'sqlite') {
-            // Somente testes/dev SQLite: dump lógico de inventário (não é pg_restore).
-            $sql = $this->logicalSqlDump($connection, $driver);
-            $gz = gzencode($sql, 9);
-            if ($gz === false) {
-                throw new RuntimeException('Falha ao compactar dump do banco.');
-            }
-            File::put($absolute, $gz);
-            $format = 'sqlite_inventory';
-        } else {
-            throw new RuntimeException('Driver de banco sem suporte a dump de backup.');
+        if (! $this->binaryExists('pg_dump')) {
+            throw new RuntimeException(
+                'pg_dump indisponível: backup de banco PostgreSQL recusado (evita SUCCESS falso).'
+            );
         }
+        $this->pgDumpToGzip($absolute, $connection);
 
         @chmod($absolute, 0600);
 
@@ -495,7 +488,7 @@ final class InstanceBackupService
     private function sealRunDirectory(string $absoluteRunDir, array $components, BackupPackageCrypto $crypto): array
     {
         $bundle = [
-            'format' => 'nfse-backup-inner-v1',
+            'format' => 'kontivehub-backup-inner-v1',
             'created_at' => now()->toIso8601String(),
             'files' => [],
         ];
@@ -530,7 +523,7 @@ final class InstanceBackupService
 
         $plaintext = json_encode($bundle, JSON_THROW_ON_ERROR);
         $sealed = $crypto->seal($plaintext);
-        $out = $absoluteRunDir.DIRECTORY_SEPARATOR.'package.nfsebkp';
+        $out = $absoluteRunDir.DIRECTORY_SEPARATOR.'package.khbkp';
         File::put($out, $sealed);
         @chmod($out, 0600);
 
@@ -543,11 +536,6 @@ final class InstanceBackupService
     private function assertEncryptedPackageOpenable(string $absolutePackage): void
     {
         $crypto = BackupPackageCrypto::fromConfig();
-        if ($crypto === null) {
-            throw new RuntimeException(
-                'Pacote cifrado presente, mas BACKUP_PACKAGE_KEY ausente (chave externa obrigatória no drill).'
-            );
-        }
 
         $bytes = file_get_contents($absolutePackage);
         if ($bytes === false || $bytes === '') {
@@ -560,7 +548,7 @@ final class InstanceBackupService
 
         $plaintext = $crypto->open($bytes);
         $decoded = json_decode($plaintext, true, 512, JSON_THROW_ON_ERROR);
-        if (! is_array($decoded) || ($decoded['format'] ?? null) !== 'nfse-backup-inner-v1') {
+        if (! is_array($decoded) || ($decoded['format'] ?? null) !== 'kontivehub-backup-inner-v1') {
             throw new RuntimeException('Conteúdo interno do pacote cifrado inválido.');
         }
         if (! is_array($decoded['files'] ?? null) || $decoded['files'] === []) {
@@ -595,8 +583,8 @@ final class InstanceBackupService
             ['serpro_credential_versions', 'oauth_vault_object_id'],
             ['serpro_credential_versions', 'token_vault_object_id'],
             ['client_credentials', 'vault_object_id'],
-            ['office_credentials', 'vault_object_id'],
-            ['vault_object_journal', 'object_id'],
+            ['tenant_credentials', 'vault_object_id'],
+            ['vault_object_journal_entries', 'object_id'],
         ];
 
         foreach ($columns as [$table, $column]) {
@@ -732,36 +720,8 @@ final class InstanceBackupService
         }
     }
 
-    private function logicalSqlDump(string $connection, string $driver): string
-    {
-        $parts = ["-- nfse logical dump\n-- master_key_included=false\n-- driver={$driver}\n"];
-
-        if ($driver === 'sqlite') {
-            $tables = DB::connection($connection)->select(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
-            );
-            foreach ($tables as $row) {
-                $name = $row->name ?? null;
-                if (! is_string($name) || $name === '') {
-                    continue;
-                }
-                $parts[] = '-- table: '.$name."\n";
-                $parts[] = '-- rows: '.DB::connection($connection)->table($name)->count()."\n";
-            }
-
-            return implode('', $parts);
-        }
-
-        throw new RuntimeException('Dump lógico de inventário permitido apenas em sqlite (testes).');
-    }
-
     private function assertDatabaseArtifactLooksRestorable(string $absoluteGzipPath, ?string $format): void
     {
-        if ($format === 'sqlite_inventory') {
-            // Aceito apenas em ambientes de teste; não é pg_restore.
-            return;
-        }
-
         if ($format === 'inventory' || $format === 'logical_inventory') {
             throw new RuntimeException('Artefato de inventário não é dump restaurável.');
         }

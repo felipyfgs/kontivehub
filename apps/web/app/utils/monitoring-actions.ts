@@ -1,19 +1,15 @@
 /**
- * Matriz de ações da carteira fiscal (papéis + existência de backend).
- * VIEWER: somente leitura/navegação.
- * OPERATOR: associação, atualização de leitura, export, triagem.
- * ADMIN (+2FA): tudo do OPERATOR + mutações de alto risco.
+ * Matriz de ações da carteira fiscal por permissões efetivas.
  */
 
-import type { MeUser, OfficeRole } from '~/types/api'
+import type { MeUser } from '~/types/api'
 import {
   canAssociateCategories,
   canCreateExport,
   canExecuteHighRiskMutation,
   canManageClients,
   canTriageMailbox,
-  canTriggerSync,
-  hasConfirmedAdminAccess
+  canTriggerSync
 } from '~/utils/permissions'
 import type { FiscalModuleKey } from '~/types/fiscal-modules'
 import { isFiscalPortfolioModule } from '~/types/fiscal-modules'
@@ -33,50 +29,39 @@ export interface MonitoringActionAvailability {
   reason?: string
 }
 
-function roleOf(user?: MeUser | null): OfficeRole | null {
-  return user?.role ?? null
-}
-
 export function monitoringActionMatrix(user?: MeUser | null): MonitoringActionAvailability[] {
-  const role = roleOf(user)
-  const isViewer = role === 'VIEWER' || role == null
-
   return [
     {
       id: 'add_client',
       allowed: canManageClients(user),
-      reason: isViewer ? 'VIEWER não pode cadastrar clientes.' : undefined
+      reason: canManageClients(user) ? undefined : 'Sem permissão para cadastrar clientes.'
     },
     {
       id: 'associate_categories',
       allowed: canAssociateCategories(user),
-      reason: isViewer ? 'VIEWER não pode associar categorias.' : undefined
+      reason: canAssociateCategories(user) ? undefined : 'Sem permissão para associar categorias.'
     },
     {
       id: 'enqueue_read',
       allowed: canTriggerSync(user),
-      reason: isViewer ? 'VIEWER não pode enfileirar consultas.' : undefined
+      reason: canTriggerSync(user) ? undefined : 'Sem permissão para enfileirar consultas.'
     },
     {
       id: 'export_portfolio',
       allowed: canCreateExport(user),
-      reason: isViewer ? 'VIEWER não pode exportar.' : undefined
+      reason: canCreateExport(user) ? undefined : 'Sem permissão para exportar.'
     },
     {
       id: 'mailbox_triage',
       allowed: canTriageMailbox(user),
-      reason: isViewer ? 'VIEWER não pode alterar triagem.' : undefined
+      reason: canTriageMailbox(user) ? undefined : 'Sem permissão para alterar triagem.'
     },
     {
       id: 'high_risk_mutation',
       allowed: canExecuteHighRiskMutation(user),
-      reason: role === 'OPERATOR'
-        ? 'Somente ADMIN com 2FA executa mutações fiscais.'
-        : isViewer
-          ? 'VIEWER não executa mutações fiscais.'
-          : !hasConfirmedAdminAccess(user)
-              ? 'ADMIN precisa de 2FA confirmado.'
-              : undefined
+      reason: canExecuteHighRiskMutation(user)
+        ? undefined
+        : 'Sem permissão para executar mutações fiscais.'
     }
   ]
 }

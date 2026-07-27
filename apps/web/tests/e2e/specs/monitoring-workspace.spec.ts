@@ -10,12 +10,12 @@ async function login(page: Page, email: string) {
   await expect(page).not.toHaveURL(/\/login/)
 }
 
-async function selectOffice(page: Page, name: string) {
-  const identity = page.getByTestId('office-identity')
-  if (await identity.getAttribute('data-office-name') === name) return
+async function selectTenant(page: Page, name: string) {
+  const identity = page.getByTestId('tenant-identity')
+  if (await identity.getAttribute('data-tenant-name') === name) return
   await identity.click()
   await page.locator('[role="option"]').filter({ hasText: name }).click()
-  await expect(identity).toHaveAttribute('data-office-name', name)
+  await expect(identity).toHaveAttribute('data-tenant-name', name)
 }
 
 test.beforeEach(async ({ page }) => {
@@ -31,7 +31,7 @@ test.beforeEach(async ({ page }) => {
 
 test('operador percorre superfícies e troca tenant sem egress fiscal', async ({ page }) => {
   await login(page, 'operador@example.com')
-  await selectOffice(page, 'Escritório Contábil Demo')
+  await selectTenant(page, 'Escritório Contábil Demo')
   await page.goto('/monitoring')
   await expect(page.getByTestId('page-navbar')).toBeVisible()
 
@@ -51,8 +51,8 @@ test('operador percorre superfícies e troca tenant sem egress fiscal', async ({
     await expect(page.locator('body')).not.toContainText('500 Internal Server Error')
   }
 
-  await selectOffice(page, 'Escritório E2E Secundário')
-  await selectOffice(page, 'Escritório Contábil Demo')
+  await selectTenant(page, 'Escritório E2E Secundário')
+  await selectTenant(page, 'Escritório Contábil Demo')
 })
 
 test('viewer vê histórico e cobertura sem controles de atualização', async ({ page }) => {

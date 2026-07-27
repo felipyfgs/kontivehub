@@ -55,7 +55,7 @@ export function buildDctfwebColumns(options: {
 }): TableColumn<DctfwebClientRow>[] {
   function actionItems(row: DctfwebClientRow): DropdownMenuItem[][] {
     const summary = dctfwebSummary(row)
-    const name = row.name || row.legal_name || `cliente ${row.client_id}`
+    const name = row.display_name || row.legal_name || `cliente ${row.client_id}`
     const items: DropdownMenuItem[] = [
       {
         label: 'Abrir cliente',
@@ -182,10 +182,9 @@ export function buildDctfwebColumns(options: {
       meta: { ...MONITORING_CLIENT_COLUMN_META },
       cell: ({ row }) => h(FiscalClientCell, {
         clientId: row.original.client_id,
-        name: row.original.legal_name || row.original.name,
+        name: row.original.display_name || row.original.legal_name,
         legalName: row.original.legal_name,
         cnpj: row.original.cnpj,
-        cnpjMasked: row.original.cnpj_masked,
         to: `/monitoring/clients/${row.original.client_id}`
       })
     },
@@ -202,9 +201,7 @@ export function buildDctfwebColumns(options: {
       meta: { ...MONITORING_CONSULTED_META },
       cell: ({ row }) => {
         const summary = dctfwebSummary(row.original)
-        const label = formatDctfwebDate(
-          summary?.last_search_at || summary?.last_valid_query_at
-        )
+        const label = formatDctfwebDate(summary?.last_search_at)
         return h('span', {
           'class': 'whitespace-nowrap tabular-nums text-xs text-muted',
           'data-testid': 'dctfweb-last-search'
@@ -218,7 +215,7 @@ export function buildDctfwebColumns(options: {
       enableSorting: false,
       meta: { ...MONITORING_ACTIONS_META },
       cell: ({ row }) => {
-        const name = row.original.name || row.original.legal_name || `cliente ${row.original.client_id}`
+        const name = row.original.display_name || row.original.legal_name || `cliente ${row.original.client_id}`
         return buildMonitoringActionsMenuCell({
           ariaLabel: `Mais ações de ${name}`,
           testId: 'dctfweb-row-actions',
@@ -292,10 +289,9 @@ export function buildMitColumns(options: {
       meta: { ...MONITORING_CLIENT_COLUMN_META },
       cell: ({ row }) => h(FiscalClientCell, {
         clientId: row.original.client_id,
-        name: row.original.legal_name || row.original.name,
+        name: row.original.display_name || row.original.legal_name,
         legalName: row.original.legal_name,
         cnpj: row.original.cnpj,
-        cnpjMasked: row.original.cnpj_masked,
         to: `/monitoring/clients/${row.original.client_id}`
       })
     },
@@ -333,7 +329,7 @@ export function buildMitColumns(options: {
       enableSorting: false,
       meta: { ...MONITORING_ACTIONS_META },
       cell: ({ row }) => {
-        const name = row.original.name || row.original.legal_name || `cliente ${row.original.client_id}`
+        const name = row.original.display_name || row.original.legal_name || `cliente ${row.original.client_id}`
         return buildMonitoringActionsMenuCell({
           ariaLabel: `Mais ações de ${name}`,
           testId: 'mit-row-actions',

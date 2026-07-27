@@ -22,7 +22,7 @@ final class SensitiveModelSerializationTest extends TestCase
     public function test_account_activation_hides_recipient_and_secret_hash(): void
     {
         $activation = (new AccountActivation)->forceFill([
-            'purpose' => ActivationPurpose::OfficeMember,
+            'purpose' => ActivationPurpose::TenantMember,
             'method' => ActivationMethod::ManualLink,
             'email_normalized' => 'fiscal@example.test',
             'secret_hash' => 'activation-secret-hash',
@@ -56,7 +56,7 @@ final class SensitiveModelSerializationTest extends TestCase
             'status' => MeiAutomationStatus::Succeeded,
             'idempotency_key' => 'mei-idempotency-secret',
             'request_fingerprint' => str_repeat('a', 64),
-            'source_provenance' => 'PORTAL_ARTIFACT',
+            'source_provenance' => 'RECEITA_PORTAL',
             'verification_kind' => FiscalVerificationKind::PortalArtifact,
             'portal_version' => 'portal-internal-version',
             'parser_version' => 'parser-internal-version',

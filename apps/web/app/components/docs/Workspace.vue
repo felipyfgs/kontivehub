@@ -6,8 +6,8 @@
  * Fonte: .local/reference/nuxt-dashboard-template/app/pages/customers.vue
  */
 import { documentKindLabel, isDocumentKindCaptureAvailable } from '~/utils/document-kinds'
-import type { Client, Establishment, ExportFilters, NfseNote, NotesInsights } from '~/types/api'
-import type { NoteListParams } from '~/composables/useApi'
+import type { Client, Establishment, ExportFilters, FiscalDocument, FiscalDocumentInsights } from '~/types/api'
+import type { DocumentListParams } from '~/composables/useApi'
 import {
   activeTriageQueue,
   applyTriageQueue,
@@ -16,10 +16,10 @@ import {
   FILTER_ALL,
   hasExportableCatalogFilters,
   isActiveFilterValue,
-  type NotesFilterState,
+  type DocumentFilterState,
   type NotesTriageQueue,
   type NotesViewMode
-} from '~/utils/notes-filters'
+} from '~/utils/document-filters'
 
 /** Teto alinhado a BuildExportZipJob::MAX_ACCESS_KEYS */
 const MAX_EXPORT_KEYS = 100
@@ -35,7 +35,7 @@ const props = withDefaults(defineProps<{
 })
 const { canCreateExport, canImportDocuments, sessionEpoch } = useDashboard()
 
-/** Query params aceitos no catálogo (deep-links e redirect legado). */
+/** Query params canônicos aceitos no catálogo. */
 const CATALOG_QUERY_KEYS = new Set([
   'kind',
   'direction',
@@ -55,7 +55,7 @@ const CATALOG_QUERY_KEYS = new Set([
   'taker_cnpj'
 ])
 
-const notes = ref<NfseNote[]>([])
+const notes = ref<FiscalDocument[]>([])
 /** Lista de clientes (API de cadastro) na visão Por cliente — com captura/sync. */
 const byClientRows = ref<Client[]>([])
 const byClientPage = ref(1)
@@ -67,7 +67,7 @@ const clientOperationalFilter = ref('total')
 const byClientSorting = ref<{ id: string, desc: boolean }[]>([{ id: 'legal_name', desc: false }])
 const clients = ref<Client[]>([])
 const establishments = ref<Establishment[]>([])
-const insights = ref<NotesInsights | null>(null)
+const insights = ref<FiscalDocumentInsights | null>(null)
 const insightsLoading = ref(false)
 const nextCursor = ref<string | null>(null)
 /** Total no escopo dos filtros (meta.total da API). */
@@ -86,8 +86,8 @@ const selectedKeys = ref<string[]>([])
 
 const triageQueue = computed(() => activeTriageQueue(filters))
 
-const persistedFilters = useState<NotesFilterState>('notes-workspace-filters', emptyDocsFilters)
-const filters = reactive<NotesFilterState>({ ...persistedFilters.value })
+const persistedFilters = useState<DocumentFilterState>('notes-workspace-filters', emptyDocsFilters)
+const filters = reactive<DocumentFilterState>({ ...persistedFilters.value })
 const view = ref<NotesViewMode>(props.initialView)
 
 /** Contexto CT-e (autXML, pendências) só no catálogo com filtro kind=CTE. */
@@ -112,7 +112,7 @@ watch(
 
 watch(sessionEpoch, () => {
   // Mantém kind documental (ex. CTE) como preferência de visão; limpa o resto
-  // tenant-scoped para não repopular CNPJ/cliente/pendências do office anterior.
+  // tenant-scoped para não repopular CNPJ/cliente/pendências do tenant anterior.
   const preserveKind = filters.kind === 'CTE' ? 'CTE' : FILTER_ALL
   const empty = emptyDocsFilters()
   empty.kind = preserveKind
@@ -173,17 +173,17 @@ const kindExportAvailable = computed(() =>
   || filters.kind === 'CTE'
 )
 
-function queryParams(cursor?: string | null): NoteListParams {
+function queryParams(cursor?: string | null): DocumentListParams {
   return {
     limit: pageSize.value,
     ...(isActiveFilterValue(filters.q) ? { q: filters.q } : {}),
     ...(isActiveFilterValue(filters.kind) ? { kind: filters.kind } : {}),
-    ...(isActiveFilterValue(filters.direction) ? { direction: filters.direction as NoteListParams['direction'] } : {}),
+    ...(isActiveFilterValue(filters.direction) ? { direction: filters.direction as DocumentListParams['direction'] } : {}),
     ...(isActiveFilterValue(filters.client_id) ? { client_id: Number(filters.client_id) } : {}),
     ...(isActiveFilterValue(filters.establishment_id) ? { establishment_id: Number(filters.establishment_id) } : {}),
     ...(isActiveFilterValue(filters.issuer_cnpj) ? { issuer_cnpj: filters.issuer_cnpj } : {}),
     ...(isActiveFilterValue(filters.taker_cnpj) ? { taker_cnpj: filters.taker_cnpj } : {}),
-    ...(isActiveFilterValue(filters.fiscal_role) ? { fiscal_role: filters.fiscal_role as NoteListParams['fiscal_role'] } : {}),
+    ...(isActiveFilterValue(filters.fiscal_role) ? { fiscal_role: filters.fiscal_role as DocumentListParams['fiscal_role'] } : {}),
     ...(isActiveFilterValue(filters.acquisition_source) ? { acquisition_source: filters.acquisition_source } : {}),
     ...(isActiveFilterValue(filters.artifact_quality) ? { artifact_quality: filters.artifact_quality } : {}),
     ...(isActiveFilterValue(filters.coverage_status) ? { coverage_status: filters.coverage_status } : {}),
@@ -202,7 +202,7 @@ function resetPagination() {
 }
 
 /** Params de insights: sem cursor/limit; mantém escopo de filtro. */
-function insightsParams(): NoteListParams {
+function insightsParams(): DocumentListParams {
   const p = queryParams()
   delete p.limit
   delete p.cursor
@@ -304,7 +304,7 @@ async function loadByClient() {
         ? undefined
         : operational as 'capture_problem',
       sort: sortId,
-      direction: sort?.desc ? 'desc' : 'asc'
+      sort_direction: sort?.desc ? 'desc' : 'asc'
     })
     if (seq !== byClientLoadSeq || epoch !== sessionEpoch.value) return
     byClientRows.value = response.data
@@ -348,7 +348,7 @@ async function onClientChange() {
 function catalogQueryFromFilters(): Record<string, string> {
   const query: Record<string, string> = {}
   for (const key of CATALOG_QUERY_KEYS) {
-    const value = filters[key as keyof NotesFilterState]
+    const value = filters[key as keyof DocumentFilterState]
     if (typeof value === 'string' && isActiveFilterValue(value)) {
       query[key] = value
     }
@@ -356,7 +356,7 @@ function catalogQueryFromFilters(): Record<string, string> {
   return query
 }
 
-/** Aplica query aceita da URL aos filtros (deep-link / redirect legado). */
+/** Aplica a query canônica da URL aos filtros. */
 function hydrateFiltersFromQuery() {
   const query = route.query
   let changed = false
@@ -366,7 +366,7 @@ function hydrateFiltersFromQuery() {
     if (typeof value !== 'string' || !value) continue
     if (key === 'kind' && !['NFSE', 'NFE', 'NFCE', 'CTE'].includes(value.toUpperCase())) continue
     const normalized = key === 'kind' ? value.toUpperCase() : value
-    if (filters[key as keyof NotesFilterState] !== normalized) {
+    if (filters[key as keyof DocumentFilterState] !== normalized) {
       ;(filters as Record<string, string>)[key] = normalized
       changed = true
     }
@@ -389,10 +389,7 @@ async function syncCatalogQuery(replace = true) {
   const same
     = Object.keys(nextQuery).length === Object.keys(current).length
       && Object.entries(nextQuery).every(([k, v]) => current[k] === v)
-  if (same && !Object.keys(route.query).some(k => !CATALOG_QUERY_KEYS.has(k) && k !== 'view')) {
-    // Ainda pode haver view= legado a limpar
-    if (!('view' in route.query)) return
-  }
+  if (same && !Object.keys(route.query).some(key => !CATALOG_QUERY_KEYS.has(key))) return
   const nav = replace ? router.replace : router.push
   await nav({ path: '/docs/catalog', query: nextQuery })
 }
@@ -438,7 +435,7 @@ watch(byClientSorting, () => {
   void loadByClient()
 }, { deep: true })
 
-async function selectNote(note: NfseNote) {
+async function selectNote(note: FiscalDocument) {
   await router.push(`/docs/${note.access_key}`)
 }
 
@@ -571,22 +568,7 @@ async function submitImport() {
       await reloadActive()
     }
   } catch (caught) {
-    try {
-      const clientId = isActiveFilterValue(importClientId.value)
-        ? Number(importClientId.value)
-        : (isActiveFilterValue(filters.client_id) ? Number(filters.client_id) : null)
-      const res = await api.documents.import(importFiles.value, clientId)
-      const r = res.data
-      toast.add({
-        title: `Importação: ${r.imported} ok, ${r.skipped} duplicados, ${r.errors} erros`,
-        color: r.errors && !r.imported ? 'error' : 'success'
-      })
-      importOpen.value = false
-      importFiles.value = []
-      await reloadActive()
-    } catch {
-      toast.add({ title: apiErrorMessage(caught, 'Falha ao importar XML.'), color: 'error' })
-    }
+    toast.add({ title: apiErrorMessage(caught, 'Falha ao importar XML.'), color: 'error' })
   } finally {
     importing.value = false
   }
@@ -675,11 +657,10 @@ async function exportSelection() {
 }
 
 onMounted(async () => {
-  const legacyDocumentView = route.query.view === 'document' || route.query.view === 'nfs'
-  // Deep-links documentais (ex. kind=CTE) hidratam filtros; params legados/não aceitos saem da URL.
+  // Deep-links documentais (ex. kind=CTE) hidratam somente filtros canônicos.
   if (view.value === 'document' && !selectedAccessKey.value) {
     hydrateFiltersFromQuery()
-    if (legacyDocumentView || Object.keys(route.query).length) {
+    if (Object.keys(route.query).length) {
       await syncCatalogQuery(true)
     }
   } else if (Object.keys(route.query).length && selectedAccessKey.value) {
@@ -784,7 +765,7 @@ onMounted(async () => {
                 :items="[
                   { label: 'Associação automática por emitente', value: FILTER_ALL },
                   ...clients.map(c => ({
-                    label: c.display_name || c.legal_name || c.name,
+                    label: c.display_name || c.legal_name,
                     value: String(c.id)
                   }))
                 ]"

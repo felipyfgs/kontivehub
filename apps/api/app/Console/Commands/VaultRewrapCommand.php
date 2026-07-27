@@ -130,7 +130,7 @@ class VaultRewrapCommand extends Command
 
         return [
             'purpose' => $entry->purpose,
-            'office_id' => $entry->office_id,
+            'tenant_id' => $entry->tenant_id,
         ];
     }
 

@@ -3,7 +3,7 @@
 namespace App\Contracts;
 
 use App\Models\Client;
-use App\Models\Office;
+use App\Models\Tenant;
 
 /**
  * Resolve identidades da cadeia Integra para SITFIS (contratante → autor → contribuinte).
@@ -21,5 +21,5 @@ interface SitfisIdentityResolving
     /**
      * @return SitfisIdentities
      */
-    public function resolve(Office $office, Client $client): array;
+    public function resolve(Tenant $tenant, Client $client): array;
 }

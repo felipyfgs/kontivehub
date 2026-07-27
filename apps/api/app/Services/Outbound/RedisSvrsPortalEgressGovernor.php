@@ -109,7 +109,7 @@ final class RedisSvrsPortalEgressGovernor implements SvrsPortalEgressGovernor
                     cohortId: $this->cohortId(),
                     rootCnpj: $rootKey,
                     channel: $request->channel,
-                    officeId: $request->officeId,
+                    tenantId: $request->tenantId,
                     exchangesReserved: $exchanges,
                     exchangesConsumed: 0,
                 );
@@ -119,7 +119,7 @@ final class RedisSvrsPortalEgressGovernor implements SvrsPortalEgressGovernor
                     [
                         'root' => $rootKey,
                         'channel' => $request->channel,
-                        'office_id' => $request->officeId,
+                        'tenant_id' => $request->tenantId,
                         'reserved' => $exchanges,
                         'consumed' => 0,
                         'created_at' => time(),
@@ -237,7 +237,7 @@ final class RedisSvrsPortalEgressGovernor implements SvrsPortalEgressGovernor
         ?string $templateFingerprint = null,
         ?int $retryAfterSeconds = null,
         ?int $userId = null,
-        ?int $officeId = null,
+        ?int $tenantId = null,
     ): void {
         $ladder = $this->config->blockCooldownLadderSeconds();
         $row = $this->ensureCohortRow();
@@ -278,14 +278,14 @@ final class RedisSvrsPortalEgressGovernor implements SvrsPortalEgressGovernor
             'tier' => $tier,
             'cooldown_seconds' => $cooldown,
             'fingerprint' => $templateFingerprint ? mb_substr($templateFingerprint, 0, 16) : null,
-        ], $userId, $officeId);
+        ], $userId, $tenantId);
         $this->metric('svrs_egress_breaker_open', 1, [
             'cause' => $cause->value,
             'state' => 'open',
         ]);
     }
 
-    public function closeBreakerAfterCanarySuccess(?int $userId = null, ?int $officeId = null): void
+    public function closeBreakerAfterCanarySuccess(?int $userId = null, ?int $tenantId = null): void
     {
         $row = $this->ensureCohortRow();
         $row->forceFill([
@@ -304,14 +304,14 @@ final class RedisSvrsPortalEgressGovernor implements SvrsPortalEgressGovernor
         $this->audit->record('svrs_egress.breaker.close', 'SUCCESS', null, [
             'cohort_id' => $this->cohortId(),
             'reason' => 'canary_success',
-        ], $userId, $officeId);
+        ], $userId, $tenantId);
         $this->metric('svrs_egress_canary_result', 1, [
             'outcome' => 'success',
             'state' => 'closed',
         ]);
     }
 
-    public function extendCooldown(int $additionalSeconds, int $userId, ?int $officeId = null): void
+    public function extendCooldown(int $additionalSeconds, int $userId, ?int $tenantId = null): void
     {
         if ($additionalSeconds < 1) {
             throw new \InvalidArgumentException('additionalSeconds deve ser positivo.');
@@ -328,7 +328,7 @@ final class RedisSvrsPortalEgressGovernor implements SvrsPortalEgressGovernor
         $this->audit->record('svrs_egress.cooldown.extend', 'SUCCESS', null, [
             'cohort_id' => $this->cohortId(),
             'additional_seconds' => $additionalSeconds,
-        ], $userId, $officeId);
+        ], $userId, $tenantId);
         $this->metric('svrs_egress_cooldown_extended', 1, [
             'state' => 'open',
         ]);
@@ -385,7 +385,7 @@ final class RedisSvrsPortalEgressGovernor implements SvrsPortalEgressGovernor
      *
      * @return array{ok: bool, reason: string}
      */
-    public function selectCanary(string $accessKeyMask, string $accessKeyHash, int $userId, ?int $officeId = null): array
+    public function selectCanary(string $accessKeyMask, string $accessKeyHash, int $userId, ?int $tenantId = null): array
     {
         $row = $this->ensureCohortRow();
         $this->refreshHalfOpenIfDue();
@@ -411,7 +411,7 @@ final class RedisSvrsPortalEgressGovernor implements SvrsPortalEgressGovernor
         $this->audit->record('svrs_egress.canary.select', 'SUCCESS', null, [
             'cohort_id' => $this->cohortId(),
             'key_mask' => mb_substr($accessKeyMask, 0, 20),
-        ], $userId, $officeId);
+        ], $userId, $tenantId);
         $this->metric('svrs_egress_canary_selection', 1, ['decision' => 'selected']);
 
         return ['ok' => true, 'reason' => 'selected'];

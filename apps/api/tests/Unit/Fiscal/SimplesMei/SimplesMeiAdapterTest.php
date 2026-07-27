@@ -20,10 +20,10 @@ use App\Enums\TaxProxyPowerStatus;
 use App\Models\Client;
 use App\Models\Establishment;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
-use App\Models\OfficeSerproAuthorization;
 use App\Models\SerproContract;
 use App\Models\TaxProxyPower;
+use App\Models\Tenant;
+use App\Models\TenantSerproAuthorization;
 use App\Services\Fiscal\SimplesMei\CcmeiPostConsultService;
 use App\Services\Fiscal\SimplesMei\CcmeiRegistrationStatusPostConsultService;
 use App\Services\Fiscal\SimplesMei\DefisDeclarationProjector;
@@ -44,7 +44,7 @@ use App\Services\Fiscal\SimplesMei\SimplesMeiResponseMapper;
 use App\Services\Integra\ContributorCnpjResolver;
 use App\Services\Integra\EnsureClientProcuracaoForConsult;
 use App\Services\Integra\IntegraEligibilityService;
-use App\Services\Integra\OfficeSerproAuthorizationService;
+use App\Services\Integra\TenantSerproAuthorizationService;
 use App\Services\Serpro\SerproContractService;
 use App\Services\Serpro\SerproOperationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -69,25 +69,25 @@ final class SimplesMeiAdapterTest extends TestCase
 
     public function test_pgmei_consultar_returns_classified_block_when_authorization_draft(): void
     {
-        [$office, $client, $run] = $this->seedTenant();
+        [$tenant, $client, $run] = $this->seedTenant();
         SerproContract::query()->create([
             'environment' => SerproEnvironment::Trial->value,
             'status' => 'ACTIVE',
             'contractor_cnpj' => '04252011000110',
             'health_status' => 'OK',
         ]);
-        OfficeSerproAuthorization::query()->create([
-            'office_id' => $office->id,
+        TenantSerproAuthorization::query()->create([
+            'tenant_id' => $tenant->id,
             'environment' => SerproEnvironment::Trial,
             'status' => SerproAuthorizationStatus::Draft,
             'author_identity_type' => AuthorIdentityType::Cnpj,
             'author_identity' => '48123272000105',
-            'certificate_mode' => AuthorCertificateMode::ManagedA1,
+            'certificate_mode' => AuthorCertificateMode::ManagedCertificate,
         ]);
 
         $adapter = $this->makeAdapter('INTEGRA_MEI', 'PGMEI', 'CONSULTAR');
         $result = $adapter->execute(new FiscalAdapterRequest(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             run: $run,
             systemCode: 'INTEGRA_MEI',
@@ -105,17 +105,17 @@ final class SimplesMeiAdapterTest extends TestCase
 
     public function test_pgdasd_consultar_with_fixture_source_returns_domain_result(): void
     {
-        [$office, $client, $run] = $this->seedTenant(
+        [$tenant, $client, $run] = $this->seedTenant(
             systemCode: 'INTEGRA_SN',
             serviceCode: 'PGDASD',
             operationCode: 'CONSULTAR_DECLARACAO',
             operationKey: 'pgdasd.consultar_declaracao',
         );
-        $this->seedUsableSerpro($office, $client, powerCode: 'PGDASD');
+        $this->seedUsableSerpro($tenant, $client, powerCode: 'PGDASD');
 
         $adapter = $this->makeAdapter('INTEGRA_SN', 'PGDASD', 'CONSULTAR_DECLARACAO');
         $result = $adapter->execute(new FiscalAdapterRequest(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             run: $run,
             systemCode: 'INTEGRA_SN',
@@ -145,7 +145,7 @@ final class SimplesMeiAdapterTest extends TestCase
             operations: app(SerproOperationService::class),
             mapper: app(SimplesMeiResponseMapper::class),
             contracts: app(SerproContractService::class),
-            authorizations: app(OfficeSerproAuthorizationService::class),
+            authorizations: app(TenantSerproAuthorizationService::class),
             regimeApplicability: app(RegimeApplicabilityService::class),
             contributors: app(ContributorCnpjResolver::class),
             pgdasdCodec13: app(PgdasdConsDeclaracao13Codec::class),
@@ -165,25 +165,25 @@ final class SimplesMeiAdapterTest extends TestCase
         );
     }
 
-    /** @return array{Office, Client, FiscalMonitoringRun} */
+    /** @return array{Tenant, Client, FiscalMonitoringRun} */
     private function seedTenant(
         string $systemCode = 'INTEGRA_MEI',
         string $serviceCode = 'PGMEI',
         string $operationCode = 'CONSULTAR',
         string $operationKey = 'pgmei.dividaativa',
     ): array {
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create([
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create([
             'root_cnpj' => '26461528',
         ]);
         Establishment::factory()->forClient($client)->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'cnpj' => '26461528000151',
             'is_active' => true,
-            'is_matrix' => true,
+            'is_headquarters' => true,
         ]);
         $run = FiscalMonitoringRun::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'system_code' => $systemCode,
             'service_code' => $serviceCode,
@@ -197,10 +197,10 @@ final class SimplesMeiAdapterTest extends TestCase
             'mutability' => FiscalMutability::ReadOnly,
         ]);
 
-        return [$office, $client, $run];
+        return [$tenant, $client, $run];
     }
 
-    private function seedUsableSerpro(Office $office, Client $client, string $powerCode): void
+    private function seedUsableSerpro(Tenant $tenant, Client $client, string $powerCode): void
     {
         SerproContract::query()->create([
             'environment' => SerproEnvironment::Trial->value,
@@ -209,23 +209,22 @@ final class SimplesMeiAdapterTest extends TestCase
             'health_status' => 'OK',
         ]);
 
-        $auth = OfficeSerproAuthorization::query()->create([
-            'office_id' => $office->id,
+        $auth = TenantSerproAuthorization::query()->create([
+            'tenant_id' => $tenant->id,
             'environment' => SerproEnvironment::Trial,
             'status' => SerproAuthorizationStatus::TokenActive,
             'author_identity_type' => AuthorIdentityType::Cnpj,
             'author_identity' => '48123272000105',
-            'certificate_mode' => AuthorCertificateMode::ManagedA1,
-            'managed_a1_consent' => true,
+            'certificate_mode' => AuthorCertificateMode::ManagedCertificate,
             'procurador_token_vault_object_id' => '01JTOKENADAPTER00000000000',
             'procurador_token_expires_at' => now()->addHours(12),
             'termo_valid_to' => now()->addYear(),
         ]);
 
         TaxProxyPower::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
-            'office_serpro_authorization_id' => $auth->id,
+            'tenant_serpro_authorization_id' => $auth->id,
             'author_identity' => $auth->author_identity,
             'contributor_cnpj' => '26461528000151',
             'system_code' => $powerCode,

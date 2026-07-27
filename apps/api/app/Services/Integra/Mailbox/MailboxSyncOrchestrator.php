@@ -6,7 +6,7 @@ use App\Enums\MailboxMonitoringMode;
 use App\Models\Client;
 use App\Models\MailboxClientSyncState;
 use App\Models\MailboxMonitoringSetting;
-use App\Models\Office;
+use App\Models\Tenant;
 
 final class MailboxSyncOrchestrator
 {
@@ -17,14 +17,14 @@ final class MailboxSyncOrchestrator
     ) {}
 
     /** @return array<string,mixed> */
-    public function preview(Office $office, ?MailboxMonitoringSetting $setting = null, bool $forceAll = false): array
+    public function preview(Tenant $tenant, ?MailboxMonitoringSetting $setting = null, bool $forceAll = false): array
     {
         $setting ??= MailboxMonitoringSetting::query()->withoutGlobalScopes()
-            ->firstOrNew(['office_id' => $office->id]);
-        $contributors = $this->contributors->contributors($office);
+            ->firstOrNew(['tenant_id' => $tenant->id]);
+        $contributors = $this->contributors->contributors($tenant);
         $clientIds = array_values(array_unique(array_column($contributors, 'client_id')));
         $states = MailboxClientSyncState::query()->withoutGlobalScopes()
-            ->where('office_id', $office->id)->whereIn('client_id', $clientIds)
+            ->where('tenant_id', $tenant->id)->whereIn('client_id', $clientIds)
             ->get()->keyBy('client_id');
         $due = [];
         $reasonByClient = [];
@@ -46,7 +46,7 @@ final class MailboxSyncOrchestrator
         }
         $cost = $due === []
             ? $this->emptyCost()
-            : $this->cost->preview((int) $office->id, 'LISTAR', count($due));
+            : $this->cost->preview((int) $tenant->id, 'LISTAR', count($due));
 
         return [
             'mode' => $setting->mode->value,
@@ -61,19 +61,19 @@ final class MailboxSyncOrchestrator
     }
 
     /** @return array{preview:array<string,mixed>,runs:array} */
-    public function confirm(Office $office, ?MailboxMonitoringSetting $setting = null, bool $forceAll = false): array
+    public function confirm(Tenant $tenant, ?MailboxMonitoringSetting $setting = null, bool $forceAll = false): array
     {
-        $preview = $this->preview($office, $setting, $forceAll);
+        $preview = $this->preview($tenant, $setting, $forceAll);
         if (! $preview['can_confirm']) {
             throw new \RuntimeException((string) $preview['cost']['block_reason']);
         }
         $clients = Client::query()->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('id', $preview['client_ids'])
             ->where('is_active', true)->orderBy('id')->get()->all();
         $reason = $forceAll ? 'manual' : (($setting?->mode === MailboxMonitoringMode::DailyComplete)
             ? 'daily_complete' : 'periodic_reconciliation');
-        $runs = $this->lists->dispatch($office, $clients, $reason, ! $forceAll);
+        $runs = $this->lists->dispatch($tenant, $clients, $reason, ! $forceAll);
 
         return ['preview' => $preview, 'runs' => $runs];
     }

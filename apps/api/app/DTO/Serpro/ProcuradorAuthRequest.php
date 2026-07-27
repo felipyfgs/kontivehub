@@ -5,7 +5,7 @@ namespace App\DTO\Serpro;
 final class ProcuradorAuthRequest
 {
     public function __construct(
-        public readonly int $officeId,
+        public readonly int $tenantId,
         public readonly string $environment,
         public readonly string $authorIdentity,
         public readonly string $termoXml,

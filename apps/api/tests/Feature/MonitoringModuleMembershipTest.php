@@ -4,14 +4,14 @@ namespace Tests\Feature;
 
 use App\DTO\Fiscal\Module\ModulePortfolioFilters;
 use App\Enums\FiscalModuleKey;
-use App\Enums\OfficeRole;
 use App\Enums\TaxRegimeCode;
+use App\Enums\TenantRole;
 use App\Models\Client;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\FiscalMonitoring\ModulePortfolio\ModulePortfolioQueryService;
 use App\Services\FiscalMonitoring\MonitoringModuleMembershipService;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -22,14 +22,14 @@ class MonitoringModuleMembershipTest extends TestCase
 
     public function test_exclude_removes_client_from_portfolio_and_include_restores(): void
     {
-        [$office, $sn, $mei] = $this->seedMixed();
+        [$tenant, $sn, $mei] = $this->seedMixed();
         $membership = app(MonitoringModuleMembershipService::class);
         $portfolio = app(ModulePortfolioQueryService::class);
 
-        $membership->exclude($office, FiscalModuleKey::SimplesMei, [$sn->id], 'PGDASD');
+        $membership->exclude($tenant, FiscalModuleKey::SimplesMei, [$sn->id], 'PGDASD');
 
         $page = $portfolio->clients(
-            $office,
+            $tenant,
             FiscalModuleKey::SimplesMei,
             ModulePortfolioFilters::fromRequest(['submodule' => 'PGDASD', 'per_page' => 50]),
         );
@@ -37,10 +37,10 @@ class MonitoringModuleMembershipTest extends TestCase
         $this->assertNotContains($sn->id, $ids);
         $this->assertSame(0, $page->total());
 
-        $membership->include($office, FiscalModuleKey::SimplesMei, [$sn->id], 'PGDASD');
+        $membership->include($tenant, FiscalModuleKey::SimplesMei, [$sn->id], 'PGDASD');
 
         $page = $portfolio->clients(
-            $office,
+            $tenant,
             FiscalModuleKey::SimplesMei,
             ModulePortfolioFilters::fromRequest(['submodule' => 'PGDASD', 'per_page' => 50]),
         );
@@ -48,9 +48,9 @@ class MonitoringModuleMembershipTest extends TestCase
         $this->assertContains($sn->id, $ids);
 
         // MEI tab untouched by PGDASD exclusion
-        $membership->exclude($office, FiscalModuleKey::SimplesMei, [$sn->id], 'PGDASD');
+        $membership->exclude($tenant, FiscalModuleKey::SimplesMei, [$sn->id], 'PGDASD');
         $meiPage = $portfolio->clients(
-            $office,
+            $tenant,
             FiscalModuleKey::SimplesMei,
             ModulePortfolioFilters::fromRequest(['submodule' => 'PGMEI', 'per_page' => 50]),
         );
@@ -59,11 +59,11 @@ class MonitoringModuleMembershipTest extends TestCase
 
     public function test_include_rejects_client_outside_regime(): void
     {
-        [$office, $sn, $mei] = $this->seedMixed();
+        [$tenant, $sn, $mei] = $this->seedMixed();
         $membership = app(MonitoringModuleMembershipService::class);
 
         $result = $membership->include(
-            $office,
+            $tenant,
             FiscalModuleKey::SimplesMei,
             [$mei->id],
             'PGDASD',
@@ -76,18 +76,17 @@ class MonitoringModuleMembershipTest extends TestCase
 
     public function test_http_exclude_is_tenant_scoped(): void
     {
-        [$office, $sn] = $this->seedMixed();
-        $otherOffice = Office::factory()->create();
-        $otherSn = Client::factory()->for($otherOffice)->create([
+        [$tenant, $sn] = $this->seedMixed();
+        $otherTenant = Tenant::factory()->create();
+        $otherSn = Client::factory()->for($otherTenant)->create([
             'is_active' => true,
-            'matrix_client_id' => null,
             'tax_regime' => TaxRegimeCode::SimplesNacional->value,
         ]);
 
-        $actor = User::factory()->forOffice($office, OfficeRole::Operator)->create();
+        $actor = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
         Sanctum::actingAs($actor);
-        app(CurrentOffice::class)->clear();
-        $this->assertSame($office->id, app(CurrentOffice::class)->resolve($actor)?->id);
+        app(CurrentTenant::class)->clear();
+        $this->assertSame($tenant->id, app(CurrentTenant::class)->resolve($actor)?->id);
 
         $this->postJson('/api/v1/fiscal/monitoring/membership/exclude', [
             'module' => 'simples_mei',
@@ -95,23 +94,23 @@ class MonitoringModuleMembershipTest extends TestCase
             'client_ids' => [$sn->id, $otherSn->id],
         ])->assertOk();
 
-        $this->assertDatabaseHas('office_monitoring_module_exclusions', [
-            'office_id' => $office->id,
+        $this->assertDatabaseHas('tenant_monitoring_module_exclusions', [
+            'tenant_id' => $tenant->id,
             'client_id' => $sn->id,
             'module_key' => 'simples_mei',
             'submodule' => 'PGDASD',
         ]);
-        $this->assertDatabaseMissing('office_monitoring_module_exclusions', [
+        $this->assertDatabaseMissing('tenant_monitoring_module_exclusions', [
             'client_id' => $otherSn->id,
         ]);
     }
 
     public function test_http_list_include_exclude_roundtrip_for_pgdasd(): void
     {
-        [$office, $sn] = $this->seedMixed();
-        $actor = User::factory()->forOffice($office, OfficeRole::Operator)->create();
+        [$tenant, $sn] = $this->seedMixed();
+        $actor = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
         Sanctum::actingAs($actor);
-        app(CurrentOffice::class)->clear();
+        app(CurrentTenant::class)->clear();
 
         $this->postJson('/api/v1/fiscal/monitoring/membership/exclude', [
             'module' => 'simples_mei',
@@ -137,7 +136,7 @@ class MonitoringModuleMembershipTest extends TestCase
 
         $portfolio = app(ModulePortfolioQueryService::class);
         $page = $portfolio->clients(
-            $office,
+            $tenant,
             FiscalModuleKey::SimplesMei,
             ModulePortfolioFilters::fromRequest(['submodule' => 'PGDASD', 'per_page' => 50]),
         );
@@ -146,10 +145,10 @@ class MonitoringModuleMembershipTest extends TestCase
 
     public function test_http_include_rejects_mei_on_pgdasd(): void
     {
-        [$office, $sn, $mei] = $this->seedMixed();
-        $actor = User::factory()->forOffice($office, OfficeRole::Operator)->create();
+        [$tenant, $sn, $mei] = $this->seedMixed();
+        $actor = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
         Sanctum::actingAs($actor);
-        app(CurrentOffice::class)->clear();
+        app(CurrentTenant::class)->clear();
 
         $this->postJson('/api/v1/fiscal/monitoring/membership/include', [
             'module' => 'simples_mei',
@@ -160,10 +159,10 @@ class MonitoringModuleMembershipTest extends TestCase
 
     public function test_viewer_cannot_mutate_membership(): void
     {
-        [$office, $sn] = $this->seedMixed();
-        $viewer = User::factory()->forOffice($office, OfficeRole::Viewer)->create();
+        [$tenant, $sn] = $this->seedMixed();
+        $viewer = User::factory()->forTenant($tenant, TenantRole::TenantUser, 'viewer')->create();
         Sanctum::actingAs($viewer);
-        app(CurrentOffice::class)->clear();
+        app(CurrentTenant::class)->clear();
 
         $this->postJson('/api/v1/fiscal/monitoring/membership/exclude', [
             'module' => 'simples_mei',
@@ -182,22 +181,20 @@ class MonitoringModuleMembershipTest extends TestCase
     }
 
     /**
-     * @return array{0: Office, 1: Client, 2: Client}
+     * @return array{0: Tenant, 1: Client, 2: Client}
      */
     private function seedMixed(): array
     {
-        $office = Office::factory()->create();
-        $sn = Client::factory()->for($office)->create([
+        $tenant = Tenant::factory()->create();
+        $sn = Client::factory()->for($tenant)->create([
             'is_active' => true,
-            'matrix_client_id' => null,
             'tax_regime' => TaxRegimeCode::SimplesNacional->value,
         ]);
-        $mei = Client::factory()->for($office)->create([
+        $mei = Client::factory()->for($tenant)->create([
             'is_active' => true,
-            'matrix_client_id' => null,
             'tax_regime' => TaxRegimeCode::Mei->value,
         ]);
 
-        return [$office, $sn, $mei];
+        return [$tenant, $sn, $mei];
     }
 }

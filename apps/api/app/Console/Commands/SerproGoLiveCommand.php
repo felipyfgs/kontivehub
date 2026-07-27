@@ -3,8 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Enums\SerproEnvironment;
-use App\Models\Office;
 use App\Models\SerproRolloutApproval;
+use App\Models\Tenant;
 use App\Services\Serpro\SerproCircuitBreaker;
 use App\Services\Serpro\SerproKillSwitchService;
 use App\Services\Serpro\SerproReadinessPromotionService;
@@ -26,7 +26,7 @@ class SerproGoLiveCommand extends Command
     protected $signature = 'serpro:go-live
         {action : checklist|free-smoke-promote|canary-blocked-check|kill-switch-status|kill-switch-hydrate|breaker-status|ledger-dry-run}
         {--serpro-env= : Ambiente SERPRO}
-        {--office= : ID do Office (não versionar em OpenSpec)}
+        {--tenant= : ID do Tenant (não versionar em OpenSpec)}
         {--confirm-ladder : Confirma escada gratuita completa}
         {--termo-local : Ladder: termo local OK}
         {--apoiar-ok : Ladder: /Apoiar OK}
@@ -88,7 +88,7 @@ class SerproGoLiveCommand extends Command
                 'kill_switch' => 'docs/ops/runbooks/serpro-kill-switch.md',
                 'rollout' => 'docs/ops/runbooks/serpro-go-live-rollout.md',
             ],
-            'budgets_note' => 'Confirmar budgets monetários positivos (global/office/canary) na UI/API antes de qualquer live faturável.',
+            'budgets_note' => 'Confirmar budgets monetários positivos (global/tenant/canary) na UI/API antes de qualquer live faturável.',
             'demo_note' => 'Dados demo devem permanecer segregation_class=DEMO e fora de allowlists reais.',
         ];
 
@@ -103,11 +103,11 @@ class SerproGoLiveCommand extends Command
             throw new RuntimeException('Use --confirm-ladder após executar a escada gratuita documentada.');
         }
 
-        $office = null;
-        if ($this->option('office')) {
-            $office = Office::query()->find((int) $this->option('office'));
-            if ($office === null) {
-                throw new RuntimeException('Office não encontrado.');
+        $tenant = null;
+        if ($this->option('tenant')) {
+            $tenant = Tenant::query()->find((int) $this->option('tenant'));
+            if ($tenant === null) {
+                throw new RuntimeException('Tenant não encontrado.');
             }
         }
 
@@ -123,7 +123,7 @@ class SerproGoLiveCommand extends Command
         $run = $promotion->promoteFreeSmokeOk(
             operatorConfirmsLadder: true,
             ladder: $ladder,
-            office: $office,
+            tenant: $tenant,
             environment: $this->environment(),
             notes: $this->option('notes') ? (string) $this->option('notes') : null,
         );
@@ -140,7 +140,7 @@ class SerproGoLiveCommand extends Command
     {
         $approvalId = (int) ($this->option('approval-id') ?: 0);
         $scope = [
-            'office_id' => $this->option('office') ? (int) $this->option('office') : null,
+            'tenant_id' => $this->option('tenant') ? (int) $this->option('tenant') : null,
             'operation_key' => (string) ($this->option('operation-key') ?: ''),
             'max_unit_cost_micros' => (int) ($this->option('max-unit-cost-micros') ?: 0),
             'max_quantity' => (int) ($this->option('max-quantity') ?: 0),
@@ -166,7 +166,7 @@ class SerproGoLiveCommand extends Command
                         'max_unit_cost_micros' => '>0',
                         'max_quantity' => 1,
                         'operation_key' => 'read-only delimitada',
-                        'office_id' => 'selecionado na aplicação (não no OpenSpec)',
+                        'tenant_id' => 'selecionado na aplicação (não no OpenSpec)',
                     ],
                 ];
                 $this->line(json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));

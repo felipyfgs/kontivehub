@@ -52,8 +52,10 @@ x-php: &php
     SANCTUM_STATEFUL_DOMAINS: ${SANCTUM_STATEFUL_DOMAINS:-localhost,localhost:3000,127.0.0.1,127.0.0.1:3000}
     VAULT_DISK_ROOT: /var/vault
     CODE_QUALITY_ARTIFACT_ROOT: /var/www/html/resources/code-quality/artifacts
+    DEVELOPMENT_DATA_PATH: /var/www/html/.local/dados
   volumes:
     - ./apps/api:/var/www/html
+    - ./.local/dados:/var/www/html/.local/dados:ro
     - vault_data:/var/vault
     - private_storage:/var/www/html/storage/app/private
   restart: unless-stopped
@@ -151,6 +153,10 @@ services:
     volumes:
       - ./apps/web:/app
       - ./apps/api/resources/code-quality:/workspace/api-code-quality:ro
+      - ./apps/api/resources/contracts:/workspace/api-contracts:ro
+      - ./apps/api/app/Services/FiscalMonitoring/Surfaces:/workspace/api-monitoring-surfaces:ro
+      - ./docker-compose.prod.yml:/workspace/docker-compose.prod.yml:ro
+      - ./infra/docker/nginx:/workspace/nginx:ro
       - frontend_node_modules:/app/node_modules
     ports:
       # 0.0.0.0: Nuxt dev acessível remotamente por IP:porta
@@ -200,6 +206,25 @@ services:
       retries: 10
       start_period: 10s
     restart: unless-stopped
+    networks:
+      - app
+
+  postgres-test:
+    image: postgres:17-alpine
+    profiles: ["test"]
+    environment:
+      POSTGRES_DB: kontivehub_test
+      POSTGRES_USER: kontivehub_test
+      POSTGRES_PASSWORD: kontivehub_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kontivehub_test -d kontivehub_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+      start_period: 5s
+    restart: "no"
     networks:
       - app
 

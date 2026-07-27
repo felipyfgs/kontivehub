@@ -3,13 +3,13 @@
 namespace Tests\Feature\FgtsDigital;
 
 use App\Enums\FiscalMutationStatus;
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Jobs\Fiscal\ExecuteFgtsDigitalRunJob;
 use App\Models\Client;
 use App\Models\FgtsDigitalRun;
 use App\Models\FgtsDigitalSession;
 use App\Models\FiscalMutationOperation;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -33,9 +33,9 @@ class FgtsDigitalApiTest extends TestCase
     public function test_admin_previews_authorizes_once_and_dispatches_horizon_job(): void
     {
         Queue::fake();
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
         Sanctum::actingAs($admin);
 
         $preview = $this->postJson('/api/v1/fiscal/fgts/digital/preview', [
@@ -88,10 +88,10 @@ class FgtsDigitalApiTest extends TestCase
 
     public function test_viewer_cannot_operate_and_foreign_client_is_not_disclosed(): void
     {
-        $office = Office::factory()->create();
-        $other = Office::factory()->create();
-        $foreign = Client::factory()->forOffice($other)->create();
-        $viewer = User::factory()->forOffice($office, OfficeRole::Viewer)->create();
+        $tenant = Tenant::factory()->create();
+        $other = Tenant::factory()->create();
+        $foreign = Client::factory()->forTenant($other)->create();
+        $viewer = User::factory()->forTenant($tenant, TenantRole::TenantUser, 'viewer')->create();
         Sanctum::actingAs($viewer);
 
         $this->getJson('/api/v1/fiscal/fgts/digital/readiness?client_id='.$foreign->id)->assertNotFound();
@@ -100,9 +100,9 @@ class FgtsDigitalApiTest extends TestCase
 
     public function test_admin_imports_allowlisted_session_without_cookie_disclosure(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
         Sanctum::actingAs($admin);
 
         $response = $this->postJson('/api/v1/fiscal/fgts/digital/sessions/import', [
@@ -136,9 +136,9 @@ class FgtsDigitalApiTest extends TestCase
     {
         Queue::fake();
         config()->set('fgts_digital.driver', 'disabled');
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
         Sanctum::actingAs($admin);
 
         $this->postJson('/api/v1/fiscal/fgts/digital/sync', ['client_id' => $client->id])
@@ -165,29 +165,29 @@ class FgtsDigitalApiTest extends TestCase
         config()->set('fgts_digital.mutations_enabled', false);
         config()->set('fgts_digital.runtime.executable', '/bin/true');
         config()->set('fgts_digital.portal.login_url', 'https://gov.br.attacker.example/login');
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
-        $viewer = User::factory()->forOffice($office, OfficeRole::Viewer)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
+        $viewer = User::factory()->forTenant($tenant, TenantRole::TenantUser, 'viewer')->create();
         Sanctum::actingAs($viewer);
 
         $this->getJson('/api/v1/fiscal/fgts/digital/readiness?client_id='.$client->id)
             ->assertOk()
             ->assertJsonPath('data.ready_for_read', false)
             ->assertJsonPath('data.blockers.0.code', 'FGTS_DIGITAL_PORTAL_HOST_INVALID')
-            ->assertJsonPath('data.credential_source', null);
+            ->assertJsonPath('data.certificate_source', null);
     }
 
     public function test_missing_representation_and_expired_session_remain_fail_closed(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
         Sanctum::actingAs($admin);
 
         config()->set('fgts_digital.driver', 'portal_browser');
         config()->set('fgts_digital.egress_enabled', true);
         config()->set('fgts_digital.mutations_enabled', false);
-        config()->set('fgts_digital.office_credential_enabled', true);
+        config()->set('fgts_digital.tenant_credential_enabled', true);
         config()->set('fgts_digital.runtime.executable', '/bin/true');
         $this->getJson('/api/v1/fiscal/fgts/digital/readiness?client_id='.$client->id)
             ->assertOk()
@@ -217,9 +217,9 @@ class FgtsDigitalApiTest extends TestCase
     public function test_expired_preview_cannot_authorize_or_enqueue_emission(): void
     {
         Queue::fake();
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
         Sanctum::actingAs($admin);
         $preview = $this->postJson('/api/v1/fiscal/fgts/digital/preview', [
             'client_id' => $client->id,

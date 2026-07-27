@@ -55,7 +55,7 @@ export interface WorkDepartment {
   updated_at?: string
 }
 
-export interface ProcessTemplateTask {
+export interface WorkProcessTemplateTask {
   id?: number
   sort_order: number
   title: string
@@ -70,7 +70,7 @@ export interface ProcessTemplateTask {
 }
 
 /** Agenda de recorrência da Rotina (contrato GET/PATCH …/recurrence). */
-export interface ProcessTemplateRecurrence {
+export interface WorkProcessTemplateRecurrence {
   recurrence_enabled: boolean
   recurrence_frequency: RecurrenceFrequency | null
   generation_day: number
@@ -80,7 +80,7 @@ export interface ProcessTemplateRecurrence {
   recurrence_owner_membership_id: number | null
 }
 
-export interface ProcessTemplate {
+export interface WorkProcessTemplate {
   id: number
   catalog_key?: string | null
   catalog_version?: number | null
@@ -100,12 +100,12 @@ export interface ProcessTemplate {
   next_run_at?: string | null
   recurrence_owner_membership_id?: number | null
   lock_version: number
-  tasks: ProcessTemplateTask[]
+  tasks: WorkProcessTemplateTask[]
   created_at?: string
   updated_at?: string
 }
 
-export interface ProcessTemplateCatalogItem {
+export interface WorkProcessTemplateCatalogItem {
   key: string
   version: number
   name: string
@@ -115,7 +115,7 @@ export interface ProcessTemplateCatalogItem {
   default_due_rule_type?: DueRuleType | null
   default_due_rule_value?: number | null
   audience_rules: ProcessAudienceRules
-  tasks: ProcessTemplateTask[]
+  tasks: WorkProcessTemplateTask[]
   installed: boolean
   installed_template_id?: number | null
   installed_version?: number | null
@@ -128,7 +128,7 @@ export interface WorkMonitoringContext {
   to: string
 }
 
-export interface OperationalTaskSummary {
+export interface WorkTaskSummary {
   id: number
   title: string
   status: TaskStatus
@@ -154,7 +154,7 @@ export interface OperationalTaskSummary {
   } | null
 }
 
-export interface OperationalProcess {
+export interface WorkProcess {
   id: number
   title: string
   description?: string | null
@@ -168,7 +168,7 @@ export interface OperationalProcess {
   work_department_id?: number | null
   assignee_membership_id?: number | null
   client_id: number
-  process_template_id?: number | null
+  work_process_template_id?: number | null
   lock_version: number
   client?: { id: number, name: string, cnpj_masked?: string | null } | null
   links?: { client: string, monitoring: string } | null
@@ -180,26 +180,26 @@ export interface OperationalProcess {
   open_task_count?: number | null
   progress_percent?: number | null
   risks?: WorkRisk[]
-  tasks?: OperationalProcessTask[]
-  comments?: OperationalComment[]
+  tasks?: WorkProcessTask[]
+  comments?: WorkComment[]
 }
 
-export interface OperationalProcessTask extends OperationalTaskSummary {
+export interface WorkProcessTask extends WorkTaskSummary {
   sort_order: number
   description?: string | null
   assignee_membership_id?: number | null
   work_department_id?: number | null
 }
 
-export interface OperationalTaskDetail extends OperationalProcessTask {
-  operational_process_id: number
+export interface WorkTaskDetail extends WorkProcessTask {
+  work_process_id: number
   started_at?: string | null
   completed_at?: string | null
-  evidences?: OperationalEvidence[]
-  comments?: OperationalComment[]
+  evidences?: WorkEvidence[]
+  comments?: WorkComment[]
 }
 
-export interface OperationalEvidence {
+export interface WorkEvidence {
   id: number
   original_filename: string
   mime_type: string
@@ -208,7 +208,7 @@ export interface OperationalEvidence {
   created_at?: string
 }
 
-export interface OperationalComment {
+export interface WorkComment {
   id: number
   body: string
   author_membership_id?: number
@@ -217,7 +217,7 @@ export interface OperationalComment {
 
 export interface GenerationBatch {
   id: number
-  process_template_id: number
+  work_process_template_id: number
   template_lock_version: number
   competence: string
   status: string
@@ -300,13 +300,11 @@ export interface DepartmentWorkProgress {
   unassigned: number
   total_relevant: number
   completed_percent: number
-  /** Compat legado = open */
-  total: number
 }
 
 export interface WorkKpis {
   generated_at: string
-  office_timezone: string
+  tenant_timezone: string
   today: string
   kpis: {
     total_open: number
@@ -335,7 +333,7 @@ export interface WorkKpis {
   }>
 }
 
-export interface OperationalExportJob {
+export interface WorkExportJob {
   id: number
   status: string
   filters_snapshot: Record<string, unknown>
@@ -359,9 +357,6 @@ export type WorkProcessGroupMode = 'client' | 'process'
 /** Parâmetro `group_by` do endpoint de grupos. */
 export type WorkProcessGroupBy = 'client' | 'routine'
 
-/** Sort whitelist da lista flat de processos (legado; não path principal). */
-export type WorkProcessFlatSort = 'title' | 'status' | 'due_date' | 'competence'
-
 export type WorkProcessGroupSort
   = | 'label'
     | 'process_count'
@@ -369,23 +364,23 @@ export type WorkProcessGroupSort
     | 'next_due_date'
     | 'progress_percent'
 
-export interface OperationalProcessGroupClient {
+export interface WorkProcessGroupClient {
   id: number
   name: string
   cnpj_masked?: string | null
 }
 
-export interface OperationalProcessGroupRoutine {
+export interface WorkProcessGroupRoutine {
   id: number
   name: string
 }
 
 /** Item de `GET /api/v1/work/process-groups`. */
-export interface OperationalProcessGroup {
+export interface WorkProcessGroup {
   key: string
   label: string
-  client?: OperationalProcessGroupClient | null
-  routine?: OperationalProcessGroupRoutine | null
+  client?: WorkProcessGroupClient | null
+  routine?: WorkProcessGroupRoutine | null
   client_count: number
   process_count: number
   task_count: number

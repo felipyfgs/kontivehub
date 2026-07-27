@@ -31,7 +31,7 @@ use App\Models\CommunicationIdentity;
 use App\Models\CommunicationInbox;
 use App\Models\CommunicationMessage;
 use App\Models\CommunicationOutboxEntry;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Communication\Flows\CommunicationFlowCorrelator;
 use App\Services\Communication\Flows\CommunicationFlowExecutor;
 use App\Services\Communication\Security\CommunicationHmacSigner;
@@ -91,7 +91,7 @@ final class CommunicationFlowRuntimeTest extends TestCase
         Queue::assertNotPushed(CorrelateCommunicationFlowEventJob::class);
         // Mesmo se correlacionar manualmente, no-op:
         app(CommunicationFlowCorrelator::class)->correlateMessage(
-            (int) $inbox->office_id,
+            (int) $inbox->tenant_id,
             (int) CommunicationConversation::query()->withoutGlobalScopes()->value('id'),
             (int) CommunicationMessage::query()->withoutGlobalScopes()->value('id'),
             'gw:gw-off-1',
@@ -134,7 +134,7 @@ final class CommunicationFlowRuntimeTest extends TestCase
         $outboxCount = CommunicationOutboxEntry::query()->withoutGlobalScopes()->whereNotNull('effect_key')->count();
 
         app(CommunicationFlowCorrelator::class)->correlateMessage(
-            (int) $inbox->office_id,
+            (int) $inbox->tenant_id,
             (int) CommunicationConversation::query()->withoutGlobalScopes()->value('id'),
             (int) CommunicationMessage::query()->withoutGlobalScopes()
                 ->where('provider_message_id', 'provider-idempotent-0001')->value('id'),
@@ -169,7 +169,7 @@ final class CommunicationFlowRuntimeTest extends TestCase
 
         // Mensagem FLOW_AUTOMATION inbound (defesa em profundidade)
         $message = CommunicationMessage::query()->withoutGlobalScopes()->create([
-            'office_id' => $inbox->office_id,
+            'tenant_id' => $inbox->tenant_id,
             'inbox_id' => $inbox->id,
             'conversation_id' => $conversation->id,
             'identity_id' => $conversation->identity_id,
@@ -184,7 +184,7 @@ final class CommunicationFlowRuntimeTest extends TestCase
             'occurred_at' => now(),
         ]);
         app(CommunicationFlowCorrelator::class)->correlateMessage(
-            (int) $inbox->office_id,
+            (int) $inbox->tenant_id,
             (int) $conversation->id,
             (int) $message->id,
             'gw:should-ignore',
@@ -199,7 +199,7 @@ final class CommunicationFlowRuntimeTest extends TestCase
         $conversation = CommunicationConversation::query()->withoutGlobalScopes()->firstOrFail();
 
         $run = CommunicationFlowRun::query()->withoutGlobalScopes()->create([
-            'office_id' => $inbox->office_id,
+            'tenant_id' => $inbox->tenant_id,
             'flow_id' => CommunicationFlow::query()->withoutGlobalScopes()->value('id'),
             'flow_version_id' => CommunicationFlowVersion::query()->withoutGlobalScopes()->value('id'),
             'binding_id' => CommunicationFlowInboxBinding::query()->withoutGlobalScopes()->value('id'),
@@ -212,7 +212,7 @@ final class CommunicationFlowRuntimeTest extends TestCase
         ]);
 
         $message = CommunicationMessage::query()->withoutGlobalScopes()->create([
-            'office_id' => $inbox->office_id,
+            'tenant_id' => $inbox->tenant_id,
             'inbox_id' => $inbox->id,
             'conversation_id' => $conversation->id,
             'identity_id' => $conversation->identity_id,
@@ -228,7 +228,7 @@ final class CommunicationFlowRuntimeTest extends TestCase
         ]);
 
         $entry = CommunicationOutboxEntry::query()->withoutGlobalScopes()->create([
-            'office_id' => $inbox->office_id,
+            'tenant_id' => $inbox->tenant_id,
             'inbox_id' => $inbox->id,
             'message_id' => $message->id,
             'command_id' => 'flow:wait:m:message',
@@ -243,7 +243,7 @@ final class CommunicationFlowRuntimeTest extends TestCase
         $run->forceFill(['waiting_outbox_entry_id' => $entry->id])->save();
 
         CommunicationFlowRunStep::query()->withoutGlobalScopes()->create([
-            'office_id' => $inbox->office_id,
+            'tenant_id' => $inbox->tenant_id,
             'run_id' => $run->id,
             'node_id' => 'm',
             'node_type' => 'message',
@@ -306,7 +306,7 @@ final class CommunicationFlowRuntimeTest extends TestCase
         );
 
         $run = CommunicationFlowRun::query()->withoutGlobalScopes()->create([
-            'office_id' => $inbox->office_id,
+            'tenant_id' => $inbox->tenant_id,
             'flow_id' => $flow->id,
             'flow_version_id' => CommunicationFlowVersion::query()->withoutGlobalScopes()->value('id'),
             'binding_id' => CommunicationFlowInboxBinding::query()->withoutGlobalScopes()->value('id'),
@@ -357,7 +357,7 @@ final class CommunicationFlowRuntimeTest extends TestCase
         );
 
         $run = CommunicationFlowRun::query()->withoutGlobalScopes()->create([
-            'office_id' => $inbox->office_id,
+            'tenant_id' => $inbox->tenant_id,
             'flow_id' => $flow->id,
             'flow_version_id' => CommunicationFlowVersion::query()->withoutGlobalScopes()->value('id'),
             'binding_id' => $binding->id,
@@ -401,7 +401,7 @@ final class CommunicationFlowRuntimeTest extends TestCase
         );
 
         $run = CommunicationFlowRun::query()->withoutGlobalScopes()->create([
-            'office_id' => $inbox->office_id,
+            'tenant_id' => $inbox->tenant_id,
             'flow_id' => $flow->id,
             'flow_version_id' => CommunicationFlowVersion::query()->withoutGlobalScopes()->value('id'),
             'binding_id' => CommunicationFlowInboxBinding::query()->withoutGlobalScopes()->value('id'),
@@ -414,7 +414,7 @@ final class CommunicationFlowRuntimeTest extends TestCase
         ]);
 
         CommunicationFlowRunStep::query()->withoutGlobalScopes()->create([
-            'office_id' => $inbox->office_id,
+            'tenant_id' => $inbox->tenant_id,
             'run_id' => $run->id,
             'node_id' => 'q',
             'node_type' => 'question',
@@ -428,7 +428,7 @@ final class CommunicationFlowRuntimeTest extends TestCase
         $flow->forceFill(['status' => FlowStatus::Paused])->save();
 
         $message = CommunicationMessage::query()->withoutGlobalScopes()->create([
-            'office_id' => $inbox->office_id,
+            'tenant_id' => $inbox->tenant_id,
             'inbox_id' => $inbox->id,
             'conversation_id' => $conversation->id,
             'identity_id' => $conversation->identity_id,
@@ -448,7 +448,7 @@ final class CommunicationFlowRuntimeTest extends TestCase
             ->count();
 
         app(CommunicationFlowCorrelator::class)->correlateMessage(
-            (int) $inbox->office_id,
+            (int) $inbox->tenant_id,
             (int) $conversation->id,
             (int) $message->id,
             'gw:answer-paused-1',
@@ -469,9 +469,9 @@ final class CommunicationFlowRuntimeTest extends TestCase
      */
     private function seedFlow(bool $active, bool $enabled, ?array $graph = null): array
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
         $inbox = CommunicationInbox::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => 'Inbox Flow',
             'session_id' => 'session-flow-'.uniqid(),
             'status' => InboxStatus::Connected,
@@ -479,13 +479,13 @@ final class CommunicationFlowRuntimeTest extends TestCase
             'lock_version' => 1,
         ]);
         $contact = CommunicationContact::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => 'Contato',
             'is_active' => true,
         ]);
         $address = '+5511988880001';
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'contact_id' => $contact->id,
             'channel' => CommunicationChannel::Whatsapp,
             'address_encrypted' => $address,
@@ -494,21 +494,21 @@ final class CommunicationFlowRuntimeTest extends TestCase
             'is_active' => true,
         ]);
         $conversation = CommunicationConversation::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'inbox_id' => $inbox->id,
             'identity_id' => $identity->id,
             'status' => 'OPEN',
             'lock_version' => 1,
         ]);
         $flow = CommunicationFlow::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => 'Robô',
             'status' => $active ? FlowStatus::Active : FlowStatus::Paused,
             'lock_version' => 1,
         ]);
         $graph ??= $this->messageGraph();
         $version = CommunicationFlowVersion::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'flow_id' => $flow->id,
             'version' => 1,
             'graph_encrypted' => $graph,
@@ -516,7 +516,7 @@ final class CommunicationFlowRuntimeTest extends TestCase
             'published_at' => now(),
         ]);
         $binding = CommunicationFlowInboxBinding::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'flow_id' => $flow->id,
             'inbox_id' => $inbox->id,
             'published_version_id' => $version->id,

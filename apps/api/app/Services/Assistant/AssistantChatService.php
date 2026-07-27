@@ -6,7 +6,7 @@ use App\Contracts\AssistantLlmGateway;
 use App\Models\AssistantConversation;
 use App\Models\AssistantMessage;
 use App\Models\User;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Validation\ValidationException;
 
@@ -19,7 +19,7 @@ final class AssistantChatService
         private readonly AssistantLlmGateway $llm,
         private readonly AssistantToolRegistry $tools,
         private readonly AssistantPendingApprovalStore $approvals,
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
     ) {}
 
     /**
@@ -35,9 +35,9 @@ final class AssistantChatService
         $this->availability->assertEnabled();
         $this->assertConversationScope($conversation, $user);
 
-        $officeId = (int) $this->currentOffice->id();
+        $tenantId = (int) $this->currentTenant->id();
         $userMessage = AssistantMessage::query()->create([
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'conversation_id' => $conversation->id,
             'role' => 'user',
             'content' => $content,
@@ -158,7 +158,7 @@ final class AssistantChatService
         }
 
         $assistantMessage = AssistantMessage::query()->create([
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'conversation_id' => $conversation->id,
             'role' => 'assistant',
             'content' => $assistantText,
@@ -202,9 +202,9 @@ final class AssistantChatService
             throw $e;
         }
 
-        $officeId = (int) $this->currentOffice->id();
+        $tenantId = (int) $this->currentTenant->id();
         $message = AssistantMessage::query()->create([
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'conversation_id' => $conversation->id,
             'role' => 'tool',
             'content' => json_encode($outcome, JSON_UNESCAPED_UNICODE),
@@ -229,10 +229,10 @@ final class AssistantChatService
         $this->availability->assertEnabled();
         $this->assertConversationScope($conversation, $user);
 
-        $officeId = (int) $this->currentOffice->id();
+        $tenantId = (int) $this->currentTenant->id();
         $forgotten = $this->approvals->forget(
             $approvalToken,
-            $officeId,
+            $tenantId,
             $conversation->id,
         );
 
@@ -245,7 +245,7 @@ final class AssistantChatService
 
         $outcome = ['status' => 'denied'];
         $message = AssistantMessage::query()->create([
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'conversation_id' => $conversation->id,
             'role' => 'tool',
             'content' => json_encode($outcome, JSON_UNESCAPED_UNICODE),
@@ -261,8 +261,8 @@ final class AssistantChatService
 
     private function assertConversationScope(AssistantConversation $conversation, User $user): void
     {
-        $officeId = $this->currentOffice->id();
-        if ($officeId === null || (int) $conversation->office_id !== (int) $officeId) {
+        $tenantId = $this->currentTenant->id();
+        if ($tenantId === null || (int) $conversation->tenant_id !== (int) $tenantId) {
             abort(404);
         }
         if ((int) $conversation->user_id !== (int) $user->id) {
@@ -352,7 +352,7 @@ final class AssistantChatService
     {
         return array_map(function (array $r): array {
             if (is_array($r['args'] ?? null)) {
-                unset($r['args']['office_id'], $r['args']['api_key'], $r['args']['openai_api_key']);
+                unset($r['args']['tenant_id'], $r['args']['api_key'], $r['args']['openai_api_key']);
             }
             unset($r['approval_token']);
 

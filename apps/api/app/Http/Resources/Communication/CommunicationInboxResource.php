@@ -22,9 +22,9 @@ final class CommunicationInboxResource extends JsonResource
             'last_seen_at' => $this->last_seen_at?->toIso8601String(),
             'members_count' => $this->whenCounted('members'),
             'member_ids' => $this->whenLoaded('members', fn () => $this->members
-                ->pluck('office_membership_id')->map(fn ($id) => (int) $id)->values()),
+                ->pluck('tenant_membership_id')->map(fn ($id) => (int) $id)->values()),
             'members' => $this->whenLoaded('members', fn () => $this->members->map(fn ($member) => [
-                'id' => (int) $member->office_membership_id,
+                'id' => (int) $member->tenant_membership_id,
                 'name' => $member->relationLoaded('membership')
                     && $member->membership?->relationLoaded('user')
                     ? $member->membership?->user?->name

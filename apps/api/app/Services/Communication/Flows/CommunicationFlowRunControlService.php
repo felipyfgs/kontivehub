@@ -6,7 +6,7 @@ use App\Enums\Communication\FlowRunStatus;
 use App\Enums\Communication\FlowStatus;
 use App\Jobs\Communication\AdvanceCommunicationFlowRunJob;
 use App\Models\CommunicationFlowRun;
-use App\Models\OfficeMembership;
+use App\Models\TenantMembership;
 use App\Services\Communication\Events\CommunicationEventRecorder;
 use DomainException;
 use Illuminate\Support\Facades\DB;
@@ -19,14 +19,14 @@ final class CommunicationFlowRunControlService
         private readonly CommunicationEventRecorder $events,
     ) {}
 
-    public function pause(CommunicationFlowRun $run, ?OfficeMembership $actor = null): CommunicationFlowRun
+    public function pause(CommunicationFlowRun $run, ?TenantMembership $actor = null): CommunicationFlowRun
     {
         $this->availability->assertEnabled();
 
         return $this->transition($run, FlowRunStatus::Paused, 'COMMUNICATION_FLOW_RUN_PAUSED', $actor, requireNonTerminal: true);
     }
 
-    public function resume(CommunicationFlowRun $run, ?OfficeMembership $actor = null): CommunicationFlowRun
+    public function resume(CommunicationFlowRun $run, ?TenantMembership $actor = null): CommunicationFlowRun
     {
         $this->availability->assertRuntimeEnabled();
 
@@ -38,7 +38,10 @@ final class CommunicationFlowRunControlService
             if ($locked->status !== FlowRunStatus::Paused) {
                 throw new DomainException('FLOW_RUN_NOT_PAUSED');
             }
-            $locked->loadMissing(['flow', 'binding']);
+            $locked->loadMissing([
+                'flow' => fn ($query) => $query->withoutGlobalScopes(),
+                'binding' => fn ($query) => $query->withoutGlobalScopes(),
+            ]);
             if ($locked->flow?->status === FlowStatus::Paused || $locked->binding?->enabled !== true) {
                 throw new DomainException('FLOW_RUN_NOT_ELIGIBLE');
             }
@@ -53,21 +56,21 @@ final class CommunicationFlowRunControlService
         return $updated;
     }
 
-    public function handoff(CommunicationFlowRun $run, ?OfficeMembership $actor = null): CommunicationFlowRun
+    public function handoff(CommunicationFlowRun $run, ?TenantMembership $actor = null): CommunicationFlowRun
     {
         $this->availability->assertEnabled();
 
         return $this->transition($run, FlowRunStatus::HandedOff, 'COMMUNICATION_FLOW_RUN_HANDED_OFF', $actor, requireNonTerminal: true, finish: true);
     }
 
-    public function stop(CommunicationFlowRun $run, ?OfficeMembership $actor = null): CommunicationFlowRun
+    public function stop(CommunicationFlowRun $run, ?TenantMembership $actor = null): CommunicationFlowRun
     {
         $this->availability->assertEnabled();
 
         return $this->transition($run, FlowRunStatus::Stopped, 'COMMUNICATION_FLOW_RUN_STOPPED', $actor, requireNonTerminal: true, finish: true);
     }
 
-    public function restart(CommunicationFlowRun $run, ?OfficeMembership $actor = null): CommunicationFlowRun
+    public function restart(CommunicationFlowRun $run, ?TenantMembership $actor = null): CommunicationFlowRun
     {
         $this->availability->assertRuntimeEnabled();
 
@@ -87,7 +90,12 @@ final class CommunicationFlowRunControlService
                 $this->record($locked, 'COMMUNICATION_FLOW_RUN_STOPPED', $actor, ['reason' => 'restart']);
             }
 
-            $locked->loadMissing(['binding.publishedVersion', 'binding.flow', 'version']);
+            $locked->loadMissing([
+                'binding' => fn ($query) => $query->withoutGlobalScopes(),
+                'binding.publishedVersion' => fn ($query) => $query->withoutGlobalScopes(),
+                'binding.flow' => fn ($query) => $query->withoutGlobalScopes(),
+                'version' => fn ($query) => $query->withoutGlobalScopes(),
+            ]);
             $binding = $locked->binding;
             if ($binding === null || ! $binding->enabled || $binding->published_version_id === null) {
                 throw new DomainException('FLOW_RUN_RESTART_NO_BINDING');
@@ -110,7 +118,7 @@ final class CommunicationFlowRunControlService
             }
 
             $created = CommunicationFlowRun::query()->withoutGlobalScopes()->create([
-                'office_id' => $locked->office_id,
+                'tenant_id' => $locked->tenant_id,
                 'flow_id' => $locked->flow_id,
                 'flow_version_id' => $version->id,
                 'binding_id' => $binding->id,
@@ -135,7 +143,7 @@ final class CommunicationFlowRunControlService
 
     public function handoffActiveForConversation(
         int $conversationId,
-        ?OfficeMembership $actor = null,
+        ?TenantMembership $actor = null,
         string $reason = 'human_outbound',
     ): void {
         DB::transaction(function () use ($conversationId, $actor, $reason): void {
@@ -249,7 +257,7 @@ final class CommunicationFlowRunControlService
         CommunicationFlowRun $run,
         FlowRunStatus $status,
         string $eventType,
-        ?OfficeMembership $actor,
+        ?TenantMembership $actor,
         bool $requireNonTerminal = false,
         bool $finish = false,
     ): CommunicationFlowRun {
@@ -279,11 +287,11 @@ final class CommunicationFlowRunControlService
     private function record(
         CommunicationFlowRun $run,
         string $type,
-        ?OfficeMembership $actor,
+        ?TenantMembership $actor,
         array $extra = [],
     ): void {
         $this->events->record(
-            (int) $run->office_id,
+            (int) $run->tenant_id,
             $type,
             array_merge([
                 'run_id' => (int) $run->id,

@@ -24,7 +24,7 @@ enum SerproExternalGateKind: string
             self::CnpjAlphanumericSerialization => 'Serialização CNPJ alfanumérico no Termo/Eventos',
             self::ContractVigencyTariff => 'Vigência contratual e tabela/ciclo tarifário',
             self::SoftwareHouseLegalModel => 'Modelo jurídico software-house',
-            self::OpsRolesRpoRto => 'Responsáveis, on-call, RPO/RTO e custódia A1',
+            self::OpsRolesRpoRto => 'Responsáveis, on-call, RPO/RTO e custódia certificado',
             self::OfficialClarificationRequired => 'Esclarecimento oficial SERPRO pendente',
         };
     }

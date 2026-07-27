@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use App\Enums\EsocialEventCode;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * Payload bruto no cofre; metadados sem material criptográfico.
  */
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'client_id',
     'establishment_id',
     'run_id',
@@ -39,7 +39,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class EsocialEventEvidence extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected $table = 'esocial_event_evidences';
 
@@ -89,7 +89,7 @@ class EsocialEventEvidence extends Model
     {
         return [
             'id' => $this->id,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'client_id' => $this->client_id,
             'establishment_id' => $this->establishment_id,
             'run_id' => $this->run_id,

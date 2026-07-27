@@ -544,7 +544,7 @@ onMounted(() => {
       <ShellFormModal
         v-model:open="linkOpen"
         title="Vincular cliente"
-        description="Associa a identidade a um cliente do Office atual."
+        description="Associa a identidade a um cliente do Tenant atual."
         submit-label="Vincular"
         :loading="linkBusy"
         :disabled="!canManage || !linkClientId"

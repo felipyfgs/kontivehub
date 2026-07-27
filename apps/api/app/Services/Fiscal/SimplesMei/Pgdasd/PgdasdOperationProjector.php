@@ -5,10 +5,10 @@ namespace App\Services\Fiscal\SimplesMei\Pgdasd;
 use App\Enums\PgdasdOperationKind;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
 use App\Models\PgdasdOperation;
 use App\Models\TaxObligationDefinition;
 use App\Models\TaxObligationProjection;
+use App\Models\Tenant;
 use App\Services\Fiscal\Declarations\TaxObligationCatalogService;
 use App\Services\Fiscal\Declarations\TaxObligationProjectionService;
 use Carbon\CarbonImmutable;
@@ -29,14 +29,14 @@ final class PgdasdOperationProjector
      */
     public function projectFromDecoded(
         FiscalMonitoringRun $run,
-        Office $office,
+        Tenant $tenant,
         Client $client,
         array $decoded,
     ): array {
         if ((bool) ($decoded['incomplete'] ?? true)) {
             throw new RuntimeException('Resposta PGDAS-D incompleta não pode ser projetada.');
         }
-        if ((int) $client->office_id !== (int) $office->id || (int) $run->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id || (int) $run->tenant_id !== (int) $tenant->id) {
             throw new RuntimeException('Contexto tenant inválido para projeção PGDAS-D.');
         }
 
@@ -48,7 +48,7 @@ final class PgdasdOperationProjector
         DB::transaction(function () use (
             $decoded,
             $definition,
-            $office,
+            $tenant,
             $client,
             $run,
             $observedAt,
@@ -58,7 +58,7 @@ final class PgdasdOperationProjector
             foreach ($decoded['periods'] as $period) {
                 $periodKey = (string) $period['period_key'];
                 $projection = $this->projections->project(
-                    office: $office,
+                    tenant: $tenant,
                     client: $client,
                     obligation: $definition,
                     periodKey: $periodKey,
@@ -70,7 +70,7 @@ final class PgdasdOperationProjector
 
                 foreach ($period['operations'] as $operation) {
                     $identity = [
-                        'office_id' => $office->id,
+                        'tenant_id' => $tenant->id,
                         'client_id' => $client->id,
                         'logical_key' => $operation['logical_key'],
                     ];
@@ -140,11 +140,11 @@ final class PgdasdOperationProjector
         return $declarations[0] ?? null;
     }
 
-    public function latestDeclarationForPeriod(int $officeId, int $clientId, string $periodKey): ?PgdasdOperation
+    public function latestDeclarationForPeriod(int $tenantId, int $clientId, string $periodKey): ?PgdasdOperation
     {
         $operations = PgdasdOperation::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('client_id', $clientId)
             ->where('period_key', $periodKey)
             ->where('kind', PgdasdOperationKind::Declaration->value)
@@ -155,13 +155,13 @@ final class PgdasdOperationProjector
     }
 
     public function ensureProjectionForPeriod(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $periodKey,
         ?int $competenceId = null,
     ): TaxObligationProjection {
         return $this->projections->project(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             obligation: $this->definition(),
             periodKey: $periodKey,

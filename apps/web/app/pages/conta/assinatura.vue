@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import OfficeSubscriptionPage from '../settings/subscription.vue'
+import TenantSubscriptionPage from '~/components/settings/TenantSubscriptionPage.vue'
 </script>
 
 <template>
-  <OfficeSubscriptionPage />
+  <TenantSubscriptionPage />
 </template>

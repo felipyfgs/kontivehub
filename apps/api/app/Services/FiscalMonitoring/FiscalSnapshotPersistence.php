@@ -56,7 +56,7 @@ final class FiscalSnapshotPersistence
             $locked = FiscalMonitoringRun::query()
                 ->withoutGlobalScopes()
                 ->whereKey($run->id)
-                ->where('office_id', $run->office_id)
+                ->where('tenant_id', $run->tenant_id)
                 ->lockForUpdate()
                 ->firstOrFail();
 
@@ -154,7 +154,9 @@ final class FiscalSnapshotPersistence
      */
     public function reproject(FiscalSnapshot $snapshot, array $findings): array
     {
-        $run = $snapshot->run;
+        $run = FiscalMonitoringRun::query()
+            ->withoutGlobalScopes()
+            ->find($snapshot->run_id);
         if ($run === null) {
             throw new RuntimeException('Snapshot sem run associada.');
         }
@@ -195,7 +197,7 @@ final class FiscalSnapshotPersistence
         if ($isCurrentEligible) {
             FiscalSnapshot::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $run->office_id)
+                ->where('tenant_id', $run->tenant_id)
                 ->where('client_id', $run->client_id)
                 ->where('system_code', $run->system_code)
                 ->where('service_code', $run->service_code)
@@ -210,7 +212,7 @@ final class FiscalSnapshotPersistence
 
         $version = (int) FiscalSnapshot::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $run->office_id)
+            ->where('tenant_id', $run->tenant_id)
             ->where('client_id', $run->client_id)
             ->where('system_code', $run->system_code)
             ->where('service_code', $run->service_code)
@@ -222,7 +224,7 @@ final class FiscalSnapshotPersistence
             ->max('version');
 
         return FiscalSnapshot::query()->withoutGlobalScopes()->create([
-            'office_id' => $run->office_id,
+            'tenant_id' => $run->tenant_id,
             'run_id' => $run->id,
             'client_id' => $run->client_id,
             'competence_id' => $run->competence_id,
@@ -325,7 +327,7 @@ final class FiscalSnapshotPersistence
 
             $finding = FiscalFinding::query()->updateOrCreate(
                 [
-                    'office_id' => $run->office_id,
+                    'tenant_id' => $run->tenant_id,
                     'snapshot_id' => $snapshot->id,
                     'code' => $code,
                 ],
@@ -357,7 +359,7 @@ final class FiscalSnapshotPersistence
 
             FiscalPendingItem::query()->updateOrCreate(
                 [
-                    'office_id' => $run->office_id,
+                    'tenant_id' => $run->tenant_id,
                     'client_id' => $run->client_id,
                     'open_dedupe_key' => $logical,
                 ],

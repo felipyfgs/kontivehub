@@ -1,6 +1,5 @@
 import type { DataTableFilterDefinition, DataTableFilterModel } from '~/types/data-table-filter'
 import type {
-  MonitoringAdvancedFilterField,
   MonitoringFilterConfig,
   MonitoringFilterValue,
   MonitoringStructuredFilterField
@@ -34,29 +33,14 @@ export const EMPTY_MONITORING_FILTERS: Readonly<MonitoringFilterValue> = Object.
   modality: 'all'
 })
 
-/** Aceita clientIds[], clientId legado (número) ou CSV. */
-function normalizeClientIds(value: unknown, legacySingle?: unknown): number[] {
-  if (Array.isArray(value) || (typeof value === 'string' && value.includes(','))) {
-    return decodeClientIds(value)
-  }
-  if (value != null && value !== '') {
-    return decodeClientIds(value)
-  }
-  if (legacySingle != null && legacySingle !== '') {
-    return decodeClientIds(legacySingle)
-  }
-  return []
-}
-
 export function normalizeMonitoringFilters(
-  value?: (Partial<MonitoringFilterValue> & { clientId?: number | string | null }) | null
+  value?: Partial<MonitoringFilterValue> | null
 ): MonitoringFilterValue {
-  const legacy = value as { clientId?: unknown } | null | undefined
   return {
     q: String(value?.q ?? '').trim(),
     situation: String(value?.situation || 'all'),
     competence: String(value?.competence ?? '').trim(),
-    clientIds: normalizeClientIds(value?.clientIds, legacy?.clientId),
+    clientIds: decodeClientIds(value?.clientIds),
     deliveryStatus: String(value?.deliveryStatus || 'all'),
     sendStatus: String(value?.sendStatus || 'all'),
     paymentStatus: String(value?.paymentStatus || 'all'),
@@ -95,57 +79,19 @@ export function hasActiveMonitoringFilters(
   )
 }
 
-/**
- * Normaliza a config da toolbar para `fields` ordenados.
- * Aceita legado `situation` + `advanced` e converte para o contrato novo.
- */
+/** Retorna os campos estruturados na ordem declarada pela superfície. */
 export function resolveMonitoringFilterFields(
   config: MonitoringFilterConfig | null | undefined
 ): MonitoringStructuredFilterField[] {
-  if (config?.fields && config.fields.length > 0) {
-    return config.fields
-  }
-
-  const fields: MonitoringStructuredFilterField[] = []
-  if (config?.situation !== false && (config?.situation === true || config?.advanced)) {
-    // Legado: situation era quick-filter; no novo modelo só entra se explicitamente pedido
-    // via fields. Não auto-injetar situation a partir de advanced-only configs.
-  }
-  if (config?.situation === true) {
-    fields.push({
-      key: 'situation',
-      kind: 'option',
-      label: 'Situação',
-      items: fiscalSituationFilterItems(false)
-    })
-  }
-
-  for (const field of config?.advanced || []) {
-    if (field.key === 'competence') {
-      fields.push({ key: 'competence', kind: 'month', label: field.label })
-      continue
-    }
-    if (field.key === 'clientId') {
-      fields.push({ key: 'clientId', kind: 'client', label: field.label })
-      continue
-    }
-    fields.push({
-      key: field.key,
-      kind: 'option',
-      label: field.label,
-      items: field.items
-    })
-  }
-
-  return fields
+  return config?.fields ?? []
 }
 
 /**
  * Eixos option com multi-seleção por default — só onde o backend portfolio
  * aceita lista/CSV (`ModulePortfolioFilters` + whereIn).
  *
- * Fora da allowlist: single (equality). Surfaces legadas (status, paymentStatus
- * em guias/processos/mailbox/cadastros) não entram até a API aceitar `IN`.
+ * Fora da allowlist: single (equality). Os demais campos não entram
+ * até a API aceitar `IN`.
  * Override por campo: `field.multiple` em MonitoringStructuredFilterField.
  */
 const MULTIPLE_OPTION_KEYS = new Set([
@@ -280,7 +226,7 @@ export function modelsToMonitoringFilters(
 
 export function monitoringAdvancedFieldActive(
   filters: MonitoringFilterValue,
-  field: MonitoringAdvancedFilterField | MonitoringStructuredFilterField
+  field: MonitoringStructuredFilterField
 ): boolean {
   if (field.key === 'clientId') return (filters.clientIds?.length ?? 0) > 0
   if (field.key === 'competence') return String(filters.competence || '').trim() !== ''

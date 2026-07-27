@@ -8,7 +8,7 @@ use App\Models\CommunicationFlowRun;
 use App\Models\User;
 use App\Services\Communication\Authorization\CommunicationAccess;
 use App\Services\Communication\Flows\CommunicationFlowRunControlService;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,7 +17,7 @@ final class CommunicationFlowRunController extends Controller
 {
     public function __construct(
         private readonly CommunicationAccess $access,
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly CommunicationFlowRunControlService $controls,
     ) {}
 
@@ -71,7 +71,7 @@ final class CommunicationFlowRunController extends Controller
     {
         return $this->mutate($request, $run, fn (CommunicationFlowRun $model) => $this->controls->pause(
             $model,
-            $this->currentOffice->realMembership(),
+            $this->currentTenant->realMembership(),
         ));
     }
 
@@ -79,7 +79,7 @@ final class CommunicationFlowRunController extends Controller
     {
         return $this->mutate($request, $run, fn (CommunicationFlowRun $model) => $this->controls->resume(
             $model,
-            $this->currentOffice->realMembership(),
+            $this->currentTenant->realMembership(),
         ));
     }
 
@@ -87,7 +87,7 @@ final class CommunicationFlowRunController extends Controller
     {
         return $this->mutate($request, $run, fn (CommunicationFlowRun $model) => $this->controls->handoff(
             $model,
-            $this->currentOffice->realMembership(),
+            $this->currentTenant->realMembership(),
         ));
     }
 
@@ -95,7 +95,7 @@ final class CommunicationFlowRunController extends Controller
     {
         return $this->mutate($request, $run, fn (CommunicationFlowRun $model) => $this->controls->stop(
             $model,
-            $this->currentOffice->realMembership(),
+            $this->currentTenant->realMembership(),
         ));
     }
 
@@ -103,7 +103,7 @@ final class CommunicationFlowRunController extends Controller
     {
         return $this->mutate($request, $run, fn (CommunicationFlowRun $model) => $this->controls->restart(
             $model,
-            $this->currentOffice->realMembership(),
+            $this->currentTenant->realMembership(),
         ));
     }
 

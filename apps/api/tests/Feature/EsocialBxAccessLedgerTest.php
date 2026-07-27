@@ -6,9 +6,9 @@ namespace Tests\Feature;
 
 use App\Models\Client;
 use App\Models\EsocialBxAccessLedger;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
@@ -21,7 +21,7 @@ class EsocialBxAccessLedgerTest extends TestCase
     public function test_schema_is_tenant_scoped_and_has_no_sensitive_payload_columns(): void
     {
         $this->assertTrue(Schema::hasColumns('esocial_bx_access_ledgers', [
-            'office_id',
+            'tenant_id',
             'client_id',
             'employer_hash',
             'environment',
@@ -41,35 +41,35 @@ class EsocialBxAccessLedgerTest extends TestCase
         }
     }
 
-    public function test_global_scope_isolates_offices_and_public_serialization_hides_employer_hash(): void
+    public function test_global_scope_isolates_tenants_and_public_serialization_hides_employer_hash(): void
     {
-        $office = Office::factory()->create();
-        $otherOffice = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
-        $otherClient = Client::factory()->forOffice($otherOffice)->create();
-        $user = User::factory()->forOffice($office)->create();
+        $tenant = Tenant::factory()->create();
+        $otherTenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
+        $otherClient = Client::factory()->forTenant($otherTenant)->create();
+        $user = User::factory()->forTenant($tenant)->create();
 
-        $visible = $this->ledger($office, $client, str_repeat('a', 64));
-        $this->ledger($otherOffice, $otherClient, str_repeat('b', 64));
+        $visible = $this->ledger($tenant, $client, str_repeat('a', 64));
+        $this->ledger($otherTenant, $otherClient, str_repeat('b', 64));
 
         Sanctum::actingAs($user);
-        app(CurrentOffice::class)->clear();
-        app(CurrentOffice::class)->resolve($user);
+        app(CurrentTenant::class)->clear();
+        app(CurrentTenant::class)->resolve($user);
 
         $this->assertSame([$visible->id], EsocialBxAccessLedger::query()->pluck('id')->all());
         $serialized = $visible->fresh()->toArray();
         $public = $visible->fresh()->toPublicArray();
         $encoded = json_encode([$serialized, $public], JSON_THROW_ON_ERROR);
         $this->assertArrayNotHasKey('employer_hash', $serialized);
-        $this->assertArrayNotHasKey('office_id', $public);
+        $this->assertArrayNotHasKey('tenant_id', $public);
         $this->assertStringNotContainsString(str_repeat('a', 64), $encoded);
         $this->assertStringNotContainsString((string) $client->root_cnpj, $encoded);
     }
 
-    private function ledger(Office $office, Client $client, string $employerHash): EsocialBxAccessLedger
+    private function ledger(Tenant $tenant, Client $client, string $employerHash): EsocialBxAccessLedger
     {
         return EsocialBxAccessLedger::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'employer_hash' => $employerHash,
             'environment' => 'restricted',

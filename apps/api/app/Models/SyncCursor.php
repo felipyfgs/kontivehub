@@ -3,20 +3,20 @@
 namespace App\Models;
 
 use App\Enums\SyncCursorStatus;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
-    'office_id', 'establishment_id', 'environment', 'last_nsu', 'status',
+    'tenant_id', 'establishment_id', 'environment', 'last_nsu', 'status',
     'consecutive_decode_failures', 'attempts', 'next_sync_at', 'last_success_at',
     'locked_at', 'lock_owner', 'last_error',
 ])]
 class SyncCursor extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {

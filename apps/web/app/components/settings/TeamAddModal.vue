@@ -5,7 +5,7 @@
  */
 import * as z from 'zod'
 import type { FormSubmitEvent } from '@nuxt/ui'
-import type { ActivationMethod, CredentialDeliveryPayload, OfficeRole } from '~/types/api'
+import type { ActivationMethod, CredentialDeliveryPayload, TenantRole } from '~/types/api'
 import { apiErrorMessage } from '~/utils/api-error'
 
 const emit = defineEmits<{
@@ -22,7 +22,7 @@ const reconfirmPassword = ref('')
 const schema = z.object({
   name: z.string().trim().min(2, 'Informe o nome'),
   email: z.email('Informe um e-mail válido'),
-  role: z.enum(['ADMIN', 'OPERATOR', 'VIEWER']),
+  role: z.enum(['tenant_admin', 'tenant_user']),
   method: z.enum(['MANUAL_LINK', 'TEMPORARY_PASSWORD'])
 })
 
@@ -31,14 +31,13 @@ type Schema = z.output<typeof schema>
 const state = reactive<Partial<Schema>>({
   name: '',
   email: '',
-  role: 'OPERATOR',
+  role: 'tenant_user',
   method: 'MANUAL_LINK'
 })
 
 const roleItems = [
-  { label: 'Admin', value: 'ADMIN' as OfficeRole },
-  { label: 'Operador', value: 'OPERATOR' as OfficeRole },
-  { label: 'Visualizador', value: 'VIEWER' as OfficeRole }
+  { label: 'Administrador', value: 'tenant_admin' as TenantRole },
+  { label: 'Usuário', value: 'tenant_user' as TenantRole }
 ]
 
 const methodItems = [
@@ -49,7 +48,7 @@ const methodItems = [
 function reset() {
   state.name = ''
   state.email = ''
-  state.role = 'OPERATOR'
+  state.role = 'tenant_user'
   state.method = 'MANUAL_LINK'
   reconfirmPassword.value = ''
 }
@@ -66,7 +65,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
   creating.value = true
   try {
     await api.confirmPassword(reconfirmPassword.value)
-    const res = await api.office.members.create({
+    const res = await api.tenant.members.create({
       name: event.data.name.trim(),
       email: event.data.email.trim(),
       role: event.data.role,

@@ -23,7 +23,7 @@ export const LIST_FILTER_SEARCH_INPUT
 export const LIST_FILTER_ACTIONS_ROW
   = `${TOUCH_SCROLL_X} flex w-full items-center gap-1.5 pb-0.5 sm:ml-auto sm:min-w-0 sm:flex-1 sm:flex-nowrap sm:justify-end sm:overflow-visible sm:pb-0`
 
-/** Lista de chips DataTableFilter (nowrap + scroll no xs) — legado / host direto. */
+/** Lista de chips DataTableFilter com scroll no xs. */
 export const DATA_TABLE_FILTERS_ROW
   = `${TOUCH_SCROLL_X} flex min-w-0 max-w-full items-center gap-1.5`
 

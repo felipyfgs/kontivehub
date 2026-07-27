@@ -16,7 +16,7 @@ final class SerproRequestTagGenerator
     /**
      * Tag opaca determinística a partir de seed interno (sem CNPJ/CPF/nome).
      *
-     * @param  array<string, scalar|null>  $opaqueParts  office id, op hash, etc. — nunca NI
+     * @param  array<string, scalar|null>  $opaqueParts  tenant id, op hash, etc. — nunca NI
      */
     public function generate(array $opaqueParts = []): string
     {

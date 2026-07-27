@@ -9,7 +9,7 @@ use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use App\Services\Authorization\TenantAuthorization;
 use App\Services\Sefaz\FiscalDocumentQuarantineService;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use RuntimeException;
@@ -21,15 +21,15 @@ class FiscalDocumentQuarantineController extends Controller
 {
     public function index(
         Request $request,
-        CurrentOffice $currentOffice,
+        CurrentTenant $currentTenant,
         FiscalDocumentQuarantineService $quarantines,
     ): JsonResponse {
-        $office = $currentOffice->office();
+        $tenant = $currentTenant->tenant();
         $reason = $request->query('reason');
         $reason = is_string($reason) ? $reason : null;
         $limit = min(100, max(1, (int) $request->query('limit', 50)));
 
-        $items = $quarantines->listOpen($office->id, $reason, $limit);
+        $items = $quarantines->listOpen($tenant->id, $reason, $limit);
 
         return response()->json([
             'data' => array_map(
@@ -42,7 +42,7 @@ class FiscalDocumentQuarantineController extends Controller
     public function resolve(
         Request $request,
         int $quarantine,
-        CurrentOffice $currentOffice,
+        CurrentTenant $currentTenant,
         TenantAuthorization $authorization,
         FiscalDocumentQuarantineService $quarantines,
         AuditLogger $audit,
@@ -60,7 +60,7 @@ class FiscalDocumentQuarantineController extends Controller
         ]);
 
         $model = FiscalDocumentQuarantine::query()
-            ->where('office_id', $currentOffice->office()->id)
+            ->where('tenant_id', $currentTenant->tenant()->id)
             ->whereKey($quarantine)
             ->first();
 

@@ -28,7 +28,7 @@ final class DasGuideHookService
         $periodKey = (string) ($n['competence'] ?? $request->competence?->period_key ?? '');
 
         $stub = FiscalGuideStub::query()->create([
-            'office_id' => $request->office->id,
+            'tenant_id' => $request->tenant->id,
             'client_id' => $request->client->id,
             'run_id' => $request->run->id,
             'system_code' => $def->systemCode,
@@ -59,7 +59,7 @@ final class DasGuideHookService
                 'emission_status' => $stub->emission_status->value,
                 'payment_status' => FiscalGuidePaymentStatus::Unknown->value,
             ],
-            officeId: (int) $request->office->id,
+            tenantId: (int) $request->tenant->id,
         );
 
         return $stub;

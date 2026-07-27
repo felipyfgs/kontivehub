@@ -5,7 +5,7 @@ namespace Tests\Feature;
 use App\Enums\SerproEligibilityCode;
 use App\Enums\SerproEnvironment;
 use App\Models\Client;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Integra\IntegraEligibilityService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -16,11 +16,11 @@ class IntegraEligibilityAuthorizationTest extends TestCase
 
     public function test_pgmei_evaluate_includes_authorization_missing_for_draft(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->for($office)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->for($tenant)->create();
 
         $result = app(IntegraEligibilityService::class)->evaluate(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             solutionCode: 'PGMEI',
             serviceCode: 'DIVIDAATIVA24',

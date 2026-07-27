@@ -117,7 +117,7 @@ final class DctfwebPostConsultService
             $projection = $this->findProjection($request, $periodKey);
             $observedAt = CarbonImmutable::now();
             $declaration = $this->declarations->findOrCreate(
-                $request->office,
+                $request->tenant,
                 $request->client,
                 $periodKey,
                 $category,
@@ -179,7 +179,7 @@ final class DctfwebPostConsultService
 
         $hints = $this->codec->parsePdfHints($pdfBytes);
         $declaration = $this->declarations->findOrCreate(
-            $request->office,
+            $request->tenant,
             $request->client,
             $periodKey,
             $category,
@@ -307,25 +307,16 @@ final class DctfwebPostConsultService
     public function resolveExpectedPeriodKey(FiscalAdapterRequest $request): string
     {
         $progress = is_array($request->progress) ? $request->progress : [];
-        // PA congelado no progress vence qualquer period_key comercial.
-        foreach (['expected_period_key', 'period_key'] as $key) {
-            if (! empty($progress[$key]) && is_string($progress[$key])) {
-                return DctfwebPeriod::toPeriodKey(DctfwebPeriod::parse($progress[$key]));
-            }
-        }
-        if (! empty($progress['anoPA']) && ! empty($progress['mesPA'])) {
-            return DctfwebPeriod::periodKeyFromParts((string) $progress['anoPA'], (string) $progress['mesPA']);
-        }
-        if (! empty($progress['expected_periodo_apuracao']) && is_string($progress['expected_periodo_apuracao'])) {
-            return DctfwebPeriod::toPeriodKey(DctfwebPeriod::parse($progress['expected_periodo_apuracao']));
+        if (! empty($progress['period_key']) && is_string($progress['period_key'])) {
+            return DctfwebPeriod::toPeriodKey(DctfwebPeriod::parse($progress['period_key']));
         }
 
         if ($request->competence?->period_key) {
             return DctfwebPeriod::toPeriodKey(DctfwebPeriod::parse($request->competence->period_key));
         }
 
-        $tz = is_string($request->office->timezone) && $request->office->timezone !== ''
-            ? $request->office->timezone
+        $tz = is_string($request->tenant->timezone) && $request->tenant->timezone !== ''
+            ? $request->tenant->timezone
             : 'America/Sao_Paulo';
 
         return DctfwebPeriod::toPeriodKey(DctfwebPeriod::expectedPa(null, $tz));
@@ -396,7 +387,7 @@ final class DctfwebPostConsultService
 
         $declaration = DctfwebDeclaration::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $request->office->id)
+            ->where('tenant_id', $request->tenant->id)
             ->where('client_id', $request->client->id)
             ->where('period_key', $periodKey)
             ->where('category', DctfwebCategory::default()->value)
@@ -553,7 +544,7 @@ final class DctfwebPostConsultService
 
         return TaxObligationProjection::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $request->office->id)
+            ->where('tenant_id', $request->tenant->id)
             ->where('client_id', $request->client->id)
             ->where('period_key', $periodKey)
             ->where('obligation_definition_id', $definitionId)
@@ -575,7 +566,7 @@ final class DctfwebPostConsultService
         $pa = DctfwebPeriod::parse($periodKey);
 
         return TaxObligationProjection::query()->create([
-            'office_id' => $request->office->id,
+            'tenant_id' => $request->tenant->id,
             'client_id' => $request->client->id,
             'obligation_definition_id' => $definition->id,
             'period_key' => $periodKey,
@@ -605,7 +596,7 @@ final class DctfwebPostConsultService
         ?array $metadata = null,
     ): void {
         DctfwebConsultObservation::query()->create([
-            'office_id' => $request->office->id,
+            'tenant_id' => $request->tenant->id,
             'client_id' => $request->client->id,
             'declaration_id' => $declarationId,
             'run_id' => $request->run->id,

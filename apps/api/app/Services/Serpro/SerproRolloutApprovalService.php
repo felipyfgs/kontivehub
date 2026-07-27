@@ -2,11 +2,11 @@
 
 namespace App\Services\Serpro;
 
-use App\Enums\OfficeRole;
 use App\Enums\SerproApprovalPolicy;
 use App\Enums\SerproEnvironment;
-use App\Models\OfficeMembership;
+use App\Enums\TenantRole;
 use App\Models\SerproRolloutApproval;
+use App\Models\TenantMembership;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use Carbon\CarbonImmutable;
@@ -30,7 +30,7 @@ final class SerproRolloutApprovalService
 
     public const ACTION_ROLLOUT_PROMOTE = 'ROLLOUT_PROMOTE';
 
-    public const ACTION_CREDENTIAL_CUTOVER = 'CREDENTIAL_CUTOVER';
+    public const ACTION_CREDENTIAL_ACTIVATION = 'CREDENTIAL_ACTIVATION';
 
     /** Promoção FREE_SMOKE_OK (escada gratuita — sem canário faturável). */
     public const ACTION_FREE_SMOKE_PROMOTE = 'FREE_SMOKE_PROMOTE';
@@ -43,7 +43,7 @@ final class SerproRolloutApprovalService
         self::ACTION_KILL_SWITCH_OFF,
         self::ACTION_KILL_SWITCH_SOLUTION_OFF,
         self::ACTION_CONTRACT_ACTIVATE,
-        self::ACTION_CREDENTIAL_CUTOVER,
+        self::ACTION_CREDENTIAL_ACTIVATION,
     ];
 
     /** @var list<string> */
@@ -89,7 +89,7 @@ final class SerproRolloutApprovalService
         string $reason,
         int $requestedByUserId,
         ?SerproEnvironment $environment = null,
-        ?int $officeId = null,
+        ?int $tenantId = null,
         array $context = [],
         int $ttlHours = 24,
         ?CarbonImmutable $changeWindowStart = null,
@@ -120,9 +120,9 @@ final class SerproRolloutApprovalService
 
         if ($policy === SerproApprovalPolicy::DualRole
             && in_array($action, [self::ACTION_BILLABLE_CANARY], true)
-            && ($officeId === null || $officeId <= 0)
+            && ($tenantId === null || $tenantId <= 0)
         ) {
-            throw new RuntimeException('Canário faturável exige office_id do Office delimitado (não injetado pelo cliente no escopo).');
+            throw new RuntimeException('Canário faturável exige tenant_id do Tenant delimitado (não injetado pelo cliente no escopo).');
         }
 
         $approval = SerproRolloutApproval::query()->create([
@@ -131,7 +131,7 @@ final class SerproRolloutApprovalService
             'action' => $action,
             'approval_policy' => $policy,
             'environment' => $env,
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'status' => 'PENDING',
             'reason' => mb_substr($reason, 0, 500),
             'confirmation_phrase' => $policy === SerproApprovalPolicy::OwnerConfirmation
@@ -150,7 +150,7 @@ final class SerproRolloutApprovalService
             'subject_type' => $subjectType,
             'subject_id' => $subjectId,
             'environment' => $env->value,
-        ], $requestedByUserId, $officeId);
+        ], $requestedByUserId, $tenantId);
 
         return $approval;
     }
@@ -224,7 +224,7 @@ final class SerproRolloutApprovalService
         $this->audit->record('serpro.rollout.reject', 'SUCCESS', $approval, [
             'action' => $approval->action,
             'reason' => mb_substr($reason, 0, 200),
-        ], $userId, $approval->office_id);
+        ], $userId, $approval->tenant_id);
 
         return $approval->refresh();
     }
@@ -314,7 +314,7 @@ final class SerproRolloutApprovalService
             'action' => $approval->action,
             'subject_type' => $approval->subject_type,
             'subject_id' => $approval->subject_id,
-        ], $actorUserId, $approval->office_id);
+        ], $actorUserId, $approval->tenant_id);
 
         return $approval->refresh();
     }
@@ -414,7 +414,7 @@ final class SerproRolloutApprovalService
             'environment' => $approval->environment instanceof SerproEnvironment
                 ? $approval->environment->value
                 : (string) $approval->environment,
-            'office_id' => $approval->office_id,
+            'tenant_id' => $approval->tenant_id,
             'status' => $approval->status,
             'reason' => $approval->reason,
             // Frase esperada (não é segredo) — UI de confirmação explícita.
@@ -513,7 +513,7 @@ final class SerproRolloutApprovalService
                 'action' => $locked->action,
                 'approver_user_id' => $user->id,
                 'approval_policy' => SerproApprovalPolicy::OwnerConfirmation->value,
-            ], $user->id, $locked->office_id);
+            ], $user->id, $locked->tenant_id);
 
             $executed = $this->executeIfReady($locked->refresh(), $user->id);
 
@@ -554,7 +554,7 @@ final class SerproRolloutApprovalService
                     'action' => $locked->action,
                     'approver_user_id' => $user->id,
                     'approver_role' => $role,
-                ], $user->id, $locked->office_id);
+                ], $user->id, $locked->tenant_id);
 
                 return ['approval' => $locked->refresh(), 'executed' => false];
             }
@@ -588,7 +588,7 @@ final class SerproRolloutApprovalService
                 'action' => $locked->action,
                 'approver_user_id' => $user->id,
                 'approver_role' => $role,
-            ], $user->id, $locked->office_id);
+            ], $user->id, $locked->tenant_id);
 
             $executed = $this->executeIfReady($locked->refresh(), $user->id);
 
@@ -599,27 +599,27 @@ final class SerproRolloutApprovalService
     private function resolveDualApproverRole(SerproRolloutApproval $approval, User $user): string
     {
         $isPlatform = $user->isPlatformAdmin();
-        $isOfficeAdmin = false;
+        $isTenantAdmin = false;
 
-        if ($approval->office_id !== null) {
-            $isOfficeAdmin = OfficeMembership::query()
-                ->where('office_id', $approval->office_id)
+        if ($approval->tenant_id !== null) {
+            $isTenantAdmin = TenantMembership::query()
+                ->where('tenant_id', $approval->tenant_id)
                 ->where('user_id', $user->id)
                 ->where('is_active', true)
-                ->where('role', OfficeRole::Admin->value)
+                ->where('role', TenantRole::TenantAdmin->value)
                 ->exists();
         }
 
-        // Canário faturável: papéis Proprietário + Office ADMIN.
-        // Conta dual (PLATFORM_ADMIN + Office ADMIN) só exerce o papel de Proprietário —
-        // nunca o segundo papel OFFICE_ADMIN.
+        // Canário faturável: papéis Proprietário + Tenant ADMIN.
+        // Conta dual (PLATFORM_ADMIN + Tenant ADMIN) só exerce o papel de Proprietário —
+        // nunca o segundo papel TENANT_ADMIN.
         if ($approval->action === self::ACTION_BILLABLE_CANARY) {
-            if ($isPlatform && $isOfficeAdmin) {
+            if ($isPlatform && $isTenantAdmin) {
                 $ctx = is_array($approval->context) ? $approval->context : [];
                 $firstRole = (string) ($ctx['first_approver_role'] ?? '');
                 if ($firstRole === 'PLATFORM_ADMIN') {
                     throw new RuntimeException(
-                        'Conta dual não pode preencher o papel de Office ADMIN no canário faturável.'
+                        'Conta dual não pode preencher o papel de Tenant ADMIN no canário faturável.'
                     );
                 }
 
@@ -628,12 +628,12 @@ final class SerproRolloutApprovalService
             if ($isPlatform) {
                 return 'PLATFORM_ADMIN';
             }
-            if ($isOfficeAdmin) {
-                return 'OFFICE_ADMIN';
+            if ($isTenantAdmin) {
+                return 'TENANT_ADMIN';
             }
 
             throw new RuntimeException(
-                'Canário faturável exige Proprietário PLATFORM_ADMIN ou Office ADMIN ativo do Office delimitado.'
+                'Canário faturável exige Proprietário PLATFORM_ADMIN ou Tenant ADMIN ativo do Tenant delimitado.'
             );
         }
 
@@ -653,9 +653,9 @@ final class SerproRolloutApprovalService
         if ($approval->action === self::ACTION_BILLABLE_CANARY) {
             $roles = [$firstRole, $secondRole];
             sort($roles);
-            if ($roles !== ['OFFICE_ADMIN', 'PLATFORM_ADMIN']) {
+            if ($roles !== ['TENANT_ADMIN', 'PLATFORM_ADMIN']) {
                 throw new RuntimeException(
-                    'Canário faturável exige um Proprietário e um Office ADMIN distintos do Office delimitado.'
+                    'Canário faturável exige um Proprietário e um Tenant ADMIN distintos do Tenant delimitado.'
                 );
             }
 
@@ -675,11 +675,11 @@ final class SerproRolloutApprovalService
             return false;
         }
 
-        // Cutover / activate: caller consome via consumeOwnerApproval (não executa efeito aqui).
+        // Ativação: o chamador consome via consumeOwnerApproval (não executa efeito aqui).
         if (in_array($approval->action, [
             self::ACTION_ROLLOUT_PROMOTE,
             self::ACTION_CONTRACT_ACTIVATE,
-            self::ACTION_CREDENTIAL_CUTOVER,
+            self::ACTION_CREDENTIAL_ACTIVATION,
             self::ACTION_BILLABLE_CANARY,
             self::ACTION_FREE_SMOKE_PROMOTE,
         ], true)) {
@@ -702,7 +702,7 @@ final class SerproRolloutApprovalService
         $this->audit->record('serpro.rollout.executed', 'SUCCESS', $approval, [
             'action' => $approval->action,
             'approval_policy' => $approval->policy()->value,
-        ], $actorUserId, $approval->office_id);
+        ], $actorUserId, $approval->tenant_id);
 
         return true;
     }

@@ -2,11 +2,11 @@
 
 namespace Tests\Feature;
 
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Jobs\Fiscal\ExecuteFiscalMonitoringRunJob;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Integra\Dctfweb\DctfwebCodes;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -57,11 +57,11 @@ class MitConsultApiTest extends TestCase
         );
     }
 
-    public function test_consult_rejects_a_client_from_another_office(): void
+    public function test_consult_rejects_a_client_from_another_tenant(): void
     {
         [$user] = $this->actorAndClient();
-        $otherOffice = Office::factory()->create();
-        $otherClient = Client::factory()->forOffice($otherOffice)->create();
+        $otherTenant = Tenant::factory()->create();
+        $otherClient = Client::factory()->forTenant($otherTenant)->create();
         Sanctum::actingAs($user);
 
         $this->postJson('/api/v1/fiscal/mit/consult', [
@@ -87,7 +87,7 @@ class MitConsultApiTest extends TestCase
         ])->assertUnprocessable()
             ->assertJsonValidationErrors('period_key');
 
-        $this->assertDatabaseCount('mit_apuracoes', 0);
+        $this->assertDatabaseCount('mit_assessments', 0);
         Queue::assertNothingPushed();
     }
 
@@ -95,9 +95,9 @@ class MitConsultApiTest extends TestCase
     private function actorAndClient(): array
     {
         Queue::fake();
-        $office = Office::factory()->create();
-        $user = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $client = Client::factory()->forOffice($office)->create();
+        $tenant = Tenant::factory()->create();
+        $user = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $client = Client::factory()->forTenant($tenant)->create();
 
         return [$user, $client];
     }

@@ -14,7 +14,7 @@ use App\Models\CommunicationPreferenceRecipient;
 use App\Models\User;
 use App\Services\Communication\Authorization\CommunicationAccess;
 use App\Services\Communication\Events\CommunicationEventRecorder;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use DateTimeZone;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -32,7 +32,7 @@ final class CommunicationAutomationController extends Controller
     ];
 
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly CommunicationAccess $access,
         private readonly CommunicationEventRecorder $events,
     ) {}
@@ -40,7 +40,7 @@ final class CommunicationAutomationController extends Controller
     public function index(Request $request): JsonResponse
     {
         $this->access->assertManage($this->actor($request));
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
         $policies = CommunicationAutomationPolicy::query()
             ->with('inbox')
             ->orderBy('module_key')->orderBy('submodule_key')->get();
@@ -56,7 +56,7 @@ final class CommunicationAutomationController extends Controller
                         'status' => $inbox->status?->value ?? $inbox->status,
                         'enabled' => (bool) $inbox->is_enabled,
                     ])->values(),
-                'office_enabled' => (bool) $office->communication_enabled,
+                'tenant_enabled' => (bool) $tenant->communication_enabled,
                 'global_enabled' => (bool) config('communication.enabled'),
             ],
         ]);
@@ -65,7 +65,7 @@ final class CommunicationAutomationController extends Controller
     public function upsert(Request $request): JsonResponse
     {
         $this->access->assertManage($this->actor($request));
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
         $data = $request->validate([
             'module_key' => ['required', 'string', 'max:40'],
             'submodule_key' => ['required', 'string', 'max:40'],
@@ -87,9 +87,9 @@ final class CommunicationAutomationController extends Controller
         abort_if($data['inbox_id'] !== null && $inbox === null, 422, 'Inbox inválida para este escritório.');
         abort_if($data['is_enabled'] && $inbox === null, 422, 'Política ativa exige uma inbox geral.');
 
-        $policy = DB::transaction(function () use ($office, $data): ?CommunicationAutomationPolicy {
+        $policy = DB::transaction(function () use ($tenant, $data): ?CommunicationAutomationPolicy {
             $current = CommunicationAutomationPolicy::query()->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('module_key', $data['module_key'])
                 ->where('submodule_key', $data['submodule_key'])
                 ->lockForUpdate()->first();
@@ -100,7 +100,7 @@ final class CommunicationAutomationController extends Controller
 
                 return CommunicationAutomationPolicy::query()->withoutGlobalScopes()->create([
                     ...$data,
-                    'office_id' => $office->id,
+                    'tenant_id' => $tenant->id,
                     'lock_version' => 1,
                 ]);
             }
@@ -117,14 +117,14 @@ final class CommunicationAutomationController extends Controller
         if (! $policy instanceof CommunicationAutomationPolicy) {
             return response()->json(['message' => 'Política alterada por outro usuário.', 'code' => 'version_conflict'], 409);
         }
-        $this->events->record((int) $office->id, 'AUTOMATION_POLICY_UPDATED', [
+        $this->events->record((int) $tenant->id, 'AUTOMATION_POLICY_UPDATED', [
             'policy_id' => (int) $policy->id,
             'module_key' => $policy->module_key,
             'submodule_key' => $policy->submodule_key,
             'enabled' => (bool) $policy->is_enabled,
             'lock_version' => (int) $policy->lock_version,
         ], inboxId: $policy->inbox_id !== null ? (int) $policy->inbox_id : null,
-            actorMembershipId: $this->currentOffice->realMembership()?->id);
+            actorMembershipId: $this->currentTenant->realMembership()?->id);
 
         return response()->json(['data' => $this->policyArray($policy->load('inbox'))]);
     }
@@ -181,7 +181,7 @@ final class CommunicationAutomationController extends Controller
             CommunicationPreferenceRecipient::query()->withoutGlobalScopes()->where('preference_id', $locked->id)->delete();
             foreach ($ids as $identityId) {
                 CommunicationPreferenceRecipient::query()->withoutGlobalScopes()->create([
-                    'office_id' => $locked->office_id,
+                    'tenant_id' => $locked->tenant_id,
                     'preference_id' => $locked->id,
                     'identity_id' => $identityId,
                 ]);
@@ -199,15 +199,15 @@ final class CommunicationAutomationController extends Controller
     /** @return array{0:Client,1:?ClientCommunicationPreference} */
     private function clientAndPreference(Request $request, int $client): array
     {
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
         $data = $request->validate([
             'module_key' => ['required', 'string', 'max:40'],
             'submodule_key' => ['required', 'string', 'max:40'],
         ]);
         abort_unless(in_array($data['module_key'].':'.$data['submodule_key'], self::SCOPES, true), 422);
-        $model = Client::query()->withoutGlobalScopes()->where('office_id', $office->id)->findOrFail($client);
+        $model = Client::query()->withoutGlobalScopes()->where('tenant_id', $tenant->id)->findOrFail($client);
         $preference = ClientCommunicationPreference::query()->withoutGlobalScopes()
-            ->where('office_id', $office->id)->where('client_id', $model->id)
+            ->where('tenant_id', $tenant->id)->where('client_id', $model->id)
             ->where('module_key', $data['module_key'])->where('submodule_key', $data['submodule_key'])->first();
 
         return [$model, $preference];
@@ -221,7 +221,7 @@ final class CommunicationAutomationController extends Controller
             ->selectRaw('links.is_primary as link_is_primary, links.receives_automatic as link_receives_automatic')
             ->join('communication_identity_links as links', 'links.identity_id', '=', 'communication_identities.id')
             ->join('communication_contacts as contacts', 'contacts.id', '=', 'communication_identities.contact_id')
-            ->where('communication_identities.office_id', $this->currentOffice->id())
+            ->where('communication_identities.tenant_id', $this->currentTenant->id())
             ->where('links.client_id', $clientId)
             ->where('communication_identities.channel', CommunicationChannel::Whatsapp->value)
             ->where('communication_identities.is_active', true)

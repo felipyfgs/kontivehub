@@ -21,23 +21,23 @@ final class CursorSyncItemsCollector
     /**
      * @return Collection<int, array<string, mixed>>
      */
-    public function collect(int $officeId, InboxCapabilities $capabilities): Collection
+    public function collect(int $tenantId, InboxCapabilities $capabilities): Collection
     {
         // collect() base: Eloquent\Collection::merge() tenta getKey() em arrays de item.
         return collect()
-            ->merge($this->cursorItems($officeId, $capabilities))
-            ->merge($this->channelCursorItems($officeId, $capabilities))
-            ->merge($this->syncFailedItems($officeId, $capabilities))
+            ->merge($this->cursorItems($tenantId, $capabilities))
+            ->merge($this->channelCursorItems($tenantId, $capabilities))
+            ->merge($this->syncFailedItems($tenantId, $capabilities))
             ->values();
     }
 
     /**
      * @return Collection<int, array<string, mixed>>
      */
-    private function cursorItems(int $officeId, InboxCapabilities $capabilities): Collection
+    private function cursorItems(int $tenantId, InboxCapabilities $capabilities): Collection
     {
         $cursors = SyncCursor::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereIn('status', [SyncCursorStatus::Blocked, SyncCursorStatus::Error])
             ->with(['establishment.client'])
             ->orderBy('id')
@@ -95,10 +95,10 @@ final class CursorSyncItemsCollector
      *
      * @return Collection<int, array<string, mixed>>
      */
-    private function channelCursorItems(int $officeId, InboxCapabilities $capabilities): Collection
+    private function channelCursorItems(int $tenantId, InboxCapabilities $capabilities): Collection
     {
         $cursors = ChannelSyncCursor::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereIn('status', [SyncCursorStatus::Blocked, SyncCursorStatus::Error])
             ->with(['establishment.client'])
             ->orderBy('id')
@@ -164,12 +164,12 @@ final class CursorSyncItemsCollector
     /**
      * @return Collection<int, array<string, mixed>>
      */
-    private function syncFailedItems(int $officeId, InboxCapabilities $capabilities): Collection
+    private function syncFailedItems(int $tenantId, InboxCapabilities $capabilities): Collection
     {
         $since = now()->subDay();
 
         $failedRuns = SyncRun::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('status', 'FAILED')
             ->where('created_at', '>=', $since)
             ->with(['cursor.establishment.client'])

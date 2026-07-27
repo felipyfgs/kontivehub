@@ -4,9 +4,9 @@ namespace App\Services\Outbound;
 
 use App\Enums\OutboundNumberStatus;
 use App\Models\DfeDocument;
-use App\Models\MaOutboundRetrievalRequest;
 use App\Models\OutboundCaptureProfile;
 use App\Models\OutboundNumberState;
+use App\Models\OutboundRetrievalRequest;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -62,7 +62,7 @@ final class OutboundXmlRecoveryRouter
         }
 
         $existing = DfeDocument::query()
-            ->where('office_id', $number->office_id)
+            ->where('tenant_id', $number->tenant_id)
             ->where('access_key', $key)
             ->first();
 
@@ -70,7 +70,7 @@ final class OutboundXmlRecoveryRouter
             // Satisfaz prazo e cancela SVRS se ainda houver recovery aberta
             try {
                 app(OutboundDeadlineSatisfactionService::class)->markCapturedBySource(
-                    (int) $number->office_id,
+                    (int) $number->tenant_id,
                     $key,
                     'VAULT_OR_CATALOG',
                     $existing->sha256,
@@ -88,8 +88,8 @@ final class OutboundXmlRecoveryRouter
         }
 
         // Acomodação: se recovery ainda na janela, não chama SVRS
-        $pending = MaOutboundRetrievalRequest::query()
-            ->where('office_id', $number->office_id)
+        $pending = OutboundRetrievalRequest::query()
+            ->where('tenant_id', $number->tenant_id)
             ->where('access_key', $key)
             ->whereNotNull('accommodation_until')
             ->where('accommodation_until', '>', now())
@@ -119,7 +119,7 @@ final class OutboundXmlRecoveryRouter
 
         // SVRS só para uma chave conhecida vinculada — nunca por período/série
         Log::info('outbound.xml_recovery.route', [
-            'office_id' => $number->office_id,
+            'tenant_id' => $number->tenant_id,
             'model' => $model,
             'source' => self::SOURCE_SVRS,
             'key_mask' => substr($key, 0, 6).'...'.substr($key, -4),

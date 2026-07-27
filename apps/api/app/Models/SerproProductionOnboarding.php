@@ -5,7 +5,7 @@ namespace App\Models;
 use App\Enums\SerproEnvironment;
 use App\Enums\SerproProductionOnboardingStatus;
 use App\Enums\SerproProductionOnboardingStep;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Database\Factories\SerproProductionOnboardingFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'actor_user_id',
     'environment',
     'idempotency_key',
@@ -25,7 +25,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'consented_at',
     'correlation_id',
     'serpro_credential_version_id',
-    'office_serpro_authorization_id',
+    'tenant_serpro_authorization_id',
     'serpro_rollout_approval_id',
     'initial_mailbox_run_id',
     'consumer_key_hint',
@@ -42,7 +42,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class SerproProductionOnboarding extends Model
 {
     /** @use HasFactory<SerproProductionOnboardingFactory> */
-    use BelongsToOffice, HasFactory;
+    use BelongsToTenant, HasFactory;
 
     protected static function newFactory(): SerproProductionOnboardingFactory
     {
@@ -77,7 +77,7 @@ class SerproProductionOnboarding extends Model
 
     public function authorization(): BelongsTo
     {
-        return $this->belongsTo(OfficeSerproAuthorization::class, 'office_serpro_authorization_id');
+        return $this->belongsTo(TenantSerproAuthorization::class, 'tenant_serpro_authorization_id');
     }
 
     public function initialMailboxRun(): BelongsTo
@@ -102,7 +102,7 @@ class SerproProductionOnboarding extends Model
     {
         return [
             'id' => $this->id,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'environment' => $this->environment?->value,
             'status' => $this->status?->value,
             'current_step' => $this->current_step?->value,
@@ -115,7 +115,7 @@ class SerproProductionOnboarding extends Model
                 'actor_user_id' => $this->actor_user_id,
             ],
             'credential_version_id' => $this->serpro_credential_version_id,
-            'authorization_id' => $this->office_serpro_authorization_id,
+            'authorization_id' => $this->tenant_serpro_authorization_id,
             'rollout_approval_id' => $this->serpro_rollout_approval_id,
             'initial_mailbox_run_id' => $this->initial_mailbox_run_id,
             'hints' => [

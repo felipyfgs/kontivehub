@@ -61,7 +61,7 @@ class RepairKnownCteNsuJob implements ShouldQueue
                 'nsu' => $this->knownNsu,
                 'correlation_id' => $this->correlationId,
                 'reason' => $reason,
-            ], $cursor->office_id);
+            ], $cursor->tenant_id);
             $metrics->increment('cte.repair', 1, [
                 'channel' => CaptureChannel::CteDistDfe->value,
                 'result' => 'denied',
@@ -76,7 +76,7 @@ class RepairKnownCteNsuJob implements ShouldQueue
             $logger->info('sefaz.cte.repair.lock_busy', [
                 'cursor_id' => $cursor->id,
                 'correlation_id' => $this->correlationId,
-            ], $cursor->office_id);
+            ], $cursor->tenant_id);
 
             return;
         }
@@ -91,7 +91,7 @@ class RepairKnownCteNsuJob implements ShouldQueue
             }
 
             $credential = ClientCredential::query()
-                ->where('office_id', $cursor->office_id)
+                ->where('tenant_id', $cursor->tenant_id)
                 ->where('client_id', $clientModel->id)
                 ->where('status', CredentialStatus::Active)
                 ->first();
@@ -101,12 +101,12 @@ class RepairKnownCteNsuJob implements ShouldQueue
                     'cursor_id' => $cursor->id,
                     'nsu' => $this->knownNsu,
                     'correlation_id' => $this->correlationId,
-                    'reason' => 'active_a1_unavailable',
-                ], $cursor->office_id);
+                    'reason' => 'active_certificate_unavailable',
+                ], $cursor->tenant_id);
                 $metrics->increment('cte.repair', 1, [
                     'channel' => CaptureChannel::CteDistDfe->value,
                     'result' => 'failed',
-                    'outcome' => 'a1_missing',
+                    'outcome' => 'certificate_missing',
                 ]);
 
                 return;
@@ -147,7 +147,7 @@ class RepairKnownCteNsuJob implements ShouldQueue
                 'quarantined' => $result['quarantined'],
                 'cursor_unchanged' => $before === (int) $cursor->last_nsu,
                 'cstat' => $page->cStat,
-            ], $cursor->office_id);
+            ], $cursor->tenant_id);
             $metrics->increment('cte.repair', 1, [
                 'channel' => CaptureChannel::CteDistDfe->value,
                 'result' => 'ok',

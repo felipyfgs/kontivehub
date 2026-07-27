@@ -6,14 +6,14 @@ import type {
 import type { ApiClient } from './types'
 
 /**
- * Presets nomeados de filtros de lista (tenant via CurrentOffice).
- * Nunca envia office_id — escopo só no servidor.
+ * Presets nomeados de filtros de lista (tenant via CurrentTenant).
+ * Nunca envia tenant_id — escopo só no servidor.
  */
 export function createSavedListFiltersApi(client: ApiClient) {
   const base = '/api/v1/list-filters'
   return {
     savedListFilters: {
-      /** GET ?surface= — personal do user + office do CurrentOffice. */
+      /** GET ?surface= — personal do user + tenant do CurrentTenant. */
       list: (params: { surface: string }) =>
         client<{ data: SavedListFilter[] }>(base, {
           query: { surface: params.surface }
@@ -26,8 +26,7 @@ export function createSavedListFiltersApi(client: ApiClient) {
             surface: body.surface,
             name: body.name,
             visibility: body.visibility,
-            payload: body.payload,
-            schema_version: body.schema_version ?? 1
+            payload: body.payload
           }
         }),
 

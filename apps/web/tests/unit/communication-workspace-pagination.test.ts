@@ -36,7 +36,7 @@ describe('paginação do workspace de comunicação', () => {
     expect(secondPage.find(item => item.id === 2)?.priority).toBe(4)
   })
 
-  it('descarta resposta fora de ordem por geração e por troca de Office', () => {
+  it('descarta resposta fora de ordem por geração e por troca de Tenant', () => {
     const active = { generation: 8, sessionEpoch: 12 }
 
     expect(isCommunicationConversationRequestCurrent(active, active)).toBe(true)

@@ -6,22 +6,22 @@ use App\Enums\CaptureChannel;
 use App\Enums\DocumentAcquisitionSource;
 use App\Enums\DocumentArtifactQuality;
 use App\Enums\SignatureVerificationResult;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'office_id', 'dfe_document_id', 'access_key', 'source', 'channel', 'nsu', 'sha256',
+    'tenant_id', 'dfe_document_id', 'access_key', 'source', 'channel', 'nsu', 'sha256',
     'artifact_quality', 'signature_result',
     'is_canonical', 'bytes_diverge_from_canonical', 'quarantine_reason',
-    'establishment_id', 'ma_outbound_retrieval_request_id', 'outbound_number_state_id',
-    'office_distribution_cursor_id', 'document_import_batch_item_id',
+    'establishment_id', 'outbound_retrieval_request_id', 'outbound_number_state_id',
+    'tenant_distribution_cursor_id', 'document_import_batch_item_id',
     'metadata',
 ])]
 class DocumentAcquisition extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {
@@ -49,7 +49,7 @@ class DocumentAcquisition extends Model
 
     public function retrievalRequest(): BelongsTo
     {
-        return $this->belongsTo(MaOutboundRetrievalRequest::class, 'ma_outbound_retrieval_request_id');
+        return $this->belongsTo(OutboundRetrievalRequest::class, 'outbound_retrieval_request_id');
     }
 
     public function numberState(): BelongsTo
@@ -57,9 +57,9 @@ class DocumentAcquisition extends Model
         return $this->belongsTo(OutboundNumberState::class, 'outbound_number_state_id');
     }
 
-    public function officeDistributionCursor(): BelongsTo
+    public function tenantDistributionCursor(): BelongsTo
     {
-        return $this->belongsTo(OfficeDistributionCursor::class, 'office_distribution_cursor_id');
+        return $this->belongsTo(TenantDistributionCursor::class, 'tenant_distribution_cursor_id');
     }
 
     public function importBatchItem(): BelongsTo

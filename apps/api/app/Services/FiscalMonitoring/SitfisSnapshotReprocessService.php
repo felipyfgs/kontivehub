@@ -3,6 +3,7 @@
 namespace App\Services\FiscalMonitoring;
 
 use App\Enums\FiscalVerificationState;
+use App\Models\FiscalMonitoringRun;
 use App\Models\FiscalSnapshot;
 use App\Services\Integra\Sitfis\SitfisReportParser;
 use Carbon\CarbonImmutable;
@@ -21,13 +22,16 @@ final class SitfisSnapshotReprocessService
     /**
      * @return array{examined:int,changed:int,skipped:int,rows:list<array<string,mixed>>}
      */
-    public function reprocess(int $officeId, ?int $clientId = null, bool $apply = false): array
+    public function reprocess(int $tenantId, ?int $clientId = null, bool $apply = false): array
     {
         $system = (string) config('fiscal_monitoring.sitfis.system_code', 'INTEGRA_SITFIS');
         $service = (string) config('fiscal_monitoring.sitfis.service_code', 'SITFIS');
         $snapshots = FiscalSnapshot::query()->withoutGlobalScopes()
-            ->with(['evidence', 'run'])
-            ->where('office_id', $officeId)
+            ->with([
+                'evidence' => fn ($query) => $query->withoutGlobalScopes(),
+                'run' => fn ($query) => $query->withoutGlobalScopes(),
+            ])
+            ->where('tenant_id', $tenantId)
             ->where('system_code', $system)
             ->where('service_code', $service)
             ->where('is_current', true)
@@ -45,7 +49,7 @@ final class SitfisSnapshotReprocessService
                 continue;
             }
 
-            $bytes = $this->evidenceStore->readAuthorized($snapshot->evidence, $officeId);
+            $bytes = $this->evidenceStore->readAuthorized($snapshot->evidence, $tenantId);
             $parsed = $this->parser->parse($bytes);
             $different = $this->isDifferent($snapshot, $parsed->situation->value, $parsed->normalized);
             $rows[] = [
@@ -92,14 +96,16 @@ final class SitfisSnapshotReprocessService
             if (! $locked->is_current) {
                 return;
             }
-            $run = $locked->run;
+            $run = FiscalMonitoringRun::query()
+                ->withoutGlobalScopes()
+                ->find($locked->run_id);
             if ($run === null) {
                 throw new RuntimeException('Snapshot SITFIS sem execução associada.');
             }
 
             $locked->forceFill(['is_current' => false])->save();
             $version = (int) FiscalSnapshot::query()->withoutGlobalScopes()
-                ->where('office_id', $locked->office_id)
+                ->where('tenant_id', $locked->tenant_id)
                 ->where('client_id', $locked->client_id)
                 ->where('system_code', $locked->system_code)
                 ->where('service_code', $locked->service_code)
@@ -109,7 +115,7 @@ final class SitfisSnapshotReprocessService
                 ->max('version');
 
             $successor = FiscalSnapshot::query()->withoutGlobalScopes()->create([
-                'office_id' => $locked->office_id,
+                'tenant_id' => $locked->tenant_id,
                 'run_id' => $locked->run_id,
                 'client_id' => $locked->client_id,
                 'competence_id' => $locked->competence_id,

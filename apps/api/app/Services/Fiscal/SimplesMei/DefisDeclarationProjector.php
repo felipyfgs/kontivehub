@@ -6,7 +6,7 @@ use App\Models\Client;
 use App\Models\DefisDeclarationObservation;
 use App\Models\DefisDeclarationProjection;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
+use App\Models\Tenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -20,37 +20,37 @@ final class DefisDeclarationProjector
     ) {}
 
     public function projectFromResponse(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         mixed $dados,
         ?int $sourceRunId,
         string $sourceProvenance,
     ): void {
         $payload = is_string($dados) ? json_decode($dados, true) : $dados;
-        $this->project($office, $client, $this->codec->decodeWithReferences(is_array($payload) ? $payload : []), $sourceRunId, $sourceProvenance);
+        $this->project($tenant, $client, $this->codec->decodeWithReferences(is_array($payload) ? $payload : []), $sourceRunId, $sourceProvenance);
     }
 
     /**
      * @param  list<array{calendar_year:int,type:string,transmitted_at:?string}>  $declarations
      */
     public function project(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         array $declarations,
         ?int $sourceRunId,
         string $sourceProvenance,
         ?CarbonImmutable $observedAt = null,
     ): void {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new RuntimeException('Cliente não pertence ao escritório da projeção DEFIS.');
         }
         $observedAt ??= CarbonImmutable::now();
 
-        DB::transaction(function () use ($office, $client, $declarations, $sourceRunId, $sourceProvenance, $observedAt): void {
+        DB::transaction(function () use ($tenant, $client, $declarations, $sourceRunId, $sourceProvenance, $observedAt): void {
             if ($sourceRunId !== null && ! FiscalMonitoringRun::query()
                 ->withoutGlobalScopes()
                 ->whereKey($sourceRunId)
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('client_id', $client->id)
                 ->exists()) {
                 throw new RuntimeException('Execução de origem inválida para a projeção DEFIS.');
@@ -69,14 +69,14 @@ final class DefisDeclarationProjector
                 ], JSON_THROW_ON_ERROR));
                 $observation = DefisDeclarationObservation::query()
                     ->withoutGlobalScopes()
-                    ->where('office_id', $office->id)
+                    ->where('tenant_id', $tenant->id)
                     ->where('client_id', $client->id)
                     ->where('digest', $digest)
                     ->lockForUpdate()
                     ->first();
                 if ($observation === null) {
                     $observation = DefisDeclarationObservation::query()->create([
-                        'office_id' => $office->id,
+                        'tenant_id' => $tenant->id,
                         'client_id' => $client->id,
                         'calendar_year' => $year,
                         'declaration_type' => $type,
@@ -90,11 +90,11 @@ final class DefisDeclarationProjector
 
                 $referenceId = null;
                 if (is_string($declaration['id_defis'] ?? null)) {
-                    $referenceId = $this->references->store($office, $client, $declaration['id_defis'], $sourceRunId, $sourceProvenance)->id;
+                    $referenceId = $this->references->store($tenant, $client, $declaration['id_defis'], $sourceRunId, $sourceProvenance)->id;
                 }
 
                 DefisDeclarationProjection::query()->updateOrCreate([
-                    'office_id' => $office->id,
+                    'tenant_id' => $tenant->id,
                     'client_id' => $client->id,
                     'calendar_year' => $year,
                     'declaration_type' => $type,

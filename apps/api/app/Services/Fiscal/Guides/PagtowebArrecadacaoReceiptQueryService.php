@@ -4,8 +4,8 @@ namespace App\Services\Fiscal\Guides;
 
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
 use App\Models\PagtowebArrecadacaoReceipt;
+use App\Models\Tenant;
 use App\Services\FiscalMonitoring\FiscalMonitoringRunService;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -16,23 +16,23 @@ final class PagtowebArrecadacaoReceiptQueryService
     public function __construct(private readonly FiscalMonitoringRunService $runs, private readonly PagtowebArrecadacaoReceiptCodec $codec) {}
 
     /** @return array<string, mixed> */
-    public function history(Office $office, Client $client): array
+    public function history(Tenant $tenant, Client $client): array
     {
-        $this->assertClient($office, $client);
+        $this->assertClient($tenant, $client);
         $items = PagtowebArrecadacaoReceipt::query()->withoutGlobalScopes()
-            ->where('office_id', $office->id)->where('client_id', $client->id)
+            ->where('tenant_id', $tenant->id)->where('client_id', $client->id)
             ->latest('observed_at')->get()->map(static fn (PagtowebArrecadacaoReceipt $item) => $item->toPublicArray())->all();
 
         return ['client_id' => $client->id, 'items' => $items, 'provenance' => ['source' => 'local_projection', 'serpro_called' => false]];
     }
 
     /** @return array<string, mixed> */
-    public function request(Office $office, Client $client, mixed $numeroDocumento, ?int $actorUserId): array
+    public function request(Tenant $tenant, Client $client, mixed $numeroDocumento, ?int $actorUserId): array
     {
-        $this->assertClient($office, $client);
+        $this->assertClient($tenant, $client);
         $normalized = $this->codec->normalizeRequest($numeroDocumento);
         $run = $this->runs->enqueueManual(
-            office: $office, client: $client, systemCode: PagtowebArrecadacaoReceiptAdapter::SYSTEM,
+            tenant: $tenant, client: $client, systemCode: PagtowebArrecadacaoReceiptAdapter::SYSTEM,
             serviceCode: PagtowebArrecadacaoReceiptAdapter::SERVICE, operationCode: PagtowebArrecadacaoReceiptAdapter::OPERATION,
             actorId: $actorUserId, correlationId: sprintf('pagtoweb-receipt-%d-%s', $client->id, (string) Str::uuid()), dispatch: false,
         );
@@ -41,9 +41,9 @@ final class PagtowebArrecadacaoReceiptQueryService
         return $this->toPublicRun($completed);
     }
 
-    private function assertClient(Office $office, Client $client): void
+    private function assertClient(Tenant $tenant, Client $client): void
     {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new HttpException(404, 'Cliente não encontrado no escritório atual.');
         }
     }

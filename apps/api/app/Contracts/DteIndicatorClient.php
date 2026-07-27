@@ -10,7 +10,7 @@ use App\DTO\Mailbox\DteIndicatorResult;
 interface DteIndicatorClient
 {
     /**
-     * @param  array<string, mixed>  $context  office_id, client_id, cnpj…
+     * @param  array<string, mixed>  $context  tenant_id, client_id, cnpj…
      */
     public function getIndicator(array $context = []): DteIndicatorResult;
 }

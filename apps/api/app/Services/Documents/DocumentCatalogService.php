@@ -10,8 +10,8 @@ use App\Enums\FiscalRole;
 use App\Models\CteDocument;
 use App\Models\DocumentAcquisition;
 use App\Models\NfeDocument;
-use App\Models\NfseNote;
-use App\Support\CurrentOffice;
+use App\Models\NfseDocument;
+use App\Support\CurrentTenant;
 use App\Support\DocumentCatalogCursor;
 use App\Support\NfseNoteStatus;
 use Carbon\CarbonImmutable;
@@ -33,17 +33,16 @@ class DocumentCatalogService
     /**
      * @return array{data: list<array<string, mixed>>, meta: array<string, mixed>}
      */
-    public function index(Request $request, CurrentOffice $currentOffice): array
+    public function index(Request $request, CurrentTenant $currentTenant): array
     {
-        $officeId = $currentOffice->office()->id;
+        $tenantId = $currentTenant->tenant()->id;
         $kinds = DocumentKind::listFromRequest($request);
         $wantNfse = DocumentKind::includesNfse($kinds);
         $wantNfe = DocumentKind::includes($kinds, DocumentKind::Nfe);
         $wantNfce = DocumentKind::includes($kinds, DocumentKind::Nfce);
         $wantCte = DocumentKind::includes($kinds, DocumentKind::Cte);
-        // MDF-e é reconhecido apenas como filtro legado: não há query/projeção operacional.
         $wantSefazProjection = $wantNfe || $wantNfce;
-        // Kind exclusivo sem implementação/fonte (incluindo MDFE legado) → vazio sem tocar no banco.
+        // Kind sem implementação/fonte → vazio sem tocar no banco.
         if (! $wantNfse && ! $wantSefazProjection && ! $wantCte) {
             return [
                 'data' => [],
@@ -66,18 +65,18 @@ class DocumentCatalogService
         $rows = collect();
 
         if ($wantNfse) {
-            $q = NfseNote::query()->where('office_id', $officeId)->orderByDesc('id');
+            $q = NfseDocument::query()->where('tenant_id', $tenantId)->orderByDesc('id');
             if ($beforeId = $cursor->beforeId(DocumentKind::Nfse)) {
                 $q->where('id', '<', $beforeId);
             }
             $this->applyCatalogFilters($q, $request);
             $rows = $rows->merge(
-                $q->limit($limit + 1)->get()->map(fn (NfseNote $n) => $this->serializeNoteListItem($n))
+                $q->limit($limit + 1)->get()->map(fn (NfseDocument $n) => $this->serializeNfseListItem($n))
             );
         }
 
         if ($wantSefazProjection) {
-            $q = NfeDocument::query()->where('office_id', $officeId)->orderByDesc('id');
+            $q = NfeDocument::query()->where('tenant_id', $tenantId)->orderByDesc('id');
             if ($beforeId = $cursor->beforeId(DocumentKind::Nfe)) {
                 $q->where('id', '<', $beforeId);
             }
@@ -97,7 +96,7 @@ class DocumentCatalogService
                         $sub->select(DB::raw(1))
                             ->from('nfe_documents as full_nfe')
                             ->whereColumn('full_nfe.access_key', 'nfe_documents.access_key')
-                            ->whereColumn('full_nfe.office_id', 'nfe_documents.office_id')
+                            ->whereColumn('full_nfe.tenant_id', 'nfe_documents.tenant_id')
                             ->where('full_nfe.is_summary', false);
                     });
             });
@@ -109,13 +108,13 @@ class DocumentCatalogService
         }
 
         if ($wantCte) {
-            $q = CteDocument::query()->where('office_id', $officeId)->orderByDesc('id');
+            $q = CteDocument::query()->where('tenant_id', $tenantId)->orderByDesc('id');
             if ($beforeId = $cursor->beforeId(DocumentKind::Cte)) {
                 $q->where('id', '<', $beforeId);
             }
             $this->applyCteCatalogFilters($q, $request);
             // Visão por cliente: autoriza apenas documentos com interesse no client_id.
-            // Visão ampla: office_id explícito + BelongsToOffice.
+            // Visão ampla: tenant_id explícito + BelongsToTenant.
             $cteModels = $q->with(['document.interests', 'document.acquisitions'])->limit($limit + 1)->get();
             $fullCteKeys = $this->fullAccessKeysForCte($cteModels);
             $rows = $rows->merge(
@@ -133,7 +132,7 @@ class DocumentCatalogService
             'data' => $page->values()->all(),
             'meta' => [
                 'next_cursor' => $nextCursor,
-                'total' => $this->catalogTotal($request, $officeId, $wantNfse, $wantSefazProjection, $wantNfe, $wantNfce, $wantCte, $kinds),
+                'total' => $this->catalogTotal($request, $tenantId, $wantNfse, $wantSefazProjection, $wantNfe, $wantNfce, $wantCte, $kinds),
                 'per_page' => $limit,
             ],
         ];
@@ -147,7 +146,7 @@ class DocumentCatalogService
      */
     private function catalogTotal(
         Request $request,
-        int $officeId,
+        int $tenantId,
         bool $wantNfse,
         bool $wantSefazProjection,
         bool $wantNfe,
@@ -158,13 +157,13 @@ class DocumentCatalogService
         $total = 0;
 
         if ($wantNfse) {
-            $q = NfseNote::query()->where('office_id', $officeId);
+            $q = NfseDocument::query()->where('tenant_id', $tenantId);
             $this->applyCatalogFilters($q, $request);
             $total += (int) $q->count();
         }
 
         if ($wantSefazProjection) {
-            $q = NfeDocument::query()->where('office_id', $officeId);
+            $q = NfeDocument::query()->where('tenant_id', $tenantId);
             $this->applyNfeCatalogFilters($q, $request);
             if ($wantNfe && ! $wantNfce && $kinds !== []) {
                 $q->where(function ($inner): void {
@@ -179,7 +178,7 @@ class DocumentCatalogService
                         $sub->select(DB::raw(1))
                             ->from('nfe_documents as full_nfe')
                             ->whereColumn('full_nfe.access_key', 'nfe_documents.access_key')
-                            ->whereColumn('full_nfe.office_id', 'nfe_documents.office_id')
+                            ->whereColumn('full_nfe.tenant_id', 'nfe_documents.tenant_id')
                             ->where('full_nfe.is_summary', false);
                     });
             });
@@ -187,7 +186,7 @@ class DocumentCatalogService
         }
 
         if ($wantCte) {
-            $q = CteDocument::query()->where('office_id', $officeId);
+            $q = CteDocument::query()->where('tenant_id', $tenantId);
             $this->applyCteCatalogFilters($q, $request);
             // Listagem CT-e aplica preferência full/resumo no merge em memória, não no SQL.
             $total += (int) $q->count();
@@ -202,25 +201,25 @@ class DocumentCatalogService
      *
      * @return array{data: array<string, mixed>}
      */
-    public function insights(Request $request, CurrentOffice $currentOffice): array
+    public function insights(Request $request, CurrentTenant $currentTenant): array
     {
-        $officeId = $currentOffice->office()->id;
+        $tenantId = $currentTenant->tenant()->id;
         $currentCompetence = now()->format('Y-m');
         $kinds = DocumentKind::listFromRequest($request);
         $byKind = [
             'NFSE' => DocumentKind::includesNfse($kinds)
-                ? NfseNote::query()->where('office_id', $officeId)->count()
+                ? NfseDocument::query()->where('tenant_id', $tenantId)->count()
                 : 0,
             'NFE' => DocumentKind::includes($kinds, DocumentKind::Nfe)
-                ? NfeDocument::query()->where('office_id', $officeId)->where(function ($q): void {
+                ? NfeDocument::query()->where('tenant_id', $tenantId)->where(function ($q): void {
                     $q->where('model', '55')->orWhereNull('model');
                 })->count()
                 : 0,
             'NFCE' => DocumentKind::includes($kinds, DocumentKind::Nfce)
-                ? NfeDocument::query()->where('office_id', $officeId)->where('model', '65')->count()
+                ? NfeDocument::query()->where('tenant_id', $tenantId)->where('model', '65')->count()
                 : 0,
             'CTE' => DocumentKind::includes($kinds, DocumentKind::Cte)
-                ? CteDocument::query()->where('office_id', $officeId)->count()
+                ? CteDocument::query()->where('tenant_id', $tenantId)->count()
                 : 0,
         ];
 
@@ -241,13 +240,13 @@ class DocumentCatalogService
             ];
         }
 
-        $scoped = NfseNote::query()->where('office_id', $officeId);
+        $scoped = NfseDocument::query()->where('tenant_id', $tenantId);
         $this->applyCatalogFilters($scoped, $request);
 
-        $withoutStatus = NfseNote::query()->where('office_id', $officeId);
+        $withoutStatus = NfseDocument::query()->where('tenant_id', $tenantId);
         $this->applyCatalogFilters($withoutStatus, $request, ignoreClientId: false, ignoreStatus: true);
 
-        $withoutCompetence = NfseNote::query()->where('office_id', $officeId);
+        $withoutCompetence = NfseDocument::query()->where('tenant_id', $tenantId);
         $this->applyCatalogFilters($withoutCompetence, $request, ignoreClientId: false, ignoreStatus: false, ignoreCompetence: true);
 
         $missingParty = (clone $scoped)->where(function ($q): void {
@@ -269,7 +268,7 @@ class DocumentCatalogService
                 'active' => (clone $withoutStatus)->whereIn('status', $authorizedStatuses)->count(),
                 // Grupo operacional Cancelada (CANCELLED + SUPERSEDED)
                 'cancelled' => (clone $withoutStatus)->whereIn('status', $cancelledStatuses)->count(),
-                'superseded' => (clone $withoutStatus)->whereIn('status', ['SUPERSEDED', 'REPLACED'])->count(),
+                'superseded' => (clone $withoutStatus)->where('status', 'SUPERSEDED')->count(),
                 'substitute' => (clone $withoutStatus)->where('status', 'SUBSTITUTE')->count(),
                 // Em revisão = situação indefinida
                 'review' => (clone $withoutStatus)->whereIn('status', $reviewStatuses)->count(),
@@ -287,9 +286,9 @@ class DocumentCatalogService
      *
      * @return array{data: list<array<string, mixed>>, meta: array<string, mixed>}
      */
-    public function byClient(Request $request, CurrentOffice $currentOffice): array
+    public function byClient(Request $request, CurrentTenant $currentTenant): array
     {
-        $officeId = $currentOffice->office()->id;
+        $tenantId = $currentTenant->tenant()->id;
 
         if (! DocumentKind::includesNfse(DocumentKind::listFromRequest($request))) {
             return [
@@ -298,16 +297,16 @@ class DocumentCatalogService
             ];
         }
 
-        $notesQuery = NfseNote::query()->where('office_id', $officeId);
+        $notesQuery = NfseDocument::query()->where('tenant_id', $tenantId);
         $this->applyCatalogFilters($notesQuery, $request, ignoreClientId: true);
-        $noteIds = $notesQuery->select('nfse_notes.id');
+        $noteIds = $notesQuery->select('nfse_documents.id');
 
         // Uma linha por (nota, cliente) — evita multiplicar valor por vários interests no mesmo cliente.
         $pairs = DB::table('document_interests as di')
             ->join('dfe_documents as d', 'd.id', '=', 'di.dfe_document_id')
-            ->join('nfse_notes as n', 'n.dfe_document_id', '=', 'd.id')
+            ->join('nfse_documents as n', 'n.dfe_document_id', '=', 'd.id')
             ->join('establishments as e', 'e.id', '=', 'di.establishment_id')
-            ->where('n.office_id', $officeId)
+            ->where('n.tenant_id', $tenantId)
             ->whereIn('n.id', $noteIds)
             ->select([
                 'e.client_id',
@@ -324,9 +323,9 @@ class DocumentCatalogService
 
         $paginator = DB::query()
             ->fromSub($pairs, 'p')
-            ->join('clients as c', function ($join) use ($officeId): void {
+            ->join('clients as c', function ($join) use ($tenantId): void {
                 $join->on('c.id', '=', 'p.client_id')
-                    ->where('c.office_id', '=', $officeId);
+                    ->where('c.tenant_id', '=', $tenantId);
             })
             ->select([
                 'c.id as client_id',
@@ -336,7 +335,7 @@ class DocumentCatalogService
             ])
             ->selectRaw('COALESCE(c.display_name, c.legal_name) as name')
             ->selectRaw('(SELECT e2.cnpj FROM establishments e2 WHERE e2.client_id = c.id ORDER BY e2.id LIMIT 1) as cnpj')
-            ->selectRaw('COUNT(*) as notes_count')
+            ->selectRaw('COUNT(*) as documents_count')
             ->selectRaw('COALESCE(SUM(p.service_amount), 0) as service_amount_sum')
             ->selectRaw("SUM(CASE WHEN p.status IN ($cancelledPlaceholders) THEN 1 ELSE 0 END) as cancelled_count", $cancelledStatuses)
             ->selectRaw("SUM(CASE WHEN p.status = 'UNKNOWN' THEN 1 ELSE 0 END) as review_count")
@@ -344,7 +343,7 @@ class DocumentCatalogService
             ->groupBy('c.id', 'c.legal_name', 'c.display_name', 'c.root_cnpj')
             ->orderByDesc('review_count')
             ->orderByDesc('cancelled_count')
-            ->orderByDesc('notes_count')
+            ->orderByDesc('documents_count')
             ->orderBy('c.legal_name')
             ->paginate($perPage);
 
@@ -356,7 +355,7 @@ class DocumentCatalogService
                 'name' => $row->name,
                 'root_cnpj' => $row->root_cnpj,
                 'cnpj' => $row->cnpj,
-                'notes_count' => (int) $row->notes_count,
+                'documents_count' => (int) $row->documents_count,
                 'service_amount_sum' => number_format((float) $row->service_amount_sum, 2, '.', ''),
                 'cancelled_count' => (int) $row->cancelled_count,
                 'review_count' => (int) $row->review_count,
@@ -381,7 +380,7 @@ class DocumentCatalogService
     /**
      * Filtros compartilhados entre listagem, insights e agregação por cliente.
      *
-     * @param  Builder<NfseNote>  $query
+     * @param  Builder<NfseDocument>  $query
      */
     private function applyCatalogFilters(
         Builder $query,
@@ -466,7 +465,7 @@ class DocumentCatalogService
      *
      * @return array<string, mixed>
      */
-    public function serializeNoteListItem(NfseNote $note): array
+    public function serializeNfseListItem(NfseDocument $note): array
     {
         $cStat = $note->official_status_code;
 
@@ -635,7 +634,7 @@ class DocumentCatalogService
                 ->first();
         } else {
             $acquisition = DocumentAcquisition::query()
-                ->where('office_id', $doc->office_id)
+                ->where('tenant_id', $doc->tenant_id)
                 ->where('access_key', $doc->access_key)
                 ->orderByDesc('is_canonical')
                 ->orderByDesc('id')
@@ -782,16 +781,12 @@ class DocumentCatalogService
             $query->where('coverage_status', strtoupper($v));
         }
         if ($direction = DocumentDirection::tryFromRequest($request->string('direction')->toString())) {
-            // Direção via interesse (fonte de verdade por estabelecimento) ou projeção legada.
-            $query->where(function ($q) use ($direction): void {
-                $q->where('direction', $direction->value)
-                    ->orWhereHas('document.interests', function ($interest) use ($direction): void {
-                        $interest->where('direction', $direction->value);
-                    });
+            $query->whereHas('document.interests', function ($interest) use ($direction): void {
+                $interest->where('direction', $direction->value);
             });
         }
         // Visão por cliente: autoriza por interesse (fonte de verdade multi-papel).
-        // Não usar só CNPJ de projeção — evita vazar docs de outro cliente do mesmo office.
+        // Não usar só CNPJ de projeção — evita vazar docs de outro cliente do mesmo tenant.
         if ($clientId = $request->integer('client_id')) {
             $query->whereHas('document.interests.establishment', function ($interest) use ($clientId): void {
                 $interest->where('client_id', $clientId);
@@ -893,10 +888,10 @@ class DocumentCatalogService
         if ($summaryKeys === []) {
             return [];
         }
-        $officeIds = $models->pluck('office_id')->unique()->all();
+        $tenantIds = $models->pluck('tenant_id')->unique()->all();
 
         return NfeDocument::query()
-            ->whereIn('office_id', $officeIds)
+            ->whereIn('tenant_id', $tenantIds)
             ->whereIn('access_key', $summaryKeys)
             ->where('is_summary', false)
             ->pluck('access_key')
@@ -915,10 +910,10 @@ class DocumentCatalogService
         if ($summaryKeys === []) {
             return [];
         }
-        $officeIds = $models->pluck('office_id')->unique()->all();
+        $tenantIds = $models->pluck('tenant_id')->unique()->all();
 
         return CteDocument::query()
-            ->whereIn('office_id', $officeIds)
+            ->whereIn('tenant_id', $tenantIds)
             ->whereIn('access_key', $summaryKeys)
             ->where('is_summary', false)
             ->pluck('access_key')
@@ -945,7 +940,7 @@ class DocumentCatalogService
         }
 
         $normalized = strtoupper(trim((string) $status));
-        if (in_array($normalized, ['CANCELLED', 'SUPERSEDED', 'REPLACED', 'CANCELED'], true)) {
+        if (in_array($normalized, ['CANCELLED', 'SUPERSEDED', 'CANCELED'], true)) {
             return 'Cancelada';
         }
         if (in_array($normalized, ['DENIED', 'DENEGADA'], true)) {

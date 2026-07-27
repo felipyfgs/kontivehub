@@ -2,7 +2,7 @@
  * Carteira fiscal tenant-aware: overview + lista paginada do read model.
  * - Filtros, ordenação e paginação ficam em estado local (URL Nuxt path-only)
  * - Sem fallback sintético em erro/vazio
- * - Aborta/descarta requests quando o office ou módulo muda
+ * - Aborta/descarta requests quando o tenant ou módulo muda
  * - Ordenação é sempre server-side para não reordenar apenas o lote carregado
  */
 import type { Ref } from 'vue'
@@ -72,8 +72,6 @@ export function useFiscalModulePortfolio<M extends FiscalPortfolioModuleKey>(
 ) {
   const api = useApi()
   const { sessionEpoch } = useDashboard()
-  const router = useRouter()
-  const route = useRoute()
 
   const page = ref(1)
   /** pageSize alinhado à lista de clientes (20). */
@@ -252,13 +250,6 @@ export function useFiscalModulePortfolio<M extends FiscalPortfolioModuleKey>(
     modality: modality.value
   }) || Boolean(submodule.value && submodule.value !== 'all' && submodule.value.trim()))
 
-  /** URL Nuxt path-only — limpa query residual (bookmarks legados). */
-  async function syncUrl() {
-    if (Object.keys(route.query).length > 0) {
-      await router.replace({ path: route.path })
-    }
-  }
-
   function overviewStillCurrent(seq: number, epoch: number) {
     return epoch === sessionEpoch.value && seq === overviewSeq
   }
@@ -291,7 +282,6 @@ export function useFiscalModulePortfolio<M extends FiscalPortfolioModuleKey>(
 
   async function loadClients(opts?: { silent?: boolean }) {
     const seq = ++clientsLoadSeq
-    await syncUrl()
     if (seq !== clientsLoadSeq) return
 
     const preservePrevious = opts?.silent === true && hasLoadedOnce.value
@@ -329,7 +319,6 @@ export function useFiscalModulePortfolio<M extends FiscalPortfolioModuleKey>(
   async function setPage(next: number) {
     const target = Math.max(1, Math.floor(Number(next) || 1))
     page.value = target
-    await syncUrl()
     await clientsFeed.setPage(target)
     page.value = clientsFeed.page.value
     lastPage.value = clientsFeed.lastPage.value
@@ -342,7 +331,6 @@ export function useFiscalModulePortfolio<M extends FiscalPortfolioModuleKey>(
     if (perPage.value === target) return
     perPage.value = target
     page.value = 1
-    await syncUrl()
     await loadClients()
   }
 
@@ -471,7 +459,7 @@ export function useFiscalModulePortfolio<M extends FiscalPortfolioModuleKey>(
   )
 
   /**
-   * Troca de Office/módulo: invalida época, descarta overview/origem/contadores/linhas
+   * Troca de Tenant/módulo: invalida época, descarta overview/origem/contadores/linhas
    * e impede que resposta atrasada seja aplicada (seq + sessionEpoch).
    */
   function clearForContextChange() {
@@ -488,7 +476,7 @@ export function useFiscalModulePortfolio<M extends FiscalPortfolioModuleKey>(
     overviewLoading.value = false
   }
 
-  /** Limpa filtros aplicados (incl. cliente) antes da carga do novo Office. */
+  /** Limpa filtros aplicados (incl. cliente) antes da carga do novo Tenant. */
   function clearFiltersForTenantSwitch() {
     filterTransactionDepth += 1
     try {
@@ -508,7 +496,7 @@ export function useFiscalModulePortfolio<M extends FiscalPortfolioModuleKey>(
   }
 
   watch(sessionEpoch, () => {
-    // Troca de office aborta o request e limpa antes de recarregar: tenants não se misturam.
+    // Troca de tenant aborta o request e limpa antes de recarregar: tenants não se misturam.
     clearFiltersForTenantSwitch()
     clearForContextChange()
     if (ready) void load()
@@ -525,7 +513,7 @@ export function useFiscalModulePortfolio<M extends FiscalPortfolioModuleKey>(
 
   if (options.immediate !== false) {
     onMounted(async () => {
-      // Ativa os watchers antes do request para uma troca de office durante
+      // Ativa os watchers antes do request para uma troca de tenant durante
       // o carregamento inicial abortar e já iniciar a carteira do novo tenant.
       ready = true
       await load()
@@ -586,7 +574,6 @@ export function useFiscalModulePortfolio<M extends FiscalPortfolioModuleKey>(
     applyQuickFilters,
     applyFilters,
     resetFilters,
-    syncUrl,
     buildFilters,
     buildOverviewFilters
   }

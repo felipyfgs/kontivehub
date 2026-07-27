@@ -3,10 +3,10 @@
 namespace App\Services\Fiscal\SimplesMei\Pgdasd;
 
 use App\Models\Client;
-use App\Models\Office;
 use App\Models\PagtowebPaymentListItem;
 use App\Models\PagtowebPaymentListObservation;
 use App\Models\PgdasdOperation;
+use App\Models\Tenant;
 use App\Services\Fiscal\Guides\PagtowebPaymentListCodec;
 use Carbon\CarbonImmutable;
 use RuntimeException;
@@ -21,15 +21,15 @@ final class PgdasdPagtowebEvidenceService
      * @return array{paid:int,not_found:int}
      */
     public function apply(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         PagtowebPaymentListObservation $observation,
         array $consultedDigests,
         ?int $sourceRunId,
         CarbonImmutable $verifiedAt,
     ): array {
-        if ((int) $client->office_id !== (int) $office->id
-            || (int) $observation->office_id !== (int) $office->id
+        if ((int) $client->tenant_id !== (int) $tenant->id
+            || (int) $observation->tenant_id !== (int) $tenant->id
             || (int) $observation->client_id !== (int) $client->id
         ) {
             throw new RuntimeException('Evidência PAGTOWEB fora do escritório atual.');
@@ -46,7 +46,7 @@ final class PgdasdPagtowebEvidenceService
 
         $items = PagtowebPaymentListItem::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('observation_id', $observation->id)
             ->whereIn('document_digest', array_keys($consulted))
@@ -57,7 +57,7 @@ final class PgdasdPagtowebEvidenceService
         $notFound = 0;
         $operations = PgdasdOperation::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('kind', 'DAS')
             ->whereNotNull('das_number')

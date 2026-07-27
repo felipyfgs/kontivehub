@@ -1,28 +1,28 @@
 import type {
   CursorMeta,
   DfeDocumentMetadata,
-  NfseNote,
-  NoteClientAggregate,
-  NotesInsights,
+  FiscalDocument,
+  FiscalDocumentClientAggregate,
+  FiscalDocumentInsights,
   PageMeta
 } from '~/types/api'
-import type { ApiClient, ApiUrl, NoteListParams } from './types'
+import type { ApiClient, ApiUrl, DocumentListParams } from './types'
 
 export function createDocumentsApi(client: ApiClient, apiUrl: ApiUrl) {
   return {
     documents: {
-      list: (params?: NoteListParams) =>
-        client<{ data: NfseNote[], meta: CursorMeta }>('/api/v1/documents', { query: params }),
-      byClient: (params?: NoteListParams) =>
-        client<{ data: NoteClientAggregate[], meta: PageMeta & { total_clients: number } }>(
+      list: (params?: DocumentListParams) =>
+        client<{ data: FiscalDocument[], meta: CursorMeta }>('/api/v1/documents', { query: params }),
+      byClient: (params?: DocumentListParams) =>
+        client<{ data: FiscalDocumentClientAggregate[], meta: PageMeta & { total_clients: number } }>(
           '/api/v1/documents/by-client',
           { query: params }
         ),
-      insights: (params?: NoteListParams) =>
-        client<{ data: NotesInsights }>('/api/v1/documents/insights', { query: params }),
+      insights: (params?: DocumentListParams) =>
+        client<{ data: FiscalDocumentInsights }>('/api/v1/documents/insights', { query: params }),
       get: (accessKey: string) => client<{
         data: {
-          note: NfseNote
+          fiscal_document: FiscalDocument
           events: Array<{
             id: number
             access_key: string
@@ -30,7 +30,7 @@ export function createDocumentsApi(client: ApiClient, apiUrl: ApiUrl) {
             event_at?: string | null
             status?: string | null
           }>
-          document: DfeDocumentMetadata | null
+          metadata: DfeDocumentMetadata | null
         }
       }>(`/api/v1/documents/${encodeURIComponent(accessKey)}`),
       xmlUrl: (accessKey: string) => apiUrl(`/api/v1/documents/${encodeURIComponent(accessKey)}/xml`),
@@ -67,32 +67,7 @@ export function createDocumentsApi(client: ApiClient, apiUrl: ApiUrl) {
           method: 'POST',
           body
         }),
-      /** Import multipart de XML/ZIP de saídas (NF-e / NFC-e) — síncrono legado. */
-      import: (files: File[], clientId?: number | null) => {
-        const body = new FormData()
-        for (const file of files) {
-          body.append('files[]', file)
-        }
-        if (clientId != null && clientId > 0) {
-          body.append('client_id', String(clientId))
-        }
-        return client<{
-          data: {
-            imported: number
-            skipped: number
-            errors: number
-            items: Array<{
-              status: string
-              filename: string
-              access_key?: string
-              kind?: string
-              message?: string
-              sha256?: string
-            }>
-          }
-        }>('/api/v1/documents/import', { method: 'POST', body })
-      },
-      /** Lote assíncrono (ou síncrono se flag off) — preferir este caminho. */
+      /** Lote assíncrono de XML/ZIP de saídas (NF-e / NFC-e). */
       importBatch: (files: File[], opts?: { clientId?: number | null, establishmentId?: number | null, idempotencyKey?: string }) => {
         const body = new FormData()
         for (const file of files) {
@@ -148,32 +123,6 @@ export function createDocumentsApi(client: ApiClient, apiUrl: ApiUrl) {
         ),
       importBatchCsvUrl: (publicId: string) =>
         apiUrl(`/api/v1/documents/import-batches/${encodeURIComponent(publicId)}/export.csv`)
-    },
-    /** @deprecated Preferir `documents` — alias de compat. */
-    notes: {
-      list: (params?: NoteListParams) =>
-        client<{ data: NfseNote[], meta: CursorMeta }>('/api/v1/documents', { query: params }),
-      byClient: (params?: NoteListParams) =>
-        client<{ data: NoteClientAggregate[], meta: PageMeta & { total_clients: number } }>(
-          '/api/v1/documents/by-client',
-          { query: params }
-        ),
-      insights: (params?: NoteListParams) =>
-        client<{ data: NotesInsights }>('/api/v1/documents/insights', { query: params }),
-      get: (accessKey: string) => client<{
-        data: {
-          note: NfseNote
-          events: Array<{
-            id: number
-            access_key: string
-            event_type?: string | null
-            event_at?: string | null
-            status?: string | null
-          }>
-          document: DfeDocumentMetadata | null
-        }
-      }>(`/api/v1/documents/${encodeURIComponent(accessKey)}`),
-      xmlUrl: (accessKey: string) => apiUrl(`/api/v1/documents/${encodeURIComponent(accessKey)}/xml`)
     }
   }
 }

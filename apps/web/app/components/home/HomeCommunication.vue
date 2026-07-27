@@ -11,7 +11,7 @@ const items = computed(() => buildHomeCommunicationKpis(props.summary, { loading
 const flagsOff = computed(() => {
   const c = props.summary?.communication
   if (!c || c.available === false) return false
-  return !c.global_enabled || !c.gateway_enabled || !c.office_enabled
+  return !c.global_enabled || !c.gateway_enabled || !c.tenant_enabled
 })
 const unavailable = computed(() => props.summary?.communication?.available === false)
 </script>
@@ -53,7 +53,7 @@ const unavailable = computed(() => props.summary?.communication?.available === f
       variant="subtle"
       icon="i-lucide-toggle-left"
       title="Comunicação ou gateway desabilitados"
-      description="Flags globais/office podem impedir o transporte WhatsApp."
+      description="Flags globais/tenant podem impedir o transporte WhatsApp."
       class="mb-2"
     />
 

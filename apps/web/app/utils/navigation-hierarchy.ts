@@ -1,6 +1,6 @@
 /**
  * Utilitários genéricos da hierarquia Tabs → Subtabs.
- * Independentes de catálogos de domínio e de tenancy (`office_id`).
+ * Independentes de catálogos de domínio e de tenancy (`tenant_id`).
  */
 
 export type NavMatchMode = 'exact' | 'prefix'

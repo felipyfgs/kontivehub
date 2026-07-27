@@ -6,8 +6,8 @@ use App\Enums\FiscalControlModule;
 use App\Enums\FiscalModuleControlScope;
 use App\Exceptions\RecentPasswordRequiredException;
 use App\Models\AuditLog;
-use App\Models\Office;
 use App\Models\PlatformMembership;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Fiscal\Availability\FiscalModuleControlService;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -45,19 +45,19 @@ class FiscalModuleControlServiceTest extends TestCase
     public function test_restriction_is_audited_and_blocked_jobs_are_counted(): void
     {
         $actor = $this->platformAdmin();
-        $office = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
         $service = app(FiscalModuleControlService::class);
         $control = $service->setRestriction(
             FiscalControlModule::Mailbox,
-            FiscalModuleControlScope::Office,
-            $office,
+            FiscalModuleControlScope::Tenant,
+            $tenant,
             true,
             'Pausa operacional',
             $actor,
             false,
         );
 
-        $service->recordBlockedJob(FiscalControlModule::Mailbox, $office, 'OFFICE_RESTRICTION', 42);
+        $service->recordBlockedJob(FiscalControlModule::Mailbox, $tenant, 'TENANT_RESTRICTION', 42);
 
         $this->assertSame(1, $control->fresh()->blocked_jobs_count);
         $this->assertTrue(AuditLog::query()->where('action', 'fiscal.module.restricted')->exists());

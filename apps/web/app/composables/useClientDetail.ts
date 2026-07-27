@@ -1,7 +1,5 @@
 import type { Client, ClientCredential, Establishment } from '~/types/api'
 import type { InjectionKey, Ref, ComputedRef } from 'vue'
-import type { ClientDetailPanel, ClientDetailTab } from '~/utils/client-detail-tabs'
-import { clientDetailHref, legacyClientPathToHref } from '~/utils/client-detail-tabs'
 
 export interface ClientDetailContext {
   clientId: ComputedRef<number>
@@ -17,8 +15,6 @@ export interface ClientDetailContext {
   load: () => Promise<void>
   triggerSync: (establishment: Establishment) => Promise<void>
   onCredentialActivated: (value: ClientCredential) => void
-  sectionPath: (section?: string) => string
-  goToTab: (tab: ClientDetailTab, panel?: ClientDetailPanel) => void
   /** Abre o modal único de editar cadastro geral. */
   openClientEdit: () => void
 }
@@ -32,12 +28,4 @@ export function useClientDetail(): ClientDetailContext {
     throw new Error('useClientDetail() deve ser usado dentro de /clients/[id].')
   }
   return ctx
-}
-
-/** Path canônico do detalhe (`/clients/:id/:segment`). */
-export function clientSectionPath(clientId: number | string, section?: string): string {
-  if (!section || section === 'resumo' || section === 'index') {
-    return clientDetailHref(clientId, 'cadastro')
-  }
-  return legacyClientPathToHref(clientId, section) || clientDetailHref(clientId)
 }

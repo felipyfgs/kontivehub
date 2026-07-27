@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Fiscal;
 
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Http\Controllers\Controller;
 use App\Models\Client;
 use App\Services\Fiscal\Dctfweb\DctfwebPeriod;
@@ -12,7 +12,7 @@ use App\Services\Integra\Dctfweb\DctfwebDeclarationService;
 use App\Services\Integra\Dctfweb\DctfwebEventIngestionService;
 use App\Services\Integra\Dctfweb\DctfwebEvidenceVersioningService;
 use App\Services\Integra\Dctfweb\DctfwebMutationGuard;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use InvalidArgumentException;
@@ -21,7 +21,7 @@ use RuntimeException;
 class DctfwebController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly DctfwebDeclarationService $declarations,
         private readonly DctfwebEventIngestionService $events,
         private readonly DctfwebEvidenceVersioningService $versions,
@@ -32,12 +32,12 @@ class DctfwebController extends Controller
     public function indexDeclarations(Request $request): JsonResponse
     {
         $this->assertCanRead();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
         $perPage = min(100, max(1, (int) $request->query('per_page', 50)));
         $clientId = $request->query('client_id');
 
         $page = $this->declarations->paginate(
-            $office,
+            $tenant,
             $perPage,
             is_numeric($clientId) ? (int) $clientId : null,
         );
@@ -49,8 +49,8 @@ class DctfwebController extends Controller
     public function showDeclaration(int $declaration): JsonResponse
     {
         $this->assertCanRead();
-        $office = $this->currentOffice->office();
-        $model = $this->declarations->findForOffice($office, $declaration);
+        $tenant = $this->currentTenant->tenant();
+        $model = $this->declarations->findForTenant($tenant, $declaration);
         if ($model === null) {
             return response()->json(['message' => 'Declaração não encontrada.'], 404);
         }
@@ -67,7 +67,7 @@ class DctfwebController extends Controller
     public function ingestEvent(Request $request): JsonResponse
     {
         $this->assertCanWrite();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
         $data = $request->validate([
             'client_id' => ['required', 'integer'],
@@ -80,7 +80,7 @@ class DctfwebController extends Controller
 
         $client = Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($data['client_id'])
             ->first();
 
@@ -90,7 +90,7 @@ class DctfwebController extends Controller
 
         try {
             $result = $this->events->ingestAndDirect(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 periodKey: $data['period_key'],
                 eventType: $data['event_type'] ?? DctfwebCodes::EVENT_ULTIMA_ATUALIZACAO,
@@ -122,7 +122,7 @@ class DctfwebController extends Controller
     public function enqueueConsult(Request $request): JsonResponse
     {
         $this->assertCanWrite();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
         $data = $request->validate([
             'client_id' => ['required', 'integer'],
@@ -141,7 +141,7 @@ class DctfwebController extends Controller
 
         $client = Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($data['client_id'])
             ->first();
 
@@ -149,15 +149,15 @@ class DctfwebController extends Controller
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
 
-        $timezone = (string) ($office->timezone ?: 'America/Sao_Paulo');
+        $timezone = (string) ($tenant->timezone ?: 'America/Sao_Paulo');
         $periodKey = $data['period_key'] ?? DctfwebPeriod::toPeriodKey(
             DctfwebPeriod::expectedPa(null, $timezone),
         );
-        $declaration = $this->declarations->findOrCreate($office, $client, $periodKey);
+        $declaration = $this->declarations->findOrCreate($tenant, $client, $periodKey);
 
         try {
             $run = $this->runs->enqueueManual(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 systemCode: DctfwebCodes::SYSTEM_DCTFWEB,
                 serviceCode: DctfwebCodes::SERVICE_DCTFWEB,
@@ -180,7 +180,7 @@ class DctfwebController extends Controller
     public function transmit(Request $request): JsonResponse
     {
         $this->assertCanWrite();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
         $data = $request->validate([
             'client_id' => ['required', 'integer'],
@@ -191,7 +191,7 @@ class DctfwebController extends Controller
 
         $client = Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($data['client_id'])
             ->first();
 
@@ -200,7 +200,7 @@ class DctfwebController extends Controller
         }
 
         $gate = $this->mutations->assertMayMutate(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             systemCode: DctfwebCodes::SYSTEM_DCTFWEB,
             serviceCode: DctfwebCodes::SERVICE_DCTFWEB,
@@ -216,11 +216,11 @@ class DctfwebController extends Controller
             ], 403);
         }
 
-        $declaration = $this->declarations->findOrCreate($office, $client, $data['period_key']);
+        $declaration = $this->declarations->findOrCreate($tenant, $client, $data['period_key']);
 
         try {
             $run = $this->runs->enqueueManual(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 systemCode: DctfwebCodes::SYSTEM_DCTFWEB,
                 serviceCode: DctfwebCodes::SERVICE_DCTFWEB,
@@ -239,15 +239,15 @@ class DctfwebController extends Controller
 
     private function assertCanRead(): void
     {
-        if ($this->currentOffice->role() === null) {
+        if ($this->currentTenant->role() === null) {
             abort(403, 'Perfil não resolvido.');
         }
     }
 
     private function assertCanWrite(): void
     {
-        $role = $this->currentOffice->role();
-        if ($role === null || ! in_array($role, [OfficeRole::Admin, OfficeRole::Operator], true)) {
+        $role = $this->currentTenant->role();
+        if ($role === null || ! in_array($role, [TenantRole::TenantAdmin, TenantRole::TenantUser], true)) {
             abort(403, 'Ação não autorizada para o perfil atual.');
         }
     }

@@ -11,7 +11,7 @@ use App\DTO\Serpro\ProcuradorAuthResult;
 use App\Enums\SecureObjectPurpose;
 use App\Enums\SerproEnvironment;
 use App\Enums\TermoAuthorizationState;
-use App\Models\OfficeSerproAuthorization;
+use App\Models\TenantSerproAuthorization;
 use App\Services\Serpro\SerproContractService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
@@ -37,7 +37,7 @@ final class HttpAutenticarProcuradorClient implements AutenticarProcuradorClient
 
     public function authenticate(ProcuradorAuthRequest $request): ProcuradorAuthResult
     {
-        $this->assertNoLegacyPayload($request);
+        $this->assertTermoPresent($request);
 
         $termoHash = hash('sha256', $request->termoXml);
         $environment = SerproEnvironment::tryFrom(strtoupper($request->environment))
@@ -115,14 +115,14 @@ final class HttpAutenticarProcuradorClient implements AutenticarProcuradorClient
         if (str_contains($request->termoXml, 'xmlAssinado')) {
             return new ProcuradorAuthResult(
                 success: false,
-                errorCode: 'LEGACY_ENVELOPE_BLOCKED',
+                errorCode: 'INVALID_ENVELOPE',
                 errorMessage: 'Campo xmlAssinado é proibido no envelope Autentica Procurador.',
                 authorizationState: TermoAuthorizationState::Rejected->value,
             );
         }
 
         $integraRequest = new IntegraRequest(
-            officeId: $request->officeId,
+            tenantId: $request->tenantId,
             clientId: 0,
             environment: $request->environment,
             contractorCnpj: (string) $contract->contractor_cnpj,
@@ -309,7 +309,7 @@ final class HttpAutenticarProcuradorClient implements AutenticarProcuradorClient
      * Invalida meta de cache para o contexto (sem precisar do token).
      */
     public function forgetCache(
-        int $officeId,
+        int $tenantId,
         string $environment,
         string $authorIdentity,
         string $termoSha256,
@@ -317,7 +317,7 @@ final class HttpAutenticarProcuradorClient implements AutenticarProcuradorClient
     ): void {
         $key = sprintf(
             'serpro:procurador:meta:%d:%s:%s:%s:%s',
-            $officeId,
+            $tenantId,
             strtoupper($environment),
             substr(hash('sha256', $contractKey), 0, 16),
             substr(hash('sha256', $authorIdentity), 0, 16),
@@ -349,7 +349,7 @@ final class HttpAutenticarProcuradorClient implements AutenticarProcuradorClient
         return ['dados' => $dados, 'xml_base64' => $xmlBase64];
     }
 
-    private function assertNoLegacyPayload(ProcuradorAuthRequest $request): void
+    private function assertTermoPresent(ProcuradorAuthRequest $request): void
     {
         // Defesa em profundidade: o DTO só tem termoXml, mas se XML cru for vazio.
         if (trim($request->termoXml) === '') {
@@ -361,7 +361,7 @@ final class HttpAutenticarProcuradorClient implements AutenticarProcuradorClient
     {
         return sprintf(
             'serpro:procurador:meta:%d:%s:%s:%s:%s',
-            $request->officeId,
+            $request->tenantId,
             strtoupper($request->environment),
             substr(hash('sha256', $contractKey), 0, 16),
             substr(hash('sha256', $request->authorIdentity), 0, 16),
@@ -380,7 +380,7 @@ final class HttpAutenticarProcuradorClient implements AutenticarProcuradorClient
     ): ?array {
         try {
             $aad = SecureObjectPurpose::SerproProcuradorToken->aadBase([
-                'office_id' => $request->officeId,
+                'tenant_id' => $request->tenantId,
                 'environment' => $request->environment,
                 'author_identity' => $request->authorIdentity,
                 'termo_sha256' => $termoHash,
@@ -399,9 +399,9 @@ final class HttpAutenticarProcuradorClient implements AutenticarProcuradorClient
     private function recoverTokenFromAuthorization(ProcuradorAuthRequest $request, string $termoHash): ?string
     {
         try {
-            $auth = OfficeSerproAuthorization::query()
+            $auth = TenantSerproAuthorization::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $request->officeId)
+                ->where('tenant_id', $request->tenantId)
                 ->where('environment', strtoupper($request->environment))
                 ->where('author_identity', $request->authorIdentity)
                 ->first();
@@ -413,32 +413,20 @@ final class HttpAutenticarProcuradorClient implements AutenticarProcuradorClient
             }
 
             $termoAad = SecureObjectPurpose::SerproTermoXml->aadBase([
-                'office_id' => $request->officeId,
+                'tenant_id' => $request->tenantId,
                 'environment' => $request->environment,
                 'kind' => 'signed',
                 'sha256' => $auth->termo_sha256,
                 'author_identity' => $request->authorIdentity,
             ]);
-            try {
-                $storedTermo = $this->store->get($auth->termo_vault_object_id, $termoAad);
-            } catch (Throwable) {
-                $storedTermo = $this->store->get(
-                    $auth->termo_vault_object_id,
-                    SecureObjectPurpose::SerproTermoXml->aadBase([
-                        'office_id' => $request->officeId,
-                        'environment' => $request->environment,
-                        'sha256' => $auth->termo_sha256,
-                        'author_identity' => $request->authorIdentity,
-                    ]),
-                );
-            }
+            $storedTermo = $this->store->get($auth->termo_vault_object_id, $termoAad);
             if (! hash_equals($termoHash, hash('sha256', $storedTermo))) {
                 return null;
             }
             unset($storedTermo);
 
             $aad = SecureObjectPurpose::SerproProcuradorToken->aadBase([
-                'office_id' => $request->officeId,
+                'tenant_id' => $request->tenantId,
                 'environment' => $request->environment,
                 'author_identity' => $request->authorIdentity,
             ]);
@@ -465,7 +453,7 @@ final class HttpAutenticarProcuradorClient implements AutenticarProcuradorClient
         ?string $etag,
     ): string {
         $aad = SecureObjectPurpose::SerproProcuradorToken->aadBase([
-            'office_id' => $request->officeId,
+            'tenant_id' => $request->tenantId,
             'environment' => $request->environment,
             'author_identity' => $request->authorIdentity,
             'termo_sha256' => $termoHash,

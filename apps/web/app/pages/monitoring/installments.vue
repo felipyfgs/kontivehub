@@ -330,10 +330,9 @@ const columns: TableColumn<InstallmentsClientRow>[] = [
     meta: { ...MONITORING_CLIENT_COLUMN_META },
     cell: ({ row }) => h(FiscalClientCell, {
       clientId: row.original.client_id,
-      name: row.original.name || row.original.display_name,
+      name: row.original.display_name || row.original.legal_name,
       legalName: row.original.legal_name,
-      cnpj: row.original.cnpj,
-      cnpjMasked: row.original.cnpj_masked
+      cnpj: row.original.cnpj
     })
   },
   {

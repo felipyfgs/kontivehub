@@ -33,8 +33,8 @@ final class RefreshClientRegistration
     {
         $establishment = Establishment::query()
             ->where('client_id', $client->id)
-            ->where('office_id', $client->office_id)
-            ->orderByDesc('is_matrix')
+            ->where('tenant_id', $client->tenant_id)
+            ->orderByDesc('is_headquarters')
             ->orderBy('id')
             ->first();
 

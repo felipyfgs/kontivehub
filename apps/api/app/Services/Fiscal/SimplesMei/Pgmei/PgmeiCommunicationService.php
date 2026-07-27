@@ -4,7 +4,7 @@ namespace App\Services\Fiscal\SimplesMei\Pgmei;
 
 use App\Models\Client;
 use App\Models\ClientCommunicationPreference;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use App\Services\Authorization\TenantAuthorization;
@@ -33,38 +33,38 @@ final class PgmeiCommunicationService
         );
     }
 
-    public function getPreferences(Office $office, Client $client): ClientCommunicationPreference
+    public function getPreferences(Tenant $tenant, Client $client): ClientCommunicationPreference
     {
-        return $this->inner->getPreferences($office, $client);
+        return $this->inner->getPreferences($tenant, $client);
     }
 
     /**
      * @return array<string, mixed>
      */
-    public function summary(Office $office, Client $client): array
+    public function summary(Tenant $tenant, Client $client): array
     {
-        return $this->inner->summary($office, $client);
+        return $this->inner->summary($tenant, $client);
     }
 
     /**
      * @param  list<int>  $clientIds
      * @return array<int, array<string, mixed>>
      */
-    public function summariesForClients(Office $office, array $clientIds): array
+    public function summariesForClients(Tenant $tenant, array $clientIds): array
     {
-        return $this->inner->summariesForClients($office, $clientIds);
+        return $this->inner->summariesForClients($tenant, $clientIds);
     }
 
     /**
      * @param  array{email_enabled: bool, whatsapp_enabled: bool, automatic_requested: bool, lock_version: int}  $input
      */
     public function updatePreferences(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         User $actor,
         array $input,
     ): ClientCommunicationPreference {
-        return $this->inner->updatePreferences($office, $client, $actor, $input);
+        return $this->inner->updatePreferences($tenant, $client, $actor, $input);
     }
 
     /**
@@ -72,40 +72,40 @@ final class PgmeiCommunicationService
      * @return list<ClientCommunicationPreference>
      */
     public function batchSetAutomatic(
-        Office $office,
+        Tenant $tenant,
         User $actor,
         array $clientIds,
         bool $automaticRequested,
     ): array {
-        return $this->inner->batchSetAutomatic($office, $actor, $clientIds, $automaticRequested);
+        return $this->inner->batchSetAutomatic($tenant, $actor, $clientIds, $automaticRequested);
     }
 
     /**
      * @return array<string, mixed>
      */
-    public function preview(Office $office, Client $client): array
+    public function preview(Tenant $tenant, Client $client): array
     {
-        return $this->inner->preview($office, $client);
+        return $this->inner->preview($tenant, $client);
     }
 
     /**
      * @return array<string, mixed>
      */
-    public function tracking(Office $office, Client $client): array
+    public function tracking(Tenant $tenant, Client $client): array
     {
-        return $this->inner->tracking($office, $client);
+        return $this->inner->tracking($tenant, $client);
     }
 
     /**
      * @return array{queued:int, provider_enabled:bool, dispatches:list<array<string, mixed>>}
      */
-    public function requestSend(Office $office, Client $client, User $actor, ?string $periodKey = null): array
+    public function requestSend(Tenant $tenant, Client $client, User $actor, ?string $periodKey = null): array
     {
-        return $this->inner->requestSend($office, $client, $actor, $periodKey);
+        return $this->inner->requestSend($tenant, $client, $actor, $periodKey);
     }
 
-    public function maybeQueueAutomaticAfterConsult(Office $office, Client $client, ?string $periodKey = null): void
+    public function maybeQueueAutomaticAfterConsult(Tenant $tenant, Client $client, ?string $periodKey = null): void
     {
-        $this->inner->maybeQueueAutomaticAfterConsult($office, $client, $periodKey);
+        $this->inner->maybeQueueAutomaticAfterConsult($tenant, $client, $periodKey);
     }
 }

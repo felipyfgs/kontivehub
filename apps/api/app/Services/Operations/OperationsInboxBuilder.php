@@ -39,7 +39,7 @@ final class OperationsInboxBuilder
         'outbound_authorized_unexpected',
         'outbound_cancel_failed',
         // Canal SVRS NFC-e XML
-        'svrs_nfce_a1',
+        'svrs_nfce_certificate',
         'svrs_nfce_auth',
         'svrs_nfce_rate_limit',
         'svrs_nfce_multiple_queries',
@@ -57,7 +57,7 @@ final class OperationsInboxBuilder
         'quarantine_schema',
         'quarantine_other',
         // CT-e tipados
-        'cte_a1_missing',
+        'cte_certificate_missing',
         'cte_593',
         'cte_656',
         'cte_decode_failures',
@@ -123,14 +123,14 @@ final class OperationsInboxBuilder
      * }
      */
     public function build(
-        int $officeId,
+        int $tenantId,
         ?InboxCapabilities $capabilities = null,
         ?string $severity = null,
         ?string $type = null,
         int $limit = 50,
         ?string $cursor = null,
     ): array {
-        $items = $this->collectAll($officeId, $capabilities ?? new InboxCapabilities);
+        $items = $this->collectAll($tenantId, $capabilities ?? new InboxCapabilities);
 
         if ($severity !== null && $severity !== '' && in_array($severity, self::SEVERITIES, true)) {
             $items = $items->filter(fn (array $item) => $item['severity'] === $severity)->values();
@@ -184,9 +184,9 @@ final class OperationsInboxBuilder
      *
      * @return array{inbox_critical: int, inbox_high: int, inbox_total: int}
      */
-    public function counts(int $officeId, ?InboxCapabilities $capabilities = null): array
+    public function counts(int $tenantId, ?InboxCapabilities $capabilities = null): array
     {
-        $items = $this->collectAll($officeId, $capabilities ?? new InboxCapabilities);
+        $items = $this->collectAll($tenantId, $capabilities ?? new InboxCapabilities);
 
         return [
             'inbox_critical' => $items->where('severity', 'critical')->count(),
@@ -198,18 +198,18 @@ final class OperationsInboxBuilder
     /**
      * @return Collection<int, array<string, mixed>>
      */
-    private function collectAll(int $officeId, InboxCapabilities $capabilities): Collection
+    private function collectAll(int $tenantId, InboxCapabilities $capabilities): Collection
     {
         // Ordem de merge alinhada ao monólito (sort em build() é a fonte de verdade da página).
         return collect()
-            ->merge($this->cursorSync->collect($officeId, $capabilities))
-            ->merge($this->cte->collect($officeId, $capabilities))
-            ->merge($this->credentialBackup->collect($officeId, $capabilities))
-            ->merge($this->outboundSvrs->collect($officeId, $capabilities))
-            ->merge($this->quarantine->collect($officeId, $capabilities))
-            ->merge($this->mailbox->collect($officeId, $capabilities))
-            ->merge($this->serproProxyUsage->collect($officeId, $capabilities))
-            ->merge($this->fiscal->collect($officeId, $capabilities))
+            ->merge($this->cursorSync->collect($tenantId, $capabilities))
+            ->merge($this->cte->collect($tenantId, $capabilities))
+            ->merge($this->credentialBackup->collect($tenantId, $capabilities))
+            ->merge($this->outboundSvrs->collect($tenantId, $capabilities))
+            ->merge($this->quarantine->collect($tenantId, $capabilities))
+            ->merge($this->mailbox->collect($tenantId, $capabilities))
+            ->merge($this->serproProxyUsage->collect($tenantId, $capabilities))
+            ->merge($this->fiscal->collect($tenantId, $capabilities))
             ->values();
     }
 }

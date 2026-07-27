@@ -3,10 +3,10 @@
 namespace Tests\Unit\Fiscal\Mutations;
 
 use App\Enums\FiscalMutationDenialCode;
-use App\Enums\OfficeRole;
 use App\Enums\SerproEnvironment;
+use App\Enums\TenantRole;
 use App\Models\Client;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Fiscal\Mutations\FiscalMutationPolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -26,15 +26,15 @@ final class FiscalMutationPolicyTest extends TestCase
             'fiscal_mutations.operations' => [
                 'INTEGRA_MEI.PGMEI.GERAR_DAS' => [
                     'enabled' => true,
-                    'allow_all_offices' => true,
+                    'allow_all_tenants' => true,
                 ],
             ],
         ]);
 
-        [$office, $client, $admin] = $this->tenant(OfficeRole::Admin);
+        [$tenant, $client, $admin] = $this->tenant(TenantRole::TenantAdmin);
 
         $result = app(FiscalMutationPolicy::class)->evaluate(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             user: $admin,
             solutionCode: 'INTEGRA_MEI',
@@ -49,6 +49,7 @@ final class FiscalMutationPolicyTest extends TestCase
                 'confirmed' => true,
                 'skip_anti_repeat' => true,
                 'skip_uncertain_check' => true,
+                'operation_key' => 'pgmei.gerardaspdf',
             ],
         );
 
@@ -70,15 +71,15 @@ final class FiscalMutationPolicyTest extends TestCase
             'fiscal_mutations.operations' => [
                 'INTEGRA_MEI.PGMEI.GERAR_DAS' => [
                     'enabled' => true,
-                    'allow_all_offices' => true,
+                    'allow_all_tenants' => true,
                 ],
             ],
         ]);
 
-        [$office, $client, $admin] = $this->tenant(OfficeRole::Admin);
+        [$tenant, $client, $admin] = $this->tenant(TenantRole::TenantAdmin);
 
         $result = app(FiscalMutationPolicy::class)->evaluate(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             user: $admin,
             solutionCode: 'INTEGRA_MEI',
@@ -93,6 +94,7 @@ final class FiscalMutationPolicyTest extends TestCase
                 'confirmed' => true,
                 'skip_anti_repeat' => true,
                 'skip_uncertain_check' => true,
+                'operation_key' => 'pgmei.gerardaspdf',
             ],
         );
 
@@ -104,13 +106,13 @@ final class FiscalMutationPolicyTest extends TestCase
         $this->assertContains(FiscalMutationDenialCode::PasswordConfirmationRequired->value, $codes);
     }
 
-    /** @return array{Office, Client, User} */
-    private function tenant(OfficeRole $role): array
+    /** @return array{Tenant, Client, User} */
+    private function tenant(TenantRole $role): array
     {
-        $office = Office::factory()->create();
-        $user = User::factory()->forOffice($office, $role)->create();
-        $client = Client::factory()->forOffice($office)->create();
+        $tenant = Tenant::factory()->create();
+        $user = User::factory()->forTenant($tenant, $role)->create();
+        $client = Client::factory()->forTenant($tenant)->create();
 
-        return [$office, $client, $user];
+        return [$tenant, $client, $user];
     }
 }

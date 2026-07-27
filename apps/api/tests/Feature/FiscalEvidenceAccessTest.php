@@ -10,11 +10,11 @@ use App\Enums\FiscalRunStatus;
 use App\Enums\FiscalSituation;
 use App\Enums\FiscalTrigger;
 use App\Enums\FiscalVerificationState;
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Models\Client;
 use App\Models\FiscalEvidenceArtifact;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\FiscalMonitoring\FiscalDocumentDescriptorFactory;
 use App\Services\FiscalMonitoring\FiscalEvidenceStore;
@@ -37,17 +37,17 @@ class FiscalEvidenceAccessTest extends TestCase
         $this->app->instance(SecureObjectStore::class, $this->objects);
     }
 
-    public function test_descriptor_and_download_require_a_real_integral_current_office_artifact(): void
+    public function test_descriptor_and_download_require_a_real_integral_current_tenant_artifact(): void
     {
-        $office = Office::factory()->create();
-        $viewer = User::factory()->forOffice($office, OfficeRole::Viewer)->create();
-        $client = Client::factory()->for($office)->create();
-        $artifact = $this->storeArtifact($office, $client, '%PDF-1.7 evidence');
+        $tenant = Tenant::factory()->create();
+        $viewer = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $client = Client::factory()->for($tenant)->create();
+        $artifact = $this->storeArtifact($tenant, $client, '%PDF-1.7 evidence');
         Sanctum::actingAs($viewer);
 
         $surface = app(MonitoringSurfaceRegistry::class)->get('dctfweb');
         $descriptor = app(FiscalDocumentDescriptorFactory::class)
-            ->forSurface($office, $surface, $artifact)
+            ->forSurface($tenant, $surface, $artifact)
             ->toArray();
         $this->assertTrue($descriptor['available']);
         $this->assertSame('PDF', $descriptor['kind']);
@@ -60,7 +60,7 @@ class FiscalEvidenceAccessTest extends TestCase
 
         $this->objects->forget($artifact->vault_object_id);
         $missing = app(FiscalDocumentDescriptorFactory::class)
-            ->forSurface($office, $surface, $artifact->fresh())
+            ->forSurface($tenant, $surface, $artifact->fresh())
             ->toArray();
         $this->assertFalse($missing['available']);
         $this->assertNull($missing['href']);
@@ -70,16 +70,16 @@ class FiscalEvidenceAccessTest extends TestCase
 
     public function test_cross_tenant_and_rejected_evidence_fail_closed_without_href_or_metadata_leak(): void
     {
-        $office = Office::factory()->create();
-        $viewer = User::factory()->forOffice($office, OfficeRole::Viewer)->create();
-        $otherOffice = Office::factory()->create();
-        $otherClient = Client::factory()->for($otherOffice)->create();
-        $otherArtifact = $this->storeArtifact($otherOffice, $otherClient, '%PDF other tenant');
+        $tenant = Tenant::factory()->create();
+        $viewer = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $otherTenant = Tenant::factory()->create();
+        $otherClient = Client::factory()->for($otherTenant)->create();
+        $otherArtifact = $this->storeArtifact($otherTenant, $otherClient, '%PDF other tenant');
         Sanctum::actingAs($viewer);
 
         $surface = app(MonitoringSurfaceRegistry::class)->get('dctfweb');
         $crossTenant = app(FiscalDocumentDescriptorFactory::class)
-            ->forSurface($office, $surface, $otherArtifact)
+            ->forSurface($tenant, $surface, $otherArtifact)
             ->toArray();
         $this->assertFalse($crossTenant['available']);
         $this->assertNull($crossTenant['href']);
@@ -92,7 +92,7 @@ class FiscalEvidenceAccessTest extends TestCase
             'verification_state' => FiscalVerificationState::Rejected,
         ])->save();
         $rejected = app(FiscalDocumentDescriptorFactory::class)
-            ->forSurface($otherOffice, $surface, $otherArtifact->fresh())
+            ->forSurface($otherTenant, $surface, $otherArtifact->fresh())
             ->toArray();
         $this->assertFalse($rejected['available']);
         $this->assertNull($rejected['href']);
@@ -104,16 +104,16 @@ class FiscalEvidenceAccessTest extends TestCase
 
     public function test_structured_and_aggregate_surfaces_never_fabricate_document_links(): void
     {
-        $office = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
         $factory = app(FiscalDocumentDescriptorFactory::class);
         $surfaces = app(MonitoringSurfaceRegistry::class);
 
         $structured = $factory->forSurface(
-            $office,
+            $tenant,
             $surfaces->get('fgts'),
         )->toArray();
         $aggregate = $factory->forSurface(
-            $office,
+            $tenant,
             $surfaces->get('monitoring_dashboard'),
         )->toArray();
 
@@ -126,12 +126,12 @@ class FiscalEvidenceAccessTest extends TestCase
     }
 
     private function storeArtifact(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $bytes,
     ): FiscalEvidenceArtifact {
         $run = FiscalMonitoringRun::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'system_code' => 'INTEGRA_DCTFWEB',
             'service_code' => 'DCTFWEB',

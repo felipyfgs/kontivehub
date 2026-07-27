@@ -13,7 +13,7 @@ import type {
   OperationsUsageSummary
 } from '~/types/api'
 import type { DashboardKpiItem } from '~/utils/kpi-ui'
-import { normalizeTenantPath } from '~/utils/inbox-links'
+import { validateTenantPath } from '~/utils/inbox-links'
 
 export function homeDisplayValue(
   loading: boolean,
@@ -199,7 +199,7 @@ export function buildHomeSerproKpis(
         : (usage?.available === false
             ? '—'
             : (usage?.remaining ?? '—')),
-      to: normalizeTenantPath(usage?.deep_link) || '/conta/consumo',
+      to: validateTenantPath(usage?.deep_link) || '/conta/consumo',
       tone: usage?.alert_threshold_reached ? 'warning' : 'default'
     }
   ]

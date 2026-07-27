@@ -9,7 +9,7 @@ class RefreshCredentialExpiryCommand extends Command
 {
     protected $signature = 'credentials:refresh-expiry';
 
-    protected $description = 'Atualiza alertas de vencimento de A1, expira credenciais e bloqueia cursores dependentes';
+    protected $description = 'Atualiza alertas de vencimento de certificado, expira credenciais e bloqueia cursores dependentes';
 
     public function handle(CredentialService $credentials): int
     {

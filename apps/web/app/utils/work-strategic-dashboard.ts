@@ -14,11 +14,6 @@ export interface WorkDepartmentDashboardRow {
   overdueTo: string
 }
 
-export interface WorkQueueLegacyTarget {
-  path: string
-  query: Record<string, unknown>
-}
-
 export type WorkOperationalLevelTone = 'primary' | 'info' | 'success' | 'warning' | 'error'
 
 export interface WorkOperationalLevel {
@@ -29,21 +24,6 @@ export interface WorkOperationalLevel {
   remainingToNext: number
   nextLabel: string | null
 }
-
-const WORK_QUEUE_QUERY_KEYS = new Set([
-  'tab',
-  'q',
-  'department_id',
-  'assignee_membership_id',
-  'client_id',
-  'scope',
-  'page',
-  'per_page',
-  'view',
-  'sort',
-  'direction',
-  'task'
-])
 
 export function buildWorkDashboardKpis(data: WorkKpis): DashboardKpiItem[] {
   const kpis = data.kpis
@@ -209,26 +189,4 @@ export function buildWorkDepartmentRows(
         : `/work/tasks?tab=atrasadas&department_id=${row.work_department_id}`
     }))
     .sort((a, b) => b.open - a.open || b.overdue - a.overdue || a.name.localeCompare(b.name, 'pt-BR'))
-}
-
-function positiveInteger(value: unknown): number | null {
-  const raw = Array.isArray(value) ? value[0] : value
-  if (raw === undefined || raw === null || String(raw).trim() === '') return null
-  const parsed = Number(raw)
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
-}
-
-export function workQueueLegacyTarget(
-  query: Record<string, unknown>
-): WorkQueueLegacyTarget | null {
-  if (!Object.keys(query).some(key => WORK_QUEUE_QUERY_KEYS.has(key))) return null
-
-  const nextQuery = { ...query }
-  const taskId = positiveInteger(nextQuery.task)
-  delete nextQuery.task
-
-  return {
-    path: taskId == null ? '/work/tasks' : `/work/tasks/${taskId}`,
-    query: nextQuery
-  }
 }

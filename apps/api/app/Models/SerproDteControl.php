@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable([
     'operation_key',
     'mode',
-    'pilot_office_id',
+    'pilot_tenant_id',
     'pilot_client_id',
     'limited_max_quantity',
     'limited_used_quantity',
@@ -40,9 +40,9 @@ class SerproDteControl extends Model
         ];
     }
 
-    public function pilotOffice(): BelongsTo
+    public function pilotTenant(): BelongsTo
     {
-        return $this->belongsTo(Office::class, 'pilot_office_id');
+        return $this->belongsTo(Tenant::class, 'pilot_tenant_id');
     }
 
     public function pilotClient(): BelongsTo
@@ -50,14 +50,14 @@ class SerproDteControl extends Model
         return $this->belongsTo(Client::class, 'pilot_client_id');
     }
 
-    public function allowsOffice(int $officeId): bool
+    public function allowsTenant(int $tenantId): bool
     {
         if ($this->mode === SerproDteControlMode::Disabled) {
             return false;
         }
 
-        return $this->pilot_office_id !== null
-            && (int) $this->pilot_office_id === $officeId;
+        return $this->pilot_tenant_id !== null
+            && (int) $this->pilot_tenant_id === $tenantId;
     }
 
     public function remainingLimitedQuantity(): ?int
@@ -97,7 +97,7 @@ class SerproDteControl extends Model
             'mode' => $this->mode instanceof SerproDteControlMode
                 ? $this->mode->value
                 : (string) $this->mode,
-            'pilot_office_id' => $this->pilot_office_id,
+            'pilot_tenant_id' => $this->pilot_tenant_id,
             'pilot_client_id' => $this->pilot_client_id,
             'limited_max_quantity' => $this->limited_max_quantity !== null
                 ? (int) $this->limited_max_quantity

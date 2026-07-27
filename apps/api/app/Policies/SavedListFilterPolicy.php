@@ -11,7 +11,7 @@ use App\Policies\Concerns\AuthorizesTenantPermission;
  * Ownership e share de presets de filtro de lista.
  *
  * - personal: só o autor lista/edita/exclui
- * - office: membership do Office lista; publicar = filters.share; excluir office de terceiros = admin baseline
+ * - tenant: membership do Tenant lista; publicar = filters.share; excluir tenant de terceiros = admin baseline
  */
 class SavedListFilterPolicy
 {
@@ -24,12 +24,12 @@ class SavedListFilterPolicy
 
     public function view(User $user, SavedListFilter $filter): bool
     {
-        if (! $this->sameOffice($user, $filter)
+        if (! $this->sameTenant($user, $filter)
             || ! $this->allows($user, TenantPermission::ClientsView, $filter)) {
             return false;
         }
 
-        if ($filter->isOfficeShared()) {
+        if ($filter->isTenantShared()) {
             return true;
         }
 
@@ -41,14 +41,14 @@ class SavedListFilterPolicy
         return $this->allows($user, TenantPermission::ClientsView);
     }
 
-    public function shareOffice(User $user): bool
+    public function shareTenant(User $user): bool
     {
         return $this->allows($user, TenantPermission::FiltersShare);
     }
 
     public function update(User $user, SavedListFilter $filter): bool
     {
-        if (! $this->sameOffice($user, $filter)
+        if (! $this->sameTenant($user, $filter)
             || ! $this->allows($user, TenantPermission::ClientsView, $filter)) {
             return false;
         }
@@ -57,7 +57,7 @@ class SavedListFilterPolicy
             return true;
         }
 
-        return $filter->isOfficeShared()
+        return $filter->isTenantShared()
             && $this->allows($user, TenantPermission::TenantSettingsManage, $filter);
     }
 

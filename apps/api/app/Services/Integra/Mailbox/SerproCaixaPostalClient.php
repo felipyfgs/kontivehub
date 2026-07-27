@@ -8,7 +8,7 @@ use App\DTO\Mailbox\CaixaPostalDetailResult;
 use App\DTO\Mailbox\CaixaPostalListResult;
 use App\Enums\SerproCapabilityDriver;
 use App\Models\Client;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Integra\ContributorCnpjResolver;
 use App\Services\Serpro\CapabilityDriverResolver;
 use DateTimeImmutable;
@@ -40,7 +40,7 @@ final class SerproCaixaPostalClient implements CaixaPostalClient
         if ($resolved instanceof CaixaPostalListResult) {
             return $resolved;
         }
-        [$office, $client, $contributor] = $resolved;
+        [$tenant, $client, $contributor] = $resolved;
 
         $business = array_filter([
             // Opcional no contrato. A identidade principal já vai no envelope.
@@ -53,7 +53,7 @@ final class SerproCaixaPostalClient implements CaixaPostalClient
         ], static fn ($v) => $v !== null && $v !== '');
 
         $response = $this->operations->execute(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             operationKey: 'caixa_postal.lista',
             businessData: $business,
@@ -115,10 +115,10 @@ final class SerproCaixaPostalClient implements CaixaPostalClient
                 errorMessage: $resolved->errorMessage,
             );
         }
-        [$office, $client] = $resolved;
+        [$tenant, $client] = $resolved;
 
         $response = $this->operations->execute(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             operationKey: 'caixa_postal.detalhe',
             businessData: ['isn' => $externalMessageId],
@@ -171,18 +171,18 @@ final class SerproCaixaPostalClient implements CaixaPostalClient
 
     /**
      * @param  array<string, mixed>  $context
-     * @return array{0: Office, 1: Client, 2: string}|CaixaPostalListResult
+     * @return array{0: Tenant, 1: Client, 2: string}|CaixaPostalListResult
      */
     private function resolveContext(array $context): array|CaixaPostalListResult
     {
-        $officeId = (int) ($context['office_id'] ?? 0);
+        $tenantId = (int) ($context['tenant_id'] ?? 0);
         $clientId = (int) ($context['client_id'] ?? 0);
-        $office = Office::query()->withoutGlobalScopes()->find($officeId);
+        $tenant = Tenant::query()->withoutGlobalScopes()->find($tenantId);
         $client = Client::query()->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereKey($clientId)
             ->first();
-        if ($office === null || $client === null) {
+        if ($tenant === null || $client === null) {
             return new CaixaPostalListResult(
                 success: false,
                 errorCode: 'CONTRIBUTOR_IDENTITY_MISSING',
@@ -199,7 +199,7 @@ final class SerproCaixaPostalClient implements CaixaPostalClient
             );
         }
 
-        return [$office, $client, $contributor];
+        return [$tenant, $client, $contributor];
     }
 
     /**

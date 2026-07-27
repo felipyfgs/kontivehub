@@ -15,7 +15,7 @@ final class SerproAsyncJobRunStore
      */
     public function start(
         string $jobType,
-        int $officeId,
+        int $tenantId,
         ?int $clientId,
         ?string $correlationId,
         bool $flagCheckedAtDispatch,
@@ -25,7 +25,7 @@ final class SerproAsyncJobRunStore
     ): SerproAsyncJobRun {
         return SerproAsyncJobRun::query()->create([
             'job_type' => $jobType,
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'client_id' => $clientId,
             'environment' => $environment,
             'status' => SerproAsyncJobRun::STATUS_RUNNING,

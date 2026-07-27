@@ -93,7 +93,7 @@ describe('work calendar composition', () => {
     expect(day).not.toContain(':aria-label="`Abrir tarefa ${item.title}`"')
     expect(desktopRail).not.toContain(':aria-label="`Abrir tarefa ${item.title}`"')
     expect(mobileRail).not.toContain(':aria-label="`Abrir tarefa ${item.title}`"')
-    expect(calendar).toContain('const taskContext = (item: OperationalTaskSummary)')
+    expect(calendar).toContain('const taskContext = (item: WorkTaskSummary)')
     expect(calendar).toContain('<p v-if="taskContext(item)"')
     expect(calendar).toContain('].filter(Boolean).join(\' · \')')
     expect(desktopRail).toContain('title="Nenhuma tarefa nesta lista"')

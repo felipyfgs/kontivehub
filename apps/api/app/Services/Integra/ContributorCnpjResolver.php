@@ -17,10 +17,10 @@ final class ContributorCnpjResolver
     {
         $establishment = Establishment::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $client->office_id)
+            ->where('tenant_id', $client->tenant_id)
             ->where('client_id', $client->id)
             ->where('is_active', true)
-            ->orderByDesc('is_matrix')
+            ->orderByDesc('is_headquarters')
             ->orderBy('id')
             ->first();
 

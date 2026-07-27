@@ -41,7 +41,7 @@ final class CcmeiPostConsultService
         }
         try {
             $projected = $this->projector->project(
-                $request->office,
+                $request->tenant,
                 $request->client,
                 [
                     'status' => (string) ($normalized['status'] ?? ''),
@@ -59,7 +59,7 @@ final class CcmeiPostConsultService
         } catch (Throwable) {
             Log::warning('ccmei.projection_failed', [
                 'operation_key' => self::OPERATION_KEY,
-                'office_id' => $request->office->id,
+                'tenant_id' => $request->tenant->id,
                 'client_id' => $request->client->id,
                 'reason' => 'PROJECTION_FAILED',
             ]);

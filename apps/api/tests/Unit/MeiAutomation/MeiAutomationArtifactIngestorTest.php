@@ -7,7 +7,7 @@ use App\Enums\MeiAutomationStatus;
 use App\Enums\MeiProvider;
 use App\Models\Client;
 use App\Models\MeiAutomationAttempt;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\MeiAutomation\MeiAutomationArtifactIngestor;
 use App\Services\MeiAutomation\MeiAutomationAttemptService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -34,7 +34,7 @@ class MeiAutomationArtifactIngestorTest extends TestCase
         $objects = Mockery::mock(SecureObjectStore::class);
         $objects->shouldReceive('put')->once()
             ->with($content, Mockery::on(fn (array $metadata): bool => $metadata['purpose'] === 'MEI_PORTAL_ARTIFACT'
-                && $metadata['office_id'] === $attempt->office_id))
+                && $metadata['tenant_id'] === $attempt->tenant_id))
             ->andReturn('opaque-vault-object');
         $this->app->instance(SecureObjectStore::class, $objects);
 
@@ -114,10 +114,10 @@ class MeiAutomationArtifactIngestorTest extends TestCase
         config()->set('mei_automation.hmac.secret', 'shared-test-secret');
         config()->set('mei_automation.artifact_max_bytes', 10485760);
         config()->set('mei_automation.artifact_allowed_content_types', ['application/pdf']);
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
         $attempt = app(MeiAutomationAttemptService::class)->start(
-            $office,
+            $tenant,
             $client,
             'pgmei.gerardaspdf',
             MeiProvider::ReceitaPortal,

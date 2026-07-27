@@ -7,7 +7,7 @@ use App\Http\Requests\Fiscal\Mei\ConsultDasnHistoryRequest;
 use App\Http\Requests\Fiscal\Mei\ListDasnHistoryRequest;
 use App\Models\Client;
 use App\Services\Fiscal\SimplesMei\DasnSimeiQueryService;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use App\Support\FeatureFlags;
 use Illuminate\Http\JsonResponse;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -15,20 +15,20 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 final class DasnSimeiController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly DasnSimeiQueryService $queries,
     ) {}
 
     public function history(ListDasnHistoryRequest $request, int $client): JsonResponse
     {
-        $office = $this->currentOffice->office();
-        $model = $this->client((int) $office->id, $client);
+        $tenant = $this->currentTenant->tenant();
+        $model = $this->client((int) $tenant->id, $client);
         if ($model === null) {
             return $this->clientNotFound();
         }
 
         return response()->json(['data' => $this->queries->history(
-            $office,
+            $tenant,
             $model,
             $request->validated('calendar_year'),
         )]);
@@ -39,7 +39,7 @@ final class DasnSimeiController extends Controller
         $this->assertModuleEnabled();
         try {
             $runs = $this->queries->enqueueManualConsult(
-                $this->currentOffice->office(),
+                $this->currentTenant->tenant(),
                 $request->validated('client_ids'),
                 $request->validated('calendar_year'),
                 (bool) ($request->validated('include_full_receipt') ?? false),
@@ -55,11 +55,11 @@ final class DasnSimeiController extends Controller
         ], 201);
     }
 
-    private function client(int $officeId, int $clientId): ?Client
+    private function client(int $tenantId, int $clientId): ?Client
     {
         return Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereKey($clientId)
             ->first();
     }
@@ -74,8 +74,8 @@ final class DasnSimeiController extends Controller
 
     private function assertModuleEnabled(): void
     {
-        $office = $this->currentOffice->office();
-        if (! FeatureFlags::isModuleEnabled('simples_mei', $office->id)
+        $tenant = $this->currentTenant->tenant();
+        if (! FeatureFlags::isModuleEnabled('simples_mei', $tenant->id)
             && ! (bool) config('fiscal_monitoring.enabled', false)) {
             abort(403, 'Módulo simples_mei desabilitado.');
         }

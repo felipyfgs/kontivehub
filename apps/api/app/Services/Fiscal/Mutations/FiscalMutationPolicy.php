@@ -5,40 +5,38 @@ namespace App\Services\Fiscal\Mutations;
 use App\Enums\FiscalMutationDenialCode;
 use App\Enums\FiscalMutationStatus;
 use App\Enums\MeiProvider;
-use App\Enums\OfficeRole;
 use App\Enums\SerproEnvironment;
+use App\Enums\TenantRole;
 use App\Models\Client;
 use App\Models\FiscalMutationOperation;
-use App\Models\Office;
-use App\Models\OfficeSerproAuthorization;
 use App\Models\SerproServiceCatalogEntry;
 use App\Models\TaxProxyPower;
+use App\Models\Tenant;
+use App\Models\TenantSerproAuthorization;
 use App\Models\User;
 use App\Services\Auth\RecentPasswordConfirmationGate;
 use App\Services\Fiscal\Demo\FiscalDataOriginResolver;
 use App\Services\Integra\IntegraEligibilityService;
 use App\Services\Integra\TaxProxyPowerService;
 use App\Services\MeiAutomation\MeiProviderPolicy;
-use App\Services\Platform\OfficeSubscriptionGate;
-use App\Services\Serpro\Catalog\OperationKeyMap;
+use App\Services\Platform\TenantSubscriptionGate;
 use App\Services\Serpro\SerproKillSwitchService;
 use App\Services\Serpro\Usage\OperationCatalog;
 use App\Services\Serpro\Usage\PriceCalculator;
 use App\Services\Serpro\Usage\UsageBudgetGate;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use App\Support\FeatureFlags;
 
 /**
  * Policy comum de operação mutante (13.1):
- * papel, 2FA recente, procuração, plano, feature flag, custo e kill switch.
+ * papel, senha recente, procuração, plano, feature flag, custo e kill switch.
  */
 final class FiscalMutationPolicy
 {
     public function __construct(
-        private readonly RecentTwoFactorGate $totp,
         private readonly RecentPasswordConfirmationGate $passwordGate,
-        private readonly CurrentOffice $currentOffice,
-        private readonly OfficeSubscriptionGate $subscriptionGate,
+        private readonly CurrentTenant $currentTenant,
+        private readonly TenantSubscriptionGate $subscriptionGate,
         private readonly IntegraEligibilityService $eligibility,
         private readonly TaxProxyPowerService $proxyPowers,
         private readonly SerproKillSwitchService $serproKillSwitch,
@@ -51,17 +49,17 @@ final class FiscalMutationPolicy
 
     /**
      * @param  array{
-     *     require_totp?: bool,
+     *     require_password?: bool,
      *     require_confirmation?: bool,
      *     confirmed?: bool,
      *     skip_anti_repeat?: bool,
      *     skip_uncertain_check?: bool,
      *     exclude_operation_id?: int|null,
-     *     provider_operation_key?: string|null,
+     *     operation_key: string,
      * }  $options
      */
     public function evaluate(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         User $user,
         string $solutionCode,
@@ -77,18 +75,18 @@ final class FiscalMutationPolicy
         $excludeOperationId = isset($options['exclude_operation_id'])
             ? (int) $options['exclude_operation_id']
             : null;
-        $providerOperationKey = is_string($options['provider_operation_key'] ?? null)
-            ? $options['provider_operation_key']
+        $operationKey = is_string($options['operation_key'] ?? null)
+            ? $options['operation_key']
             : null;
         $portalFirst = $this->isPortalFirst(
-            $office,
+            $tenant,
             $solutionCode,
             $serviceCode,
             $operationCode,
-            $providerOperationKey,
+            $operationKey,
         );
         $context = [
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'solution' => strtoupper($solutionCode),
             'service' => strtoupper($serviceCode),
@@ -100,8 +98,8 @@ final class FiscalMutationPolicy
             'provider_route' => $portalFirst ? 'RECEITA_PORTAL' : 'SERPRO',
         ];
 
-        // 0. Modo demonstração / office demo — bloqueio explícito sem sucesso fiscal fictício
-        if ($this->dataOrigin->isDemoOfficeContext($office)) {
+        // 0. Modo demonstração / tenant demo — bloqueio explícito sem sucesso fiscal fictício
+        if ($this->dataOrigin->isDemoTenantContext($tenant)) {
             $codes[] = FiscalMutationDenialCode::DemoMode;
             $context['demo_mode'] = true;
             $context['read_only'] = true;
@@ -117,29 +115,27 @@ final class FiscalMutationPolicy
             $codes[] = FiscalMutationDenialCode::KillSwitch;
         }
 
-        // 2. Feature flags (global + mutações + módulo)
+        // 2. Feature flags (global + módulo)
         if (! FeatureFlags::isGloballyEnabled() && ! (bool) config('fiscal_mutations.enabled', false)) {
             $codes[] = FiscalMutationDenialCode::FeatureDisabled;
         }
 
-        if (! FeatureFlags::isMutatingEnabled('mutacoes', $office->id)
-            && ! FeatureFlags::isMutatingEnabled($module, $office->id)
-        ) {
+        if (! FeatureFlags::isMutatingEnabled($module, $tenant->id)) {
             $codes[] = FiscalMutationDenialCode::MutatingDisabled;
         }
 
-        if (! FiscalMutationCohort::isOperationEnabled($solutionCode, $serviceCode, $operationCode, $office->id)) {
+        if (! FiscalMutationCohort::isOperationEnabled($solutionCode, $serviceCode, $operationCode, $tenant->id)) {
             $codes[] = FiscalMutationDenialCode::OperationCohortDisabled;
         }
 
         // 3. Papel — mutações fiscais: somente ADMIN (membership ou platform_privileged)
-        $role = $this->effectiveRole($user, $office);
-        if ($role !== OfficeRole::Admin) {
+        $role = $this->effectiveRole($user, $tenant);
+        if ($role !== TenantRole::TenantAdmin) {
             $codes[] = FiscalMutationDenialCode::RoleForbidden;
         }
 
-        // 4. Reconfirmação recente de senha (todos os perfis; TOTP descontinuado)
-        $requireAuth = $options['require_totp'] ?? $options['require_password'] ?? true;
+        // 4. Reconfirmação recente de senha (todos os perfis).
+        $requireAuth = $options['require_password'] ?? true;
 
         if ($requireAuth) {
             if (! $this->passwordGate->isRecentlyConfirmed($user)) {
@@ -151,14 +147,14 @@ final class FiscalMutationPolicy
         }
 
         // 5. Plano / assinatura
-        if (! $this->subscriptionGate->allowsMutations($office)
-            || ! $this->subscriptionGate->allowsExternalCalls($office)
+        if (! $this->subscriptionGate->allowsMutations($tenant)
+            || ! $this->subscriptionGate->allowsExternalCalls($tenant)
         ) {
             $codes[] = FiscalMutationDenialCode::SubscriptionBlocked;
         }
 
         // 6. Tenant isolation
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             $codes[] = FiscalMutationDenialCode::ContributorCrossTenant;
         }
 
@@ -189,14 +185,14 @@ final class FiscalMutationPolicy
             // 8. Procuração / poder (revalidação pontual)
             $requiredPower = $catalog->required_proxy_power;
             if (! $portalFirst && $requiredPower !== null && $requiredPower !== '') {
-                $auth = OfficeSerproAuthorization::query()
-                    ->where('office_id', $office->id)
+                $auth = TenantSerproAuthorization::query()
+                    ->where('tenant_id', $tenant->id)
                     ->where('environment', $environment->value)
                     ->first();
                 $authorIdentity = $auth?->author_identity ?? '';
                 $power = $authorIdentity !== ''
                     ? $this->proxyPowers->findUsablePower(
-                        $office->id,
+                        $tenant->id,
                         $client->id,
                         $requiredPower,
                         $authorIdentity,
@@ -206,7 +202,7 @@ final class FiscalMutationPolicy
                 if ($power === null) {
                     // Distinguir revogado vs ausente se existir registro
                     $any = TaxProxyPower::query()
-                        ->where('office_id', $office->id)
+                        ->where('tenant_id', $tenant->id)
                         ->where('client_id', $client->id)
                         ->where('power_code', strtoupper($requiredPower))
                         ->orderByDesc('id')
@@ -225,7 +221,7 @@ final class FiscalMutationPolicy
 
         // 9. Elegibilidade Integra (contrato, termo, token, breaker…)
         $elig = $portalFirst ? null : $this->eligibility->evaluate(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             solutionCode: strtoupper($solutionCode),
             serviceCode: strtoupper($serviceCode),
@@ -291,7 +287,7 @@ final class FiscalMutationPolicy
             'block_reason' => null,
             'remaining' => null,
         ] : $this->budget->evaluate(
-            officeId: $office->id,
+            tenantId: $tenant->id,
             class: $class,
             quantity: 1,
             isEssential: (bool) $classified['is_essential'],
@@ -313,7 +309,7 @@ final class FiscalMutationPolicy
         if (! ($options['skip_uncertain_check'] ?? false)) {
             $openUncertainQ = FiscalMutationOperation::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('client_id', $client->id)
                 ->where('solution_code', strtoupper($solutionCode))
                 ->where('service_code', strtoupper($serviceCode))
@@ -344,7 +340,7 @@ final class FiscalMutationPolicy
             $window = max(1, (int) config('fiscal_mutations.anti_repeat_window_seconds', 300));
             $recentQ = FiscalMutationOperation::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('client_id', $client->id)
                 ->where('solution_code', strtoupper($solutionCode))
                 ->where('service_code', strtoupper($serviceCode))
@@ -394,42 +390,33 @@ final class FiscalMutationPolicy
     }
 
     private function isPortalFirst(
-        Office $office,
+        Tenant $tenant,
         string $solutionCode,
         string $serviceCode,
         string $operationCode,
-        ?string $providerOperationKey,
+        string $operationKey,
     ): bool {
         if (strtoupper($solutionCode) !== 'INTEGRA_MEI') {
             return false;
         }
-        $operationKey = $providerOperationKey ?? OperationKeyMap::resolve(
-            null,
-            $solutionCode,
-            $serviceCode,
-            $operationCode,
-        );
-        if ($operationKey === null) {
-            return false;
-        }
 
-        return ($this->meiProviders->providers($office, $operationKey)[0] ?? MeiProvider::Serpro)
+        return ($this->meiProviders->providers($tenant, $operationKey)[0] ?? MeiProvider::Serpro)
             !== MeiProvider::Serpro;
     }
 
     /**
-     * ADMIN efetivo: membership no office ou PLATFORM_ADMIN em platform_privileged no mesmo office.
+     * ADMIN efetivo: membership no tenant ou PLATFORM_ADMIN em platform_privileged no mesmo tenant.
      */
-    private function effectiveRole(User $user, Office $office): ?OfficeRole
+    private function effectiveRole(User $user, Tenant $tenant): ?TenantRole
     {
         if (
-            $this->currentOffice->isPlatformPrivileged()
-            && $this->currentOffice->id() === $office->id
-            && $this->currentOffice->actor()?->id === $user->id
+            $this->currentTenant->isPlatformPrivileged()
+            && $this->currentTenant->id() === $tenant->id
+            && $this->currentTenant->actor()?->id === $user->id
         ) {
-            return OfficeRole::Admin;
+            return TenantRole::TenantAdmin;
         }
 
-        return $user->roleIn($office);
+        return $user->roleIn($tenant);
     }
 }

@@ -8,10 +8,10 @@ use App\Enums\OutboundRetrievalOrigin;
 use App\Enums\OutboundSeriesStatus;
 use App\Enums\OutboundUrgencyBand;
 use App\Enums\SvrsNfceRecoveryStatus;
-use App\Models\MaOutboundRetrievalRequest;
 use App\Models\OutboundCapacitySnapshot;
 use App\Models\OutboundCaptureRun;
 use App\Models\OutboundNumberState;
+use App\Models\OutboundRetrievalRequest;
 use App\Models\OutboundSeriesCursor;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -58,12 +58,12 @@ final class OutboundMetrics
      *
      * @return array<string, mixed>
      */
-    public function deadlineSnapshot(?int $officeId = null, ?string $competence = null): array
+    public function deadlineSnapshot(?int $tenantId = null, ?string $competence = null): array
     {
-        $q = MaOutboundRetrievalRequest::query()
+        $q = OutboundRetrievalRequest::query()
             ->where('origin', OutboundRetrievalOrigin::SvrsPortalByKey);
-        if ($officeId !== null) {
-            $q->where('office_id', $officeId);
+        if ($tenantId !== null) {
+            $q->where('tenant_id', $tenantId);
         }
         if ($competence !== null && $competence !== '') {
             $q->where('competence', $competence);
@@ -88,8 +88,8 @@ final class OutboundMetrics
             ->count();
 
         $snapQ = OutboundCapacitySnapshot::query()->orderByDesc('id');
-        if ($officeId !== null) {
-            $snapQ->where('office_id', $officeId);
+        if ($tenantId !== null) {
+            $snapQ->where('tenant_id', $tenantId);
         }
         if ($competence !== null && $competence !== '') {
             $snapQ->where('competence', $competence);
@@ -124,7 +124,7 @@ final class OutboundMetrics
         ];
 
         Log::info('metrics.outbound_deadline', [
-            'office_scoped' => $officeId !== null,
+            'tenant_scoped' => $tenantId !== null,
             'competence' => $competence,
             // sem chave/CNPJ
             'known_total' => $known,
@@ -180,16 +180,16 @@ final class OutboundMetrics
      *   labels: array<string, string>
      * }
      */
-    public function snapshot(?int $officeId = null): array
+    public function snapshot(?int $tenantId = null): array
     {
         $seriesQ = OutboundSeriesCursor::query();
         $numQ = OutboundNumberState::query();
         $runQ = OutboundCaptureRun::query()->where('created_at', '>=', now()->subDay());
 
-        if ($officeId !== null) {
-            $seriesQ->where('office_id', $officeId);
-            $numQ->where('office_id', $officeId);
-            $runQ->where('office_id', $officeId);
+        if ($tenantId !== null) {
+            $seriesQ->where('tenant_id', $tenantId);
+            $numQ->where('tenant_id', $tenantId);
+            $runQ->where('tenant_id', $tenantId);
         }
 
         $data = [

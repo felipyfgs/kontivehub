@@ -3,41 +3,41 @@
 namespace App\Services\Integra\Dctfweb;
 
 use App\Enums\DctfwebMutationStatus;
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Models\Client;
 use App\Models\DctfwebMutationAttempt;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
-use App\Services\Fiscal\Mutations\RecentTwoFactorGate;
+use App\Services\Auth\RecentPasswordConfirmationGate;
 use App\Support\FeatureFlags;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Gates de mutação DCTFWeb/MIT (9.8):
- * flags mutantes OFF, ADMIN+2FA recente (fail-closed sem actor),
+ * flags mutantes OFF, ADMIN + senha recente (fail-closed sem actor),
  * idempotência e bloqueio pós-timeout incerto.
  */
 final class DctfwebMutationGuard
 {
     public function __construct(
-        private readonly RecentTwoFactorGate $totp,
+        private readonly RecentPasswordConfirmationGate $passwordGate,
     ) {}
 
-    public function mutationsEnabled(int $officeId): bool
+    public function mutationsEnabled(int $tenantId): bool
     {
         if (! (bool) config('fiscal_monitoring.mutating_enabled', false)) {
             return false;
         }
 
-        return FeatureFlags::isMutatingEnabled(DctfwebCodes::MODULE, $officeId);
+        return FeatureFlags::isMutatingEnabled(DctfwebCodes::MODULE, $tenantId);
     }
 
     /**
      * @return array{allowed:bool,code:?string,message:?string}
      */
     public function assertMayMutate(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $systemCode,
         string $serviceCode,
@@ -46,7 +46,7 @@ final class DctfwebMutationGuard
         ?User $actor = null,
         ?string $idempotencyKey = null,
     ): array {
-        if (! $this->mutationsEnabled((int) $office->id)) {
+        if (! $this->mutationsEnabled((int) $tenant->id)) {
             return [
                 'allowed' => false,
                 'code' => 'MUTATING_DISABLED',
@@ -54,7 +54,7 @@ final class DctfwebMutationGuard
             ];
         }
 
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             return [
                 'allowed' => false,
                 'code' => 'CONTRIBUTOR_CROSS_TENANT',
@@ -62,17 +62,17 @@ final class DctfwebMutationGuard
             ];
         }
 
-        // Fail-closed: mutações exigem actor resolvido (ADMIN + 2FA recente).
+        // Fail-closed: mutações exigem actor resolvido (ADMIN + senha recente).
         if ($actor === null) {
             return [
                 'allowed' => false,
                 'code' => 'ACTOR_REQUIRED',
-                'message' => 'Mutação fiscal exige ator autenticado (ADMIN + 2FA).',
+                'message' => 'Mutação fiscal exige ator autenticado e senha recente.',
             ];
         }
 
-        $role = $actor->roleIn($office);
-        if ($role !== OfficeRole::Admin) {
+        $role = $actor->roleIn($tenant);
+        if ($role !== TenantRole::TenantAdmin) {
             return [
                 'allowed' => false,
                 'code' => 'ADMIN_REQUIRED',
@@ -80,7 +80,7 @@ final class DctfwebMutationGuard
             ];
         }
 
-        if (! $this->totp->isRecentlyConfirmed($actor)) {
+        if (! $this->passwordGate->isRecentlyConfirmed($actor)) {
             return [
                 'allowed' => false,
                 'code' => 'PASSWORD_CONFIRMATION_REQUIRED',
@@ -89,7 +89,7 @@ final class DctfwebMutationGuard
         }
 
         $block = $this->findActiveUncertainBlock(
-            (int) $office->id,
+            (int) $tenant->id,
             (int) $client->id,
             $systemCode,
             $serviceCode,
@@ -108,7 +108,7 @@ final class DctfwebMutationGuard
     }
 
     public function findActiveUncertainBlock(
-        int $officeId,
+        int $tenantId,
         int $clientId,
         string $systemCode,
         string $serviceCode,
@@ -120,7 +120,7 @@ final class DctfwebMutationGuard
 
         $q = DctfwebMutationAttempt::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('client_id', $clientId)
             ->where('system_code', strtoupper($systemCode))
             ->where('service_code', strtoupper($serviceCode))
@@ -149,7 +149,7 @@ final class DctfwebMutationGuard
     }
 
     public function beginAttempt(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $systemCode,
         string $serviceCode,
@@ -161,7 +161,7 @@ final class DctfwebMutationGuard
     ): DctfwebMutationAttempt {
         $existing = DctfwebMutationAttempt::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('idempotency_key', $idempotencyKey)
             ->first();
 
@@ -170,7 +170,7 @@ final class DctfwebMutationGuard
         }
 
         return DctfwebMutationAttempt::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'competence_id' => $competenceId,
             'system_code' => strtoupper($systemCode),
@@ -215,19 +215,6 @@ final class DctfwebMutationGuard
 
             return $locked->fresh();
         });
-    }
-
-    /**
-     * @deprecated Prefer claimForUpstream — markSent com bloqueio 24h antes do upstream trava retry.
-     */
-    public function markSent(DctfwebMutationAttempt $attempt): DctfwebMutationAttempt
-    {
-        $claimed = $this->claimForUpstream($attempt);
-        if ($claimed !== null) {
-            return $claimed;
-        }
-
-        return $attempt->fresh() ?? $attempt;
     }
 
     public function markUncertain(

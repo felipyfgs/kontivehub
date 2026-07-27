@@ -21,7 +21,7 @@ use Throwable;
 
 /**
  * Configuração global SERPRO (PLATFORM_ADMIN / Proprietário).
- * Sem Office context; respostas sempre sanitizadas; sem transporte fiscal.
+ * Sem Tenant context; respostas sempre sanitizadas; sem transporte fiscal.
  */
 class SerproPlatformConfigurationController extends Controller
 {
@@ -140,7 +140,7 @@ class SerproPlatformConfigurationController extends Controller
         ]);
     }
 
-    public function cutoverCredentialVersion(
+    public function activateCredentialVersion(
         Request $request,
         SerproCredentialVersion $serproCredentialVersion,
     ): JsonResponse {
@@ -161,7 +161,7 @@ class SerproPlatformConfigurationController extends Controller
         }
 
         try {
-            $version = $this->credentials->cutover(
+            $version = $this->credentials->activate(
                 $serproCredentialVersion,
                 contract: $contract,
                 actorUserId: $request->user()?->id,
@@ -226,9 +226,9 @@ class SerproPlatformConfigurationController extends Controller
             'cycle_start_day' => ['required', 'integer', 'min:1', 'max:28'],
             'alert_percent' => ['required', 'integer', 'min:1', 'max:100'],
             'global_limit_quantity' => ['nullable', 'integer', 'min:1'],
-            'office_limits' => ['sometimes', 'array'],
-            'office_limits.*.office_id' => ['required', 'integer', 'min:1'],
-            'office_limits.*.limit_quantity' => ['nullable', 'integer', 'min:1'],
+            'tenant_limits' => ['sometimes', 'array'],
+            'tenant_limits.*.tenant_id' => ['required', 'integer', 'min:1'],
+            'tenant_limits.*.limit_quantity' => ['nullable', 'integer', 'min:1'],
         ]);
 
         try {
@@ -238,7 +238,7 @@ class SerproPlatformConfigurationController extends Controller
                 (int) $data['cycle_start_day'],
                 (int) $data['alert_percent'],
                 isset($data['global_limit_quantity']) ? (int) $data['global_limit_quantity'] : null,
-                $data['office_limits'] ?? [],
+                $data['tenant_limits'] ?? [],
                 $request->user()?->id,
             );
         } catch (RuntimeException $e) {
@@ -248,22 +248,11 @@ class SerproPlatformConfigurationController extends Controller
         return response()->json([
             'data' => [
                 'config' => $row->toSanitizedArray(),
-                'office_limits' => $this->quantityLimits->listOfficeLimits(
+                'tenant_limits' => $this->quantityLimits->listTenantLimits(
                     SerproEnvironment::from($data['environment']),
                 ),
             ],
         ]);
-    }
-
-    /**
-     * Rotas legadas de mutação de contrato: removidas (410).
-     */
-    public function legacyMutationRemoved(): JsonResponse
-    {
-        return response()->json([
-            'message' => 'Interface legada removida. Use /api/v1/platform/serpro/credential-versions e cutover versionado.',
-            'code' => 'legacy_contract_mutation_removed',
-        ], 410);
     }
 
     private function parseEnv(mixed $raw): ?SerproEnvironment

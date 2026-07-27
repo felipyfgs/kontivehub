@@ -23,7 +23,7 @@ use App\Services\Communication\Flows\CommunicationFlowGraphCanonicalizer;
 use App\Services\Communication\Flows\CommunicationFlowGraphPreviewService;
 use App\Services\Communication\Flows\CommunicationFlowGraphValidator;
 use App\Services\Communication\Flows\CommunicationFlowRunControlService;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use App\Support\LogSanitizer;
 use DomainException;
 use Illuminate\Database\QueryException;
@@ -39,7 +39,7 @@ final class CommunicationFlowController extends Controller
 
     public function __construct(
         private readonly CommunicationAccess $access,
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly CommunicationFlowAvailability $flowsAvailability,
         private readonly CommunicationFlowGraphValidator $validator,
         private readonly CommunicationFlowGraphCanonicalizer $canonicalizer,
@@ -67,36 +67,36 @@ final class CommunicationFlowController extends Controller
     {
         $this->denyIfFlowsDisabled();
         $this->access->assertManageFlows($this->actor($request));
-        $officeId = (int) $this->currentOffice->office()->id;
+        $tenantId = (int) $this->currentTenant->tenant()->id;
         $name = trim($request->validated('name'));
 
-        $flow = DB::transaction(function () use ($officeId, $name): CommunicationFlow {
+        $flow = DB::transaction(function () use ($tenantId, $name): CommunicationFlow {
             $flow = CommunicationFlow::query()->create([
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'name' => $name,
                 'status' => FlowStatus::Paused,
                 'lock_version' => 1,
-                'created_by_membership_id' => $this->currentOffice->realMembership()?->id,
+                'created_by_membership_id' => $this->currentTenant->realMembership()?->id,
             ]);
             $digest = $this->canonicalizer->digest(self::EMPTY_GRAPH);
             CommunicationFlowDraft::query()->create([
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'flow_id' => $flow->id,
                 'graph_encrypted' => self::EMPTY_GRAPH,
                 'graph_digest' => $digest,
                 'lock_version' => 1,
-                'updated_by_membership_id' => $this->currentOffice->realMembership()?->id,
+                'updated_by_membership_id' => $this->currentTenant->realMembership()?->id,
             ]);
 
             return $flow;
         });
 
-        $this->events->record($officeId, 'COMMUNICATION_FLOW_CREATED', [
+        $this->events->record($tenantId, 'COMMUNICATION_FLOW_CREATED', [
             'flow_id' => (int) $flow->id,
             'name' => $flow->name,
             'status' => $flow->status->value,
             'lock_version' => (int) $flow->lock_version,
-        ], actorMembershipId: $this->currentOffice->realMembership()?->id);
+        ], actorMembershipId: $this->currentTenant->realMembership()?->id);
 
         return response()->json(['data' => $this->flowPayload($flow->load('draft'))], 201);
     }
@@ -142,11 +142,11 @@ final class CommunicationFlowController extends Controller
             $this->runControl->stopActiveForFlow((int) $updated->id, 'flow_paused');
         }
 
-        $this->events->record((int) $updated->office_id, 'COMMUNICATION_FLOW_UPDATED', [
+        $this->events->record((int) $updated->tenant_id, 'COMMUNICATION_FLOW_UPDATED', [
             'flow_id' => (int) $updated->id,
             'status' => $updated->status->value,
             'lock_version' => (int) $updated->lock_version,
-        ], actorMembershipId: $this->currentOffice->realMembership()?->id);
+        ], actorMembershipId: $this->currentTenant->realMembership()?->id);
 
         return response()->json(['data' => $this->flowPayload($updated)]);
     }
@@ -156,13 +156,13 @@ final class CommunicationFlowController extends Controller
         $this->denyIfFlowsDisabled();
         $model = CommunicationFlow::query()->findOrFail($flow);
         $this->access->assertManageFlows($this->actor($request), $model);
-        $officeId = (int) $model->office_id;
+        $tenantId = (int) $model->tenant_id;
         $flowId = (int) $model->id;
         $model->delete();
 
-        $this->events->record($officeId, 'COMMUNICATION_FLOW_DELETED', [
+        $this->events->record($tenantId, 'COMMUNICATION_FLOW_DELETED', [
             'flow_id' => $flowId,
-        ], actorMembershipId: $this->currentOffice->realMembership()?->id);
+        ], actorMembershipId: $this->currentTenant->realMembership()?->id);
 
         return response()->json(status: 204);
     }
@@ -198,7 +198,7 @@ final class CommunicationFlowController extends Controller
                 'graph_encrypted' => $graph,
                 'graph_digest' => $digest,
                 'lock_version' => (int) $data['lock_version'] + 1,
-                'updated_by_membership_id' => $this->currentOffice->realMembership()?->id,
+                'updated_by_membership_id' => $this->currentTenant->realMembership()?->id,
             ]);
             $draft->save();
 
@@ -209,12 +209,12 @@ final class CommunicationFlowController extends Controller
             return $this->versionConflict('Draft foi alterado por outro usuário.');
         }
 
-        $this->events->record((int) $model->office_id, 'COMMUNICATION_FLOW_DRAFT_UPDATED', [
+        $this->events->record((int) $model->tenant_id, 'COMMUNICATION_FLOW_DRAFT_UPDATED', [
             'flow_id' => (int) $model->id,
             'draft_id' => (int) $updated->id,
             'graph_digest' => $updated->graph_digest,
             'lock_version' => (int) $updated->lock_version,
-        ], actorMembershipId: $this->currentOffice->realMembership()?->id);
+        ], actorMembershipId: $this->currentTenant->realMembership()?->id);
 
         return response()->json(['data' => $this->draftPayload($updated)]);
     }
@@ -240,7 +240,7 @@ final class CommunicationFlowController extends Controller
             $graph = is_array($draft->graph_encrypted) ? $draft->graph_encrypted : self::EMPTY_GRAPH;
         }
 
-        $result = $this->validator->validate($graph, (int) $model->office_id);
+        $result = $this->validator->validate($graph, (int) $model->tenant_id);
         if (! $result->valid) {
             return $this->invalidGraphResponse($result->errors, $result->digest);
         }
@@ -282,24 +282,24 @@ final class CommunicationFlowController extends Controller
 
         /** @var array<string, mixed> $context */
         $context = is_array($payload['context'] ?? null) ? $payload['context'] : [];
-        $result = $this->dryRun->simulate($graph, (int) $model->office_id, $context);
+        $result = $this->dryRun->simulate($graph, (int) $model->tenant_id, $context);
 
         Log::info('communication.flow.dry_run', LogSanitizer::redact([
             'flow_id' => (int) $model->id,
-            'office_id' => (int) $model->office_id,
+            'tenant_id' => (int) $model->tenant_id,
             'graph_digest' => $result->graphDigest,
             'outcome' => $result->outcome,
             'valid' => $result->valid,
             'steps_count' => count($result->steps),
         ]));
 
-        $this->events->record((int) $model->office_id, 'COMMUNICATION_FLOW_DRY_RUN', [
+        $this->events->record((int) $model->tenant_id, 'COMMUNICATION_FLOW_DRY_RUN', [
             'flow_id' => (int) $model->id,
             'graph_digest' => $result->graphDigest,
             'outcome' => $result->outcome,
             'valid' => $result->valid,
             'steps_count' => count($result->steps),
-        ], actorMembershipId: $this->currentOffice->realMembership()?->id);
+        ], actorMembershipId: $this->currentTenant->realMembership()?->id);
 
         if (! $result->valid) {
             return $this->invalidGraphResponse($result->errors, $result->graphDigest);
@@ -333,7 +333,7 @@ final class CommunicationFlowController extends Controller
 
         Log::info('communication.flow.preview', LogSanitizer::redact([
             'flow_id' => (int) $model->id,
-            'office_id' => (int) $model->office_id,
+            'tenant_id' => (int) $model->tenant_id,
             'graph_digest' => $preview['graph_digest'],
             'masked_paths_count' => count($preview['masked_paths']),
         ]));
@@ -360,7 +360,7 @@ final class CommunicationFlowController extends Controller
             }
             /** @var array{nodes: list<mixed>, edges: list<mixed>} $graph */
             $graph = is_array($draft->graph_encrypted) ? $draft->graph_encrypted : self::EMPTY_GRAPH;
-            $result = $this->validator->validate($graph, (int) $model->office_id);
+            $result = $this->validator->validate($graph, (int) $model->tenant_id);
             if (! $result->valid) {
                 return ['errors' => $result->errors, 'digest' => $result->digest];
             }
@@ -370,13 +370,13 @@ final class CommunicationFlowController extends Controller
                 ->max('version') + 1;
 
             return CommunicationFlowVersion::query()->create([
-                'office_id' => $model->office_id,
+                'tenant_id' => $model->tenant_id,
                 'flow_id' => $model->id,
                 'version' => $nextVersion,
                 'graph_encrypted' => $graph,
                 'graph_digest' => $result->digest,
                 'published_at' => now(),
-                'published_by_membership_id' => $this->currentOffice->realMembership()?->id,
+                'published_by_membership_id' => $this->currentTenant->realMembership()?->id,
             ]);
         });
 
@@ -392,13 +392,13 @@ final class CommunicationFlowController extends Controller
             ->where('enabled', true)
             ->count();
 
-        $this->events->record((int) $model->office_id, 'COMMUNICATION_FLOW_PUBLISHED', [
+        $this->events->record((int) $model->tenant_id, 'COMMUNICATION_FLOW_PUBLISHED', [
             'flow_id' => (int) $model->id,
             'version_id' => (int) $published->id,
             'version' => (int) $published->version,
             'graph_digest' => $published->graph_digest,
             'enabled_bindings' => $enabledBindings,
-        ], actorMembershipId: $this->currentOffice->realMembership()?->id);
+        ], actorMembershipId: $this->currentTenant->realMembership()?->id);
 
         return response()->json([
             'data' => [
@@ -418,7 +418,7 @@ final class CommunicationFlowController extends Controller
             'name' => ['required', 'string', 'min:2', 'max:160'],
             'from_version_id' => ['nullable', 'integer', 'min:1'],
         ]);
-        $officeId = (int) $this->currentOffice->office()->id;
+        $tenantId = (int) $this->currentTenant->tenant()->id;
 
         $graph = self::EMPTY_GRAPH;
         if (! empty($data['from_version_id'])) {
@@ -431,31 +431,31 @@ final class CommunicationFlowController extends Controller
             $graph = is_array($source->draft->graph_encrypted) ? $source->draft->graph_encrypted : self::EMPTY_GRAPH;
         }
 
-        $clone = DB::transaction(function () use ($officeId, $data, $graph): CommunicationFlow {
+        $clone = DB::transaction(function () use ($tenantId, $data, $graph): CommunicationFlow {
             $flow = CommunicationFlow::query()->create([
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'name' => trim($data['name']),
                 'status' => FlowStatus::Paused,
                 'lock_version' => 1,
-                'created_by_membership_id' => $this->currentOffice->realMembership()?->id,
+                'created_by_membership_id' => $this->currentTenant->realMembership()?->id,
             ]);
             CommunicationFlowDraft::query()->create([
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'flow_id' => $flow->id,
                 'graph_encrypted' => $graph,
                 'graph_digest' => $this->canonicalizer->digest($graph),
                 'lock_version' => 1,
-                'updated_by_membership_id' => $this->currentOffice->realMembership()?->id,
+                'updated_by_membership_id' => $this->currentTenant->realMembership()?->id,
             ]);
 
             return $flow;
         });
 
-        $this->events->record($officeId, 'COMMUNICATION_FLOW_CLONED', [
+        $this->events->record($tenantId, 'COMMUNICATION_FLOW_CLONED', [
             'flow_id' => (int) $clone->id,
             'source_flow_id' => (int) $source->id,
             'from_version_id' => $data['from_version_id'] ?? null,
-        ], actorMembershipId: $this->currentOffice->realMembership()?->id);
+        ], actorMembershipId: $this->currentTenant->realMembership()?->id);
 
         return response()->json(['data' => $this->flowPayload($clone->load('draft'))], 201);
     }
@@ -511,7 +511,7 @@ final class CommunicationFlowController extends Controller
 
         try {
             $binding = CommunicationFlowInboxBinding::query()->create([
-                'office_id' => $model->office_id,
+                'tenant_id' => $model->tenant_id,
                 'flow_id' => $model->id,
                 'inbox_id' => $inbox->id,
                 'published_version_id' => $versionId,
@@ -525,14 +525,14 @@ final class CommunicationFlowController extends Controller
             throw $e;
         }
 
-        $this->events->record((int) $model->office_id, 'COMMUNICATION_FLOW_BINDING_CREATED', [
+        $this->events->record((int) $model->tenant_id, 'COMMUNICATION_FLOW_BINDING_CREATED', [
             'flow_id' => (int) $model->id,
             'binding_id' => (int) $binding->id,
             'inbox_id' => (int) $binding->inbox_id,
             'enabled' => (bool) $binding->enabled,
             'published_version_id' => $binding->published_version_id,
         ], inboxId: (int) $binding->inbox_id,
-            actorMembershipId: $this->currentOffice->realMembership()?->id);
+            actorMembershipId: $this->currentTenant->realMembership()?->id);
 
         return response()->json(['data' => $this->bindingPayload($binding)], 201);
     }
@@ -590,7 +590,7 @@ final class CommunicationFlowController extends Controller
             $this->runControl->stopActiveForBinding((int) $updated->id, 'binding_disabled');
         }
 
-        $this->events->record((int) $updated->office_id, 'COMMUNICATION_FLOW_BINDING_UPDATED', [
+        $this->events->record((int) $updated->tenant_id, 'COMMUNICATION_FLOW_BINDING_UPDATED', [
             'flow_id' => (int) $updated->flow_id,
             'binding_id' => (int) $updated->id,
             'inbox_id' => (int) $updated->inbox_id,
@@ -598,7 +598,7 @@ final class CommunicationFlowController extends Controller
             'published_version_id' => $updated->published_version_id,
             'lock_version' => (int) $updated->lock_version,
         ], inboxId: (int) $updated->inbox_id,
-            actorMembershipId: $this->currentOffice->realMembership()?->id);
+            actorMembershipId: $this->currentTenant->realMembership()?->id);
 
         return response()->json(['data' => $this->bindingPayload($updated)]);
     }
@@ -668,7 +668,7 @@ final class CommunicationFlowController extends Controller
             $this->runControl->stopActiveForBinding((int) $updated->id, 'binding_disabled');
         }
 
-        $this->events->record((int) $updated->office_id, 'COMMUNICATION_FLOW_BINDING_UPDATED', [
+        $this->events->record((int) $updated->tenant_id, 'COMMUNICATION_FLOW_BINDING_UPDATED', [
             'flow_id' => (int) $updated->flow_id,
             'binding_id' => (int) $updated->id,
             'inbox_id' => (int) $updated->inbox_id,
@@ -676,7 +676,7 @@ final class CommunicationFlowController extends Controller
             'published_version_id' => $updated->published_version_id,
             'lock_version' => (int) $updated->lock_version,
         ], inboxId: (int) $updated->inbox_id,
-            actorMembershipId: $this->currentOffice->realMembership()?->id);
+            actorMembershipId: $this->currentTenant->realMembership()?->id);
 
         return response()->json(['data' => $this->bindingPayload($updated)]);
     }
@@ -691,13 +691,13 @@ final class CommunicationFlowController extends Controller
             'binding_id' => (int) $model->id,
             'inbox_id' => (int) $model->inbox_id,
         ];
-        $officeId = (int) $model->office_id;
+        $tenantId = (int) $model->tenant_id;
         $inboxId = (int) $model->inbox_id;
         $model->delete();
 
-        $this->events->record($officeId, 'COMMUNICATION_FLOW_BINDING_DELETED', $payload,
+        $this->events->record($tenantId, 'COMMUNICATION_FLOW_BINDING_DELETED', $payload,
             inboxId: $inboxId,
-            actorMembershipId: $this->currentOffice->realMembership()?->id);
+            actorMembershipId: $this->currentTenant->realMembership()?->id);
 
         return response()->json(status: 204);
     }

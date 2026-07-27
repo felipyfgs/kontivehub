@@ -10,9 +10,9 @@ use App\Models\Client;
 use App\Models\ClientProcuracaoSync;
 use App\Models\Establishment;
 use App\Models\MailboxClientSyncState;
-use App\Models\Office;
-use App\Models\OfficeSubscription;
 use App\Models\SerproEventosRun;
+use App\Models\Tenant;
+use App\Models\TenantSubscription;
 use App\Services\Integra\Eventos\EventosResultArtifactStore;
 use App\Services\Integra\Mailbox\MailboxEventosResultProcessor;
 use Carbon\CarbonImmutable;
@@ -35,8 +35,8 @@ class MailboxEventosResultProcessorTest extends TestCase
     {
         Queue::fake();
         CarbonImmutable::setTestNow('2026-07-21 10:00:00', 'America/Sao_Paulo');
-        [$office, $client, $cnpj] = $this->eligibleClient();
-        $run = $this->consumedRun($office, [[$cnpj, '260720']]);
+        [$tenant, $client, $cnpj] = $this->eligibleClient();
+        $run = $this->consumedRun($tenant, [[$cnpj, '260720']]);
 
         $processor = app(MailboxEventosResultProcessor::class);
         $processed = $processor->process($run);
@@ -52,7 +52,7 @@ class MailboxEventosResultProcessorTest extends TestCase
             'processing_status' => MailboxEventProcessingStatus::Directed->value,
         ]);
         $state = MailboxClientSyncState::query()->withoutGlobalScopes()
-            ->where('office_id', $office->id)->where('client_id', $client->id)->firstOrFail();
+            ->where('tenant_id', $tenant->id)->where('client_id', $client->id)->firstOrFail();
         $this->assertSame('2026-07-20', $state->pending_event_date?->toDateString());
         $this->assertNull($state->last_reconciled_event_date);
         Queue::assertPushed(ExecuteFiscalMonitoringRunJob::class, 1);
@@ -63,12 +63,12 @@ class MailboxEventosResultProcessorTest extends TestCase
     {
         Queue::fake();
         CarbonImmutable::setTestNow('2026-07-21 10:00:00', 'America/Sao_Paulo');
-        [$office, $currentClient, $currentCnpj] = $this->eligibleClient();
-        $deniedClient = Client::factory()->for($office)->create();
+        [$tenant, $currentClient, $currentCnpj] = $this->eligibleClient();
+        $deniedClient = Client::factory()->for($tenant)->create();
         $deniedCnpj = '11365521000169';
         Establishment::factory()->forClient($deniedClient, $deniedCnpj)->create();
         ClientProcuracaoSync::factory()->forClient($deniedClient)->authorized()->create();
-        $run = $this->consumedRun($office, [[$currentCnpj, '260721'], [$deniedCnpj, 'x']]);
+        $run = $this->consumedRun($tenant, [[$currentCnpj, '260721'], [$deniedCnpj, 'x']]);
 
         app(MailboxEventosResultProcessor::class)->process($run);
 
@@ -85,9 +85,9 @@ class MailboxEventosResultProcessorTest extends TestCase
 
     public function test_missing_private_artifact_fails_without_remote_egress(): void
     {
-        $office = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
         $run = SerproEventosRun::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'environment' => SerproEnvironment::Trial,
             'person_type' => 'PJ',
             'phase' => SerproEventosRun::PHASE_CONSUMED,
@@ -109,25 +109,25 @@ class MailboxEventosResultProcessorTest extends TestCase
         $this->assertSame(MailboxEventosResultProcessor::LOCAL_FAILED, $run->fresh()->local_processing_status);
     }
 
-    /** @return array{Office,Client,string} */
+    /** @return array{Tenant,Client,string} */
     private function eligibleClient(): array
     {
-        $office = Office::factory()->create();
-        OfficeSubscription::query()->where('office_id', $office->id)->update([
+        $tenant = Tenant::factory()->create();
+        TenantSubscription::query()->where('tenant_id', $tenant->id)->update([
             'status' => SubscriptionStatus::Active->value,
         ]);
-        $client = Client::factory()->for($office)->create();
+        $client = Client::factory()->for($tenant)->create();
         $cnpj = '11222333000181';
         Establishment::factory()->forClient($client, $cnpj)->create();
         ClientProcuracaoSync::factory()->forClient($client)->authorized()->create();
 
-        return [$office, $client, $cnpj];
+        return [$tenant, $client, $cnpj];
     }
 
-    private function consumedRun(Office $office, array $dados): SerproEventosRun
+    private function consumedRun(Tenant $tenant, array $dados): SerproEventosRun
     {
         $run = SerproEventosRun::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'environment' => SerproEnvironment::Trial,
             'person_type' => 'PJ',
             'phase' => SerproEventosRun::PHASE_CONSUMED,

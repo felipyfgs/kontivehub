@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use App\Enums\TaxGuidePaymentStatus;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,9 +14,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * Versões/artefatos em tax_guide_versions; pagamento é eixo independente.
  */
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'client_id',
     'establishment_id',
+    'operation_key',
     'system_code',
     'service_code',
     'operation_code',
@@ -37,7 +38,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 ])]
 class TaxGuide extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {
@@ -91,9 +92,10 @@ class TaxGuide extends Model
 
         return [
             'id' => $this->id,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'client_id' => $this->client_id,
             'establishment_id' => $this->establishment_id,
+            'operation_key' => $this->operation_key,
             'system_code' => $this->system_code,
             'service_code' => $this->service_code,
             'operation_code' => $this->operation_code,

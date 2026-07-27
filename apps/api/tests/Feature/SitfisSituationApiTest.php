@@ -8,14 +8,14 @@ use App\Enums\FiscalSituation;
 use App\Enums\FiscalSourceProvenance;
 use App\Enums\FiscalTrigger;
 use App\Enums\FiscalVerificationState;
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
 use App\Models\FiscalSnapshot;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\FiscalMonitoring\FiscalEvidenceStore;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
@@ -33,8 +33,8 @@ class SitfisSituationApiTest extends TestCase
 
     public function test_show_includes_evidence_download_link_when_artifact_exists(): void
     {
-        [$office, $user, $client] = $this->seedActor();
-        $run = $this->makeRun($office, $client);
+        [$tenant, $user, $client] = $this->seedActor();
+        $run = $this->makeRun($tenant, $client);
         $evidence = app(FiscalEvidenceStore::class)->store(
             run: $run,
             bytes: '%PDF-1.4 test',
@@ -47,7 +47,7 @@ class SitfisSituationApiTest extends TestCase
         ])->save();
 
         FiscalSnapshot::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'run_id' => $run->id,
             'client_id' => $client->id,
             'system_code' => 'INTEGRA_SITFIS',
@@ -66,7 +66,7 @@ class SitfisSituationApiTest extends TestCase
         ]);
 
         Sanctum::actingAs($user);
-        app(CurrentOffice::class)->clear();
+        app(CurrentTenant::class)->clear();
 
         $this->getJson('/api/v1/fiscal/sitfis?client_id='.$client->id)
             ->assertOk()
@@ -77,11 +77,11 @@ class SitfisSituationApiTest extends TestCase
 
     public function test_show_without_artifact_has_null_evidence_link(): void
     {
-        [$office, $user, $client] = $this->seedActor();
-        $run = $this->makeRun($office, $client);
+        [$tenant, $user, $client] = $this->seedActor();
+        $run = $this->makeRun($tenant, $client);
 
         FiscalSnapshot::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'run_id' => $run->id,
             'client_id' => $client->id,
             'system_code' => 'INTEGRA_SITFIS',
@@ -99,7 +99,7 @@ class SitfisSituationApiTest extends TestCase
         ]);
 
         Sanctum::actingAs($user);
-        app(CurrentOffice::class)->clear();
+        app(CurrentTenant::class)->clear();
 
         $this->getJson('/api/v1/fiscal/sitfis?client_id='.$client->id)
             ->assertOk()
@@ -109,8 +109,8 @@ class SitfisSituationApiTest extends TestCase
 
     public function test_refresh_within_ttl_healthy_snapshot_does_not_enqueue(): void
     {
-        [$office, $user, $client] = $this->seedActor();
-        $run = $this->makeRun($office, $client);
+        [$tenant, $user, $client] = $this->seedActor();
+        $run = $this->makeRun($tenant, $client);
         $evidence = app(FiscalEvidenceStore::class)->store(
             run: $run,
             bytes: '%PDF-1.4 ok',
@@ -123,7 +123,7 @@ class SitfisSituationApiTest extends TestCase
         ])->save();
 
         FiscalSnapshot::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'run_id' => $run->id,
             'client_id' => $client->id,
             'system_code' => 'INTEGRA_SITFIS',
@@ -142,7 +142,7 @@ class SitfisSituationApiTest extends TestCase
         ]);
 
         Sanctum::actingAs($user);
-        app(CurrentOffice::class)->clear();
+        app(CurrentTenant::class)->clear();
 
         $this->postJson('/api/v1/fiscal/sitfis/refresh', ['client_id' => $client->id])
             ->assertOk()
@@ -152,11 +152,11 @@ class SitfisSituationApiTest extends TestCase
 
     public function test_refresh_error_snapshot_enqueues_and_force_bypasses_ttl(): void
     {
-        [$office, $user, $client] = $this->seedActor();
-        $run = $this->makeRun($office, $client);
+        [$tenant, $user, $client] = $this->seedActor();
+        $run = $this->makeRun($tenant, $client);
 
         FiscalSnapshot::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'run_id' => $run->id,
             'client_id' => $client->id,
             'system_code' => 'INTEGRA_SITFIS',
@@ -174,14 +174,14 @@ class SitfisSituationApiTest extends TestCase
         ]);
 
         Sanctum::actingAs($user);
-        app(CurrentOffice::class)->clear();
+        app(CurrentTenant::class)->clear();
 
         $this->postJson('/api/v1/fiscal/sitfis/refresh', ['client_id' => $client->id])
             ->assertStatus(202)
             ->assertJsonPath('data.enqueued', true);
 
         // Segunda chamada com force em cima de snapshot saudável
-        $run2 = $this->makeRun($office, $client);
+        $run2 = $this->makeRun($tenant, $client);
         $evidence = app(FiscalEvidenceStore::class)->store(
             run: $run2,
             bytes: '%PDF-1.4 two',
@@ -199,7 +199,7 @@ class SitfisSituationApiTest extends TestCase
             ->update(['is_current' => false]);
 
         FiscalSnapshot::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'run_id' => $run2->id,
             'client_id' => $client->id,
             'system_code' => 'INTEGRA_SITFIS',
@@ -226,21 +226,21 @@ class SitfisSituationApiTest extends TestCase
     }
 
     /**
-     * @return array{0: Office, 1: User, 2: Client}
+     * @return array{0: Tenant, 1: User, 2: Client}
      */
     private function seedActor(): array
     {
-        $office = Office::factory()->create();
-        $user = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $client = Client::factory()->for($office)->create(['is_active' => true]);
+        $tenant = Tenant::factory()->create();
+        $user = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $client = Client::factory()->for($tenant)->create(['is_active' => true]);
 
-        return [$office, $user, $client];
+        return [$tenant, $user, $client];
     }
 
-    private function makeRun(Office $office, Client $client): FiscalMonitoringRun
+    private function makeRun(Tenant $tenant, Client $client): FiscalMonitoringRun
     {
         return FiscalMonitoringRun::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'system_code' => 'INTEGRA_SITFIS',
             'service_code' => 'SITFIS',

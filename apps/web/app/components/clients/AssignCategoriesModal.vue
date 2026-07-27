@@ -31,7 +31,7 @@ const description = computed(() => {
   if (isBulk.value) {
     return `${props.clientIds?.length ?? 0} cliente(s) selecionado(s).`
   }
-  return props.client ? (props.client.legal_name || props.client.name) : undefined
+  return props.client ? (props.client.display_name || props.client.legal_name) : undefined
 })
 const initiallyAssignedIds = computed(() => props.client?.categories?.map(category => category.id) ?? [])
 const items = computed(() => props.categories.map(category => ({

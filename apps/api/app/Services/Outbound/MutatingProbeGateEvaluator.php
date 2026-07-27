@@ -3,13 +3,14 @@
 namespace App\Services\Outbound;
 
 use App\Enums\OutboundFiscalModel;
+use App\Enums\TenantRole;
 use App\Models\OutboundCaptureProfile;
 use App\Models\OutboundSeriesCursor;
 use App\Models\User;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 
 /**
- * Avaliador único dos gates mutantes (flag, mandato, ADMIN+2FA, allowlist, série fechada…).
+ * Avaliador único dos gates mutantes (flag, mandato, admin, allowlist, série fechada).
  * Produção permanece desabilitada se qualquer gate falhar.
  */
 final class MutatingProbeGateEvaluator
@@ -65,13 +66,13 @@ final class MutatingProbeGateEvaluator
         }
 
         $user ??= auth()->user();
-        $role = app(CurrentOffice::class)->role();
-        if ($role?->value !== 'ADMIN') {
-            $reasons[] = 'Somente ADMIN com 2FA recente.';
+        $role = app(CurrentTenant::class)->role();
+        if ($role !== TenantRole::TenantAdmin) {
+            $reasons[] = 'Somente administradores com confirmação recente de senha.';
             $codes[] = 'admin_required';
         }
 
-        // 2FA recente é enforced pelo middleware EnsureAdminTwoFactor nas rotas
+        // A senha recente é exigida pelas rotas e revalidada nos controllers.
 
         return [
             'allowed' => $reasons === [],

@@ -86,7 +86,7 @@ class SyncEstablishmentDistributionJob implements ShouldQueue
             }
 
             $run = SyncRun::query()->create([
-                'office_id' => $cursor->office_id,
+                'tenant_id' => $cursor->tenant_id,
                 'sync_cursor_id' => $cursor->id,
                 'status' => 'RUNNING',
                 'trigger' => $this->trigger,
@@ -106,7 +106,7 @@ class SyncEstablishmentDistributionJob implements ShouldQueue
                     $credential->save();
                 }
                 $cursor->status = SyncCursorStatus::Blocked;
-                $cursor->last_error = 'Credencial A1 ausente ou expirada.';
+                $cursor->last_error = 'certificado ausente ou expirada.';
                 $cursor->locked_at = null;
                 $cursor->lock_owner = null;
                 $cursor->save();
@@ -275,7 +275,7 @@ class SyncEstablishmentDistributionJob implements ShouldQueue
             $credentialIssue = in_array('credential_missing', $codes, true)
                 || in_array('credential_expired', $codes, true);
 
-            // Credencial: BLOCKED (alinha ao caminho pós-claim de A1).
+            // Credencial: BLOCKED (alinha ao caminho pós-claim de certificado).
             // Demais (capture off, cliente/est. inativo): IDLE + slot horário — scheduler reavalia.
             if ($credentialIssue) {
                 $cursor->status = SyncCursorStatus::Blocked;

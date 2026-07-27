@@ -6,9 +6,9 @@ use App\Enums\MailboxEventItemClassification;
 use App\Enums\MailboxEventProcessingStatus;
 use App\Models\Client;
 use App\Models\MailboxClientSyncState;
-use App\Models\Office;
 use App\Models\SerproEventosRun;
 use App\Models\SerproEventosRunItem;
+use App\Models\Tenant;
 use App\Services\Integra\Eventos\EventosResultArtifactStore;
 use App\Services\Integra\Eventos\EventosResultMatrixParser;
 use Carbon\CarbonImmutable;
@@ -47,7 +47,7 @@ final class MailboxEventosResultProcessor
         try {
             $dados = $this->artifacts->load($run);
             $parsed = $this->parser->parse($dados);
-            $clientMap = $this->contributors->clientMap((int) $run->office_id);
+            $clientMap = $this->contributors->clientMap((int) $run->tenant_id);
             $items = $this->normalize($run, $parsed, $clientMap);
             $this->direct($run, $items);
 
@@ -101,7 +101,7 @@ final class MailboxEventosResultProcessor
                         'ni_fingerprint' => $fingerprint,
                     ],
                     [
-                        'office_id' => $run->office_id,
+                        'tenant_id' => $run->tenant_id,
                         'client_id' => $clientId,
                         'classification' => $classification,
                         'event_date' => $row['event_date'],
@@ -112,7 +112,7 @@ final class MailboxEventosResultProcessor
                 );
                 if (! $item->wasRecentlyCreated) {
                     $item->forceFill([
-                        'office_id' => $run->office_id,
+                        'tenant_id' => $run->tenant_id,
                         'client_id' => $clientId,
                         'classification' => $classification,
                         'event_date' => $row['event_date'],
@@ -130,7 +130,7 @@ final class MailboxEventosResultProcessor
     private function direct(SerproEventosRun $run, array $items): void
     {
         $today = CarbonImmutable::now((string) config('serpro.eventos.timezone', 'America/Sao_Paulo'))->startOfDay();
-        $office = Office::query()->withoutGlobalScopes()->findOrFail($run->office_id);
+        $tenant = Tenant::query()->withoutGlobalScopes()->findOrFail($run->tenant_id);
 
         foreach ($items as $item) {
             if ($item->processing_status !== MailboxEventProcessingStatus::Pending) {
@@ -178,7 +178,7 @@ final class MailboxEventosResultProcessor
             }
 
             $client = Client::query()->withoutGlobalScopes()
-                ->where('office_id', $run->office_id)
+                ->where('tenant_id', $run->tenant_id)
                 ->find($item->client_id);
             if ($client === null || ! $client->is_active) {
                 $item->forceFill([
@@ -190,7 +190,7 @@ final class MailboxEventosResultProcessor
             }
 
             $directed = $this->events->ingestNewMessageEvent(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 externalEventId: sprintf('E0601:%s:%d', $eventDate->format('Y-m-d'), $client->id),
                 payloadDigest: $run->result_payload_sha256,
@@ -210,7 +210,7 @@ final class MailboxEventosResultProcessor
     private function syncState(SerproEventosRun $run, SerproEventosRunItem $item): MailboxClientSyncState
     {
         return MailboxClientSyncState::query()->withoutGlobalScopes()->firstOrCreate([
-            'office_id' => $run->office_id,
+            'tenant_id' => $run->tenant_id,
             'client_id' => $item->client_id,
         ]);
     }

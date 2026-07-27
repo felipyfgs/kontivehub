@@ -57,7 +57,7 @@ final class MeiAutomationSyncService
     public function schedule(MeiAutomationAttempt $attempt): void
     {
         $this->assertPollingContract();
-        SyncMeiAutomationAttemptJob::dispatch((int) $attempt->office_id, (int) $attempt->id)
+        SyncMeiAutomationAttemptJob::dispatch((int) $attempt->tenant_id, (int) $attempt->id)
             ->delay(now()->addSeconds($this->pollIntervalSeconds()))
             ->onQueue((string) config('mei_automation.queue', 'fiscal'));
     }

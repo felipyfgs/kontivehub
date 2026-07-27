@@ -32,7 +32,7 @@ final class CcmeiRegistrationStatusPostConsultService
             return ['result' => $this->withNormalized($result, $normalized)];
         }
         try {
-            $projected = $this->projector->project($request->office, $request->client, [
+            $projected = $this->projector->project($request->tenant, $request->client, [
                 'status' => (string) ($normalized['status'] ?? ''),
                 'enquadrado_mei' => (bool) ($normalized['enquadrado_mei'] ?? false),
                 'situation' => (string) ($normalized['situation'] ?? ''), 'count' => (int) ($normalized['count'] ?? 0),
@@ -41,7 +41,7 @@ final class CcmeiRegistrationStatusPostConsultService
                 'observation_id' => $projected['observation']->id, ...$projected['projection']->toPublicArray()];
         } catch (Throwable) {
             Log::warning('ccmei.registration_status_projection_failed', ['operation_key' => self::OPERATION_KEY,
-                'office_id' => $request->office->id, 'client_id' => $request->client->id, 'reason' => 'PROJECTION_FAILED']);
+                'tenant_id' => $request->tenant->id, 'client_id' => $request->client->id, 'reason' => 'PROJECTION_FAILED']);
             $normalized['ccmei_registration_status'] = ['operation_key' => self::OPERATION_KEY, 'promoted' => false, 'reason' => 'PROJECTION_FAILED'];
         }
 

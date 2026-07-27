@@ -64,7 +64,7 @@ final class DctfwebDarfAdapter extends AbstractDctfwebAdapter
         $metadata = $this->codec->sanitize($response->dados);
         $darf = $this->declarations->projectDarf(
             run: $request->run,
-            office: $request->office,
+            tenant: $request->tenant,
             client: $request->client,
             periodKey: $periodKey,
             evidenceBytes: $bytes,

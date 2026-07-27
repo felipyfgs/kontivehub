@@ -112,7 +112,7 @@ final readonly class ReferencePeriod implements Stringable
     }
 
     /**
-     * Âncora mensal para regras de prazo legadas (FixedDay / DaysAfterStart).
+     * Âncora mensal para regras de prazo FixedDay e DaysAfterStart.
      * Usa o mês de início do período.
      */
     public function toCompetenceMonth(): CompetenceMonth

@@ -15,9 +15,9 @@ func TestDirectWhatsMeowQueriesUseWazyncSchema(t *testing.T) {
 		if !strings.Contains(query, "wazync.whatsmeow_device") {
 			t.Fatalf("%s query does not use the Wazync schema: %q", name, query)
 		}
-		legacySchema := "whatsapp_" + "gateway"
-		if strings.Contains(query, legacySchema) {
-			t.Fatalf("%s query references legacy schema %q", name, legacySchema)
+		removedSchema := "whatsapp_" + "gateway"
+		if strings.Contains(query, removedSchema) {
+			t.Fatalf("%s query references removed schema %q", name, removedSchema)
 		}
 	}
 }

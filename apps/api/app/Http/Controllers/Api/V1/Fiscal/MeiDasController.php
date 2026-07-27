@@ -12,20 +12,22 @@ use App\Models\MeiAutomationAttempt;
 use App\Models\User;
 use App\Services\Fiscal\Mutations\FiscalMutationException;
 use App\Services\Fiscal\Mutations\FiscalMutationService;
-use App\Support\CurrentOffice;
+use App\Services\Serpro\Catalog\OfficialServiceCatalogManifest;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 
 final class MeiDasController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly FiscalMutationService $mutations,
+        private readonly OfficialServiceCatalogManifest $manifest,
     ) {}
 
     public function preflight(GenerateMeiDasPreflightRequest $request): JsonResponse
     {
-        $office = $this->currentOffice->office();
-        $client = $this->client((int) $office->id, (int) $request->validated('client_id'));
+        $tenant = $this->currentTenant->tenant();
+        $client = $this->client((int) $tenant->id, (int) $request->validated('client_id'));
         if ($client === null) {
             return $this->clientNotFound();
         }
@@ -36,13 +38,16 @@ final class MeiDasController extends Controller
 
         $competencies = $this->competencies($request->validated('competencies'));
         $dueDate = $this->dueDate($request->validated('due_date'));
+        $operationKey = $this->operationKey((string) $request->validated('output_format'));
+        $operation = $this->officialOperation($operationKey);
         $result = $this->mutations->preflight(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             user: $actor,
-            solutionCode: 'INTEGRA_MEI',
-            serviceCode: 'PGMEI',
-            operationCode: 'GERAR_DAS',
+            solutionCode: (string) $operation['id_sistema'],
+            serviceCode: (string) $operation['id_sistema'],
+            operationCode: (string) $operation['id_servico'],
+            operationKey: $operationKey,
             competencePeriodKey: $this->competenceKey($competencies),
             idempotencyKey: (string) $request->validated('idempotency_key'),
             requestPayload: [
@@ -58,8 +63,8 @@ final class MeiDasController extends Controller
 
     public function store(GenerateMeiDasRequest $request): JsonResponse
     {
-        $office = $this->currentOffice->office();
-        $client = $this->client((int) $office->id, (int) $request->validated('client_id'));
+        $tenant = $this->currentTenant->tenant();
+        $client = $this->client((int) $tenant->id, (int) $request->validated('client_id'));
         if ($client === null) {
             return $this->clientNotFound();
         }
@@ -69,15 +74,18 @@ final class MeiDasController extends Controller
         }
         $competencies = $this->competencies($request->validated('competencies'));
         $dueDate = $this->dueDate($request->validated('due_date'));
+        $operationKey = $this->operationKey((string) $request->validated('output_format'));
+        $officialOperation = $this->officialOperation($operationKey);
 
         try {
             $operation = $this->mutations->execute(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 user: $actor,
-                solutionCode: 'INTEGRA_MEI',
-                serviceCode: 'PGMEI',
-                operationCode: 'GERAR_DAS',
+                solutionCode: (string) $officialOperation['id_sistema'],
+                serviceCode: (string) $officialOperation['id_sistema'],
+                operationCode: (string) $officialOperation['id_servico'],
+                operationKey: $operationKey,
                 confirmationPhrase: (string) $request->validated('confirmation_phrase'),
                 confirmed: true,
                 competencePeriodKey: $this->competenceKey($competencies),
@@ -96,7 +104,7 @@ final class MeiDasController extends Controller
 
         $attempt = MeiAutomationAttempt::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('fiscal_mutation_operation_id', $operation->id)
             ->latest('id')
             ->first();
@@ -137,20 +145,33 @@ final class MeiDasController extends Controller
             : now('America/Sao_Paulo')->toDateString();
     }
 
+    private function operationKey(string $outputFormat): string
+    {
+        return strtoupper($outputFormat) === 'BARCODE'
+            ? 'pgmei.gerardascodbarra'
+            : 'pgmei.gerardaspdf';
+    }
+
+    /** @return array<string, mixed> */
+    private function officialOperation(string $operationKey): array
+    {
+        return $this->manifest->findByOperationKey($this->manifest->load(), $operationKey);
+    }
+
     /** @return array<string, mixed> */
     private function publicMutation(FiscalMutationOperation $operation): array
     {
         $data = $operation->toPublicArray();
-        unset($data['office_id']);
+        unset($data['tenant_id']);
 
         return $data;
     }
 
-    private function client(int $officeId, int $clientId): ?Client
+    private function client(int $tenantId, int $clientId): ?Client
     {
         return Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereKey($clientId)
             ->first();
     }

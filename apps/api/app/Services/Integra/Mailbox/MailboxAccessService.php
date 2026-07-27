@@ -7,7 +7,7 @@ use App\Enums\MailboxTriageStatus;
 use App\Models\MailboxAccessEvent;
 use App\Models\MailboxAttachment;
 use App\Models\MailboxMessage;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use Carbon\CarbonImmutable;
@@ -30,12 +30,12 @@ final class MailboxAccessService
      * @return array{message:MailboxMessage,official_read_unchanged:bool}
      */
     public function view(
-        Office $office,
+        Tenant $tenant,
         MailboxMessage $message,
         ?User $actor = null,
         bool $autoTriageInReview = true,
     ): array {
-        $this->assertTenant($office, $message);
+        $this->assertTenant($tenant, $message);
 
         $officialBefore = $message->official_read_indicator;
 
@@ -50,7 +50,7 @@ final class MailboxAccessService
             ])->save();
         }
 
-        $this->record($office, $message, MailboxAccessAction::View, $actor);
+        $this->record($tenant, $message, MailboxAccessAction::View, $actor);
 
         $fresh = $message->fresh(['attachments']);
         $unchanged = $fresh->official_read_indicator === $officialBefore;
@@ -60,7 +60,7 @@ final class MailboxAccessService
             'client_id' => $fresh->client_id,
             'official_read_unchanged' => $unchanged,
             // sem subject/body
-        ], userId: $actor?->id, officeId: (int) $office->id);
+        ], userId: $actor?->id, tenantId: (int) $tenant->id);
 
         return [
             'message' => $fresh,
@@ -71,21 +71,21 @@ final class MailboxAccessService
     /**
      * @return array{bytes:string,content_type:string,filename:string}
      */
-    public function downloadBody(Office $office, MailboxMessage $message, ?User $actor = null): array
+    public function downloadBody(Tenant $tenant, MailboxMessage $message, ?User $actor = null): array
     {
-        $this->assertTenant($office, $message);
+        $this->assertTenant($tenant, $message);
 
         if (! $message->has_body || $message->body_vault_object_id === null || $message->body_sha256 === null) {
             throw new RuntimeException('Corpo da mensagem não disponível.');
         }
 
         $bytes = $this->vault->getBody(
-            (int) $office->id,
+            (int) $tenant->id,
             $message->body_vault_object_id,
             $message->body_sha256,
         );
 
-        $this->record($office, $message, MailboxAccessAction::DownloadBody, $actor);
+        $this->record($tenant, $message, MailboxAccessAction::DownloadBody, $actor);
 
         $this->audit->record('mailbox.message.download_body', 'SUCCESS', $message, [
             'message_id' => $message->id,
@@ -93,7 +93,7 @@ final class MailboxAccessService
             'byte_size' => strlen($bytes),
             'content_sha256' => $message->body_sha256,
             // sem body
-        ], userId: $actor?->id, officeId: (int) $office->id);
+        ], userId: $actor?->id, tenantId: (int) $tenant->id);
 
         $rawType = trim((string) ($message->body_content_type ?? ''));
         $contentType = $rawType !== '' ? $rawType : 'text/plain; charset=UTF-8';
@@ -118,26 +118,26 @@ final class MailboxAccessService
      * @return array{bytes:string,content_type:string,filename:string}
      */
     public function downloadAttachment(
-        Office $office,
+        Tenant $tenant,
         MailboxMessage $message,
         MailboxAttachment $attachment,
         ?User $actor = null,
     ): array {
-        $this->assertTenant($office, $message);
+        $this->assertTenant($tenant, $message);
 
-        if ((int) $attachment->office_id !== (int) $office->id
+        if ((int) $attachment->tenant_id !== (int) $tenant->id
             || (int) $attachment->mailbox_message_id !== (int) $message->id) {
             throw new RuntimeException('Anexo não pertence à mensagem/escritório.');
         }
 
         $bytes = $this->vault->getAttachment(
-            (int) $office->id,
+            (int) $tenant->id,
             $attachment->vault_object_id,
             $attachment->content_sha256,
         );
 
         $this->record(
-            $office,
+            $tenant,
             $message,
             MailboxAccessAction::DownloadAttachment,
             $actor,
@@ -150,7 +150,7 @@ final class MailboxAccessService
             'byte_size' => strlen($bytes),
             'content_sha256' => $attachment->content_sha256,
             // sem bytes/filename sensível além do sanitizado em metadata se necessário
-        ], userId: $actor?->id, officeId: (int) $office->id);
+        ], userId: $actor?->id, tenantId: (int) $tenant->id);
 
         $name = $attachment->filename_sanitized ?: ('attachment-'.$attachment->id.'.bin');
 
@@ -162,14 +162,14 @@ final class MailboxAccessService
     }
 
     private function record(
-        Office $office,
+        Tenant $tenant,
         MailboxMessage $message,
         MailboxAccessAction $action,
         ?User $actor,
         ?MailboxAttachment $attachment = null,
     ): void {
         MailboxAccessEvent::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'mailbox_message_id' => $message->id,
             'mailbox_attachment_id' => $attachment?->id,
             'user_id' => $actor?->id,
@@ -183,9 +183,9 @@ final class MailboxAccessService
         ]);
     }
 
-    private function assertTenant(Office $office, MailboxMessage $message): void
+    private function assertTenant(Tenant $tenant, MailboxMessage $message): void
     {
-        if ((int) $message->office_id !== (int) $office->id) {
+        if ((int) $message->tenant_id !== (int) $tenant->id) {
             throw new RuntimeException('Mensagem não pertence ao escritório ativo.');
         }
     }

@@ -9,9 +9,9 @@ import { h } from 'vue'
 import type { TableColumn } from '@nuxt/ui'
 import UCheckbox from '@nuxt/ui/components/Checkbox.vue'
 import type {
-  OperationalProcess,
-  OperationalProcessGroup,
-  OperationalProcessTask,
+  WorkProcess,
+  WorkProcessGroup,
+  WorkProcessTask,
   WorkDepartment,
   WorkEntityLevel,
   WorkProcessGroupSort
@@ -115,10 +115,10 @@ const total = ref(0)
 
 const rowSelection = ref<Record<string, boolean>>({})
 const selectedTaskIds = ref<Record<string, boolean>>({})
-const materialisedProcessCache = ref<Record<string, OperationalProcess>>({})
+const materialisedProcessCache = ref<Record<string, WorkProcess>>({})
 
 /** Ambos os modos — árvore multi-expandida (Cliente ou Rotina). */
-const groups = ref<OperationalProcessGroup[]>([])
+const groups = ref<WorkProcessGroup[]>([])
 const groupExpanded = ref<Record<string, boolean>>({})
 const groupChildrenCache = ref<Record<string, GroupChildrenCacheEntry>>({})
 const expandedChildProcessIds = ref<Record<string, boolean>>({})
@@ -302,7 +302,7 @@ function patchGroupCache(groupKey: string, patch: Partial<GroupChildrenCacheEntr
 }
 
 async function loadGroupChildren(
-  group: OperationalProcessGroup,
+  group: WorkProcessGroup,
   page = 1,
   opts?: { force?: boolean, silentToast?: boolean }
 ) {
@@ -356,7 +356,7 @@ async function loadGroupChildren(
   }
 }
 
-async function prefetchGroupChildren(pageGroups: OperationalProcessGroup[]) {
+async function prefetchGroupChildren(pageGroups: WorkProcessGroup[]) {
   const session = sessionEpoch.value
   const localPrefetch = prefetchEpoch.value
   await mapWithConcurrency(
@@ -412,7 +412,7 @@ async function loadDepartments() {
   }
 }
 
-function toggleGroupExpanded(group: OperationalProcessGroup) {
+function toggleGroupExpanded(group: WorkProcessGroup) {
   const wasOpen = groupExpanded.value[group.key] === true
   groupExpanded.value = toggleGroupKeyExpanded(groupExpanded.value, group.key)
   if (wasOpen) {
@@ -429,7 +429,7 @@ function toggleChildProcessTasks(processId: number) {
   )
 }
 
-function retryGroupChildren(group: OperationalProcessGroup) {
+function retryGroupChildren(group: WorkProcessGroup) {
   void loadGroupChildren(group, groupCacheEntry(group.key).page || 1, { force: true })
 }
 
@@ -463,7 +463,7 @@ const selectionProcesses = computed(() =>
   Object.values(materialisedProcessCache.value)
 )
 
-function setProcessSelected(process: OperationalProcess, selected: boolean) {
+function setProcessSelected(process: WorkProcess, selected: boolean) {
   const next = cascadeProcessTaskSelection({
     processes: selectionProcesses.value,
     processSelection: rowSelection.value,
@@ -524,7 +524,7 @@ function openBulkActions() {
   bulkOpen.value = true
 }
 
-function openProcess(process: OperationalProcess) {
+function openProcess(process: WorkProcess) {
   const query = { ...route.query }
   void navigateTo({
     path: `/work/processes/${process.id}`,
@@ -535,12 +535,12 @@ function openProcess(process: OperationalProcess) {
   })
 }
 
-function processTasks(process: OperationalProcess): OperationalProcessTask[] {
+function processTasks(process: WorkProcess): WorkProcessTask[] {
   return sortedProcessTasks(process)
 }
 
-const groupColumns = computed<TableColumn<OperationalProcessGroup>[]>(() => {
-  const columns: TableColumn<OperationalProcessGroup>[] = [
+const groupColumns = computed<TableColumn<WorkProcessGroup>[]>(() => {
+  const columns: TableColumn<WorkProcessGroup>[] = [
     {
       id: 'expand',
       header: '',
@@ -616,7 +616,7 @@ const groupColumns = computed<TableColumn<OperationalProcessGroup>[]>(() => {
   return columns
 })
 
-function clearSelectionForProcesses(processes: readonly OperationalProcess[]) {
+function clearSelectionForProcesses(processes: readonly WorkProcess[]) {
   if (!processes.length) return
   const nextRows = { ...rowSelection.value }
   const nextTasks = { ...selectedTaskIds.value }
@@ -639,7 +639,7 @@ function groupSelectState(groupKey: string): boolean | 'indeterminate' {
   return state === 'all'
 }
 
-async function setGroupChildrenSelected(group: OperationalProcessGroup, selected: boolean) {
+async function setGroupChildrenSelected(group: WorkProcessGroup, selected: boolean) {
   let entry = groupCacheEntry(group.key)
   if (selected && entry.status !== 'ready') {
     await loadGroupChildren(group, entry.page || 1, { force: entry.status === 'error' })
@@ -660,7 +660,7 @@ async function setGroupChildrenSelected(group: OperationalProcessGroup, selected
   clearSelectionForProcesses(entry.processes)
 }
 
-function childRowCheckbox(child: OperationalProcess) {
+function childRowCheckbox(child: WorkProcess) {
   const processId = String(child.id)
   const processLabel = isClientMode.value
     ? child.title

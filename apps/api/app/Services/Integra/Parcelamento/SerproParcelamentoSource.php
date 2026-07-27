@@ -64,9 +64,9 @@ final class SerproParcelamentoSource implements ParcelamentoSource
             ];
         }
 
-        $officeId = (int) ($request?->office->id ?? 0);
+        $tenantId = (int) ($request?->tenant->id ?? 0);
         $clientId = (int) ($request?->client->id ?? 0);
-        if ($officeId <= 0 || $clientId <= 0 || $request === null) {
+        if ($tenantId <= 0 || $clientId <= 0 || $request === null) {
             return [
                 'success' => false,
                 'simulated' => false,
@@ -79,13 +79,13 @@ final class SerproParcelamentoSource implements ParcelamentoSource
         $isMutating = in_array($op, ['ADERIR', 'REPARCELAR', 'DESISTIR', 'GERARDAS', 'EMITIR_DOCUMENTO'], true);
 
         $response = $this->operations->execute(
-            office: $request->office,
+            tenant: $request->tenant,
             client: $request->client,
             operationKey: $operationKey,
             businessData: $payload,
             correlationId: $request->run->correlation_id,
             mutationAuth: MutationAuthorization::none(),
-            module: 'parcelamentos',
+            module: 'installments',
         );
         if ($response->hasSimulatedSource()) {
             $response = $response->rejectSimulatedSource();

@@ -14,7 +14,7 @@ use App\Services\Integra\Dctfweb\DctfwebCodes;
 use App\Services\Integra\Dctfweb\DctfwebCompetenceResolver;
 use App\Services\Integra\Dctfweb\DctfwebDeclarationService;
 use App\Services\Integra\Dctfweb\DctfwebIntegraCaller;
-use App\Services\Integra\Dctfweb\MitApuracaoService;
+use App\Services\Integra\Dctfweb\MitAssessmentService;
 
 /**
  * Situação MIT — não infere sucesso de transmissão DCTFWeb.
@@ -24,7 +24,7 @@ final class MitSituacaoAdapter extends AbstractDctfwebAdapter
     public function __construct(
         DctfwebIntegraCaller $caller,
         DctfwebCompetenceResolver $competences,
-        private readonly MitApuracaoService $mit,
+        private readonly MitAssessmentService $mit,
         private readonly DctfwebDeclarationService $declarations,
     ) {
         parent::__construct($caller, $competences);
@@ -82,22 +82,22 @@ final class MitSituacaoAdapter extends AbstractDctfwebAdapter
         }
         $bytes = DctfwebIntegraCaller::evidenceBytes($response->dados);
         $mit = $this->mit->projectSituacao(
-            $request->office,
+            $request->tenant,
             $request->client,
             $periodKey,
             $response->dados,
         );
 
         // Garante declaração existe para espelho (sem promover transmissão)
-        $this->declarations->findOrCreate($request->office, $request->client, $periodKey);
+        $this->declarations->findOrCreate($request->tenant, $request->client, $periodKey);
         $this->mit->syncDctfwebMirror($mit);
         $mit = $mit->fresh();
 
         // Persiste evidência MIT como versão em declaração “irmã” se houver
-        $decl = $this->declarations->findOrCreate($request->office, $request->client, $periodKey);
+        $decl = $this->declarations->findOrCreate($request->tenant, $request->client, $periodKey);
         $this->declarations->projectArtifact(
             run: $request->run,
-            office: $request->office,
+            tenant: $request->tenant,
             client: $request->client,
             periodKey: $periodKey,
             kind: DctfwebArtifactKind::SituacaoMit,

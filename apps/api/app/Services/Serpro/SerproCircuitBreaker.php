@@ -6,7 +6,6 @@ use App\Models\SerproCircuitBreakerState;
 use App\Services\Audit\AuditLogger;
 use App\Services\Operations\OperationsMetrics;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * Circuit breaker atômico por dependência/solução.
@@ -283,10 +282,6 @@ final class SerproCircuitBreaker
      */
     private function persistState(string $scope, array $payload): void
     {
-        if (! Schema::hasTable('serpro_circuit_breaker_states')) {
-            return;
-        }
-
         try {
             $solution = null;
             $dependency = 'SERPRO';
@@ -321,10 +316,6 @@ final class SerproCircuitBreaker
      */
     private function loadPersisted(string $scope): ?array
     {
-        if (! Schema::hasTable('serpro_circuit_breaker_states')) {
-            return null;
-        }
-
         try {
             $row = SerproCircuitBreakerState::query()->where('scope_key', $scope)->first();
             if ($row === null) {

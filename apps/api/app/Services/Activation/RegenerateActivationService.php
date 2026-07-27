@@ -3,7 +3,6 @@
 namespace App\Services\Activation;
 
 use App\Enums\ActivationMethod;
-use App\Enums\ActivationPurpose;
 use App\Models\AccountActivation;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
@@ -47,8 +46,8 @@ final class RegenerateActivationService
                 ->whereNull('consumed_at')
                 ->whereNull('revoked_at');
 
-            if ($locked->office_membership_id !== null) {
-                $q->where('office_membership_id', $locked->office_membership_id);
+            if ($locked->tenant_membership_id !== null) {
+                $q->where('tenant_membership_id', $locked->tenant_membership_id);
             }
             if ($locked->platform_membership_id !== null) {
                 $q->where('platform_membership_id', $locked->platform_membership_id);
@@ -67,8 +66,8 @@ final class RegenerateActivationService
                 'purpose' => $locked->purpose,
                 'method' => $method,
                 'user_id' => $user->id,
-                'office_id' => $locked->office_id,
-                'office_membership_id' => $locked->office_membership_id,
+                'tenant_id' => $locked->tenant_id,
+                'tenant_membership_id' => $locked->tenant_membership_id,
                 'platform_membership_id' => $locked->platform_membership_id,
                 'email_normalized' => $locked->email_normalized,
                 'secret_hash' => $issued['hash'],
@@ -83,10 +82,6 @@ final class RegenerateActivationService
             if (! $user->password_change_required) {
                 $user->forceFill(['password_change_required' => true])->save();
             }
-            if ($user->is_active && $locked->purpose !== ActivationPurpose::OfficeMember) {
-                // Se ainda não concluiu e reativamos flag, não força inativo em legado multi-grant.
-            }
-
             $this->audit->record(
                 action: 'activation.regenerated',
                 result: 'SUCCESS',
@@ -99,7 +94,7 @@ final class RegenerateActivationService
                     'previous_activation_id' => $locked->id,
                 ],
                 userId: $actor->id,
-                officeId: $activation->office_id,
+                tenantId: $activation->tenant_id,
             );
 
             return $activation;

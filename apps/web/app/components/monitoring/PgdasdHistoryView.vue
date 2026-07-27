@@ -26,16 +26,14 @@ const toast = useToast()
 const loading = ref(false)
 const collectingPeriod = ref<string | null>(null)
 const error = ref<string | null>(null)
-const history = ref<PgdasdHistoryPayload | PgdasdHistoryPeriod[] | null>(null)
+const history = ref<PgdasdHistoryPayload | null>(null)
 const yearFilter = ref<number | 'all'>(new Date().getFullYear())
 const knownYears = ref<number[]>([new Date().getFullYear()])
 const documentConfirmOpen = ref(false)
 const pendingDocumentRequest = ref<{ periodKey: string, declarationNumber: string | null } | null>(null)
 let requestGeneration = 0
 
-const payload = computed<PgdasdHistoryPayload>(() =>
-  Array.isArray(history.value) ? { periods: history.value } : history.value || {}
-)
+const payload = computed<PgdasdHistoryPayload>(() => history.value || {})
 
 const yearOptions = computed(() => knownYears.value)
 
@@ -50,7 +48,7 @@ const periods = computed(() =>
   )
 )
 
-function rememberYearsFromHistory(payload: PgdasdHistoryPayload | PgdasdHistoryPeriod[] | null) {
+function rememberYearsFromHistory(payload: PgdasdHistoryPayload | null) {
   knownYears.value = pgdasdHistoryCalendarYears(payload, knownYears.value)
 }
 
@@ -128,8 +126,8 @@ function latestDeclaration(period: PgdasdHistoryPeriod): PgdasdHistoryDeclaratio
   return [...(period.declarations || [])].sort((a, b) => {
     const byDate = String(b.transmitted_at || '').localeCompare(String(a.transmitted_at || ''))
     if (byDate !== 0) return byDate
-    return String(b.declaration_number || b.number || '')
-      .localeCompare(String(a.declaration_number || a.number || ''))
+    return String(b.declaration_number || '')
+      .localeCompare(String(a.declaration_number || ''))
   })[0] || null
 }
 
@@ -143,7 +141,7 @@ function requestDocuments(period: PgdasdHistoryPeriod) {
   const declaration = latestDeclaration(period)
   openDocumentConfirmation(
     period.period_key || '',
-    declaration?.declaration_number || declaration?.number || null
+    declaration?.declaration_number || null
   )
 }
 

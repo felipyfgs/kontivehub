@@ -6,10 +6,7 @@ import type { FiscalTableEmptyKind } from '~/types/fiscal-modules'
 
 const props = withDefaults(defineProps<{
   kind?: FiscalTableEmptyKind
-  /** Título canônico. */
   title?: string
-  /** Alias de `title` (páginas legadas: empty-title). */
-  emptyTitle?: string
   description?: string
   error?: string | null
 }>(), {
@@ -20,10 +17,8 @@ const emit = defineEmits<{
   retry: []
 }>()
 
-const resolvedTitle = computed(() => props.title || props.emptyTitle || '')
-
 const resolved = computed(() => {
-  const customTitle = resolvedTitle.value || undefined
+  const customTitle = props.title || undefined
   switch (props.kind) {
     case 'loading':
       return {

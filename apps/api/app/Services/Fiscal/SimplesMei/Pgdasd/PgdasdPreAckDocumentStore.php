@@ -23,7 +23,7 @@ final class PgdasdPreAckDocumentStore
         string $operationKey,
         string $entityKey,
         IntegraResponse $response,
-        int $officeId,
+        int $tenantId,
         int $clientId,
     ): IntegraResponse {
         if (! in_array($operationKey, [
@@ -40,13 +40,13 @@ final class PgdasdPreAckDocumentStore
 
         $run = FiscalMonitoringRun::query()
             ->withoutGlobalScopes()
-            ->with(['office', 'client', 'competence'])
+            ->with(['tenant', 'client', 'competence'])
             ->whereKey((int) $matches[1])
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('client_id', $clientId)
             ->where('service_code', 'PGDASD')
             ->first();
-        if ($run === null || $run->office === null || $run->client === null) {
+        if ($run === null || $run->tenant === null || $run->client === null) {
             throw new RuntimeException('Run fiscal PGDAS-D inválida para captura documental pré-ACK.');
         }
 
@@ -73,7 +73,7 @@ final class PgdasdPreAckDocumentStore
         ])->save();
 
         $projection = $this->projector->ensureProjectionForPeriod(
-            $run->office,
+            $run->tenant,
             $run->client,
             $periodKey,
             $run->competence?->period_key === $periodKey ? $run->competence?->id : null,

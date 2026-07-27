@@ -5,13 +5,13 @@ namespace App\Models;
 use App\Enums\MailboxDteStatus;
 use App\Enums\MailboxMessagesConsultStatus;
 use App\Enums\MailboxSource;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'client_id',
     'dte_status',
     'dte_source',
@@ -30,7 +30,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class MailboxContributorState extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {
@@ -63,7 +63,7 @@ class MailboxContributorState extends Model
     {
         return [
             'id' => $this->id,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'client_id' => $this->client_id,
             'dte' => [
                 'status' => $this->dte_status?->value ?? MailboxDteStatus::Unknown->value,

@@ -147,6 +147,23 @@ func TestTypedMessageSenderUsesRemoteParticipantOnlyWhenQuotedSenderIsKnown(t *t
 	}
 }
 
+func TestTypedMessageBuilderRejectsMissingKind(t *testing.T) {
+	t.Parallel()
+
+	message, err := buildTypedMessage(
+		&fakeClient{connected: true},
+		types.NewJID("5511999991234", types.DefaultUserServer),
+		domain.MessageSendPayload{
+			To:   "+5511999991234",
+			Text: "Mensagem sem tipo explícito",
+		},
+		nil,
+	)
+	if err == nil || message != nil {
+		t.Fatalf("message without an explicit kind must fail closed: message=%+v err=%v", message, err)
+	}
+}
+
 func TestTypedMessageSenderStreamsMediaAndKeepsProviderID(t *testing.T) {
 	t.Parallel()
 	client := &fakeClient{connected: true}

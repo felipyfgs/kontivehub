@@ -5,7 +5,7 @@ namespace Database\Factories;
 use App\Domain\Cnpj;
 use App\Enums\RegistrationSource;
 use App\Models\Client;
-use App\Models\Office;
+use App\Models\Tenant;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -20,7 +20,7 @@ class ClientFactory extends Factory
         $cnpj = $this->validNumericCnpj();
 
         return [
-            'office_id' => Office::factory(),
+            'tenant_id' => Tenant::factory(),
             'legal_name' => fake()->company(),
             'display_name' => null,
             'root_cnpj' => substr($cnpj, 0, 8),
@@ -36,19 +36,14 @@ class ClientFactory extends Factory
         ];
     }
 
-    public function forOffice(Office $office): static
+    public function forTenant(Tenant $tenant): static
     {
-        return $this->state(fn () => ['office_id' => $office->id]);
+        return $this->state(fn () => ['tenant_id' => $tenant->id]);
     }
 
     public function withRoot(string $root8): static
     {
         return $this->state(fn () => ['root_cnpj' => strtoupper(substr($root8, 0, 8))]);
-    }
-
-    public function legacy(): static
-    {
-        return $this->state(fn () => ['registration_source' => RegistrationSource::Legacy]);
     }
 
     private function validNumericCnpj(): string

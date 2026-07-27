@@ -44,7 +44,6 @@ import type {
   SitfisRefreshResponse,
   SitfisShowResponse,
   PgdasdHistoryPayload,
-  PgdasdHistoryPeriod,
   DctfwebHistoryPayload,
   MitListaApuracoes317Payload,
   FiscalRegistrationLink,
@@ -167,7 +166,7 @@ export function createFiscalApi(client: ApiClient, apiUrl: ApiUrl) {
       },
       /**
        * Read model de carteira por módulo (overview + clients).
-       * office_id só via membership ativa no backend — nunca enviar no query.
+       * tenant_id só via membership ativa no backend — nunca enviar no query.
        */
       modules: {
         overview: <M extends FiscalPortfolioModuleKey>(module: M, params?: FiscalModulePortfolioFilters) =>
@@ -219,7 +218,7 @@ export function createFiscalApi(client: ApiClient, apiUrl: ApiUrl) {
       },
       pgdasd: {
         history: (clientId: number, params?: { year?: number }) =>
-          client<{ data: PgdasdHistoryPayload | PgdasdHistoryPeriod[] }>(
+          client<{ data: PgdasdHistoryPayload }>(
             `/api/v1/fiscal/simples-mei/pgdasd/clients/${clientId}/history`,
             { query: params }
           ),
@@ -853,9 +852,7 @@ export function createFiscalApi(client: ApiClient, apiUrl: ApiUrl) {
           client<{ data: Array<Record<string, unknown>>, meta?: PageMeta }>(
             `/api/v1/fiscal/simples-mei/clients/${clientId}/snapshots`,
             { query: params }
-          ),
-        consult: (body: Record<string, unknown>) =>
-          client<{ data: unknown }>('/api/v1/fiscal/simples-mei/consult', { method: 'POST', body })
+          )
       },
       fgts: {
         coverage: () =>
@@ -933,11 +930,6 @@ export function createFiscalApi(client: ApiClient, apiUrl: ApiUrl) {
         }
       },
       mutations: {
-        confirmTotp: (code: string) =>
-          client<{ data: { confirmed: boolean, window_minutes?: number, seconds_remaining?: number } }>(
-            '/api/v1/auth/confirm-totp',
-            { method: 'POST', body: { code } }
-          ),
         preflight: (body: Record<string, unknown>) =>
           client<{ data: FiscalMutationPreflight }>('/api/v1/fiscal/mutations/preflight', {
             method: 'POST',

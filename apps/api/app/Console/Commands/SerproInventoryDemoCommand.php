@@ -6,19 +6,18 @@ use App\Services\Serpro\SerproDemoInventoryService;
 use Illuminate\Console\Command;
 
 /**
- * Inventaria e opcionalmente segrega demo/shadow/fake sem apagar histórico.
+ * Inventaria demo/shadow/fake sem alterar o histórico.
  */
 class SerproInventoryDemoCommand extends Command
 {
     protected $signature = 'serpro:inventory-demo
-        {--apply : Aplica segregation_class sem promover estados}
         {--json : Saída JSON}';
 
-    protected $description = 'Inventário de Offices demo, tokens, ledger shadow e evidências (sem apagar trilha)';
+    protected $description = 'Inventário de Tenants demo, tokens, ledger shadow e evidências (sem apagar trilha)';
 
     public function handle(SerproDemoInventoryService $inventory): int
     {
-        $result = $inventory->inventory(applySegregation: (bool) $this->option('apply'));
+        $result = $inventory->inventory();
 
         if ($this->option('json')) {
             $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
@@ -26,10 +25,10 @@ class SerproInventoryDemoCommand extends Command
             return self::SUCCESS;
         }
 
-        $this->info('Offices: '.count($result['offices']));
+        $this->info('Tenants: '.count($result['tenants']));
         $this->table(
             ['id', 'slug', 'demo?', 'segregation'],
-            collect($result['offices'])->map(fn (array $o) => [
+            collect($result['tenants'])->map(fn (array $o) => [
                 $o['id'],
                 $o['slug'],
                 $o['inferred_demo'] ? 'yes' : 'no',
@@ -50,15 +49,6 @@ class SerproInventoryDemoCommand extends Command
             $result['powers']['total'],
             $result['powers']['simulated_or_unverified'],
         ));
-
-        if ($result['actions_applied'] !== []) {
-            $this->warn('Ações de segregação:');
-            foreach ($result['actions_applied'] as $a) {
-                $this->line(' - '.$a);
-            }
-        } else {
-            $this->line('Nenhuma segregação aplicada (use --apply).');
-        }
 
         return self::SUCCESS;
     }

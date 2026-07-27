@@ -3,31 +3,33 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Contracts\SvrsPortalEgressGovernor;
-use App\Enums\OfficeRole;
 use App\Enums\OutboundRetrievalOrigin;
 use App\Enums\SvrsNfceRecoveryStatus;
+use App\Enums\TenantRole;
 use App\Http\Controllers\Controller;
 use App\Models\Client;
-use App\Models\MaOutboundRetrievalRequest;
 use App\Models\OutboundCaptureProfile;
 use App\Models\OutboundNumberState;
-use App\Models\OutboundXmlRecoveryAttempt;
+use App\Models\OutboundRetrievalAttempt;
+use App\Models\OutboundRetrievalRequest;
+use App\Models\User;
+use App\Services\Auth\RecentPasswordConfirmationGate;
 use App\Services\Outbound\OutboundXmlRecoveryOrchestrator;
 use App\Services\Outbound\SvrsNfceCircuitBreaker;
 use App\Services\Outbound\SvrsNfceConfig;
 use App\Services\Outbound\SvrsNfceKillSwitchService;
 use App\Services\Outbound\SvrsNfe55Config;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * API same-origin do canal SVRS NFC-e / saúde de coorte — DTOs sanitizados; office_id do servidor.
+ * API same-origin do canal SVRS NFC-e / saúde de coorte — DTOs sanitizados; tenant_id do servidor.
  */
 class SvrsNfceRecoveryController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly SvrsNfceConfig $config,
         private readonly SvrsNfe55Config $nfe55Config,
         private readonly SvrsNfceKillSwitchService $killSwitch,
@@ -39,10 +41,10 @@ class SvrsNfceRecoveryController extends Controller
     public function channelSummary(): JsonResponse
     {
         $this->authorizeView();
-        $officeId = $this->currentOffice->id();
+        $tenantId = $this->currentTenant->id();
 
-        $backlog = MaOutboundRetrievalRequest::query()
-            ->where('office_id', $officeId)
+        $backlog = OutboundRetrievalRequest::query()
+            ->where('tenant_id', $tenantId)
             ->where('origin', OutboundRetrievalOrigin::SvrsPortalByKey)
             ->whereIn('recovery_status', [
                 SvrsNfceRecoveryStatus::Eligible,
@@ -52,8 +54,8 @@ class SvrsNfceRecoveryController extends Controller
             ])
             ->count();
 
-        $oldest = MaOutboundRetrievalRequest::query()
-            ->where('office_id', $officeId)
+        $oldest = OutboundRetrievalRequest::query()
+            ->where('tenant_id', $tenantId)
             ->where('origin', OutboundRetrievalOrigin::SvrsPortalByKey)
             ->whereIn('recovery_status', [
                 SvrsNfceRecoveryStatus::Eligible,
@@ -126,9 +128,9 @@ class SvrsNfceRecoveryController extends Controller
     public function profileSummary(OutboundCaptureProfile $profile): JsonResponse
     {
         $this->authorizeView();
-        $this->assertProfileOffice($profile);
+        $this->assertProfileTenant($profile);
 
-        $pending = MaOutboundRetrievalRequest::query()
+        $pending = OutboundRetrievalRequest::query()
             ->where('outbound_capture_profile_id', $profile->id)
             ->where('origin', OutboundRetrievalOrigin::SvrsPortalByKey)
             ->whereIn('recovery_status', [
@@ -142,9 +144,9 @@ class SvrsNfceRecoveryController extends Controller
             ->orderByDesc('updated_at')
             ->limit(5)
             ->get()
-            ->map(fn (MaOutboundRetrievalRequest $r) => $r->toPublicArray());
+            ->map(fn (OutboundRetrievalRequest $r) => $r->toPublicArray());
 
-        $lastCaptured = MaOutboundRetrievalRequest::query()
+        $lastCaptured = OutboundRetrievalRequest::query()
             ->where('outbound_capture_profile_id', $profile->id)
             ->where('origin', OutboundRetrievalOrigin::SvrsPortalByKey)
             ->where('recovery_status', SvrsNfceRecoveryStatus::Captured)
@@ -174,10 +176,10 @@ class SvrsNfceRecoveryController extends Controller
     public function index(Request $request): JsonResponse
     {
         $this->authorizeView();
-        $officeId = $this->currentOffice->id();
+        $tenantId = $this->currentTenant->id();
 
-        $q = MaOutboundRetrievalRequest::query()
-            ->where('office_id', $officeId)
+        $q = OutboundRetrievalRequest::query()
+            ->where('tenant_id', $tenantId)
             ->where('origin', OutboundRetrievalOrigin::SvrsPortalByKey)
             ->orderByDesc('id');
 
@@ -187,11 +189,11 @@ class SvrsNfceRecoveryController extends Controller
         if ($request->filled('profile_id')) {
             $q->where('outbound_capture_profile_id', (int) $request->input('profile_id'));
         }
-        // Escopo por cliente do escritório (nunca confiar office_id do payload)
+        // Escopo por cliente do escritório (nunca confiar tenant_id do payload)
         if ($request->filled('client_id')) {
             $clientId = (int) $request->input('client_id');
             $profileIds = OutboundCaptureProfile::query()
-                ->where('office_id', $officeId)
+                ->where('tenant_id', $tenantId)
                 ->where('client_id', $clientId)
                 ->pluck('id');
             $q->whereIn('outbound_capture_profile_id', $profileIds);
@@ -200,7 +202,7 @@ class SvrsNfceRecoveryController extends Controller
         $page = $q->paginate(min(100, max(1, (int) $request->input('per_page', 20))));
 
         return response()->json([
-            'data' => collect($page->items())->map(fn (MaOutboundRetrievalRequest $r) => $r->toPublicArray()),
+            'data' => collect($page->items())->map(fn (OutboundRetrievalRequest $r) => $r->toPublicArray()),
             'meta' => [
                 'current_page' => $page->currentPage(),
                 'last_page' => $page->lastPage(),
@@ -209,16 +211,16 @@ class SvrsNfceRecoveryController extends Controller
         ]);
     }
 
-    public function attempts(MaOutboundRetrievalRequest $recovery): JsonResponse
+    public function attempts(OutboundRetrievalRequest $recovery): JsonResponse
     {
         $this->authorizeView();
-        $this->assertRecoveryOffice($recovery);
+        $this->assertRecoveryTenant($recovery);
 
-        $rows = OutboundXmlRecoveryAttempt::query()
-            ->where('ma_outbound_retrieval_request_id', $recovery->id)
+        $rows = OutboundRetrievalAttempt::query()
+            ->where('outbound_retrieval_request_id', $recovery->id)
             ->orderBy('attempt_number')
             ->get()
-            ->map(fn (OutboundXmlRecoveryAttempt $a) => $a->toPublicArray());
+            ->map(fn (OutboundRetrievalAttempt $a) => $a->toPublicArray());
 
         return response()->json(['data' => $rows]);
     }
@@ -227,8 +229,8 @@ class SvrsNfceRecoveryController extends Controller
     {
         $this->authorizeOperate();
 
-        // Ignorar office_id / url / host / headers / cookie / credential do cliente
-        $request->request->remove('office_id');
+        // Ignorar tenant_id / url / host / headers / cookie / credential do cliente
+        $request->request->remove('tenant_id');
         $request->request->remove('url');
         $request->request->remove('host');
         $request->request->remove('headers');
@@ -267,10 +269,10 @@ class SvrsNfceRecoveryController extends Controller
         return response()->json(['data' => $recovery->toPublicArray()]);
     }
 
-    public function retry(MaOutboundRetrievalRequest $recovery): JsonResponse
+    public function retry(OutboundRetrievalRequest $recovery): JsonResponse
     {
         $this->authorizeOperate();
-        $this->assertRecoveryOffice($recovery);
+        $this->assertRecoveryTenant($recovery);
 
         if ($this->breaker->globalStatus()['state'] === 'open') {
             return response()->json([
@@ -314,16 +316,16 @@ class SvrsNfceRecoveryController extends Controller
 
     public function killSwitch(Request $request): JsonResponse
     {
-        $this->authorizeAdmin2fa();
+        $this->authorizeAdminWithRecentPassword();
         $data = $request->validate([
             'active' => ['required', 'boolean'],
             'reason' => ['required', 'string', 'max:500'],
         ]);
 
         if ($data['active']) {
-            $this->killSwitch->activate($data['reason'], (int) $request->user()->id, $this->currentOffice->id());
+            $this->killSwitch->activate($data['reason'], (int) $request->user()->id, $this->currentTenant->id());
         } else {
-            $this->killSwitch->deactivate($data['reason'], (int) $request->user()->id, $this->currentOffice->id());
+            $this->killSwitch->deactivate($data['reason'], (int) $request->user()->id, $this->currentTenant->id());
         }
 
         return response()->json(['data' => $this->killSwitch->status()]);
@@ -342,7 +344,7 @@ class SvrsNfceRecoveryController extends Controller
 
     public function breakerReset(Request $request): JsonResponse
     {
-        $this->authorizeAdmin2fa();
+        $this->authorizeAdminWithRecentPassword();
         $data = $request->validate([
             'scope' => ['required', 'in:global,root'],
             'client_id' => ['nullable', 'integer'],
@@ -350,7 +352,7 @@ class SvrsNfceRecoveryController extends Controller
         ]);
 
         if ($data['scope'] === 'global') {
-            $this->breaker->resetGlobal($data['reason'], (int) $request->user()->id, $this->currentOffice->id());
+            $this->breaker->resetGlobal($data['reason'], (int) $request->user()->id, $this->currentTenant->id());
         } else {
             $clientId = (int) ($data['client_id'] ?? 0);
             if ($clientId < 1) {
@@ -359,12 +361,12 @@ class SvrsNfceRecoveryController extends Controller
             // Tenancy: client deve pertencer ao escritório da sessão
             $client = Client::query()
                 ->where('id', $clientId)
-                ->where('office_id', $this->currentOffice->id())
+                ->where('tenant_id', $this->currentTenant->id())
                 ->first();
             if ($client === null) {
                 abort(404);
             }
-            $this->breaker->resetRoot($clientId, $data['reason'], (int) $request->user()->id, $this->currentOffice->id());
+            $this->breaker->resetRoot($clientId, $data['reason'], (int) $request->user()->id, $this->currentTenant->id());
         }
 
         return response()->json([
@@ -379,7 +381,7 @@ class SvrsNfceRecoveryController extends Controller
      */
     public function extendEgressCooldown(Request $request): JsonResponse
     {
-        $this->authorizeAdmin2fa();
+        $this->authorizeAdminWithRecentPassword();
         // Recusar campos de elevação de orçamento / URL / proxy
         foreach (['min_interval', 'max_exchanges', 'url', 'host', 'headers', 'cookie', 'proxy', 'next_probe_at'] as $forbidden) {
             $request->request->remove($forbidden);
@@ -393,7 +395,7 @@ class SvrsNfceRecoveryController extends Controller
         $this->egressGovernor->extendCooldown(
             (int) $data['additional_seconds'],
             (int) $request->user()->id,
-            $this->currentOffice->id(),
+            $this->currentTenant->id(),
         );
 
         return response()->json([
@@ -407,7 +409,7 @@ class SvrsNfceRecoveryController extends Controller
      */
     public function selectEgressCanary(Request $request): JsonResponse
     {
-        $this->authorizeAdmin2fa();
+        $this->authorizeAdminWithRecentPassword();
         foreach (['url', 'host', 'headers', 'cookie', 'proxy', 'next_probe_at', 'min_interval'] as $forbidden) {
             $request->request->remove($forbidden);
         }
@@ -418,7 +420,7 @@ class SvrsNfceRecoveryController extends Controller
         ]);
 
         $number = OutboundNumberState::query()->find((int) $data['number_state_id']);
-        if ($number === null || (int) $number->office_id !== (int) $this->currentOffice->id()) {
+        if ($number === null || (int) $number->tenant_id !== (int) $this->currentTenant->id()) {
             abort(404);
         }
 
@@ -440,7 +442,7 @@ class SvrsNfceRecoveryController extends Controller
             $mask,
             hash('sha256', $key),
             (int) $request->user()->id,
-            $this->currentOffice->id(),
+            $this->currentTenant->id(),
         );
 
         if (! $result['ok']) {
@@ -461,7 +463,7 @@ class SvrsNfceRecoveryController extends Controller
      */
     public function refuseBudgetElevation(Request $request): JsonResponse
     {
-        $this->authorizeAdmin2fa();
+        $this->authorizeAdminWithRecentPassword();
 
         return response()->json([
             'message' => 'Elevação de orçamento, antecipação de next_probe_at, URL/host/proxy/cookie arbitrários não são permitidos via API.',
@@ -475,35 +477,36 @@ class SvrsNfceRecoveryController extends Controller
 
     private function authorizeView(): void
     {
-        $this->currentOffice->office(); // ensures resolved
+        $this->currentTenant->tenant(); // ensures resolved
         abort_unless(auth()->check(), 401);
     }
 
     private function authorizeOperate(): void
     {
         $this->authorizeView();
-        $role = $this->currentOffice->role();
-        abort_unless(in_array($role, [OfficeRole::Admin, OfficeRole::Operator], true), 403);
+        $role = $this->currentTenant->role();
+        abort_unless(in_array($role, [TenantRole::TenantAdmin, TenantRole::TenantUser], true), 403);
     }
 
-    private function authorizeAdmin2fa(): void
+    private function authorizeAdminWithRecentPassword(): void
     {
         $this->authorizeView();
-        abort_unless($this->currentOffice->role() === OfficeRole::Admin, 403);
+        abort_unless($this->currentTenant->role() === TenantRole::TenantAdmin, 403);
         $user = auth()->user();
-        abort_unless($user && $user->two_factor_confirmed_at, 403);
+        abort_unless($user instanceof User, 403);
+        abort_unless(app(RecentPasswordConfirmationGate::class)->isRecentlyConfirmed($user), 403);
     }
 
-    private function assertProfileOffice(OutboundCaptureProfile $profile): void
+    private function assertProfileTenant(OutboundCaptureProfile $profile): void
     {
-        if ((int) $profile->office_id !== (int) $this->currentOffice->id()) {
+        if ((int) $profile->tenant_id !== (int) $this->currentTenant->id()) {
             abort(404);
         }
     }
 
-    private function assertRecoveryOffice(MaOutboundRetrievalRequest $recovery): void
+    private function assertRecoveryTenant(OutboundRetrievalRequest $recovery): void
     {
-        if ((int) $recovery->office_id !== (int) $this->currentOffice->id()) {
+        if ((int) $recovery->tenant_id !== (int) $this->currentTenant->id()) {
             abort(404);
         }
         if ($recovery->origin !== OutboundRetrievalOrigin::SvrsPortalByKey) {

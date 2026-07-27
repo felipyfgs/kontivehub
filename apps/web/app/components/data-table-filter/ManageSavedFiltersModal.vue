@@ -58,7 +58,7 @@ function submitRename() {
 
 function toggleShare(filter: SavedListFilter) {
   if (!props.canShare && filter.visibility === 'personal') return
-  const next: SavedFilterVisibility = filter.visibility === 'office' ? 'personal' : 'office'
+  const next: SavedFilterVisibility = filter.visibility === 'tenant' ? 'personal' : 'tenant'
   emit('toggle-share', { id: filter.id, visibility: next })
 }
 
@@ -74,11 +74,11 @@ function confirmDelete() {
 }
 
 function canEdit(filter: SavedListFilter): boolean {
-  return filter.can_edit !== false
+  return filter.permissions.update
 }
 
 function canDelete(filter: SavedListFilter): boolean {
-  return filter.can_delete !== false
+  return filter.permissions.delete
 }
 </script>
 
@@ -159,18 +159,18 @@ function canDelete(filter: SavedListFilter): boolean {
                     {{ filter.name }}
                   </p>
                   <p
-                    v-if="filter.author_name"
+                    v-if="filter.author.name"
                     class="truncate text-xs text-muted"
                   >
-                    {{ filter.author_name }}
+                    {{ filter.author.name }}
                   </p>
                 </template>
               </div>
               <UBadge
                 size="sm"
                 variant="subtle"
-                :color="filter.visibility === 'office' ? 'primary' : 'neutral'"
-                :label="filter.visibility === 'office' ? 'Equipe' : 'Pessoal'"
+                :color="filter.visibility === 'tenant' ? 'primary' : 'neutral'"
+                :label="filter.visibility === 'tenant' ? 'Equipe' : 'Pessoal'"
               />
             </div>
 
@@ -212,12 +212,12 @@ function canDelete(filter: SavedListFilter): boolean {
                 @click="startRename(filter)"
               />
               <UButton
-                v-if="canEdit(filter) && (canShare || filter.visibility === 'office')"
+                v-if="canEdit(filter) && (canShare || filter.visibility === 'tenant')"
                 size="xs"
                 color="neutral"
                 variant="ghost"
-                :icon="filter.visibility === 'office' ? 'i-lucide-lock' : 'i-lucide-share-2'"
-                :label="filter.visibility === 'office' ? 'Tornar pessoal' : 'Compartilhar'"
+                :icon="filter.visibility === 'tenant' ? 'i-lucide-lock' : 'i-lucide-share-2'"
+                :label="filter.visibility === 'tenant' ? 'Tornar pessoal' : 'Compartilhar'"
                 :disabled="actingId === filter.id || (!canShare && filter.visibility === 'personal')"
                 data-testid="manage-saved-filter-share"
                 @click="toggleShare(filter)"

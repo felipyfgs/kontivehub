@@ -9,7 +9,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 
 /**
- * Credenciais A1 e status de backup da instância.
+ * Credenciais certificado e status de backup da instância.
  */
 final class CredentialBackupItemsCollector
 {
@@ -20,9 +20,9 @@ final class CredentialBackupItemsCollector
     /**
      * @return Collection<int, array<string, mixed>>
      */
-    public function collect(int $officeId, InboxCapabilities $role): Collection
+    public function collect(int $tenantId, InboxCapabilities $role): Collection
     {
-        return $this->credentialItems($officeId)
+        return $this->credentialItems($tenantId)
             ->merge($this->backupItems())
             ->values();
     }
@@ -30,11 +30,11 @@ final class CredentialBackupItemsCollector
     /**
      * @return Collection<int, array<string, mixed>>
      */
-    private function credentialItems(int $officeId): Collection
+    private function credentialItems(int $tenantId): Collection
     {
         $now = CarbonImmutable::now();
         $credentials = ClientCredential::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereIn('status', [CredentialStatus::Active, CredentialStatus::Expired])
             ->with('client')
             ->orderBy('id')
@@ -55,7 +55,7 @@ final class CredentialBackupItemsCollector
             if ($expired) {
                 $items->push($this->items->item(
                     type: 'credential_expired',
-                    title: 'Certificado A1 vencido: '.$this->items->clientLabel($client),
+                    title: 'certificado vencido: '.$this->items->clientLabel($client),
                     body: 'A credencial ACTIVE/operacional está vencida. Atualize o certificado do cliente.',
                     reasons: ['credential_expired'],
                     clientId: $client->id,
@@ -82,7 +82,7 @@ final class CredentialBackupItemsCollector
             if ($credential->expires_alert_1 || $credential->expires_alert_7 || $days <= 7) {
                 $items->push($this->items->item(
                     type: 'credential_expiring_7d',
-                    title: 'Certificado A1 vence em breve: '.$this->items->clientLabel($client),
+                    title: 'certificado vence em breve: '.$this->items->clientLabel($client),
                     body: 'Vencimento em até 7 dias ('.$validTo->toDateString().').',
                     reasons: ['credential_expiring_7d'],
                     clientId: $client->id,
@@ -99,7 +99,7 @@ final class CredentialBackupItemsCollector
             if ($credential->expires_alert_30 || $days <= 30) {
                 $items->push($this->items->item(
                     type: 'credential_expiring_30d',
-                    title: 'Certificado A1 a vencer: '.$this->items->clientLabel($client),
+                    title: 'certificado a vencer: '.$this->items->clientLabel($client),
                     body: 'Vencimento em até 30 dias ('.$validTo->toDateString().').',
                     reasons: ['credential_expiring_30d'],
                     clientId: $client->id,

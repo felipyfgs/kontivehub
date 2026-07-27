@@ -2,11 +2,12 @@
 
 namespace Database\Factories;
 
-use App\Enums\OfficeRole;
 use App\Enums\PlatformRole;
-use App\Models\Office;
+use App\Enums\TenantRole;
 use App\Models\PlatformMembership;
+use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Authorization\SystemTenantPermissionProfiles;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -38,42 +39,40 @@ class UserFactory extends Factory
         ]);
     }
 
-    public function withTwoFactorConfirmed(): static
-    {
-        return $this->state(fn (array $attributes) => [
-            'two_factor_secret' => encrypt('TESTSECRET'),
-            'two_factor_recovery_codes' => encrypt(json_encode(['code-1'])),
-            'two_factor_confirmed_at' => now(),
-        ]);
-    }
-
-    public function forOffice(Office $office, OfficeRole $role = OfficeRole::Viewer): static
-    {
-        return $this->afterCreating(function (User $user) use ($office, $role): void {
-            $office->users()->attach($user->id, [
+    public function forTenant(
+        Tenant $tenant,
+        TenantRole $role = TenantRole::TenantUser,
+        string $permissionProfile = 'operator',
+    ): static {
+        return $this->afterCreating(function (User $user) use ($tenant, $role, $permissionProfile): void {
+            $profiles = app(SystemTenantPermissionProfiles::class)->ensure($tenant);
+            $tenant->users()->attach($user->id, [
                 'role' => $role->value,
+                'permission_profile_id' => $role === TenantRole::TenantUser
+                    ? $profiles[$permissionProfile]->id
+                    : null,
                 'is_active' => true,
             ]);
         });
     }
 
     /**
-     * PLATFORM_ADMIN global — sem membership de office e sem acesso fiscal implícito.
-     * default_office_id opcional via withPlatformDefaultOffice().
+     * PLATFORM_ADMIN global — sem membership de tenant e sem acesso fiscal implícito.
+     * default_tenant_id opcional via withPlatformDefaultTenant().
      */
-    public function asPlatformAdmin(?int $defaultOfficeId = null): static
+    public function asPlatformAdmin(?int $defaultTenantId = null): static
     {
-        return $this->afterCreating(function (User $user) use ($defaultOfficeId): void {
+        return $this->afterCreating(function (User $user) use ($defaultTenantId): void {
             $attrs = ['is_active' => true];
-            if ($defaultOfficeId !== null) {
-                $attrs['default_office_id'] = $defaultOfficeId;
+            if ($defaultTenantId !== null) {
+                $attrs['default_tenant_id'] = $defaultTenantId;
             } else {
-                $oldestActive = Office::query()
+                $oldestActive = Tenant::query()
                     ->where('is_active', true)
                     ->orderBy('id')
                     ->value('id');
                 if ($oldestActive !== null) {
-                    $attrs['default_office_id'] = (int) $oldestActive;
+                    $attrs['default_tenant_id'] = (int) $oldestActive;
                 }
             }
 
@@ -87,13 +86,13 @@ class UserFactory extends Factory
         });
     }
 
-    public function withPlatformDefaultOffice(int $officeId): static
+    public function withPlatformDefaultTenant(int $tenantId): static
     {
-        return $this->afterCreating(function (User $user) use ($officeId): void {
+        return $this->afterCreating(function (User $user) use ($tenantId): void {
             PlatformMembership::query()
                 ->where('user_id', $user->id)
                 ->where('role', PlatformRole::PlatformAdmin->value)
-                ->update(['default_office_id' => $officeId]);
+                ->update(['default_tenant_id' => $tenantId]);
         });
     }
 }

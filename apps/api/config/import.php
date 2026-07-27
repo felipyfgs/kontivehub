@@ -2,8 +2,7 @@
 
 /**
  * Limites de importação em massa de XML/ZIP (saídas NF-e 55 / NFC-e 65).
- * Valores alinhados a Nginx, PHP-FPM e workers — processing assíncrono
- * só entra com a change add-office-autxml-and-bulk-xml-import.
+ * Valores alinhados a Nginx, PHP-FPM e workers.
  *
  * Edge atual (docker):
  *   nginx client_max_body_size = 25M  (margem multipart sobre 20 MiB compactados)
@@ -11,11 +10,10 @@
  *   php post_max_size          = 25M
  *   php memory_limit           = 512M
  *
- * @see openspec/changes/add-office-autxml-and-bulk-xml-import design D9
+ * @see openspec/changes/add-tenant-autxml-and-bulk-xml-import design D9
  */
 return [
-    // Feature: processamento assíncrono por batch (default off até seção 6)
-    'async_batches_enabled' => filter_var(env('IMPORT_ASYNC_BATCHES_ENABLED', false), FILTER_VALIDATE_BOOL),
+    'enabled' => true,
 
     // Admissão HTTP (top-level)
     'max_top_level_files' => (int) env('IMPORT_MAX_TOP_LEVEL_FILES', 50),

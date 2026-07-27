@@ -2,6 +2,8 @@
 
 namespace App\Services\FiscalMonitoring\Surfaces;
 
+use App\Enums\FiscalControlModule;
+
 /**
  * Metadados de integração pertencentes ao workspace. O manifesto oficial
  * continua sendo a fonte de coordenadas e schemas do provider; este registro
@@ -146,15 +148,6 @@ final class MonitoringActionMetadataRegistry
 
     public function featureModuleFor(string $monitoringModule): ?string
     {
-        return match ($monitoringModule) {
-            'simples_mei' => 'simples_mei',
-            'dctfweb' => 'dctfweb_mit',
-            'installments' => 'parcelamentos',
-            'sitfis' => 'sitfis',
-            'mailbox' => 'mailbox',
-            'guides' => 'guias',
-            'declarations' => 'declaracoes',
-            default => null,
-        };
+        return FiscalControlModule::tryFrom($monitoringModule)?->value;
     }
 }

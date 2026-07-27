@@ -2,114 +2,114 @@
 
 namespace App\Services\Platform;
 
-use App\Models\Office;
-use App\Models\OfficeMembership;
+use App\Models\Tenant;
+use App\Models\TenantMembership;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
  * Troca explícita de tenant entre memberships ativas.
- * Nunca confia office_id como autoridade sem revalidar membership.
+ * Nunca confia tenant_id como autoridade sem revalidar membership.
  *
- * Persistência: `users.selected_office_id` (durável) + sessão SPA quando disponível.
+ * Persistência: `users.selected_tenant_id` (durável) + sessão SPA quando disponível.
  */
 final class TenantSwitchService
 {
-    public const SESSION_KEY = CurrentOffice::SESSION_KEY;
+    public const SESSION_KEY = CurrentTenant::SESSION_KEY;
 
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly AuditLogger $audit,
     ) {}
 
     /**
      * @throws HttpException 403/404
      */
-    public function switchTo(User $user, int $targetOfficeId, Request $request): Office
+    public function switchTo(User $user, int $targetTenantId, Request $request): Tenant
     {
         if (! $user->is_active) {
             abort(403, 'Usuário inativo.');
         }
 
-        $fromOfficeId = $this->currentOffice->resolve($user)?->id;
+        $fromTenantId = $this->currentTenant->resolve($user)?->id;
 
-        $membership = OfficeMembership::query()
+        $membership = TenantMembership::query()
             ->where('user_id', $user->id)
-            ->where('office_id', $targetOfficeId)
+            ->where('tenant_id', $targetTenantId)
             ->where('is_active', true)
-            ->whereHas('office', fn ($q) => $q->where('is_active', true))
-            ->with('office')
+            ->whereHas('tenant', fn ($q) => $q->where('is_active', true))
+            ->with('tenant')
             ->first();
 
         // Não revelar existência do tenant alvo sem membership.
-        if ($membership === null || $membership->office === null) {
+        if ($membership === null || $membership->tenant === null) {
             $this->audit->record(
                 action: 'tenant.switch_denied',
                 result: 'DENIED',
                 context: [
-                    'from_office_id' => $fromOfficeId,
+                    'from_tenant_id' => $fromTenantId,
                     'reason' => 'no_active_membership',
                 ],
                 userId: $user->id,
-                officeId: $fromOfficeId,
+                tenantId: $fromTenantId,
             );
 
             abort(404, 'Escritório não encontrado.');
         }
 
-        $office = $membership->office;
+        $tenant = $membership->tenant;
 
         // Preferência durável (funciona sem sessão SPA / token / testes).
-        $user->forceFill(['selected_office_id' => $office->id])->save();
+        $user->forceFill(['selected_tenant_id' => $tenant->id])->save();
 
         if ($request->hasSession()) {
-            $request->session()->put(self::SESSION_KEY, $office->id);
+            $request->session()->put(self::SESSION_KEY, $tenant->id);
             // Rotaciona id de sessão sem destroy (mantém atributos no driver array).
             $request->session()->regenerate();
         }
 
-        $this->currentOffice->clear();
-        $this->currentOffice->bind($user, $membership);
+        $this->currentTenant->clear();
+        $this->currentTenant->bind($user, $membership);
 
         $this->audit->record(
             action: 'tenant.switched',
             result: 'SUCCESS',
-            subject: $office,
+            subject: $tenant,
             context: [
-                'from_office_id' => $fromOfficeId,
-                'to_office_id' => $office->id,
+                'from_tenant_id' => $fromTenantId,
+                'to_tenant_id' => $tenant->id,
             ],
             userId: $user->id,
-            officeId: $office->id,
+            tenantId: $tenant->id,
         );
 
-        return $office;
+        return $tenant;
     }
 
     /**
      * Lista memberships ativas do usuário (sem conteúdo fiscal).
      *
-     * @return list<array{office_id: int, office_name: string|null, office_slug: string|null, role: string, is_current: bool}>
+     * @return list<array{tenant_id: int, tenant_name: string|null, tenant_slug: string|null, role: string, is_current: bool}>
      */
     public function listMemberships(User $user): array
     {
-        $currentId = $this->currentOffice->resolve($user)?->id;
+        $currentId = $this->currentTenant->resolve($user)?->id;
 
         return $user->memberships()
             ->where('is_active', true)
-            ->whereHas('office', fn ($q) => $q->where('is_active', true))
-            ->with('office')
+            ->whereHas('tenant', fn ($q) => $q->where('is_active', true))
+            ->with('tenant')
             ->orderBy('id')
             ->get()
-            ->map(fn (OfficeMembership $m) => [
-                'office_id' => $m->office_id,
-                'office_name' => $m->office?->name,
-                'office_slug' => $m->office?->slug,
+            ->map(fn (TenantMembership $m) => [
+                'tenant_id' => $m->tenant_id,
+                'tenant_name' => $m->tenant?->name,
+                'tenant_slug' => $m->tenant?->slug,
                 'role' => $m->role->value,
-                'is_current' => $currentId !== null && $m->office_id === $currentId,
+                'is_current' => $currentId !== null && $m->tenant_id === $currentId,
             ])
             ->values()
             ->all();

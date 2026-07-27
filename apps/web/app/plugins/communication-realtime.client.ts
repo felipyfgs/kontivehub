@@ -61,7 +61,7 @@ export default defineNuxtPlugin(() => {
     state: readonly(state),
     channelsReady: computed(() => false),
     subscribeInbox: () => () => undefined,
-    subscribeOffice: () => () => undefined,
+    subscribeTenant: () => () => undefined,
     disconnect: () => undefined
   }
 
@@ -127,20 +127,20 @@ export default defineNuxtPlugin(() => {
   const handlers = new Map<number, Set<(event: CommunicationRealtimeEvent) => void>>()
   const channelCallbacks = new Map<number, (event: CommunicationRealtimeEvent) => void>()
   const subscribedInboxes = new Set<number>()
-  const officeHandlers = new Map<number, Set<(event: CommunicationRealtimeEvent) => void>>()
-  const officeCallbacks = new Map<number, (event: CommunicationRealtimeEvent) => void>()
-  const subscribedOffices = new Set<number>()
+  const tenantHandlers = new Map<number, Set<(event: CommunicationRealtimeEvent) => void>>()
+  const tenantCallbacks = new Map<number, (event: CommunicationRealtimeEvent) => void>()
+  const subscribedTenants = new Set<number>()
 
-  function markSubscribed(kind: 'inbox' | 'office', id: number): void {
-    const set = kind === 'inbox' ? subscribedInboxes : subscribedOffices
+  function markSubscribed(kind: 'inbox' | 'tenant', id: number): void {
+    const set = kind === 'inbox' ? subscribedInboxes : subscribedTenants
     if (set.has(id)) return
     set.add(id)
     subscribedChannelCount.value += 1
     refreshRealtimeState()
   }
 
-  function markUnsubscribed(kind: 'inbox' | 'office', id: number): void {
-    const set = kind === 'inbox' ? subscribedInboxes : subscribedOffices
+  function markUnsubscribed(kind: 'inbox' | 'tenant', id: number): void {
+    const set = kind === 'inbox' ? subscribedInboxes : subscribedTenants
     if (!set.has(id)) return
     set.delete(id)
     subscribedChannelCount.value = Math.max(0, subscribedChannelCount.value - 1)
@@ -188,52 +188,52 @@ export default defineNuxtPlugin(() => {
         markUnsubscribed('inbox', inboxId)
       }
     },
-    subscribeOffice(officeId, handler) {
-      const currentHandlers = officeHandlers.get(officeId) ?? new Set()
+    subscribeTenant(tenantId, handler) {
+      const currentHandlers = tenantHandlers.get(tenantId) ?? new Set()
       currentHandlers.add(handler)
-      officeHandlers.set(officeId, currentHandlers)
+      tenantHandlers.set(tenantId, currentHandlers)
 
-      if (!officeCallbacks.has(officeId)) {
+      if (!tenantCallbacks.has(tenantId)) {
         const channelCallback = (event: CommunicationRealtimeEvent) => {
-          for (const subscriber of officeHandlers.get(officeId) ?? []) subscriber(event)
+          for (const subscriber of tenantHandlers.get(tenantId) ?? []) subscriber(event)
         }
-        officeCallbacks.set(officeId, channelCallback)
-        echo.private(`communication.office.${officeId}`)
+        tenantCallbacks.set(tenantId, channelCallback)
+        echo.private(`communication.tenant.${tenantId}`)
           .listen('.communication.event', channelCallback)
           .subscribed(() => {
-            markSubscribed('office', officeId)
+            markSubscribed('tenant', tenantId)
           })
           .error(() => {
-            markUnsubscribed('office', officeId)
+            markUnsubscribed('tenant', tenantId)
             transportState.value = 'unavailable'
             refreshRealtimeState()
           })
       }
 
       return () => {
-        const subscribers = officeHandlers.get(officeId)
+        const subscribers = tenantHandlers.get(tenantId)
         subscribers?.delete(handler)
         if (subscribers?.size) return
-        const callback = officeCallbacks.get(officeId)
+        const callback = tenantCallbacks.get(tenantId)
         if (callback) {
-          echo.private(`communication.office.${officeId}`)
+          echo.private(`communication.tenant.${tenantId}`)
             .stopListening('.communication.event', callback)
         }
-        echo.leave(`communication.office.${officeId}`)
-        officeHandlers.delete(officeId)
-        officeCallbacks.delete(officeId)
-        markUnsubscribed('office', officeId)
+        echo.leave(`communication.tenant.${tenantId}`)
+        tenantHandlers.delete(tenantId)
+        tenantCallbacks.delete(tenantId)
+        markUnsubscribed('tenant', tenantId)
       }
     },
     disconnect() {
       for (const inboxId of handlers.keys()) echo.leave(`communication.inbox.${inboxId}`)
-      for (const officeId of officeHandlers.keys()) echo.leave(`communication.office.${officeId}`)
+      for (const tenantId of tenantHandlers.keys()) echo.leave(`communication.tenant.${tenantId}`)
       handlers.clear()
       channelCallbacks.clear()
-      officeHandlers.clear()
-      officeCallbacks.clear()
+      tenantHandlers.clear()
+      tenantCallbacks.clear()
       subscribedInboxes.clear()
-      subscribedOffices.clear()
+      subscribedTenants.clear()
       subscribedChannelCount.value = 0
       echo.disconnect()
       transportState.value = 'unavailable'

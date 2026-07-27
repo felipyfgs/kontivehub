@@ -5,7 +5,7 @@ namespace App\Services\Communication\Flows;
 use App\Enums\Communication\ConversationStatus;
 use App\Models\CommunicationCannedResponse;
 use App\Models\CommunicationLabel;
-use App\Models\OfficeMembership;
+use App\Models\TenantMembership;
 
 final class CommunicationFlowGraphValidator
 {
@@ -52,7 +52,7 @@ final class CommunicationFlowGraphValidator
     /**
      * @param  array<string, mixed>  $graph
      */
-    public function validate(array $graph, int $officeId): CommunicationFlowGraphValidationResult
+    public function validate(array $graph, int $tenantId): CommunicationFlowGraphValidationResult
     {
         $digest = $this->canonicalizer->digest($graph);
         $errors = [];
@@ -101,7 +101,7 @@ final class CommunicationFlowGraphValidator
             $data = is_array($node['data'] ?? null) ? $node['data'] : [];
             $this->rejectForbiddenPayload($data, "$path.data", $errors);
             if (in_array($type, self::ALLOWED_TYPES, true)) {
-                $this->validateNodeData($type, $data, $officeId, $path, $errors);
+                $this->validateNodeData($type, $data, $tenantId, $path, $errors);
             }
         }
 
@@ -158,17 +158,17 @@ final class CommunicationFlowGraphValidator
      * @param  array<string, mixed>  $data
      * @param  list<array{path: string, code: string, message: string}>  $errors
      */
-    private function validateNodeData(string $type, array $data, int $officeId, string $path, array &$errors): void
+    private function validateNodeData(string $type, array $data, int $tenantId, string $path, array &$errors): void
     {
         match ($type) {
             'start', 'end' => null,
-            'message' => $this->validateMessage($data, $officeId, $path, $errors),
-            'quick_reply' => $this->validateQuickReply($data, $officeId, $path, $errors),
+            'message' => $this->validateMessage($data, $tenantId, $path, $errors),
+            'quick_reply' => $this->validateQuickReply($data, $tenantId, $path, $errors),
             'question' => $this->validateQuestion($data, $path, $errors),
             'condition' => $this->validateCondition($data, $path, $errors),
             'delay' => $this->validateDelay($data, $path, $errors),
-            'action' => $this->validateAction($data, $officeId, $path, $errors),
-            'handoff' => $this->validateHandoff($data, $officeId, $path, $errors),
+            'action' => $this->validateAction($data, $tenantId, $path, $errors),
+            'handoff' => $this->validateHandoff($data, $tenantId, $path, $errors),
             default => null,
         };
     }
@@ -177,15 +177,15 @@ final class CommunicationFlowGraphValidator
      * @param  array<string, mixed>  $data
      * @param  list<array{path: string, code: string, message: string}>  $errors
      */
-    private function validateMessage(array $data, int $officeId, string $path, array &$errors): void
+    private function validateMessage(array $data, int $tenantId, string $path, array &$errors): void
     {
         $body = isset($data['body']) && is_string($data['body']) ? trim($data['body']) : '';
         $cannedId = $this->positiveIntOrNull($data['canned_response_id'] ?? null);
         if ($body === '' && $cannedId === null) {
             $errors[] = $this->error("$path.data", 'message_content_required', 'Nó message exige body ou canned_response_id.');
         }
-        if ($cannedId !== null && ! $this->cannedBelongsToOffice($cannedId, $officeId)) {
-            $errors[] = $this->error("$path.data.canned_response_id", 'canned_out_of_office', 'Resposta rápida fora do Office.');
+        if ($cannedId !== null && ! $this->cannedBelongsToTenant($cannedId, $tenantId)) {
+            $errors[] = $this->error("$path.data.canned_response_id", 'canned_out_of_tenant', 'Resposta rápida fora do Tenant.');
         }
         if (isset($data['regex']) || isset($data['webhook_url']) || isset($data['code'])) {
             $errors[] = $this->error("$path.data", 'forbidden_field', 'Campos proibidos no nó message.');
@@ -196,7 +196,7 @@ final class CommunicationFlowGraphValidator
      * @param  array<string, mixed>  $data
      * @param  list<array{path: string, code: string, message: string}>  $errors
      */
-    private function validateQuickReply(array $data, int $officeId, string $path, array &$errors): void
+    private function validateQuickReply(array $data, int $tenantId, string $path, array &$errors): void
     {
         $cannedId = $this->positiveIntOrNull($data['canned_response_id'] ?? null);
         if ($cannedId === null) {
@@ -204,8 +204,8 @@ final class CommunicationFlowGraphValidator
 
             return;
         }
-        if (! $this->cannedBelongsToOffice($cannedId, $officeId)) {
-            $errors[] = $this->error("$path.data.canned_response_id", 'canned_out_of_office', 'Resposta rápida fora do Office.');
+        if (! $this->cannedBelongsToTenant($cannedId, $tenantId)) {
+            $errors[] = $this->error("$path.data.canned_response_id", 'canned_out_of_tenant', 'Resposta rápida fora do Tenant.');
         }
     }
 
@@ -277,7 +277,7 @@ final class CommunicationFlowGraphValidator
      * @param  array<string, mixed>  $data
      * @param  list<array{path: string, code: string, message: string}>  $errors
      */
-    private function validateAction(array $data, int $officeId, string $path, array &$errors): void
+    private function validateAction(array $data, int $tenantId, string $path, array &$errors): void
     {
         $kind = isset($data['kind']) && is_string($data['kind']) ? strtolower(trim($data['kind'])) : '';
         if (! in_array($kind, self::ACTION_KINDS, true)) {
@@ -287,14 +287,14 @@ final class CommunicationFlowGraphValidator
         }
         if ($kind === 'label') {
             $labelId = $this->positiveIntOrNull($data['label_id'] ?? null);
-            if ($labelId === null || ! $this->labelBelongsToOffice($labelId, $officeId)) {
-                $errors[] = $this->error("$path.data.label_id", 'label_out_of_office', 'Label inválida para o Office.');
+            if ($labelId === null || ! $this->labelBelongsToTenant($labelId, $tenantId)) {
+                $errors[] = $this->error("$path.data.label_id", 'label_out_of_tenant', 'Label inválida para o Tenant.');
             }
         }
         if ($kind === 'assignee') {
             $membershipId = $this->positiveIntOrNull($data['assignee_membership_id'] ?? null);
-            if ($membershipId === null || ! $this->membershipBelongsToOffice($membershipId, $officeId)) {
-                $errors[] = $this->error("$path.data.assignee_membership_id", 'assignee_out_of_office', 'Assignee fora do Office.');
+            if ($membershipId === null || ! $this->membershipBelongsToTenant($membershipId, $tenantId)) {
+                $errors[] = $this->error("$path.data.assignee_membership_id", 'assignee_out_of_tenant', 'Assignee fora do Tenant.');
             }
         }
         if ($kind === 'status') {
@@ -310,11 +310,11 @@ final class CommunicationFlowGraphValidator
      * @param  array<string, mixed>  $data
      * @param  list<array{path: string, code: string, message: string}>  $errors
      */
-    private function validateHandoff(array $data, int $officeId, string $path, array &$errors): void
+    private function validateHandoff(array $data, int $tenantId, string $path, array &$errors): void
     {
         $membershipId = $this->positiveIntOrNull($data['assignee_membership_id'] ?? null);
-        if ($membershipId !== null && ! $this->membershipBelongsToOffice($membershipId, $officeId)) {
-            $errors[] = $this->error("$path.data.assignee_membership_id", 'assignee_out_of_office', 'Handoff assignee fora do Office.');
+        if ($membershipId !== null && ! $this->membershipBelongsToTenant($membershipId, $tenantId)) {
+            $errors[] = $this->error("$path.data.assignee_membership_id", 'assignee_out_of_tenant', 'Handoff assignee fora do Tenant.');
         }
         if (isset($data['webhook_url']) || isset($data['url'])) {
             $errors[] = $this->error("$path.data", 'webhook_forbidden', 'Webhook/URL é proibido em handoff.');
@@ -413,27 +413,27 @@ final class CommunicationFlowGraphValidator
         return false;
     }
 
-    private function cannedBelongsToOffice(int $id, int $officeId): bool
+    private function cannedBelongsToTenant(int $id, int $tenantId): bool
     {
         return CommunicationCannedResponse::query()->withoutGlobalScopes()
             ->whereKey($id)
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->exists();
     }
 
-    private function labelBelongsToOffice(int $id, int $officeId): bool
+    private function labelBelongsToTenant(int $id, int $tenantId): bool
     {
         return CommunicationLabel::query()->withoutGlobalScopes()
             ->whereKey($id)
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->exists();
     }
 
-    private function membershipBelongsToOffice(int $id, int $officeId): bool
+    private function membershipBelongsToTenant(int $id, int $tenantId): bool
     {
-        return OfficeMembership::query()->withoutGlobalScopes()
+        return TenantMembership::query()->withoutGlobalScopes()
             ->whereKey($id)
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->exists();
     }
 

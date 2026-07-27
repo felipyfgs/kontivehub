@@ -17,7 +17,7 @@ final class LogSanitizer
         'consumer_secret', 'consumerSecret', 'access_token', 'accessToken',
         'bearer', 'jwt', 'termo_xml', 'termoXml', 'procurador_token',
         'oauth_vault_object_id', 'pfx_vault_object_id', 'token_vault_object_id',
-        'author_pfx_vault_object_id', 'termo_vault_object_id', 'procurador_token_vault_object_id',
+        'termo_vault_object_id', 'procurador_token_vault_object_id',
         'body_bytes', 'body_content', 'message_body', 'attachment_bytes',
         'subject_preview', 'mailbox_body', 'body_vault_object_id',
         'access_key', 'chNFe', 'chave', 'raw_body', 'response_body',

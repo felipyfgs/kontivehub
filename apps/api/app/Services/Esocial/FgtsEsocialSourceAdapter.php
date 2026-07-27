@@ -63,7 +63,7 @@ final class FgtsEsocialSourceAdapter implements FiscalSourceAdapter
 
     public function execute(FiscalAdapterRequest $request): FiscalAdapterResult
     {
-        $readiness = $this->readiness->check($request->office, $request->client);
+        $readiness = $this->readiness->check($request->tenant, $request->client);
         if (! $readiness->ready) {
             $blocker = $readiness->blockers[0];
 
@@ -83,7 +83,7 @@ final class FgtsEsocialSourceAdapter implements FiscalSourceAdapter
         if (is_numeric($estId)) {
             $establishment = Establishment::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $request->office->id)
+                ->where('tenant_id', $request->tenant->id)
                 ->where('client_id', $request->client->id)
                 ->whereKey((int) $estId)
                 ->first();
@@ -91,7 +91,7 @@ final class FgtsEsocialSourceAdapter implements FiscalSourceAdapter
 
         try {
             $out = $this->monitoring->syncCompetence(
-                office: $request->office,
+                tenant: $request->tenant,
                 client: $request->client,
                 competencePeriodKey: $competence,
                 establishment: $establishment,

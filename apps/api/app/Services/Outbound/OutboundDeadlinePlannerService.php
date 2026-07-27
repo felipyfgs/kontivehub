@@ -10,14 +10,14 @@ use App\Enums\OutboundDeadlineStatus;
 use App\Enums\OutboundRetrievalOrigin;
 use App\Enums\OutboundUrgencyBand;
 use App\Enums\SvrsNfceRecoveryStatus;
-use App\Models\MaOutboundRetrievalRequest;
 use App\Models\OutboundCapacitySnapshot;
+use App\Models\OutboundRetrievalRequest;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Planner periódico: recalcula prazos/faixas/agenda sem materializar A1.
+ * Planner periódico: recalcula prazos/faixas/agenda sem materializar certificado.
  */
 final class OutboundDeadlinePlannerService
 {
@@ -30,7 +30,7 @@ final class OutboundDeadlinePlannerService
     /**
      * @return array{planned: int, snapshots: int}
      */
-    public function plan(?int $officeId = null, ?CarbonImmutable $now = null): array
+    public function plan(?int $tenantId = null, ?CarbonImmutable $now = null): array
     {
         if (! config('outbound_deadline.enabled') && ! config('outbound_deadline.planner_enabled')) {
             return ['planned' => 0, 'snapshots' => 0];
@@ -39,7 +39,7 @@ final class OutboundDeadlinePlannerService
         $now = ($now ?? CarbonImmutable::now('UTC'))->utc();
         $limit = (int) config('outbound_deadline.planner_batch_size', 500);
 
-        $q = MaOutboundRetrievalRequest::query()
+        $q = OutboundRetrievalRequest::query()
             ->where('origin', OutboundRetrievalOrigin::SvrsPortalByKey)
             ->whereNotIn('recovery_status', [
                 SvrsNfceRecoveryStatus::Captured->value,
@@ -49,38 +49,38 @@ final class OutboundDeadlinePlannerService
             ->orderBy('id')
             ->limit($limit);
 
-        if ($officeId !== null) {
-            $q->where('office_id', $officeId);
+        if ($tenantId !== null) {
+            $q->where('tenant_id', $tenantId);
         }
 
         $rows = $q->get();
         $planned = 0;
-        // Chave composta office_id|competence: global planner não pode misturar escritórios.
-        $byOfficeCompetence = [];
+        // Chave composta tenant_id|competence: global planner não pode misturar escritórios.
+        $byTenantCompetence = [];
 
         foreach ($rows as $row) {
             $this->refreshDeadlineFields($row, $now);
             $planned++;
-            $rowOfficeId = (int) $row->office_id;
+            $rowTenantId = (int) $row->tenant_id;
             $comp = (string) ($row->competence ?: 'unknown');
-            $bucketKey = $rowOfficeId.'|'.$comp;
-            $byOfficeCompetence[$bucketKey]['office_id'] = $rowOfficeId;
-            $byOfficeCompetence[$bucketKey]['competence'] = $comp;
-            $byOfficeCompetence[$bucketKey]['first'] = ($byOfficeCompetence[$bucketKey]['first'] ?? 0)
+            $bucketKey = $rowTenantId.'|'.$comp;
+            $byTenantCompetence[$bucketKey]['tenant_id'] = $rowTenantId;
+            $byTenantCompetence[$bucketKey]['competence'] = $comp;
+            $byTenantCompetence[$bucketKey]['first'] = ($byTenantCompetence[$bucketKey]['first'] ?? 0)
                 + ((int) $row->svrs_transaction_count < 1 ? 1 : 0);
-            $byOfficeCompetence[$bucketKey]['second'] = ($byOfficeCompetence[$bucketKey]['second'] ?? 0)
+            $byTenantCompetence[$bucketKey]['second'] = ($byTenantCompetence[$bucketKey]['second'] ?? 0)
                 + ((int) $row->svrs_transaction_count === 1 ? 1 : 0);
-            $byOfficeCompetence[$bucketKey]['target_at'] = $row->target_at;
-            $byOfficeCompetence[$bucketKey]['due_at'] = $row->due_at;
-            $byOfficeCompetence[$bucketKey]['bands'][$row->urgency_band?->value ?? 'PLANNED'] =
-                ($byOfficeCompetence[$bucketKey]['bands'][$row->urgency_band?->value ?? 'PLANNED'] ?? 0) + 1;
+            $byTenantCompetence[$bucketKey]['target_at'] = $row->target_at;
+            $byTenantCompetence[$bucketKey]['due_at'] = $row->due_at;
+            $byTenantCompetence[$bucketKey]['bands'][$row->urgency_band?->value ?? 'PLANNED'] =
+                ($byTenantCompetence[$bucketKey]['bands'][$row->urgency_band?->value ?? 'PLANNED'] ?? 0) + 1;
         }
 
         $snapshots = 0;
-        foreach ($byOfficeCompetence as $stats) {
+        foreach ($byTenantCompetence as $stats) {
             $compStr = (string) ($stats['competence'] ?? 'unknown');
-            $statsOfficeId = (int) ($stats['office_id'] ?? 0);
-            if ($compStr === 'unknown' || $statsOfficeId < 1) {
+            $statsTenantId = (int) ($stats['tenant_id'] ?? 0);
+            if ($compStr === 'unknown' || $statsTenantId < 1) {
                 continue;
             }
             try {
@@ -94,13 +94,13 @@ final class OutboundDeadlinePlannerService
                 (int) ($stats['second'] ?? 0),
                 $now,
                 isset($stats['target_at']) ? CarbonImmutable::parse($stats['target_at']) : null,
-                $statsOfficeId,
+                $statsTenantId,
             );
 
             OutboundCapacitySnapshot::query()->create([
-                'office_id' => $statsOfficeId,
+                'tenant_id' => $statsTenantId,
                 'competence' => $compStr,
-                'scope' => 'OFFICE',
+                'scope' => 'TENANT',
                 'demand_exchanges' => $proj['demand_exchanges'],
                 'safe_capacity_exchanges' => $proj['safe_capacity_exchanges'],
                 'nominal_capacity_exchanges' => $proj['nominal_capacity_exchanges'],
@@ -127,9 +127,9 @@ final class OutboundDeadlinePlannerService
 
             if ($proj['at_risk']) {
                 // Marca itens menos prioritários (segundas tentativas / due mais longe) — sem rajada
-                // Sempre escopado por office_id da competência (nunca cross-tenant).
-                MaOutboundRetrievalRequest::query()
-                    ->where('office_id', $statsOfficeId)
+                // Sempre escopado por tenant_id da competência (nunca cross-tenant).
+                OutboundRetrievalRequest::query()
+                    ->where('tenant_id', $statsTenantId)
                     ->where('competence', $compStr)
                     ->where('origin', OutboundRetrievalOrigin::SvrsPortalByKey)
                     ->whereNotIn('recovery_status', [
@@ -169,7 +169,7 @@ final class OutboundDeadlinePlannerService
         return ['planned' => $planned, 'snapshots' => $snapshots];
     }
 
-    public function refreshDeadlineFields(MaOutboundRetrievalRequest $row, CarbonImmutable $now): void
+    public function refreshDeadlineFields(OutboundRetrievalRequest $row, CarbonImmutable $now): void
     {
         $plan = null;
         if ($row->access_key) {
@@ -236,11 +236,11 @@ final class OutboundDeadlinePlannerService
     }
 
     /**
-     * @param  Collection<int, MaOutboundRetrievalRequest>  $rows
+     * @param  Collection<int, OutboundRetrievalRequest>  $rows
      */
     private function scheduleAttempts($rows, CarbonImmutable $now): void
     {
-        $candidates = $rows->filter(function (MaOutboundRetrievalRequest $r) {
+        $candidates = $rows->filter(function (OutboundRetrievalRequest $r) {
             if ($r->urgency_band === OutboundUrgencyBand::Captured) {
                 return false;
             }
@@ -267,9 +267,9 @@ final class OutboundDeadlinePlannerService
 
         $window = 3600; // spread dentro de 1h para não compactar
         foreach ($selected as $item) {
-            /** @var MaOutboundRetrievalRequest $item */
+            /** @var OutboundRetrievalRequest $item */
             $spread = $this->fairQueue->spreadSeconds(
-                (string) $item->office_id.'|'.(string) $item->access_key.'|'.(string) $item->svrs_transaction_count,
+                (string) $item->tenant_id.'|'.(string) $item->access_key.'|'.(string) $item->svrs_transaction_count,
                 $window,
             );
             $next = $now->addSeconds($spread);
@@ -278,7 +278,7 @@ final class OutboundDeadlinePlannerService
             }
             $item->forceFill([
                 'next_attempt_at' => $next,
-                'slot_key' => $item->office_id.'|'.$item->access_key.'|'.((int) $item->svrs_transaction_count + 1),
+                'slot_key' => $item->tenant_id.'|'.$item->access_key.'|'.((int) $item->svrs_transaction_count + 1),
             ])->save();
         }
     }

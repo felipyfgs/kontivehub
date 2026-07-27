@@ -4,7 +4,6 @@ import { resolve } from 'node:path'
 import { createWorkApi } from '../../app/composables/api/createWorkApi'
 import type { ApiClient, ApiUrl } from '../../app/composables/api/types'
 import {
-  buildFlatProcessesListParams,
   buildGroupChildrenListParams,
   buildProcessGroupsListParams,
   entityLevelForProcesses,
@@ -112,12 +111,6 @@ describe('work-process-grouping URL e modos', () => {
       per_page: 20
     })
     expect(buildProcessGroupsListParams({ ...parsed, group: 'client' }).group_by).toBe('client')
-    // flat permanece helper legado, não path principal
-    expect(buildFlatProcessesListParams(parsed)).toMatchObject({
-      include_tasks: 1,
-      page: 1,
-      per_page: 20
-    })
   })
 
   it('sort de grupos em ambos os modos (não flat)', () => {
@@ -227,7 +220,7 @@ describe('work-process-grouping lazy-load e expansão', () => {
       { page: 2, per_page: 50 }
     )).toMatchObject({
       include_tasks: 1,
-      process_template_id: 15,
+      work_process_template_id: 15,
       client_id: 9,
       page: 2
     })
@@ -244,7 +237,7 @@ describe('work-process-grouping lazy-load e expansão', () => {
       { key: 'manual' },
       'routine',
       base
-    )).not.toHaveProperty('process_template_id')
+    )).not.toHaveProperty('work_process_template_id')
   })
 
   it('página agrupa por rotina no modo Processo e por cliente no modo Cliente', () => {
@@ -360,7 +353,7 @@ describe('work-process-grouping presets e API client', () => {
     })
     await api.work.processes.list({
       include_tasks: 1,
-      process_template_id: 15,
+      work_process_template_id: 15,
       page: 1
     })
 
@@ -375,7 +368,7 @@ describe('work-process-grouping presets e API client', () => {
     expect(clientMock).toHaveBeenCalledWith('/api/v1/work/processes', {
       query: {
         include_tasks: 1,
-        process_template_id: 15,
+        work_process_template_id: 15,
         page: 1
       }
     })

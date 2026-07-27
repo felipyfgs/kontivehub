@@ -9,15 +9,15 @@ use App\Enums\SerproCredentialVersionStatus;
 use App\Enums\SerproEnvironment;
 use App\Enums\SerproProductionOnboardingStatus;
 use App\Enums\SerproProductionOnboardingStep;
-use App\Models\Office;
-use App\Models\OfficeSerproAuthorization;
 use App\Models\SerproAuthorizationConsent;
 use App\Models\SerproCredentialVersion;
 use App\Models\SerproProductionOnboarding;
+use App\Models\Tenant;
+use App\Models\TenantSerproAuthorization;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use App\Services\Certificates\ContractorPfxValidator;
-use App\Services\Integra\OfficeSerproAuthorizationService;
+use App\Services\Integra\TenantSerproAuthorizationService;
 use App\Support\FeatureFlags;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
@@ -31,23 +31,23 @@ final class SerproProductionOnboardingService
         private readonly ContractorPfxValidator $pfxValidator,
         private readonly SerproCredentialVersionService $credentials,
         private readonly SerproRolloutApprovalService $rollouts,
-        private readonly OfficeSerproAuthorizationService $authorizations,
+        private readonly TenantSerproAuthorizationService $authorizations,
         private readonly SerproInitialMailboxSyncDispatcher $mailboxSync,
         private readonly AuditLogger $audit,
     ) {}
 
-    public function latestForOffice(Office $office): ?SerproProductionOnboarding
+    public function latestForTenant(Tenant $tenant): ?SerproProductionOnboarding
     {
         return SerproProductionOnboarding::query()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('environment', SerproEnvironment::Production->value)
             ->orderByDesc('id')
             ->first();
     }
 
-    public function activate(Office $office, User $actor, ProductionOnboardingInput $input): SerproProductionOnboarding
+    public function activate(Tenant $tenant, User $actor, ProductionOnboardingInput $input): SerproProductionOnboarding
     {
-        if (! FeatureFlags::isSerproProductionOnboardingEnabled((int) $office->id)) {
+        if (! FeatureFlags::isSerproProductionOnboardingEnabled((int) $tenant->id)) {
             throw new RuntimeException('Ativação simplificada SERPRO está desabilitada para este tenant.');
         }
 
@@ -55,13 +55,13 @@ final class SerproProductionOnboardingService
             throw new RuntimeException('Consentimento explícito é obrigatório.');
         }
 
-        $lock = Cache::lock($this->lockKey($office, $input->idempotencyKey), 300);
+        $lock = Cache::lock($this->lockKey($tenant, $input->idempotencyKey), 300);
         if (! $lock->get()) {
             throw new RuntimeException('Onboarding SERPRO já está em processamento para esta chave.');
         }
 
         try {
-            $onboarding = $this->getOrCreateOnboarding($office, $actor, $input);
+            $onboarding = $this->getOrCreateOnboarding($tenant, $actor, $input);
 
             if ($onboarding->status === SerproProductionOnboardingStatus::Active
                 || $onboarding->status === SerproProductionOnboardingStatus::ActiveSyncPending
@@ -80,9 +80,9 @@ final class SerproProductionOnboardingService
             $meta = $this->validateInput($onboarding, $input);
             $version = $this->storeOrReuseCredential($onboarding, $input, $meta, $actor);
             $version = $this->verifyAndTest($onboarding, $version, $actor);
-            $version = $this->confirmAndCutover($onboarding, $version, $actor, $office);
-            $authorization = $this->activateAuthorization($onboarding, $office, $actor, $version);
-            $this->queueReadSync($onboarding, $office, $authorization, $actor);
+            $version = $this->confirmAndActivate($onboarding, $version, $actor, $tenant);
+            $authorization = $this->activateAuthorization($onboarding, $tenant, $actor, $version);
+            $this->queueReadSync($onboarding, $tenant, $authorization, $actor);
 
             $onboarding->markStepCompleted(SerproProductionOnboardingStep::Completed);
             if ($onboarding->status !== SerproProductionOnboardingStatus::ActionRequired) {
@@ -99,7 +99,7 @@ final class SerproProductionOnboardingService
                 'credential_version_id' => $version->id,
                 'authorization_id' => $authorization->id,
                 'status' => $onboarding->status->value,
-            ], $actor->id, $office->id);
+            ], $actor->id, $tenant->id);
 
             return $onboarding->refresh();
         } catch (Throwable $e) {
@@ -115,12 +115,12 @@ final class SerproProductionOnboardingService
     }
 
     private function getOrCreateOnboarding(
-        Office $office,
+        Tenant $tenant,
         User $actor,
         ProductionOnboardingInput $input,
     ): SerproProductionOnboarding {
         $existing = SerproProductionOnboarding::query()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('environment', SerproEnvironment::Production->value)
             ->where('idempotency_key', $input->idempotencyKey)
             ->first();
@@ -130,7 +130,7 @@ final class SerproProductionOnboardingService
         }
 
         return SerproProductionOnboarding::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'actor_user_id' => $actor->id,
             'environment' => SerproEnvironment::Production,
             'idempotency_key' => $input->idempotencyKey,
@@ -250,29 +250,29 @@ final class SerproProductionOnboardingService
         return $version->refresh();
     }
 
-    private function confirmAndCutover(
+    private function confirmAndActivate(
         SerproProductionOnboarding $onboarding,
         SerproCredentialVersion $version,
         User $actor,
-        Office $office,
+        Tenant $tenant,
     ): SerproCredentialVersion {
         if ($version->status === SerproCredentialVersionStatus::Active) {
-            $this->completeStep($onboarding, SerproProductionOnboardingStep::ConfirmCutover);
+            $this->completeStep($onboarding, SerproProductionOnboardingStep::ConfirmActivation);
 
             return $version;
         }
 
-        $this->setStep($onboarding, SerproProductionOnboardingStep::ConfirmCutover);
+        $this->setStep($onboarding, SerproProductionOnboardingStep::ConfirmActivation);
 
         if ($onboarding->serpro_rollout_approval_id === null) {
             $approval = $this->rollouts->request(
-                action: SerproRolloutApprovalService::ACTION_CREDENTIAL_CUTOVER,
+                action: SerproRolloutApprovalService::ACTION_CREDENTIAL_ACTIVATION,
                 subjectType: 'CREDENTIAL_VERSION',
                 subjectId: (int) $version->id,
                 reason: 'Onboarding produtivo simplificado SERPRO #'.$onboarding->id,
                 requestedByUserId: (int) $actor->id,
                 environment: SerproEnvironment::Production,
-                officeId: (int) $office->id,
+                tenantId: (int) $tenant->id,
                 context: [
                     'onboarding_id' => $onboarding->id,
                     'consent_version' => $onboarding->consent_version,
@@ -290,7 +290,7 @@ final class SerproProductionOnboardingService
                 passwordRecentlyConfirmed: true,
                 reason: 'Confirmação sensível consumida pelo onboarding produtivo simplificado #'.$onboarding->id,
                 confirmationPhrase: $this->rollouts->expectedConfirmationPhrase(
-                    SerproRolloutApprovalService::ACTION_CREDENTIAL_CUTOVER,
+                    SerproRolloutApprovalService::ACTION_CREDENTIAL_ACTIVATION,
                 ),
                 changeWindowStart: CarbonImmutable::now()->subMinute(),
                 changeWindowEnd: CarbonImmutable::now()->addHour(),
@@ -301,28 +301,28 @@ final class SerproProductionOnboardingService
             $onboarding->save();
         }
 
-        $active = $this->credentials->cutover(
+        $active = $this->credentials->activate(
             $version->fresh(),
             actorUserId: $actor->id,
             approvalId: (int) $onboarding->serpro_rollout_approval_id,
         );
-        $this->completeStep($onboarding, SerproProductionOnboardingStep::ConfirmCutover);
+        $this->completeStep($onboarding, SerproProductionOnboardingStep::ConfirmActivation);
 
         return $active;
     }
 
     private function activateAuthorization(
         SerproProductionOnboarding $onboarding,
-        Office $office,
+        Tenant $tenant,
         User $actor,
         SerproCredentialVersion $version,
-    ): OfficeSerproAuthorization {
+    ): TenantSerproAuthorization {
         $this->setStep($onboarding, SerproProductionOnboardingStep::ActivateAuthorization);
 
-        $auth = $this->authorizations->getOrCreate($office, SerproEnvironment::Production);
+        $auth = $this->authorizations->getOrCreate($tenant, SerproEnvironment::Production);
         if ($auth->author_identity === '' || $auth->author_identity === '00000000000000') {
             $this->authorizations->configureAuthor(
-                office: $office,
+                tenant: $tenant,
                 environment: SerproEnvironment::Production,
                 identityType: AuthorIdentityType::Cnpj,
                 identity: (string) $version->contractor_cnpj,
@@ -334,8 +334,8 @@ final class SerproProductionOnboardingService
         }
 
         SerproAuthorizationConsent::query()->create([
-            'office_id' => $office->id,
-            'office_serpro_authorization_id' => $auth->id,
+            'tenant_id' => $tenant->id,
+            'tenant_serpro_authorization_id' => $auth->id,
             'consent_type' => SerproAuthorizationConsent::TYPE_PRODUCTION_ONBOARDING,
             'version_code' => $onboarding->consent_version,
             'actor_user_id' => $actor->id,
@@ -343,7 +343,7 @@ final class SerproProductionOnboardingService
             'payload_sha256' => hash('sha256', implode('|', [
                 $onboarding->consent_text_sha256,
                 $onboarding->certificate_fingerprint_sha256 ?? '',
-                (string) $office->id,
+                (string) $tenant->id,
                 (string) $actor->id,
             ])),
             'metadata' => [
@@ -353,7 +353,7 @@ final class SerproProductionOnboardingService
             ],
         ]);
 
-        $onboarding->office_serpro_authorization_id = $auth->id;
+        $onboarding->tenant_serpro_authorization_id = $auth->id;
         $this->completeStep($onboarding, SerproProductionOnboardingStep::ActivateAuthorization);
 
         return $auth->refresh();
@@ -361,14 +361,14 @@ final class SerproProductionOnboardingService
 
     private function queueReadSync(
         SerproProductionOnboarding $onboarding,
-        Office $office,
-        OfficeSerproAuthorization $authorization,
+        Tenant $tenant,
+        TenantSerproAuthorization $authorization,
         User $actor,
     ): void {
         $this->setStep($onboarding, SerproProductionOnboardingStep::QueueReadSync);
 
         $result = $this->mailboxSync->dispatchIfAllowed(
-            office: $office,
+            tenant: $tenant,
             authorization: $authorization,
             idempotencyKey: $onboarding->idempotency_key,
             actorUserId: $actor->id,
@@ -432,7 +432,7 @@ final class SerproProductionOnboardingService
             'code' => $code,
             'step' => $onboarding->current_step?->value,
             'message' => $message,
-        ], (int) $onboarding->actor_user_id, (int) $onboarding->office_id);
+        ], (int) $onboarding->actor_user_id, (int) $onboarding->tenant_id);
     }
 
     private function classifyError(Throwable $e): string
@@ -489,8 +489,8 @@ final class SerproProductionOnboardingService
         return hash('sha256', (string) config('serpro.production_onboarding.consent_text', ''));
     }
 
-    private function lockKey(Office $office, string $idempotencyKey): string
+    private function lockKey(Tenant $tenant, string $idempotencyKey): string
     {
-        return 'serpro:prod-onboarding:'.$office->id.':'.hash('sha256', $idempotencyKey);
+        return 'serpro:prod-onboarding:'.$tenant->id.':'.hash('sha256', $idempotencyKey);
     }
 }

@@ -15,12 +15,12 @@ use Illuminate\Database\Eloquent\Model;
     'orphaned_at',
     'deleted_at',
     'content_sha256',
-    'office_id',
+    'tenant_id',
     'metadata',
 ])]
 class VaultObjectJournalEntry extends Model
 {
-    protected $table = 'vault_object_journal';
+    protected $table = 'vault_object_journal_entries';
 
     protected function casts(): array
     {

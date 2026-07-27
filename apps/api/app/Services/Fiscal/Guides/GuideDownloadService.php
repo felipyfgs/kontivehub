@@ -23,9 +23,9 @@ final class GuideDownloadService
     /**
      * @return array{token:string,expires_at:string,version_id:int}
      */
-    public function issueToken(TaxGuideVersion $version, User $user, int $officeId): array
+    public function issueToken(TaxGuideVersion $version, User $user, int $tenantId): array
     {
-        if ((int) $version->office_id !== $officeId) {
+        if ((int) $version->tenant_id !== $tenantId) {
             throw GuideException::notFound();
         }
 
@@ -42,7 +42,7 @@ final class GuideDownloadService
         $hash = hash('sha256', $plain);
 
         TaxGuideDownloadToken::query()->create([
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'tax_guide_version_id' => $version->id,
             'user_id' => $user->id,
             'token_hash' => $hash,
@@ -61,7 +61,7 @@ final class GuideDownloadService
                 // sem path, vault_object_id ou token em claro
             ],
             userId: $user->id,
-            officeId: $officeId,
+            tenantId: $tenantId,
         );
 
         return [
@@ -76,13 +76,13 @@ final class GuideDownloadService
      *
      * @return array{bytes:string,content_type:string,filename:string,sha256:string,version:TaxGuideVersion}
      */
-    public function consumeToken(string $plainToken, int $officeId, ?User $user = null): array
+    public function consumeToken(string $plainToken, int $tenantId, ?User $user = null): array
     {
         $hash = hash('sha256', $plainToken);
 
         $token = TaxGuideDownloadToken::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('token_hash', $hash)
             ->first();
 
@@ -92,7 +92,7 @@ final class GuideDownloadService
 
         $version = TaxGuideVersion::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereKey($token->tax_guide_version_id)
             ->first();
 
@@ -100,7 +100,7 @@ final class GuideDownloadService
             throw GuideException::notFound();
         }
 
-        $bytes = $this->storage->readDocumentAuthorized($version, $officeId);
+        $bytes = $this->storage->readDocumentAuthorized($version, $tenantId);
 
         $token->used_at = CarbonImmutable::now();
         $token->save();
@@ -117,7 +117,7 @@ final class GuideDownloadService
                 'payment_unchanged' => true,
             ],
             userId: $user?->id ?? $token->user_id,
-            officeId: $officeId,
+            tenantId: $tenantId,
         );
 
         $filename = 'guia-'.$version->tax_guide_id.'-v'.$version->version_number.'.pdf';

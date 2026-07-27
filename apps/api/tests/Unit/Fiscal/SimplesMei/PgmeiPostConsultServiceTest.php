@@ -15,7 +15,7 @@ use App\Enums\FiscalTrigger;
 use App\Enums\PgmeiDebtState;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Fiscal\SimplesMei\Pgmei\PgmeiDebtProjector;
 use App\Services\Fiscal\SimplesMei\Pgmei\PgmeiDividaAtiva24Codec;
 use App\Services\Fiscal\SimplesMei\Pgmei\PgmeiPostConsultService;
@@ -94,10 +94,10 @@ final class PgmeiPostConsultServiceTest extends TestCase
      */
     private function requestAndResult(?int $year): array
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
         $run = FiscalMonitoringRun::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'system_code' => 'INTEGRA_MEI',
             'service_code' => 'PGMEI',
@@ -116,7 +116,7 @@ final class PgmeiPostConsultServiceTest extends TestCase
         ]);
 
         $request = new FiscalAdapterRequest(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             run: $run,
             systemCode: 'INTEGRA_MEI',

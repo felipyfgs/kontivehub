@@ -2,28 +2,28 @@
 
 namespace App\Http\Controllers\Api\V1\Fiscal;
 
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Http\Controllers\Controller;
 use App\Jobs\Fiscal\RefreshTaxProcessesJob;
 use App\Models\Client;
 use App\Models\FiscalTaxProcess;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * APIs tenant-scoped de Processos fiscais (office da sessão).
+ * APIs tenant-scoped de Processos fiscais (tenant da sessão).
  */
 final class TaxProcessController extends Controller
 {
-    public function index(Request $request, CurrentOffice $currentOffice): JsonResponse
+    public function index(Request $request, CurrentTenant $currentTenant): JsonResponse
     {
-        $office = $currentOffice->office();
-        abort_if($office === null, 403);
+        $tenant = $currentTenant->tenant();
+        abort_if($tenant === null, 403);
 
         $query = FiscalTaxProcess::query()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->orderByDesc('refreshed_at')
             ->orderByDesc('id');
 
@@ -39,12 +39,12 @@ final class TaxProcessController extends Controller
             $like = '%'.addcslashes($search, '%_\\').'%';
             $normalizedDigits = preg_replace('/\D+/', '', $search) ?: '';
             $digits = strlen($normalizedDigits) >= 8 ? $normalizedDigits : null;
-            $query->where(function (Builder $filter) use ($search, $like, $digits, $office): void {
+            $query->where(function (Builder $filter) use ($search, $like, $digits, $tenant): void {
                 $filter->where('process_number', 'like', $like)
                     ->orWhere('source_provenance', 'like', $like)
                     ->when(ctype_digit($search), fn (Builder $q) => $q->orWhere('client_id', (int) $search))
-                    ->orWhereHas('client', function (Builder $client) use ($like, $digits, $office): void {
-                        $client->where('office_id', $office->id)
+                    ->orWhereHas('client', function (Builder $client) use ($like, $digits, $tenant): void {
+                        $client->where('tenant_id', $tenant->id)
                             ->where(function (Builder $identity) use ($like, $digits): void {
                                 $identity->where('legal_name', 'like', $like)
                                     ->orWhere('display_name', 'like', $like);
@@ -73,18 +73,18 @@ final class TaxProcessController extends Controller
         ]);
     }
 
-    public function showForClient(int $clientId, CurrentOffice $currentOffice): JsonResponse
+    public function showForClient(int $clientId, CurrentTenant $currentTenant): JsonResponse
     {
-        $office = $currentOffice->office();
-        abort_if($office === null, 403);
+        $tenant = $currentTenant->tenant();
+        abort_if($tenant === null, 403);
 
         $client = Client::query()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($clientId)
             ->firstOrFail();
 
         $rows = FiscalTaxProcess::query()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->orderByDesc('refreshed_at')
             ->get();
@@ -97,38 +97,38 @@ final class TaxProcessController extends Controller
         ]);
     }
 
-    public function show(int $id, CurrentOffice $currentOffice): JsonResponse
+    public function show(int $id, CurrentTenant $currentTenant): JsonResponse
     {
-        $office = $currentOffice->office();
-        abort_if($office === null, 403);
+        $tenant = $currentTenant->tenant();
+        abort_if($tenant === null, 403);
 
         $row = FiscalTaxProcess::query()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($id)
             ->first();
 
-        // Inacessível de outro office — 404 sem revelar existência
+        // Inacessível de outro tenant — 404 sem revelar existência
         abort_if($row === null, 404);
 
         return response()->json(['data' => $row->toPublicArray()]);
     }
 
-    public function refresh(int $clientId, CurrentOffice $currentOffice): JsonResponse
+    public function refresh(int $clientId, CurrentTenant $currentTenant): JsonResponse
     {
-        $office = $currentOffice->office();
-        abort_if($office === null, 403);
-        $role = $currentOffice->role();
-        if ($role === null || ! in_array($role, [OfficeRole::Admin, OfficeRole::Operator], true)) {
+        $tenant = $currentTenant->tenant();
+        abort_if($tenant === null, 403);
+        $role = $currentTenant->role();
+        if ($role === null || ! in_array($role, [TenantRole::TenantAdmin, TenantRole::TenantUser], true)) {
             abort(403);
         }
 
         $client = Client::query()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($clientId)
             ->firstOrFail();
 
         $job = RefreshTaxProcessesJob::dispatchIfAllowed(
-            (int) $office->id,
+            (int) $tenant->id,
             (int) $client->id,
             bin2hex(random_bytes(8)),
         );

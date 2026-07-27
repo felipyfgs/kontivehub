@@ -22,7 +22,7 @@ final class SyncMeiAutomationAttemptJob implements ShouldQueue
     public array $backoff = [10, 30, 60, 120];
 
     public function __construct(
-        public readonly int $officeId,
+        public readonly int $tenantId,
         public readonly int $attemptId,
     ) {}
 
@@ -31,7 +31,7 @@ final class SyncMeiAutomationAttemptJob implements ShouldQueue
         MeiAutomationSyncService $sync,
         MeiDasMutationReconciler $mutations,
     ): void {
-        $attempt = $attempts->findForOffice($this->officeId, $this->attemptId);
+        $attempt = $attempts->findForTenant($this->tenantId, $this->attemptId);
         $attempt = $sync->synchronize($attempt);
         $mutations->reconcile($attempt);
         $status = $attempt->status;

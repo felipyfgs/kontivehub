@@ -4,12 +4,12 @@ namespace App\Services\FgtsDigital;
 
 use App\Enums\FgtsDigitalGuideType;
 use App\Enums\FiscalRunResult;
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Jobs\Fiscal\ExecuteFgtsDigitalPolicyJob;
 use App\Jobs\Fiscal\ExecuteFgtsDigitalRunJob;
 use App\Models\Client;
 use App\Models\FiscalMonitoringSchedule;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
@@ -43,7 +43,7 @@ final class FgtsDigitalScheduleDispatcher
             ->get();
 
         foreach ($schedules as $schedule) {
-            $lock = Cache::lock('fgts-digital:schedule:'.$schedule->office_id.':'.$schedule->id, 55);
+            $lock = Cache::lock('fgts-digital:schedule:'.$schedule->tenant_id.':'.$schedule->id, 55);
             if (! $lock->get()) {
                 $out['skipped']++;
 
@@ -63,23 +63,23 @@ final class FgtsDigitalScheduleDispatcher
     /** @return 'dispatched'|'blocked'|'skipped' */
     private function dispatchSchedule(FiscalMonitoringSchedule $schedule, CarbonImmutable $now): string
     {
-        $office = Office::query()->find($schedule->office_id);
+        $tenant = Tenant::query()->find($schedule->tenant_id);
         $client = Client::query()->withoutGlobalScopes()
-            ->where('office_id', $schedule->office_id)
+            ->where('tenant_id', $schedule->tenant_id)
             ->whereKey($schedule->client_id)
             ->first();
-        if ($office === null || $client === null) {
+        if ($tenant === null || $client === null) {
             return $this->finish($schedule, $now, 'blocked', 'FGTS_DIGITAL_TENANT_NOT_FOUND');
         }
 
-        $ready = $this->readiness->check($office, $client);
+        $ready = $this->readiness->check($tenant, $client);
         $operation = strtoupper((string) $schedule->operation_code);
         if ($operation === 'QUERY_GUIDES') {
             if (! $ready['ready_for_read']) {
                 return $this->finish($schedule, $now, 'blocked', (string) ($ready['blockers'][0]['code'] ?? 'FGTS_DIGITAL_NOT_READY'));
             }
-            $run = $this->portal->createQueryRun($office, $client, null, $this->queryParameters($schedule));
-            ExecuteFgtsDigitalRunJob::dispatch((int) $office->id, (int) $run->id);
+            $run = $this->portal->createQueryRun($tenant, $client, null, $this->queryParameters($schedule));
+            ExecuteFgtsDigitalRunJob::dispatch((int) $tenant->id, (int) $run->id);
 
             return $this->finish($schedule, $now, 'dispatched', null);
         }
@@ -93,18 +93,18 @@ final class FgtsDigitalScheduleDispatcher
         if (! $ready['ready_for_mutation']) {
             return $this->finish($schedule, $now, 'blocked', (string) ($ready['blockers'][0]['code'] ?? 'FGTS_DIGITAL_MUTATIONS_DISABLED'));
         }
-        if (($blocker = $this->policyBlocker($schedule, $office, $now)) !== null) {
+        if (($blocker = $this->policyBlocker($schedule, $tenant, $now)) !== null) {
             return $this->finish($schedule, $now, 'blocked', $blocker);
         }
 
-        ExecuteFgtsDigitalPolicyJob::dispatch((int) $office->id, (int) $schedule->id);
+        ExecuteFgtsDigitalPolicyJob::dispatch((int) $tenant->id, (int) $schedule->id);
 
         return $this->finish($schedule, $now, 'dispatched', null);
     }
 
     public function policyBlocker(
         FiscalMonitoringSchedule $schedule,
-        Office $office,
+        Tenant $tenant,
         ?CarbonImmutable $now = null,
     ): ?string {
         $now ??= CarbonImmutable::now();
@@ -117,7 +117,7 @@ final class FgtsDigitalScheduleDispatcher
             return 'FGTS_DIGITAL_SCHEDULE_POLICY_EXPIRED';
         }
         $user = User::query()->find((int) ($policy['authorized_by_user_id'] ?? 0));
-        if ($user === null || ! $user->is_active || $user->roleIn($office) !== OfficeRole::Admin) {
+        if ($user === null || ! $user->is_active || $user->roleIn($tenant) !== TenantRole::TenantAdmin) {
             return 'FGTS_DIGITAL_SCHEDULE_POLICY_AUTHORIZER_INVALID';
         }
         $parameters = $this->policyParameters($schedule);

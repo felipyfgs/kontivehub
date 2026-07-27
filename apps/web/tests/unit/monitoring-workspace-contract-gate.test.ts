@@ -12,9 +12,13 @@ interface RegistrySurface {
   route: string
 }
 
+const monitoringSurfaceRoot = existsSync('/workspace/api-monitoring-surfaces')
+  ? '/workspace/api-monitoring-surfaces'
+  : resolve(process.cwd(), '../api/app/Services/FiscalMonitoring/Surfaces')
+
 function registrySurfaces(): RegistrySurface[] {
   const source = readFileSync(
-    resolve(process.cwd(), '../api/app/Services/FiscalMonitoring/Surfaces/MonitoringSurfaceRegistry.php'),
+    resolve(monitoringSurfaceRoot, 'MonitoringSurfaceRegistry.php'),
     'utf8'
   )
   const expression = /new MonitoringSurfaceContract\(\s*surfaceKey:\s*'([^']+)',\s*routePattern:\s*'([^']+)'/gu
@@ -70,7 +74,7 @@ describe('gate de equivalência do contrato do monitor', () => {
 
   it('mantém coverage derivado do registro e o cache protegido por sessão e geração', () => {
     const coverageService = readFileSync(
-      resolve(process.cwd(), '../api/app/Services/FiscalMonitoring/Surfaces/MonitoringCoverageService.php'),
+      resolve(monitoringSurfaceRoot, 'MonitoringCoverageService.php'),
       'utf8'
     )
     const workspace = readFileSync(
@@ -79,7 +83,7 @@ describe('gate de equivalência do contrato do monitor', () => {
     )
 
     expect(coverageService).toContain('$this->surfaces->all()')
-    expect(workspace).toContain('useState<MonitoringCoverageContract | null>')
+    expect(workspace).toMatch(/useState<MonitoringCoverageContract \| null>\s*\(/)
     expect(workspace).toContain('sessionEpoch')
     expect(workspace).toContain('generation')
     expect(workspace).toContain('filterMonitoringCoverageSurfaces')

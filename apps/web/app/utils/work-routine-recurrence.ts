@@ -3,8 +3,8 @@
  * Contrato alinhado à API `/api/v1/work/templates/{id}/recurrence`.
  */
 import type {
-  ProcessTemplate,
-  ProcessTemplateRecurrence,
+  WorkProcessTemplate,
+  WorkProcessTemplateRecurrence,
   RecurrenceFrequency,
   RecurrencePeriodOffset
 } from '~/types/work'
@@ -34,7 +34,7 @@ export const RECURRENCE_PERIOD_OFFSET_ITEMS: ReadonlyArray<{
 /** Defaults ao habilitar recorrência sem sobrescrever dia/defasagem. */
 export function defaultRecurrenceConfig(
   frequency: RecurrenceFrequency = 'MONTHLY'
-): ProcessTemplateRecurrence {
+): WorkProcessTemplateRecurrence {
   return {
     recurrence_enabled: true,
     recurrence_frequency: frequency,
@@ -46,7 +46,7 @@ export function defaultRecurrenceConfig(
   }
 }
 
-export function emptyRecurrenceConfig(): ProcessTemplateRecurrence {
+export function emptyRecurrenceConfig(): WorkProcessTemplateRecurrence {
   return {
     recurrence_enabled: false,
     recurrence_frequency: null,
@@ -60,7 +60,7 @@ export function emptyRecurrenceConfig(): ProcessTemplateRecurrence {
 
 export function recurrenceFromTemplate(
   template?: Pick<
-    ProcessTemplate,
+    WorkProcessTemplate,
     | 'recurrence_enabled'
     | 'recurrence_frequency'
     | 'generation_day'
@@ -69,7 +69,7 @@ export function recurrenceFromTemplate(
     | 'next_run_at'
     | 'recurrence_owner_membership_id'
   > | null
-): ProcessTemplateRecurrence {
+): WorkProcessTemplateRecurrence {
   if (!template) return emptyRecurrenceConfig()
   return {
     recurrence_enabled: template.recurrence_enabled === true,
@@ -112,9 +112,9 @@ export function recurrencePeriodOffsetLabel(
   return RECURRENCE_PERIOD_OFFSET_ITEMS.find(item => item.value === offset)?.label || offset
 }
 
-/** Payload PATCH da agenda (sem office_id). */
+/** Payload PATCH da agenda (sem tenant_id). */
 export function recurrencePatchPayload(
-  config: ProcessTemplateRecurrence
+  config: WorkProcessTemplateRecurrence
 ): Record<string, unknown> {
   if (!config.recurrence_enabled) {
     return { recurrence_enabled: false }

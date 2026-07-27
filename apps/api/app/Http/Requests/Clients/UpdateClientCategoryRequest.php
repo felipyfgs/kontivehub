@@ -3,7 +3,7 @@
 namespace App\Http\Requests\Clients;
 
 use App\Models\ClientCategory;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -34,7 +34,7 @@ class UpdateClientCategoryRequest extends FormRequest
     {
         /** @var ClientCategory|null $category */
         $category = $this->route('clientCategory');
-        $officeId = app(CurrentOffice::class)->id();
+        $tenantId = app(CurrentTenant::class)->id();
 
         return [
             'name' => ['sometimes', 'required', 'string', 'max:80'],
@@ -43,12 +43,12 @@ class UpdateClientCategoryRequest extends FormRequest
                 'string',
                 'max:80',
                 Rule::unique('client_categories', 'name_key')
-                    ->where('office_id', $officeId)
+                    ->where('tenant_id', $tenantId)
                     ->ignore($category?->id),
             ],
             'color' => ['sometimes', 'required', 'string', Rule::in(ClientCategory::COLORS)],
             'is_active' => ['sometimes', 'boolean'],
-            'office_id' => ['prohibited'],
+            'tenant_id' => ['prohibited'],
             'created_by' => ['prohibited'],
         ];
     }

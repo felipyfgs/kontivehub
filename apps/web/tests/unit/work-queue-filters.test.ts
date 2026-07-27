@@ -84,7 +84,7 @@ describe('work-queue-filters view', () => {
       tab: 'atrasadas',
       q: 'mei',
       department_id: 2,
-      scope: 'office',
+      scope: 'tenant',
       page: 1,
       per_page: 100,
       view: 'kanban'
@@ -97,7 +97,7 @@ describe('work-queue-filters view', () => {
       tab: 'atrasadas',
       q: 'mei',
       department_id: 2,
-      scope: 'office',
+      scope: 'tenant',
       per_page: 100,
       view: 'kanban'
     })

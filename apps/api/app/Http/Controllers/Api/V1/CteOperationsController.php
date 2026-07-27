@@ -5,17 +5,19 @@ namespace App\Http\Controllers\Api\V1;
 use App\Enums\CaptureChannel;
 use App\Enums\CteCoverageStatus;
 use App\Enums\QuarantineResolutionStatus;
+use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
 use App\Jobs\RepairKnownCteNsuJob;
 use App\Models\ChannelSyncCursor;
 use App\Models\Client;
 use App\Models\CteCoverageSnapshot;
 use App\Models\FiscalDocumentQuarantine;
-use App\Models\OfficeDistributionCursor;
-use App\Models\OfficeFiscalIdentity;
+use App\Models\TenantDistributionCursor;
+use App\Models\TenantFiscalIdentity;
+use App\Services\Authorization\TenantAuthorization;
 use App\Services\Sefaz\CteCoverageService;
 use App\Services\Sefaz\CteOperationsMetrics;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -23,18 +25,18 @@ use Illuminate\Support\Str;
 /** APIs CT-e somente com metadados sanitizados e tenant derivado da sessão. */
 class CteOperationsController extends Controller
 {
-    public function onboarding(CurrentOffice $currentOffice): JsonResponse
+    public function onboarding(CurrentTenant $currentTenant): JsonResponse
     {
-        $officeId = $currentOffice->office()->id;
-        $identity = OfficeFiscalIdentity::query()
-            ->where('office_id', $officeId)
+        $tenantId = $currentTenant->tenant()->id;
+        $identity = TenantFiscalIdentity::query()
+            ->where('tenant_id', $tenantId)
             ->with(['credentials' => fn ($query) => $query->orderByDesc('id')])
             ->orderByDesc('id')
             ->first();
         $credential = $identity?->credentials->first();
 
         return response()->json(['data' => [
-            'office_cnpj' => $identity?->cnpj,
+            'tenant_cnpj' => $identity?->cnpj,
             'identity' => $identity?->toPublicArray(),
             'credential' => $credential?->toPublicArray(),
             'enabled' => (bool) config('sefaz.cte_autxml.enabled', false),
@@ -47,11 +49,11 @@ class CteOperationsController extends Controller
         ]]);
     }
 
-    public function health(CurrentOffice $currentOffice, CteOperationsMetrics $metrics): JsonResponse
+    public function health(CurrentTenant $currentTenant, CteOperationsMetrics $metrics): JsonResponse
     {
-        $officeId = $currentOffice->office()->id;
+        $tenantId = $currentTenant->tenant()->id;
         $clientStreams = ChannelSyncCursor::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('channel', CaptureChannel::CteDistDfe->value)
             ->with('establishment.client:id,legal_name,display_name')
             ->orderBy('id')
@@ -71,32 +73,32 @@ class CteOperationsController extends Controller
                 'retry_allowed' => $cursor->status->value !== 'BLOCKED'
                     && ! ($cursor->next_sync_at?->isFuture() ?? false),
             ])->values();
-        $officeStreams = OfficeDistributionCursor::query()
-            ->where('office_id', $officeId)
+        $tenantStreams = TenantDistributionCursor::query()
+            ->where('tenant_id', $tenantId)
             ->where('channel', CaptureChannel::CteAutXmlDistDfe->value)
             ->orderBy('id')
             ->get()
-            ->map(fn (OfficeDistributionCursor $cursor) => $cursor->toPublicArray())
+            ->map(fn (TenantDistributionCursor $cursor) => $cursor->toPublicArray())
             ->values();
 
         return response()->json(['data' => [
             'channels' => [
                 CaptureChannel::CteDistDfe->value => $clientStreams,
-                CaptureChannel::CteAutXmlDistDfe->value => $officeStreams,
+                CaptureChannel::CteAutXmlDistDfe->value => $tenantStreams,
             ],
             'summary' => [
                 'client_streams' => $clientStreams->count(),
-                'office_streams' => $officeStreams->count(),
+                'tenant_streams' => $tenantStreams->count(),
                 'blocked' => $clientStreams->where('status', 'BLOCKED')->count()
-                    + $officeStreams->where('status', 'BLOCKED')->count(),
+                    + $tenantStreams->where('status', 'BLOCKED')->count(),
             ],
-            'metrics' => $metrics->snapshot($officeId),
+            'metrics' => $metrics->snapshot($tenantId),
         ]]);
     }
 
     public function coverage(
         Request $request,
-        CurrentOffice $currentOffice,
+        CurrentTenant $currentTenant,
         CteCoverageService $coverage,
     ): JsonResponse {
         $data = $request->validate([
@@ -104,21 +106,21 @@ class CteOperationsController extends Controller
             'client_id' => ['nullable', 'integer'],
             'status' => ['nullable', 'string'],
         ]);
-        $officeId = $currentOffice->office()->id;
+        $tenantId = $currentTenant->tenant()->id;
         $period = $data['period'] ?? now()->format('Y-m');
         $clients = Client::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->when(isset($data['client_id']), fn ($query) => $query->whereKey((int) $data['client_id']))
             ->orderBy('id')
             ->limit(200)
             ->get();
 
         foreach ($clients as $client) {
-            $coverage->recompute($officeId, $client->id, $period);
+            $coverage->recompute($tenantId, $client->id, $period);
         }
 
         $snapshots = CteCoverageSnapshot::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('period', $period)
             ->when(isset($data['client_id']), fn ($query) => $query->where('client_id', (int) $data['client_id']))
             ->when(isset($data['status']), fn ($query) => $query->where('status', strtoupper((string) $data['status'])))
@@ -147,10 +149,10 @@ class CteOperationsController extends Controller
         ]]);
     }
 
-    public function pending(CurrentOffice $currentOffice): JsonResponse
+    public function pending(CurrentTenant $currentTenant): JsonResponse
     {
         $items = FiscalDocumentQuarantine::query()
-            ->where('office_id', $currentOffice->office()->id)
+            ->where('tenant_id', $currentTenant->tenant()->id)
             ->where('resolution_status', QuarantineResolutionStatus::Open->value)
             ->where(function ($query): void {
                 $query->where('model', '57')->orWhere('schema_family', 'like', '%CTe%');
@@ -164,15 +166,20 @@ class CteOperationsController extends Controller
         return response()->json(['data' => $items]);
     }
 
-    public function repairKnownNsu(Request $request, CurrentOffice $currentOffice): JsonResponse
+    public function repairKnownNsu(Request $request, CurrentTenant $currentTenant): JsonResponse
     {
-        abort_unless(in_array($currentOffice->role()?->value, ['ADMIN', 'OPERATOR'], true), 403);
+        $actor = $request->user();
+        abort_unless(
+            $actor !== null
+                && app(TenantAuthorization::class)->allows($actor, TenantPermission::FiscalSyncTrigger),
+            403,
+        );
         $data = $request->validate([
             'cursor_id' => ['required', 'integer'],
             'nsu' => ['required', 'integer', 'min:1'],
         ]);
         $cursor = ChannelSyncCursor::query()
-            ->where('office_id', $currentOffice->office()->id)
+            ->where('tenant_id', $currentTenant->tenant()->id)
             ->where('channel', CaptureChannel::CteDistDfe->value)
             ->find((int) $data['cursor_id']);
         if ($cursor === null) {

@@ -3,7 +3,6 @@
 namespace App\DTO\Fiscal\SimplesMei;
 
 use App\Enums\TaxRegimeCode;
-use InvalidArgumentException;
 
 /**
  * Regime de Apuração oficial (vigências SN/MEI).
@@ -27,11 +26,6 @@ final readonly class RegimeApuracaoDto
      */
     public static function fromIntegraBody(array $body): self
     {
-        $version = (string) ($body['dto_version'] ?? $body['version'] ?? self::VERSION);
-        if ($version !== self::VERSION) {
-            throw new InvalidArgumentException("Regime Apuração DTO versão não suportada: {$version}");
-        }
-
         $data = is_array($body['data'] ?? null) ? $body['data'] : $body;
         $rawPeriods = is_array($data['periods'] ?? null) ? $data['periods'] : (is_array($data['periodos'] ?? null) ? $data['periodos'] : []);
 

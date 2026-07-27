@@ -2,10 +2,11 @@
 
 namespace App\Http\Controllers\Api\V1\Fiscal;
 
-use App\Enums\OfficeRole;
+use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
 use App\Models\Client;
 use App\Models\User;
+use App\Services\Authorization\TenantAuthorization;
 use App\Services\Fiscal\Guides\ClientGuidesQueryService;
 use App\Services\Fiscal\Guides\Exceptions\GuideException;
 use App\Services\Fiscal\Guides\GuideDownloadService;
@@ -14,7 +15,7 @@ use App\Services\Fiscal\Guides\GuideIssuanceService;
 use App\Services\Fiscal\Guides\GuidePaymentService;
 use App\Services\Fiscal\Guides\GuideQueryService;
 use App\Services\Fiscal\Guides\GuideReconciliationService;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -25,7 +26,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class TaxGuideController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly GuideQueryService $queries,
         private readonly ClientGuidesQueryService $clientGuides,
         private readonly GuideIssuanceService $issuance,
@@ -33,26 +34,26 @@ class TaxGuideController extends Controller
         private readonly GuidePaymentService $payments,
         private readonly GuideReconciliationService $reconciliation,
         private readonly GuideHighRiskGate $highRisk,
+        private readonly TenantAuthorization $authorization,
     ) {}
 
     public function index(Request $request): JsonResponse
     {
         $this->assertCanRead();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
         $perPage = min(100, max(1, (int) $request->query('per_page', 50)));
         $clientId = $request->query('client_id');
         $paymentStatus = $request->query('payment_status');
 
-        // LFU-07: `sort_direction` e `direction` são aliases equivalentes.
-        $direction = $request->query('sort_direction', $request->query('direction', ''));
+        $direction = $request->query('sort_direction', '');
         $direction = is_string($direction) ? strtolower($direction) : '';
         $sort = $request->string('sort')->toString();
         $payment = is_string($paymentStatus) ? $paymentStatus : null;
         $resolvedClientId = is_numeric($clientId) ? (int) $clientId : null;
 
         $result = $this->clientGuides->paginate(
-            $office,
+            $tenant,
             $resolvedClientId,
             $perPage,
             $payment,
@@ -69,10 +70,10 @@ class TaxGuideController extends Controller
     public function show(int $guide): JsonResponse
     {
         $this->assertCanRead();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
         try {
-            $model = $this->queries->find($office, $guide);
+            $model = $this->queries->find($tenant, $guide);
         } catch (GuideException $e) {
             return $this->guideError($e);
         }
@@ -88,29 +89,25 @@ class TaxGuideController extends Controller
     public function preflight(Request $request): JsonResponse
     {
         $this->assertCanWrite();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
         $data = $request->validate([
             'client_id' => ['required', 'integer'],
-            'system_code' => ['required', 'string', 'max:40'],
-            'service_code' => ['required', 'string', 'max:80'],
-            'operation_code' => ['sometimes', 'string', 'max:80'],
+            'operation_key' => ['required', 'string', 'max:120', 'regex:/^[a-z0-9]+(?:[._-][a-z0-9]+)+$/'],
             'competence_period_key' => ['sometimes', 'nullable', 'string', 'max:20'],
             'debit_ref' => ['sometimes', 'nullable', 'string', 'max:120'],
             'amount_cents' => ['sometimes', 'nullable', 'integer', 'min:0'],
         ]);
 
-        $client = $this->resolveClient($office->id, (int) $data['client_id']);
+        $client = $this->resolveClient($tenant->id, (int) $data['client_id']);
         if ($client === null) {
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
 
         try {
             $preflight = $this->issuance->preflight(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
-                systemCode: $data['system_code'],
-                serviceCode: $data['service_code'],
-                operationCode: $data['operation_code'] ?? 'EMITIR_GUIA',
+                operationKey: $data['operation_key'],
                 competencePeriodKey: $data['competence_period_key'] ?? null,
                 debitRef: $data['debit_ref'] ?? null,
                 amountCents: isset($data['amount_cents']) ? (int) $data['amount_cents'] : null,
@@ -123,39 +120,10 @@ class TaxGuideController extends Controller
         return response()->json(['data' => $preflight]);
     }
 
-    /**
-     * Desafio de 2FA recente para operações de alto risco.
-     */
-    public function challenge(Request $request): JsonResponse
-    {
-        $this->assertCanWrite();
-        $user = $request->user();
-        if (! $user instanceof User) {
-            return response()->json(['message' => 'Não autenticado.'], 401);
-        }
-
-        $data = $request->validate([
-            'totp_code' => ['required', 'string', 'max:12'],
-        ]);
-
-        try {
-            $this->highRisk->verifyTotpAndMark($user, $data['totp_code']);
-        } catch (GuideException $e) {
-            return $this->guideError($e);
-        }
-
-        return response()->json([
-            'data' => [
-                'confirmed' => true,
-                'window_seconds' => (int) config('tax_guides.high_risk.challenge_window_seconds', 300),
-            ],
-        ]);
-    }
-
     public function store(Request $request): JsonResponse
     {
         $this->assertCanWrite();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
         $user = $request->user();
         if (! $user instanceof User) {
             return response()->json(['message' => 'Não autenticado.'], 401);
@@ -163,9 +131,7 @@ class TaxGuideController extends Controller
 
         $data = $request->validate([
             'client_id' => ['required', 'integer'],
-            'system_code' => ['required', 'string', 'max:40'],
-            'service_code' => ['required', 'string', 'max:80'],
-            'operation_code' => ['sometimes', 'string', 'max:80'],
+            'operation_key' => ['required', 'string', 'max:120', 'regex:/^[a-z0-9]+(?:[._-][a-z0-9]+)+$/'],
             'competence_period_key' => ['sometimes', 'nullable', 'string', 'max:20'],
             'debit_ref' => ['sometimes', 'nullable', 'string', 'max:120'],
             'amount_cents' => ['sometimes', 'nullable', 'integer', 'min:0'],
@@ -200,18 +166,16 @@ class TaxGuideController extends Controller
             'operation_data.cnpjPrestador' => ['sometimes', 'nullable', 'string', 'max:20'],
         ]);
 
-        $client = $this->resolveClient($office->id, (int) $data['client_id']);
+        $client = $this->resolveClient($tenant->id, (int) $data['client_id']);
         if ($client === null) {
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
 
         try {
             $result = $this->issuance->issue(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
-                systemCode: $data['system_code'],
-                serviceCode: $data['service_code'],
-                operationCode: $data['operation_code'] ?? 'EMITIR_GUIA',
+                operationKey: $data['operation_key'],
                 competencePeriodKey: $data['competence_period_key'] ?? null,
                 debitRef: $data['debit_ref'] ?? null,
                 amountCents: isset($data['amount_cents']) ? (int) $data['amount_cents'] : null,
@@ -248,19 +212,19 @@ class TaxGuideController extends Controller
     public function issueDownloadToken(Request $request, int $guide): JsonResponse
     {
         $this->assertCanRead();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
         $user = $request->user();
         if (! $user instanceof User) {
             return response()->json(['message' => 'Não autenticado.'], 401);
         }
 
         try {
-            $model = $this->queries->find($office, $guide);
+            $model = $this->queries->find($tenant, $guide);
             $version = $model->currentVersion;
             if ($version === null) {
                 return response()->json(['message' => 'Documento indisponível.'], 422);
             }
-            $token = $this->downloads->issueToken($version, $user, (int) $office->id);
+            $token = $this->downloads->issueToken($version, $user, (int) $tenant->id);
         } catch (GuideException $e) {
             return $this->guideError($e);
         }
@@ -278,12 +242,12 @@ class TaxGuideController extends Controller
     public function download(Request $request, string $token): StreamedResponse|JsonResponse
     {
         $this->assertCanRead();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
         try {
             $payload = $this->downloads->consumeToken(
                 $token,
-                (int) $office->id,
+                (int) $tenant->id,
                 $request->user() instanceof User ? $request->user() : null,
             );
         } catch (GuideException $e) {
@@ -302,12 +266,12 @@ class TaxGuideController extends Controller
     public function confirmPayment(Request $request, int $guide): JsonResponse
     {
         $this->assertCanWrite();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
         try {
-            $model = $this->queries->find($office, $guide);
+            $model = $this->queries->find($tenant, $guide);
             $result = $this->payments->lookupAndConfirm(
-                $office,
+                $tenant,
                 $model,
                 $request->user() instanceof User ? $request->user() : null,
             );
@@ -327,15 +291,15 @@ class TaxGuideController extends Controller
     public function reconcile(Request $request, int $guide): JsonResponse
     {
         $this->assertCanWrite();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
         try {
-            $model = $this->queries->find($office, $guide);
+            $model = $this->queries->find($tenant, $guide);
             $version = $model->currentVersion;
             if ($version === null) {
                 return response()->json(['message' => 'Versão não encontrada.'], 404);
             }
-            $result = $this->reconciliation->reconcile($office, $version);
+            $result = $this->reconciliation->reconcile($tenant, $version);
         } catch (GuideException $e) {
             return $this->guideError($e);
         }
@@ -349,11 +313,11 @@ class TaxGuideController extends Controller
         ]);
     }
 
-    private function resolveClient(int $officeId, int $clientId): ?Client
+    private function resolveClient(int $tenantId, int $clientId): ?Client
     {
         return Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereKey($clientId)
             ->first();
     }
@@ -369,15 +333,16 @@ class TaxGuideController extends Controller
 
     private function assertCanRead(): void
     {
-        if ($this->currentOffice->role() === null) {
+        if ($this->currentTenant->role() === null) {
             abort(403, 'Perfil não resolvido.');
         }
     }
 
     private function assertCanWrite(): void
     {
-        $role = $this->currentOffice->role();
-        if ($role === null || $role === OfficeRole::Viewer) {
+        $actor = auth()->user();
+        if (! $actor instanceof User
+            || ! $this->authorization->allows($actor, TenantPermission::FiscalMutationsExecute)) {
             abort(403, 'Sem permissão para operações de guias.');
         }
     }

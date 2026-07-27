@@ -7,7 +7,6 @@ use App\DTO\Serpro\IntegraRequest;
 use App\DTO\Serpro\IntegraResponse;
 use App\DTO\Serpro\MutationAuthorization;
 use App\Models\FiscalMutationOperation;
-use App\Services\Serpro\Catalog\OperationKeyMap;
 use App\Services\Serpro\SerproOperationService;
 
 /**
@@ -36,65 +35,52 @@ final class IntegraFiscalMutationTransport implements SerproFiscalMutationTransp
     public function reconcile(IntegraRequest $request): IntegraResponse
     {
         // Consulta de reconciliação — nunca reenvia a mutação original.
-        $reconcileOp = $this->reconcileOperationCode((string) ($request->operationCode ?? ''));
-        $reconcileKey = OperationKeyMap::resolve(
-            null,
-            $request->solutionCode,
-            $request->serviceCode,
-            $reconcileOp,
-        ) ?? $request->operationKey;
+        $reconcileKey = $this->reconcileOperationKey($request->operationKey);
 
         $query = new IntegraRequest(
-            officeId: $request->officeId,
+            tenantId: $request->tenantId,
             clientId: $request->clientId,
             environment: $request->environment,
             contractorCnpj: $request->contractorCnpj,
             authorIdentity: $request->authorIdentity,
             contributorCnpj: $request->contributorCnpj,
             operationKey: $reconcileKey,
-            payload: array_merge($request->payload, [
+            businessData: [
                 'reconcile' => true,
-                'original_operation' => $request->operationCode,
-            ]),
+                'original_operation_key' => $request->operationKey,
+            ],
             headers: $request->headers,
             idempotencyKey: ($request->idempotencyKey ?? '').':reconcile',
             correlationId: $request->correlationId,
             isMutating: false,
-            solutionCode: $request->solutionCode,
-            serviceCode: $request->serviceCode,
-            operationCode: $reconcileOp,
         );
 
         return $this->operations->executeRequest($query, mutationAuth: MutationAuthorization::none());
     }
 
-    private function reconcileOperationCode(string $operationCode): string
+    private function reconcileOperationKey(string $operationKey): string
     {
-        $map = [
-            'TRANSMITIR' => 'CONSULTAR_RECIBO',
-            'TRANSMITIR_DECLARACAO' => 'CONSULTAR_RECIBO',
-            'EMITIR_GUIA' => 'CONSULTAR',
-            'ENCERRAR' => 'CONSULTAR_SITUACAO',
-            'ADERIR' => 'CONSULTAR_PEDIDO',
-        ];
-
-        $upper = strtoupper($operationCode);
-
-        return $map[$upper] ?? 'CONSULTAR_RECIBO';
+        return match (strtolower($operationKey)) {
+            'pgdasd.transdeclaracao' => 'pgdasd.consultimadecrec',
+            'defis.transdeclaracao' => 'defis.consultimadecrec',
+            'dctfweb.transdeclaracao' => 'dctfweb.consrecibo',
+            'mit.encapuracao' => 'mit.situacaoenc',
+            default => $operationKey,
+        };
     }
 
     private function persistedOperation(IntegraRequest $request): ?FiscalMutationOperation
     {
-        $id = $request->payload['mutation_operation_id'] ?? null;
-        if (! is_int($id) && ! (is_string($id) && ctype_digit($id))) {
+        $id = $request->mutationOperationId;
+        if ($id === null) {
             return null;
         }
 
         $operation = FiscalMutationOperation::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $request->officeId)
+            ->where('tenant_id', $request->tenantId)
             ->where('client_id', $request->clientId)
-            ->whereKey((int) $id)
+            ->whereKey($id)
             ->first();
         if ($operation === null) {
             return null;

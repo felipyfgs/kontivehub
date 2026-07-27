@@ -12,7 +12,7 @@ final class EnvelopeCryptoTest extends TestCase
     {
         $key = random_bytes(SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_KEYBYTES);
         $crypto = new EnvelopeCrypto($key, 1);
-        $metadata = ['purpose' => 'unit-test', 'office_id' => 42];
+        $metadata = ['purpose' => 'unit-test', 'tenant_id' => 42];
 
         $envelope = $crypto->seal('segredo-fiscal', $metadata);
 

@@ -5,7 +5,9 @@ namespace App\Services\Outbound;
 use App\Contracts\SvrsNfceOutboundXmlRetrievalClient;
 use App\Contracts\SvrsNfe55OutboundXmlRetrievalClient;
 use App\Contracts\SvrsPortalEgressGovernor;
+use App\Domain\Cnpj;
 use App\DTO\Outbound\SvrsEgressReservation;
+use App\DTO\Outbound\SvrsEgressReserveRequest;
 use App\DTO\Outbound\SvrsNfceEligibilityResult;
 use App\DTO\Outbound\SvrsNfceRetrievalRequest;
 use App\Enums\DocumentAcquisitionSource;
@@ -22,10 +24,10 @@ use App\Enums\SvrsNfceTransportOutcome;
 use App\Jobs\RecoverSvrsNfceXmlJob;
 use App\Models\Client;
 use App\Models\Establishment;
-use App\Models\MaOutboundRetrievalRequest;
 use App\Models\OutboundCaptureProfile;
 use App\Models\OutboundNumberState;
-use App\Models\OutboundXmlRecoveryAttempt;
+use App\Models\OutboundRetrievalAttempt;
+use App\Models\OutboundRetrievalRequest;
 use App\Services\Audit\AuditLogger;
 use App\Services\Certificates\CredentialService;
 use Illuminate\Support\Facades\Cache;
@@ -45,9 +47,9 @@ final class OutboundXmlRecoveryOrchestrator
         private readonly SvrsNfe55RetrievalEligibility $nfe55Eligibility,
         private readonly SvrsNfceKillSwitchService $killSwitch,
         private readonly SvrsNfe55KillSwitchService $nfe55KillSwitch,
-        private readonly SvrsNfceRateLimiter $rateLimiter,
         private readonly SvrsNfceCircuitBreaker $breaker,
         private readonly SvrsPortalEgressGovernor $egressGovernor,
+        private readonly SvrsPortalEgressConfig $egressConfig,
         private readonly SvrsNfceOutboundXmlRetrievalClient $client,
         private readonly SvrsNfe55OutboundXmlRetrievalClient $nfe55Client,
         private readonly SvrsNfceXmlIngestionService $ingestion,
@@ -65,14 +67,14 @@ final class OutboundXmlRecoveryOrchestrator
         bool $queue = true,
         ?int $userId = null,
         string $triggeredBy = 'system',
-    ): ?MaOutboundRetrievalRequest {
-        if ((int) $number->office_id !== (int) $profile->office_id
+    ): ?OutboundRetrievalRequest {
+        if ((int) $number->tenant_id !== (int) $profile->tenant_id
             || (int) $number->outbound_capture_profile_id !== (int) $profile->id) {
             return null;
         }
 
-        $a1Ok = $this->hasA1((int) $profile->client_id);
-        $eval = $this->evaluateEligibility($number, $profile, $a1Ok);
+        $certificateOk = $this->hasCertificate((int) $profile->client_id);
+        $eval = $this->evaluateEligibility($number, $profile, $certificateOk);
         if (! $eval->eligible) {
             return null;
         }
@@ -90,8 +92,8 @@ final class OutboundXmlRecoveryOrchestrator
 
         try {
             $request = DB::transaction(function () use ($number, $profile, $key, $userId) {
-                $existing = MaOutboundRetrievalRequest::query()
-                    ->where('office_id', $profile->office_id)
+                $existing = OutboundRetrievalRequest::query()
+                    ->where('tenant_id', $profile->tenant_id)
                     ->where('outbound_capture_profile_id', $profile->id)
                     ->where('access_key', $key)
                     ->where('origin', OutboundRetrievalOrigin::SvrsPortalByKey)
@@ -108,8 +110,8 @@ final class OutboundXmlRecoveryOrchestrator
                     return $existing;
                 }
 
-                return MaOutboundRetrievalRequest::query()->create([
-                    'office_id' => $profile->office_id,
+                return OutboundRetrievalRequest::query()->create([
+                    'tenant_id' => $profile->tenant_id,
                     'outbound_capture_profile_id' => $profile->id,
                     'establishment_id' => $profile->establishment_id,
                     'environment' => $profile->environment,
@@ -129,8 +131,8 @@ final class OutboundXmlRecoveryOrchestrator
             });
         } catch (Throwable) {
             // Unique parcial (PG) ou corrida: re-ler recovery ativa
-            $request = MaOutboundRetrievalRequest::query()
-                ->where('office_id', $profile->office_id)
+            $request = OutboundRetrievalRequest::query()
+                ->where('tenant_id', $profile->tenant_id)
                 ->where('outbound_capture_profile_id', $profile->id)
                 ->where('access_key', $key)
                 ->where('origin', OutboundRetrievalOrigin::SvrsPortalByKey)
@@ -156,7 +158,7 @@ final class OutboundXmlRecoveryOrchestrator
     /**
      * Enfileira somente se ainda não há job em andamento (QUEUED/RUNNING).
      */
-    public function enqueue(MaOutboundRetrievalRequest $request, ?int $userId = null, string $triggeredBy = 'system'): bool
+    public function enqueue(OutboundRetrievalRequest $request, ?int $userId = null, string $triggeredBy = 'system'): bool
     {
         if ($request->origin !== OutboundRetrievalOrigin::SvrsPortalByKey) {
             return false;
@@ -197,7 +199,7 @@ final class OutboundXmlRecoveryOrchestrator
         $this->audit->record('svrs_nfce.recovery.queued', 'SUCCESS', $request, [
             'triggered_by' => $triggeredBy,
             'correlation_id' => $request->correlation_id,
-        ], $userId, $request->office_id);
+        ], $userId, $request->tenant_id);
 
         $this->metrics->increment('svrs_nfce_queued');
 
@@ -221,7 +223,7 @@ final class OutboundXmlRecoveryOrchestrator
             $this->runAttemptLocked($requestId, $reservation);
         } finally {
             if ($reservation !== null) {
-                $this->rateLimiter->release($reservation);
+                $this->egressGovernor->release($reservation, false);
             }
             $lock->release();
         }
@@ -229,7 +231,7 @@ final class OutboundXmlRecoveryOrchestrator
 
     private function runAttemptLocked(int $requestId, ?SvrsEgressReservation &$reservation): void
     {
-        $request = MaOutboundRetrievalRequest::withoutGlobalScopes()->find($requestId);
+        $request = OutboundRetrievalRequest::withoutGlobalScopes()->find($requestId);
         if ($request === null) {
             return;
         }
@@ -256,8 +258,8 @@ final class OutboundXmlRecoveryOrchestrator
             return;
         }
 
-        if ((int) $request->office_id !== (int) $profile->office_id
-            || (int) $number->office_id !== (int) $profile->office_id) {
+        if ((int) $request->tenant_id !== (int) $profile->tenant_id
+            || (int) $number->tenant_id !== (int) $profile->tenant_id) {
             return;
         }
 
@@ -304,7 +306,7 @@ final class OutboundXmlRecoveryOrchestrator
             return;
         }
 
-        // Reserva no governador compartilhado ANTES de materializar A1
+        // Reserva no governador compartilhado ANTES de materializar certificado
         if (! $this->egressGovernor->isCallAllowed($isProbe)) {
             $this->scheduleRetry($request, SvrsNfceFailureReason::BreakerOpen, 'Circuit breaker coorte aberto.', 900);
 
@@ -317,24 +319,26 @@ final class OutboundXmlRecoveryOrchestrator
             ?? Client::withoutGlobalScopes()->find($profile->client_id)?->root_cnpj
             ?? ('CLIENT'.$profile->client_id);
 
-        $rate = $this->rateLimiter->acquire(
-            (int) $profile->client_id,
-            (string) $rootCnpj,
-            (int) $profile->office_id,
-            $modelCode === '55' ? 'nfe55' : 'nfce65',
-            $isProbe,
-        );
-        if (! $rate['allowed'] || ($rate['reservation'] ?? null) === null) {
+        $rate = $this->egressGovernor->reserve(new SvrsEgressReserveRequest(
+            rootCnpj: $this->normalizeRootCnpj((string) $rootCnpj, (int) $profile->client_id),
+            accessKeyMask: '****'.substr((string) $request->access_key, -4),
+            channel: $modelCode === '55' ? 'nfe55' : 'nfce65',
+            tenantId: (int) $profile->tenant_id,
+            exchangesNeeded: $this->egressConfig->exchangesPerDownload(),
+            isCanary: $isProbe,
+            correlationId: $request->correlation_id,
+        ));
+        if (! $rate->allowed || $rate->reservation === null) {
             $this->scheduleRetry(
                 $request,
                 SvrsNfceFailureReason::RateLimited,
                 'Orçamento de egress SVRS esgotado.',
-                max(1, $rate['retry_after_seconds']),
+                max(1, $rate->retryAfterSeconds),
             );
 
             return;
         }
-        $reservation = $rate['reservation'];
+        $reservation = $rate->reservation;
 
         $correlationId = $request->correlation_id ?: (string) Str::uuid();
         $attemptNumber = (int) $request->attempt_count + 1;
@@ -363,17 +367,17 @@ final class OutboundXmlRecoveryOrchestrator
         $retryAfterHint = null;
 
         try {
-            $certificate = $this->materializeA1((int) $profile->client_id);
+            $certificate = $this->materializeCertificate((int) $profile->client_id);
             if ($certificate === null) {
-                $failure = SvrsNfceFailureReason::A1Unavailable;
-                $detail = 'A1 indisponível.';
+                $failure = SvrsNfceFailureReason::CertificateUnavailable;
+                $detail = 'certificado indisponível.';
                 $resultOutcome = SvrsNfceTransportOutcome::AuthForbidden;
             } else {
                 $dto = new SvrsNfceRetrievalRequest(
                     accessKey: (string) $request->access_key,
                     environment: (string) $profile->environment,
                     correlationId: $correlationId,
-                    officeId: (int) $profile->office_id,
+                    tenantId: (int) $profile->tenant_id,
                     profileId: (int) $profile->id,
                     clientId: (int) $profile->client_id,
                     establishmentId: (int) $profile->establishment_id,
@@ -419,7 +423,7 @@ final class OutboundXmlRecoveryOrchestrator
                         if (($ingest['status'] ?? '') === 'captured' || ($ingest['status'] ?? '') === 'duplicate') {
                             $this->breaker->recordSuccess((int) $profile->client_id);
                             if ($isProbe) {
-                                $this->egressGovernor->closeBreakerAfterCanarySuccess(officeId: (int) $profile->office_id);
+                                $this->egressGovernor->closeBreakerAfterCanarySuccess(tenantId: (int) $profile->tenant_id);
                             }
                             $this->metrics->increment(
                                 ($ingest['status'] ?? '') === 'duplicate' ? 'svrs_nfce_duplicate' : 'svrs_nfce_captured'
@@ -462,16 +466,16 @@ final class OutboundXmlRecoveryOrchestrator
                 SvrsEgressBlockCause::MultipleQueries,
                 templateFingerprint: 'multiple_queries_block_v1',
                 retryAfterSeconds: $retryAfterHint,
-                officeId: (int) $profile->office_id,
+                tenantId: (int) $profile->tenant_id,
             );
         } elseif ($failure === SvrsNfceFailureReason::ResponseContractChanged) {
             $this->egressGovernor->openBreaker(
                 SvrsEgressBlockCause::ContractChanged,
-                officeId: (int) $profile->office_id,
+                tenantId: (int) $profile->tenant_id,
             );
         }
 
-        $this->breaker->recordFailure($failure, (int) $profile->client_id, null, (int) $profile->office_id);
+        $this->breaker->recordFailure($failure, (int) $profile->client_id, null, (int) $profile->tenant_id);
 
         $terminalStatus = $this->resolveTerminalStatus($failure, $attemptNumber);
         if ($terminalStatus === SvrsNfceRecoveryStatus::NotAvailableVisible) {
@@ -533,15 +537,15 @@ final class OutboundXmlRecoveryOrchestrator
         );
     }
 
-    public function resolveByOtherSource(int $officeId, string $accessKey, string $sourceLabel = 'other'): void
+    public function resolveByOtherSource(int $tenantId, string $accessKey, string $sourceLabel = 'other'): void
     {
         $key = $this->normalizeAccessKey($accessKey);
         if ($key === null) {
             return;
         }
 
-        MaOutboundRetrievalRequest::withoutGlobalScopes()
-            ->where('office_id', $officeId)
+        OutboundRetrievalRequest::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
             ->where('access_key', $key)
             ->where('origin', OutboundRetrievalOrigin::SvrsPortalByKey)
             ->whereNotIn('recovery_status', [
@@ -562,11 +566,11 @@ final class OutboundXmlRecoveryOrchestrator
     private function evaluateEligibility(
         OutboundNumberState $number,
         OutboundCaptureProfile $profile,
-        bool $a1Ok,
+        bool $certificateOk,
     ): SvrsNfceEligibilityResult {
         return $this->profileModelCode($profile) === '55'
-            ? $this->nfe55Eligibility->evaluate($number, $profile, $a1Ok)
-            : $this->eligibility->evaluate($number, $profile, $a1Ok);
+            ? $this->nfe55Eligibility->evaluate($number, $profile, $certificateOk)
+            : $this->eligibility->evaluate($number, $profile, $certificateOk);
     }
 
     private function profileModelCode(OutboundCaptureProfile $profile): string
@@ -584,8 +588,24 @@ final class OutboundXmlRecoveryOrchestrator
             ?? $this->nfe55Eligibility->normalizeKey($raw);
     }
 
+    private function normalizeRootCnpj(string $rootCnpj, int $clientId): string
+    {
+        $clean = Cnpj::normalize($rootCnpj);
+        if ($clean === '') {
+            return 'CLIENT'.$clientId;
+        }
+
+        if (strlen($clean) === 14) {
+            $parsed = Cnpj::tryParse($clean);
+
+            return $parsed?->root() ?? substr($clean, 0, 8);
+        }
+
+        return $clean;
+    }
+
     private function scheduleRetry(
-        MaOutboundRetrievalRequest $request,
+        OutboundRetrievalRequest $request,
         SvrsNfceFailureReason $reason,
         string $detail,
         int $delaySeconds,
@@ -654,7 +674,7 @@ final class OutboundXmlRecoveryOrchestrator
     }
 
     private function recordAttempt(
-        MaOutboundRetrievalRequest $request,
+        OutboundRetrievalRequest $request,
         OutboundCaptureProfile $profile,
         OutboundNumberState $number,
         string $correlationId,
@@ -677,9 +697,9 @@ final class OutboundXmlRecoveryOrchestrator
         ]);
 
         try {
-            OutboundXmlRecoveryAttempt::query()->create([
-                'office_id' => $request->office_id,
-                'ma_outbound_retrieval_request_id' => $request->id,
+            OutboundRetrievalAttempt::query()->create([
+                'tenant_id' => $request->tenant_id,
+                'outbound_retrieval_request_id' => $request->id,
                 'outbound_capture_profile_id' => $profile->id,
                 'outbound_number_state_id' => $number->id,
                 'access_key' => $request->access_key,
@@ -703,7 +723,7 @@ final class OutboundXmlRecoveryOrchestrator
         }
     }
 
-    private function hasA1(int $clientId): bool
+    private function hasCertificate(int $clientId): bool
     {
         $client = Client::withoutGlobalScopes()->find($clientId);
         if ($client === null) {
@@ -716,7 +736,7 @@ final class OutboundXmlRecoveryOrchestrator
     /**
      * @return array{pfx: string, password: string}|null
      */
-    private function materializeA1(int $clientId): ?array
+    private function materializeCertificate(int $clientId): ?array
     {
         $client = Client::withoutGlobalScopes()->find($clientId);
         if ($client === null) {

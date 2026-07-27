@@ -7,20 +7,20 @@ use App\Enums\AuthorIdentityType;
 use App\Enums\FiscalProfile;
 use App\Enums\FiscalRunStatus;
 use App\Enums\MeiProvider;
-use App\Enums\OfficeRole;
 use App\Enums\SerproAuthorizationStatus;
 use App\Enums\SerproEligibilityCode;
 use App\Enums\SerproEnvironment;
 use App\Enums\TaxProxyPowerSource;
 use App\Enums\TaxProxyPowerStatus;
+use App\Enums\TenantRole;
 use App\Jobs\Fiscal\ExecuteFiscalMonitoringRunJob;
 use App\Models\Client;
 use App\Models\Establishment;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
-use App\Models\OfficeSerproAuthorization;
 use App\Models\SerproContract;
 use App\Models\TaxProxyPower;
+use App\Models\Tenant;
+use App\Models\TenantSerproAuthorization;
 use App\Models\User;
 use App\Services\Fiscal\ManualConsult\ManualConsultReadPolicy;
 use App\Services\Fiscal\SimplesMei\Pgmei\PgmeiMonitoringQueryService;
@@ -58,11 +58,11 @@ final class PgmeiConsultHappyPathTest extends TestCase
 
     public function test_usable_authorization_does_not_block_with_authorization_missing_from_draft(): void
     {
-        [$office, $user, $client] = $this->seedUsableTrialContext();
+        [$tenant, $user, $client] = $this->seedUsableTrialContext();
         Sanctum::actingAs($user);
 
         $eligibility = app(IntegraEligibilityService::class)->evaluate(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             solutionCode: 'PGMEI',
             serviceCode: 'DIVIDAATIVA24',
@@ -81,7 +81,7 @@ final class PgmeiConsultHappyPathTest extends TestCase
         );
 
         $runs = app(PgmeiMonitoringQueryService::class)->enqueueManualConsult(
-            $office,
+            $tenant,
             [$client->id],
             2025,
             true,
@@ -105,19 +105,19 @@ final class PgmeiConsultHappyPathTest extends TestCase
         Http::assertNothingSent();
     }
 
-    /** @return array{Office, User, Client} */
+    /** @return array{Tenant, User, Client} */
     private function seedUsableTrialContext(): array
     {
-        $office = Office::factory()->create();
-        $user = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $client = Client::factory()->forOffice($office)->create([
+        $tenant = Tenant::factory()->create();
+        $user = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $client = Client::factory()->forTenant($tenant)->create([
             'root_cnpj' => '26461528',
         ]);
         Establishment::factory()->forClient($client)->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'cnpj' => '26461528000151',
             'is_active' => true,
-            'is_matrix' => true,
+            'is_headquarters' => true,
         ]);
 
         SerproContract::query()->create([
@@ -127,23 +127,22 @@ final class PgmeiConsultHappyPathTest extends TestCase
             'health_status' => 'OK',
         ]);
 
-        $auth = OfficeSerproAuthorization::query()->create([
-            'office_id' => $office->id,
+        $auth = TenantSerproAuthorization::query()->create([
+            'tenant_id' => $tenant->id,
             'environment' => SerproEnvironment::Trial,
             'status' => SerproAuthorizationStatus::TokenActive,
             'author_identity_type' => AuthorIdentityType::Cnpj,
             'author_identity' => '48123272000105',
-            'certificate_mode' => AuthorCertificateMode::ManagedA1,
-            'managed_a1_consent' => true,
+            'certificate_mode' => AuthorCertificateMode::ManagedCertificate,
             'procurador_token_vault_object_id' => '01JTOKENHAPPY0000000000000',
             'procurador_token_expires_at' => now()->addHours(12),
             'termo_valid_to' => now()->addYear(),
         ]);
 
         TaxProxyPower::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
-            'office_serpro_authorization_id' => $auth->id,
+            'tenant_serpro_authorization_id' => $auth->id,
             'author_identity' => $auth->author_identity,
             'contributor_cnpj' => '26461528000151',
             'system_code' => 'PGMEI',
@@ -158,6 +157,6 @@ final class PgmeiConsultHappyPathTest extends TestCase
             'valid_to' => now()->addYear(),
         ]);
 
-        return [$office, $user, $client];
+        return [$tenant, $user, $client];
     }
 }

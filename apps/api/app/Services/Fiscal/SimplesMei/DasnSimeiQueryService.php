@@ -6,7 +6,7 @@ use App\Enums\MeiAutomationStatus;
 use App\Jobs\Fiscal\ExecuteFiscalMonitoringRunJob;
 use App\Models\Client;
 use App\Models\MeiAutomationAttempt;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\FiscalMonitoring\FiscalMonitoringRunService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -21,12 +21,12 @@ final class DasnSimeiQueryService
     ) {}
 
     /** @return array<string, mixed> */
-    public function history(Office $office, Client $client, ?int $calendarYear = null): array
+    public function history(Tenant $tenant, Client $client, ?int $calendarYear = null): array
     {
-        $this->assertClient($office, $client);
+        $this->assertClient($tenant, $client);
         $attemptQuery = MeiAutomationAttempt::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('operation_key', 'dasnsimei.consultimadecrec');
         $attempt = (clone $attemptQuery)->latest('id')->first();
@@ -86,7 +86,7 @@ final class DasnSimeiQueryService
      * @return list<array<string, mixed>>
      */
     public function enqueueManualConsult(
-        Office $office,
+        Tenant $tenant,
         array $clientIds,
         ?int $calendarYear,
         bool $includeFullReceipt,
@@ -99,7 +99,7 @@ final class DasnSimeiQueryService
 
         $clients = Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('id', $clientIds)
             ->get()
             ->keyBy('id');
@@ -108,7 +108,7 @@ final class DasnSimeiQueryService
         }
 
         $models = DB::transaction(function () use (
-            $office,
+            $tenant,
             $clientIds,
             $clients,
             $calendarYear,
@@ -120,7 +120,7 @@ final class DasnSimeiQueryService
                 /** @var Client $client */
                 $client = $clients->get($clientId);
                 $run = $this->runs->enqueueManual(
-                    office: $office,
+                    tenant: $tenant,
                     client: $client,
                     systemCode: 'INTEGRA_MEI',
                     serviceCode: 'DASN_SIMEI',
@@ -145,15 +145,15 @@ final class DasnSimeiQueryService
             ExecuteFiscalMonitoringRunJob::dispatch($run->id)
                 ->onQueue((string) config('fiscal_monitoring.job.queue', 'default'));
             $data = $run->refresh()->toPublicArray();
-            unset($data['office_id'], $data['idempotency_key']);
+            unset($data['tenant_id'], $data['idempotency_key']);
 
             return $data;
         }, $models);
     }
 
-    private function assertClient(Office $office, Client $client): void
+    private function assertClient(Tenant $tenant, Client $client): void
     {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new HttpException(404, 'Cliente não encontrado no escritório atual.');
         }
     }

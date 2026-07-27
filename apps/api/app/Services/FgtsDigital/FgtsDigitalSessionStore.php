@@ -17,7 +17,7 @@ final class FgtsDigitalSessionStore
 
     /** @param array<string, mixed> $storageState */
     public function store(
-        int $officeId,
+        int $tenantId,
         int $clientId,
         FgtsDigitalCredentialSource $source,
         string $fingerprint,
@@ -31,7 +31,7 @@ final class FgtsDigitalSessionStore
         $expiresAt ??= CarbonImmutable::now()->addMinutes((int) config('fgts_digital.session.ttl_minutes', 30));
 
         $session = FgtsDigitalSession::query()->create([
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'client_id' => $clientId,
             'representation_id' => $representationId,
             'credential_source' => $source,
@@ -54,7 +54,7 @@ final class FgtsDigitalSessionStore
 
         FgtsDigitalSession::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('client_id', $clientId)
             ->whereKeyNot($session->id)
             ->where('status', FgtsDigitalSessionStatus::Ready->value)
@@ -64,7 +64,7 @@ final class FgtsDigitalSessionStore
     }
 
     public function latest(
-        int $officeId,
+        int $tenantId,
         int $clientId,
         string $fingerprint,
         string $profileType,
@@ -72,7 +72,7 @@ final class FgtsDigitalSessionStore
     ): ?FgtsDigitalSession {
         $session = FgtsDigitalSession::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('client_id', $clientId)
             ->where('credential_fingerprint', $fingerprint)
             ->where('profile_type', $profileType)
@@ -107,7 +107,7 @@ final class FgtsDigitalSessionStore
     private static function aad(FgtsDigitalSession $session): array
     {
         return SecureObjectPurpose::FgtsDigitalSession->aadBase([
-            'office_id' => (int) $session->office_id,
+            'tenant_id' => (int) $session->tenant_id,
             'client_id' => (int) $session->client_id,
             'session_id' => (int) $session->id,
             'credential_fingerprint' => (string) $session->credential_fingerprint,

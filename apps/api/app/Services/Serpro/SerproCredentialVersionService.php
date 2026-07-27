@@ -10,7 +10,6 @@ use App\Enums\SerproCredentialVersionStatus;
 use App\Enums\SerproDataSegregationClass;
 use App\Enums\SerproEnvironment;
 use App\Models\SerproContract;
-use App\Models\SerproCredentialApproval;
 use App\Models\SerproCredentialConnectionEvidence;
 use App\Models\SerproCredentialVersion;
 use App\Services\Audit\AuditLogger;
@@ -264,7 +263,7 @@ final class SerproCredentialVersionService
                     $decoded = json_decode((string) $response['body'], true);
                     $hasBearer = is_array($decoded) && ! empty($decoded['access_token']);
                     $requireJwt = (bool) config('serpro.oauth.require_jwt_token', true);
-                    $hasJwt = is_array($decoded) && (! empty($decoded['jwt_token']) || ! empty($decoded['jwt']));
+                    $hasJwt = is_array($decoded) && ! empty($decoded['jwt_token']);
                     if (! $hasBearer || ($requireJwt && ! $hasJwt)) {
                         $success = false;
                         $message = 'Resposta OAuth incompleta (tokens ausentes).';
@@ -351,33 +350,30 @@ final class SerproCredentialVersionService
     }
 
     /**
-     * Cutover atômico: exige confirmação OWNER, evidência OAuth recente da mesma
+     * Ativação atômica: exige confirmação OWNER, evidência OAuth recente da mesma
      * versão/fingerprint, invalida tokens/caches e retira a ACTIVE anterior.
-     *
-     * @param  callable(SerproContract): mixed|null  $oauthProbe  legado (testes); preferir evidência
      */
-    public function cutover(
+    public function activate(
         SerproCredentialVersion $version,
         ?SerproContract $contract = null,
         ?int $actorUserId = null,
-        ?callable $oauthProbe = null,
         bool $skipOauth = false,
         ?int $approvalId = null,
     ): SerproCredentialVersion {
         if ($version->status !== SerproCredentialVersionStatus::Verified) {
-            throw new RuntimeException('Cutover exige versão VERIFIED.');
+            throw new RuntimeException('Ativação exige versão VERIFIED.');
         }
 
         // skip_oauth só em local/testing — produção exige evidência OAuth recente.
         if ($skipOauth && ! app()->environment(['local', 'testing'])) {
             throw new RuntimeException(
-                'skip_oauth não é permitido fora de local/testing; execute test-connection antes do cutover.'
+                'skip_oauth não é permitido fora de local/testing; execute test-connection antes da ativação.'
             );
         }
 
         if ($actorUserId === null || $actorUserId <= 0) {
             throw new RuntimeException(
-                'Cutover exige ator PLATFORM_ADMIN com confirmação OWNER vinculada à versão.'
+                'Ativação exige ator PLATFORM_ADMIN com confirmação OWNER vinculada à versão.'
             );
         }
 
@@ -387,7 +383,7 @@ final class SerproCredentialVersionService
                 : null);
 
         // Fluxo versionado (UI Configuração): cadastro de versão não exige contrato prévio.
-        // Cria/reutiliza shell no mesmo ambiente + CNPJ do contratante antes do cutover.
+        // Cria/reutiliza shell no mesmo ambiente + CNPJ do contratante antes da ativação.
         if ($contract === null) {
             $contract = $this->ensureContractShellForVersion($version);
         }
@@ -396,13 +392,12 @@ final class SerproCredentialVersionService
             $version,
             $contract,
             $actorUserId,
-            $oauthProbe,
             $skipOauth,
             $approvalId,
         ): SerproCredentialVersion {
             $locked = SerproCredentialVersion::query()->whereKey($version->id)->lockForUpdate()->firstOrFail();
             if ($locked->status !== SerproCredentialVersionStatus::Verified) {
-                throw new RuntimeException('Estado da versão mudou durante o cutover.');
+                throw new RuntimeException('Estado da versão mudou durante a ativação.');
             }
 
             $env = $locked->environment instanceof SerproEnvironment
@@ -416,7 +411,7 @@ final class SerproCredentialVersionService
 
             if ($contractEnv !== $env) {
                 throw new RuntimeException(
-                    'Cutover exige contrato e versão de credencial no mesmo ambiente SERPRO.'
+                    'Ativação exige contrato e versão de credencial no mesmo ambiente SERPRO.'
                 );
             }
 
@@ -424,30 +419,20 @@ final class SerproCredentialVersionService
                 $evidence = $locked->latestValidConnectionEvidence();
                 if ($evidence === null || ! $evidence->isValidFor($locked)) {
                     throw new RuntimeException(
-                        'Cutover exige teste OAuth recente e bem-sucedido da mesma versão e fingerprint.'
+                        'Ativação exige teste OAuth recente e bem-sucedido da mesma versão e fingerprint.'
                     );
                 }
             }
 
             $rollouts = app(SerproRolloutApprovalService::class);
             $ownerApproval = $rollouts->claimOwnerApproval(
-                action: SerproRolloutApprovalService::ACTION_CREDENTIAL_CUTOVER,
+                action: SerproRolloutApprovalService::ACTION_CREDENTIAL_ACTIVATION,
                 subjectType: 'CREDENTIAL_VERSION',
                 subjectId: (int) $locked->id,
                 environment: $env,
                 actorUserId: $actorUserId,
                 approvalId: $approvalId,
             );
-
-            $previousPfx = $contractLocked->pfx_vault_object_id;
-            $previousOauth = $contractLocked->oauth_vault_object_id;
-            $previousToken = $contractLocked->token_vault_object_id;
-            $previousFingerprint = $contractLocked->fingerprint_sha256;
-            $previousCnpj = $contractLocked->contractor_cnpj;
-            $previousSubject = $contractLocked->subject_name;
-            $previousCertFrom = $contractLocked->cert_valid_from;
-            $previousCertTo = $contractLocked->cert_valid_to;
-            $previousHint = $contractLocked->consumer_key_hint;
 
             $contractPfxId = $this->resealVersionMaterialForContract($locked, $contractLocked);
             $contractOauthId = $contractPfxId['oauth'];
@@ -468,33 +453,6 @@ final class SerproCredentialVersionService
 
             $this->tokenCache->invalidate($contractLocked->refresh());
 
-            // Probe legado opcional (testes antigos); caminho normal usa evidência prévia.
-            if (! $skipOauth && $oauthProbe !== null) {
-                try {
-                    $oauthProbe($contractLocked);
-                } catch (Throwable $e) {
-                    $this->safeDelete($contractPfxObjectId);
-                    $this->safeDelete($contractOauthId);
-                    $contractLocked->forceFill([
-                        'pfx_vault_object_id' => $previousPfx,
-                        'oauth_vault_object_id' => $previousOauth,
-                        'token_vault_object_id' => $previousToken,
-                        'fingerprint_sha256' => $previousFingerprint,
-                        'contractor_cnpj' => $previousCnpj,
-                        'subject_name' => $previousSubject,
-                        'cert_valid_from' => $previousCertFrom,
-                        'cert_valid_to' => $previousCertTo,
-                        'consumer_key_hint' => $previousHint,
-                    ])->save();
-
-                    throw new RuntimeException(
-                        'OAuth pré-cutover falhou; versão permanece VERIFIED e ACTIVE anterior intacta.',
-                        0,
-                        $e,
-                    );
-                }
-            }
-
             $previousActive = SerproCredentialVersion::query()
                 ->where('environment', $env->value)
                 ->where('status', SerproCredentialVersionStatus::Active->value)
@@ -503,19 +461,19 @@ final class SerproCredentialVersionService
                 ->get();
 
             foreach ($previousActive as $old) {
-                $this->invalidateConnectionEvidences($old, 'cutover_retire', $actorUserId);
+                $this->invalidateConnectionEvidences($old, 'activation_retire', $actorUserId);
                 $old->forceFill([
                     'status' => SerproCredentialVersionStatus::Retired,
                     'retired_at' => now(),
                     'token_vault_object_id' => null,
                     'token_expires_at' => null,
-                    'notes' => trim((string) $old->notes."\nRetirada segura no cutover da v{$locked->version_number}."),
+                    'notes' => trim((string) $old->notes."\nRetirada segura na ativação da v{$locked->version_number}."),
                 ])->save();
 
                 $this->audit->record('serpro.credential.retired', 'SUCCESS', $old, [
                     'environment' => $env->value,
                     'version_number' => $old->version_number,
-                    'reason' => 'cutover',
+                    'reason' => 'activation',
                     'replaced_by' => $locked->id,
                 ], $actorUserId, null);
             }
@@ -531,15 +489,14 @@ final class SerproCredentialVersionService
                 'status' => SerproContractStatus::Active,
                 'activated_at' => $contractLocked->activated_at ?? now(),
                 'active_credential_version_id' => $locked->id,
-                'credentials_exposed' => false,
                 'health_status' => 'OK',
-                'health_message' => 'Cutover de credencial concluído.',
+                'health_message' => 'Ativação de credencial concluída.',
                 'last_verified_at' => now(),
             ])->save();
 
             $rollouts->markOwnerApprovalExecuted($ownerApproval, $actorUserId);
 
-            $this->audit->record('serpro.credential.cutover', 'SUCCESS', $locked, [
+            $this->audit->record('serpro.credential.activation', 'SUCCESS', $locked, [
                 'environment' => $env->value,
                 'version_number' => $locked->version_number,
                 'retired_count' => $previousActive->count(),
@@ -553,7 +510,7 @@ final class SerproCredentialVersionService
 
     /**
      * Garante um contrato shell no ambiente da versão (fluxo Configuração versionada).
-     * Não grava segredos — o cutover resela PFX/OAuth a partir da versão.
+     * Não grava segredos — a ativação resela PFX/OAuth a partir da versão.
      */
     private function ensureContractShellForVersion(SerproCredentialVersion $version): SerproContract
     {
@@ -564,7 +521,7 @@ final class SerproCredentialVersionService
         $cnpj = (string) ($version->contractor_cnpj ?? '');
         if ($cnpj === '') {
             throw new RuntimeException(
-                'Cutover exige contrato vinculado à versão (CNPJ do contratante ausente na versão).'
+                'Ativação exige contrato vinculado à versão (CNPJ do contratante ausente na versão).'
             );
         }
 
@@ -601,7 +558,7 @@ final class SerproCredentialVersionService
             'cert_valid_to' => $version->cert_valid_to,
             'consumer_key_hint' => $version->consumer_key_hint,
             'health_status' => 'PENDING',
-            'health_message' => 'Contrato criado no fluxo versionado; aguardando cutover.',
+            'health_message' => 'Contrato criado no fluxo versionado; aguardando ativação.',
             'notes' => 'Shell auto-criado a partir da credential version #'.$version->id,
             'segregation_class' => $version->segregation_class
                 ?? SerproDataSegregationClass::HistoricalUnverified,
@@ -739,7 +696,6 @@ final class SerproCredentialVersionService
             ]);
 
             $contract->forceFill([
-                'credentials_exposed' => true,
                 'active_credential_version_id' => $version->id,
                 'segregation_class' => SerproDataSegregationClass::HistoricalUnverified->value,
             ])->save();
@@ -784,7 +740,6 @@ final class SerproCredentialVersionService
                     $contract->forceFill([
                         'token_vault_object_id' => null,
                         'token_expires_at' => null,
-                        'credentials_exposed' => true,
                         'health_status' => 'BLOCKED',
                         'health_message' => 'Credencial comprometida; rotação obrigatória.',
                     ])->save();
@@ -829,69 +784,6 @@ final class SerproCredentialVersionService
         ], $actorUserId, null);
 
         return $version->refresh();
-    }
-
-    /**
-     * Registro legado de decisão por versão (retire/compromise).
-     * Cutover produtivo usa {@see SerproRolloutApprovalService} OWNER_CONFIRMATION —
-     * este método NÃO satisfaz cutover e NÃO deve ser chamado por CLI para fabricar olhos.
-     */
-    public function recordApproval(
-        SerproCredentialVersion $version,
-        string $action,
-        int $approverUserId,
-        bool $totpVerified,
-        string $decision,
-        ?string $reason = null,
-        bool $fromHttp = true,
-    ): SerproCredentialApproval {
-        if (! $fromHttp) {
-            throw new RuntimeException(
-                'Aprovação de credencial SERPRO só pode ser registrada via API HTTP; CLI/job não fabricam confirmação.'
-            );
-        }
-
-        // $totpVerified legado: significa confirmação de senha recente (PASSWORD).
-        if (! $totpVerified) {
-            throw new RuntimeException('Aprovação de credencial SERPRO exige reconfirmação de senha recente.');
-        }
-
-        $action = strtoupper($action);
-        if ($action === 'CUTOVER') {
-            throw new RuntimeException(
-                'Cutover não aceita contagem de aprovadores legada; use confirmação OWNER via SerproRolloutApproval (CREDENTIAL_CUTOVER).'
-            );
-        }
-
-        return SerproCredentialApproval::query()->create([
-            'serpro_credential_version_id' => $version->id,
-            'action' => $action,
-            'approver_user_id' => $approverUserId,
-            'approver_role' => 'PLATFORM_ADMIN',
-            'totp_verified' => true, // coluna legada: true = confirmação humana válida
-            'decision' => strtoupper($decision),
-            'reason' => $reason !== null ? mb_substr($reason, 0, 500) : null,
-            'decided_at' => now(),
-            'context' => [
-                'confirmation_method' => 'PASSWORD',
-                'confirmed_at' => now()->toIso8601String(),
-            ],
-        ]);
-    }
-
-    /**
-     * Contagem legada de aprovadores (não usada para cutover OWNER).
-     */
-    public function distinctApprovers(SerproCredentialVersion $version, string $action): int
-    {
-        return SerproCredentialApproval::query()
-            ->where('serpro_credential_version_id', $version->id)
-            ->where('action', strtoupper($action))
-            ->where('decision', 'APPROVE')
-            ->where('totp_verified', true)
-            ->pluck('approver_user_id')
-            ->unique()
-            ->count();
     }
 
     /**

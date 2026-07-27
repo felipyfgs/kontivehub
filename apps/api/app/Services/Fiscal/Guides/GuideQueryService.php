@@ -2,16 +2,16 @@
 
 namespace App\Services\Fiscal\Guides;
 
-use App\Models\Office;
 use App\Models\TaxGuide;
 use App\Models\TaxGuideVersion;
+use App\Models\Tenant;
 use App\Services\Fiscal\Guides\Exceptions\GuideException;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 final class GuideQueryService
 {
     public function paginate(
-        Office $office,
+        Tenant $tenant,
         int $perPage = 50,
         ?int $clientId = null,
         ?string $paymentStatus = null,
@@ -30,7 +30,7 @@ final class GuideQueryService
         $sortDirection = strtolower($direction) === 'asc' ? 'asc' : 'desc';
         $q = TaxGuide::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->with(['currentVersion' => fn ($q) => $q->withoutGlobalScopes()])
             ->orderBy($sortColumn, $sortDirection);
         if ($sortColumn !== 'id') {
@@ -47,11 +47,11 @@ final class GuideQueryService
         return $q->paginate($perPage);
     }
 
-    public function find(Office $office, int $guideId): TaxGuide
+    public function find(Tenant $tenant, int $guideId): TaxGuide
     {
         $guide = TaxGuide::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($guideId)
             ->with([
                 'currentVersion' => fn ($q) => $q->withoutGlobalScopes(),
@@ -67,11 +67,11 @@ final class GuideQueryService
         return $guide;
     }
 
-    public function findVersion(Office $office, int $versionId): TaxGuideVersion
+    public function findVersion(Tenant $tenant, int $versionId): TaxGuideVersion
     {
         $version = TaxGuideVersion::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($versionId)
             ->first();
 
@@ -85,11 +85,11 @@ final class GuideQueryService
     /**
      * Tenant cruzado: retorna null (não vaza existência).
      */
-    public function findOrNull(Office $office, int $guideId): ?TaxGuide
+    public function findOrNull(Tenant $tenant, int $guideId): ?TaxGuide
     {
         return TaxGuide::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($guideId)
             ->first();
     }

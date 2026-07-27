@@ -3,24 +3,23 @@
 namespace Tests\Feature;
 
 use App\Contracts\SecureObjectStore;
-use App\Enums\OfficeRole;
 use App\Enums\TenantPermission;
 use App\Enums\TenantRole;
 use App\Enums\Work\TaskStatus;
 use App\Http\Middleware\EnsureWorkRealMembership;
 use App\Models\Client;
-use App\Models\Office;
-use App\Models\OfficeMembership;
-use App\Models\OperationalProcess;
-use App\Models\OperationalTask;
-use App\Models\OperationalTaskEvidence;
-use App\Models\ProcessTemplate;
+use App\Models\Tenant;
+use App\Models\TenantMembership;
 use App\Models\TenantPermissionProfile;
 use App\Models\User;
 use App\Models\WorkDepartment;
+use App\Models\WorkProcess;
+use App\Models\WorkProcessTemplate;
+use App\Models\WorkTask;
+use App\Models\WorkTaskEvidence;
 use App\Services\Authorization\TenantAuthorization;
-use App\Services\Work\OperationalEvidenceService;
-use App\Support\CurrentOffice;
+use App\Services\Work\WorkEvidenceService;
+use App\Support\CurrentTenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Route as RoutingRoute;
 use Illuminate\Support\Collection;
@@ -41,22 +40,21 @@ final class WorkActionAuthorizationApiTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        config(['features.canonical_multitenant_rbac.enabled' => true]);
         $this->vault = new InMemoryWorkEvidenceStore;
         $this->app->instance(SecureObjectStore::class, $this->vault);
     }
 
     public function test_view_only_can_read_but_not_mutate_execute_catalog_process_export(): void
     {
-        [$office, $actor] = $this->actorWithPermissions([TenantPermission::WorkView]);
-        $client = Client::factory()->forOffice($office)->create();
-        $process = OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        [$tenant, $actor] = $this->actorWithPermissions([TenantPermission::WorkView]);
+        $client = Client::factory()->forTenant($tenant)->create();
+        $process = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
         ]);
-        $task = OperationalTask::factory()->create([
-            'office_id' => $office->id,
-            'operational_process_id' => $process->id,
+        $task = WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $process->id,
             'status' => TaskStatus::AFazer,
             'lock_version' => 1,
         ]);
@@ -85,9 +83,9 @@ final class WorkActionAuthorizationApiTest extends TestCase
 
     public function test_tasks_execute_allows_transition_and_claim_and_denies_without_it(): void
     {
-        $office = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
         $department = WorkDepartment::factory()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => 'Fiscal',
             'code' => 'FISCAL',
         ]);
@@ -95,28 +93,28 @@ final class WorkActionAuthorizationApiTest extends TestCase
         [, $denied] = $this->actorWithPermissions([
             TenantPermission::WorkView,
             TenantPermission::WorkProcessesCreate,
-        ], $office);
+        ], $tenant);
         [, $executor] = $this->actorWithPermissions([
             TenantPermission::WorkView,
             TenantPermission::WorkTasksExecute,
-        ], $office, $department->id);
+        ], $tenant, $department->id);
 
-        $client = Client::factory()->forOffice($office)->create();
-        $process = OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        $client = Client::factory()->forTenant($tenant)->create();
+        $process = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
         ]);
-        $assigned = OperationalTask::factory()->create([
-            'office_id' => $office->id,
-            'operational_process_id' => $process->id,
+        $assigned = WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $process->id,
             'status' => TaskStatus::AFazer,
             'work_department_id' => $department->id,
-            'assignee_membership_id' => $executor->memberships()->where('office_id', $office->id)->value('id'),
+            'assignee_membership_id' => $executor->memberships()->where('tenant_id', $tenant->id)->value('id'),
             'lock_version' => 1,
         ]);
-        $unclaimed = OperationalTask::factory()->create([
-            'office_id' => $office->id,
-            'operational_process_id' => $process->id,
+        $unclaimed = WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $process->id,
             'sort_order' => 2,
             'status' => TaskStatus::AFazer,
             'work_department_id' => $department->id,
@@ -138,22 +136,22 @@ final class WorkActionAuthorizationApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath(
                 'data.assignee_membership_id',
-                $executor->memberships()->where('office_id', $office->id)->value('id'),
+                $executor->memberships()->where('tenant_id', $tenant->id)->value('id'),
             );
     }
 
     public function test_processes_create_allows_store_and_denies_without_it(): void
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
         [, $denied] = $this->actorWithPermissions([
             TenantPermission::WorkView,
             TenantPermission::WorkTasksExecute,
-        ], $office);
+        ], $tenant);
         [, $creator] = $this->actorWithPermissions([
             TenantPermission::WorkView,
             TenantPermission::WorkProcessesCreate,
-        ], $office);
+        ], $tenant);
 
         $payload = [
             'client_id' => $client->id,
@@ -173,15 +171,15 @@ final class WorkActionAuthorizationApiTest extends TestCase
 
     public function test_catalog_manage_allows_department_and_template_create(): void
     {
-        $office = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
         [, $denied] = $this->actorWithPermissions([
             TenantPermission::WorkView,
             TenantPermission::WorkProcessesCreate,
-        ], $office);
+        ], $tenant);
         [, $catalog] = $this->actorWithPermissions([
             TenantPermission::WorkView,
             TenantPermission::WorkCatalogManage,
-        ], $office);
+        ], $tenant);
 
         $this->authenticate($denied);
         $this->postJson('/api/v1/work/departments', [
@@ -208,12 +206,16 @@ final class WorkActionAuthorizationApiTest extends TestCase
 
     public function test_exports_create_allows_export_and_denies_without_it(): void
     {
-        $office = Office::factory()->create();
-        [, $denied] = $this->actorWithPermissions([TenantPermission::WorkView], $office);
+        config()->set(
+            'filesystems.disks.local.root',
+            sys_get_temp_dir().'/kontivehub-work-exports-'.uniqid(),
+        );
+        $tenant = Tenant::factory()->create();
+        [, $denied] = $this->actorWithPermissions([TenantPermission::WorkView], $tenant);
         [, $exporter] = $this->actorWithPermissions([
             TenantPermission::WorkView,
             TenantPermission::WorkExportsCreate,
-        ], $office);
+        ], $tenant);
 
         $this->authenticate($denied);
         $this->postJson('/api/v1/work/exports', ['filters' => []])->assertForbidden();
@@ -226,42 +228,42 @@ final class WorkActionAuthorizationApiTest extends TestCase
 
     public function test_evidence_download_requires_canonical_permission(): void
     {
-        $office = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
         [, $denied] = $this->actorWithPermissions([
             TenantPermission::WorkView,
             TenantPermission::WorkTasksExecute,
-        ], $office);
+        ], $tenant);
         [, $downloader] = $this->actorWithPermissions([
             TenantPermission::WorkView,
             TenantPermission::WorkEvidenceDownload,
-        ], $office);
+        ], $tenant);
 
-        $client = Client::factory()->forOffice($office)->create();
-        $process = OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        $client = Client::factory()->forTenant($tenant)->create();
+        $process = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
         ]);
-        $task = OperationalTask::factory()->create([
-            'office_id' => $office->id,
-            'operational_process_id' => $process->id,
+        $task = WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $process->id,
         ]);
 
         $this->authenticate($downloader);
         $bytes = '%PDF-1.4 work-evidence';
         $sha = hash('sha256', $bytes);
         $placeholder = $this->vault->put($bytes, []);
-        $evidence = OperationalTaskEvidence::query()->create([
-            'office_id' => $office->id,
-            'operational_task_id' => $task->id,
+        $evidence = WorkTaskEvidence::query()->create([
+            'tenant_id' => $tenant->id,
+            'work_task_id' => $task->id,
             'original_filename' => 'comprovante.pdf',
             'mime_type' => 'application/pdf',
             'byte_size' => strlen($bytes),
             'sha256' => $sha,
             'vault_object_id' => $placeholder,
-            'uploaded_by_membership_id' => $downloader->memberships()->where('office_id', $office->id)->value('id'),
+            'uploaded_by_membership_id' => $downloader->memberships()->where('tenant_id', $tenant->id)->value('id'),
         ]);
-        $aad = OperationalEvidenceService::aad(
-            (int) $office->id,
+        $aad = WorkEvidenceService::aad(
+            (int) $tenant->id,
             (int) $task->id,
             (string) $evidence->id,
             $sha,
@@ -278,27 +280,27 @@ final class WorkActionAuthorizationApiTest extends TestCase
             ->assertOk();
     }
 
-    public function test_current_office_isolation_hides_foreign_work_resources(): void
+    public function test_current_tenant_isolation_hides_foreign_work_resources(): void
     {
-        [$officeA, $actorA] = $this->actorWithPermissions([
+        [$tenantA, $actorA] = $this->actorWithPermissions([
             TenantPermission::WorkView,
             TenantPermission::WorkTasksExecute,
             TenantPermission::WorkAdminister,
         ]);
-        $officeB = Office::factory()->create();
-        $clientB = Client::factory()->forOffice($officeB)->create();
-        $foreignProcess = OperationalProcess::factory()->create([
-            'office_id' => $officeB->id,
+        $tenantB = Tenant::factory()->create();
+        $clientB = Client::factory()->forTenant($tenantB)->create();
+        $foreignProcess = WorkProcess::factory()->create([
+            'tenant_id' => $tenantB->id,
             'client_id' => $clientB->id,
             'title' => 'Vazado',
         ]);
-        $foreignTask = OperationalTask::factory()->create([
-            'office_id' => $officeB->id,
-            'operational_process_id' => $foreignProcess->id,
+        $foreignTask = WorkTask::factory()->create([
+            'tenant_id' => $tenantB->id,
+            'work_process_id' => $foreignProcess->id,
             'lock_version' => 1,
         ]);
-        $foreignTemplate = ProcessTemplate::factory()->create([
-            'office_id' => $officeB->id,
+        $foreignTemplate = WorkProcessTemplate::factory()->create([
+            'tenant_id' => $tenantB->id,
             'name' => 'Template externo',
         ]);
 
@@ -308,11 +310,11 @@ final class WorkActionAuthorizationApiTest extends TestCase
         $this->getJson('/api/v1/work/tasks/'.$foreignTask->id)->assertNotFound();
         $this->postJson('/api/v1/work/tasks/'.$foreignTask->id.'/start', [
             'lock_version' => 1,
-            'office_id' => $officeB->id,
+            'tenant_id' => $tenantB->id,
         ])->assertNotFound();
         $this->getJson('/api/v1/work/templates/'.$foreignTemplate->id)->assertNotFound();
 
-        $keys = $this->getJson('/api/v1/work/processes?office_id='.$officeB->id)
+        $keys = $this->getJson('/api/v1/work/processes?tenant_id='.$tenantB->id)
             ->assertOk()
             ->json('data.*.id');
         $this->assertNotContains($foreignProcess->id, $keys);
@@ -365,36 +367,36 @@ final class WorkActionAuthorizationApiTest extends TestCase
 
     /**
      * @param  list<TenantPermission>  $permissions
-     * @return array{Office, User}
+     * @return array{Tenant, User}
      */
     private function actorWithPermissions(
         array $permissions,
-        ?Office $office = null,
+        ?Tenant $tenant = null,
         ?int $workDepartmentId = null,
     ): array {
-        $office ??= Office::factory()->create();
+        $tenant ??= Tenant::factory()->create();
         $actor = User::factory()->create();
-        $actor->forceFill(['selected_office_id' => $office->id])->saveQuietly();
-        $profile = TenantPermissionProfile::factory()->forOffice($office)->create();
+        $actor->forceFill(['selected_tenant_id' => $tenant->id])->saveQuietly();
+        $profile = TenantPermissionProfile::factory()->forTenant($tenant)->create();
         $profile->syncPermissionKeys($permissions);
-        OfficeMembership::factory()->create([
-            'office_id' => $office->id,
+        TenantMembership::factory()->create([
+            'tenant_id' => $tenant->id,
             'user_id' => $actor->id,
-            'role' => OfficeRole::Operator,
-            'tenant_role' => TenantRole::TenantUser,
+            'role' => TenantRole::TenantUser,
+            'role' => TenantRole::TenantUser,
             'permission_profile_id' => $profile->id,
             'authorization_version' => 1,
             'work_department_id' => $workDepartmentId,
             'is_active' => true,
         ]);
 
-        return [$office, $actor];
+        return [$tenant, $actor];
     }
 
     private function authenticate(User $actor): void
     {
         Sanctum::actingAs($actor);
-        app(CurrentOffice::class)->clear();
+        app(CurrentTenant::class)->clear();
         app()->forgetInstance(TenantAuthorization::class);
     }
 }

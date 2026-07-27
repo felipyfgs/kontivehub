@@ -53,7 +53,7 @@ final class RegimeResolutionPostConsultService
             }
 
             Log::info('regime.consultarresolucao.decoded', [
-                'office_id' => $request->office->id,
+                'tenant_id' => $request->tenant->id,
                 'client_id' => $request->client->id,
                 'calendar_year' => $calendarYear,
                 'byte_size' => $decoded['byte_size'],
@@ -89,7 +89,7 @@ final class RegimeResolutionPostConsultService
             ];
 
             $this->regimes->projectResolution(
-                $request->office,
+                $request->tenant,
                 $request->client,
                 $calendarYear,
                 $artifact->id,
@@ -137,7 +137,7 @@ final class RegimeResolutionPostConsultService
             )];
         } catch (Throwable $e) {
             Log::warning('regime.consultarresolucao.decode_failed', [
-                'office_id' => $request->office->id,
+                'tenant_id' => $request->tenant->id,
                 'client_id' => $request->client->id,
                 'calendar_year' => $year,
                 'code' => 'REGIME_RESOLUTION_DECODE_FAILED',

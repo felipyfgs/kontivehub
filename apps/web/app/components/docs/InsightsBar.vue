@@ -4,12 +4,12 @@
  * Mobile: ShellScrollableTabs (scroll touch).
  * sm+: grid de cards (HomeStats).
  */
-import type { NotesInsights } from '~/types/api'
-import type { NotesTriageQueue } from '~/utils/notes-filters'
+import type { FiscalDocumentInsights } from '~/types/api'
+import type { NotesTriageQueue } from '~/utils/document-filters'
 import ShellScrollableTabs from '~/components/shell/ScrollableTabs.vue'
 
 const props = defineProps<{
-  insights: NotesInsights | null
+  insights: FiscalDocumentInsights | null
   loading?: boolean
   activeQueue?: NotesTriageQueue
 }>()

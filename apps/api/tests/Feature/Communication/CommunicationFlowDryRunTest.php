@@ -3,7 +3,6 @@
 namespace Tests\Feature\Communication;
 
 use App\Enums\Communication\FlowStatus;
-use App\Enums\OfficeRole;
 use App\Enums\TenantPermission;
 use App\Enums\TenantRole;
 use App\Events\CommunicationEventCommitted;
@@ -14,11 +13,11 @@ use App\Models\CommunicationFlow;
 use App\Models\CommunicationFlowDraft;
 use App\Models\CommunicationFlowRun;
 use App\Models\CommunicationOutboxEntry;
-use App\Models\Office;
-use App\Models\OfficeMembership;
+use App\Models\Tenant;
+use App\Models\TenantMembership;
 use App\Models\TenantPermissionProfile;
 use App\Models\User;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
@@ -44,8 +43,8 @@ final class CommunicationFlowDryRunTest extends TestCase
 
     public function test_dry_run_simulates_without_outbox_jobs_or_runs(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
         $this->authenticate($admin);
 
         $flow = $this->postJson('/api/v1/communication/flows', ['name' => 'Dry'])
@@ -91,8 +90,8 @@ final class CommunicationFlowDryRunTest extends TestCase
 
     public function test_dry_run_accepts_graph_body_and_flag_off_denies(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
         $this->authenticate($admin);
 
         $flow = $this->postJson('/api/v1/communication/flows', ['name' => 'Body'])
@@ -118,20 +117,20 @@ final class CommunicationFlowDryRunTest extends TestCase
             ->assertJsonPath('code', 'communication_flows_disabled');
     }
 
-    public function test_dry_run_and_preview_are_cross_office_denied(): void
+    public function test_dry_run_and_preview_are_cross_tenant_denied(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $foreign = Office::factory()->create(['communication_enabled' => true]);
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $foreign = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
 
         $flow = CommunicationFlow::query()->withoutGlobalScopes()->create([
-            'office_id' => $foreign->id,
+            'tenant_id' => $foreign->id,
             'name' => 'Alien',
             'status' => FlowStatus::Paused,
             'lock_version' => 1,
         ]);
         CommunicationFlowDraft::query()->withoutGlobalScopes()->create([
-            'office_id' => $foreign->id,
+            'tenant_id' => $foreign->id,
             'flow_id' => $flow->id,
             'graph_encrypted' => $this->validGraph(),
             'graph_digest' => hash('sha256', 'x'),
@@ -147,8 +146,8 @@ final class CommunicationFlowDryRunTest extends TestCase
     {
         Event::fake();
 
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
         $this->authenticate($admin);
 
         $sensitive = 'Olá cliente CPF 123.456.789-00 email joao@empresa.com.br tel +5511987654321';
@@ -186,7 +185,7 @@ final class CommunicationFlowDryRunTest extends TestCase
         $event = CommunicationEvent::query()
             ->withoutGlobalScopes()
             ->where('type', 'COMMUNICATION_FLOW_DRY_RUN')
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->latest('id')
             ->first();
         $this->assertNotNull($event);
@@ -198,12 +197,11 @@ final class CommunicationFlowDryRunTest extends TestCase
 
     public function test_preview_requires_manage_flows(): void
     {
-        config(['features.canonical_multitenant_rbac.enabled' => true]);
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $viewer = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $manager = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $this->assignProfile($viewer, $office, [TenantPermission::CommunicationView]);
-        $this->assignProfile($manager, $office, [
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $viewer = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $manager = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $this->assignProfile($viewer, $tenant, [TenantPermission::CommunicationView]);
+        $this->assignProfile($manager, $tenant, [
             TenantPermission::CommunicationView,
             TenantPermission::CommunicationManageFlows,
         ]);
@@ -227,16 +225,16 @@ final class CommunicationFlowDryRunTest extends TestCase
     }
 
     /** @param list<TenantPermission> $permissions */
-    private function assignProfile(User $user, Office $office, array $permissions): void
+    private function assignProfile(User $user, Tenant $tenant, array $permissions): void
     {
-        $profile = TenantPermissionProfile::factory()->forOffice($office)->create();
+        $profile = TenantPermissionProfile::factory()->forTenant($tenant)->create();
         $profile->syncPermissionKeys($permissions);
-        $membership = OfficeMembership::query()->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+        $membership = TenantMembership::query()->withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
             ->where('user_id', $user->id)
             ->firstOrFail();
         $membership->forceFill([
-            'tenant_role' => TenantRole::TenantUser,
+            'role' => TenantRole::TenantUser,
             'permission_profile_id' => $profile->id,
             'authorization_version' => (int) $membership->authorization_version + 1,
         ])->save();
@@ -245,7 +243,7 @@ final class CommunicationFlowDryRunTest extends TestCase
     private function authenticate(User $user): void
     {
         Sanctum::actingAs($user);
-        app(CurrentOffice::class)->clear();
+        app(CurrentTenant::class)->clear();
     }
 
     /**

@@ -95,7 +95,7 @@ final class DistDfePageProcessor
             });
 
             // Fora da transação: SEFAZ RecepcaoEvento não pode travar o commit do lote DistDFe.
-            $this->autoCiencia->enqueueForKeys((int) $cursor->office_id, $summaryKeysForCiencia);
+            $this->autoCiencia->enqueueForKeys((int) $cursor->tenant_id, $summaryKeysForCiencia);
 
             return $result;
         } catch (Throwable $e) {
@@ -146,7 +146,7 @@ final class DistDfePageProcessor
                 return ['documents' => $persisted];
             });
 
-            $this->autoCiencia->enqueueForKeys((int) $cursor->office_id, $summaryKeysForCiencia);
+            $this->autoCiencia->enqueueForKeys((int) $cursor->tenant_id, $summaryKeysForCiencia);
 
             return $result;
         } catch (Throwable $e) {
@@ -193,7 +193,7 @@ final class DistDfePageProcessor
                 'nsu' => $doc->nsu,
             ],
             [
-                'office_id' => $cursor->office_id,
+                'tenant_id' => $cursor->tenant_id,
                 'dfe_document_id' => $dfe->id,
                 'fiscal_role' => FiscalRole::Taker->value,
             ]
@@ -212,7 +212,7 @@ final class DistDfePageProcessor
         if ($isEvent && $accessKey) {
             NfeEvent::query()->firstOrCreate(
                 [
-                    'office_id' => $cursor->office_id,
+                    'tenant_id' => $cursor->tenant_id,
                     'dfe_document_id' => $dfe->id,
                 ],
                 [
@@ -224,7 +224,7 @@ final class DistDfePageProcessor
             );
             if (($parsed['status'] ?? null) === 'CANCELLED') {
                 NfeDocument::query()
-                    ->where('office_id', $cursor->office_id)
+                    ->where('tenant_id', $cursor->tenant_id)
                     ->where('access_key', $accessKey)
                     ->where('is_summary', false)
                     ->update(['status' => 'CANCELLED']);
@@ -239,7 +239,7 @@ final class DistDfePageProcessor
 
         $isSummary = (bool) ($parsed['is_summary'] ?? false);
         $existing = NfeDocument::query()
-            ->where('office_id', $cursor->office_id)
+            ->where('tenant_id', $cursor->tenant_id)
             ->where('access_key', $accessKey)
             ->where('is_summary', $isSummary)
             ->first();
@@ -259,7 +259,7 @@ final class DistDfePageProcessor
 
         NfeDocument::query()->updateOrCreate(
             [
-                'office_id' => $cursor->office_id,
+                'tenant_id' => $cursor->tenant_id,
                 'access_key' => $accessKey,
                 'is_summary' => $isSummary,
             ],
@@ -286,7 +286,7 @@ final class DistDfePageProcessor
 
         if ($isSummary) {
             $hasFull = NfeDocument::query()
-                ->where('office_id', $cursor->office_id)
+                ->where('tenant_id', $cursor->tenant_id)
                 ->where('access_key', $accessKey)
                 ->where('is_summary', false)
                 ->exists();
@@ -309,7 +309,7 @@ final class DistDfePageProcessor
         array &$storedObjectIds,
     ): DfeDocument {
         $identity = [
-            'office_id' => $cursor->office_id,
+            'tenant_id' => $cursor->tenant_id,
             'sha256' => $decoded['sha256'],
         ];
 

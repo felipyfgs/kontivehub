@@ -34,11 +34,9 @@ async function onLogout() {
 const { $pwa } = useNuxtApp()
 
 const roleLabel = computed(() => {
-  if (me.value?.is_platform_admin) return 'Proprietário da plataforma'
-  const role = me.value?.role
-  if (role === 'ADMIN') return 'Administrador'
-  if (role === 'OPERATOR') return 'Operador'
-  if (role === 'VIEWER') return 'Visualizador'
+  if (me.value?.platform_role === 'platform_admin') return 'Proprietário da plataforma'
+  if (me.value?.tenant_role === 'tenant_admin') return 'Administrador'
+  if (me.value?.tenant_role === 'tenant_user') return me.value.permission_profile?.name || 'Usuário'
   return null
 })
 

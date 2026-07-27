@@ -4,7 +4,7 @@ namespace Tests\Unit\Fiscal;
 
 use App\Enums\ManualConsultEligibility;
 use App\Enums\SerproEnvironment;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Fiscal\ManualConsult\ManualConsultActionDefinition;
 use App\Services\Fiscal\ManualConsult\ManualConsultEligibilityGate;
 use Tests\TestCase;
@@ -16,7 +16,7 @@ class ManualConsultEligibilityGateTest extends TestCase
         config(['serpro.kill_switch' => false]);
 
         $eligibility = app(ManualConsultEligibilityGate::class)->evaluateWithContext(
-            office: new Office,
+            tenant: new Tenant,
             def: $this->definition(),
             hasToken: false,
             client: null,
@@ -32,7 +32,7 @@ class ManualConsultEligibilityGateTest extends TestCase
         config(['serpro.kill_switch' => false]);
 
         $eligibility = app(ManualConsultEligibilityGate::class)->evaluateWithContext(
-            office: new Office,
+            tenant: new Tenant,
             def: $this->definition(),
             hasToken: false,
             client: null,

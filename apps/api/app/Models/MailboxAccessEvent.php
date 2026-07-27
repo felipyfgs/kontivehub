@@ -3,13 +3,13 @@
 namespace App\Models;
 
 use App\Enums\MailboxAccessAction;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'mailbox_message_id',
     'mailbox_attachment_id',
     'user_id',
@@ -21,7 +21,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class MailboxAccessEvent extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     public $timestamps = false;
 
@@ -56,7 +56,7 @@ class MailboxAccessEvent extends Model
     {
         return [
             'id' => $this->id,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'mailbox_message_id' => $this->mailbox_message_id,
             'mailbox_attachment_id' => $this->mailbox_attachment_id,
             'user_id' => $this->user_id,

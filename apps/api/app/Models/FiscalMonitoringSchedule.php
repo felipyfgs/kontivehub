@@ -3,14 +3,14 @@
 namespace App\Models;
 
 use App\Enums\FiscalRunResult;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'client_id',
     'fiscal_category_id',
     'category_link_id',
@@ -29,7 +29,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 ])]
 class FiscalMonitoringSchedule extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {
@@ -57,7 +57,7 @@ class FiscalMonitoringSchedule extends Model
 
     public function categoryLink(): BelongsTo
     {
-        return $this->belongsTo(OfficeFiscalCategoryLink::class, 'category_link_id');
+        return $this->belongsTo(TenantFiscalCategoryLink::class, 'category_link_id');
     }
 
     public function runs(): HasMany
@@ -72,7 +72,7 @@ class FiscalMonitoringSchedule extends Model
     {
         return [
             'id' => $this->id,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'client_id' => $this->client_id,
             'fiscal_category_id' => $this->fiscal_category_id,
             'system_code' => $this->system_code,

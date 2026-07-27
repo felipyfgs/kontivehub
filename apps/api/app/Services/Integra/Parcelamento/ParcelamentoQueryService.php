@@ -2,10 +2,10 @@
 
 namespace App\Services\Integra\Parcelamento;
 
-use App\Models\Office;
 use App\Models\TaxGuide;
 use App\Models\TaxInstallmentOrder;
 use App\Models\TaxInstallmentParcel;
+use App\Models\Tenant;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 /** Leitura tenant-scoped de pedidos/parcelas/guias de parcelamento. */
@@ -15,14 +15,14 @@ final class ParcelamentoQueryService
      * @return LengthAwarePaginator<int, TaxInstallmentOrder>
      */
     public function paginateOrders(
-        Office $office,
+        Tenant $tenant,
         int $perPage = 50,
         ?int $clientId = null,
         ?string $modality = null,
     ): LengthAwarePaginator {
         $q = TaxInstallmentOrder::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->orderByDesc('id');
 
         if ($clientId !== null) {
@@ -39,7 +39,7 @@ final class ParcelamentoQueryService
      * @return LengthAwarePaginator<int, TaxInstallmentParcel>
      */
     public function paginateParcels(
-        Office $office,
+        Tenant $tenant,
         int $perPage = 50,
         ?int $clientId = null,
         ?int $orderId = null,
@@ -47,7 +47,7 @@ final class ParcelamentoQueryService
     ): LengthAwarePaginator {
         $q = TaxInstallmentParcel::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->orderByDesc('id');
 
         if ($clientId !== null) {
@@ -67,13 +67,13 @@ final class ParcelamentoQueryService
      * @return LengthAwarePaginator<int, TaxGuide>
      */
     public function paginateGuides(
-        Office $office,
+        Tenant $tenant,
         int $perPage = 50,
         ?int $clientId = null,
     ): LengthAwarePaginator {
         $q = TaxGuide::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('system_code', ParcelamentoServiceCatalog::SOLUTION)
             ->orderByDesc('id');
 
@@ -84,11 +84,11 @@ final class ParcelamentoQueryService
         return $q->paginate($perPage);
     }
 
-    public function findOrder(Office $office, int $id): ?TaxInstallmentOrder
+    public function findOrder(Tenant $tenant, int $id): ?TaxInstallmentOrder
     {
         return TaxInstallmentOrder::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($id)
             ->first();
     }

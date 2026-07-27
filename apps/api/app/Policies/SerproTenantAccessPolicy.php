@@ -7,7 +7,7 @@ use App\Models\User;
 use App\Policies\Concerns\AuthorizesTenantPermission;
 
 /**
- * Dados fiscais/tenant SERPRO exigem CurrentOffice resolvido.
+ * Dados fiscais/tenant SERPRO exigem CurrentTenant resolvido.
  * PLATFORM_ADMIN sem seleção privilegiada e sem membership não obtém acesso fiscal.
  */
 final class SerproTenantAccessPolicy

@@ -8,27 +8,27 @@ use Illuminate\Console\Command;
 /**
  * Reaplica evidência PAGTOWEB local com digest canônico (sem live SERPRO).
  *
- * Uso: php artisan fiscal:reapply-pgdasd-pagtoweb-evidence [--office=] [--client=]
+ * Uso: php artisan fiscal:reapply-pgdasd-pagtoweb-evidence [--tenant=] [--client=]
  */
 final class ReapplyPgdasdPagtowebEvidenceCommand extends Command
 {
     protected $signature = 'fiscal:reapply-pgdasd-pagtoweb-evidence
-        {--office= : Limita ao escritório}
-        {--client= : Limita ao cliente (exige --office)}';
+        {--tenant= : Limita ao escritório}
+        {--client= : Limita ao cliente (exige --tenant)}';
 
     protected $description = 'Reaplica evidência PAGTOWEB já persistida em DAS PGDAS-D (digest canônico; sem SERPRO)';
 
     public function handle(PgdasdPagtowebEvidenceReapplyService $reapply): int
     {
-        $officeId = $this->option('office') !== null ? max(1, (int) $this->option('office')) : null;
+        $tenantId = $this->option('tenant') !== null ? max(1, (int) $this->option('tenant')) : null;
         $clientId = $this->option('client') !== null ? max(1, (int) $this->option('client')) : null;
-        if ($clientId !== null && $officeId === null) {
-            $this->error('Use --office junto com --client.');
+        if ($clientId !== null && $tenantId === null) {
+            $this->error('Use --tenant junto com --client.');
 
             return self::FAILURE;
         }
 
-        $result = $reapply->reapply($officeId, $clientId);
+        $result = $reapply->reapply($tenantId, $clientId);
         $this->info(sprintf(
             'PGDASD/PAGTOWEB reapply: observations=%d paid=%d not_found=%d skipped=%d',
             $result['observations'],

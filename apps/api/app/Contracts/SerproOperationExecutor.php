@@ -7,7 +7,7 @@ use App\DTO\Serpro\IntegraResponse;
 use App\DTO\Serpro\MutationAuthorization;
 use App\DTO\Serpro\SerproOperationCommand;
 use App\Models\Client;
-use App\Models\Office;
+use App\Models\Tenant;
 
 /**
  * Único entrypoint produtivo para operações Integra Contador.
@@ -22,13 +22,9 @@ interface SerproOperationExecutor
      */
     public function run(SerproOperationCommand $command): IntegraResponse;
 
-    /**
-     * Atalho de compatibilidade para callers com Office/Client.
-     *
-     * @param  array<string, mixed>  $businessData
-     */
+    /** @param array<string, mixed> $businessData */
     public function execute(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $operationKey,
         array $businessData = [],

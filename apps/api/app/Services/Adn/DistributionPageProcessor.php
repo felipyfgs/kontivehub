@@ -15,8 +15,8 @@ use App\Exceptions\Adn\DocumentDecodeException;
 use App\Models\DfeDocument;
 use App\Models\DocumentInterest;
 use App\Models\Establishment;
+use App\Models\NfseDocument;
 use App\Models\NfseEvent;
-use App\Models\NfseNote;
 use App\Models\SyncCursor;
 use App\Services\FiscalDataModel\DocumentAcquisitionRecorder;
 use App\Support\NfseNoteStatus;
@@ -130,13 +130,13 @@ final class DistributionPageProcessor
         $sha = $decoded['sha256'];
 
         $existing = DfeDocument::query()
-            ->where('office_id', $cursor->office_id)
+            ->where('tenant_id', $cursor->tenant_id)
             ->where('sha256', $sha)
             ->first();
 
         if ($existing === null) {
             $objectId = $this->store->put($bytes, [
-                'office_id' => $cursor->office_id,
+                'tenant_id' => $cursor->tenant_id,
                 'sha256' => $sha,
             ]);
 
@@ -162,7 +162,7 @@ final class DistributionPageProcessor
             }
 
             $existing = DfeDocument::query()->create([
-                'office_id' => $cursor->office_id,
+                'tenant_id' => $cursor->tenant_id,
                 'sha256' => $sha,
                 'document_type' => $doc->type,
                 'schema_version' => $doc->schema,
@@ -174,9 +174,9 @@ final class DistributionPageProcessor
             ]);
 
             if ($doc->type === AdnDocumentType::Nfse && isset($parsed) && is_array($parsed) && $accessKey) {
-                NfseNote::query()->firstOrCreate(
+                NfseDocument::query()->firstOrCreate(
                     [
-                        'office_id' => $cursor->office_id,
+                        'tenant_id' => $cursor->tenant_id,
                         'access_key' => $accessKey,
                     ],
                     $this->noteProjectionAttributes($existing->id, $parsed, $fiscalRole),
@@ -186,7 +186,7 @@ final class DistributionPageProcessor
             if ($doc->type === AdnDocumentType::Event && isset($parsed) && is_array($parsed)) {
                 $eventKey = $accessKey ?? '';
                 NfseEvent::query()->create([
-                    'office_id' => $cursor->office_id,
+                    'tenant_id' => $cursor->tenant_id,
                     'dfe_document_id' => $existing->id,
                     'access_key' => $eventKey,
                     'event_type' => $parsed['event_type'] ?? null,
@@ -195,7 +195,7 @@ final class DistributionPageProcessor
                 ]);
 
                 $this->applyDerivedNoteStatus(
-                    officeId: (int) $cursor->office_id,
+                    tenantId: (int) $cursor->tenant_id,
                     accessKey: $eventKey,
                     eventType: $parsed['event_type'] ?? null,
                 );
@@ -203,10 +203,6 @@ final class DistributionPageProcessor
         } else {
             // Papel fiscal é por estabelecimento (interesse), não o da nota original.
             $fiscalRole = $this->fiscalRoleForEstablishment($existing, $establishment);
-            // Backfill de projeção quando o XML já existia sem chave (parser legado).
-            if ($existing->access_key === null && $doc->type === AdnDocumentType::Nfse) {
-                $this->backfillNoteProjection($existing, $establishment, $doc);
-            }
         }
 
         // Idempotência: (establishment, env, nsu) e no máximo um vínculo documento↔estabelecimento.
@@ -228,7 +224,7 @@ final class DistributionPageProcessor
                     'establishment_id' => $establishment->id,
                     'environment' => $cursor->environment,
                     'nsu' => $doc->nsu,
-                    'office_id' => $cursor->office_id,
+                    'tenant_id' => $cursor->tenant_id,
                     'dfe_document_id' => $existing->id,
                     'fiscal_role' => $fiscalRole ?? null,
                     'channel' => 'NFSE_ADN',
@@ -252,20 +248,20 @@ final class DistributionPageProcessor
 
     private function fiscalRoleForEstablishment(DfeDocument $document, Establishment $establishment): ?FiscalRole
     {
-        $note = $document->note;
-        if ($note === null) {
+        $nfseDocument = $document->nfseDocument;
+        if ($nfseDocument === null) {
             return null;
         }
 
         $cnpj = strtoupper($establishment->cnpj);
 
-        if ($note->issuer_cnpj === $cnpj) {
+        if ($nfseDocument->issuer_cnpj === $cnpj) {
             return FiscalRole::Issuer;
         }
-        if ($note->taker_cnpj === $cnpj) {
+        if ($nfseDocument->taker_cnpj === $cnpj) {
             return FiscalRole::Taker;
         }
-        if ($note->intermediary_cnpj === $cnpj) {
+        if ($nfseDocument->intermediary_cnpj === $cnpj) {
             return FiscalRole::Intermediary;
         }
 
@@ -280,14 +276,11 @@ final class DistributionPageProcessor
     }
 
     /**
-     * Atualiza somente a projeção nfse_notes; o XML original permanece imutável.
-     */
-    /**
      * Eventos de cancelamento/substituição atualizam a projeção da nota (sem apagar XML).
      *
      * @see NfseNoteStatus::fromEventType
      */
-    private function applyDerivedNoteStatus(int $officeId, string $accessKey, ?string $eventType): void
+    private function applyDerivedNoteStatus(int $tenantId, string $accessKey, ?string $eventType): void
     {
         if ($accessKey === '' || $eventType === null) {
             return;
@@ -298,50 +291,10 @@ final class DistributionPageProcessor
             return;
         }
 
-        NfseNote::query()
-            ->where('office_id', $officeId)
+        NfseDocument::query()
+            ->where('tenant_id', $tenantId)
             ->where('access_key', $accessKey)
             ->update(['status' => $status]);
-    }
-
-    /**
-     * Reprojeta nota quando o documento já existia sem access_key (parser anterior).
-     * Não altera bytes/SHA do XML imutável.
-     */
-    private function backfillNoteProjection(
-        DfeDocument $existing,
-        Establishment $establishment,
-        DistributionDocumentDto $doc,
-    ): void {
-        try {
-            $bytes = $this->store->get($existing->vault_object_id, [
-                'office_id' => $existing->office_id,
-                'sha256' => $existing->sha256,
-            ]);
-        } catch (Throwable) {
-            return;
-        }
-
-        $parsed = $this->parser->parseNote($bytes);
-        [$accessKey, $parseStatus, $parseAlert] = $this->resolveAccessKeyAndParseStatus($parsed, $doc->accessKey);
-        if (! $accessKey) {
-            return;
-        }
-
-        $fiscalRole = ($parsed['fiscal_role_for'])($establishment->cnpj);
-        $existing->access_key = $accessKey;
-        // Chave do envelope não mascara FAILED; só limpa REVIEW por chave ausente.
-        $existing->parse_status = $parseStatus;
-        $existing->parse_alert = $parseAlert;
-        $existing->save();
-
-        $attrs = $this->noteProjectionAttributes($existing->id, $parsed, $fiscalRole);
-        $note = NfseNote::query()->firstOrNew([
-            'office_id' => $existing->office_id,
-            'access_key' => $accessKey,
-        ]);
-        $note->fill($attrs);
-        $note->save();
     }
 
     /**

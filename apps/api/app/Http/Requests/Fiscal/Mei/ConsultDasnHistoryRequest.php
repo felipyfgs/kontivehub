@@ -15,7 +15,7 @@ final class ConsultDasnHistoryRequest extends MeiPublicOperationRequest
             'calendar_year' => ['sometimes', 'nullable', 'integer', 'min:2009', 'max:2100'],
             'include_full_receipt' => ['sometimes', 'boolean'],
             'confirmed' => ['required', 'accepted'],
-            'office_id' => ['prohibited'],
+            'tenant_id' => ['prohibited'],
         ];
     }
 

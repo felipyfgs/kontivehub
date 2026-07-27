@@ -4,8 +4,8 @@ namespace App\Services\Usage;
 
 use App\Enums\SubscriptionPlan;
 use App\Models\Client;
-use App\Models\Office;
-use App\Models\OfficeSubscription;
+use App\Models\Tenant;
+use App\Models\TenantSubscription;
 use App\Services\Audit\AuditLogger;
 use Carbon\CarbonImmutable;
 use InvalidArgumentException;
@@ -36,7 +36,7 @@ final class CommercialEntitlementService
      *   period_ends_at: string
      * }
      */
-    public function snapshot(OfficeSubscription $subscription, CarbonImmutable|string|null $at = null): array
+    public function snapshot(TenantSubscription $subscription, CarbonImmutable|string|null $at = null): array
     {
         $period = $this->periods->resolve($subscription, $at);
 
@@ -57,12 +57,12 @@ final class CommercialEntitlementService
         ];
     }
 
-    public function monitorUnits(OfficeSubscription $subscription): int
+    public function monitorUnits(TenantSubscription $subscription): int
     {
         return $subscription->resolvedCommercialMonitorUnits();
     }
 
-    public function effectiveMaxClients(OfficeSubscription $subscription): int
+    public function effectiveMaxClients(TenantSubscription $subscription): int
     {
         return $subscription->effectiveCommercialMaxClients();
     }
@@ -71,10 +71,10 @@ final class CommercialEntitlementService
      * Somente plataforma: limite negociado acima de 200, sem mudar plano nem unidades de consulta.
      */
     public function setNegotiatedClientLimit(
-        OfficeSubscription $subscription,
+        TenantSubscription $subscription,
         int $limit,
         ?int $actorUserId = null,
-    ): OfficeSubscription {
+    ): TenantSubscription {
         if ($limit <= 200) {
             throw new InvalidArgumentException(
                 'Limite negociado de clientes deve ser superior a 200.'
@@ -92,7 +92,7 @@ final class CommercialEntitlementService
         ])->save();
 
         $this->audit->record(
-            action: 'office_subscription.negotiated_client_limit_set',
+            action: 'tenant_subscription.negotiated_client_limit_set',
             result: 'SUCCESS',
             subject: $subscription,
             context: [
@@ -102,19 +102,19 @@ final class CommercialEntitlementService
                 'commercial_monitor_units' => $this->monitorUnits($subscription),
                 'actor_user_id' => $actorUserId,
             ],
-            officeId: $subscription->office_id,
+            tenantId: $subscription->tenant_id,
         );
 
         return $subscription->refresh();
     }
 
-    public function clearNegotiatedClientLimit(OfficeSubscription $subscription, ?int $actorUserId = null): OfficeSubscription
+    public function clearNegotiatedClientLimit(TenantSubscription $subscription, ?int $actorUserId = null): TenantSubscription
     {
         $from = $subscription->negotiated_client_limit;
         $subscription->forceFill(['negotiated_client_limit' => null])->save();
 
         $this->audit->record(
-            action: 'office_subscription.negotiated_client_limit_cleared',
+            action: 'tenant_subscription.negotiated_client_limit_cleared',
             result: 'SUCCESS',
             subject: $subscription,
             context: [
@@ -122,40 +122,39 @@ final class CommercialEntitlementService
                 'plan' => $subscription->plan->value,
                 'actor_user_id' => $actorUserId,
             ],
-            officeId: $subscription->office_id,
+            tenantId: $subscription->tenant_id,
         );
 
         return $subscription->refresh();
     }
 
-    public function countRootClients(int $officeId): int
+    public function countRootClients(int $tenantId): int
     {
         return (int) Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
-            ->whereNull('matrix_client_id')
+            ->where('tenant_id', $tenantId)
             ->count();
     }
 
     /**
      * @return array{allowed: bool, current: int, max: int, reason: string|null}
      */
-    public function evaluateClientCreate(Office|int $office): array
+    public function evaluateClientCreate(Tenant|int $tenant): array
     {
-        $officeId = $office instanceof Office ? (int) $office->id : (int) $office;
-        $subscription = OfficeSubscription::query()->where('office_id', $officeId)->first();
+        $tenantId = $tenant instanceof Tenant ? (int) $tenant->id : (int) $tenant;
+        $subscription = TenantSubscription::query()->where('tenant_id', $tenantId)->first();
 
         if ($subscription === null) {
             return [
                 'allowed' => false,
-                'current' => $this->countRootClients($officeId),
+                'current' => $this->countRootClients($tenantId),
                 'max' => 0,
                 'reason' => 'SUBSCRIPTION_MISSING',
             ];
         }
 
         $max = $this->effectiveMaxClients($subscription);
-        $current = $this->countRootClients($officeId);
+        $current = $this->countRootClients($tenantId);
 
         if ($current >= $max) {
             return [
@@ -177,9 +176,9 @@ final class CommercialEntitlementService
     /**
      * @throws RuntimeException quando acima do máximo
      */
-    public function assertCanCreateClient(Office|int $office): void
+    public function assertCanCreateClient(Tenant|int $tenant): void
     {
-        $eval = $this->evaluateClientCreate($office);
+        $eval = $this->evaluateClientCreate($tenant);
         if ($eval['allowed']) {
             return;
         }

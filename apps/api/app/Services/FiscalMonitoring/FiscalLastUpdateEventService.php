@@ -9,7 +9,7 @@ use App\Jobs\Fiscal\ExecuteFiscalMonitoringRunJob;
 use App\Models\Client;
 use App\Models\FiscalLastUpdateEvent;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
+use App\Models\Tenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -28,7 +28,7 @@ final class FiscalLastUpdateEventService
      * @return array{event: FiscalLastUpdateEvent, duplicate: bool, run: ?FiscalMonitoringRun}
      */
     public function ingestAndDirect(
-        Office $office,
+        Tenant $tenant,
         string $systemCode,
         string $eventType,
         ?Client $client = null,
@@ -41,7 +41,7 @@ final class FiscalLastUpdateEventService
         string $operationCode = 'MONITOR',
     ): array {
         $hash = FiscalIdempotency::eventHash(
-            (int) $office->id,
+            (int) $tenant->id,
             $systemCode,
             $eventType,
             $externalId,
@@ -52,13 +52,13 @@ final class FiscalLastUpdateEventService
         $run = null;
 
         $event = DB::transaction(function () use (
-            $office, $client, $systemCode, $serviceCode, $eventType, $externalId,
+            $tenant, $client, $systemCode, $serviceCode, $eventType, $externalId,
             $payloadDigest, $occurredAt, $metadata, $hash, $operationCode,
             &$duplicate, &$run
         ) {
             $existing = FiscalLastUpdateEvent::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('event_hash', $hash)
                 ->lockForUpdate()
                 ->first();
@@ -73,7 +73,7 @@ final class FiscalLastUpdateEventService
             }
 
             $event = FiscalLastUpdateEvent::query()->create([
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'client_id' => $client?->id,
                 'system_code' => strtoupper($systemCode),
                 'service_code' => $serviceCode !== null ? strtoupper($serviceCode) : null,
@@ -96,7 +96,7 @@ final class FiscalLastUpdateEventService
                 return $event;
             }
 
-            if (! $this->scheduler->officeAllowsExternal((int) $office->id)) {
+            if (! $this->scheduler->tenantAllowsExternal((int) $tenant->id)) {
                 $event->forceFill([
                     'status' => FiscalEventStatus::Ignored,
                     'processed_at' => CarbonImmutable::now(),
@@ -108,7 +108,7 @@ final class FiscalLastUpdateEventService
 
             $slot = FiscalIdempotency::eventSlot($hash);
             $key = FiscalIdempotency::runKey(
-                (int) $office->id,
+                (int) $tenant->id,
                 (int) $client->id,
                 $systemCode,
                 $serviceCode,
@@ -120,7 +120,7 @@ final class FiscalLastUpdateEventService
 
             $existingRun = FiscalMonitoringRun::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('idempotency_key', $key)
                 ->first();
 
@@ -136,7 +136,7 @@ final class FiscalLastUpdateEventService
             }
 
             $run = FiscalMonitoringRun::query()->create([
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'client_id' => $client->id,
                 'last_update_event_id' => $event->id,
                 'system_code' => strtoupper($systemCode),

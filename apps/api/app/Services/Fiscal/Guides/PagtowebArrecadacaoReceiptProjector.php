@@ -7,8 +7,8 @@ use App\DTO\Fiscal\Guides\PagtowebArrecadacaoReceiptDto;
 use App\Enums\FiscalSourceProvenance;
 use App\Enums\SecureObjectPurpose;
 use App\Models\Client;
-use App\Models\Office;
 use App\Models\PagtowebArrecadacaoReceipt;
+use App\Models\Tenant;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -17,9 +17,9 @@ final class PagtowebArrecadacaoReceiptProjector
 {
     public function __construct(private readonly SecureObjectStore $vault) {}
 
-    public function project(Office $office, Client $client, string $sourceProvenance, mixed $dados): PagtowebArrecadacaoReceipt
+    public function project(Tenant $tenant, Client $client, string $sourceProvenance, mixed $dados): PagtowebArrecadacaoReceipt
     {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new RuntimeException('Cliente não pertence ao escritório ativo.');
         }
         $provenance = FiscalSourceProvenance::tryFrom($sourceProvenance);
@@ -29,10 +29,10 @@ final class PagtowebArrecadacaoReceiptProjector
 
         $receipt = PagtowebArrecadacaoReceiptDto::fromDados($dados);
 
-        return DB::transaction(function () use ($office, $client, $provenance, $receipt): PagtowebArrecadacaoReceipt {
+        return DB::transaction(function () use ($tenant, $client, $provenance, $receipt): PagtowebArrecadacaoReceipt {
             $existing = PagtowebArrecadacaoReceipt::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('client_id', $client->id)
                 ->where('receipt_sha256', $receipt->sha256)
                 ->lockForUpdate()
@@ -43,11 +43,11 @@ final class PagtowebArrecadacaoReceiptProjector
 
             $objectId = $this->vault->put(
                 $receipt->contents,
-                self::receiptAad((int) $office->id, (int) $client->id, $receipt->sha256),
+                self::receiptAad((int) $tenant->id, (int) $client->id, $receipt->sha256),
             );
 
             return PagtowebArrecadacaoReceipt::query()->create([
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'client_id' => $client->id,
                 'receipt_vault_object_id' => $objectId,
                 'receipt_sha256' => $receipt->sha256,
@@ -60,25 +60,25 @@ final class PagtowebArrecadacaoReceiptProjector
     }
 
     /** @return array<string, scalar> */
-    public static function receiptAad(int $officeId, int $clientId, string $sha256): array
+    public static function receiptAad(int $tenantId, int $clientId, string $sha256): array
     {
         return SecureObjectPurpose::FiscalEvidence->aadBase([
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'client_id' => $clientId,
             'operation_key' => 'pagtoweb.comparrecadacao',
             'sha256' => $sha256,
         ]);
     }
 
-    public function readAuthorized(PagtowebArrecadacaoReceipt $receipt, int $officeId): string
+    public function readAuthorized(PagtowebArrecadacaoReceipt $receipt, int $tenantId): string
     {
-        if ((int) $receipt->office_id !== $officeId) {
+        if ((int) $receipt->tenant_id !== $tenantId) {
             throw new RuntimeException('Comprovante não pertence ao escritório ativo.');
         }
 
         return $this->vault->get(
             $receipt->receipt_vault_object_id,
-            self::receiptAad($officeId, (int) $receipt->client_id, $receipt->receipt_sha256),
+            self::receiptAad($tenantId, (int) $receipt->client_id, $receipt->receipt_sha256),
         );
     }
 }

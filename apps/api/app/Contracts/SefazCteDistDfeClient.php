@@ -7,7 +7,7 @@ use App\Domain\Sefaz\DistDfePageDto;
 /**
  * Distribuição CT-e (CTeDistribuicaoDFe) — cursor NSU independente de NF-e.
  *
- * distByLastNsu / distByNsu: fluxo sequencial (Scheduler).
+ * distByLastNsu: fluxo sequencial (Scheduler).
  * findByNsu: reparo pontual de NSU conhecido — nunca varredura/descoberta/chave.
  */
 interface SefazCteDistDfeClient
@@ -18,18 +18,6 @@ interface SefazCteDistDfeClient
      * @param  array{pfx: string, password: string}  $certificate
      */
     public function distByLastNsu(
-        array $certificate,
-        string $cnpjConsulta,
-        int $ultNsu,
-        string $cUfAutor,
-    ): DistDfePageDto;
-
-    /**
-     * Alias de compatibilidade — mesmo contrato de distByLastNsu.
-     *
-     * @param  array{pfx: string, password: string}  $certificate
-     */
-    public function distByNsu(
         array $certificate,
         string $cnpjConsulta,
         int $ultNsu,

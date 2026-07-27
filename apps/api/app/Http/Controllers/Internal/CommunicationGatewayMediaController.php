@@ -37,7 +37,10 @@ final class CommunicationGatewayMediaController extends Controller
         }
 
         $entry = CommunicationOutboxEntry::query()->withoutGlobalScopes()
-            ->with('message.attachments')
+            ->with([
+                'message' => fn ($query) => $query->withoutGlobalScopes(),
+                'message.attachments' => fn ($query) => $query->withoutGlobalScopes(),
+            ])
             ->where('command_id', $command)
             ->where('type', GatewayCommandType::SendMessage->value)
             ->first();

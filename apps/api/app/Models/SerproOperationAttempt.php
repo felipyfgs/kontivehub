@@ -3,14 +3,14 @@
 namespace App\Models;
 
 use App\Enums\SerproAttemptState;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'environment',
     'operation_key',
     'entity_key',
@@ -41,7 +41,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Hidden(['mensagens', 'dados', 'body', 'headers'])]
 class SerproOperationAttempt extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {

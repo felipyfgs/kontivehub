@@ -12,7 +12,7 @@ use InvalidArgumentException;
 #[Fillable([
     'module_key',
     'scope',
-    'office_id',
+    'tenant_id',
     'restricted',
     'reason',
     'updated_by_user_id',
@@ -31,14 +31,14 @@ class FiscalModuleControl extends Model
                 ? $control->scope
                 : FiscalModuleControlScope::from((string) $control->scope);
 
-            if ($scope === FiscalModuleControlScope::Global && $control->office_id !== null) {
-                throw new InvalidArgumentException('Controle GLOBAL não pode possuir office_id.');
+            if ($scope === FiscalModuleControlScope::Global && $control->tenant_id !== null) {
+                throw new InvalidArgumentException('Controle GLOBAL não pode possuir tenant_id.');
             }
-            if ($scope === FiscalModuleControlScope::Office && $control->office_id === null) {
-                throw new InvalidArgumentException('Controle OFFICE exige office_id.');
+            if ($scope === FiscalModuleControlScope::Tenant && $control->tenant_id === null) {
+                throw new InvalidArgumentException('Controle TENANT exige tenant_id.');
             }
 
-            $control->control_key = self::controlKey($module, $scope, $control->office_id);
+            $control->control_key = self::controlKey($module, $scope, $control->tenant_id);
             $control->restricted_at = $control->restricted
                 ? ($control->restricted_at ?? now())
                 : null;
@@ -59,16 +59,16 @@ class FiscalModuleControl extends Model
     public static function controlKey(
         FiscalControlModule $module,
         FiscalModuleControlScope $scope,
-        ?int $officeId,
+        ?int $tenantId,
     ): string {
         return $scope === FiscalModuleControlScope::Global
             ? "GLOBAL:{$module->value}"
-            : "OFFICE:{$officeId}:{$module->value}";
+            : "TENANT:{$tenantId}:{$module->value}";
     }
 
-    public function office(): BelongsTo
+    public function tenant(): BelongsTo
     {
-        return $this->belongsTo(Office::class);
+        return $this->belongsTo(Tenant::class);
     }
 
     public function updatedBy(): BelongsTo

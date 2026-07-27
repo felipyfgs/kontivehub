@@ -16,6 +16,7 @@ import { dctfwebSummary, isDctfwebCapsule, isMitCapsule } from '~/utils/dctfweb'
 import { MONITORING_SHARED_COLUMN_LABELS } from '~/utils/monitoring-table-columns'
 import { apiErrorMessage } from '~/utils/api-error'
 import { useDctfwebMonitoring } from '~/composables/useDctfwebMonitoring'
+import { formatCnpj } from '~/utils/format'
 
 const { canManageClients, canTriggerSync } = useDashboard()
 const api = useApi()
@@ -104,8 +105,8 @@ const modalPreference = ref<PgdasdCommunicationPreference | null>(null)
 
 function openFor(row: DctfwebClientRow, kind: 'history' | 'preview' | 'tracking' | 'prefs') {
   modalClientId.value = row.client_id
-  modalClientName.value = row.legal_name || row.name || null
-  modalCnpjMasked.value = row.cnpj_masked || null
+  modalClientName.value = row.display_name || row.legal_name || null
+  modalCnpjMasked.value = row.cnpj ? formatCnpj(row.cnpj) : null
   modalPreference.value = dctfwebSummary(row)?.communication || null
   historyOpen.value = kind === 'history'
   previewOpen.value = kind === 'preview'
@@ -183,8 +184,8 @@ const mitColumns = computed(() => buildMitColumns({
   },
   onListApuracoes: (row) => {
     modalClientId.value = row.client_id
-    modalClientName.value = row.legal_name || row.name || null
-    modalCnpjMasked.value = row.cnpj_masked || null
+    modalClientName.value = row.display_name || row.legal_name || null
+    modalCnpjMasked.value = row.cnpj ? formatCnpj(row.cnpj) : null
     mitListOpen.value = true
   },
   onEditClient: canManageClients.value

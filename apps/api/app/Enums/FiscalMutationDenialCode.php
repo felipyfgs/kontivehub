@@ -10,9 +10,6 @@ enum FiscalMutationDenialCode: string
     case MutatingDisabled = 'MUTATING_DISABLED';
     case OperationCohortDisabled = 'OPERATION_COHORT_DISABLED';
     case RoleForbidden = 'ROLE_FORBIDDEN';
-    case TotpRequired = 'TOTP_REQUIRED';
-    case TotpExpired = 'TOTP_EXPIRED';
-    /** Reconfirmação de senha (contexto platform_privileged). */
     case PasswordConfirmationRequired = 'PASSWORD_CONFIRMATION_REQUIRED';
     case PasswordConfirmationExpired = 'PASSWORD_CONFIRMATION_EXPIRED';
     case SubscriptionBlocked = 'SUBSCRIPTION_BLOCKED';
@@ -43,8 +40,6 @@ enum FiscalMutationDenialCode: string
             self::MutatingDisabled => 'Operações mutantes desabilitadas.',
             self::OperationCohortDisabled => 'Operação não liberada para esta coorte/tenant.',
             self::RoleForbidden => 'Papel sem permissão para mutação fiscal.',
-            self::TotpRequired => 'Confirmação TOTP necessária.',
-            self::TotpExpired => 'Confirmação TOTP expirada; confirme novamente.',
             self::PasswordConfirmationRequired => 'Reconfirmação de senha necessária para ação privilegiada.',
             self::PasswordConfirmationExpired => 'Reconfirmação de senha expirada; confirme novamente.',
             self::SubscriptionBlocked => 'Assinatura do escritório bloqueia mutações.',

@@ -62,7 +62,7 @@ class InitialOnboardingController extends Controller
             'data' => [
                 'authenticated' => true,
                 'user_id' => $result['user']->id,
-                'redirect' => '/admin/offices/new',
+                'redirect' => '/admin/tenants/new',
                 'platform_organization_name' => $result['settings']->organization_name,
             ],
         ], 201);

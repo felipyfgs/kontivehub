@@ -289,7 +289,7 @@ final class ContractorPfxValidator
     }
 
     /**
-     * Finalidade aceitável para mTLS/cliente e assinatura (e-CNPJ A1 típico).
+     * Finalidade aceitável para mTLS/cliente e assinatura (certificado típico).
      *
      * @param  list<string>  $keyUsage
      * @param  list<string>  $extKeyUsage

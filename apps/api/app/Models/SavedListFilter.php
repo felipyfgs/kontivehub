@@ -2,18 +2,18 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Preset nomeado de filtros de lista (personal ou compartilhado no Office).
+ * Preset nomeado de filtros de lista (personal ou compartilhado no Tenant).
  *
- * office_id só via CurrentOffice / servidor — nunca autoridade do client.
+ * tenant_id só via CurrentTenant / servidor — nunca autoridade do client.
  */
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'user_id',
     'surface',
     'name',
@@ -23,11 +23,32 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class SavedListFilter extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     public const VISIBILITY_PERSONAL = 'personal';
 
-    public const VISIBILITY_OFFICE = 'office';
+    public const VISIBILITY_TENANT = 'tenant';
+
+    public const SCHEMA_VERSION = 1;
+
+    /** @var list<string> */
+    public const SURFACES = [
+        'monitoring.simples_mei',
+        'monitoring.dctfweb',
+        'monitoring.installments',
+        'monitoring.sitfis',
+        'monitoring.declarations',
+        'monitoring.fgts',
+        'monitoring.guides',
+        'monitoring.registrations',
+        'monitoring.tax_processes',
+        'monitoring.mailbox',
+        'clients.index',
+        'docs.catalog',
+        'work.queue',
+        'work.processes',
+        'closing.list',
+    ];
 
     protected function casts(): array
     {
@@ -47,8 +68,8 @@ class SavedListFilter extends Model
         return $this->visibility === self::VISIBILITY_PERSONAL;
     }
 
-    public function isOfficeShared(): bool
+    public function isTenantShared(): bool
     {
-        return $this->visibility === self::VISIBILITY_OFFICE;
+        return $this->visibility === self::VISIBILITY_TENANT;
     }
 }

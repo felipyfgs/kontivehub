@@ -15,7 +15,7 @@ use App\Models\FiscalCategory;
 use App\Models\FiscalCompetence;
 use App\Models\FiscalEvidenceArtifact;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
+use App\Models\Tenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 
@@ -28,7 +28,7 @@ final class RegimeApplicabilityService
      * Bloqueia operação se regime da competência for incompatível com o serviço.
      */
     public function assertOperationApplicable(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         SimplesMeiOperationDef $def,
         ?string $periodKey,
@@ -43,13 +43,13 @@ final class RegimeApplicabilityService
             return null;
         }
 
-        $regimeAt = $this->regimeForPeriod($office, $client, $periodKey);
+        $regimeAt = $this->regimeForPeriod($tenant, $client, $periodKey);
         if ($regimeAt === null || $regimeAt === TaxRegimeCode::Unknown) {
             // Sem projeção: não inventa — permite consulta (fonte dirá); não marca NOT_APPLICABLE
             return null;
         }
 
-        if (! $regimeAt->compatibleWith($def->regimeFamily)) {
+        if (! $regimeAt->matches($def->regimeFamily)) {
             return new FiscalAdapterResult(
                 result: FiscalRunResult::Success,
                 situation: FiscalSituation::NotApplicable,
@@ -81,7 +81,7 @@ final class RegimeApplicabilityService
         return null;
     }
 
-    public function regimeForPeriod(Office $office, Client $client, string $periodKey): ?TaxRegimeCode
+    public function regimeForPeriod(Tenant $tenant, Client $client, string $periodKey): ?TaxRegimeCode
     {
         $anchor = $this->periodAnchorDate($periodKey);
         if ($anchor === null) {
@@ -90,7 +90,7 @@ final class RegimeApplicabilityService
 
         $row = ClientTaxRegimePeriod::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('effective_from', '<=', $anchor)
             ->where(function ($q) use ($anchor): void {
@@ -107,7 +107,7 @@ final class RegimeApplicabilityService
      * @param  array<string, mixed>  $normalized  saída de RegimeApuracaoDto::toNormalized()
      */
     public function projectFromNormalized(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         array $normalized,
         ?int $sourceRunId = null,
@@ -118,7 +118,7 @@ final class RegimeApplicabilityService
                 ?? TaxRegimeCode::Unknown;
             if ($current !== TaxRegimeCode::Unknown) {
                 $this->upsertPeriod(
-                    $office,
+                    $tenant,
                     $client,
                     $current,
                     CarbonImmutable::now()->startOfMonth(),
@@ -142,11 +142,11 @@ final class RegimeApplicabilityService
             $to = ! empty($p['effective_to'])
                 ? CarbonImmutable::parse((string) $p['effective_to'])->endOfDay()
                 : null;
-            $this->upsertPeriod($office, $client, $code, $from, $to, $sourceRunId);
+            $this->upsertPeriod($tenant, $client, $code, $from, $to, $sourceRunId);
         }
 
         // Atualiza tax_regime do cliente com o vigente atual (somente exibição; fonte de verdade = períodos)
-        $current = $this->regimeForPeriod($office, $client, now()->format('Y-m'));
+        $current = $this->regimeForPeriod($tenant, $client, now()->format('Y-m'));
         if ($current !== null && $current !== TaxRegimeCode::Unknown) {
             $client->forceFill(['tax_regime' => $current->value])->save();
         }
@@ -160,7 +160,7 @@ final class RegimeApplicabilityService
      * @param  list<array{calendar_year:int,regime_apuracao:string}>  $options
      */
     public function projectCalendarOptions(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         array $options,
         ?int $sourceRunId = null,
@@ -176,7 +176,7 @@ final class RegimeApplicabilityService
             $from = CarbonImmutable::create($year, 1, 1)->startOfDay();
             $existing = ClientTaxRegimePeriod::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('client_id', $client->id)
                 ->where('regime_code', TaxRegimeCode::SimplesNacional->value)
                 ->whereDate('effective_from', $from->toDateString())
@@ -191,7 +191,7 @@ final class RegimeApplicabilityService
             ]);
 
             $this->upsertPeriod(
-                $office,
+                $tenant,
                 $client,
                 TaxRegimeCode::SimplesNacional,
                 $from,
@@ -213,7 +213,7 @@ final class RegimeApplicabilityService
      * @param  array{calendar_year:int,regime_apuracao:string}  $option
      */
     public function projectRegimeOption(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         array $option,
         ?int $sourceRunId = null,
@@ -228,7 +228,7 @@ final class RegimeApplicabilityService
         $from = CarbonImmutable::create($year, 1, 1)->startOfDay();
         $existing = ClientTaxRegimePeriod::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('regime_code', TaxRegimeCode::SimplesNacional->value)
             ->whereDate('effective_from', $from->toDateString())
@@ -241,7 +241,7 @@ final class RegimeApplicabilityService
         ];
 
         $this->upsertPeriod(
-            $office,
+            $tenant,
             $client,
             TaxRegimeCode::SimplesNacional,
             $from,
@@ -255,11 +255,11 @@ final class RegimeApplicabilityService
     /**
      * @return list<array{calendar_year:int,regime_apuracao:string,observed_at:?string}>
      */
-    public function listCalendarOptions(Office $office, Client $client): array
+    public function listCalendarOptions(Tenant $tenant, Client $client): array
     {
         return ClientTaxRegimePeriod::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('source_system', 'INTEGRA_SN')
             ->where('source_service', 'REGIME_APURACAO')
@@ -288,11 +288,11 @@ final class RegimeApplicabilityService
     }
 
     /** @return list<array{calendar_year:int,regime_apuracao:string,observed_at:?string}> */
-    public function listRegimeOptions(Office $office, Client $client): array
+    public function listRegimeOptions(Tenant $tenant, Client $client): array
     {
         return ClientTaxRegimePeriod::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('source_system', 'INTEGRA_SN')
             ->where('source_service', 'REGIME_APURACAO')
@@ -334,7 +334,7 @@ final class RegimeApplicabilityService
      * }  $documentMeta
      */
     public function projectResolution(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         int $calendarYear,
         int $evidenceArtifactId,
@@ -348,7 +348,7 @@ final class RegimeApplicabilityService
 
         $artifact = FiscalEvidenceArtifact::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($evidenceArtifactId)
             ->first();
         if ($artifact === null) {
@@ -389,11 +389,11 @@ final class RegimeApplicabilityService
      *   }
      * }>
      */
-    public function listResolutions(Office $office, Client $client, ?int $year = null): array
+    public function listResolutions(Tenant $tenant, Client $client, ?int $year = null): array
     {
         $runIds = FiscalMonitoringRun::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->pluck('id');
 
@@ -403,7 +403,7 @@ final class RegimeApplicabilityService
 
         $rows = FiscalEvidenceArtifact::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('operation_key', RegimeResolutionCodec::OPERATION_KEY)
             ->whereIn('run_id', $runIds)
             ->orderByDesc('observed_at')
@@ -457,7 +457,7 @@ final class RegimeApplicabilityService
      * @param  array<string, mixed>|null  $metadata
      */
     public function projectCompetenceSituation(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         SimplesMeiOperationDef $def,
         string $periodKey,
@@ -485,7 +485,7 @@ final class RegimeApplicabilityService
         $competence = FiscalCompetence::query()
             ->withoutGlobalScopes()
             ->firstOrNew([
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'client_id' => $client->id,
                 'fiscal_category_id' => $category->id,
                 'period_key' => $periodKey,
@@ -511,11 +511,11 @@ final class RegimeApplicabilityService
     /**
      * @return Collection<int, ClientTaxRegimePeriod>
      */
-    public function listPeriods(Office $office, Client $client): Collection
+    public function listPeriods(Tenant $tenant, Client $client): Collection
     {
         return ClientTaxRegimePeriod::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->orderBy('effective_from')
             ->get();
@@ -525,7 +525,7 @@ final class RegimeApplicabilityService
      * @param  array<string, mixed>|null  $metadata
      */
     private function upsertPeriod(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         TaxRegimeCode $regime,
         CarbonImmutable $from,
@@ -548,7 +548,7 @@ final class RegimeApplicabilityService
 
         return ClientTaxRegimePeriod::query()->updateOrCreate(
             [
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'client_id' => $client->id,
                 'regime_code' => $regime->value,
                 'effective_from' => $from->toDateString(),

@@ -10,7 +10,6 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Facades\Schema;
 
 #[Fillable([
     'serpro_contract_id',
@@ -71,11 +70,6 @@ class SerproCredentialVersion extends Model
         return $this->belongsTo(SerproContract::class, 'serpro_contract_id');
     }
 
-    public function approvals(): HasMany
-    {
-        return $this->hasMany(SerproCredentialApproval::class);
-    }
-
     public function connectionEvidences(): HasMany
     {
         return $this->hasMany(SerproCredentialConnectionEvidence::class);
@@ -90,10 +84,6 @@ class SerproCredentialVersion extends Model
     {
         $at = $at ?? now();
 
-        if (! Schema::hasTable('serpro_credential_connection_evidences')) {
-            return null;
-        }
-
         return $this->connectionEvidences()
             ->where('success', true)
             ->where('invalidated', false)
@@ -101,15 +91,6 @@ class SerproCredentialVersion extends Model
             ->where('fingerprint_sha256', $this->fingerprint_sha256)
             ->orderByDesc('tested_at')
             ->first();
-    }
-
-    private function safeLatestEvidence(): ?SerproCredentialConnectionEvidence
-    {
-        try {
-            return $this->latestValidConnectionEvidence();
-        } catch (\Throwable) {
-            return null;
-        }
     }
 
     /**
@@ -125,6 +106,8 @@ class SerproCredentialVersion extends Model
      */
     public function toSanitizedArray(): array
     {
+        $latestEvidence = $this->latestValidConnectionEvidence();
+
         return [
             'id' => $this->id,
             'serpro_contract_id' => $this->serpro_contract_id,
@@ -150,8 +133,8 @@ class SerproCredentialVersion extends Model
             'has_cached_token' => $this->token_vault_object_id !== null
                 && $this->token_expires_at !== null
                 && $this->token_expires_at->isFuture(),
-            'has_recent_connection_test' => $this->safeLatestEvidence() !== null,
-            'latest_connection_test' => $this->safeLatestEvidence()?->toSanitizedArray(),
+            'has_recent_connection_test' => $latestEvidence !== null,
+            'latest_connection_test' => $latestEvidence?->toSanitizedArray(),
             'segregation_class' => $this->segregation_class?->value,
             'blocks_billable_egress' => $this->blocksBillableEgress(),
             'created_at' => $this->created_at?->toIso8601String(),

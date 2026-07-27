@@ -53,7 +53,7 @@ describe('contratos dos serviços públicos MEI', () => {
       '/api/v1/fiscal/simples-mei/pgmei/das/preflight',
       expect.objectContaining({
         method: 'POST',
-        body: expect.not.objectContaining({ office_id: expect.anything() }),
+        body: expect.not.objectContaining({ tenant_id: expect.anything() }),
         headers: { 'Idempotency-Key': 'das-idempotency-001' }
       })
     )
@@ -61,7 +61,7 @@ describe('contratos dos serviços públicos MEI', () => {
       '/api/v1/fiscal/simples-mei/pgmei/das',
       expect.objectContaining({
         method: 'POST',
-        body: expect.not.objectContaining({ office_id: expect.anything() }),
+        body: expect.not.objectContaining({ tenant_id: expect.anything() }),
         headers: { 'Idempotency-Key': 'das-idempotency-001' }
       })
     )

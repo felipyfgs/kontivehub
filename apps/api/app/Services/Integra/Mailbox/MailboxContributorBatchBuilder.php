@@ -6,27 +6,27 @@ use App\DTO\Serpro\FiscalIdentity;
 use App\Enums\AuthorIdentityType;
 use App\Enums\ClientProcuracaoSyncStatus;
 use App\Models\Establishment;
-use App\Models\Office;
+use App\Models\Tenant;
 
 /** Monta lotes PJ determinísticos e estritamente isolados por escritório. */
 final class MailboxContributorBatchBuilder
 {
     /** @return list<array{client_id:int,ni:string}> */
-    public function contributors(Office|int $office): array
+    public function contributors(Tenant|int $tenant): array
     {
-        $officeId = $office instanceof Office ? (int) $office->id : $office;
+        $tenantId = $tenant instanceof Tenant ? (int) $tenant->id : $tenant;
 
         return Establishment::query()
             ->withoutGlobalScopes()
             ->join('clients', function ($join): void {
                 $join->on('clients.id', '=', 'establishments.client_id')
-                    ->on('clients.office_id', '=', 'establishments.office_id');
+                    ->on('clients.tenant_id', '=', 'establishments.tenant_id');
             })
             ->join('client_procuracao_syncs', function ($join): void {
                 $join->on('client_procuracao_syncs.client_id', '=', 'clients.id')
-                    ->on('client_procuracao_syncs.office_id', '=', 'clients.office_id');
+                    ->on('client_procuracao_syncs.tenant_id', '=', 'clients.tenant_id');
             })
-            ->where('establishments.office_id', $officeId)
+            ->where('establishments.tenant_id', $tenantId)
             ->where('establishments.is_active', true)
             ->where('establishments.capture_enabled', true)
             ->where('clients.is_active', true)
@@ -54,19 +54,19 @@ final class MailboxContributorBatchBuilder
     }
 
     /** @return list<list<string>> */
-    public function batches(Office|int $office, int $size = 1000): array
+    public function batches(Tenant|int $tenant, int $size = 1000): array
     {
         $size = max(1, min(1000, $size));
-        $numbers = array_column($this->contributors($office), 'ni');
+        $numbers = array_column($this->contributors($tenant), 'ni');
 
         return array_values(array_chunk($numbers, $size));
     }
 
     /** @return array<string, int> */
-    public function clientMap(Office|int $office): array
+    public function clientMap(Tenant|int $tenant): array
     {
         $map = [];
-        foreach ($this->contributors($office) as $contributor) {
+        foreach ($this->contributors($tenant) as $contributor) {
             $map[$contributor['ni']] = $contributor['client_id'];
         }
 

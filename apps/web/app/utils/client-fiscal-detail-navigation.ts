@@ -102,7 +102,7 @@ function sectionDefFromMonitoring(key: ClientFiscalSectionKey, fallbackId: strin
 
 /**
  * Ordem canônica do rail = MONITORING_NAV_ITEMS.
- * Inclui ocultas no catálogo completo só para deep-link/redirect.
+ * Inclui seções contextuais no catálogo completo para deep-links canônicos.
  */
 const FISCAL_SECTIONS: FiscalSectionDef[] = [
   sectionDefFromMonitoring('overview', 'cf-overview'),

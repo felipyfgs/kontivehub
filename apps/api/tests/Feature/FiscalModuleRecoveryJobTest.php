@@ -9,8 +9,8 @@ use App\Jobs\Fiscal\RecoverFiscalModuleJob;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
 use App\Models\FiscalMonitoringSchedule;
-use App\Models\Office;
 use App\Models\PlatformMembership;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use App\Services\Fiscal\Availability\FiscalModuleAvailabilityService;
@@ -29,12 +29,12 @@ class FiscalModuleRecoveryJobTest extends TestCase
         Queue::fake();
         $actor = User::factory()->create();
         PlatformMembership::factory()->forUser($actor)->create();
-        $office = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
         $controls = app(FiscalModuleControlService::class);
         $controls->setRestriction(
             FiscalControlModule::Mailbox,
-            FiscalModuleControlScope::Office,
-            $office,
+            FiscalModuleControlScope::Tenant,
+            $tenant,
             true,
             'Pausa',
             $actor,
@@ -43,26 +43,26 @@ class FiscalModuleRecoveryJobTest extends TestCase
 
         $controls->setRestriction(
             FiscalControlModule::Mailbox,
-            FiscalModuleControlScope::Office,
-            $office,
+            FiscalModuleControlScope::Tenant,
+            $tenant,
             false,
             'Liberado',
             $actor,
             true,
         );
 
-        Queue::assertPushed(RecoverFiscalModuleJob::class, fn (RecoverFiscalModuleJob $job): bool => $job->moduleKey === 'caixa_postal' && $job->officeId === (int) $office->id
+        Queue::assertPushed(RecoverFiscalModuleJob::class, fn (RecoverFiscalModuleJob $job): bool => $job->moduleKey === 'mailbox' && $job->tenantId === (int) $tenant->id
         );
     }
 
-    public function test_office_recovery_is_idempotent_for_enabled_module_schedules(): void
+    public function test_tenant_recovery_is_idempotent_for_enabled_module_schedules(): void
     {
         Queue::fake();
         config(['fiscal.profile' => 'dev', 'fiscal.kill_switch' => false]);
-        $office = Office::factory()->create();
-        $client = Client::factory()->forOffice($office)->create();
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
         FiscalMonitoringSchedule::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'system_code' => 'CAIXA_POSTAL',
             'service_code' => 'MAILBOX',
@@ -73,7 +73,7 @@ class FiscalModuleRecoveryJobTest extends TestCase
             'next_run_at' => now()->addDay(),
         ]);
 
-        $job = new RecoverFiscalModuleJob('caixa_postal', (int) $office->id, User::factory()->create()->id);
+        $job = new RecoverFiscalModuleJob('mailbox', (int) $tenant->id, User::factory()->create()->id);
         $job->handle(
             app(FiscalModuleAvailabilityService::class),
             app(FiscalMonitoringScheduler::class),

@@ -3,7 +3,6 @@
 namespace App\DTO\Fiscal\SimplesMei;
 
 use App\Enums\FiscalSituation;
-use InvalidArgumentException;
 
 /**
  * DTO versionado de declaração PGDAS-D (contrato de adapter).
@@ -30,18 +29,6 @@ final readonly class PgdasdDeclarationDto
      */
     public static function fromIntegraBody(array $body, string $fallbackCompetence = ''): self
     {
-        // Aceita payload legado (dto_version) ou contrato oficial SERPRO (periodos/operacoes)
-        $version = (string) ($body['dto_version'] ?? $body['version'] ?? self::VERSION);
-        if ($version !== self::VERSION && $version !== '1.0') {
-            // Layout oficial não carrega dto_version — trata como v1 se tiver campos SERPRO
-            $looksOfficial = isset($body['periodos']) || isset($body['periodoApuracao'])
-                || isset($body['operacoes']) || isset($body['numeroDeclaracao']);
-            if (! $looksOfficial) {
-                throw new InvalidArgumentException("PGDAS-D DTO versão não suportada: {$version}");
-            }
-            $version = self::VERSION;
-        }
-
         $data = is_array($body['data'] ?? null) ? $body['data'] : $body;
 
         // Contrato oficial: primeira declaração/operação quando disponível

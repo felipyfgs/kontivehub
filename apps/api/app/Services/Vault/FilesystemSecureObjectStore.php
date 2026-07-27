@@ -4,7 +4,6 @@ namespace App\Services\Vault;
 
 use App\Contracts\SecureObjectStore;
 use App\Models\VaultObjectJournalEntry;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
@@ -260,10 +259,6 @@ final class FilesystemSecureObjectStore implements SecureObjectStore
      */
     private function journalPut(string $id, array $metadata, int $keyVersion, string $plaintext): void
     {
-        if (! $this->journalAvailable()) {
-            return;
-        }
-
         try {
             VaultObjectJournalEntry::query()->updateOrCreate(
                 ['object_id' => $id],
@@ -272,7 +267,7 @@ final class FilesystemSecureObjectStore implements SecureObjectStore
                     'crypto_key_version' => $keyVersion,
                     'rewrap_status' => 'CURRENT',
                     'content_sha256' => hash('sha256', $plaintext),
-                    'office_id' => isset($metadata['office_id']) ? (int) $metadata['office_id'] : null,
+                    'tenant_id' => isset($metadata['tenant_id']) ? (int) $metadata['tenant_id'] : null,
                     'metadata' => [
                         'aad_keys' => array_keys($metadata),
                     ],
@@ -285,10 +280,6 @@ final class FilesystemSecureObjectStore implements SecureObjectStore
 
     private function journalRewrap(string $id, int $keyVersion): void
     {
-        if (! $this->journalAvailable()) {
-            return;
-        }
-
         try {
             VaultObjectJournalEntry::query()->where('object_id', $id)->update([
                 'crypto_key_version' => $keyVersion,
@@ -302,10 +293,6 @@ final class FilesystemSecureObjectStore implements SecureObjectStore
 
     private function journalMarkDeleted(string $id): void
     {
-        if (! $this->journalAvailable()) {
-            return;
-        }
-
         try {
             VaultObjectJournalEntry::query()->where('object_id', $id)->update([
                 'deleted_at' => now(),
@@ -313,15 +300,6 @@ final class FilesystemSecureObjectStore implements SecureObjectStore
             ]);
         } catch (Throwable) {
             // best-effort
-        }
-    }
-
-    private function journalAvailable(): bool
-    {
-        try {
-            return Schema::hasTable('vault_object_journal');
-        } catch (Throwable) {
-            return false;
         }
     }
 }

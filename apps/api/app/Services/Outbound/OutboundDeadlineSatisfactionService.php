@@ -9,8 +9,8 @@ use App\Enums\OutboundUrgencyBand;
 use App\Enums\SvrsNfceFailureReason;
 use App\Enums\SvrsNfceRecoveryStatus;
 use App\Models\DfeDocument;
-use App\Models\MaOutboundRetrievalRequest;
 use App\Models\NfeDocument;
+use App\Models\OutboundRetrievalRequest;
 use App\Services\Audit\AuditLogger;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Log;
@@ -31,7 +31,7 @@ final class OutboundDeadlineSatisfactionService
      * Após ingestão canônica completa (vault + acquisition + projeção).
      */
     public function markCapturedBySource(
-        int $officeId,
+        int $tenantId,
         string $accessKey,
         string $sourceLabel,
         ?string $sha256 = null,
@@ -47,7 +47,7 @@ final class OutboundDeadlineSatisfactionService
 
         // Recalcula prazo definitivo se houver data de autorização na projeção
         $nfe = NfeDocument::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('access_key', $key)
             ->where('is_summary', false)
             ->first();
@@ -64,14 +64,14 @@ final class OutboundDeadlineSatisfactionService
             $plan = $this->calculator->planFromAccessKey($key, null, $capturedAt, captured: true);
         }
 
-        MaOutboundRetrievalRequest::withoutGlobalScopes()
-            ->where('office_id', $officeId)
+        OutboundRetrievalRequest::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
             ->where('access_key', $key)
             ->where('origin', OutboundRetrievalOrigin::SvrsPortalByKey)
             ->whereNotIn('recovery_status', [
                 SvrsNfceRecoveryStatus::Captured->value,
             ])
-            ->each(function (MaOutboundRetrievalRequest $req) use ($plan, $capturedAt, $sourceLabel, $sha256, $dfeDocumentId): void {
+            ->each(function (OutboundRetrievalRequest $req) use ($plan, $capturedAt, $sourceLabel, $sha256, $dfeDocumentId): void {
                 $beforeDue = $plan !== null && $capturedAt->lessThanOrEqualTo($plan->dueAt);
 
                 $req->forceFill([
@@ -100,18 +100,18 @@ final class OutboundDeadlineSatisfactionService
             });
 
         // Também cancela via orchestrator (jobs/slots)
-        $this->orchestrator->resolveByOtherSource($officeId, $key, $sourceLabel);
+        $this->orchestrator->resolveByOtherSource($tenantId, $key, $sourceLabel);
 
         $this->audit->record('outbound.deadline.captured', 'SUCCESS', null, [
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'key_mask' => substr($key, 0, 6).'...'.substr($key, -4),
             'source' => $sourceLabel,
             'before_due' => $plan !== null && $capturedAt->lessThanOrEqualTo($plan->dueAt),
             // sem XML, sem chave completa
-        ], null, $officeId);
+        ], null, $tenantId);
 
         Log::info('outbound.deadline.captured', [
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'source' => $sourceLabel,
             'key_mask' => substr($key, 0, 6).'...'.substr($key, -4),
         ]);
@@ -122,18 +122,18 @@ final class OutboundDeadlineSatisfactionService
      *
      * @return array{has_full: bool, source: ?string, dfe_document_id: ?int, sha256: ?string, diverge: bool}
      */
-    public function preferExistingSource(int $officeId, string $accessKey): array
+    public function preferExistingSource(int $tenantId, string $accessKey): array
     {
         $key = strtoupper(preg_replace('/\s+/', '', $accessKey) ?? '');
 
         $nfe = NfeDocument::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('access_key', $key)
             ->where('is_summary', false)
             ->first();
 
         if ($nfe !== null && $nfe->dfe_document_id) {
-            $dfe = DfeDocument::query()->where('office_id', $officeId)->find($nfe->dfe_document_id);
+            $dfe = DfeDocument::query()->where('tenant_id', $tenantId)->find($nfe->dfe_document_id);
             if ($dfe !== null) {
                 return [
                     'has_full' => true,
@@ -146,7 +146,7 @@ final class OutboundDeadlineSatisfactionService
         }
 
         $dfe = DfeDocument::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('access_key', $key)
             ->first();
 
@@ -191,11 +191,11 @@ final class OutboundDeadlineSatisfactionService
     /**
      * Detecta divergência de bytes para a mesma chave (não sobrescreve canônico).
      */
-    public function bytesDivergeFromCanonical(int $officeId, string $accessKey, string $sha256): bool
+    public function bytesDivergeFromCanonical(int $tenantId, string $accessKey, string $sha256): bool
     {
         $key = strtoupper(preg_replace('/\s+/', '', $accessKey) ?? '');
         $dfe = DfeDocument::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('access_key', $key)
             ->first();
 
@@ -207,14 +207,14 @@ final class OutboundDeadlineSatisfactionService
     }
 
     /**
-     * Lote de contingência por office/raiz/modelo (metadados sanitizados).
+     * Lote de contingência por tenant/raiz/modelo (metadados sanitizados).
      *
      * @return list<array<string, mixed>>
      */
-    public function contingencyBatch(int $officeId, ?string $competence = null, int $limit = 100): array
+    public function contingencyBatch(int $tenantId, ?string $competence = null, int $limit = 100): array
     {
-        $q = MaOutboundRetrievalRequest::query()
-            ->where('office_id', $officeId)
+        $q = OutboundRetrievalRequest::query()
+            ->where('tenant_id', $tenantId)
             ->where('origin', OutboundRetrievalOrigin::SvrsPortalByKey)
             ->whereIn('urgency_band', [
                 OutboundUrgencyBand::Contingency->value,
@@ -232,7 +232,7 @@ final class OutboundDeadlineSatisfactionService
             $q->where('competence', $competence);
         }
 
-        return $q->get()->map(function (MaOutboundRetrievalRequest $r) {
+        return $q->get()->map(function (OutboundRetrievalRequest $r) {
             $key = (string) $r->access_key;
 
             return [

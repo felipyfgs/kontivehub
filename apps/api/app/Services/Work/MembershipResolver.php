@@ -2,9 +2,9 @@
 
 namespace App\Services\Work;
 
-use App\Models\OfficeMembership;
+use App\Models\TenantMembership;
 use App\Models\WorkDepartment;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -13,24 +13,24 @@ use Illuminate\Validation\ValidationException;
 final class MembershipResolver
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
     ) {}
 
     public function currentMembershipId(): ?int
     {
-        return $this->currentOffice->membership()?->id;
+        return $this->currentTenant->realMembership()?->id;
     }
 
-    public function requireActiveMembership(int $membershipId): OfficeMembership
+    public function requireActiveMembership(int $membershipId): TenantMembership
     {
-        $officeId = $this->currentOffice->id();
-        if ($officeId === null) {
+        $tenantId = $this->currentTenant->id();
+        if ($tenantId === null) {
             abort(404);
         }
 
-        $membership = OfficeMembership::query()
+        $membership = TenantMembership::query()
             ->where('id', $membershipId)
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->first();
 
@@ -49,10 +49,10 @@ final class MembershipResolver
             return null;
         }
 
-        $officeId = $this->currentOffice->id();
+        $tenantId = $this->currentTenant->id();
         $dept = WorkDepartment::query()
             ->where('id', $departmentId)
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->first();
 

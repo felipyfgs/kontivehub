@@ -2,7 +2,7 @@ openapi: 3.1.0
 jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
 info:
   title: Contrato interno KontiveHub ↔ Wazync
-  version: 1.1.0
+  version: 2.0.0
   license:
     name: Uso interno
     identifier: LicenseRef-Internal
@@ -11,11 +11,8 @@ info:
     Nenhuma rota do gateway deve ser publicada pelo proxy externo. Grupos, communities,
     newsletters/canais, status/broadcast, JIDs crus, protobufs e eventos brutos
     estão fora deste contrato.
-
-    A versão `v1` permanece compatível com o envelope original. Em
-    `MESSAGE_SEND`, a ausência de `kind` mantém o payload legado `{to,text,media}`:
-    sem `media` significa `TEXT`; com `media`, o tipo é inferido do MIME apenas
-    entre IMAGE, AUDIO, VIDEO e DOCUMENT.
+    Todo `MESSAGE_SEND` exige `kind` explícito e deve falhar fechado quando o tipo
+    estiver ausente, for inválido ou divergir do conteúdo.
 servers:
   - url: http://wazync:8080
 security:
@@ -305,7 +302,6 @@ components:
         - SESSION_PASSKEY_CONFIRM
         - SESSION_CONNECT
         - SESSION_DISCONNECT
-        - SESSION_RESET
         - SESSION_SET_PASSIVE
         - SESSION_LOGOUT
         - MESSAGE_SEND
@@ -410,7 +406,7 @@ components:
         - if:
             properties:
               type:
-                enum: [SESSION_PAIR, SESSION_CONNECT, SESSION_DISCONNECT, SESSION_RESET, SESSION_LOGOUT]
+                enum: [SESSION_PAIR, SESSION_CONNECT, SESSION_DISCONNECT, SESSION_LOGOUT]
             required: [type]
           then:
             properties: {payload: {$ref: '#/components/schemas/EmptyPayload'}}
@@ -575,29 +571,13 @@ components:
         passive:
           type: boolean
     MessageSendPayload:
-      description: Payload rico tipado ou envelope legado sem `kind`.
       oneOf:
-        - $ref: '#/components/schemas/LegacyMessageSendPayload'
         - $ref: '#/components/schemas/TextMessageSendPayload'
         - $ref: '#/components/schemas/MediaMessageSendPayload'
         - $ref: '#/components/schemas/LocationMessageSendPayload'
         - $ref: '#/components/schemas/ContactMessageSendPayload'
         - $ref: '#/components/schemas/PollMessageSendPayload'
         - $ref: '#/components/schemas/InteractiveMessageSendPayload'
-    LegacyMessageSendPayload:
-      type: object
-      additionalProperties: false
-      required: [to]
-      properties:
-        to:
-          $ref: '#/components/schemas/OneToOneAddress'
-        text:
-          type: string
-          minLength: 1
-          maxLength: 65536
-        media:
-          $ref: '#/components/schemas/MediaReference'
-      minProperties: 2
     TextMessageSendPayload:
       type: object
       additionalProperties: false

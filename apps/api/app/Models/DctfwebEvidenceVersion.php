@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use App\Enums\DctfwebArtifactKind;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,7 +14,7 @@ use LogicException;
  * Retificação cria nova versão — nunca sobrescreve a anterior.
  */
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'client_id',
     'declaration_id',
     'competence_id',
@@ -33,7 +33,7 @@ use LogicException;
 ])]
 class DctfwebEvidenceVersion extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     public $timestamps = false;
 
@@ -55,7 +55,7 @@ class DctfwebEvidenceVersion extends Model
         static::updating(function (self $model): bool {
             // is_current pode ser desligado ao criar sucessor; bytes/sha/version imutáveis.
             $protected = [
-                'office_id', 'client_id', 'declaration_id', 'competence_id',
+                'tenant_id', 'client_id', 'declaration_id', 'competence_id',
                 'run_id', 'evidence_artifact_id', 'artifact_kind', 'version',
                 'content_sha256', 'declaration_type', 'source_version',
                 'is_retification', 'observed_at',
@@ -94,7 +94,7 @@ class DctfwebEvidenceVersion extends Model
     {
         return [
             'id' => $this->id,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'client_id' => $this->client_id,
             'declaration_id' => $this->declaration_id,
             'competence_id' => $this->competence_id,

@@ -2,19 +2,19 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /** Descritor DEFIS 143: os bytes ficam exclusivamente no cofre. */
 #[Fillable([
-    'office_id', 'client_id', 'calendar_year', 'kind', 'fiscal_evidence_artifact_id',
+    'tenant_id', 'client_id', 'calendar_year', 'kind', 'fiscal_evidence_artifact_id',
     'source_run_id', 'source_provenance', 'observed_at', 'filename', 'content_type', 'digest',
 ])]
 class DefisLatestDeclarationArtifact extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {

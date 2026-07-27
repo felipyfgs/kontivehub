@@ -8,9 +8,9 @@ use App\Models\Client;
 use App\Models\DctfwebConsultObservation;
 use App\Models\DctfwebDeclaration;
 use App\Models\DctfwebEvidenceVersion;
-use App\Models\Office;
 use App\Models\TaxObligationDefinition;
 use App\Models\TaxObligationProjection;
+use App\Models\Tenant;
 use RuntimeException;
 
 /**
@@ -28,14 +28,14 @@ final class DctfwebMonitoringQueryService
      * @param  list<int>  $clientIds
      * @return array<int, array<string, mixed>>
      */
-    public function portfolioDetails(Office $office, array $clientIds): array
+    public function portfolioDetails(Tenant $tenant, array $clientIds): array
     {
         if ($clientIds === []) {
             return [];
         }
 
-        $tz = is_string($office->timezone) && $office->timezone !== ''
-            ? $office->timezone
+        $tz = is_string($tenant->timezone) && $tenant->timezone !== ''
+            ? $tenant->timezone
             : 'America/Sao_Paulo';
         $expectedPa = DctfwebPeriod::expectedPa(null, $tz);
         $periodKey = DctfwebPeriod::toPeriodKey($expectedPa);
@@ -44,18 +44,18 @@ final class DctfwebMonitoringQueryService
         $definition = TaxObligationDefinition::query()->where('code', 'DCTFWEB')->first();
         $projections = TaxObligationProjection::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->where('period_key', $periodKey)
             ->where('obligation_definition_id', $definition?->id ?? 0)
             ->get()
             ->keyBy('client_id');
 
-        $communications = $this->communication->summariesForClients($office, $clientIds);
+        $communications = $this->communication->summariesForClients($tenant, $clientIds);
 
         $declarations = DctfwebDeclaration::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->where('category', $category->value)
             ->orderByDesc('period_key')
@@ -65,7 +65,7 @@ final class DctfwebMonitoringQueryService
 
         $lastObs = DctfwebConsultObservation::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('client_id', $clientIds)
             ->where('category', $category->value)
             ->orderByDesc('observed_at')
@@ -98,12 +98,9 @@ final class DctfwebMonitoringQueryService
                 'submodule' => 'DCTFWEB',
                 'category' => $category->value,
                 'expected_period_key' => $periodKey,
-                'expected_periodo_apuracao' => DctfwebPeriod::toPeriodoApuracao($expectedPa),
-                'period_key' => $periodKey,
                 'declaration_state' => $state,
                 'declaration_state_reason' => $lastDecl?->state_reason
                     ?? $this->stateReason($proj),
-                'last_declaration' => $lastPublic,
                 'latest_declaration' => $lastPublic === null ? null : [
                     'id' => $lastPublic['id'] ?? null,
                     'period_key' => $lastPublic['period_key'] ?? null,
@@ -116,8 +113,6 @@ final class DctfwebMonitoringQueryService
                     'no_movement' => $lastPublic['no_movement'] ?? null,
                     'declaration_state' => $lastPublic['declaration_state'] ?? null,
                 ],
-                'last_productive_consulted_at' => $lastSearchAt?->toIso8601String(),
-                'last_valid_query_at' => $lastSearchAt?->toIso8601String(),
                 'last_search_at' => $lastSearchAt?->toIso8601String(),
                 'calendar_verified' => (bool) ($proj?->dctfweb_calendar_verified
                     ?? $lastDecl?->calendar_verified
@@ -146,22 +141,22 @@ final class DctfwebMonitoringQueryService
      *
      * @return array<string, mixed>
      */
-    public function history(Office $office, Client $client, ?int $year = null): array
+    public function history(Tenant $tenant, Client $client, ?int $year = null): array
     {
-        $this->assertClient($office, $client);
+        $this->assertClient($tenant, $client);
         if ($year !== null && ($year < 2000 || $year > 2100)) {
             throw new RuntimeException('Ano do histórico inválido.');
         }
 
         $category = DctfwebCategory::default();
-        $tz = is_string($office->timezone) && $office->timezone !== ''
-            ? $office->timezone
+        $tz = is_string($tenant->timezone) && $tenant->timezone !== ''
+            ? $tenant->timezone
             : 'America/Sao_Paulo';
         $expectedPeriodKey = DctfwebPeriod::toPeriodKey(DctfwebPeriod::expectedPa(null, $tz));
 
         $declarations = DctfwebDeclaration::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->when($year !== null, fn ($q) => $q->where('period_key', 'like', sprintf('%04d-%%', $year)))
             ->orderByDesc('period_key')
@@ -170,7 +165,7 @@ final class DctfwebMonitoringQueryService
 
         $observations = DctfwebConsultObservation::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->when($year !== null, fn ($q) => $q->where('period_key', 'like', sprintf('%04d-%%', $year)))
             ->orderByDesc('observed_at')
@@ -180,7 +175,7 @@ final class DctfwebMonitoringQueryService
         $evidence = DctfwebEvidenceVersion::query()
             ->withoutGlobalScopes()
             ->with('artifact:id,content_type,byte_size')
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->whereIn('declaration_id', $declarations->pluck('id')->filter()->all() ?: [0])
             ->orderByDesc('observed_at')
@@ -216,13 +211,12 @@ final class DctfwebMonitoringQueryService
                 $byPeriod[$pk] = $this->emptyPeriodBucket($pk);
             }
             $byPeriod[$pk]['documents'][] = $this->evidencePublicArray($ev, (int) $client->id);
-            $byPeriod[$pk]['artifacts'][] = $this->evidencePublicArray($ev, (int) $client->id);
         }
 
         krsort($byPeriod);
         $periods = array_values($byPeriod);
 
-        $proj = $this->currentProjection($office, $client, $expectedPeriodKey);
+        $proj = $this->currentProjection($tenant, $client, $expectedPeriodKey);
         $state = $proj?->dctfweb_declaration_state?->value
             ?? $declarations->firstWhere('period_key', $expectedPeriodKey)?->declaration_state?->value
             ?? DctfwebDeclarationState::Unverified->value;
@@ -239,12 +233,6 @@ final class DctfwebMonitoringQueryService
             'last_valid_query_at' => $proj?->dctfweb_last_productive_consulted_at?->toIso8601String()
                 ?? $declarations->first()?->last_productive_consulted_at?->toIso8601String(),
             'periods' => $periods,
-            'history' => $periods,
-            'declarations' => $declarations->map->toPublicArray()->values()->all(),
-            'observations' => $observations->map->toPublicArray()->values()->all(),
-            'artifacts' => $evidence->map(
-                fn (DctfwebEvidenceVersion $ev): array => $this->evidencePublicArray($ev, (int) $client->id)
-            )->values()->all(),
             'provenance' => [
                 'source' => 'LOCAL_PROJECTION',
                 'serpro_called' => false,
@@ -252,34 +240,34 @@ final class DctfwebMonitoringQueryService
         ];
     }
 
-    public function findEvidenceVersion(Office $office, Client $client, int $versionId): ?DctfwebEvidenceVersion
+    public function findEvidenceVersion(Tenant $tenant, Client $client, int $versionId): ?DctfwebEvidenceVersion
     {
         return DctfwebEvidenceVersion::query()
             ->withoutGlobalScopes()
             ->with('artifact')
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->whereKey($versionId)
             ->first();
     }
 
-    public function findEvidenceVersionForOffice(Office $office, int $versionId): ?DctfwebEvidenceVersion
+    public function findEvidenceVersionForTenant(Tenant $tenant, int $versionId): ?DctfwebEvidenceVersion
     {
         return DctfwebEvidenceVersion::query()
             ->withoutGlobalScopes()
             ->with('artifact')
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($versionId)
             ->first();
     }
 
-    private function currentProjection(Office $office, Client $client, string $periodKey): ?TaxObligationProjection
+    private function currentProjection(Tenant $tenant, Client $client, string $periodKey): ?TaxObligationProjection
     {
         $definitionId = TaxObligationDefinition::query()->where('code', 'DCTFWEB')->value('id');
 
         return TaxObligationProjection::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('period_key', $periodKey)
             ->where('obligation_definition_id', $definitionId ?? 0)
@@ -298,7 +286,6 @@ final class DctfwebMonitoringQueryService
             'declarations' => [],
             'observations' => [],
             'documents' => [],
-            'artifacts' => [],
         ];
     }
 
@@ -377,9 +364,9 @@ final class DctfwebMonitoringQueryService
         return substr($raw, 0, 2).'.***.***/****-'.substr($raw, -2);
     }
 
-    private function assertClient(Office $office, Client $client): void
+    private function assertClient(Tenant $tenant, Client $client): void
     {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new RuntimeException('Cliente não pertence ao escritório atual.');
         }
     }

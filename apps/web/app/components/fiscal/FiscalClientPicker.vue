@@ -49,8 +49,8 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null
 let requestGen = 0
 
 function toItem(c: Client): ClientItem {
-  const cnpj = c.cnpj || c.root_cnpj
-  const name = c.display_name || c.legal_name || c.name
+  const cnpj = c.root_cnpj
+  const name = c.display_name || c.legal_name
   const cnpjLabel = cnpj ? formatCnpj(cnpj) : ''
   return {
     label: cnpjLabel ? `${name} · ${cnpjLabel}` : String(name || `Cliente #${c.id}`),
@@ -87,7 +87,7 @@ function matchesSearch(item: ClientItem, term: string): boolean {
   if (hay.includes(raw.toLowerCase())) return true
   const digits = normalizeCnpj(raw)
   if (digits.length >= 3) {
-    const cnpj = normalizeCnpj(item.client.cnpj || item.client.root_cnpj || '')
+    const cnpj = normalizeCnpj(item.client.root_cnpj || '')
     if (cnpj.includes(digits)) return true
   }
   return false

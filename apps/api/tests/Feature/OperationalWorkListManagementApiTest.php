@@ -2,15 +2,15 @@
 
 namespace Tests\Feature;
 
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Enums\Work\ProcessStatus;
 use App\Enums\Work\TaskStatus;
 use App\Models\Client;
-use App\Models\Office;
-use App\Models\OperationalProcess;
-use App\Models\OperationalTask;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Models\WorkDepartment;
+use App\Models\WorkProcess;
+use App\Models\WorkTask;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -21,25 +21,25 @@ class OperationalWorkListManagementApiTest extends TestCase
 
     public function test_bulk_tasks_start_and_partial_complete_failure_for_missing_evidence(): void
     {
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
-        $client = Client::factory()->forOffice($office)->create();
-        $process = OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $client = Client::factory()->forTenant($tenant)->create();
+        $process = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'status' => ProcessStatus::EmProgresso,
         ]);
-        $ready = OperationalTask::factory()->create([
-            'office_id' => $office->id,
-            'operational_process_id' => $process->id,
+        $ready = WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $process->id,
             'sort_order' => 1,
             'title' => 'Sem evidência',
             'status' => TaskStatus::AFazer,
             'requires_evidence' => false,
             'lock_version' => 1,
         ]);
-        $needsEvidence = OperationalTask::factory()->create([
-            'office_id' => $office->id,
-            'operational_process_id' => $process->id,
+        $needsEvidence = WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $process->id,
             'sort_order' => 2,
             'title' => 'Com evidência',
             'status' => TaskStatus::EmProgresso,
@@ -57,7 +57,7 @@ class OperationalWorkListManagementApiTest extends TestCase
             ->assertJsonPath('meta.succeeded', 1)
             ->assertJsonCount(0, 'meta.failed');
 
-        $this->assertDatabaseHas('operational_tasks', [
+        $this->assertDatabaseHas('work_tasks', [
             'id' => $ready->id,
             'status' => TaskStatus::EmProgresso->value,
         ]);
@@ -73,11 +73,11 @@ class OperationalWorkListManagementApiTest extends TestCase
             ->assertJsonCount(1, 'meta.failed')
             ->assertJsonPath('meta.failed.0.id', $needsEvidence->id);
 
-        $this->assertDatabaseHas('operational_tasks', [
+        $this->assertDatabaseHas('work_tasks', [
             'id' => $ready->id,
             'status' => TaskStatus::Concluida->value,
         ]);
-        $this->assertDatabaseHas('operational_tasks', [
+        $this->assertDatabaseHas('work_tasks', [
             'id' => $needsEvidence->id,
             'status' => TaskStatus::EmProgresso->value,
         ]);
@@ -85,33 +85,33 @@ class OperationalWorkListManagementApiTest extends TestCase
 
     public function test_bulk_tasks_block_requires_reason_and_executor_can_claim(): void
     {
-        [$operator, $office] = $this->actor(OfficeRole::Operator);
+        [$operator, $tenant] = $this->actor(TenantRole::TenantUser);
         $department = WorkDepartment::factory()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => 'Fiscal',
             'code' => 'FISCAL',
         ]);
-        $membership = $operator->memberships()->where('office_id', $office->id)->firstOrFail();
+        $membership = $operator->memberships()->where('tenant_id', $tenant->id)->firstOrFail();
         $membership->forceFill(['work_department_id' => $department->id])->saveQuietly();
 
-        $client = Client::factory()->forOffice($office)->create();
-        $process = OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        $client = Client::factory()->forTenant($tenant)->create();
+        $process = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'status' => ProcessStatus::EmProgresso,
         ]);
-        $task = OperationalTask::factory()->create([
-            'office_id' => $office->id,
-            'operational_process_id' => $process->id,
+        $task = WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $process->id,
             'sort_order' => 1,
             'status' => TaskStatus::EmProgresso,
             'work_department_id' => $department->id,
             'assignee_membership_id' => $membership->id,
             'lock_version' => 1,
         ]);
-        $unclaimed = OperationalTask::factory()->create([
-            'office_id' => $office->id,
-            'operational_process_id' => $process->id,
+        $unclaimed = WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $process->id,
             'sort_order' => 2,
             'status' => TaskStatus::AFazer,
             'work_department_id' => $department->id,
@@ -133,7 +133,7 @@ class OperationalWorkListManagementApiTest extends TestCase
         ])->assertOk()
             ->assertJsonPath('meta.succeeded', 1);
 
-        $this->assertDatabaseHas('operational_tasks', [
+        $this->assertDatabaseHas('work_tasks', [
             'id' => $task->id,
             'status' => TaskStatus::Impedida->value,
         ]);
@@ -144,7 +144,7 @@ class OperationalWorkListManagementApiTest extends TestCase
         ])->assertOk()
             ->assertJsonPath('meta.succeeded', 1);
 
-        $this->assertDatabaseHas('operational_tasks', [
+        $this->assertDatabaseHas('work_tasks', [
             'id' => $unclaimed->id,
             'assignee_membership_id' => $membership->id,
         ]);
@@ -152,16 +152,16 @@ class OperationalWorkListManagementApiTest extends TestCase
 
     public function test_bulk_processes_archive_with_partial_failure(): void
     {
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
-        $client = Client::factory()->forOffice($office)->create();
-        $open = OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $client = Client::factory()->forTenant($tenant)->create();
+        $open = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'status' => ProcessStatus::Concluido,
             'lock_version' => 1,
         ]);
-        $stale = OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        $stale = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'status' => ProcessStatus::Concluido,
             'lock_version' => 3,
@@ -180,11 +180,11 @@ class OperationalWorkListManagementApiTest extends TestCase
             ->assertJsonPath('meta.failed.0.id', $stale->id);
 
         $this->assertNotNull($open->fresh()->archived_at);
-        $this->assertDatabaseHas('operational_processes', [
+        $this->assertDatabaseHas('work_processes', [
             'id' => $open->id,
             'status' => ProcessStatus::Concluido->value,
         ]);
-        $this->assertDatabaseHas('operational_processes', [
+        $this->assertDatabaseHas('work_processes', [
             'id' => $stale->id,
             'status' => ProcessStatus::Concluido->value,
         ]);
@@ -193,23 +193,23 @@ class OperationalWorkListManagementApiTest extends TestCase
 
     public function test_queue_sort_by_title_whitelist(): void
     {
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
-        $client = Client::factory()->forOffice($office)->create(['legal_name' => 'Zeta Ltda', 'display_name' => 'Zeta']);
-        $process = OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $client = Client::factory()->forTenant($tenant)->create(['legal_name' => 'Zeta Ltda', 'display_name' => 'Zeta']);
+        $process = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'status' => ProcessStatus::EmProgresso,
         ]);
-        OperationalTask::factory()->create([
-            'office_id' => $office->id,
-            'operational_process_id' => $process->id,
+        WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $process->id,
             'sort_order' => 1,
             'title' => 'Zebra task',
             'status' => TaskStatus::AFazer,
         ]);
-        OperationalTask::factory()->create([
-            'office_id' => $office->id,
-            'operational_process_id' => $process->id,
+        WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $process->id,
             'sort_order' => 2,
             'title' => 'Alpha task',
             'status' => TaskStatus::AFazer,
@@ -228,17 +228,18 @@ class OperationalWorkListManagementApiTest extends TestCase
         $this->assertSame('Zebra task', $desc[0]['title']);
         $this->assertSame('Alpha task', $desc[1]['title']);
 
-        $this->getJson('/api/v1/work/queue?sort=not_a_column&direction=asc')->assertOk();
+        $this->getJson('/api/v1/work/queue?sort=not_a_column&direction=asc')
+            ->assertUnprocessable();
     }
 
     public function test_bulk_processes_assign_ok(): void
     {
-        [$operator, $office] = $this->actor(OfficeRole::Operator);
-        $assignee = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $assigneeMembership = $assignee->memberships()->where('office_id', $office->id)->firstOrFail();
-        $client = Client::factory()->forOffice($office)->create();
-        $process = OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        [$operator, $tenant] = $this->actor(TenantRole::TenantUser);
+        $assignee = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $assigneeMembership = $assignee->memberships()->where('tenant_id', $tenant->id)->firstOrFail();
+        $client = Client::factory()->forTenant($tenant)->create();
+        $process = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'status' => ProcessStatus::EmProgresso,
             'assignee_membership_id' => null,
@@ -256,7 +257,7 @@ class OperationalWorkListManagementApiTest extends TestCase
             ->assertJsonPath('meta.succeeded', 1)
             ->assertJsonCount(0, 'meta.failed');
 
-        $this->assertDatabaseHas('operational_processes', [
+        $this->assertDatabaseHas('work_processes', [
             'id' => $process->id,
             'assignee_membership_id' => $assigneeMembership->id,
         ]);
@@ -264,18 +265,18 @@ class OperationalWorkListManagementApiTest extends TestCase
 
     public function test_bulk_processes_assign_partial_lock_and_archive_policy_failure(): void
     {
-        [$operator, $office] = $this->actor(OfficeRole::Operator);
-        $assignee = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $assigneeMembership = $assignee->memberships()->where('office_id', $office->id)->firstOrFail();
-        $client = Client::factory()->forOffice($office)->create();
-        $ok = OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        [$operator, $tenant] = $this->actor(TenantRole::TenantUser);
+        $assignee = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $assigneeMembership = $assignee->memberships()->where('tenant_id', $tenant->id)->firstOrFail();
+        $client = Client::factory()->forTenant($tenant)->create();
+        $ok = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'status' => ProcessStatus::EmProgresso,
             'lock_version' => 1,
         ]);
-        $stale = OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        $stale = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'status' => ProcessStatus::EmProgresso,
             'lock_version' => 4,
@@ -296,11 +297,11 @@ class OperationalWorkListManagementApiTest extends TestCase
             ->assertJsonCount(1, 'meta.failed')
             ->assertJsonPath('meta.failed.0.id', $stale->id);
 
-        $this->assertDatabaseHas('operational_processes', [
+        $this->assertDatabaseHas('work_processes', [
             'id' => $ok->id,
             'assignee_membership_id' => $assigneeMembership->id,
         ]);
-        $this->assertDatabaseHas('operational_processes', [
+        $this->assertDatabaseHas('work_processes', [
             'id' => $stale->id,
             'assignee_membership_id' => null,
         ]);
@@ -313,7 +314,7 @@ class OperationalWorkListManagementApiTest extends TestCase
             ->assertJsonCount(1, 'meta.failed')
             ->assertJsonPath('meta.failed.0.id', $ok->id);
 
-        $this->assertDatabaseHas('operational_processes', [
+        $this->assertDatabaseHas('work_processes', [
             'id' => $ok->id,
             'status' => ProcessStatus::EmProgresso->value,
         ]);
@@ -321,10 +322,10 @@ class OperationalWorkListManagementApiTest extends TestCase
 
     public function test_viewer_cannot_bulk_processes(): void
     {
-        [$viewer, $office] = $this->actor(OfficeRole::Viewer);
-        $client = Client::factory()->forOffice($office)->create();
-        $process = OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        [$viewer, $tenant] = $this->actor(TenantRole::TenantUser, 'viewer');
+        $client = Client::factory()->forTenant($tenant)->create();
+        $process = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'status' => ProcessStatus::EmProgresso,
             'lock_version' => 1,
@@ -337,13 +338,13 @@ class OperationalWorkListManagementApiTest extends TestCase
         ])->assertForbidden();
     }
 
-    /** @return array{User, Office} */
-    private function actor(OfficeRole $role): array
+    /** @return array{User, Tenant} */
+    private function actor(TenantRole $role, string $permissionProfile = 'operator'): array
     {
-        $office = Office::factory()->create();
-        $user = User::factory()->forOffice($office, $role)->create();
-        $user->forceFill(['selected_office_id' => $office->id])->saveQuietly();
+        $tenant = Tenant::factory()->create();
+        $user = User::factory()->forTenant($tenant, $role, $permissionProfile)->create();
+        $user->forceFill(['selected_tenant_id' => $tenant->id])->saveQuietly();
 
-        return [$user, $office];
+        return [$user, $tenant];
     }
 }

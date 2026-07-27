@@ -4,14 +4,14 @@ namespace App\Models;
 
 use App\Enums\PgmeiDebtState;
 use App\Enums\PgmeiFreshnessState;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'client_id',
     'calendar_year',
     'debt_state',
@@ -25,7 +25,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class PgmeiDebtProjection extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     public const FRESHNESS_DAYS = 7;
 
@@ -90,11 +90,9 @@ class PgmeiDebtProjection extends Model
 
         return [
             'year' => $year,
-            'calendar_year' => $year,
             'debt_state' => $state->value,
             'freshness_state' => $this->freshnessState($now)->value,
             'debt_count' => $count,
-            'items_count' => $count,
             'total_cents' => (int) $this->total_cents,
             'last_valid_query_at' => $this->last_valid_query_at?->toIso8601String(),
         ];

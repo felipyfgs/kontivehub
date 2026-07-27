@@ -9,7 +9,7 @@ use App\Enums\MeiAutomationStatus;
 use App\Enums\MeiProvider;
 use App\Models\FiscalMutationOperation;
 use App\Models\MeiAutomationAttempt;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Fiscal\Mutations\FiscalMutationIntegraRequestFactory;
 use App\Services\Fiscal\Mutations\FiscalMutationStateMachine;
 use Illuminate\Support\Facades\DB;
@@ -32,7 +32,7 @@ final class MeiDasMutationReconciler
         }
         $operation = FiscalMutationOperation::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $attempt->office_id)
+            ->where('tenant_id', $attempt->tenant_id)
             ->whereKey($attempt->fiscal_mutation_operation_id)
             ->first();
         if ($operation === null || $operation->status->isTerminal()) {
@@ -222,13 +222,13 @@ final class MeiDasMutationReconciler
         ], true)) {
             return false;
         }
-        $office = Office::query()->find($operation->office_id);
-        if ($office === null) {
+        $tenant = Tenant::query()->find($operation->tenant_id);
+        if ($tenant === null) {
             return false;
         }
 
         return in_array(MeiProvider::Serpro, array_slice(
-            $this->policy->providers($office, (string) $attempt->operation_key),
+            $this->policy->providers($tenant, (string) $attempt->operation_key),
             1,
         ), true);
     }

@@ -4,9 +4,9 @@ import type { ClientCategory } from '~/types/api'
 import type {
   GenerationBatch,
   ProcessAudienceRules,
-  ProcessTemplate,
-  ProcessTemplateCatalogItem,
-  ProcessTemplateTask,
+  WorkProcessTemplate,
+  WorkProcessTemplateCatalogItem,
+  WorkProcessTemplateTask,
   RecurrenceFrequency,
   RecurrencePeriodOffset,
   WorkDepartment,
@@ -53,10 +53,10 @@ import { createWorkFormSubmissionGuard } from '~/utils/work-form-submission'
 import ShellDataTable from '~/components/shell/DataTable.vue'
 import ShellListFilterToolbar from '~/components/shell/ListFilterToolbar.vue'
 
-type ViewMode = 'library' | 'office'
-type OfficeTemplateSort = 'name' | 'is_active' | 'id'
+type ViewMode = 'library' | 'tenant'
+type TenantTemplateSort = 'name' | 'is_active' | 'id'
 
-const OFFICE_TEMPLATE_SORTS = new Set<OfficeTemplateSort>(['name', 'is_active', 'id'])
+const TENANT_TEMPLATE_SORTS = new Set<TenantTemplateSort>(['name', 'is_active', 'id'])
 
 interface TemplateFormState {
   id: number | null
@@ -73,7 +73,7 @@ interface TemplateFormState {
   generationDay: number
   periodOffset: RecurrencePeriodOffset
   nextRunAt: string | null
-  tasks: ProcessTemplateTask[]
+  tasks: WorkProcessTemplateTask[]
 }
 
 const api = useApi()
@@ -82,17 +82,17 @@ const route = useRoute()
 const router = useRouter()
 const { me, sessionEpoch } = useDashboard()
 
-const view = ref<ViewMode>(String(route.query.view) === 'office' ? 'office' : 'library')
+const view = ref<ViewMode>(String(route.query.view) === 'tenant' ? 'tenant' : 'library')
 const query = ref(String(route.query.q || ''))
 const page = ref(Math.max(1, Number(route.query.page) || 1))
 const perPage = ref(20)
 const initialSort = String(route.query.sort || '')
-const officeSort = ref<OfficeTemplateSort | null>(
-  OFFICE_TEMPLATE_SORTS.has(initialSort as OfficeTemplateSort)
-    ? initialSort as OfficeTemplateSort
+const tenantSort = ref<TenantTemplateSort | null>(
+  TENANT_TEMPLATE_SORTS.has(initialSort as TenantTemplateSort)
+    ? initialSort as TenantTemplateSort
     : null
 )
-const officeSortDirection = ref<'asc' | 'desc'>(
+const tenantSortDirection = ref<'asc' | 'desc'>(
   String(route.query.direction) === 'desc' ? 'desc' : 'asc'
 )
 const total = ref(0)
@@ -100,8 +100,8 @@ const loading = ref(false)
 const catalogLoading = ref(false)
 const templatesError = ref<string | null>(null)
 const catalogError = ref<string | null>(null)
-const catalog = ref<ProcessTemplateCatalogItem[]>([])
-const templates = ref<ProcessTemplate[]>([])
+const catalog = ref<WorkProcessTemplateCatalogItem[]>([])
+const templates = ref<WorkProcessTemplate[]>([])
 const departments = ref<WorkDepartment[]>([])
 const categories = ref<ClientCategory[]>([])
 const installingKey = ref<string | null>(null)
@@ -116,7 +116,7 @@ const editor = reactive<TemplateFormState>(emptyTemplateForm())
 
 const generationOpen = ref(false)
 const generationStep = ref<1 | 2 | 4>(1)
-const generationTemplate = ref<ProcessTemplate | null>(null)
+const generationTemplate = ref<WorkProcessTemplate | null>(null)
 const generationCompetence = ref('')
 const generationRules = ref<ProcessAudienceRules>(emptyProcessAudienceRules())
 const generationIncludeIds = ref<number[]>([])
@@ -159,10 +159,10 @@ if (!canAccessRotinas.value) {
 }
 
 if (!canManageCatalog.value && view.value === 'library') {
-  view.value = 'office'
+  view.value = 'tenant'
 }
 
-const catalogColumns: TableColumn<ProcessTemplateCatalogItem>[] = [
+const catalogColumns: TableColumn<WorkProcessTemplateCatalogItem>[] = [
   { accessorKey: 'name', header: 'Rotina', enableSorting: false },
   { accessorKey: 'department_role', header: 'Departamento', enableSorting: false },
   { accessorKey: 'tasks', header: 'Tarefas', enableSorting: false },
@@ -171,7 +171,7 @@ const catalogColumns: TableColumn<ProcessTemplateCatalogItem>[] = [
   { accessorKey: 'actions', header: '', enableSorting: false }
 ]
 
-const officeColumns: TableColumn<ProcessTemplate>[] = [
+const tenantColumns: TableColumn<WorkProcessTemplate>[] = [
   {
     accessorKey: 'name',
     header: ({ column }) => sortHeader('Rotina', column),
@@ -206,9 +206,9 @@ const filteredCatalog = computed(() => {
     .some(value => String(value || '').toLocaleLowerCase('pt-BR').includes(needle)))
 })
 
-const officeSortingState = computed(() =>
-  officeSort.value
-    ? [{ id: officeSort.value, desc: officeSortDirection.value === 'desc' }]
+const tenantSortingState = computed(() =>
+  tenantSort.value
+    ? [{ id: tenantSort.value, desc: tenantSortDirection.value === 'desc' }]
     : []
 )
 
@@ -217,7 +217,7 @@ const catalogEmptyKind = computed<'empty' | 'filtered' | 'error'>(() => {
   return query.value.trim() ? 'filtered' : 'empty'
 })
 
-const officeEmptyKind = computed<'empty' | 'filtered' | 'error'>(() => {
+const tenantEmptyKind = computed<'empty' | 'filtered' | 'error'>(() => {
   if (templatesError.value && !templates.value.length) return 'error'
   return query.value.trim() ? 'filtered' : 'empty'
 })
@@ -229,7 +229,7 @@ const generationSteps = [
   { title: 'Acompanhar', description: 'Resultado' }
 ]
 
-function emptyTask(sortOrder: number): ProcessTemplateTask {
+function emptyTask(sortOrder: number): WorkProcessTemplateTask {
   return {
     sort_order: sortOrder,
     title: '',
@@ -275,7 +275,7 @@ function onRecurrenceEnabledChange(enabled: boolean | undefined): void {
   }
 }
 
-function agendaLabel(template: ProcessTemplate): string {
+function agendaLabel(template: WorkProcessTemplate): string {
   if (!template.recurrence_enabled) return 'Manual'
   const frequency = recurrenceFrequencyLabel(template.recurrence_frequency)
   const offset = recurrencePeriodOffsetLabel(template.period_offset)
@@ -328,7 +328,7 @@ const generationModalOpen = computed({
 
 function setView(nextView: ViewMode): void {
   if (nextView === 'library' && !canManageCatalog.value) {
-    view.value = 'office'
+    view.value = 'tenant'
     return
   }
   view.value = nextView
@@ -344,16 +344,16 @@ function onQueryUpdate(value: string): void {
   page.value = 1
 }
 
-function onOfficeSortingUpdate(next: Array<{ id: string, desc: boolean }>): void {
+function onTenantSortingUpdate(next: Array<{ id: string, desc: boolean }>): void {
   const first = next[0]
-  if (!first || !OFFICE_TEMPLATE_SORTS.has(first.id as OfficeTemplateSort)) {
-    officeSort.value = null
-    officeSortDirection.value = 'asc'
+  if (!first || !TENANT_TEMPLATE_SORTS.has(first.id as TenantTemplateSort)) {
+    tenantSort.value = null
+    tenantSortDirection.value = 'asc'
     page.value = 1
     return
   }
-  officeSort.value = first.id as OfficeTemplateSort
-  officeSortDirection.value = first.desc ? 'desc' : 'asc'
+  tenantSort.value = first.id as TenantTemplateSort
+  tenantSortDirection.value = first.desc ? 'desc' : 'asc'
   page.value = 1
 }
 
@@ -404,7 +404,7 @@ function openCreate(): void {
   editorOpen.value = true
 }
 
-function openEdit(template: ProcessTemplate): void {
+function openEdit(template: WorkProcessTemplate): void {
   if (!canManageCatalog.value) return
   const recurrence = recurrenceFromTemplate(template)
   replaceEditor({
@@ -532,7 +532,7 @@ async function saveTemplate(): Promise<void> {
         color: 'success'
       })
       closeEditor()
-      view.value = 'office'
+      view.value = 'tenant'
       await Promise.all([loadTemplates(), loadCatalog()])
     } catch (error) {
       editorError.value = apiErrorMessage(error, 'Não foi possível salvar a rotina.')
@@ -563,8 +563,8 @@ async function loadTemplates(): Promise<void> {
       page: page.value,
       per_page: perPage.value,
       q: query.value || undefined,
-      sort: officeSort.value || undefined,
-      direction: officeSort.value ? officeSortDirection.value : undefined
+      sort: tenantSort.value || undefined,
+      direction: tenantSort.value ? tenantSortDirection.value : undefined
     })
     if (epoch !== sessionEpoch.value) return
     templates.value = response.data
@@ -604,9 +604,9 @@ async function loadOptions(): Promise<void> {
   categories.value = categoriesResult.status === 'fulfilled' ? categoriesResult.value.data : []
 }
 
-async function installCatalogItem(item: ProcessTemplateCatalogItem): Promise<void> {
+async function installCatalogItem(item: WorkProcessTemplateCatalogItem): Promise<void> {
   if (item.installed) {
-    view.value = 'office'
+    view.value = 'tenant'
     query.value = ''
     return
   }
@@ -627,7 +627,7 @@ async function installCatalogItem(item: ProcessTemplateCatalogItem): Promise<voi
   }
 }
 
-function openGeneration(template: ProcessTemplate): void {
+function openGeneration(template: WorkProcessTemplate): void {
   if (!canGenerateProcesses.value) return
   generationTemplate.value = template
   generationCompetence.value = new Date().toISOString().slice(0, 7)
@@ -712,7 +712,7 @@ async function refreshBatch(): Promise<void> {
   }
 }
 
-function audienceLabel(template: ProcessTemplate): string {
+function audienceLabel(template: WorkProcessTemplate): string {
   const rules = cloneProcessAudienceRules(template.audience_rules)
   const parts: string[] = []
   if (rules.tax_regimes.length) parts.push(`${rules.tax_regimes.length} regime(s)`)
@@ -732,19 +732,19 @@ function setPerPage(next: number): void {
   else void loadTemplates()
 }
 
-watch([view, query, page, officeSort, officeSortDirection], ([nextView]) => {
+watch([view, query, page, tenantSort, tenantSortDirection], ([nextView]) => {
   void router.replace({
     query: {
-      view: nextView === 'office' ? 'office' : undefined,
+      view: nextView === 'tenant' ? 'tenant' : undefined,
       q: query.value || undefined,
-      page: nextView === 'office' && page.value > 1 ? String(page.value) : undefined,
-      sort: nextView === 'office' ? officeSort.value || undefined : undefined,
-      direction: nextView === 'office' && officeSort.value
-        ? officeSortDirection.value
+      page: nextView === 'tenant' && page.value > 1 ? String(page.value) : undefined,
+      sort: nextView === 'tenant' ? tenantSort.value || undefined : undefined,
+      direction: nextView === 'tenant' && tenantSort.value
+        ? tenantSortDirection.value
         : undefined
     }
   })
-  if (nextView === 'office') void loadTemplates()
+  if (nextView === 'tenant') void loadTemplates()
 })
 
 watch(sessionEpoch, () => {
@@ -792,9 +792,9 @@ onMounted(() => {
             <UButton
               label="Minhas rotinas"
               icon="i-lucide-files"
-              :variant="view === 'office' ? 'solid' : 'outline'"
-              :color="view === 'office' ? 'primary' : 'neutral'"
-              @click="setView('office')"
+              :variant="view === 'tenant' ? 'solid' : 'outline'"
+              :color="view === 'tenant' ? 'primary' : 'neutral'"
+              @click="setView('tenant')"
             />
           </UFieldGroup>
 
@@ -960,9 +960,9 @@ onMounted(() => {
         </ShellDataTable>
       </section>
 
-      <section v-else class="flex min-h-0 flex-1 flex-col gap-4" aria-labelledby="office-templates-title">
+      <section v-else class="flex min-h-0 flex-1 flex-col gap-4" aria-labelledby="tenant-templates-title">
         <div>
-          <h2 id="office-templates-title" class="text-lg font-semibold text-highlighted">
+          <h2 id="tenant-templates-title" class="text-lg font-semibold text-highlighted">
             Rotinas do escritório
           </h2>
           <p class="mt-1 text-sm text-muted">
@@ -994,20 +994,20 @@ onMounted(() => {
             tasks: 'Tarefas'
           }"
           :get-row-id="template => String(template.id)"
-          :columns="officeColumns"
+          :columns="tenantColumns"
           :data="templates"
           :loading="loading"
           :error="templates.length ? null : templatesError"
-          :empty-kind="officeEmptyKind"
+          :empty-kind="tenantEmptyKind"
           :page="page"
           :total="total"
           :items-per-page="perPage"
-          :sorting="officeSortingState"
+          :sorting="tenantSortingState"
           :manual-sorting="true"
           per-page-aria-label="Rotinas por página"
           @update:page="page = $event"
           @update:items-per-page="setPerPage"
-          @update:sorting="onOfficeSortingUpdate"
+          @update:sorting="onTenantSortingUpdate"
           @retry="loadTemplates"
         >
           <template #name-cell="{ row }">

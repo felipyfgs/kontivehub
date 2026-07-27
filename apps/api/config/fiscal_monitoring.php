@@ -36,14 +36,6 @@ return [
         'spread_minutes' => 60,
         /** Intervalo padrão entre execuções agendadas (minutos). */
         'default_interval_minutes' => (int) env('FISCAL_MONITORING_DEFAULT_INTERVAL_MINUTES', 60),
-        /**
-         * Política mensal office+monitor (dia 1–28) — default OFF até rollout.
-         * Quando true, cria itens comerciais scheduled e despacha spillover via Horizon.
-         */
-        'commercial_monthly_enabled' => filter_var(
-            env('FISCAL_MONITORING_COMMERCIAL_MONTHLY_ENABLED', false),
-            FILTER_VALIDATE_BOOL
-        ),
     ],
 
     /**
@@ -75,7 +67,7 @@ return [
     ],
 
     'cache' => [
-        /** Prefixo obrigatório — sempre incluir office_id nas chaves reais. */
+        /** Prefixo obrigatório — sempre incluir tenant_id nas chaves reais. */
         'key_prefix' => 'fiscal',
         'ttl_seconds' => (int) env('FISCAL_MONITORING_CACHE_TTL', 300),
     ],
@@ -104,8 +96,7 @@ return [
         ),
         'negative_ttl_seconds' => (int) env('PGDASD_PAGTOWEB_NEGATIVE_TTL_SECONDS', 86_400),
         'max_documents_per_batch' => (int) env('PGDASD_PAGTOWEB_MAX_DOCUMENTS_PER_BATCH', 100),
-        'backfill_max_clients' => (int) env('PGDASD_PAGTOWEB_BACKFILL_MAX_CLIENTS', 25),
-        'backfill_max_documents' => (int) env('PGDASD_PAGTOWEB_BACKFILL_MAX_DOCUMENTS', 500),
+        'max_documents_per_client' => (int) env('PGDASD_PAGTOWEB_MAX_DOCUMENTS_PER_CLIENT', 500),
     ],
 
     'installments' => [
@@ -197,7 +188,7 @@ return [
      * Nunca habilita origem DEMO em production — guard no DataOriginResolver.
      */
     'demo' => [
-        'office_slug' => env('FISCAL_DEMO_OFFICE_SLUG', 'demo'),
+        'tenant_slug' => env('FISCAL_DEMO_TENANT_SLUG', 'demo'),
         'force_simulated' => filter_var(env('FISCAL_DEMO_FORCE_SIMULATED', false), FILTER_VALIDATE_BOOL),
     ],
 ];

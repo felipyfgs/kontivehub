@@ -26,16 +26,14 @@ export interface ClientListParams {
   /** CSV: authorized|expiring|expired|missing|unverified */
   procuracao_statuses?: string
   sort?: 'legal_name' | 'cnpj' | 'is_active' | 'tax_regime' | 'created_at'
-  direction?: 'asc' | 'desc'
+  sort_direction?: 'asc' | 'desc'
 }
 
-export interface NoteListParams {
+export interface DocumentListParams {
   /** Busca de triagem: número, nome, CNPJ ou chave. */
   q?: string
   /** Tipo DF-e (NFSE, NFE, CTE, …). */
   kind?: string
-  /** @deprecated Preferir `q`; mantido para compat. */
-  access_key?: string
   issuer_cnpj?: string
   taker_cnpj?: string
   competence?: string

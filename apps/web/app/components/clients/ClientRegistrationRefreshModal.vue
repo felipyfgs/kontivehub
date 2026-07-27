@@ -33,7 +33,7 @@ const formKey = computed(() => {
 })
 
 const primaryEstablishment = computed(() =>
-  props.client?.establishments?.find(e => e.is_matrix)
+  props.client?.establishments?.find(e => e.is_headquarters)
   || props.client?.establishments?.[0]
   || null
 )
@@ -52,12 +52,12 @@ const diffRows = computed((): DiffRow[] => {
   const rows: DiffRow[] = [
     {
       label: 'Razão social',
-      before: display(props.client.legal_name || props.client.name),
+      before: display(props.client.legal_name),
       after: display(next.client.legal_name)
     },
     {
       label: 'Nome fantasia',
-      before: display(props.client.trade_name || est?.trade_name),
+      before: display(est?.trade_name),
       after: display(next.establishment.trade_name)
     },
     {
@@ -101,11 +101,10 @@ const diffRows = computed((): DiffRow[] => {
 const description = computed(() => {
   if (!props.client) return 'Revise os dados da consulta antes de gravar.'
   const cnpj = formatCnpj(
-    props.client.cnpj
-    || primaryEstablishment.value?.cnpj
+    primaryEstablishment.value?.cnpj
     || props.client.root_cnpj
   )
-  return `${props.client.legal_name || props.client.name || 'Cliente'} · ${cnpj}`
+  return `${props.client.display_name || props.client.legal_name || 'Cliente'} · ${cnpj}`
 })
 
 function onConfirm(lookup: CnpjLookupResult) {

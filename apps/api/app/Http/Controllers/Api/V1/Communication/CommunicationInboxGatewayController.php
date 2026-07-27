@@ -16,7 +16,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
-/** Controles administrativos do device ligado a uma inbox do Office atual. */
+/** Controles administrativos do device ligado a uma inbox do Tenant atual. */
 final class CommunicationInboxGatewayController extends Controller
 {
     public function __construct(
@@ -55,11 +55,6 @@ final class CommunicationInboxGatewayController extends Controller
         $this->pairing->forget((int) $model->id);
 
         return $this->queued($entry);
-    }
-
-    public function reset(Request $request, int $inbox): JsonResponse
-    {
-        return $this->command($request, $inbox, GatewayCommandType::ResetSession);
     }
 
     public function passive(Request $request, int $inbox): JsonResponse

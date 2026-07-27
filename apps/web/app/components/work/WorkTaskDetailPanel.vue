@@ -3,7 +3,7 @@
  * Painel de detalhe da tarefa — anatomia de InboxMail.vue.
  * Ações reais (transições, comentários, evidências); sem mocks.
  */
-import type { OperationalTaskDetail } from '~/types/work'
+import type { WorkTaskDetail } from '~/types/work'
 import { canDownloadWorkEvidence, canExecuteWorkTasks } from '~/utils/permissions'
 import {
   formatCompetence,
@@ -17,7 +17,7 @@ import {
 import { apiErrorMessage } from '~/utils/api-error'
 
 const props = defineProps<{
-  detail: OperationalTaskDetail | null
+  detail: WorkTaskDetail | null
   loading?: boolean
   /** Erro de carga do detalhe (distinto de empty / sem seleção). */
   error?: string | null

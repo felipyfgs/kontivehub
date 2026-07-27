@@ -6,7 +6,7 @@
 const open = defineModel<boolean>('open', { default: false })
 
 const props = withDefaults(defineProps<{
-  /** VIEWER não pode compartilhar com o Office. */
+  /** Compartilhar com o tenant exige permissão efetiva. */
   canShare?: boolean
   loading?: boolean
   error?: string | null
@@ -89,7 +89,7 @@ function onConfirm() {
             </p>
             <p class="text-xs text-muted">
               {{ canShare
-                ? 'Outros membros do Office poderão aplicar este filtro.'
+                ? 'Outros membros do Tenant poderão aplicar este filtro.'
                 : 'Seu papel não permite publicar filtros para a equipe.' }}
             </p>
           </div>

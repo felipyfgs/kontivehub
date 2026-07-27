@@ -67,7 +67,7 @@ final class PgdasdDocumentSanitizer
                     : (string) $document['kind'];
                 $dasNumber = $document['numero_das'] ?? $numeroDas;
                 $operationId = $pgdasdOperationId ?? $this->resolveOperationId(
-                    (int) $run->office_id,
+                    (int) $run->tenant_id,
                     $clientId,
                     $projectionId,
                     $document['numero_declaracao'],
@@ -77,7 +77,7 @@ final class PgdasdDocumentSanitizer
                 $pgArtifact = PgdasdArtifact::query()
                     ->withoutGlobalScopes()
                     ->firstOrNew([
-                        'office_id' => $run->office_id,
+                        'tenant_id' => $run->tenant_id,
                         'client_id' => $clientId,
                         'kind' => $kind,
                         'fiscal_evidence_artifact_id' => $evidence->id,
@@ -163,7 +163,7 @@ final class PgdasdDocumentSanitizer
     }
 
     private function resolveOperationId(
-        int $officeId,
+        int $tenantId,
         int $clientId,
         int $projectionId,
         ?string $declarationNumber,
@@ -175,7 +175,7 @@ final class PgdasdDocumentSanitizer
 
         return PgdasdOperation::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('client_id', $clientId)
             ->where('projection_id', $projectionId)
             ->when(

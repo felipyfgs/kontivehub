@@ -250,10 +250,10 @@ watch(query, () => {
                   <UCheckbox v-model="selected[String(c.id)]" />
                 </td>
                 <td class="px-3 py-2 font-mono text-xs">
-                  {{ formatCnpj(c.cnpj || c.root_cnpj) }}
+                  {{ formatCnpj(c.root_cnpj) }}
                 </td>
                 <td class="px-3 py-2">
-                  {{ c.display_name || c.legal_name || c.name || `Cliente #${c.id}` }}
+                  {{ c.display_name || c.legal_name || `Cliente #${c.id}` }}
                   <UBadge
                     v-if="isExcluded(c.id)"
                     class="ml-2"

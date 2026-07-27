@@ -4,7 +4,7 @@ namespace App\Models;
 
 use App\Enums\FgtsDigitalCredentialSource;
 use App\Enums\FgtsDigitalRepresentationStatus;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use DateTimeInterface;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -12,13 +12,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'office_id', 'client_id', 'office_credential_id', 'credential_source', 'profile_type',
+    'tenant_id', 'client_id', 'tenant_credential_id', 'credential_source', 'profile_type',
     'target_identifier_hash', 'status', 'valid_from', 'valid_to', 'verified_by', 'verified_at', 'metadata',
 ])]
 #[Hidden(['target_identifier_hash', 'metadata'])]
 class FgtsDigitalRepresentation extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {
@@ -37,9 +37,9 @@ class FgtsDigitalRepresentation extends Model
         return $this->belongsTo(Client::class);
     }
 
-    public function officeCredential(): BelongsTo
+    public function tenantCredential(): BelongsTo
     {
-        return $this->belongsTo(OfficeCredential::class);
+        return $this->belongsTo(TenantCredential::class);
     }
 
     public function isUsable(?DateTimeInterface $at = null): bool

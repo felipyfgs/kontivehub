@@ -4,7 +4,7 @@ namespace App\Models;
 
 use App\Enums\FiscalMutationStatus;
 use App\Enums\SerproEnvironment;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Model;
@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'client_id',
     'requested_by',
     'idempotency_key',
@@ -23,7 +23,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'solution_code',
     'service_code',
     'operation_code',
-    'provider_operation_key',
+    'operation_key',
     'module_key',
     'competence_period_key',
     'status',
@@ -64,7 +64,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 ])]
 class FiscalMutationOperation extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {
@@ -131,7 +131,7 @@ class FiscalMutationOperation extends Model
     {
         return [
             'id' => $this->id,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'client_id' => $this->client_id,
             'status' => $this->status->value,
             'status_label' => $this->status->label(),
@@ -139,6 +139,7 @@ class FiscalMutationOperation extends Model
             'solution_code' => $this->solution_code,
             'service_code' => $this->service_code,
             'operation_code' => $this->operation_code,
+            'operation_key' => $this->operation_key,
             'module_key' => $this->module_key,
             'competence_period_key' => $this->competence_period_key,
             'effect_summary' => $this->effect_summary,

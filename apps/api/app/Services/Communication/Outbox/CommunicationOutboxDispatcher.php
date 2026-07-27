@@ -69,7 +69,10 @@ final readonly class CommunicationOutboxDispatcher
         return DB::transaction(function () use ($entryId): ?CommunicationOutboxEntry {
             $entry = CommunicationOutboxEntry::query()
                 ->withoutGlobalScopes()
-                ->with(['inbox.office', 'message'])
+                ->with([
+                    'inbox' => fn ($query) => $query->withoutGlobalScopes()->with('tenant'),
+                    'message' => fn ($query) => $query->withoutGlobalScopes(),
+                ])
                 ->lockForUpdate()
                 ->find($entryId);
             if ($entry === null || in_array($entry->status, [
@@ -96,7 +99,13 @@ final readonly class CommunicationOutboxDispatcher
                 'last_error_message' => null,
             ])->save();
 
-            return $entry->fresh(['inbox.office', 'message']);
+            return CommunicationOutboxEntry::query()
+                ->withoutGlobalScopes()
+                ->with([
+                    'inbox' => fn ($query) => $query->withoutGlobalScopes()->with('tenant'),
+                    'message' => fn ($query) => $query->withoutGlobalScopes(),
+                ])
+                ->findOrFail($entry->id);
         });
     }
 
@@ -115,7 +124,7 @@ final readonly class CommunicationOutboxDispatcher
             throw new CommunicationTransportException('OUTBOX_TENANT_SCOPE_INVALID', false);
         }
 
-        if ((int) $entry->office_id !== (int) $inbox->office_id
+        if ((int) $entry->tenant_id !== (int) $inbox->tenant_id
             || (int) $entry->inbox_id !== (int) $inbox->id
             || ! hash_equals((string) $entry->session_id, (string) $inbox->session_id)) {
             throw new CommunicationTransportException('OUTBOX_TENANT_SCOPE_INVALID', false);
@@ -123,7 +132,7 @@ final readonly class CommunicationOutboxDispatcher
 
         $message = $entry->message;
         if ($message !== null && (
-            (int) $message->office_id !== (int) $entry->office_id
+            (int) $message->tenant_id !== (int) $entry->tenant_id
             || (int) $message->inbox_id !== (int) $entry->inbox_id
         )) {
             throw new CommunicationTransportException('OUTBOX_TENANT_SCOPE_INVALID', false);

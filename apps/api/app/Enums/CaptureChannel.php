@@ -2,16 +2,12 @@
 
 namespace App\Enums;
 
-/**
- * Canais de captura DF-e reconhecidos pelo domínio.
- * MDF-e permanece apenas para hidratar valores legados e nunca é operacional.
- */
+/** Canais de captura DF-e reconhecidos pelo domínio. */
 enum CaptureChannel: string
 {
     case NfseAdn = 'NFSE_ADN';
     case NfeDistDfe = 'NFE_DISTDFE';
     case CteDistDfe = 'CTE_DISTDFE';
-    case MdfeDistDfe = 'MDFE_DISTDFE';
     /** Captura de saídas MA (nNF — nunca last_nsu). */
     case MaOutbound = 'MA_OUTBOUND';
     /** Escritório como terceiro em autXML NF-e (cursor central por CNPJ-base). */
@@ -29,7 +25,6 @@ enum CaptureChannel: string
             self::NfseAdn => 'NFS-e ADN',
             self::NfeDistDfe => 'NF-e DistDFe',
             self::CteDistDfe => 'CT-e DistDFe',
-            self::MdfeDistDfe => 'MDF-e DistDFe',
             self::MaOutbound => 'Saídas MA (NF-e/NFC-e)',
             self::NfeAutXmlDistDfe => 'NF-e autXML (escritório)',
             self::CteAutXmlDistDfe => 'CT-e autXML (escritório)',
@@ -56,7 +51,6 @@ enum CaptureChannel: string
             self::NfseAdn => DocumentKind::Nfse,
             self::NfeDistDfe => DocumentKind::Nfe,
             self::CteDistDfe, self::CteAutXmlDistDfe => DocumentKind::Cte,
-            self::MdfeDistDfe => DocumentKind::Mdfe,
             self::MaOutbound => null, // 55 e 65 no mesmo canal
             self::NfeAutXmlDistDfe => DocumentKind::Nfe,
             self::ImportXml, self::EmitterPush => null,
@@ -69,21 +63,16 @@ enum CaptureChannel: string
             self::NfseAdn => 'adn.enabled',
             self::NfeDistDfe => 'sefaz.distdfe_enabled',
             self::CteDistDfe => 'sefaz.cte_enabled',
-            self::MdfeDistDfe => 'sefaz.mdfe_enabled',
             self::MaOutbound => 'sefaz.ma_outbound.enabled',
             self::NfeAutXmlDistDfe => 'sefaz.autxml.enabled',
             self::CteAutXmlDistDfe => 'sefaz.cte_autxml.enabled',
-            self::ImportXml => 'import.async_batches_enabled',
+            self::ImportXml => 'import.enabled',
             self::EmitterPush => 'sefaz.cte_emitter_push.enabled',
         };
     }
 
     public function isEnabled(): bool
     {
-        if ($this === self::MdfeDistDfe) {
-            return false;
-        }
-
         if ($this === self::NfseAdn || $this === self::ImportXml) {
             return true;
         }
@@ -123,7 +112,7 @@ enum CaptureChannel: string
     /**
      * Cursor central do escritório (sem establishment_id).
      */
-    public function usesOfficeCursor(): bool
+    public function usesTenantCursor(): bool
     {
         return in_array($this, [self::NfeAutXmlDistDfe, self::CteAutXmlDistDfe], true);
     }
@@ -148,7 +137,7 @@ enum CaptureChannel: string
      *
      * @return list<self>
      */
-    public static function officeCursorCases(): array
+    public static function tenantCursorCases(): array
     {
         return [
             self::NfeAutXmlDistDfe,

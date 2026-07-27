@@ -2,14 +2,14 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use LogicException;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'inbox_id',
     'conversation_id',
     'message_id',
@@ -23,7 +23,7 @@ use LogicException;
 ])]
 class CommunicationEvent extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     public $timestamps = false;
 
@@ -63,6 +63,6 @@ class CommunicationEvent extends Model
 
     public function actor(): BelongsTo
     {
-        return $this->belongsTo(OfficeMembership::class, 'actor_membership_id');
+        return $this->belongsTo(TenantMembership::class, 'actor_membership_id');
     }
 }

@@ -9,7 +9,7 @@ use Illuminate\Support\Carbon;
  * Ciclo contratual de apuração 21–20 (Brasília):
  * do dia 21 do mês anterior ao dia 20 do mês de referência inclusivo.
  *
- * Separado do mês calendário usado em relatórios legados.
+ * Separado do mês calendário usado em relatórios operacionais.
  */
 final class BillingCycleResolver
 {
@@ -93,7 +93,7 @@ final class BillingCycleResolver
     }
 
     /**
-     * Mês calendário correspondente ao fim do ciclo (para rótulos legados).
+     * Mês calendário correspondente ao fim do ciclo.
      *
      * @return array{year: int, month: int}
      */

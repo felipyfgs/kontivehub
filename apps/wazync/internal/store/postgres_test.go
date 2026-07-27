@@ -16,9 +16,9 @@ func TestMigrationUsesOnlyWazyncSchema(t *testing.T) {
 	if !strings.Contains(migrationSQL, "CREATE TABLE IF NOT EXISTS wazync.commands") {
 		t.Fatal("migration does not qualify tables with the Wazync schema")
 	}
-	legacySchema := "whatsapp_" + "gateway"
-	if strings.Contains(migrationSQL, legacySchema) {
-		t.Fatalf("migration references legacy schema %q", legacySchema)
+	removedSchema := "whatsapp_" + "gateway"
+	if strings.Contains(migrationSQL, removedSchema) {
+		t.Fatalf("migration references removed schema %q", removedSchema)
 	}
 }
 

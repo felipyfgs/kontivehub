@@ -418,10 +418,9 @@ describe('deep-link de conversas', () => {
 })
 
 describe('permissões e estados fiscais', () => {
-  it('respeita permissões efetivas e mantém fallback legado coerente', () => {
+  it('respeita exclusivamente as permissões efetivas', () => {
     const viewOnly = {
       id: 1,
-      role: 'OPERATOR',
       effective_permissions: ['communication.view']
     } as MeUser
     expect(canViewCommunication(viewOnly)).toBe(true)
@@ -430,22 +429,15 @@ describe('permissões e estados fiscais', () => {
 
     const inboxManager = {
       id: 3,
-      role: 'OPERATOR',
       effective_permissions: ['communication.view', 'communication.manage_inboxes']
     } as MeUser
     expect(canManageCommunication(inboxManager)).toBe(true)
 
     const previousPermissionPayload = {
       id: 4,
-      role: 'OPERATOR',
       effective_permissions: ['communication.manage']
     } as MeUser
-    expect(canManageCommunication(previousPermissionPayload)).toBe(true)
-
-    const legacyOperator = { id: 2, role: 'OPERATOR' } as MeUser
-    expect(canViewCommunication(legacyOperator)).toBe(true)
-    expect(canReplyCommunication(legacyOperator)).toBe(true)
-    expect(canManageCommunication(legacyOperator)).toBe(false)
+    expect(canManageCommunication(previousPermissionPayload)).toBe(false)
   })
 
   it('expõe SKIPPED_NO_DOCUMENT sem sugerir reabertura automática', () => {

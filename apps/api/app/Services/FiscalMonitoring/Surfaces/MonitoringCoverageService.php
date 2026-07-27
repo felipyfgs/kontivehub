@@ -28,7 +28,7 @@ final class MonitoringCoverageService
         foreach ($this->surfaces->all() as $surface) {
             $operations = collect($surface->capabilities())
                 ->flatMap(static fn (MonitoringCapabilityContract $capability): array => $capability->actions)
-                ->map(static fn (MonitoringActionContract $action): array => $action->toCoverageCompatibilityArray())
+                ->map(static fn (MonitoringActionContract $action): array => $action->toCoverageArray())
                 ->values()
                 ->all();
 

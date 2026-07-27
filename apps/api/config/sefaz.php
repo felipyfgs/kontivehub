@@ -33,8 +33,6 @@ return [
     /** Teto de ciências enfileiradas por página DistDFe processada. */
     'auto_ciencia_max_per_page' => (int) env('SEFAZ_AUTO_CIENCIA_MAX_PER_PAGE', 30),
     'cte_enabled' => filter_var(env('SEFAZ_CTE_ENABLED', false), FILTER_VALIDATE_BOOL),
-    // Compatibilidade legada: MDF-e está fora do escopo escritural e não pode ser reativado por env.
-    'mdfe_enabled' => false,
     // NFC-e: gap documentado — só habilitar se canal real existir
     'nfce_enabled' => filter_var(env('SEFAZ_NFCE_ENABLED', false), FILTER_VALIDATE_BOOL),
 
@@ -95,9 +93,6 @@ return [
         ),
         'layout_version' => env('SEFAZ_CTE_LAYOUT_VERSION', '1.00'),
     ],
-
-    // Bloco de endpoints MDF-e removido: capability fora do catálogo escritural
-    // (mdfe_enabled=false; enums/cursors legados permanecem para leitura).
 
     'manifest' => [
         'production' => env(
@@ -250,7 +245,7 @@ return [
     ],
 
     /**
-     * Canal SVRS — recuperação de nfeProc de NFC-e 65 por chave + A1 (portal oficial).
+     * Canal SVRS — recuperação de nfeProc de NFC-e 65 por chave + certificado (portal oficial).
      * Defaults off; hosts/paths allowlisted; sem override por request de API.
      * Taxa/orçamento: governador compartilhado (svrs_portal_egress) — não 5s/30s/20.
      *
@@ -300,7 +295,7 @@ return [
         'retry_backoff_seconds' => [900, 3600, 21600, 43200],
         'retry_jitter_ratio' => (float) env('SEFAZ_SVRS_NFCE_XML_RETRY_JITTER', env('SVRS_EGRESS_RETRY_JITTER', 0.1)),
 
-        // Circuit breaker (cache legado; coorte durável no governador)
+        // Circuit breaker local; coorte durável no governador
         'breaker_open_seconds' => (int) env('SEFAZ_SVRS_NFCE_XML_BREAKER_OPEN_SECONDS', 86400),
         'breaker_failure_threshold' => (int) env('SEFAZ_SVRS_NFCE_XML_BREAKER_THRESHOLD', 3),
 
@@ -308,7 +303,7 @@ return [
         'job_timeout_seconds' => (int) env('SEFAZ_SVRS_NFCE_XML_JOB_TIMEOUT', 120),
         'lock_ttl_seconds' => (int) env('SEFAZ_SVRS_NFCE_XML_LOCK_TTL', 180),
 
-        // Parser versionado (bump quando fixture/contrato muda de forma compatível)
+        // Parser versionado (bump quando fixture ou contrato muda)
         'wrapper_parser_version' => env('SEFAZ_SVRS_NFCE_XML_PARSER_VERSION', '2'),
         // Exigir XMLDSig em produção; em testing fixtures sem Signature são aceitas se false
         'require_signature' => filter_var(env('SEFAZ_SVRS_NFCE_XML_REQUIRE_SIGNATURE', true), FILTER_VALIDATE_BOOL),
@@ -322,7 +317,7 @@ return [
     ],
 
     /**
-     * Canal SVRS — recuperação de nfeProc de NF-e 55 por chave + A1 (portal NFESSL).
+     * Canal SVRS — recuperação de nfeProc de NF-e 55 por chave + certificado (portal NFESSL).
      * Defaults off; orçamento no governador compartilhado.
      *
      * @see openspec/changes/add-resilient-svrs-nfe55-outbound-xml-retrieval
@@ -375,25 +370,25 @@ return [
      * Canal NFE_AUTXML_DISTDFE — escritório como terceiro em autXML.
      * Default off; allowlist vazia; kill switch não apaga cursor/XML.
      *
-     * @see openspec/changes/add-office-autxml-and-bulk-xml-import
+     * @see openspec/changes/add-tenant-autxml-and-bulk-xml-import
      * @see docs/ops/autxml-external-distnsu-consumers.md
      */
     'autxml' => [
         'enabled' => filter_var(env('SEFAZ_AUTXML_DISTDFE_ENABLED', false), FILTER_VALIDATE_BOOL),
         'kill_switch' => filter_var(env('SEFAZ_AUTXML_KILL_SWITCH', false), FILTER_VALIDATE_BOOL),
         /**
-         * Lista opcional de office_id permitidos no piloto.
-         * Vazia = nenhum office, mesmo com enabled=true (exceto se allowlist for desligada explicitamente).
+         * Lista opcional de tenant_id permitidos no piloto.
+         * Vazia = nenhum tenant, mesmo com enabled=true (exceto se allowlist for desligada explicitamente).
          */
-        'office_allowlist' => array_values(array_filter(array_map(
+        'tenant_allowlist' => array_values(array_filter(array_map(
             static fn (string $id): int => (int) trim($id),
-            explode(',', (string) env('SEFAZ_AUTXML_OFFICE_ALLOWLIST', ''))
+            explode(',', (string) env('SEFAZ_AUTXML_TENANT_ALLOWLIST', ''))
         ), static fn (int $id): bool => $id > 0)),
         /**
-         * Quando true e allowlist vazia, qualquer office é elegível (somente após gates de piloto).
+         * Quando true e allowlist vazia, qualquer tenant é elegível (somente após gates de piloto).
          * Default false: allowlist vazia bloqueia todos.
          */
-        'allow_all_offices' => filter_var(env('SEFAZ_AUTXML_ALLOW_ALL_OFFICES', false), FILTER_VALIDATE_BOOL),
+        'allow_all_tenants' => filter_var(env('SEFAZ_AUTXML_ALLOW_ALL_TENANTS', false), FILTER_VALIDATE_BOOL),
         'queue' => env('SEFAZ_AUTXML_QUEUE', 'sync-sefaz-autxml'),
         'max_pages_per_job' => (int) env('SEFAZ_AUTXML_MAX_PAGES_PER_JOB', 20),
         'page_sleep_seconds' => (float) env('SEFAZ_AUTXML_PAGE_SLEEP_SECONDS', 2),
@@ -406,19 +401,19 @@ return [
     ],
 
     /**
-     * Canal CT-e autXML do escritório (CTeDistribuicaoDFe com A1 do office).
-     * Default off; reutiliza identidade/credencial do office (finalidade NFE_AUTXML_DISTDFE).
+     * Canal CT-e autXML do escritório (CTeDistribuicaoDFe com certificado do tenant).
+     * Default off; reutiliza identidade/credencial do tenant (finalidade NFE_AUTXML_DISTDFE).
      *
      * @see openspec/changes/complete-cte-capture-with-distdfe-autxml-and-import
      */
     'cte_autxml' => [
         'enabled' => filter_var(env('SEFAZ_CTE_AUTXML_DISTDFE_ENABLED', false), FILTER_VALIDATE_BOOL),
         'kill_switch' => filter_var(env('SEFAZ_CTE_AUTXML_KILL_SWITCH', false), FILTER_VALIDATE_BOOL),
-        'office_allowlist' => array_values(array_filter(array_map(
+        'tenant_allowlist' => array_values(array_filter(array_map(
             static fn (string $id): int => (int) trim($id),
-            explode(',', (string) env('SEFAZ_CTE_AUTXML_OFFICE_ALLOWLIST', ''))
+            explode(',', (string) env('SEFAZ_CTE_AUTXML_TENANT_ALLOWLIST', ''))
         ), static fn (int $id): bool => $id > 0)),
-        'allow_all_offices' => filter_var(env('SEFAZ_CTE_AUTXML_ALLOW_ALL_OFFICES', false), FILTER_VALIDATE_BOOL),
+        'allow_all_tenants' => filter_var(env('SEFAZ_CTE_AUTXML_ALLOW_ALL_TENANTS', false), FILTER_VALIDATE_BOOL),
         'queue' => env('SEFAZ_CTE_AUTXML_QUEUE', 'sync-sefaz-cte-autxml'),
         'max_pages_per_job' => (int) env('SEFAZ_CTE_AUTXML_MAX_PAGES_PER_JOB', 20),
         'page_sleep_seconds' => (float) env('SEFAZ_CTE_AUTXML_PAGE_SLEEP_SECONDS', 2),

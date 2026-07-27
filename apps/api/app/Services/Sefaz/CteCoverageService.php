@@ -19,42 +19,42 @@ use InvalidArgumentException;
 /** Projeção conservadora de cobertura CT-e por cliente e competência. */
 final class CteCoverageService
 {
-    public function recompute(int $officeId, int $clientId, string $period): CteCoverageSnapshot
+    public function recompute(int $tenantId, int $clientId, string $period): CteCoverageSnapshot
     {
         if (preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $period) !== 1) {
             throw new InvalidArgumentException('Período CT-e deve usar YYYY-MM.');
         }
 
         $client = Client::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereKey($clientId)
             ->firstOrFail();
         $establishments = $client->establishments()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->pluck('id');
         $cnpjs = $client->establishments()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->pluck('cnpj');
 
         $start = CarbonImmutable::createFromFormat('Y-m-d', $period.'-01')->startOfMonth();
         $end = $start->endOfMonth();
 
         $dfeIds = DocumentInterest::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereIn('establishment_id', $establishments)
             ->pluck('dfe_document_id')
             ->unique()
             ->values();
 
         $cteQuery = CteDocument::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('is_summary', false)
             ->whereIn('dfe_document_id', $dfeIds)
             ->whereBetween('issued_at', [$start, $end]);
         $cteIds = (clone $cteQuery)->pluck('dfe_document_id')->unique()->values();
 
         $originalIds = DocumentAcquisition::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereIn('dfe_document_id', $cteIds)
             ->whereIn('artifact_quality', [
                 DocumentArtifactQuality::Original->value,
@@ -64,7 +64,7 @@ final class CteCoverageService
             ->unique()
             ->values();
         $redactedIds = DocumentAcquisition::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereIn('dfe_document_id', $cteIds)
             ->where('artifact_quality', DocumentArtifactQuality::AutXmlRedacted->value)
             ->whereNotIn('dfe_document_id', $originalIds)
@@ -76,17 +76,17 @@ final class CteCoverageService
             ->where('coverage_status', CteCoverageStatus::PendingImport->value)
             ->count();
         $blocked = ChannelSyncCursor::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereIn('establishment_id', $establishments)
             ->whereIn('status', [SyncCursorStatus::Blocked->value, SyncCursorStatus::Error->value])
             ->exists()
             || FiscalDocumentQuarantine::query()
-                ->where('office_id', $officeId)
+                ->where('tenant_id', $tenantId)
                 ->whereIn('issuer_cnpj', $cnpjs)
                 ->where('resolution_status', QuarantineResolutionStatus::Open->value)
                 ->exists();
         $historicalGap = ChannelSyncCursor::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereIn('establishment_id', $establishments)
             ->where('created_at', '>', $end)
             ->exists();
@@ -104,7 +104,7 @@ final class CteCoverageService
 
         return CteCoverageSnapshot::query()->updateOrCreate(
             [
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'client_id' => $clientId,
                 'period' => $period,
             ],

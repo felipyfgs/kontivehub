@@ -5,7 +5,7 @@ namespace App\Services\Integra;
 use App\Contracts\EnsuresClientProcuracaoForConsult;
 use App\Enums\SerproEnvironment;
 use App\Models\Client;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Audit\AuditLogger;
 use RuntimeException;
 use Throwable;
@@ -19,22 +19,22 @@ final class EnsureClientProcuracaoForConsult implements EnsuresClientProcuracaoF
     public function __construct(
         private readonly TaxProxyPowerService $proxyPowers,
         private readonly ClientProcuracaoSyncService $procuracoes,
-        private readonly OfficeSerproAuthorizationService $authorizations,
+        private readonly TenantSerproAuthorizationService $authorizations,
         private readonly AuditLogger $audit,
     ) {}
 
     /**
-     * @param  list<string>  $requiredPowers  ANY-of (aliases de catálogo e/ou códigos oficiais)
+     * @param  list<string>  $requiredPowers  Códigos oficiais, com semântica ANY-of
      * @return array{ok: bool, synced: bool, code: ?string, message: ?string}
      */
     public function ensure(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         SerproEnvironment $environment,
         array $requiredPowers,
         ?int $actorUserId = null,
     ): array {
-        if ($client->office_id !== $office->id) {
+        if ($client->tenant_id !== $tenant->id) {
             return [
                 'ok' => false,
                 'synced' => false,
@@ -48,7 +48,7 @@ final class EnsureClientProcuracaoForConsult implements EnsuresClientProcuracaoF
             return ['ok' => true, 'synced' => false, 'code' => null, 'message' => null];
         }
 
-        $auth = $this->authorizations->getOrCreate($office, $environment);
+        $auth = $this->authorizations->getOrCreate($tenant, $environment);
         $authorIdentity = trim((string) ($auth->author_identity ?? ''));
         if ($authorIdentity === '') {
             return [
@@ -59,13 +59,13 @@ final class EnsureClientProcuracaoForConsult implements EnsuresClientProcuracaoF
             ];
         }
 
-        if ($this->hasAnyUsable($office->id, $client->id, $codes, $authorIdentity, $environment)) {
+        if ($this->hasAnyUsable($tenant->id, $client->id, $codes, $authorIdentity, $environment)) {
             return ['ok' => true, 'synced' => false, 'code' => null, 'message' => null];
         }
 
         try {
             $this->procuracoes->syncOfficial(
-                $office,
+                $tenant,
                 $client,
                 $environment,
                 $actorUserId,
@@ -76,12 +76,12 @@ final class EnsureClientProcuracaoForConsult implements EnsuresClientProcuracaoF
                 ? 'PROCURACAO_SYNC_BUSY'
                 : 'PROCURACAO_SYNC_FAILED';
 
-            $this->audit->record('office.procuracao.ensure', 'FAILED', null, [
+            $this->audit->record('tenant.procuracao.ensure', 'FAILED', null, [
                 'client_id' => $client->id,
                 'environment' => $environment->value,
                 'code' => $code,
                 'message' => mb_substr($e->getMessage(), 0, 200),
-            ], $actorUserId, $office->id);
+            ], $actorUserId, $tenant->id);
 
             return [
                 'ok' => false,
@@ -91,12 +91,12 @@ final class EnsureClientProcuracaoForConsult implements EnsuresClientProcuracaoF
             ];
         }
 
-        if ($this->hasAnyUsable($office->id, $client->id, $codes, $authorIdentity, $environment)) {
-            $this->audit->record('office.procuracao.ensure', 'SUCCESS', null, [
+        if ($this->hasAnyUsable($tenant->id, $client->id, $codes, $authorIdentity, $environment)) {
+            $this->audit->record('tenant.procuracao.ensure', 'SUCCESS', null, [
                 'client_id' => $client->id,
                 'environment' => $environment->value,
                 'synced' => true,
-            ], $actorUserId, $office->id);
+            ], $actorUserId, $tenant->id);
 
             return ['ok' => true, 'synced' => true, 'code' => null, 'message' => null];
         }
@@ -104,7 +104,7 @@ final class EnsureClientProcuracaoForConsult implements EnsuresClientProcuracaoF
         $diag = [];
         foreach ($codes as $powerCode) {
             foreach ($this->proxyPowers->diagnoseUnusable(
-                $office->id,
+                $tenant->id,
                 $client->id,
                 $powerCode,
                 $authorIdentity,
@@ -115,13 +115,13 @@ final class EnsureClientProcuracaoForConsult implements EnsuresClientProcuracaoF
         }
         $code = $diag[0] ?? 'PROXY_POWER_MISSING';
 
-        $this->audit->record('office.procuracao.ensure', 'FAILED', null, [
+        $this->audit->record('tenant.procuracao.ensure', 'FAILED', null, [
             'client_id' => $client->id,
             'environment' => $environment->value,
             'synced' => true,
             'code' => $code,
             'required_powers' => $codes,
-        ], $actorUserId, $office->id);
+        ], $actorUserId, $tenant->id);
 
         return [
             'ok' => false,
@@ -139,10 +139,9 @@ final class EnsureClientProcuracaoForConsult implements EnsuresClientProcuracaoF
     {
         $out = [];
         foreach ($requiredPowers as $raw) {
-            foreach ($this->expandAliases(strtoupper(trim((string) $raw))) as $code) {
-                if ($code !== '') {
-                    $out[$code] = $code;
-                }
+            $code = strtoupper(trim((string) $raw));
+            if ($code !== '') {
+                $out[$code] = $code;
             }
         }
 
@@ -150,24 +149,10 @@ final class EnsureClientProcuracaoForConsult implements EnsuresClientProcuracaoF
     }
 
     /**
-     * @return list<string>
-     */
-    private function expandAliases(string $code): array
-    {
-        return match ($code) {
-            'PGDASD' => ['PGDASD', '00146'],
-            '00146' => ['00146', 'PGDASD'],
-            'REGIME_APURACAO', 'REGIMEAPURACAO' => ['REGIME_APURACAO', '00060'],
-            '00060' => ['00060', 'REGIME_APURACAO'],
-            default => [$code],
-        };
-    }
-
-    /**
      * @param  list<string>  $codes
      */
     private function hasAnyUsable(
-        int $officeId,
+        int $tenantId,
         int $clientId,
         array $codes,
         string $authorIdentity,
@@ -175,7 +160,7 @@ final class EnsureClientProcuracaoForConsult implements EnsuresClientProcuracaoF
     ): bool {
         foreach ($codes as $powerCode) {
             $power = $this->proxyPowers->findUsablePower(
-                officeId: $officeId,
+                tenantId: $tenantId,
                 clientId: $clientId,
                 powerCode: $powerCode,
                 authorIdentity: $authorIdentity,

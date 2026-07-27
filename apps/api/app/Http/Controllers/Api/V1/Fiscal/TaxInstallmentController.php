@@ -2,14 +2,16 @@
 
 namespace App\Http\Controllers\Api\V1\Fiscal;
 
-use App\Enums\OfficeRole;
+use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
 use App\Models\Client;
+use App\Models\User;
+use App\Services\Authorization\TenantAuthorization;
 use App\Services\FiscalMonitoring\FiscalMonitoringRunService;
 use App\Services\Integra\Parcelamento\ParcelamentoMonitorAllService;
 use App\Services\Integra\Parcelamento\ParcelamentoQueryService;
 use App\Services\Integra\Parcelamento\ParcelamentoServiceCatalog;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use RuntimeException;
@@ -17,10 +19,11 @@ use RuntimeException;
 class TaxInstallmentController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly ParcelamentoQueryService $query,
         private readonly FiscalMonitoringRunService $runs,
         private readonly ParcelamentoMonitorAllService $monitorAll,
+        private readonly TenantAuthorization $authorization,
     ) {}
 
     public function modalities(): JsonResponse
@@ -33,13 +36,13 @@ class TaxInstallmentController extends Controller
     public function orders(Request $request): JsonResponse
     {
         $this->assertCanRead();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
         $perPage = min(100, max(1, (int) $request->query('per_page', 50)));
         $clientId = $request->query('client_id');
         $modality = $request->query('modality');
 
         $page = $this->query->paginateOrders(
-            $office,
+            $tenant,
             $perPage,
             is_numeric($clientId) ? (int) $clientId : null,
             is_string($modality) ? $modality : null,
@@ -52,20 +55,20 @@ class TaxInstallmentController extends Controller
     public function showOrder(int $order): JsonResponse
     {
         $this->assertCanRead();
-        $office = $this->currentOffice->office();
-        $model = $this->query->findOrder($office, $order);
+        $tenant = $this->currentTenant->tenant();
+        $model = $this->query->findOrder($tenant, $order);
         if ($model === null) {
             return response()->json(['message' => 'Pedido não encontrado.'], 404);
         }
 
         $parcels = $model->parcels()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->get()
             ->map(fn ($p) => $p->toPublicArray());
         $payments = $model->payments()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->get()
             ->map(fn ($payment) => $payment->toPublicArray());
 
@@ -80,11 +83,11 @@ class TaxInstallmentController extends Controller
     public function parcels(Request $request): JsonResponse
     {
         $this->assertCanRead();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
         $perPage = min(100, max(1, (int) $request->query('per_page', 50)));
 
         $page = $this->query->paginateParcels(
-            $office,
+            $tenant,
             $perPage,
             is_numeric($request->query('client_id')) ? (int) $request->query('client_id') : null,
             is_numeric($request->query('order_id')) ? (int) $request->query('order_id') : null,
@@ -98,12 +101,12 @@ class TaxInstallmentController extends Controller
     public function guides(Request $request): JsonResponse
     {
         $this->assertCanRead();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
         $perPage = min(100, max(1, (int) $request->query('per_page', 50)));
         $clientId = $request->query('client_id');
 
         $page = $this->query->paginateGuides(
-            $office,
+            $tenant,
             $perPage,
             is_numeric($clientId) ? (int) $clientId : null,
         );
@@ -118,7 +121,7 @@ class TaxInstallmentController extends Controller
     public function enqueue(Request $request): JsonResponse
     {
         $this->assertCanWrite();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
         $data = $request->validate([
             'client_id' => ['required', 'integer'],
@@ -141,7 +144,7 @@ class TaxInstallmentController extends Controller
 
         $client = Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($data['client_id'])
             ->first();
 
@@ -162,7 +165,7 @@ class TaxInstallmentController extends Controller
 
         try {
             $run = $this->runs->enqueueManual(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 systemCode: ParcelamentoServiceCatalog::SOLUTION,
                 serviceCode: $modality,
@@ -182,7 +185,7 @@ class TaxInstallmentController extends Controller
     public function monitor(Request $request): JsonResponse
     {
         $this->assertCanWrite();
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
 
         $data = $request->validate([
             'client_ids' => ['required', 'array', 'min:1', 'max:25'],
@@ -192,7 +195,7 @@ class TaxInstallmentController extends Controller
 
         $clients = Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('id', $data['client_ids'])
             ->get()
             ->keyBy('id');
@@ -209,7 +212,7 @@ class TaxInstallmentController extends Controller
         $failed = 0;
         foreach ($data['client_ids'] as $clientId) {
             $result = $this->monitorAll->enqueueClient(
-                office: $office,
+                tenant: $tenant,
                 client: $clients->get($clientId),
                 actorId: $request->user()?->id,
                 correlationId: isset($data['correlation_id'])
@@ -238,15 +241,18 @@ class TaxInstallmentController extends Controller
 
     private function assertCanRead(): void
     {
-        if ($this->currentOffice->role() === null) {
+        $actor = request()->user();
+        if (! $actor instanceof User
+            || ! $this->authorization->allows($actor, TenantPermission::FiscalMonitoringView)) {
             abort(403, 'Perfil não resolvido.');
         }
     }
 
     private function assertCanWrite(): void
     {
-        $role = $this->currentOffice->role();
-        if ($role === null || ! in_array($role, [OfficeRole::Admin, OfficeRole::Operator], true)) {
+        $actor = request()->user();
+        if (! $actor instanceof User
+            || ! $this->authorization->allows($actor, TenantPermission::FiscalSyncTrigger)) {
             abort(403, 'Ação não autorizada para o perfil atual.');
         }
     }

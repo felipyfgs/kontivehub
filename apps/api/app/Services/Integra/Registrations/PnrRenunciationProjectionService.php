@@ -7,7 +7,7 @@ use App\Enums\FiscalSourceProvenance;
 use App\Enums\SecureObjectPurpose;
 use App\Models\Client;
 use App\Models\FiscalPnrRenunciation;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Integra\ContributorCnpjResolver;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -38,9 +38,9 @@ final class PnrRenunciationProjectionService
     /**
      * @return list<FiscalPnrRenunciation>
      */
-    public function projectHistory(Office $office, Client $client, string $sourceProvenance, mixed $dados): array
+    public function projectHistory(Tenant $tenant, Client $client, string $sourceProvenance, mixed $dados): array
     {
-        $this->assertClientBelongsToOffice($office, $client);
+        $this->assertClientBelongsToTenant($tenant, $client);
         $provenance = $this->requireOfficialSource($sourceProvenance);
         $page = $this->renunciations->decodeHistory($dados);
         $contributor = $this->contributors->resolve($client);
@@ -51,11 +51,11 @@ final class PnrRenunciationProjectionService
             $this->assertContributorMatches($contributor, $row['contributor_cnpj']);
         }
 
-        return DB::transaction(function () use ($page, $office, $client, $provenance, $contributor, $evidence, $now): array {
+        return DB::transaction(function () use ($page, $tenant, $client, $provenance, $contributor, $evidence, $now): array {
             $projections = [];
             foreach ($page['rows'] as $row) {
                 $projections[] = $this->upsertRenunciation(
-                    office: $office,
+                    tenant: $tenant,
                     client: $client,
                     contributor: $contributor,
                     renunciationId: $row['id'],
@@ -79,9 +79,9 @@ final class PnrRenunciationProjectionService
         });
     }
 
-    public function projectStatus(Office $office, Client $client, string $sourceProvenance, mixed $dados): ?FiscalPnrRenunciation
+    public function projectStatus(Tenant $tenant, Client $client, string $sourceProvenance, mixed $dados): ?FiscalPnrRenunciation
     {
-        $this->assertClientBelongsToOffice($office, $client);
+        $this->assertClientBelongsToTenant($tenant, $client);
         $provenance = $this->requireOfficialSource($sourceProvenance);
         $status = $this->renunciations->decodeStatus($dados);
         if ($status['renunciation'] === null) {
@@ -95,7 +95,7 @@ final class PnrRenunciationProjectionService
         $this->assertContributorMatches($contributor, $renunciation['contributor_cnpj']);
 
         return DB::transaction(fn (): FiscalPnrRenunciation => $this->upsertRenunciation(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             contributor: $contributor,
             renunciationId: $renunciation['id'],
@@ -115,13 +115,13 @@ final class PnrRenunciationProjectionService
     }
 
     public function projectReceipt(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         int $renunciationId,
         string $sourceProvenance,
         mixed $dados,
     ): FiscalPnrRenunciation {
-        $this->assertClientBelongsToOffice($office, $client);
+        $this->assertClientBelongsToTenant($tenant, $client);
         if ($renunciationId < 1) {
             throw new RuntimeException('Identificador da renúncia deve ser positivo.');
         }
@@ -130,10 +130,10 @@ final class PnrRenunciationProjectionService
         $contributor = $this->contributors->resolve($client);
         $now = now();
 
-        return DB::transaction(function () use ($office, $client, $renunciationId, $provenance, $receipt, $contributor, $now): FiscalPnrRenunciation {
+        return DB::transaction(function () use ($tenant, $client, $renunciationId, $provenance, $receipt, $contributor, $now): FiscalPnrRenunciation {
             $existing = FiscalPnrRenunciation::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('client_id', $client->id)
                 ->where('renunciation_id', $renunciationId)
                 ->lockForUpdate()
@@ -149,10 +149,10 @@ final class PnrRenunciationProjectionService
 
             $objectId = $existing?->receipt_sha256 === $receipt['sha256']
                 ? $existing->receipt_vault_object_id
-                : $this->vault->put($receipt['contents'], self::receiptAad($office->id, $client->id, $renunciationId, $receipt['sha256']));
+                : $this->vault->put($receipt['contents'], self::receiptAad($tenant->id, $client->id, $renunciationId, $receipt['sha256']));
 
             return $this->upsertRenunciation(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 contributor: $contributor,
                 renunciationId: $renunciationId,
@@ -174,10 +174,10 @@ final class PnrRenunciationProjectionService
     }
 
     /** @return array<string, scalar> */
-    public static function receiptAad(int $officeId, int $clientId, int $renunciationId, string $sha256): array
+    public static function receiptAad(int $tenantId, int $clientId, int $renunciationId, string $sha256): array
     {
         return SecureObjectPurpose::FiscalEvidence->aadBase([
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'client_id' => $clientId,
             'renunciation_id' => $renunciationId,
             'sha256' => $sha256,
@@ -186,7 +186,7 @@ final class PnrRenunciationProjectionService
 
     /** @param array<string, mixed> $attributes */
     private function upsertRenunciation(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $contributor,
         int $renunciationId,
@@ -196,7 +196,7 @@ final class PnrRenunciationProjectionService
             ->withoutGlobalScopes()
             ->updateOrCreate(
                 [
-                    'office_id' => $office->id,
+                    'tenant_id' => $tenant->id,
                     'client_id' => $client->id,
                     'renunciation_id' => $renunciationId,
                 ],
@@ -207,9 +207,9 @@ final class PnrRenunciationProjectionService
             );
     }
 
-    private function assertClientBelongsToOffice(Office $office, Client $client): void
+    private function assertClientBelongsToTenant(Tenant $tenant, Client $client): void
     {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new RuntimeException('Cliente não pertence ao escritório ativo.');
         }
     }

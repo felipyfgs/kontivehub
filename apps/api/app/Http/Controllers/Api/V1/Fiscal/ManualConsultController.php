@@ -4,14 +4,14 @@ namespace App\Http\Controllers\Api\V1\Fiscal;
 
 use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
-use App\Http\Middleware\EnsureOfficeContext;
+use App\Http\Middleware\EnsureTenantContext;
 use App\Models\Client;
 use App\Models\User;
 use App\Services\Authorization\TenantAuthorization;
 use App\Services\Fiscal\ManualConsult\ManualConsultExecutionService;
 use App\Services\Fiscal\ManualConsult\ManualConsultInventoryService;
 use App\Services\Fiscal\ManualConsult\ManualConsultNotReadyException;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -24,7 +24,7 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 final class ManualConsultController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly ManualConsultInventoryService $inventory,
         private readonly ManualConsultExecutionService $execution,
         private readonly TenantAuthorization $authorization,
@@ -35,11 +35,11 @@ final class ManualConsultController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        if ($rejection = $this->rejectClientOfficeId($request)) {
+        if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
 
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
         $validated = $request->validate([
             'client_id' => ['sometimes', 'nullable', 'integer'],
             'surface_key' => ['sometimes', 'nullable', 'string', 'max:80'],
@@ -48,7 +48,7 @@ final class ManualConsultController extends Controller
 
         $client = null;
         if (isset($validated['client_id']) && $validated['client_id'] !== null) {
-            $client = $this->findClient((int) $office->id, (int) $validated['client_id']);
+            $client = $this->findClient((int) $tenant->id, (int) $validated['client_id']);
             if ($client === null) {
                 return $this->clientNotFound();
             }
@@ -56,7 +56,7 @@ final class ManualConsultController extends Controller
         $this->assertCanRead($request, $client);
 
         $data = $this->inventory->inventory(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             surfaceKey: isset($validated['surface_key']) ? (string) $validated['surface_key'] : null,
             moduleKey: isset($validated['module_key']) ? (string) $validated['module_key'] : null,
@@ -71,11 +71,11 @@ final class ManualConsultController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
-        if ($rejection = $this->rejectClientOfficeId($request)) {
+        if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
 
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
         $validated = $request->validate([
             'action_id' => ['required', 'string', 'max:160'],
             'client_id' => ['required', 'integer'],
@@ -83,7 +83,7 @@ final class ManualConsultController extends Controller
             'params' => ['sometimes', 'array'],
         ]);
 
-        $client = $this->findClient((int) $office->id, (int) $validated['client_id']);
+        $client = $this->findClient((int) $tenant->id, (int) $validated['client_id']);
         if ($client === null) {
             return $this->clientNotFound();
         }
@@ -91,7 +91,7 @@ final class ManualConsultController extends Controller
 
         try {
             $payload = $this->execution->execute(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 actionId: (string) $validated['action_id'],
                 params: (array) ($validated['params'] ?? []),
@@ -127,11 +127,11 @@ final class ManualConsultController extends Controller
         return response()->json(['data' => $payload], $status);
     }
 
-    private function findClient(int $officeId, int $clientId): ?Client
+    private function findClient(int $tenantId, int $clientId): ?Client
     {
         return Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereKey($clientId)
             ->first();
     }
@@ -144,33 +144,33 @@ final class ManualConsultController extends Controller
         ], 404);
     }
 
-    private function rejectClientOfficeId(Request $request): ?JsonResponse
+    private function rejectClientTenantId(Request $request): ?JsonResponse
     {
-        $suppliedAtTopLevel = $request->attributes->get(EnsureOfficeContext::CLIENT_OFFICE_ID_SUPPLIED) === true;
-        $suppliedNested = $this->containsOfficeIdKey($request->query->all())
-            || $this->containsOfficeIdKey($request->request->all())
-            || ($request->isJson() && $request->json() !== null && $this->containsOfficeIdKey($request->json()->all()));
+        $suppliedAtTopLevel = $request->attributes->get(EnsureTenantContext::CLIENT_TENANT_ID_SUPPLIED) === true;
+        $suppliedNested = $this->containsTenantIdKey($request->query->all())
+            || $this->containsTenantIdKey($request->request->all())
+            || ($request->isJson() && $request->json() !== null && $this->containsTenantIdKey($request->json()->all()));
 
         if (! $suppliedAtTopLevel && ! $suppliedNested) {
             return null;
         }
 
         return response()->json([
-            'message' => 'office_id não é aceito; o escritório é obtido do contexto autenticado.',
-            'code' => 'CLIENT_OFFICE_ID_REJECTED',
+            'message' => 'tenant_id não é aceito; o escritório é obtido do contexto autenticado.',
+            'code' => 'CLIENT_TENANT_ID_REJECTED',
         ], 422);
     }
 
     /**
      * @param  array<mixed>  $payload
      */
-    private function containsOfficeIdKey(array $payload): bool
+    private function containsTenantIdKey(array $payload): bool
     {
         foreach ($payload as $key => $value) {
-            if (is_string($key) && strcasecmp($key, 'office_id') === 0) {
+            if (is_string($key) && strcasecmp($key, 'tenant_id') === 0) {
                 return true;
             }
-            if (is_array($value) && $this->containsOfficeIdKey($value)) {
+            if (is_array($value) && $this->containsTenantIdKey($value)) {
                 return true;
             }
         }

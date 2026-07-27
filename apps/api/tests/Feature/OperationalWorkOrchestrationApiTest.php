@@ -2,22 +2,22 @@
 
 namespace Tests\Feature;
 
-use App\Enums\OfficeRole;
 use App\Enums\TaxRegimeCode;
+use App\Enums\TenantRole;
 use App\Enums\Work\DueRuleType;
 use App\Enums\Work\ProcessStatus;
 use App\Models\Client;
 use App\Models\ClientCategory;
 use App\Models\ClientTaxRegimePeriod;
 use App\Models\Establishment;
-use App\Models\Office;
-use App\Models\OperationalProcess;
-use App\Models\OperationalTask;
-use App\Models\ProcessTemplate;
-use App\Models\ProcessTemplateTask;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Models\WorkDepartment;
-use App\Support\CurrentOffice;
+use App\Models\WorkProcess;
+use App\Models\WorkProcessTemplate;
+use App\Models\WorkProcessTemplateTask;
+use App\Models\WorkTask;
+use App\Support\CurrentTenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Laravel\Sanctum\Sanctum;
@@ -35,21 +35,21 @@ class OperationalWorkOrchestrationApiTest extends TestCase
 
     public function test_catalog_is_listed_and_installed_as_an_independent_tenant_copy(): void
     {
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
-        $otherOffice = Office::factory()->create();
-        ProcessTemplate::factory()->create([
-            'office_id' => $otherOffice->id,
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $otherTenant = Tenant::factory()->create();
+        WorkProcessTemplate::factory()->create([
+            'tenant_id' => $otherTenant->id,
             'catalog_key' => 'PGDAS_MENSAL',
             'catalog_version' => 99,
         ]);
         $department = WorkDepartment::factory()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => 'Fiscal',
             'code' => 'FISCAL',
         ]);
         Sanctum::actingAs($admin);
 
-        $catalog = $this->getJson('/api/v1/work/template-catalog?office_id='.$otherOffice->id)
+        $catalog = $this->getJson('/api/v1/work/template-catalog?tenant_id='.$otherTenant->id)
             ->assertOk()
             ->assertJsonCount(5, 'data')
             ->json('data');
@@ -57,7 +57,7 @@ class OperationalWorkOrchestrationApiTest extends TestCase
         $this->assertFalse($pgdas['installed']);
 
         $response = $this->postJson('/api/v1/work/template-catalog/PGDAS_MENSAL/install', [
-            'office_id' => $otherOffice->id,
+            'tenant_id' => $otherTenant->id,
         ])->assertCreated()
             ->assertJsonPath('data.catalog_key', 'PGDAS_MENSAL')
             ->assertJsonPath('data.catalog_version', 1)
@@ -66,15 +66,15 @@ class OperationalWorkOrchestrationApiTest extends TestCase
             ->assertJsonCount(7, 'data.tasks');
 
         $templateId = (int) $response->json('data.id');
-        $this->assertDatabaseHas('process_templates', [
+        $this->assertDatabaseHas('work_process_templates', [
             'id' => $templateId,
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'catalog_key' => 'PGDAS_MENSAL',
             'catalog_version' => 1,
         ]);
-        $this->assertDatabaseMissing('process_templates', [
+        $this->assertDatabaseMissing('work_process_templates', [
             'id' => $templateId,
-            'office_id' => $otherOffice->id,
+            'tenant_id' => $otherTenant->id,
         ]);
 
         $this->patchJson('/api/v1/work/templates/'.$templateId, [
@@ -113,10 +113,10 @@ class OperationalWorkOrchestrationApiTest extends TestCase
 
     public function test_template_rejects_cross_tenant_tags_unknown_monitoring_and_viewer_mutation(): void
     {
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
-        $otherOffice = Office::factory()->create();
-        $otherCategory = $this->category($otherOffice, 'Externa');
-        $template = ProcessTemplate::factory()->create(['office_id' => $office->id]);
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $otherTenant = Tenant::factory()->create();
+        $otherCategory = $this->category($otherTenant, 'Externa');
+        $template = WorkProcessTemplate::factory()->create(['tenant_id' => $tenant->id]);
         Sanctum::actingAs($admin);
 
         $this->patchJson('/api/v1/work/templates/'.$template->id, [
@@ -137,8 +137,8 @@ class OperationalWorkOrchestrationApiTest extends TestCase
         ])->assertUnprocessable()
             ->assertJsonMissing(['name' => 'Externa']);
 
-        $viewer = User::factory()->forOffice($office, OfficeRole::Viewer)->create();
-        $viewer->forceFill(['selected_office_id' => $office->id])->saveQuietly();
+        $viewer = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $viewer->forceFill(['selected_tenant_id' => $tenant->id])->saveQuietly();
         Sanctum::actingAs($viewer);
         $this->getJson('/api/v1/work/template-catalog')->assertOk();
         $this->postJson('/api/v1/work/template-catalog/FOLHA_MENSAL/install')->assertForbidden();
@@ -147,26 +147,26 @@ class OperationalWorkOrchestrationApiTest extends TestCase
 
     public function test_structured_preview_uses_temporal_regime_tags_exceptions_and_frozen_idempotency(): void
     {
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
-        $otherOffice = Office::factory()->create();
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $otherTenant = Tenant::factory()->create();
         Sanctum::actingAs($admin);
 
-        $movement = $this->category($office, 'Com movimento');
-        $excludedTag = $this->category($office, 'Não processar');
-        $simple = $this->client($office, 'Simples janeiro', 'SIMPLES_NACIONAL', [$movement]);
-        $presumed = $this->client($office, 'Presumido incluído', 'LUCRO_PRESUMIDO', [$movement]);
-        $excludedByTag = $this->client($office, 'Excluído por tag', 'SIMPLES_NACIONAL', [$movement, $excludedTag]);
-        $fallback = $this->client($office, 'Fallback atual', 'SIMPLES_NACIONAL', [$movement]);
-        $inactive = $this->client($office, 'Inativo incluído', 'SIMPLES_NACIONAL', [$movement], false);
-        $external = $this->client($otherOffice, 'Externo', 'SIMPLES_NACIONAL', []);
+        $movement = $this->category($tenant, 'Com movimento');
+        $excludedTag = $this->category($tenant, 'Não processar');
+        $simple = $this->client($tenant, 'Simples janeiro', 'SIMPLES_NACIONAL', [$movement]);
+        $presumed = $this->client($tenant, 'Presumido incluído', 'LUCRO_PRESUMIDO', [$movement]);
+        $excludedByTag = $this->client($tenant, 'Excluído por tag', 'SIMPLES_NACIONAL', [$movement, $excludedTag]);
+        $fallback = $this->client($tenant, 'Fallback atual', 'SIMPLES_NACIONAL', [$movement]);
+        $inactive = $this->client($tenant, 'Inativo incluído', 'SIMPLES_NACIONAL', [$movement], false);
+        $external = $this->client($otherTenant, 'Externo', 'SIMPLES_NACIONAL', []);
 
-        $this->period($office, $simple, TaxRegimeCode::SimplesNacional, '2026-01-01', '2026-01-31');
-        $this->period($office, $simple, TaxRegimeCode::LucroPresumido, '2026-02-01', null);
-        $this->period($office, $presumed, TaxRegimeCode::LucroPresumido, '2026-01-01', null);
-        $this->period($office, $excludedByTag, TaxRegimeCode::SimplesNacional, '2026-01-01', null);
-        $this->period($office, $inactive, TaxRegimeCode::SimplesNacional, '2026-01-01', null);
+        $this->period($tenant, $simple, TaxRegimeCode::SimplesNacional, '2026-01-01', '2026-01-31');
+        $this->period($tenant, $simple, TaxRegimeCode::LucroPresumido, '2026-02-01', null);
+        $this->period($tenant, $presumed, TaxRegimeCode::LucroPresumido, '2026-01-01', null);
+        $this->period($tenant, $excludedByTag, TaxRegimeCode::SimplesNacional, '2026-01-01', null);
+        $this->period($tenant, $inactive, TaxRegimeCode::SimplesNacional, '2026-01-01', null);
 
-        $template = $this->template($office, [
+        $template = $this->template($tenant, [
             'tax_regimes' => ['SIMPLES_NACIONAL'],
             'category_ids' => [$movement->id],
             'category_match' => 'ANY',
@@ -208,29 +208,29 @@ class OperationalWorkOrchestrationApiTest extends TestCase
         $this->postJson('/api/v1/work/generation-batches/'.$batchId.'/confirm')
             ->assertOk()
             ->assertJsonPath('data.status', 'COMPLETED');
-        $this->assertDatabaseCount('operational_processes', 2);
-        $this->assertDatabaseHas('operational_processes', [
-            'office_id' => $office->id,
+        $this->assertDatabaseCount('work_processes', 2);
+        $this->assertDatabaseHas('work_processes', [
+            'tenant_id' => $tenant->id,
             'client_id' => $fallback->id,
             'monitoring_module_key' => 'PGDASD',
         ]);
-        $this->assertDatabaseMissing('operational_processes', ['client_id' => $inactive->id]);
+        $this->assertDatabaseMissing('work_processes', ['client_id' => $inactive->id]);
 
         $this->postJson('/api/v1/work/generation-batches/'.$batchId.'/confirm')
             ->assertOk()
             ->assertJsonPath('data.status', 'COMPLETED');
-        $this->assertDatabaseCount('operational_processes', 2);
+        $this->assertDatabaseCount('work_processes', 2);
         Http::assertNothingSent();
     }
 
     public function test_temporal_regime_changes_selection_by_competence(): void
     {
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
         Sanctum::actingAs($admin);
-        $client = $this->client($office, 'Mudou de regime', 'LUCRO_PRESUMIDO', []);
-        $this->period($office, $client, TaxRegimeCode::SimplesNacional, '2026-01-01', '2026-01-31');
-        $this->period($office, $client, TaxRegimeCode::LucroPresumido, '2026-02-01', null);
-        $template = $this->template($office, [
+        $client = $this->client($tenant, 'Mudou de regime', 'LUCRO_PRESUMIDO', []);
+        $this->period($tenant, $client, TaxRegimeCode::SimplesNacional, '2026-01-01', '2026-01-31');
+        $this->period($tenant, $client, TaxRegimeCode::LucroPresumido, '2026-02-01', null);
+        $template = $this->template($tenant, [
             'tax_regimes' => ['SIMPLES_NACIONAL'],
             'category_ids' => [],
             'category_match' => 'ANY',
@@ -255,36 +255,36 @@ class OperationalWorkOrchestrationApiTest extends TestCase
 
     public function test_process_collection_embeds_tasks_company_and_allowlisted_monitoring_context(): void
     {
-        [$viewer, $office] = $this->actor(OfficeRole::Viewer);
-        $otherOffice = Office::factory()->create();
-        $client = $this->client($office, 'Empresa operacional', 'SIMPLES_NACIONAL', []);
+        [$viewer, $tenant] = $this->actor(TenantRole::TenantUser);
+        $otherTenant = Tenant::factory()->create();
+        $client = $this->client($tenant, 'Empresa operacional', 'SIMPLES_NACIONAL', []);
         Establishment::factory()->forClient($client, '11222333000181')->create();
-        $process = OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        $process = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'title' => 'PGDAS mensal — 2026-01',
             'monitoring_module_key' => 'PGDASD',
             'status' => ProcessStatus::EmProgresso,
         ]);
-        $task = OperationalTask::factory()->create([
-            'office_id' => $office->id,
-            'operational_process_id' => $process->id,
+        $task = WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $process->id,
             'sort_order' => 1,
             'title' => 'Apurar Simples Nacional',
         ]);
-        OperationalProcess::factory()->create([
-            'office_id' => $office->id,
+        WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'status' => ProcessStatus::Concluido,
         ]);
-        $external = $this->client($otherOffice, 'Empresa externa', null, []);
-        OperationalProcess::factory()->create([
-            'office_id' => $otherOffice->id,
+        $external = $this->client($otherTenant, 'Empresa externa', null, []);
+        WorkProcess::factory()->create([
+            'tenant_id' => $otherTenant->id,
             'client_id' => $external->id,
         ]);
         Sanctum::actingAs($viewer);
 
-        $this->getJson('/api/v1/work/processes?client_id='.$client->id.'&active_only=1&office_id='.$otherOffice->id)
+        $this->getJson('/api/v1/work/processes?client_id='.$client->id.'&active_only=1&tenant_id='.$otherTenant->id)
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.id', $process->id)
@@ -301,20 +301,20 @@ class OperationalWorkOrchestrationApiTest extends TestCase
     {
         config(['features.platform_privileged_context.enabled' => true]);
 
-        $office = Office::factory()->create();
-        $client = $this->client($office, 'Cliente privilegiado', 'SIMPLES_NACIONAL', []);
-        $template = $this->template($office, [
+        $tenant = Tenant::factory()->create();
+        $client = $this->client($tenant, 'Cliente privilegiado', 'SIMPLES_NACIONAL', []);
+        $template = $this->template($tenant, [
             'tax_regimes' => ['SIMPLES_NACIONAL'],
             'category_ids' => [],
             'category_match' => 'ANY',
             'excluded_category_ids' => [],
         ]);
-        $actor = User::factory()->asPlatformAdmin($office->id)->create();
+        $actor = User::factory()->asPlatformAdmin($tenant->id)->create();
 
         Sanctum::actingAs($actor);
-        $current = app(CurrentOffice::class);
+        $current = app(CurrentTenant::class);
         $current->clear();
-        $current->bindPlatformPrivileged($actor, $office);
+        $current->bindPlatformPrivileged($actor, $tenant);
 
         $this->assertNull($current->realMembership());
 
@@ -329,27 +329,27 @@ class OperationalWorkOrchestrationApiTest extends TestCase
         ])->assertCreated()
             ->assertJsonPath('data.preview_summary.total', 1);
 
-        $this->assertDatabaseHas('process_generation_batches', [
-            'office_id' => $office->id,
+        $this->assertDatabaseHas('work_process_generation_batches', [
+            'tenant_id' => $tenant->id,
             'idempotency_key' => 'work-platform-preview-1',
             'requested_by_membership_id' => null,
         ]);
     }
 
-    /** @return array{User, Office} */
-    private function actor(OfficeRole $role): array
+    /** @return array{User, Tenant} */
+    private function actor(TenantRole $role): array
     {
-        $office = Office::factory()->create();
-        $user = User::factory()->forOffice($office, $role)->create();
-        $user->forceFill(['selected_office_id' => $office->id])->saveQuietly();
+        $tenant = Tenant::factory()->create();
+        $user = User::factory()->forTenant($tenant, $role)->create();
+        $user->forceFill(['selected_tenant_id' => $tenant->id])->saveQuietly();
 
-        return [$user, $office];
+        return [$user, $tenant];
     }
 
-    private function category(Office $office, string $name): ClientCategory
+    private function category(Tenant $tenant, string $name): ClientCategory
     {
         return ClientCategory::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => $name,
             'name_key' => ClientCategory::normalizeNameKey($name),
             'color' => 'neutral',
@@ -359,20 +359,20 @@ class OperationalWorkOrchestrationApiTest extends TestCase
 
     /** @param list<ClientCategory> $categories */
     private function client(
-        Office $office,
+        Tenant $tenant,
         string $name,
         ?string $taxRegime,
         array $categories,
         bool $active = true,
     ): Client {
-        $client = Client::factory()->forOffice($office)->create([
+        $client = Client::factory()->forTenant($tenant)->create([
             'legal_name' => $name,
             'tax_regime' => $taxRegime,
             'is_active' => $active,
         ]);
         foreach ($categories as $category) {
             $client->categories()->attach($category->id, [
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
             ]);
         }
 
@@ -380,14 +380,14 @@ class OperationalWorkOrchestrationApiTest extends TestCase
     }
 
     private function period(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         TaxRegimeCode $regime,
         string $from,
         ?string $to,
     ): ClientTaxRegimePeriod {
         return ClientTaxRegimePeriod::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'regime_code' => $regime,
             'effective_from' => $from,
@@ -399,10 +399,10 @@ class OperationalWorkOrchestrationApiTest extends TestCase
     }
 
     /** @param array<string, mixed> $rules */
-    private function template(Office $office, array $rules): ProcessTemplate
+    private function template(Tenant $tenant, array $rules): WorkProcessTemplate
     {
-        $template = ProcessTemplate::factory()->create([
-            'office_id' => $office->id,
+        $template = WorkProcessTemplate::factory()->create([
+            'tenant_id' => $tenant->id,
             'name' => 'PGDAS teste '.fake()->unique()->numerify('####'),
             'monitoring_module_key' => 'PGDASD',
             'audience_rules' => $rules,
@@ -410,9 +410,9 @@ class OperationalWorkOrchestrationApiTest extends TestCase
             'default_due_rule_value' => 20,
             'is_active' => true,
         ]);
-        ProcessTemplateTask::factory()->create([
-            'office_id' => $office->id,
-            'process_template_id' => $template->id,
+        WorkProcessTemplateTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_template_id' => $template->id,
             'sort_order' => 1,
             'title' => 'Apurar obrigação',
             'due_rule_type' => DueRuleType::DaysBeforeProcessDue,

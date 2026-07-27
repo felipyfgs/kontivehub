@@ -4,15 +4,15 @@ namespace App\Models;
 
 use App\Enums\SerproDataSegregationClass;
 use App\Enums\SerproEnvironment;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'office_id',
-    'office_serpro_authorization_id',
+    'tenant_id',
+    'tenant_serpro_authorization_id',
     'environment',
     'version_number',
     'status',
@@ -38,7 +38,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class SerproTermVersion extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {
@@ -55,7 +55,7 @@ class SerproTermVersion extends Model
 
     public function authorization(): BelongsTo
     {
-        return $this->belongsTo(OfficeSerproAuthorization::class, 'office_serpro_authorization_id');
+        return $this->belongsTo(TenantSerproAuthorization::class, 'tenant_serpro_authorization_id');
     }
 
     /**
@@ -65,7 +65,7 @@ class SerproTermVersion extends Model
     {
         return [
             'id' => $this->id,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'environment' => $this->environment->value,
             'version_number' => $this->version_number,
             'status' => $this->status,

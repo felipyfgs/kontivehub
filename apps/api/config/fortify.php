@@ -2,9 +2,6 @@
 
 use Laravel\Fortify\Features;
 
-// TOTP/2FA descontinuado: default false. Colunas legadas permanecem no schema.
-$twoFactorRequired = filter_var(env('AUTH_TWO_FACTOR_REQUIRED', false), FILTER_VALIDATE_BOOL);
-
 return [
 
     /*
@@ -119,7 +116,6 @@ return [
 
     'limiters' => [
         'login' => 'login',
-        'two-factor' => 'two-factor',
     ],
 
     /*
@@ -137,18 +133,6 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Exigência de autenticação em duas etapas
-    |--------------------------------------------------------------------------
-    |
-    | Pode ser desativada explicitamente em desenvolvimento local. O padrão
-    | permanece seguro: quando a variável não existe, o 2FA é obrigatório.
-    |
-    */
-
-    'two_factor_required' => $twoFactorRequired,
-
-    /*
-    |--------------------------------------------------------------------------
     | Features
     |--------------------------------------------------------------------------
     |
@@ -159,14 +143,10 @@ return [
     */
 
     'features' => array_values(array_filter([
-        // Cadastro público desabilitado: bootstrap via app:bootstrap-office
+        // Cadastro público desabilitado: bootstrap via app:bootstrap-tenant
         Features::resetPasswords(),
         Features::updateProfileInformation(),
         Features::updatePasswords(),
-        $twoFactorRequired ? Features::twoFactorAuthentication([
-            'confirm' => true,
-            'confirmPassword' => true,
-        ]) : null,
     ])),
 
 ];

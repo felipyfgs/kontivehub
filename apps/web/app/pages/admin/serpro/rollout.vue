@@ -21,7 +21,7 @@ const smokeReady = computed(() => Boolean(
 
 function approvalPolicyLabel(policy: unknown) {
   if (policy === 'OWNER_CONFIRMATION') return 'Confirmação do Proprietário'
-  if (policy === 'DUAL_APPROVAL') return 'Proprietário + Office ADMIN'
+  if (policy === 'DUAL_APPROVAL') return 'Proprietário + administrador do tenant'
   return String(policy || 'Política não informada')
 }
 
@@ -266,7 +266,7 @@ onMounted(load)
       <UPageCard variant="subtle">
         <ul class="list-disc space-y-2 ps-4 text-sm text-muted">
           <li>Código implantado não ativa o driver real.</li>
-          <li>Canário exige Proprietário + Office ADMIN.</li>
+          <li>Canário exige proprietário e administrador do tenant.</li>
           <li>Kill switch, status e limites continuam bloqueadores.</li>
         </ul>
       </UPageCard>

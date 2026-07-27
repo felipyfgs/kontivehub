@@ -3,7 +3,7 @@
 /**
  * Matriz versionada das rotas Work: leitura vs mutação/exportação.
  *
- * Mutações e exportações: OfficeMembership real no Office corrente, ou
+ * Mutações e exportações: TenantMembership real no Tenant corrente, ou
  * PLATFORM_ADMIN em contexto privilegiado (EnsureWorkRealMembership + policies).
  * Leitura também usa contexto privilegiado PLATFORM_ADMIN.
  *

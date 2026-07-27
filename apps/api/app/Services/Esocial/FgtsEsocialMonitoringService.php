@@ -16,7 +16,7 @@ use App\Models\FgtsCompetenceStatus;
 use App\Models\FiscalCategory;
 use App\Models\FiscalCompetence;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
+use App\Models\Tenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -132,14 +132,14 @@ final class FgtsEsocialMonitoringService
      * }
      */
     public function syncCompetence(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $competencePeriodKey,
         ?Establishment $establishment = null,
         ?FiscalMonitoringRun $run = null,
         ?CarbonImmutable $now = null,
     ): array {
-        $this->assertTenant($office, $client, $establishment);
+        $this->assertTenant($tenant, $client, $establishment);
         $this->assertCompetenceKey($competencePeriodKey);
 
         if (! $this->isSourceAvailable()) {
@@ -165,7 +165,7 @@ final class FgtsEsocialMonitoringService
         $now ??= CarbonImmutable::now();
 
         $fetch = $this->client->fetchEvents(new EsocialFetchRequest(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             competencePeriodKey: $competencePeriodKey,
             establishment: $establishment,
@@ -201,7 +201,7 @@ final class FgtsEsocialMonitoringService
         $evidences = [];
         if (! $fetch->sourceUnsupported && $fetch->events !== []) {
             $evidences = $this->evidencePersistence->persistMany(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 events: $fetch->events,
                 run: $run,
@@ -211,7 +211,7 @@ final class FgtsEsocialMonitoringService
 
         // Inclui evidências já persistidas (syncs anteriores) para projeção completa.
         $all = $this->evidencePersistence->listForCompetence(
-            $office,
+            $tenant,
             $client,
             $competencePeriodKey,
             $establishment?->id,
@@ -235,7 +235,7 @@ final class FgtsEsocialMonitoringService
         }
 
         $status = $this->upsertStatus(
-            $office,
+            $tenant,
             $client,
             $competencePeriodKey,
             $projection,
@@ -258,7 +258,7 @@ final class FgtsEsocialMonitoringService
      * @return LengthAwarePaginator<int, FgtsCompetenceStatus>
      */
     public function paginateStatuses(
-        Office $office,
+        Tenant $tenant,
         int $perPage = 50,
         ?int $clientId = null,
         ?string $competencePeriodKey = null,
@@ -266,7 +266,7 @@ final class FgtsEsocialMonitoringService
         $q = FgtsCompetenceStatus::query()
             ->withoutGlobalScopes()
             ->operationallyEligible()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->orderByDesc('competence_period_key')
             ->orderByDesc('id');
 
@@ -280,12 +280,12 @@ final class FgtsEsocialMonitoringService
         return $q->paginate($perPage);
     }
 
-    public function findStatusForOffice(Office $office, int $id): ?FgtsCompetenceStatus
+    public function findStatusForTenant(Tenant $tenant, int $id): ?FgtsCompetenceStatus
     {
         return FgtsCompetenceStatus::query()
             ->withoutGlobalScopes()
             ->operationallyEligible()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($id)
             ->first();
     }
@@ -294,7 +294,7 @@ final class FgtsEsocialMonitoringService
      * @return LengthAwarePaginator<int, EsocialEventEvidence>
      */
     public function paginateEvents(
-        Office $office,
+        Tenant $tenant,
         int $perPage = 50,
         ?int $clientId = null,
         ?string $competencePeriodKey = null,
@@ -303,7 +303,7 @@ final class FgtsEsocialMonitoringService
         $q = EsocialEventEvidence::query()
             ->withoutGlobalScopes()
             ->operationallyEligible()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->orderByDesc('id');
 
         if ($clientId !== null) {
@@ -323,7 +323,7 @@ final class FgtsEsocialMonitoringService
      * @param  list<EsocialEventEvidence>  $evidences
      */
     private function upsertStatus(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $competencePeriodKey,
         FgtsCompetenceProjection $projection,
@@ -365,7 +365,7 @@ final class FgtsEsocialMonitoringService
 
         $competence = $isQuarantined
             ? null
-            : $this->ensureFiscalCompetence($office, $client, $competencePeriodKey, $projection);
+            : $this->ensureFiscalCompetence($tenant, $client, $competencePeriodKey, $projection);
 
         $attrs = [
             'fiscal_competence_id' => $competence?->id,
@@ -393,10 +393,10 @@ final class FgtsEsocialMonitoringService
             'quarantined_at' => $isQuarantined ? $now : null,
         ];
 
-        return DB::transaction(function () use ($office, $client, $establishment, $competencePeriodKey, $attrs) {
+        return DB::transaction(function () use ($tenant, $client, $establishment, $competencePeriodKey, $attrs) {
             $existing = FgtsCompetenceStatus::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $office->id)
+                ->where('tenant_id', $tenant->id)
                 ->where('client_id', $client->id)
                 ->where('competence_period_key', $competencePeriodKey)
                 ->when(
@@ -414,7 +414,7 @@ final class FgtsEsocialMonitoringService
             }
 
             return FgtsCompetenceStatus::query()->create(array_merge($attrs, [
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'client_id' => $client->id,
                 'establishment_id' => $establishment?->id,
                 'competence_period_key' => $competencePeriodKey,
@@ -423,7 +423,7 @@ final class FgtsEsocialMonitoringService
     }
 
     private function ensureFiscalCompetence(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $competencePeriodKey,
         FgtsCompetenceProjection $projection,
@@ -437,7 +437,7 @@ final class FgtsEsocialMonitoringService
 
         return FiscalCompetence::query()->withoutGlobalScopes()->updateOrCreate(
             [
-                'office_id' => $office->id,
+                'tenant_id' => $tenant->id,
                 'client_id' => $client->id,
                 'fiscal_category_id' => $category->id,
                 'period_key' => $competencePeriodKey,
@@ -458,13 +458,13 @@ final class FgtsEsocialMonitoringService
         );
     }
 
-    private function assertTenant(Office $office, Client $client, ?Establishment $establishment): void
+    private function assertTenant(Tenant $tenant, Client $client, ?Establishment $establishment): void
     {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new RuntimeException('Cliente não pertence ao escritório ativo.');
         }
         if ($establishment !== null) {
-            if ((int) $establishment->office_id !== (int) $office->id
+            if ((int) $establishment->tenant_id !== (int) $tenant->id
                 || (int) $establishment->client_id !== (int) $client->id) {
                 throw new RuntimeException('Estabelecimento não pertence ao cliente/escritório.');
             }

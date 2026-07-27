@@ -13,7 +13,7 @@ final readonly class RepresentationChain
         public string $authorIdentity,
         public string $authorIdentityType,
         public string $contributorCnpj,
-        public int $officeId,
+        public int $tenantId,
         public int $clientId,
         public string $environment,
         public bool $complete,
@@ -33,7 +33,7 @@ final readonly class RepresentationChain
     public function toSanitizedArray(): array
     {
         return [
-            'office_id' => $this->officeId,
+            'tenant_id' => $this->tenantId,
             'client_id' => $this->clientId,
             'environment' => $this->environment,
             'contractor_cnpj_masked' => self::mask($this->contractorCnpj),

@@ -17,20 +17,13 @@ final class SerproAuthToken
         public readonly CarbonImmutable $expiresAt,
         public readonly ?string $jwtToken = null,
         public readonly bool $fromCache = false,
-        /** @deprecated Use jwtToken — alias legado do campo oficial jwt_token */
-        public readonly ?string $jwt = null,
-    ) {
-        // Preferir jwtToken; aceitar jwt legado no cache
-        if ($this->jwtToken === null && $this->jwt !== null) {
-            // readonly: normalizado via accessor
-        }
-    }
+    ) {}
 
     public function officialJwt(): ?string
     {
-        $value = $this->jwtToken ?? $this->jwt;
-
-        return $value !== null && $value !== '' ? $value : null;
+        return $this->jwtToken !== null && $this->jwtToken !== ''
+            ? $this->jwtToken
+            : null;
     }
 
     public function requiresJwt(): bool
@@ -64,8 +57,6 @@ final class SerproAuthToken
             'from_cache' => $this->fromCache,
             'has_access_token' => $this->accessToken !== '',
             'has_jwt_token' => $this->officialJwt() !== null,
-            // legado
-            'has_jwt' => $this->officialJwt() !== null,
         ];
     }
 }

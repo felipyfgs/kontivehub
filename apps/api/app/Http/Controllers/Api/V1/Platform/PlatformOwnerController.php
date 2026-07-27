@@ -40,7 +40,7 @@ class PlatformOwnerController extends Controller
         $validated = $request->validate([
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'email' => ['sometimes', 'required', 'email', 'max:255'],
-            'default_office_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'default_tenant_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
         ]);
 
         if ($validated === []) {

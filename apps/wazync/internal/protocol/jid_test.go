@@ -95,7 +95,7 @@ func TestResolvePNUsesOnlyTheProvidedSessionResolverAndFailsClosed(t *testing.T)
 	}
 }
 
-func TestContractAddressRejectsRawUserJIDWhileInternalNormalizerKeepsCompatibility(t *testing.T) {
+func TestContractAddressRejectsRawUserJIDWhileUpstreamParserAcceptsIt(t *testing.T) {
 	t.Parallel()
 	raw := "5511999991234@s.whatsapp.net"
 	if _, err := NormalizeOneToOneAddress(raw); err != nil {

@@ -2,19 +2,18 @@
 
 namespace Tests\Unit\Assistant;
 
-use App\Enums\OfficeRole;
 use App\Enums\TenantPermission;
 use App\Enums\TenantRole;
-use App\Models\Office;
-use App\Models\OfficeMembership;
-use App\Models\ProcessTemplate;
+use App\Models\Tenant;
+use App\Models\TenantMembership;
 use App\Models\TenantPermissionProfile;
 use App\Models\User;
 use App\Models\WorkDepartment;
+use App\Models\WorkProcessTemplate;
 use App\Services\Assistant\AssistantPendingApprovalStore;
 use App\Services\Assistant\AssistantToolRegistry;
 use App\Services\Authorization\TenantAuthorization;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use DomainException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -35,33 +34,33 @@ class AssistantToolRegistryTest extends TestCase
         $this->assertFalse($registry->isAllowlisted('delete_everything'));
         $this->assertFalse($registry->isAllowlisted('serpro_consult'));
 
-        $this->bindAdminOffice();
+        $this->bindAdminTenant();
 
         $this->expectException(DomainException::class);
         $this->expectExceptionMessage('ASSISTANT_TOOL_UNKNOWN');
         $registry->execute('serpro_consult', []);
     }
 
-    public function test_list_tools_are_office_scoped(): void
+    public function test_list_tools_are_tenant_scoped(): void
     {
-        [$admin, $office] = $this->bindAdminOffice();
-        $other = Office::factory()->create();
+        [$admin, $tenant] = $this->bindAdminTenant();
+        $other = Tenant::factory()->create();
 
-        ProcessTemplate::factory()->create([
-            'office_id' => $office->id,
+        WorkProcessTemplate::factory()->create([
+            'tenant_id' => $tenant->id,
             'name' => 'Modelo Local',
         ]);
-        ProcessTemplate::factory()->create([
-            'office_id' => $other->id,
+        WorkProcessTemplate::factory()->create([
+            'tenant_id' => $other->id,
             'name' => 'Modelo Externo',
         ]);
         WorkDepartment::factory()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => 'Fiscal Local',
             'code' => 'FIS',
         ]);
         WorkDepartment::factory()->create([
-            'office_id' => $other->id,
+            'tenant_id' => $other->id,
             'name' => 'Fiscal Externo',
             'code' => 'EXT',
         ]);
@@ -86,7 +85,7 @@ class AssistantToolRegistryTest extends TestCase
 
     public function test_create_without_approval_does_not_persist(): void
     {
-        [$admin] = $this->bindAdminOffice();
+        [$admin] = $this->bindAdminTenant();
         $registry = app(AssistantToolRegistry::class);
 
         $result = $registry->execute(
@@ -100,17 +99,17 @@ class AssistantToolRegistryTest extends TestCase
 
         $this->assertSame('pending_approval', $result['status']);
         $this->assertArrayHasKey('approval_token', $result);
-        $this->assertDatabaseMissing('process_templates', ['name' => 'Nao Deve Persistir']);
+        $this->assertDatabaseMissing('work_process_templates', ['name' => 'Nao Deve Persistir']);
     }
 
     public function test_create_with_approval_and_permission_persists(): void
     {
-        [$admin, $office] = $this->bindAdminOffice();
+        [$admin, $tenant] = $this->bindAdminTenant();
         $registry = app(AssistantToolRegistry::class);
         $store = app(AssistantPendingApprovalStore::class);
 
         $token = $store->put(
-            $office->id,
+            $tenant->id,
             99,
             'call_ok',
             AssistantToolRegistry::CREATE_PROCESS_TEMPLATE,
@@ -127,25 +126,25 @@ class AssistantToolRegistryTest extends TestCase
         );
 
         $this->assertSame('ok', $result['status']);
-        $this->assertDatabaseHas('process_templates', [
-            'office_id' => $office->id,
+        $this->assertDatabaseHas('work_process_templates', [
+            'tenant_id' => $tenant->id,
             'name' => 'Criado Via Tool',
         ]);
     }
 
     public function test_create_with_approval_without_manage_permission_is_forbidden(): void
     {
-        $office = Office::factory()->create();
-        $viewer = User::factory()->forOffice($office, OfficeRole::Viewer)->create();
-        $membership = OfficeMembership::query()
-            ->where('office_id', $office->id)
+        $tenant = Tenant::factory()->create();
+        $viewer = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $membership = TenantMembership::query()
+            ->where('tenant_id', $tenant->id)
             ->where('user_id', $viewer->id)
             ->firstOrFail();
-        app(CurrentOffice::class)->bind($viewer, $membership->load('office'));
+        app(CurrentTenant::class)->bind($viewer, $membership->load('tenant'));
 
         $store = app(AssistantPendingApprovalStore::class);
         $token = $store->put(
-            $office->id,
+            $tenant->id,
             7,
             'call_forbidden',
             AssistantToolRegistry::CREATE_PROCESS_TEMPLATE,
@@ -165,24 +164,23 @@ class AssistantToolRegistryTest extends TestCase
 
     public function test_list_tools_require_work_view_permission(): void
     {
-        config(['features.canonical_multitenant_rbac.enabled' => true]);
 
-        $office = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
         $user = User::factory()->create();
-        $profile = TenantPermissionProfile::factory()->forOffice($office)->create();
+        $profile = TenantPermissionProfile::factory()->forTenant($tenant)->create();
         $profile->syncPermissionKeys([TenantPermission::TenantDashboardView]);
-        $membership = OfficeMembership::factory()->create([
-            'office_id' => $office->id,
+        $membership = TenantMembership::factory()->create([
+            'tenant_id' => $tenant->id,
             'user_id' => $user->id,
-            'role' => OfficeRole::Viewer,
-            'tenant_role' => TenantRole::TenantUser,
+            'role' => TenantRole::TenantUser,
+            'role' => TenantRole::TenantUser,
             'permission_profile_id' => $profile->id,
             'authorization_version' => 1,
             'is_active' => true,
         ]);
         app()->forgetInstance(TenantAuthorization::class);
-        app(CurrentOffice::class)->clear();
-        app(CurrentOffice::class)->bind($user, $membership->load(['office', 'permissionProfile']));
+        app(CurrentTenant::class)->clear();
+        app(CurrentTenant::class)->bind($user, $membership->load(['tenant', 'permissionProfile']));
 
         $registry = app(AssistantToolRegistry::class);
 
@@ -203,17 +201,17 @@ class AssistantToolRegistryTest extends TestCase
         $registry->execute(AssistantToolRegistry::LIST_PROCESS_TEMPLATES, [], null);
     }
 
-    /** @return array{User, Office} */
-    private function bindAdminOffice(): array
+    /** @return array{User, Tenant} */
+    private function bindAdminTenant(): array
     {
-        $office = Office::factory()->create();
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
-        $membership = OfficeMembership::query()
-            ->where('office_id', $office->id)
+        $tenant = Tenant::factory()->create();
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $membership = TenantMembership::query()
+            ->where('tenant_id', $tenant->id)
             ->where('user_id', $admin->id)
             ->firstOrFail();
-        app(CurrentOffice::class)->bind($admin, $membership->load('office'));
+        app(CurrentTenant::class)->bind($admin, $membership->load('tenant'));
 
-        return [$admin, $office];
+        return [$admin, $tenant];
     }
 }

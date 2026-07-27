@@ -2,17 +2,17 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'office_id', 'dfe_document_id', 'access_key', 'event_type', 'event_at', 'status',
+    'tenant_id', 'dfe_document_id', 'access_key', 'event_type', 'event_at', 'status',
 ])]
 class NfseEvent extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {

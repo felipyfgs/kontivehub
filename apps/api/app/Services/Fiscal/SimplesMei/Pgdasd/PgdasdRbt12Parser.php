@@ -119,31 +119,6 @@ final class PgdasdRbt12Parser
             }
         }
 
-        // Linha única legada: token RBT12/RB12 + montantes na mesma linha.
-        if ($this->containsRbt12Token($line) && ! $this->isBareRbt12Marker($line)) {
-            if ($this->isProportionalizedLine($line)) {
-                return null;
-            }
-            $internal = $this->moneyAfterLabel($line, '/mercado\s+interno/iu');
-            $external = $this->moneyAfterLabel($line, '/mercado\s+externo/iu');
-            $total = $this->moneyAfterLabel($line, '/\btotal\b/iu');
-            $values = $this->moneyValues($line);
-            if ($total === null && count($values) === 1) {
-                $total = $values[0];
-            } elseif ($total === null && count($values) >= 3) {
-                $internal ??= $values[0];
-                $external ??= $values[1];
-                $total = $values[2];
-            }
-            if ($total !== null || $internal !== null || $external !== null) {
-                return [
-                    'internal' => $internal,
-                    'external' => $external,
-                    'total' => $total,
-                ];
-            }
-        }
-
         return null;
     }
 

@@ -2,15 +2,15 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 
 /** Referência opaca para idDefis; o valor real existe exclusivamente no cofre. */
-#[Fillable(['office_id', 'client_id', 'vault_object_id', 'observed_at', 'source_run_id', 'source_provenance'])]
+#[Fillable(['tenant_id', 'client_id', 'vault_object_id', 'observed_at', 'source_run_id', 'source_provenance'])]
 class DefisDeclarationReference extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {

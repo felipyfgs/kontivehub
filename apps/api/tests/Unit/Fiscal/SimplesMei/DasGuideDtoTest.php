@@ -40,18 +40,4 @@ class DasGuideDtoTest extends TestCase
         $this->assertSame('07202619183811981', $dto->documentNumber);
         $this->assertSame(80.0, $dto->amount);
     }
-
-    #[Test]
-    public function keeps_english_aliases(): void
-    {
-        $dto = DasGuideDto::fromIntegraBody([
-            'document_number' => '07202619183811982',
-            'amount' => 12.34,
-            'competence' => '2026-05',
-        ]);
-
-        $this->assertSame('07202619183811982', $dto->documentNumber);
-        $this->assertSame(12.34, $dto->amount);
-        $this->assertSame('2026-05', $dto->competence);
-    }
 }

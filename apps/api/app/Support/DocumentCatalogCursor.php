@@ -8,7 +8,7 @@ use InvalidArgumentException;
 /**
  * Cursor opaco com posição independente por projeção do catálogo.
  *
- * IDs de NFS-e, NF-e, CT-e e MDF-e pertencem a sequências diferentes; tratá-los como
+ * IDs de NFS-e, NF-e e CT-e pertencem a sequências diferentes; tratá-los como
  * um único número faz a paginação repetir ou pular documentos.
  */
 final readonly class DocumentCatalogCursor
@@ -17,7 +17,6 @@ final readonly class DocumentCatalogCursor
         public ?int $nfseBeforeId = null,
         public ?int $sefazBeforeId = null,
         public ?int $cteBeforeId = null,
-        public ?int $mdfeBeforeId = null,
     ) {}
 
     public static function fromToken(?string $token): self
@@ -26,16 +25,11 @@ final readonly class DocumentCatalogCursor
             return new self;
         }
 
-        // Compatibilidade com o cursor escalar emitido antes do catálogo multi-fonte.
-        if (ctype_digit($token) && (int) $token > 0) {
-            return new self((int) $token, (int) $token, (int) $token, (int) $token);
-        }
-
         $padding = (4 - strlen($token) % 4) % 4;
         $decoded = base64_decode(strtr($token.str_repeat('=', $padding), '-_', '+/'), true);
         $payload = is_string($decoded) ? json_decode($decoded, true) : null;
 
-        if (! is_array($payload) || ! in_array($payload['v'] ?? null, [1, 2, 3], true)) {
+        if (! is_array($payload) || ($payload['v'] ?? null) !== 1) {
             throw new InvalidArgumentException('Cursor do catálogo inválido.');
         }
 
@@ -43,7 +37,6 @@ final readonly class DocumentCatalogCursor
             self::nullablePositiveInt($payload['nfse'] ?? null),
             self::nullablePositiveInt($payload['sefaz'] ?? null),
             self::nullablePositiveInt($payload['cte'] ?? null),
-            self::nullablePositiveInt($payload['mdfe'] ?? null),
         );
     }
 
@@ -52,7 +45,6 @@ final readonly class DocumentCatalogCursor
         return match ($kind) {
             DocumentKind::Nfse => $this->nfseBeforeId,
             DocumentKind::Cte => $this->cteBeforeId,
-            DocumentKind::Mdfe => $this->mdfeBeforeId,
             default => $this->sefazBeforeId,
         };
     }
@@ -65,7 +57,6 @@ final readonly class DocumentCatalogCursor
         $nfse = $this->nfseBeforeId;
         $sefaz = $this->sefazBeforeId;
         $cte = $this->cteBeforeId;
-        $mdfe = $this->mdfeBeforeId;
 
         foreach ($rows as $row) {
             $id = self::nullablePositiveInt($row['id'] ?? null);
@@ -78,24 +69,21 @@ final readonly class DocumentCatalogCursor
                 $nfse = $id;
             } elseif ($kind === DocumentKind::Cte->value) {
                 $cte = $id;
-            } elseif ($kind === DocumentKind::Mdfe->value) {
-                $mdfe = $id;
             } else {
                 $sefaz = $id;
             }
         }
 
-        return new self($nfse, $sefaz, $cte, $mdfe);
+        return new self($nfse, $sefaz, $cte);
     }
 
     public function toToken(): string
     {
         $json = json_encode([
-            'v' => 3,
+            'v' => 1,
             'nfse' => $this->nfseBeforeId,
             'sefaz' => $this->sefazBeforeId,
             'cte' => $this->cteBeforeId,
-            'mdfe' => $this->mdfeBeforeId,
         ], JSON_THROW_ON_ERROR);
 
         return rtrim(strtr(base64_encode($json), '+/', '-_'), '=');

@@ -6,9 +6,9 @@ use App\Enums\OutboundMonthlyReadinessStatus;
 use App\Enums\OutboundRetrievalOrigin;
 use App\Enums\OutboundUrgencyBand;
 use App\Enums\SvrsNfceRecoveryStatus;
-use App\Models\MaOutboundRetrievalRequest;
 use App\Models\NfeDocument;
 use App\Models\OutboundMonthlyReadiness;
+use App\Models\OutboundRetrievalRequest;
 use App\Services\Audit\AuditLogger;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -32,17 +32,17 @@ final class OutboundMonthlyReadinessService
      *   completeness_scope: string
      * }
      */
-    public function compute(int $officeId, string $competence): array
+    public function compute(int $tenantId, string $competence): array
     {
         // Prefer recoveries conhecidas da competência (fonte de verdade do planner)
-        $recoveries = MaOutboundRetrievalRequest::query()
-            ->where('office_id', $officeId)
+        $recoveries = OutboundRetrievalRequest::query()
+            ->where('tenant_id', $tenantId)
             ->where('origin', OutboundRetrievalOrigin::SvrsPortalByKey)
             ->where('competence', $competence)
             ->get();
 
         $knownFromNfe = NfeDocument::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('is_summary', false)
             ->where('direction', 'OUT')
             ->whereNotNull('issued_at')
@@ -88,13 +88,13 @@ final class OutboundMonthlyReadinessService
         ];
     }
 
-    public function refresh(int $officeId, string $competence): OutboundMonthlyReadiness
+    public function refresh(int $tenantId, string $competence): OutboundMonthlyReadiness
     {
-        $stats = $this->compute($officeId, $competence);
+        $stats = $this->compute($tenantId, $competence);
 
-        return DB::transaction(function () use ($officeId, $competence, $stats) {
+        return DB::transaction(function () use ($tenantId, $competence, $stats) {
             $row = OutboundMonthlyReadiness::query()->firstOrNew([
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'competence' => $competence,
             ]);
 
@@ -123,12 +123,12 @@ final class OutboundMonthlyReadinessService
     }
 
     public function confirmPartial(
-        int $officeId,
+        int $tenantId,
         string $competence,
         int $userId,
         ?string $notes = null,
     ): OutboundMonthlyReadiness {
-        $row = $this->refresh($officeId, $competence);
+        $row = $this->refresh($tenantId, $competence);
         if ($row->pending_total === 0) {
             $row->status = OutboundMonthlyReadinessStatus::CompleteKnown;
             $row->save();
@@ -147,7 +147,7 @@ final class OutboundMonthlyReadinessService
             'competence' => $competence,
             'pending_total' => $row->pending_total,
             'known_total' => $row->known_total,
-        ], $userId, $officeId);
+        ], $userId, $tenantId);
 
         return $row;
     }

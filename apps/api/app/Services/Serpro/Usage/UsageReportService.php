@@ -7,7 +7,6 @@ use App\Models\SerproUsageMonthlyAggregate;
 use App\Models\SerproUsageReconciliation;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Consultas de consumo para tenant e plataforma.
@@ -29,29 +28,20 @@ final class UsageReportService
      *
      * @return array<string, mixed>
      */
-    public function tenantUsageSummary(int $officeId, ?int $year = null, ?int $month = null): array
+    public function tenantUsageSummary(int $tenantId, ?int $year = null, ?int $month = null): array
     {
         $at = $this->periodMoment($year, $month);
-        $snapshot = $this->budget->tenantSnapshot($officeId, $at);
+        $snapshot = $this->budget->tenantSnapshot($tenantId, $at);
 
         $aggregates = SerproUsageMonthlyAggregate::query()
             ->where('scope', SerproUsageMonthlyAggregate::SCOPE_TENANT)
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('period_year', $snapshot['period_year'])
             ->where('period_month', $snapshot['period_month'])
             ->orderBy('service_code')
             ->get()
-            ->map(fn (SerproUsageMonthlyAggregate $a) => $a->toPublicArray(includeOfficeId: false))
+            ->map(fn (SerproUsageMonthlyAggregate $a) => $a->toPublicArray(includeTenantId: false))
             ->all();
-
-        // Sem escrita em GET: monta visão live a partir do ledger quando não há recompute.
-        if ($aggregates === []) {
-            $aggregates = $this->liveTenantByService(
-                $officeId,
-                $snapshot['period_year'],
-                $snapshot['period_month'],
-            );
-        }
 
         $cycle = $this->cycles->resolve($at);
 
@@ -64,7 +54,6 @@ final class UsageReportService
                 'period_end' => $cycle['period_end']->toDateString(),
                 'kind' => $cycle['kind'],
             ],
-            // Tenant NÃO recebe global_budget / custo de outros offices.
         ];
     }
 
@@ -72,7 +61,7 @@ final class UsageReportService
      * @return LengthAwarePaginator<int, array<string, mixed>>
      */
     public function tenantEntries(
-        int $officeId,
+        int $tenantId,
         int $perPage = 50,
         ?int $year = null,
         ?int $month = null,
@@ -89,7 +78,7 @@ final class UsageReportService
         $sortDirection = strtolower($direction) === 'asc' ? 'asc' : 'desc';
         $query = SerproApiUsageEntry::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->orderBy($sortColumn, $sortDirection);
         if ($sortColumn !== 'id') {
             $query->orderBy('id', $sortDirection);
@@ -108,19 +97,14 @@ final class UsageReportService
 
     /**
      * Consolidação global (PLATFORM_ADMIN).
-     * recompute=true é legado; GET não deve escrever — use recomputeAggregates() em job/POST.
      *
      * @return array<string, mixed>
      */
-    public function platformConsolidation(?int $year = null, ?int $month = null, bool $recompute = false): array
+    public function platformConsolidation(?int $year = null, ?int $month = null): array
     {
         $at = $this->periodMoment($year, $month);
         $y = (int) $at->year;
         $m = (int) $at->month;
-
-        // Nunca escrever em caminho de consulta (mesmo com recompute=true no GET).
-        // Operadores devem chamar recomputeAggregates explicitamente via comando/job.
-        unset($recompute);
 
         $global = SerproUsageMonthlyAggregate::query()
             ->where('scope', SerproUsageMonthlyAggregate::SCOPE_GLOBAL)
@@ -128,23 +112,23 @@ final class UsageReportService
             ->where('period_month', $m)
             ->orderBy('service_code')
             ->get()
-            ->map(fn (SerproUsageMonthlyAggregate $a) => $a->toPublicArray(includeOfficeId: false))
+            ->map(fn (SerproUsageMonthlyAggregate $a) => $a->toPublicArray(includeTenantId: false))
             ->all();
 
         $byTenant = SerproUsageMonthlyAggregate::query()
             ->where('scope', SerproUsageMonthlyAggregate::SCOPE_TENANT)
             ->where('period_year', $y)
             ->where('period_month', $m)
-            ->orderBy('office_id')
+            ->orderBy('tenant_id')
             ->get()
-            ->groupBy('office_id')
-            ->map(function ($rows, $officeId) {
+            ->groupBy('tenant_id')
+            ->map(function ($rows, $tenantId) {
                 $qty = $rows->sum('total_quantity');
                 $cost = $rows->sum('total_estimated_cost_micros');
                 $entries = $rows->sum('entry_count');
 
                 return [
-                    'office_id' => (int) $officeId,
+                    'tenant_id' => (int) $tenantId,
                     'entry_count' => $entries,
                     'total_quantity' => $qty,
                     'total_estimated_cost_micros' => $cost,
@@ -152,36 +136,6 @@ final class UsageReportService
             })
             ->values()
             ->all();
-
-        // Live fallback se não há agregados persistidos
-        if ($global === [] && $byTenant === []) {
-            $start = Carbon::create($y, $m, 1)->startOfMonth();
-            $end = $start->copy()->endOfMonth();
-            $live = $this->aggregates->liveTotals($start, $end);
-            $byTenant = SerproApiUsageEntry::query()
-                ->withoutGlobalScopes()
-                ->whereBetween('occurred_at', [$start, $end])
-                ->select([
-                    'office_id',
-                    DB::raw('COUNT(*) as entry_count'),
-                    DB::raw('COALESCE(SUM(quantity), 0) as total_quantity'),
-                    DB::raw('COALESCE(SUM(estimated_cost_micros), 0) as total_estimated_cost_micros'),
-                ])
-                ->groupBy('office_id')
-                ->get()
-                ->map(fn ($r) => [
-                    'office_id' => (int) $r->office_id,
-                    'entry_count' => (int) $r->entry_count,
-                    'total_quantity' => (int) $r->total_quantity,
-                    'total_estimated_cost_micros' => (int) $r->total_estimated_cost_micros,
-                ])
-                ->all();
-            $global = [[
-                'scope' => 'GLOBAL',
-                'total_quantity' => $live['global_quantity'],
-                'total_estimated_cost_micros' => $live['global_micros'],
-            ]];
-        }
 
         $reconciliations = SerproUsageReconciliation::query()
             ->where('period_year', $y)
@@ -206,7 +160,6 @@ final class UsageReportService
             'global_aggregates' => $global,
             'by_tenant' => $byTenant,
             'internal_estimated_total_micros' => $this->aggregates->internalEstimatedTotalMicros($y, $m),
-            'global_monthly_budget' => config('serpro_usage.global_monthly_budget'),
             'reconciliations' => $reconciliations,
         ];
     }
@@ -223,38 +176,6 @@ final class UsageReportService
         }
 
         return $this->aggregates->recomputeMonth($year, $month);
-    }
-
-    /**
-     * @return list<array<string, mixed>>
-     */
-    private function liveTenantByService(int $officeId, int $year, int $month): array
-    {
-        $start = Carbon::create($year, $month, 1)->startOfMonth();
-        $end = $start->copy()->endOfMonth();
-
-        return SerproApiUsageEntry::query()
-            ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
-            ->whereBetween('occurred_at', [$start, $end])
-            ->select([
-                'service_code',
-                'consumption_class',
-                DB::raw('COUNT(*) as entry_count'),
-                DB::raw('COALESCE(SUM(quantity), 0) as total_quantity'),
-                DB::raw('COALESCE(SUM(estimated_cost_micros), 0) as total_estimated_cost_micros'),
-            ])
-            ->groupBy(['service_code', 'consumption_class'])
-            ->orderBy('service_code')
-            ->get()
-            ->map(fn ($r) => [
-                'service_code' => $r->service_code,
-                'consumption_class' => $r->consumption_class,
-                'entry_count' => (int) $r->entry_count,
-                'total_quantity' => (int) $r->total_quantity,
-                'total_estimated_cost_micros' => (int) $r->total_estimated_cost_micros,
-            ])
-            ->all();
     }
 
     private function periodMoment(?int $year, ?int $month): Carbon

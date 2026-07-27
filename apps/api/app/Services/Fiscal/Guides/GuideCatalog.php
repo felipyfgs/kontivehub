@@ -11,34 +11,27 @@ use App\Services\Fiscal\Guides\Exceptions\GuideException;
 final class GuideCatalog
 {
     /**
-     * @return array{system:string,service:string,operation:string,risk:TaxGuideRiskLevel,label:string}
+     * @return array{operation_key:string,system:string,service:string,operation:string,risk:TaxGuideRiskLevel,label:string}
      */
-    public function resolve(string $systemCode, string $serviceCode, string $operationCode): array
+    public function resolve(string $operationKey): array
     {
-        $systemCode = strtoupper($systemCode);
-        $serviceCode = strtoupper($serviceCode);
-        $operationCode = strtoupper($operationCode);
-
-        /** @var list<array{system:string,service:string,operation:string,risk:string,label:string}> $ops */
+        /** @var list<array{operation_key:string,system:string,service:string,operation:string,risk:string,label:string}> $ops */
         $ops = config('tax_guides.operations', []);
 
         foreach ($ops as $op) {
-            if (
-                strtoupper($op['system']) === $systemCode
-                && strtoupper($op['service']) === $serviceCode
-                && strtoupper($op['operation']) === $operationCode
-            ) {
+            if ($op['operation_key'] === $operationKey) {
                 return [
-                    'system' => $systemCode,
-                    'service' => $serviceCode,
-                    'operation' => $operationCode,
+                    'operation_key' => $op['operation_key'],
+                    'system' => $op['system'],
+                    'service' => $op['service'],
+                    'operation' => $op['operation'],
                     'risk' => TaxGuideRiskLevel::tryFrom(strtoupper($op['risk'])) ?? TaxGuideRiskLevel::High,
                     'label' => $op['label'],
                 ];
             }
         }
 
-        throw GuideException::operationNotCataloged($systemCode, $serviceCode, $operationCode);
+        throw GuideException::operationNotCataloged($operationKey);
     }
 
     public function isEmissionOperation(string $operationCode): bool

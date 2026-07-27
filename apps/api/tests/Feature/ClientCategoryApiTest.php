@@ -2,10 +2,10 @@
 
 namespace Tests\Feature;
 
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Models\Client;
 use App\Models\ClientCategory;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -18,7 +18,7 @@ class ClientCategoryApiTest extends TestCase
 
     public function test_admin_manages_normalized_catalog_and_viewer_can_read_it(): void
     {
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
         Sanctum::actingAs($admin);
 
         $created = $this->postJson('/api/v1/client-categories', [
@@ -50,7 +50,7 @@ class ClientCategoryApiTest extends TestCase
             'color' => 'primary',
         ])->assertOk()->assertJsonPath('data.is_active', true);
 
-        $viewer = User::factory()->forOffice($office, OfficeRole::Viewer)->create();
+        $viewer = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
         Sanctum::actingAs($viewer);
         $this->getJson('/api/v1/client-categories?include_archived=1')->assertOk();
         $this->postJson('/api/v1/client-categories', [
@@ -59,18 +59,18 @@ class ClientCategoryApiTest extends TestCase
         ])->assertForbidden();
 
         $this->assertDatabaseHas('audit_logs', [
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'action' => 'client_category.reactivate',
         ]);
     }
 
     public function test_operator_replaces_categories_but_cannot_manage_catalog(): void
     {
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
-        $operator = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $client = Client::factory()->forOffice($office)->create();
-        $active = $this->category($office, 'Atendimento', true);
-        $archived = $this->category($office, 'Legado', false);
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $operator = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $client = Client::factory()->forTenant($tenant)->create();
+        $active = $this->category($tenant, 'Atendimento', true);
+        $archived = $this->category($tenant, 'Arquivada', false);
 
         Sanctum::actingAs($operator);
         $this->postJson('/api/v1/client-categories', [
@@ -89,7 +89,7 @@ class ClientCategoryApiTest extends TestCase
         ])->assertUnprocessable()->assertJsonValidationErrors('category_ids');
 
         DB::table('client_category_assignments')->insert([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'client_category_id' => $archived->id,
             'assigned_by' => $admin->id,
@@ -109,11 +109,11 @@ class ClientCategoryApiTest extends TestCase
 
     public function test_bulk_assignment_is_atomic_across_tenants_and_can_remove_archived_categories(): void
     {
-        [$operator, $office] = $this->actor(OfficeRole::Operator);
-        $otherOffice = Office::factory()->create();
-        $clients = Client::factory()->count(2)->forOffice($office)->create();
-        $ownCategory = $this->category($office, 'Cobrança', true);
-        $otherCategory = $this->category($otherOffice, 'Outro tenant', true);
+        [$operator, $tenant] = $this->actor(TenantRole::TenantUser);
+        $otherTenant = Tenant::factory()->create();
+        $clients = Client::factory()->count(2)->forTenant($tenant)->create();
+        $ownCategory = $this->category($tenant, 'Cobrança', true);
+        $otherCategory = $this->category($otherTenant, 'Outro tenant', true);
         Sanctum::actingAs($operator);
 
         $this->patchJson('/api/v1/clients/bulk-categories', [
@@ -142,23 +142,23 @@ class ClientCategoryApiTest extends TestCase
 
     public function test_client_list_filters_categories_with_or_semantics_and_current_tax_regime(): void
     {
-        [$viewer, $office] = $this->actor(OfficeRole::Viewer);
-        $priority = $this->category($office, 'Prioridade', true);
-        $onboarding = $this->category($office, 'Onboarding', true);
-        $mei = Client::factory()->forOffice($office)->create([
+        [$viewer, $tenant] = $this->actor(TenantRole::TenantUser);
+        $priority = $this->category($tenant, 'Prioridade', true);
+        $onboarding = $this->category($tenant, 'Onboarding', true);
+        $mei = Client::factory()->forTenant($tenant)->create([
             'legal_name' => 'Alfa MEI',
             'tax_regime' => 'MEI',
         ]);
-        $simples = Client::factory()->forOffice($office)->create([
+        $simples = Client::factory()->forTenant($tenant)->create([
             'legal_name' => 'Beta Simples',
             'tax_regime' => 'SIMPLES_NACIONAL',
         ]);
-        $real = Client::factory()->forOffice($office)->create([
+        $real = Client::factory()->forTenant($tenant)->create([
             'legal_name' => 'Gama Real',
             'tax_regime' => 'LUCRO_REAL',
         ]);
-        $this->assign($office, $mei, $priority);
-        $this->assign($office, $simples, $onboarding);
+        $this->assign($tenant, $mei, $priority);
+        $this->assign($tenant, $simples, $onboarding);
         Sanctum::actingAs($viewer);
 
         $this->getJson('/api/v1/clients?category_ids='.$priority->id.','.$onboarding->id.'&per_page=20')
@@ -173,34 +173,33 @@ class ClientCategoryApiTest extends TestCase
             ->assertJsonPath('data.0.tax_regime_label', 'MEI / SIMEI')
             ->assertJsonPath('data.0.categories.0.id', $priority->id);
 
-        $sorted = $this->getJson('/api/v1/clients?sort=tax_regime&direction=asc&per_page=20')
+        $sorted = $this->getJson('/api/v1/clients?sort=tax_regime&sort_direction=asc&per_page=20')
             ->assertOk();
         $this->assertSame($real->id, $sorted->json('data.0.id'));
     }
 
-    public function test_legacy_tax_regime_labels_are_normalized_without_writing_period_history(): void
+    public function test_noncanonical_tax_regime_labels_are_rejected(): void
     {
-        [$admin, $office] = $this->actor(OfficeRole::Admin);
-        $client = Client::factory()->forOffice($office)->create();
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $client = Client::factory()->forTenant($tenant)->create();
         Sanctum::actingAs($admin);
 
         $this->patchJson("/api/v1/clients/{$client->id}", [
             'tax_regime' => 'Imune/Isento',
-        ])->assertOk()
-            ->assertJsonPath('data.tax_regime', 'IMUNE_ISENTO')
-            ->assertJsonPath('data.tax_regime_label', 'Imune / Isento');
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('tax_regime');
 
         $this->assertDatabaseHas('clients', [
             'id' => $client->id,
-            'tax_regime' => 'IMUNE_ISENTO',
+            'tax_regime' => $client->getRawOriginal('tax_regime'),
         ]);
         $this->assertDatabaseCount('client_tax_regime_periods', 0);
     }
 
-    private function category(Office $office, string $name, bool $isActive): ClientCategory
+    private function category(Tenant $tenant, string $name, bool $isActive): ClientCategory
     {
         return ClientCategory::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => $name,
             'name_key' => ClientCategory::normalizeNameKey($name),
             'color' => 'primary',
@@ -208,10 +207,10 @@ class ClientCategoryApiTest extends TestCase
         ]);
     }
 
-    private function assign(Office $office, Client $client, ClientCategory $category): void
+    private function assign(Tenant $tenant, Client $client, ClientCategory $category): void
     {
         DB::table('client_category_assignments')->insert([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'client_category_id' => $category->id,
             'assigned_by' => null,
@@ -220,12 +219,12 @@ class ClientCategoryApiTest extends TestCase
         ]);
     }
 
-    /** @return array{User, Office} */
-    private function actor(OfficeRole $role): array
+    /** @return array{User, Tenant} */
+    private function actor(TenantRole $role): array
     {
-        $office = Office::factory()->create();
-        $user = User::factory()->forOffice($office, $role)->create();
+        $tenant = Tenant::factory()->create();
+        $user = User::factory()->forTenant($tenant, $role)->create();
 
-        return [$user, $office];
+        return [$user, $tenant];
     }
 }

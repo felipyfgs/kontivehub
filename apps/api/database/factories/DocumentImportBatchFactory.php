@@ -4,7 +4,7 @@ namespace Database\Factories;
 
 use App\Enums\ImportBatchStatus;
 use App\Models\DocumentImportBatch;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
@@ -20,7 +20,7 @@ class DocumentImportBatchFactory extends Factory
     {
         return [
             'public_id' => (string) Str::uuid(),
-            'office_id' => Office::factory(),
+            'tenant_id' => Tenant::factory(),
             'created_by' => User::factory(),
             'status' => ImportBatchStatus::Uploaded,
             'file_count' => 0,
@@ -28,10 +28,10 @@ class DocumentImportBatchFactory extends Factory
         ];
     }
 
-    public function forOffice(Office $office, User $user): static
+    public function forTenant(Tenant $tenant, User $user): static
     {
         return $this->state(fn () => [
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'created_by' => $user->id,
         ]);
     }

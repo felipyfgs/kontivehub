@@ -3,15 +3,15 @@
 namespace App\Jobs\Fiscal;
 
 use App\Models\Client;
-use App\Models\Office;
 use App\Models\SerproAsyncJobRun;
+use App\Models\Tenant;
 use App\Services\Fiscal\ManualConsult\ManualConsultReadPolicy;
 use App\Services\Fiscal\ManualConsult\ManualConsultReadPolicyException;
 use App\Services\Integra\TaxProcesses\TaxProcessProjectionService;
 use App\Services\Serpro\SerproAsyncJobRunStore;
 use App\Services\Serpro\SerproJobFlagGuard;
 use App\Services\Serpro\SerproMetricsExporter;
-use App\Support\FiscalDataModel\PrivilegedOfficeContext;
+use App\Support\FiscalDataModel\PrivilegedTenantContext;
 use App\Support\LogSanitizer;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -38,7 +38,7 @@ final class RefreshTaxProcessesJob implements ShouldQueue
     public array $backoff;
 
     public function __construct(
-        public readonly int $officeId,
+        public readonly int $tenantId,
         public readonly int $clientId,
         public readonly ?string $correlationId = null,
         public readonly bool $flagCheckedAtDispatch = false,
@@ -54,19 +54,19 @@ final class RefreshTaxProcessesJob implements ShouldQueue
     }
 
     public static function dispatchIfAllowed(
-        int $officeId,
+        int $tenantId,
         int $clientId,
         ?string $correlationId = null,
         ?string $manualActionId = null,
         ?int $actorUserId = null,
     ): ?self {
         $guard = app(SerproJobFlagGuard::class);
-        $check = $guard->assertAllowed('RefreshTaxProcessesJob', $officeId);
+        $check = $guard->assertAllowed('RefreshTaxProcessesJob', $tenantId);
         if (! $check['allowed']) {
             Log::info('serpro.job.dispatch_blocked', [
                 'job' => 'RefreshTaxProcessesJob',
                 'code' => $check['code'],
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
             ]);
 
             return null;
@@ -75,14 +75,14 @@ final class RefreshTaxProcessesJob implements ShouldQueue
         $store = app(SerproAsyncJobRunStore::class);
         $run = $store->start(
             jobType: 'RefreshTaxProcessesJob',
-            officeId: $officeId,
+            tenantId: $tenantId,
             clientId: $clientId,
             correlationId: $correlationId,
             flagCheckedAtDispatch: true,
         );
 
         $job = new self(
-            $officeId,
+            $tenantId,
             $clientId,
             $correlationId,
             true,
@@ -109,7 +109,7 @@ final class RefreshTaxProcessesJob implements ShouldQueue
         if ($run === null) {
             $run = $runs->start(
                 jobType: 'RefreshTaxProcessesJob',
-                officeId: $this->officeId,
+                tenantId: $this->tenantId,
                 clientId: $this->clientId,
                 correlationId: $this->correlationId,
                 flagCheckedAtDispatch: $this->flagCheckedAtDispatch,
@@ -118,7 +118,7 @@ final class RefreshTaxProcessesJob implements ShouldQueue
             $runs->bumpAttempt($run);
         }
 
-        $check = $flags->assertAllowed('RefreshTaxProcessesJob', $this->officeId);
+        $check = $flags->assertAllowed('RefreshTaxProcessesJob', $this->tenantId);
         $runs->markFlagAtHandle($run);
         if (! $check['allowed']) {
             $runs->fail($run, (string) $check['code'], (string) $check['message'], SerproAsyncJobRun::STATUS_BLOCKED);
@@ -127,12 +127,12 @@ final class RefreshTaxProcessesJob implements ShouldQueue
         }
 
         if ($this->manualActionId !== null) {
-            $office = Office::query()->find($this->officeId);
+            $tenant = Tenant::query()->find($this->tenantId);
             $client = Client::query()->withoutGlobalScopes()
-                ->where('office_id', $this->officeId)
+                ->where('tenant_id', $this->tenantId)
                 ->whereKey($this->clientId)
                 ->first();
-            if ($office === null || $client === null) {
+            if ($tenant === null || $client === null) {
                 $runs->fail(
                     $run,
                     'MANUAL_TENANT_CONTEXT_MISSING',
@@ -145,7 +145,7 @@ final class RefreshTaxProcessesJob implements ShouldQueue
 
             try {
                 $manualConsultPolicy->assertAsyncJobMayExecute(
-                    $office,
+                    $tenant,
                     $client,
                     $this->manualActionId,
                     $this->actorUserId,
@@ -163,15 +163,15 @@ final class RefreshTaxProcessesJob implements ShouldQueue
             }
         }
 
-        PrivilegedOfficeContext::enter('job:RefreshTaxProcessesJob');
+        PrivilegedTenantContext::enter('job:RefreshTaxProcessesJob');
         try {
-            $office = Office::query()->findOrFail($this->officeId);
+            $tenant = Tenant::query()->findOrFail($this->tenantId);
             $client = Client::query()->withoutGlobalScopes()
-                ->where('office_id', $this->officeId)
+                ->where('tenant_id', $this->tenantId)
                 ->whereKey($this->clientId)
                 ->firstOrFail();
 
-            $result = $service->refresh($office, $client, $this->correlationId);
+            $result = $service->refresh($tenant, $client, $this->correlationId);
 
             if (! ($result['success'] ?? false)) {
                 $code = (string) ($result['error_code'] ?? 'REFRESH_FAILED');
@@ -202,7 +202,7 @@ final class RefreshTaxProcessesJob implements ShouldQueue
         } catch (Throwable $e) {
             $metrics->recordRetry('tax_processes');
             Log::warning('serpro.job.tax_processes_failed', [
-                'office_id' => $this->officeId,
+                'tenant_id' => $this->tenantId,
                 'client_id' => $this->clientId,
                 'error' => LogSanitizer::scrubString(mb_substr($e->getMessage(), 0, 200)),
                 'attempt' => $this->attempts(),
@@ -212,7 +212,7 @@ final class RefreshTaxProcessesJob implements ShouldQueue
             }
             throw $e;
         } finally {
-            PrivilegedOfficeContext::leave();
+            PrivilegedTenantContext::leave();
         }
     }
 
@@ -227,7 +227,7 @@ final class RefreshTaxProcessesJob implements ShouldQueue
     public function failed(?Throwable $e): void
     {
         Log::error('serpro.job.tax_processes_exhausted', [
-            'office_id' => $this->officeId,
+            'tenant_id' => $this->tenantId,
             'client_id' => $this->clientId,
             'error' => $e !== null ? LogSanitizer::scrubString(mb_substr($e->getMessage(), 0, 200)) : null,
         ]);

@@ -16,11 +16,11 @@ use App\Jobs\Fiscal\ExecuteFiscalMonitoringRunJob;
 use App\Jobs\Fiscal\FetchPgdasdRbt12Job;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
 use App\Models\PgdasdOperation;
 use App\Models\PgdasdRbt12Projection;
 use App\Models\TaxObligationDefinition;
 use App\Models\TaxObligationProjection;
+use App\Models\Tenant;
 use App\Services\Fiscal\SimplesMei\Pgdasd\PgdasdMonitoringQueryService;
 use App\Services\Fiscal\SimplesMei\Pgdasd\PgdasdRbt12Service;
 use App\Services\FiscalMonitoring\FiscalIdempotency;
@@ -38,12 +38,12 @@ final class PgdasdRbt12ServiceRetryTest extends TestCase
     {
         Bus::fake([FetchPgdasdRbt12Job::class]);
 
-        [$office, $client, $projection, $monitor] = $this->seedExpectedPeriod('2026-06');
-        $decl = $this->makeDeclaration($office, $client, $projection, '50029654202606001');
-        $das = $this->makeDas($office, $client, $projection, '07202620140324992', '2026-07-07');
+        [$tenant, $client, $projection, $monitor] = $this->seedExpectedPeriod('2026-06');
+        $decl = $this->makeDeclaration($tenant, $client, $projection, '50029654202606001');
+        $das = $this->makeDas($tenant, $client, $projection, '07202620140324992', '2026-07-07');
 
         $key = app(PgdasdRbt12Service::class)->sourceReferenceKey(
-            (int) $office->id,
+            (int) $tenant->id,
             (int) $client->id,
             '2026-06',
             (string) $das->das_number,
@@ -52,7 +52,7 @@ final class PgdasdRbt12ServiceRetryTest extends TestCase
         );
 
         $failed = PgdasdRbt12Projection::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'projection_id' => $projection->id,
             'source_reference_key' => $key,
@@ -94,12 +94,12 @@ final class PgdasdRbt12ServiceRetryTest extends TestCase
     {
         Bus::fake([FetchPgdasdRbt12Job::class]);
 
-        [$office, $client, $projection, $monitor] = $this->seedExpectedPeriod('2026-06');
-        $decl = $this->makeDeclaration($office, $client, $projection, '50029654202606001');
-        $das = $this->makeDas($office, $client, $projection, '07202620140324992', '2026-07-07');
+        [$tenant, $client, $projection, $monitor] = $this->seedExpectedPeriod('2026-06');
+        $decl = $this->makeDeclaration($tenant, $client, $projection, '50029654202606001');
+        $das = $this->makeDas($tenant, $client, $projection, '07202620140324992', '2026-07-07');
 
         $key = app(PgdasdRbt12Service::class)->sourceReferenceKey(
-            (int) $office->id,
+            (int) $tenant->id,
             (int) $client->id,
             '2026-06',
             (string) $das->das_number,
@@ -108,7 +108,7 @@ final class PgdasdRbt12ServiceRetryTest extends TestCase
         );
 
         PgdasdRbt12Projection::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'projection_id' => $projection->id,
             'source_reference_key' => $key,
@@ -130,19 +130,22 @@ final class PgdasdRbt12ServiceRetryTest extends TestCase
 
         $this->assertSame([], $reserved);
         Bus::assertNotDispatched(FetchPgdasdRbt12Job::class);
-        $this->assertSame(1, PgdasdRbt12Projection::query()->where('status', 'PARSED')->count());
+        $this->assertSame(1, PgdasdRbt12Projection::query()
+            ->withoutGlobalScopes()
+            ->where('status', PgdasdRbt12Status::Parsed->value)
+            ->count());
     }
 
     public function test_fan_out_uses_only_latest_das_of_expected_period(): void
     {
         Bus::fake([FetchPgdasdRbt12Job::class]);
 
-        [$office, $client, $expected, $monitor] = $this->seedExpectedPeriod('2026-06');
-        $older = $this->makePgdasProjection($office, $client, '2026-05', 5);
-        $this->makeDeclaration($office, $client, $expected, '50029654202606001');
-        $this->makeDas($office, $client, $expected, '07202618865403722', '2026-07-01');
-        $latest = $this->makeDas($office, $client, $expected, '07202620140324992', '2026-07-07');
-        $this->makeDas($office, $client, $older, '07202617423286412', '2026-06-01');
+        [$tenant, $client, $expected, $monitor] = $this->seedExpectedPeriod('2026-06');
+        $older = $this->makePgdasProjection($tenant, $client, '2026-05', 5);
+        $this->makeDeclaration($tenant, $client, $expected, '50029654202606001');
+        $this->makeDas($tenant, $client, $expected, '07202618865403722', '2026-07-01');
+        $latest = $this->makeDas($tenant, $client, $expected, '07202620140324992', '2026-07-07');
+        $this->makeDas($tenant, $client, $older, '07202617423286412', '2026-06-01');
 
         $reserved = app(PgdasdRbt12Service::class)->reserveFromOperations(
             $monitor,
@@ -153,7 +156,7 @@ final class PgdasdRbt12ServiceRetryTest extends TestCase
 
         $this->assertCount(1, $reserved);
         $this->assertSame('07202620140324992', $reserved[0]->source_das_number);
-        $this->assertSame(1, PgdasdRbt12Projection::query()->count());
+        $this->assertSame(1, PgdasdRbt12Projection::query()->withoutGlobalScopes()->count());
         Bus::assertDispatchedTimes(FetchPgdasdRbt12Job::class, 1);
         $this->assertSame($latest->das_number, $reserved[0]->source_das_number);
     }
@@ -162,12 +165,12 @@ final class PgdasdRbt12ServiceRetryTest extends TestCase
     {
         Bus::fake([ExecuteFiscalMonitoringRunJob::class]);
 
-        [$office, $client, $projection, $monitor] = $this->seedExpectedPeriod('2026-06');
-        $das = $this->makeDas($office, $client, $projection, '07202620140324992', '2026-07-07');
+        [$tenant, $client, $projection, $monitor] = $this->seedExpectedPeriod('2026-06');
+        $das = $this->makeDas($tenant, $client, $projection, '07202620140324992', '2026-07-07');
         $key = hash('sha256', 'retry-key');
 
         $failedRun = FiscalMonitoringRun::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'system_code' => 'INTEGRA_SN',
             'service_code' => 'PGDASD',
@@ -188,7 +191,7 @@ final class PgdasdRbt12ServiceRetryTest extends TestCase
         ]);
 
         $rbt12 = PgdasdRbt12Projection::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'projection_id' => $projection->id,
             'source_reference_key' => $key,
@@ -204,7 +207,7 @@ final class PgdasdRbt12ServiceRetryTest extends TestCase
         $correlationId = 'pgdasd-rbt12-'.substr($key, 0, 50);
         $slot = FiscalIdempotency::manualSlot($correlationId);
         $idempotencyKey = FiscalIdempotency::runKey(
-            (int) $office->id,
+            (int) $tenant->id,
             (int) $client->id,
             'INTEGRA_SN',
             'PGDASD',
@@ -232,8 +235,8 @@ final class PgdasdRbt12ServiceRetryTest extends TestCase
     {
         Bus::fake([FetchPgdasdRbt12Job::class]);
 
-        [$office, $client, $projection, $monitor] = $this->seedExpectedPeriod('2026-06');
-        $decl = $this->makeDeclaration($office, $client, $projection, '43996591202606001');
+        [$tenant, $client, $projection, $monitor] = $this->seedExpectedPeriod('2026-06');
+        $decl = $this->makeDeclaration($tenant, $client, $projection, '43996591202606001');
 
         $reserved = app(PgdasdRbt12Service::class)->reserveFromOperations(
             $monitor,
@@ -255,7 +258,7 @@ final class PgdasdRbt12ServiceRetryTest extends TestCase
     {
         Bus::fake([FetchPgdasdRbt12Job::class]);
 
-        [$office, $client, $projection, $monitor] = $this->seedExpectedPeriod('2026-06');
+        [$tenant, $client, $projection, $monitor] = $this->seedExpectedPeriod('2026-06');
 
         $reserved = app(PgdasdRbt12Service::class)->reserveFromOperations(
             $monitor,
@@ -273,10 +276,10 @@ final class PgdasdRbt12ServiceRetryTest extends TestCase
     {
         Bus::fake([ExecuteFiscalMonitoringRunJob::class]);
 
-        [$office, $client, $projection, $monitor] = $this->seedExpectedPeriod('2026-06');
+        [$tenant, $client, $projection, $monitor] = $this->seedExpectedPeriod('2026-06');
         $key = hash('sha256', 'decl-key');
         $rbt12 = PgdasdRbt12Projection::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'projection_id' => $projection->id,
             'source_reference_key' => $key,
@@ -300,19 +303,18 @@ final class PgdasdRbt12ServiceRetryTest extends TestCase
     }
 
     /**
-     * @return array{0: Office, 1: Client, 2: TaxObligationProjection, 3: FiscalMonitoringRun}
+     * @return array{0: Tenant, 1: Client, 2: TaxObligationProjection, 3: FiscalMonitoringRun}
      */
     private function seedExpectedPeriod(string $periodKey): array
     {
-        $office = Office::factory()->create(['timezone' => 'America/Sao_Paulo']);
-        $client = Client::factory()->for($office)->create([
+        $tenant = Tenant::factory()->create(['timezone' => 'America/Sao_Paulo']);
+        $client = Client::factory()->for($tenant)->create([
             'is_active' => true,
-            'matrix_client_id' => null,
         ]);
         $month = (int) substr($periodKey, 5, 2);
-        $projection = $this->makePgdasProjection($office, $client, $periodKey, $month);
+        $projection = $this->makePgdasProjection($tenant, $client, $periodKey, $month);
         $monitor = FiscalMonitoringRun::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'system_code' => 'INTEGRA_SN',
             'service_code' => 'PGDASD',
@@ -330,10 +332,10 @@ final class PgdasdRbt12ServiceRetryTest extends TestCase
             'progress' => ['expected_period_key' => $periodKey],
         ]);
 
-        return [$office, $client, $projection, $monitor];
+        return [$tenant, $client, $projection, $monitor];
     }
 
-    private function makePgdasProjection(Office $office, Client $client, string $periodKey, int $month): TaxObligationProjection
+    private function makePgdasProjection(Tenant $tenant, Client $client, string $periodKey, int $month): TaxObligationProjection
     {
         $def = TaxObligationDefinition::query()->firstOrCreate(
             ['code' => 'PGDAS_D'],
@@ -347,7 +349,7 @@ final class PgdasdRbt12ServiceRetryTest extends TestCase
         );
 
         return TaxObligationProjection::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'obligation_definition_id' => $def->id,
             'period_key' => $periodKey,
@@ -361,13 +363,13 @@ final class PgdasdRbt12ServiceRetryTest extends TestCase
     }
 
     private function makeDeclaration(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         TaxObligationProjection $projection,
         string $number,
     ): PgdasdOperation {
         return PgdasdOperation::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'projection_id' => $projection->id,
             'kind' => PgdasdOperationKind::Declaration,
@@ -383,14 +385,14 @@ final class PgdasdRbt12ServiceRetryTest extends TestCase
     }
 
     private function makeDas(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         TaxObligationProjection $projection,
         string $dasNumber,
         string $issuedAt,
     ): PgdasdOperation {
         return PgdasdOperation::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'projection_id' => $projection->id,
             'kind' => PgdasdOperationKind::Das,

@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'category',
     'status',
     'trigger',
@@ -30,9 +30,9 @@ class SerproRetentionJob extends Model
         ];
     }
 
-    public function office(): BelongsTo
+    public function tenant(): BelongsTo
     {
-        return $this->belongsTo(Office::class);
+        return $this->belongsTo(Tenant::class);
     }
 
     /**
@@ -42,7 +42,7 @@ class SerproRetentionJob extends Model
     {
         return [
             'id' => $this->id,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'category' => $this->category,
             'status' => $this->status,
             'trigger' => $this->trigger,

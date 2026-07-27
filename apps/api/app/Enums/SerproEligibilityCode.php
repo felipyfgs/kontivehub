@@ -27,7 +27,7 @@ enum SerproEligibilityCode: string
     case ServiceNotCataloged = 'SERVICE_NOT_CATALOGED';
     case MutatingDisabled = 'MUTATING_DISABLED';
     case RepresentationChainIncomplete = 'REPRESENTATION_CHAIN_INCOMPLETE';
-    case DemoOfficeBlocked = 'DEMO_OFFICE_BLOCKED';
+    case DemoTenantBlocked = 'DEMO_TENANT_BLOCKED';
     case PowerMatrixReviewRequired = 'POWER_MATRIX_REVIEW_REQUIRED';
     case ProxyPowerNotAccepted = 'PROXY_POWER_NOT_ACCEPTED';
     case ProxyPowerStale = 'PROXY_POWER_STALE';

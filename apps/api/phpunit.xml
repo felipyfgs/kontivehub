@@ -3,6 +3,7 @@
          xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
          bootstrap="vendor/autoload.php"
          colors="true"
+         cacheResult="false"
 >
     <testsuites>
         <testsuite name="Unit">
@@ -25,18 +26,20 @@
         <server name="FRONTEND_URL" value="https://app.kontivehub.com.br"/>
         <server name="PORTAL_URL" value="https://portal.kontivehub.com.br"/>
         <server name="APP_KEY" value="base64:QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE="/>
-        <server name="AUTH_TWO_FACTOR_REQUIRED" value="false"/>
         <server name="APP_MAINTENANCE_DRIVER" value="file"/>
         <server name="BCRYPT_ROUNDS" value="4"/>
         <server name="BROADCAST_CONNECTION" value="null"/>
         <server name="CACHE_STORE" value="array"/>
-        <server name="DB_CONNECTION" value="sqlite"/>
-        <server name="DB_DATABASE" value=":memory:"/>
-        <server name="DB_URL" value=""/>
+        <server name="DB_CONNECTION" value="pgsql"/>
+        <server name="DB_HOST" value="postgres-test"/>
+        <server name="DB_PORT" value="5432"/>
+        <server name="DB_DATABASE" value="kontivehub_test"/>
+        <server name="DB_USERNAME" value="kontivehub_test"/>
+        <server name="DB_PASSWORD" value="kontivehub_test"/>
         <!-- Fixtures determinísticas: não herdar slugs locais do piloto. -->
-        <server name="FISCAL_DEMO_OFFICE_SLUG" value="contador"/>
+        <server name="FISCAL_DEMO_TENANT_SLUG" value="contador"/>
         <server name="FISCAL_DEMO_SENTINEL_SLUG" value="plataforma"/>
-        <server name="WORK_DEMO_OFFICE_SLUG" value="contador"/>
+        <server name="WORK_DEMO_TENANT_SLUG" value="contador"/>
         <server name="WORK_DEMO_SENTINEL_SLUG" value="plataforma"/>
         <server name="FISCAL_MONITORING_MUTATING_ENABLED" value="false"/>
         <!-- Perfil/flags de piloto: $_SERVER do Docker não pode vazar para a suíte -->
@@ -52,8 +55,6 @@
         <server name="MEI_AUTOMATION_PROVIDER_PGMEI_DAS_BARCODE" value=""/>
         <server name="MEI_AUTOMATION_PROVIDER_PGMEI_DEBT" value=""/>
         <server name="MEI_AUTOMATION_PROVIDER_DASN_HISTORY" value=""/>
-        <!-- Suíte legada: fail-closed de tenant é coberto por testes dedicados com flag true -->
-        <server name="FISCAL_MODEL_FAIL_CLOSED_SCOPES" value="false"/>
         <server name="MAIL_MAILER" value="array"/>
         <server name="MAIL_FROM_ADDRESS" value="noreply@kontivehub.com.br"/>
         <server name="MAIL_FROM_NAME" value="KontiveHub"/>
@@ -108,17 +109,19 @@
         <env name="FRONTEND_URL" value="https://app.kontivehub.com.br" force="true"/>
         <env name="PORTAL_URL" value="https://portal.kontivehub.com.br" force="true"/>
         <env name="APP_KEY" value="base64:QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=" force="true"/>
-        <env name="AUTH_TWO_FACTOR_REQUIRED" value="false" force="true"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file" force="true"/>
         <env name="BCRYPT_ROUNDS" value="4" force="true"/>
         <env name="BROADCAST_CONNECTION" value="null" force="true"/>
         <env name="CACHE_STORE" value="array" force="true"/>
-        <env name="DB_CONNECTION" value="sqlite" force="true"/>
-        <env name="DB_DATABASE" value=":memory:" force="true"/>
-        <env name="DB_URL" value="" force="true"/>
-        <env name="FISCAL_DEMO_OFFICE_SLUG" value="contador" force="true"/>
+        <env name="DB_CONNECTION" value="pgsql" force="true"/>
+        <env name="DB_HOST" value="postgres-test" force="true"/>
+        <env name="DB_PORT" value="5432" force="true"/>
+        <env name="DB_DATABASE" value="kontivehub_test" force="true"/>
+        <env name="DB_USERNAME" value="kontivehub_test" force="true"/>
+        <env name="DB_PASSWORD" value="kontivehub_test" force="true"/>
+        <env name="FISCAL_DEMO_TENANT_SLUG" value="contador" force="true"/>
         <env name="FISCAL_DEMO_SENTINEL_SLUG" value="plataforma" force="true"/>
-        <env name="WORK_DEMO_OFFICE_SLUG" value="contador" force="true"/>
+        <env name="WORK_DEMO_TENANT_SLUG" value="contador" force="true"/>
         <env name="WORK_DEMO_SENTINEL_SLUG" value="plataforma" force="true"/>
         <env name="FISCAL_MONITORING_MUTATING_ENABLED" value="false" force="true"/>
         <env name="FISCAL_PROFILE" value="dev" force="true"/>
@@ -133,7 +136,6 @@
         <env name="MEI_AUTOMATION_PROVIDER_PGMEI_DAS_BARCODE" value="" force="true"/>
         <env name="MEI_AUTOMATION_PROVIDER_PGMEI_DEBT" value="" force="true"/>
         <env name="MEI_AUTOMATION_PROVIDER_DASN_HISTORY" value="" force="true"/>
-        <env name="FISCAL_MODEL_FAIL_CLOSED_SCOPES" value="false" force="true"/>
         <env name="MAIL_MAILER" value="array" force="true"/>
         <env name="MAIL_FROM_ADDRESS" value="noreply@kontivehub.com.br" force="true"/>
         <env name="MAIL_FROM_NAME" value="KontiveHub" force="true"/>
@@ -164,9 +166,8 @@
         <!-- Canal autXML do escritório: defaults off no CI -->
         <env name="SEFAZ_AUTXML_DISTDFE_ENABLED" value="false" force="true"/>
         <env name="SEFAZ_AUTXML_KILL_SWITCH" value="false" force="true"/>
-        <env name="SEFAZ_AUTXML_OFFICE_ALLOWLIST" value="" force="true"/>
-        <env name="SEFAZ_AUTXML_ALLOW_ALL_OFFICES" value="false" force="true"/>
-        <env name="IMPORT_ASYNC_BATCHES_ENABLED" value="false" force="true"/>
+        <env name="SEFAZ_AUTXML_TENANT_ALLOWLIST" value="" force="true"/>
+        <env name="SEFAZ_AUTXML_ALLOW_ALL_TENANTS" value="false" force="true"/>
         <env name="OUTBOUND_DEADLINE_SCHEDULING_ENABLED" value="false" force="true"/>
         <env name="OUTBOUND_DEADLINE_PLANNER_ENABLED" value="false" force="true"/>
         <env name="OUTBOUND_DEADLINE_DISPATCH_ENABLED" value="false" force="true"/>

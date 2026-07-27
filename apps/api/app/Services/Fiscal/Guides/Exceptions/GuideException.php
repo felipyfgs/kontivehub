@@ -25,7 +25,7 @@ class GuideException extends RuntimeException
         return new self($message, $code, 403);
     }
 
-    public static function challengeRequired(string $message = 'Confirmação reforçada e 2FA recente exigidos.'): self
+    public static function challengeRequired(string $message = 'Confirmação recente de senha exigida.'): self
     {
         return new self($message, 'high_risk_challenge_required', 403, [
             'requires_challenge' => true,
@@ -46,10 +46,10 @@ class GuideException extends RuntimeException
         return new self($message, 'retry_blocked_unknown_result', 409);
     }
 
-    public static function operationNotCataloged(string $system, string $service, string $operation): self
+    public static function operationNotCataloged(string $operationKey): self
     {
         return new self(
-            "Operação de guia não catalogada: {$system}/{$service}/{$operation}.",
+            "Operação de guia não catalogada: {$operationKey}.",
             'operation_not_cataloged',
             422,
         );

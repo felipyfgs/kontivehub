@@ -2,11 +2,11 @@
 
 namespace Tests\Feature;
 
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Models\Client;
 use App\Models\Establishment;
 use App\Models\FiscalMutationOperation;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +19,7 @@ final class DeclarationOperationApiTest extends TestCase
 
     public function test_controlled_mutation_preflight_is_fail_closed_and_persists_only_encrypted_payload(): void
     {
-        [$office, $client, $admin] = $this->tenant();
+        [$tenant, $client, $admin] = $this->tenant();
         Sanctum::actingAs($admin);
 
         $response = $this->postJson(
@@ -32,16 +32,16 @@ final class DeclarationOperationApiTest extends TestCase
             ->assertJsonPath('data.eligible', false)
             ->assertJsonMissingPath('data.operation')
             ->assertJsonMissingPath('data.eligibility.context')
-            ->assertJsonMissingPath('data.office_id');
+            ->assertJsonMissingPath('data.tenant_id');
 
         $operation = FiscalMutationOperation::query()->firstOrFail();
-        self::assertSame($office->id, $operation->office_id);
-        self::assertSame('pgdasd.gerardas', $operation->provider_operation_key);
+        self::assertSame($tenant->id, $operation->tenant_id);
+        self::assertSame('pgdasd.gerardas', $operation->operation_key);
         self::assertSame(['periodoApuracao' => '202607'], $operation->request_payload_encrypted);
         self::assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $operation->request_payload_digest);
 
         $raw = (string) DB::table('fiscal_mutation_operations')
-            ->whereKey($operation->id)
+            ->where('id', $operation->id)
             ->value('request_payload_encrypted');
         self::assertStringNotContainsString('periodoApuracao', $raw);
         self::assertStringNotContainsString('202607', $raw);
@@ -109,11 +109,11 @@ final class DeclarationOperationApiTest extends TestCase
         self::assertSame(0, FiscalMutationOperation::query()->count());
     }
 
-    public function test_client_from_another_office_is_not_addressable(): void
+    public function test_client_from_another_tenant_is_not_addressable(): void
     {
         [, , $admin] = $this->tenant();
-        $foreignOffice = Office::factory()->create();
-        $foreignClient = Client::factory()->forOffice($foreignOffice)->create();
+        $foreignTenant = Tenant::factory()->create();
+        $foreignClient = Client::factory()->forTenant($foreignTenant)->create();
         Establishment::factory()->forClient($foreignClient)->create();
         Sanctum::actingAs($admin);
 
@@ -140,15 +140,15 @@ final class DeclarationOperationApiTest extends TestCase
         )->assertUnprocessable()->assertJsonPath('code', 'OPERATION_NOT_PRODUCTION');
     }
 
-    /** @return array{Office, Client, User} */
+    /** @return array{Tenant, Client, User} */
     private function tenant(): array
     {
-        $office = Office::factory()->create();
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
-        $client = Client::factory()->forOffice($office)->create();
+        $tenant = Tenant::factory()->create();
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $client = Client::factory()->forTenant($tenant)->create();
         Establishment::factory()->forClient($client)->create();
 
-        return [$office, $client, $admin];
+        return [$tenant, $client, $admin];
     }
 
     /** @return array<string, mixed> */

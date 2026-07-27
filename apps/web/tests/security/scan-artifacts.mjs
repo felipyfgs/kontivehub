@@ -62,9 +62,9 @@ const forbidden = [
   { id: 'SERPRO_RAW_RESPONSE', re: /\b(?:serpro[_-]?raw|raw[_-]?response|integra[_-]?raw)\b\s*[:=]\s*["'{[]/i }
 ]
 
-const legacyProductIdentity = [
-  { id: 'LEGACY_PRODUCT_NAME', re: /\bFiscal Hub\b|<title[^>]*>\s*NFS-e ADN\b|["'](?:name|short_name)["']\s*:\s*["']NFS-e ADN["']/i },
-  { id: 'LEGACY_PRODUCT_DOMAIN', re: /\binovaicontabil\.com\.br\b/i }
+const forbiddenProductIdentity = [
+  { id: 'FORBIDDEN_PRODUCT_NAME', re: /\bFiscal Hub\b|<title[^>]*>\s*NFS-e ADN\b|["'](?:name|short_name)["']\s*:\s*["']NFS-e ADN["']/i },
+  { id: 'FORBIDDEN_PRODUCT_DOMAIN', re: /\binovaicontabil\.com\.br\b/i }
 ]
 
 function filesUnder(root, files = []) {
@@ -126,7 +126,7 @@ for (const root of roots) {
       if (re.test(content)) offenders.push(`${file}: ${id}`)
     }
     if (file.startsWith(generatedPublicRoot)) {
-      for (const { id, re } of legacyProductIdentity) {
+      for (const { id, re } of forbiddenProductIdentity) {
         if (re.test(content)) offenders.push(`${file}: ${id}`)
       }
     }

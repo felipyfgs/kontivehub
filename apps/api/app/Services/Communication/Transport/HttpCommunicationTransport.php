@@ -81,7 +81,7 @@ final readonly class HttpCommunicationTransport implements CommunicationTranspor
         }
 
         try {
-            GatewayContractPayload::assertSafeEvent($payload);
+            GatewayContractPayload::assertSafePayload($payload);
             $this->queryResults->assertValid($query->type, $result);
         } catch (InvalidArgumentException) {
             throw new CommunicationTransportException('GATEWAY_UNSAFE_QUERY_RESULT', false, 200);

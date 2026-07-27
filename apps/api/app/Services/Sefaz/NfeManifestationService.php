@@ -41,7 +41,7 @@ final class NfeManifestationService
      */
     public function manifest(
         string $accessKey,
-        int $officeId,
+        int $tenantId,
         NfeManifestationType $type,
         ?string $justification = null,
         string $purpose = 'UNLOCK_XML',
@@ -53,13 +53,13 @@ final class NfeManifestationService
 
             return [
                 'status' => 'flag_off',
-                'has_full_xml' => $this->hasFull($officeId, $accessKey),
+                'has_full_xml' => $this->hasFull($tenantId, $accessKey),
                 'message' => "Manifestação SEFAZ desabilitada ({$flagHint}).",
                 'type' => $type->value,
             ];
         }
 
-        $hasFull = $this->hasFull($officeId, $accessKey);
+        $hasFull = $this->hasFull($tenantId, $accessKey);
 
         // Ciência só para desbloqueio: se full já existe, no-op
         if ($type === NfeManifestationType::Ciencia && $hasFull && $purpose === 'UNLOCK_XML') {
@@ -72,7 +72,7 @@ final class NfeManifestationService
         }
 
         $nfe = NfeDocument::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('access_key', $accessKey)
             ->orderBy('is_summary') // full first
             ->first();
@@ -111,12 +111,12 @@ final class NfeManifestationService
             }
         }
 
-        $ctx = $this->resolveAuthorContext($officeId, $accessKey, $nfe);
+        $ctx = $this->resolveAuthorContext($tenantId, $accessKey, $nfe);
         if ($ctx === null) {
             return [
                 'status' => 'no_credential',
                 'has_full_xml' => $hasFull,
-                'message' => 'Não foi possível resolver estabelecimento/A1 do destinatário para esta chave.',
+                'message' => 'Não foi possível resolver estabelecimento/certificado do destinatário para esta chave.',
                 'type' => $type->value,
             ];
         }
@@ -164,12 +164,12 @@ final class NfeManifestationService
 
         $statusValue = $type->manifestationStatus();
         NfeDocument::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('access_key', $accessKey)
             ->update(['manifestation_status' => $statusValue]);
 
         NfeEvent::query()->create([
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'dfe_document_id' => $nfe->dfe_document_id,
             'access_key' => $accessKey,
             'event_type' => $type->tpEvento(),
@@ -182,7 +182,7 @@ final class NfeManifestationService
         // Reconsulta assíncrona após ciência (ou qualquer sucesso se ainda só resumo)
         if ($type === NfeManifestationType::Ciencia || ! $hasFull) {
             ReconsultNfeAfterManifestationJob::dispatch(
-                $officeId,
+                $tenantId,
                 $accessKey,
                 $ctx['establishment_id'],
             );
@@ -202,10 +202,10 @@ final class NfeManifestationService
         ];
     }
 
-    private function hasFull(int $officeId, string $accessKey): bool
+    private function hasFull(int $tenantId, string $accessKey): bool
     {
         return NfeDocument::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('access_key', $accessKey)
             ->where('is_summary', false)
             ->exists();
@@ -236,10 +236,10 @@ final class NfeManifestationService
     /**
      * @return array{certificate: array{pfx: string, password: string}, cnpj: string, establishment_id: int}|null
      */
-    private function resolveAuthorContext(int $officeId, string $accessKey, NfeDocument $nfe): ?array
+    private function resolveAuthorContext(int $tenantId, string $accessKey, NfeDocument $nfe): ?array
     {
         $interest = DocumentInterest::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('channel', CaptureChannel::NfeDistDfe->value)
             ->where('dfe_document_id', $nfe->dfe_document_id)
             ->with(['establishment.client'])
@@ -249,7 +249,7 @@ final class NfeManifestationService
 
         if ($establishment === null && $nfe->recipient_cnpj) {
             $establishment = Establishment::query()
-                ->where('office_id', $officeId)
+                ->where('tenant_id', $tenantId)
                 ->where('cnpj', strtoupper($nfe->recipient_cnpj))
                 ->with('client')
                 ->first();
@@ -258,7 +258,7 @@ final class NfeManifestationService
         if ($establishment === null) {
             // Fallback: qualquer interest da chave via dfe com mesmo access_key
             $interest = DocumentInterest::query()
-                ->where('office_id', $officeId)
+                ->where('tenant_id', $tenantId)
                 ->where('channel', CaptureChannel::NfeDistDfe->value)
                 ->whereHas('document', fn ($q) => $q->where('access_key', $accessKey))
                 ->with(['establishment.client'])

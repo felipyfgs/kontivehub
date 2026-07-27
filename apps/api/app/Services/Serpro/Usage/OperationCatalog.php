@@ -3,9 +3,9 @@
 namespace App\Services\Serpro\Usage;
 
 use App\Enums\SerproConsumptionClass;
-use App\Models\SerproOperationCatalogEntry;
 use App\Services\Audit\AuditLogger;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -29,15 +29,27 @@ final class OperationCatalog
     ): array {
         $at = $at instanceof Carbon ? $at : ($at ? Carbon::parse($at) : now());
 
-        $entry = SerproOperationCatalogEntry::query()
-            ->where('system_code', $systemCode)
-            ->where('service_code', $serviceCode)
-            ->where('operation_code', $operationCode)
-            ->where('effective_from', '<=', $at)
-            ->where(function ($q) use ($at): void {
-                $q->whereNull('effective_to')->orWhere('effective_to', '>=', $at);
+        $entry = DB::table('serpro_operation_versions as version')
+            ->join('serpro_operations as operation', 'operation.id', '=', 'version.serpro_operation_id')
+            ->where('operation.is_enabled', true)
+            ->where('version.system_code', $systemCode)
+            ->where('version.service_code', $serviceCode)
+            ->where('version.operation_code', $operationCode)
+            ->where(function ($query) use ($at): void {
+                $query->whereNull('version.effective_from')
+                    ->orWhere('version.effective_from', '<=', $at);
             })
-            ->orderByDesc('effective_from')
+            ->where(function ($query) use ($at): void {
+                $query->whereNull('version.effective_to')
+                    ->orWhere('version.effective_to', '>=', $at);
+            })
+            ->orderByDesc('version.effective_from')
+            ->select([
+                'operation.id',
+                'operation.label',
+                'operation.consumption_class',
+                'version.billable_class',
+            ])
             ->first();
 
         if ($entry === null) {
@@ -51,9 +63,13 @@ final class OperationCatalog
             ];
         }
 
+        $class = SerproConsumptionClass::tryFrom(
+            (string) ($entry->billable_class ?? $entry->consumption_class ?? '')
+        ) ?? SerproConsumptionClass::Desconhecida;
+
         return [
-            'class' => $entry->consumption_class,
-            'is_essential' => (bool) $entry->is_essential,
+            'class' => $class,
+            'is_essential' => false,
             'catalog_id' => $entry->id,
             'label' => $entry->label,
         ];

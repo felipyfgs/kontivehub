@@ -21,8 +21,8 @@ use App\Enums\SerproCapabilityDriver;
 use App\Enums\SerproEnvironment;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
 use App\Models\SerproContract;
+use App\Models\Tenant;
 use App\Services\Integra\Sitfis\SitfisFlowService;
 use App\Services\Integra\Sitfis\SitfisProtocolState;
 use App\Services\Integra\Sitfis\SitfisReportParser;
@@ -38,7 +38,7 @@ class SitfisFlowServiceTest extends TestCase
 
     public function test_solicit_persists_protocol_and_requeues_with_wait(): void
     {
-        [$office, $client, $run] = $this->seedRun();
+        [$tenant, $client, $run] = $this->seedRun();
         $protocol = str_repeat('P', 140);
 
         $operations = Mockery::mock(SerproOperationExecutor::class);
@@ -53,7 +53,7 @@ class SitfisFlowServiceTest extends TestCase
             ));
 
         $service = $this->makeService($operations);
-        $result = $service->execute($this->adapterRequest($office, $client, $run));
+        $result = $service->execute($this->adapterRequest($tenant, $client, $run));
 
         $this->assertSame(FiscalRunResult::Partial, $result->result);
         $this->assertSame(FiscalSituation::Processing, $result->situation);
@@ -66,7 +66,7 @@ class SitfisFlowServiceTest extends TestCase
 
     public function test_solicit_304_uses_protocol_from_etag_without_force_retry(): void
     {
-        [$office, $client, $run] = $this->seedRun();
+        [$tenant, $client, $run] = $this->seedRun();
         $protocol = str_repeat('E', 160);
 
         $operations = Mockery::mock(SerproOperationExecutor::class);
@@ -84,7 +84,7 @@ class SitfisFlowServiceTest extends TestCase
             ));
 
         $service = $this->makeService($operations);
-        $result = $service->execute($this->adapterRequest($office, $client, $run));
+        $result = $service->execute($this->adapterRequest($tenant, $client, $run));
 
         $this->assertSame(FiscalRunResult::Partial, $result->result);
         $this->assertSame(FiscalSituation::Processing, $result->situation);
@@ -95,7 +95,7 @@ class SitfisFlowServiceTest extends TestCase
 
     public function test_solicit_304_without_etag_waits_until_expires(): void
     {
-        [$office, $client, $run] = $this->seedRun();
+        [$tenant, $client, $run] = $this->seedRun();
         $expires = CarbonImmutable::now()->addMinutes(45)->toRfc7231String();
 
         $operations = Mockery::mock(SerproOperationExecutor::class);
@@ -114,7 +114,7 @@ class SitfisFlowServiceTest extends TestCase
             ));
 
         $service = $this->makeService($operations);
-        $result = $service->execute($this->adapterRequest($office, $client, $run));
+        $result = $service->execute($this->adapterRequest($tenant, $client, $run));
 
         $this->assertSame(FiscalRunResult::Partial, $result->result);
         $this->assertSame(FiscalSituation::Processing, $result->situation);
@@ -127,7 +127,7 @@ class SitfisFlowServiceTest extends TestCase
 
     public function test_solicit_304_without_etag_or_expires_uses_fallback_wait(): void
     {
-        [$office, $client, $run] = $this->seedRun();
+        [$tenant, $client, $run] = $this->seedRun();
 
         $operations = Mockery::mock(SerproOperationExecutor::class);
         $operations->shouldReceive('executeRequest')
@@ -143,7 +143,7 @@ class SitfisFlowServiceTest extends TestCase
             ));
 
         $service = $this->makeService($operations);
-        $result = $service->execute($this->adapterRequest($office, $client, $run));
+        $result = $service->execute($this->adapterRequest($tenant, $client, $run));
 
         $this->assertSame(FiscalRunResult::Partial, $result->result);
         $this->assertSame(SitfisProtocolState::PHASE_WAITING_CACHE_EXPIRY, $result->progress['phase'] ?? null);
@@ -153,7 +153,7 @@ class SitfisFlowServiceTest extends TestCase
 
     public function test_waiting_cache_expiry_requeues_without_solicit_call(): void
     {
-        [$office, $client, $run] = $this->seedRun();
+        [$tenant, $client, $run] = $this->seedRun();
 
         $operations = Mockery::mock(SerproOperationExecutor::class);
         $operations->shouldReceive('executeRequest')->never();
@@ -162,7 +162,7 @@ class SitfisFlowServiceTest extends TestCase
         $ensure->shouldReceive('ensure')->never();
 
         $service = $this->makeService($operations, $ensure);
-        $result = $service->execute($this->adapterRequest($office, $client, $run, [
+        $result = $service->execute($this->adapterRequest($tenant, $client, $run, [
             'phase' => SitfisProtocolState::PHASE_WAITING_CACHE_EXPIRY,
             'requested_at' => CarbonImmutable::now()->toIso8601String(),
             'not_before' => CarbonImmutable::now()->addMinutes(20)->toIso8601String(),
@@ -178,7 +178,7 @@ class SitfisFlowServiceTest extends TestCase
 
     public function test_after_cache_expiry_resumes_solicit(): void
     {
-        [$office, $client, $run] = $this->seedRun();
+        [$tenant, $client, $run] = $this->seedRun();
         $protocol = str_repeat('R', 120);
 
         $operations = Mockery::mock(SerproOperationExecutor::class);
@@ -193,7 +193,7 @@ class SitfisFlowServiceTest extends TestCase
             ));
 
         $service = $this->makeService($operations);
-        $result = $service->execute($this->adapterRequest($office, $client, $run, [
+        $result = $service->execute($this->adapterRequest($tenant, $client, $run, [
             'phase' => SitfisProtocolState::PHASE_WAITING_CACHE_EXPIRY,
             'requested_at' => CarbonImmutable::now()->subHours(2)->toIso8601String(),
             'not_before' => CarbonImmutable::now()->subMinute()->toIso8601String(),
@@ -209,7 +209,7 @@ class SitfisFlowServiceTest extends TestCase
 
     public function test_ensure_proxy_power_blocks_before_serpro_call(): void
     {
-        [$office, $client, $run] = $this->seedRun();
+        [$tenant, $client, $run] = $this->seedRun();
 
         $operations = Mockery::mock(SerproOperationExecutor::class);
         $operations->shouldReceive('executeRequest')->never();
@@ -225,7 +225,7 @@ class SitfisFlowServiceTest extends TestCase
             ]);
 
         $service = $this->makeService($operations, $ensure);
-        $result = $service->execute($this->adapterRequest($office, $client, $run));
+        $result = $service->execute($this->adapterRequest($tenant, $client, $run));
 
         $this->assertSame(FiscalRunResult::Blocked, $result->result);
         $this->assertSame(FiscalSituation::Blocked, $result->situation);
@@ -234,7 +234,7 @@ class SitfisFlowServiceTest extends TestCase
 
     public function test_waiting_min_period_requeues_without_emit_call(): void
     {
-        [$office, $client, $run] = $this->seedRun();
+        [$tenant, $client, $run] = $this->seedRun();
         $protocol = 'PROTOCOLO-TESTE-SITFIS';
 
         $operations = Mockery::mock(SerproOperationExecutor::class);
@@ -244,7 +244,7 @@ class SitfisFlowServiceTest extends TestCase
         $ensure->shouldReceive('ensure')->never();
 
         $service = $this->makeService($operations, $ensure);
-        $result = $service->execute($this->adapterRequest($office, $client, $run, [
+        $result = $service->execute($this->adapterRequest($tenant, $client, $run, [
             'phase' => SitfisProtocolState::PHASE_WAITING_MIN_PERIOD,
             'protocol' => $protocol,
             'requested_at' => CarbonImmutable::now()->toIso8601String(),
@@ -261,7 +261,7 @@ class SitfisFlowServiceTest extends TestCase
 
     public function test_emit_still_processing_requeues_then_success_parses_report(): void
     {
-        [$office, $client, $run] = $this->seedRun();
+        [$tenant, $client, $run] = $this->seedRun();
         $protocol = 'PROTOCOLO-EMIT-OK';
 
         $operations = Mockery::mock(SerproOperationExecutor::class);
@@ -281,7 +281,7 @@ class SitfisFlowServiceTest extends TestCase
             ));
 
         $service = $this->makeService($operations);
-        $processing = $service->execute($this->adapterRequest($office, $client, $run, [
+        $processing = $service->execute($this->adapterRequest($tenant, $client, $run, [
             'phase' => SitfisProtocolState::PHASE_WAITING_MIN_PERIOD,
             'protocol' => $protocol,
             'requested_at' => CarbonImmutable::now()->subMinutes(2)->toIso8601String(),
@@ -316,7 +316,7 @@ class SitfisFlowServiceTest extends TestCase
             ));
 
         $service2 = $this->makeService($operations2);
-        $done = $service2->execute($this->adapterRequest($office, $client, $run, [
+        $done = $service2->execute($this->adapterRequest($tenant, $client, $run, [
             'phase' => SitfisProtocolState::PHASE_POLLING_EMIT,
             'protocol' => $protocol,
             'requested_at' => CarbonImmutable::now()->subMinutes(2)->toIso8601String(),
@@ -333,14 +333,14 @@ class SitfisFlowServiceTest extends TestCase
     }
 
     /**
-     * @return array{0: Office, 1: Client, 2: FiscalMonitoringRun}
+     * @return array{0: Tenant, 1: Client, 2: FiscalMonitoringRun}
      */
     private function seedRun(): array
     {
-        $office = Office::factory()->create();
-        $client = Client::factory()->create(['office_id' => $office->id]);
+        $tenant = Tenant::factory()->create();
+        $client = Client::factory()->create(['tenant_id' => $tenant->id]);
         $run = FiscalMonitoringRun::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'system_code' => 'INTEGRA_SITFIS',
             'service_code' => 'SITFIS',
@@ -356,20 +356,20 @@ class SitfisFlowServiceTest extends TestCase
             'verification_state' => FiscalVerificationState::Unverified,
         ]);
 
-        return [$office, $client, $run];
+        return [$tenant, $client, $run];
     }
 
     /**
      * @param  array<string, mixed>  $progress
      */
     private function adapterRequest(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         FiscalMonitoringRun $run,
         array $progress = [],
     ): FiscalAdapterRequest {
         return new FiscalAdapterRequest(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             run: $run,
             systemCode: 'INTEGRA_SITFIS',

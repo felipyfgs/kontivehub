@@ -3,7 +3,7 @@
 namespace App\Http\Requests\Clients;
 
 use App\Models\ClientCategory;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -32,7 +32,7 @@ class StoreClientCategoryRequest extends FormRequest
     /** @return array<string, mixed> */
     public function rules(): array
     {
-        $officeId = app(CurrentOffice::class)->id();
+        $tenantId = app(CurrentTenant::class)->id();
 
         return [
             'name' => ['required', 'string', 'max:80'],
@@ -40,10 +40,10 @@ class StoreClientCategoryRequest extends FormRequest
                 'required',
                 'string',
                 'max:80',
-                Rule::unique('client_categories', 'name_key')->where('office_id', $officeId),
+                Rule::unique('client_categories', 'name_key')->where('tenant_id', $tenantId),
             ],
             'color' => ['required', 'string', Rule::in(ClientCategory::COLORS)],
-            'office_id' => ['prohibited'],
+            'tenant_id' => ['prohibited'],
             'created_by' => ['prohibited'],
             'is_active' => ['prohibited'],
         ];

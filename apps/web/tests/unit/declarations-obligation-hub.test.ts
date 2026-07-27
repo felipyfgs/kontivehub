@@ -8,16 +8,17 @@ import {
 } from '../../app/types/fiscal-modules'
 
 describe('declarations-obligation-hub', () => {
-  it('normaliza submodule com default PGDAS e aliases', () => {
+  it('aceita somente códigos canônicos e usa PGDAS como default', () => {
     expect(normalizeDeclarationsSubmodule(undefined)).toBe('PGDAS')
     expect(normalizeDeclarationsSubmodule('')).toBe('PGDAS')
-    expect(normalizeDeclarationsSubmodule('pgdasd')).toBe('PGDAS')
-    expect(normalizeDeclarationsSubmodule('PGDAS_D')).toBe('PGDAS')
-    expect(normalizeDeclarationsSubmodule('dctf')).toBe('DCTFWEB')
+    expect(normalizeDeclarationsSubmodule('PGDAS')).toBe('PGDAS')
     expect(normalizeDeclarationsSubmodule('DEFIS')).toBe('DEFIS')
-    expect(normalizeDeclarationsSubmodule('dasnsimei')).toBe('DASN_SIMEI')
-    expect(normalizeDeclarationsSubmodule('mit')).toBe('MIT')
-    expect(normalizeDeclarationsSubmodule('dirf')).toBe('DIRF')
+    expect(normalizeDeclarationsSubmodule('DASN_SIMEI')).toBe('DASN_SIMEI')
+    expect(normalizeDeclarationsSubmodule('DCTFWEB')).toBe('DCTFWEB')
+    expect(normalizeDeclarationsSubmodule('MIT')).toBe('MIT')
+    expect(normalizeDeclarationsSubmodule('FGTS')).toBe('FGTS')
+    expect(normalizeDeclarationsSubmodule('DIRF')).toBe('DIRF')
+    expect(normalizeDeclarationsSubmodule('INVALID')).toBe('PGDAS')
   })
 
   it('expõe as cinco obrigações oficiais e duas coberturas externas', () => {

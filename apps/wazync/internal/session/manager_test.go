@@ -25,14 +25,20 @@ type fakeConnector struct {
 	beforeConnectEnd func()
 }
 
-func (c *fakeConnector) Connect(sessionID string) error {
+func (c *fakeConnector) ConnectContext(_ context.Context, sessionID string) error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.contextCalls++
+	hook := c.beforeConnectEnd
 	if c.failures > 0 {
 		c.failures--
+		c.mu.Unlock()
 		return fmt.Errorf("temporary connection failure")
 	}
 	c.connected[sessionID] = true
+	c.mu.Unlock()
+	if hook != nil {
+		hook()
+	}
 	return nil
 }
 
@@ -69,18 +75,6 @@ func (c *fakeConnector) ForgetSession(_ context.Context, sessionID string) error
 	}
 	delete(c.connected, sessionID)
 	return nil
-}
-
-func (c *fakeConnector) ConnectContext(_ context.Context, sessionID string) error {
-	c.mu.Lock()
-	c.contextCalls++
-	hook := c.beforeConnectEnd
-	c.mu.Unlock()
-	err := c.Connect(sessionID)
-	if hook != nil {
-		hook()
-	}
-	return err
 }
 
 func (c *fakeConnector) Reset(_ context.Context, sessionID string) error {

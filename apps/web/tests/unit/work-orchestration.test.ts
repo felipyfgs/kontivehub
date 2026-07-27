@@ -43,7 +43,7 @@ describe('orquestração dos modelos de trabalho', () => {
     })
   })
 
-  it('mapeia catálogo, instalação e preview estruturado sem office_id', async () => {
+  it('mapeia catálogo, instalação e preview estruturado sem tenant_id', async () => {
     const { api, clientMock } = apiHarness()
     const rules: ProcessAudienceRules = {
       tax_regimes: ['SIMPLES_NACIONAL'],
@@ -66,7 +66,7 @@ describe('orquestração dos modelos de trabalho', () => {
       method: 'POST',
       body: { competence: '2026-07', selection }
     })
-    expect(JSON.stringify(clientMock.mock.calls)).not.toContain('office_id')
+    expect(JSON.stringify(clientMock.mock.calls)).not.toContain('tenant_id')
   })
 
   it('expõe identidade explicativa no item da prévia', () => {
@@ -174,12 +174,12 @@ describe('integração entre modelos, tarefas e monitoramento', () => {
 
   it('carrega trabalho do cliente com falha independente e link filtrado', () => {
     const page = source('app/pages/monitoring/clients/[clientId].vue')
-    const block = source('app/components/monitoring/ClientOperationalWork.vue')
+    const block = source('app/components/monitoring/ClientWork.vue')
 
     expect(page).toContain('operationalWorkState')
     expect(page).toContain('void loadOperationalWork(force)')
     expect(page).toContain('active_only: true')
-    expect(page).toContain('MonitoringClientOperationalWork')
+    expect(page).toContain('MonitoringClientWork')
     expect(block).toContain('Trabalho operacional')
     expect(block).toContain('/work/processes?client_id=${props.clientId}')
     expect(block).toContain('progress_percent')

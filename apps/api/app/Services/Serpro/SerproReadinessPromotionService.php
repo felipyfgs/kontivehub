@@ -5,10 +5,10 @@ namespace App\Services\Serpro;
 use App\Enums\SerproEnvironment;
 use App\Enums\SerproReadinessGate;
 use App\Enums\SerproReadinessScope;
-use App\Models\Office;
 use App\Models\SerproReadinessEvidence;
 use App\Models\SerproReadinessRun;
 use App\Models\SerproRolloutApproval;
+use App\Models\Tenant;
 use App\Services\Audit\AuditLogger;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -47,7 +47,7 @@ final class SerproReadinessPromotionService
         ?string $fingerprint = null,
         array $metadata = [],
         string $trigger = 'SMOKE',
-        ?int $officeId = null,
+        ?int $tenantId = null,
     ): SerproReadinessRun {
         if (! in_array($gate, [
             SerproReadinessGate::TlsOk,
@@ -72,7 +72,7 @@ final class SerproReadinessPromotionService
         $started = CarbonImmutable::now();
         $ttlHours = max(1, (int) config('serpro.readiness.default_ttl_hours', 24));
         $contract = $this->contracts->activeFor($environment);
-        $scope = $officeId !== null ? SerproReadinessScope::Office : SerproReadinessScope::Global;
+        $scope = $tenantId !== null ? SerproReadinessScope::Tenant : SerproReadinessScope::Global;
 
         $highest = $status === 'PASS' ? $gate : null;
 
@@ -86,7 +86,7 @@ final class SerproReadinessPromotionService
             $fingerprint,
             $metadata,
             $trigger,
-            $officeId,
+            $tenantId,
             $started,
             $ttlHours,
             $contract,
@@ -97,7 +97,7 @@ final class SerproReadinessPromotionService
                 'scope' => $scope,
                 'environment' => $environment,
                 'serpro_contract_id' => $contract?->id,
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'client_id' => null,
                 'operation_key' => null,
                 'highest_gate' => $highest,
@@ -134,7 +134,7 @@ final class SerproReadinessPromotionService
                 'gate' => $gate->value,
                 'status' => $status,
                 'live' => $live,
-            ], $actorUserId, $officeId);
+            ], $actorUserId, $tenantId);
 
             return $run->load('evidences');
         });
@@ -155,7 +155,7 @@ final class SerproReadinessPromotionService
     public function promoteFreeSmokeOk(
         bool $operatorConfirmsLadder,
         array $ladder,
-        ?Office $office = null,
+        ?Tenant $tenant = null,
         ?SerproEnvironment $environment = null,
         ?int $actorUserId = null,
         ?string $notes = null,
@@ -179,11 +179,11 @@ final class SerproReadinessPromotionService
             }
         }
 
-        if ($office !== null) {
-            $seg = (string) ($office->serpro_segregation_class ?? '');
-            $slug = strtolower((string) $office->slug);
+        if ($tenant !== null) {
+            $seg = (string) ($tenant->serpro_segregation_class ?? '');
+            $slug = strtolower((string) $tenant->slug);
             if ($seg === 'DEMO' || str_contains($slug, 'demo')) {
-                throw new RuntimeException('Office demo/segregado não pode promover FREE_SMOKE_OK real.');
+                throw new RuntimeException('Tenant demo/segregado não pode promover FREE_SMOKE_OK real.');
             }
         }
 
@@ -205,13 +205,13 @@ final class SerproReadinessPromotionService
                     'zero_consultar_emitir_declarar' => true,
                     'kill_switch_tested' => (bool) ($ladder['kill_switch_tested'] ?? false),
                 ],
-                'office_id' => $office?->id,
+                'tenant_id' => $tenant?->id,
                 'notes' => $notes !== null ? mb_substr($notes, 0, 200) : null,
                 'canary_ready' => false,
                 'production_ready' => false,
             ],
             trigger: 'FREE_SMOKE_PROMOTE',
-            officeId: $office?->id,
+            tenantId: $tenant?->id,
         );
 
         // Garantir highest_gate = FREE_SMOKE_OK
@@ -221,10 +221,10 @@ final class SerproReadinessPromotionService
         ])->save();
 
         $this->audit->record('serpro.readiness.free_smoke_ok', 'SUCCESS', $run, [
-            'office_id' => $office?->id,
+            'tenant_id' => $tenant?->id,
             'environment' => $environment->value,
             'canary_blocked' => true,
-        ], $actorUserId, $office?->id);
+        ], $actorUserId, $tenant?->id);
 
         return $run->refresh()->load('evidences');
     }
@@ -232,7 +232,7 @@ final class SerproReadinessPromotionService
     /**
      * CANARY_READY — bloqueado sem aprovação dual + teto unitário + qty 1.
      *
-     * @param  array<string, mixed>  $scope  office_id, operation_key, max_unit_cost_micros, max_quantity, window_minutes
+     * @param  array<string, mixed>  $scope  tenant_id, operation_key, max_unit_cost_micros, max_quantity, window_minutes
      */
     public function promoteCanaryReady(
         SerproRolloutApproval $approval,
@@ -248,11 +248,11 @@ final class SerproReadinessPromotionService
             );
         }
 
-        // Canário/promoção: política DUAL_ROLE (Proprietário + Office ADMIN ou dual de promoção).
+        // Canário/promoção: política DUAL_ROLE (Proprietário + Tenant ADMIN ou dual de promoção).
         // Confirmação OWNER singleton NUNCA satisfaz este gate.
         if ($approval->policy()->value === 'OWNER_CONFIRMATION' || ! $approval->isFullyApproved()) {
             throw new RuntimeException(
-                'CANARY_READY bloqueado: exige política DUAL_ROLE completa (Proprietário + Office ADMIN distintos); confirmação singleton não satisfaz.'
+                'CANARY_READY bloqueado: exige política DUAL_ROLE completa (Proprietário + Tenant ADMIN distintos); confirmação singleton não satisfaz.'
             );
         }
 
@@ -265,7 +265,7 @@ final class SerproReadinessPromotionService
         $maxCost = (int) ($scope['max_unit_cost_micros'] ?? 0);
         $maxQty = (int) ($scope['max_quantity'] ?? 0);
         $operationKey = (string) ($scope['operation_key'] ?? '');
-        $officeId = isset($scope['office_id']) ? (int) $scope['office_id'] : null;
+        $tenantId = isset($scope['tenant_id']) ? (int) $scope['tenant_id'] : null;
 
         if ($maxCost <= 0) {
             throw new RuntimeException('CANARY_READY bloqueado: max_unit_cost_micros deve ser > 0 (teto unitário).');
@@ -281,8 +281,8 @@ final class SerproReadinessPromotionService
                 'CANARY_READY bloqueado: operação mutante/proibida neste go-live ('.$operationKey.').'
             );
         }
-        if ($officeId === null || $officeId <= 0) {
-            throw new RuntimeException('CANARY_READY bloqueado: office_id do canário obrigatório (não versionar em OpenSpec).');
+        if ($tenantId === null || $tenantId <= 0) {
+            throw new RuntimeException('CANARY_READY bloqueado: tenant_id do canário obrigatório (não versionar em OpenSpec).');
         }
 
         $environment ??= $this->defaultEnvironment();
@@ -298,16 +298,16 @@ final class SerproReadinessPromotionService
             $started,
             $ttlHours,
             $contract,
-            $officeId,
+            $tenantId,
             $operationKey,
             $maxCost,
             $maxQty,
         ): SerproReadinessRun {
             $run = SerproReadinessRun::query()->create([
-                'scope' => SerproReadinessScope::Office,
+                'scope' => SerproReadinessScope::Tenant,
                 'environment' => $environment,
                 'serpro_contract_id' => $contract?->id,
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'client_id' => isset($scope['client_id']) ? (int) $scope['client_id'] : null,
                 'operation_key' => $operationKey,
                 'highest_gate' => SerproReadinessGate::CanaryReady,
@@ -331,7 +331,7 @@ final class SerproReadinessPromotionService
             SerproReadinessEvidence::query()->create([
                 'serpro_readiness_run_id' => $run->id,
                 'gate' => SerproReadinessGate::CanaryReady,
-                'scope' => SerproReadinessScope::Office,
+                'scope' => SerproReadinessScope::Tenant,
                 'status' => 'PASS',
                 'live_evidence' => true,
                 'fingerprint' => null,
@@ -349,10 +349,10 @@ final class SerproReadinessPromotionService
 
             $this->audit->record('serpro.readiness.canary_ready', 'SUCCESS', $run, [
                 'approval_id' => $approval->id,
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'operation_key' => $operationKey,
                 'max_unit_cost_micros' => $maxCost,
-            ], $actorUserId, $officeId);
+            ], $actorUserId, $tenantId);
 
             return $run->load('evidences');
         });

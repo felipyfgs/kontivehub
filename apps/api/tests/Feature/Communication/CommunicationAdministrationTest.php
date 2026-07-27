@@ -6,7 +6,7 @@ use App\Enums\Communication\ConversationStatus;
 use App\Enums\Communication\GatewayCommandType;
 use App\Enums\Communication\InboxStatus;
 use App\Enums\Communication\RecipientMode;
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Events\CommunicationEventCommitted;
 use App\Models\Client;
 use App\Models\ClientCommunicationPreference;
@@ -16,9 +16,9 @@ use App\Models\CommunicationIdentity;
 use App\Models\CommunicationIdentityLink;
 use App\Models\CommunicationInbox;
 use App\Models\CommunicationOutboxEntry;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
@@ -41,16 +41,16 @@ final class CommunicationAdministrationTest extends TestCase
         ]);
     }
 
-    public function test_contacts_support_multiple_client_links_but_remain_isolated_by_office(): void
+    public function test_contacts_support_multiple_client_links_but_remain_isolated_by_tenant(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $foreignOffice = Office::factory()->create(['communication_enabled' => true]);
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
-        $operator = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $foreignAdmin = User::factory()->forOffice($foreignOffice, OfficeRole::Admin)->create();
-        $clientA = Client::factory()->create(['office_id' => $office->id]);
-        $clientB = Client::factory()->create(['office_id' => $office->id]);
-        $foreignClient = Client::factory()->create(['office_id' => $foreignOffice->id]);
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $foreignTenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $operator = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $foreignAdmin = User::factory()->forTenant($foreignTenant, TenantRole::TenantAdmin)->create();
+        $clientA = Client::factory()->create(['tenant_id' => $tenant->id]);
+        $clientB = Client::factory()->create(['tenant_id' => $tenant->id]);
+        $foreignClient = Client::factory()->create(['tenant_id' => $foreignTenant->id]);
 
         $this->authenticate($admin);
         $created = $this->postJson('/api/v1/communication/contacts', [
@@ -95,14 +95,14 @@ final class CommunicationAdministrationTest extends TestCase
 
     public function test_policy_and_selected_recipients_are_explicit_versioned_and_fail_closed(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
-        $client = Client::factory()->create(['office_id' => $office->id]);
-        $inbox = $this->inbox($office);
-        $first = $this->identity($office, $client, '+5511999997001', true);
-        $second = $this->identity($office, $client, '+5511999997002', false);
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $client = Client::factory()->create(['tenant_id' => $tenant->id]);
+        $inbox = $this->inbox($tenant);
+        $first = $this->identity($tenant, $client, '+5511999997001', true);
+        $second = $this->identity($tenant, $client, '+5511999997002', false);
         $preference = ClientCommunicationPreference::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'module_key' => 'simples_mei',
             'submodule_key' => 'pgdasd',
@@ -175,30 +175,30 @@ final class CommunicationAdministrationTest extends TestCase
 
     public function test_pairing_is_durable_and_switches_refuse_commands_when_disabled(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $foreignOffice = Office::factory()->create(['communication_enabled' => true]);
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
-        $inbox = $this->inbox($office);
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $foreignTenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $inbox = $this->inbox($tenant);
         $inbox->forceFill(['status' => InboxStatus::Disconnected])->save();
-        $foreignInbox = $this->inbox($foreignOffice);
+        $foreignInbox = $this->inbox($foreignTenant);
         $this->authenticate($admin);
 
-        $first = $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/pairing')
+        $first = $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/session/connect')
             ->assertStatus(202)
             ->assertJsonPath('data.event', 'pending')
             ->assertJsonCount(1, 'data.commands');
-        $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/pairing')
+        $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/session/connect')
             ->assertStatus(202)
             ->assertJsonPath('data.event', 'pending')
             ->assertJsonPath('data.expires_at', $first->json('data.expires_at'))
             ->assertJsonPath('data.commands', $first->json('data.commands'));
         $this->assertDatabaseCount('communication_outbox_entries', 1);
         $this->assertSame(InboxStatus::Connecting, $inbox->refresh()->status);
-        $this->postJson('/api/v1/communication/inboxes/'.$foreignInbox->id.'/pairing')->assertNotFound();
+        $this->postJson('/api/v1/communication/inboxes/'.$foreignInbox->id.'/session/connect')->assertNotFound();
         $this->assertDatabaseCount('communication_outbox_entries', 1);
 
         config(['communication.enabled' => false]);
-        $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/pairing')
+        $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/session/connect')
             ->assertStatus(503)
             ->assertJsonPath('code', 'COMMUNICATION_DISABLED');
         $this->assertDatabaseCount('communication_outbox_entries', 1);
@@ -206,13 +206,13 @@ final class CommunicationAdministrationTest extends TestCase
 
     public function test_logout_is_idempotent_preserves_history_and_connect_starts_a_new_pairing(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
-        $client = Client::factory()->create(['office_id' => $office->id]);
-        $inbox = $this->inbox($office);
-        $identity = $this->identity($office, $client, '+5511999997111', true);
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $client = Client::factory()->create(['tenant_id' => $tenant->id]);
+        $inbox = $this->inbox($tenant);
+        $identity = $this->identity($tenant, $client, '+5511999997111', true);
         $conversation = CommunicationConversation::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'inbox_id' => $inbox->id,
             'identity_id' => $identity->id,
             'status' => ConversationStatus::Open,
@@ -250,21 +250,21 @@ final class CommunicationAdministrationTest extends TestCase
 
     public function test_deleting_one_session_logs_it_out_archives_it_and_preserves_other_sessions_and_history(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
-        $client = Client::factory()->create(['office_id' => $office->id]);
-        $deletedInbox = $this->inbox($office);
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $client = Client::factory()->create(['tenant_id' => $tenant->id]);
+        $deletedInbox = $this->inbox($tenant);
         $remainingInbox = CommunicationInbox::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => 'WhatsApp financeiro',
             'session_id' => 'session-'.Str::ulid(),
             'status' => InboxStatus::Connected,
             'is_enabled' => true,
             'is_default' => false,
         ]);
-        $identity = $this->identity($office, $client, '+5511999997222', true);
+        $identity = $this->identity($tenant, $client, '+5511999997222', true);
         $conversation = CommunicationConversation::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'inbox_id' => $deletedInbox->id,
             'identity_id' => $identity->id,
             'status' => ConversationStatus::Open,
@@ -304,9 +304,9 @@ final class CommunicationAdministrationTest extends TestCase
 
     public function test_archived_inbox_name_can_be_reused_but_an_active_duplicate_is_rejected(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
-        $archivedInbox = $this->inbox($office);
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $archivedInbox = $this->inbox($tenant);
         $this->authenticate($admin);
 
         $this->postJson('/api/v1/communication/inboxes', [
@@ -331,21 +331,21 @@ final class CommunicationAdministrationTest extends TestCase
         $this->assertSame(1, CommunicationInbox::query()->withoutGlobalScopes()->count());
     }
 
-    public function test_disabling_office_disconnects_each_session_without_logging_out_or_reconnecting_on_enable(): void
+    public function test_disabling_tenant_disconnects_each_session_without_logging_out_or_reconnecting_on_enable(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $foreignOffice = Office::factory()->create(['communication_enabled' => true]);
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
-        $first = $this->inbox($office);
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $foreignTenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $first = $this->inbox($tenant);
         $second = CommunicationInbox::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => 'WhatsApp financeiro',
             'session_id' => 'session-'.Str::ulid(),
             'status' => InboxStatus::Connected,
             'is_enabled' => true,
             'is_default' => false,
         ]);
-        $foreign = $this->inbox($foreignOffice);
+        $foreign = $this->inbox($foreignTenant);
         $this->authenticate($admin);
 
         $this->patchJson('/api/v1/communication/settings', ['enabled' => false])
@@ -370,9 +370,9 @@ final class CommunicationAdministrationTest extends TestCase
 
     public function test_disabling_an_inbox_disconnects_it_without_removing_credentials_by_logout(): void
     {
-        $office = Office::factory()->create(['communication_enabled' => true]);
-        $admin = User::factory()->forOffice($office, OfficeRole::Admin)->create();
-        $inbox = $this->inbox($office);
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $inbox = $this->inbox($tenant);
         $this->authenticate($admin);
 
         $this->patchJson('/api/v1/communication/inboxes/'.$inbox->id, [
@@ -395,13 +395,13 @@ final class CommunicationAdministrationTest extends TestCase
     private function authenticate(User $user): void
     {
         Sanctum::actingAs($user);
-        app(CurrentOffice::class)->clear();
+        app(CurrentTenant::class)->clear();
     }
 
-    private function inbox(Office $office): CommunicationInbox
+    private function inbox(Tenant $tenant): CommunicationInbox
     {
         return CommunicationInbox::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => 'WhatsApp geral',
             'session_id' => 'session-'.Str::ulid(),
             'status' => InboxStatus::Connected,
@@ -410,15 +410,15 @@ final class CommunicationAdministrationTest extends TestCase
         ]);
     }
 
-    private function identity(Office $office, Client $client, string $address, bool $primary): CommunicationIdentity
+    private function identity(Tenant $tenant, Client $client, string $address, bool $primary): CommunicationIdentity
     {
         $contact = CommunicationContact::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'name' => 'Contato '.substr($address, -4),
             'is_active' => true,
         ]);
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'contact_id' => $contact->id,
             'channel' => 'WHATSAPP',
             'address_encrypted' => $address,
@@ -427,7 +427,7 @@ final class CommunicationAdministrationTest extends TestCase
             'is_active' => true,
         ]);
         CommunicationIdentityLink::query()->withoutGlobalScopes()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'identity_id' => $identity->id,
             'client_id' => $client->id,
             'is_primary' => $primary,

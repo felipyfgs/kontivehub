@@ -7,7 +7,7 @@ use App\Enums\NfeManifestationType;
 
 /**
  * Registro de Manifestação do Destinatário via NFeRecepcaoEvento4 (AN).
- * mTLS com A1 do destinatário; sem PEM em disco.
+ * mTLS com certificado do destinatário; sem PEM em disco.
  */
 interface SefazNfeManifestationClient
 {

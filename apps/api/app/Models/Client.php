@@ -4,10 +4,10 @@ namespace App\Models;
 
 use App\Enums\CredentialStatus;
 use App\Enums\FiscalProfile;
-use App\Enums\OfficeSerproOnboardingStatus;
 use App\Enums\RegistrationSource;
+use App\Enums\TenantSerproOnboardingStatus;
 use App\Jobs\Serpro\SyncClientProcuracaoJob;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Database\Factories\ClientFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -19,11 +19,10 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\DB;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'legal_name',
     'display_name',
     'root_cnpj',
-    'matrix_client_id',
     'legal_nature_code',
     'legal_nature_name',
     'company_size_code',
@@ -42,7 +41,7 @@ use Illuminate\Support\Facades\DB;
 class Client extends Model
 {
     /** @use HasFactory<ClientFactory> */
-    use BelongsToOffice, HasFactory;
+    use BelongsToTenant, HasFactory;
 
     protected static function booted(): void
     {
@@ -51,12 +50,12 @@ class Client extends Model
                 return;
             }
 
-            $state = OfficeSerproOnboardingState::query()
+            $state = TenantSerproOnboardingState::query()
                 ->withoutGlobalScopes()
-                ->where('office_id', $client->office_id)
+                ->where('tenant_id', $client->tenant_id)
                 ->whereIn('status', [
-                    OfficeSerproOnboardingStatus::Ready->value,
-                    OfficeSerproOnboardingStatus::Authorized->value,
+                    TenantSerproOnboardingStatus::Ready->value,
+                    TenantSerproOnboardingStatus::Authorized->value,
                 ])
                 ->orderByDesc('id')
                 ->first();
@@ -66,12 +65,12 @@ class Client extends Model
 
             // afterCommit: CreateClientWithEstablishment (e afins) criam o cliente
             // dentro de DB::transaction — evita job contra registro ainda não commitado/revertido.
-            $officeId = (int) $client->office_id;
+            $tenantId = (int) $client->tenant_id;
             $clientId = (int) $client->id;
             $environment = $state->environment->value;
-            DB::afterCommit(static function () use ($officeId, $clientId, $environment): void {
+            DB::afterCommit(static function () use ($tenantId, $clientId, $environment): void {
                 SyncClientProcuracaoJob::dispatch(
-                    $officeId,
+                    $tenantId,
                     $clientId,
                     $environment,
                     automatic: false,
@@ -81,33 +80,33 @@ class Client extends Model
 
         // Evidência fiscal/financeira: exclusão física bloqueada (retenção explícita).
         static::deleting(function (Client $client): void {
-            // Sem depender do global scope da request (fail-closed / sem CurrentOffice).
+            // Sem depender do global scope da request (fail-closed / sem CurrentTenant).
             $hasCursors = Establishment::query()
                 ->withoutGlobalScopes()
                 ->where('client_id', $client->id)
-                ->where('office_id', $client->office_id)
+                ->where('tenant_id', $client->tenant_id)
                 ->whereHas('syncCursors')
                 ->exists();
 
             $hasEvidence = $hasCursors
                 || DB::table('dfe_documents')
-                    ->where('office_id', $client->office_id)
+                    ->where('tenant_id', $client->tenant_id)
                     ->whereExists(function ($q) use ($client): void {
                         $q->selectRaw('1')
                             ->from('document_interests as di')
                             ->join('establishments as e', 'e.id', '=', 'di.establishment_id')
                             ->whereColumn('di.dfe_document_id', 'dfe_documents.id')
                             ->where('e.client_id', $client->id)
-                            ->where('e.office_id', $client->office_id);
+                            ->where('e.tenant_id', $client->tenant_id);
                     })
                     ->exists()
                 || DB::table('fiscal_monitoring_runs')
                     ->where('client_id', $client->id)
-                    ->where('office_id', $client->office_id)
+                    ->where('tenant_id', $client->tenant_id)
                     ->exists()
                 || DB::table('serpro_api_usage_entries')
                     ->where('client_id', $client->id)
-                    ->where('office_id', $client->office_id)
+                    ->where('tenant_id', $client->tenant_id)
                     ->exists();
 
             if ($hasEvidence) {
@@ -138,18 +137,6 @@ class Client extends Model
         return $this->belongsTo(WorkDepartment::class);
     }
 
-    /** Matriz à qual esta filial está vinculada (null se for raiz/matriz). */
-    public function matrix(): BelongsTo
-    {
-        return $this->belongsTo(self::class, 'matrix_client_id');
-    }
-
-    /** Filiais que apontam para este cliente como matriz. */
-    public function branches(): HasMany
-    {
-        return $this->hasMany(self::class, 'matrix_client_id');
-    }
-
     public function contacts(): HasMany
     {
         return $this->hasMany(ClientContact::class);
@@ -171,9 +158,9 @@ class Client extends Model
     }
 
     /** Processos operacionais deste contribuinte no escritório. */
-    public function operationalProcesses(): HasMany
+    public function workProcesses(): HasMany
     {
-        return $this->hasMany(OperationalProcess::class);
+        return $this->hasMany(WorkProcess::class);
     }
 
     /** Histórico de regimes usado para selecionar rotinas por competência. */
@@ -196,7 +183,7 @@ class Client extends Model
     public function categories(): BelongsToMany
     {
         return $this->belongsToMany(ClientCategory::class, 'client_category_assignments')
-            ->withPivot(['office_id', 'assigned_by'])
+            ->withPivot(['tenant_id', 'assigned_by'])
             ->withTimestamps();
     }
 
@@ -208,7 +195,7 @@ class Client extends Model
     }
 
     /**
-     * Credencial A1 ativa (uso operacional: UI/sync).
+     * certificado ativa (uso operacional: UI/sync).
      * Histórico (SUPERSEDED/EXPIRED/etc.) via credentials().
      */
     public function credential(): HasOne
@@ -223,16 +210,10 @@ class Client extends Model
         return $this->hasMany(ClientCredential::class);
     }
 
-    /** Projeção canônica da sincronização oficial de procuração. */
-    public function procuracaoSync(): HasOne
+    /** Sincronizações oficiais de procuração por ambiente. */
+    public function procuracaoSyncs(): HasMany
     {
-        return $this->hasOne(ClientProcuracaoSync::class);
-    }
-
-    /** Snapshots por ambiente, usados apenas como compatibilidade de leitura. */
-    public function procuracaoSnapshots(): HasMany
-    {
-        return $this->hasMany(ClientProcuracaoSnapshot::class);
+        return $this->hasMany(ClientProcuracaoSync::class);
     }
 
     /**

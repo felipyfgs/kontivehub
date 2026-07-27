@@ -1,15 +1,15 @@
 import type { PageMeta } from '~/types/api'
 import type {
   GenerationBatch,
-  OperationalExportJob,
-  OperationalProcess,
-  OperationalProcessGroup,
-  OperationalTaskDetail,
-  OperationalTaskSummary,
+  WorkExportJob,
+  WorkProcess,
+  WorkProcessGroup,
+  WorkTaskDetail,
+  WorkTaskSummary,
   GenerationSelection,
-  ProcessTemplate,
-  ProcessTemplateCatalogItem,
-  ProcessTemplateRecurrence,
+  WorkProcessTemplate,
+  WorkProcessTemplateCatalogItem,
+  WorkProcessTemplateRecurrence,
   WorkDepartment,
   WorkKpis,
   WorkProcessGroupBy,
@@ -32,8 +32,8 @@ export type WorkProcessesListParams = {
   direction?: 'asc' | 'desc'
   /** Default API `1` / true — omitir array de tarefas com `0`. */
   include_tasks?: boolean | 0 | 1
-  process_template_id?: number
-  /** Processos sem rotina (`process_template_id` nulo). Não combinar com `process_template_id`. */
+  work_process_template_id?: number
+  /** Processos sem rotina (`work_process_template_id` nulo). Não combinar com `work_process_template_id`. */
   without_template?: boolean | 0 | 1
 } & Record<string, unknown>
 
@@ -70,11 +70,11 @@ export function createWorkApi(client: ApiClient, apiUrl: ApiUrl) {
       },
       templates: {
         catalog: () =>
-          client<{ data: ProcessTemplateCatalogItem[] }>('/api/v1/work/template-catalog'),
+          client<{ data: WorkProcessTemplateCatalogItem[] }>('/api/v1/work/template-catalog'),
         installCatalog: (
           catalogKey: string,
           body?: { name?: string, default_department_id?: number | null }
-        ) => client<{ data: ProcessTemplate }>(
+        ) => client<{ data: WorkProcessTemplate }>(
           `/api/v1/work/template-catalog/${encodeURIComponent(catalogKey)}/install`,
           { method: 'POST', body: body || {} }
         ),
@@ -86,13 +86,13 @@ export function createWorkApi(client: ApiClient, apiUrl: ApiUrl) {
           sort?: 'name' | 'is_active' | 'id'
           direction?: 'asc' | 'desc'
         }) =>
-          client<{ data: ProcessTemplate[], meta: PageMeta }>('/api/v1/work/templates', { query: params }),
+          client<{ data: WorkProcessTemplate[], meta: PageMeta }>('/api/v1/work/templates', { query: params }),
         get: (id: number) =>
-          client<{ data: ProcessTemplate }>(`/api/v1/work/templates/${id}`),
+          client<{ data: WorkProcessTemplate }>(`/api/v1/work/templates/${id}`),
         create: (body: Record<string, unknown>) =>
-          client<{ data: ProcessTemplate }>('/api/v1/work/templates', { method: 'POST', body }),
+          client<{ data: WorkProcessTemplate }>('/api/v1/work/templates', { method: 'POST', body }),
         update: (id: number, body: Record<string, unknown>) =>
-          client<{ data: ProcessTemplate }>(`/api/v1/work/templates/${id}`, { method: 'PATCH', body }),
+          client<{ data: WorkProcessTemplate }>(`/api/v1/work/templates/${id}`, { method: 'PATCH', body }),
         preview: (id: number, body: {
           competence: string
           client_ids?: number[]
@@ -102,11 +102,11 @@ export function createWorkApi(client: ApiClient, apiUrl: ApiUrl) {
         }) =>
           client<{ data: GenerationBatch }>(`/api/v1/work/templates/${id}/preview`, { method: 'POST', body }),
         getRecurrence: (id: number) =>
-          client<{ data: ProcessTemplateRecurrence & { lock_version: number } }>(
+          client<{ data: WorkProcessTemplateRecurrence & { lock_version: number } }>(
             `/api/v1/work/templates/${id}/recurrence`
           ),
         updateRecurrence: (id: number, body: Record<string, unknown>) =>
-          client<{ data: ProcessTemplateRecurrence & { lock_version: number } }>(
+          client<{ data: WorkProcessTemplateRecurrence & { lock_version: number } }>(
             `/api/v1/work/templates/${id}/recurrence`,
             { method: 'PATCH', body }
           ),
@@ -136,25 +136,25 @@ export function createWorkApi(client: ApiClient, apiUrl: ApiUrl) {
           })
       },
       queue: (params?: Record<string, unknown>) =>
-        client<{ data: OperationalTaskSummary[], meta: PageMeta }>('/api/v1/work/queue', { query: params }),
+        client<{ data: WorkTaskSummary[], meta: PageMeta }>('/api/v1/work/queue', { query: params }),
       processGroups: {
         list: (params: WorkProcessGroupsListParams) =>
-          client<{ data: OperationalProcessGroup[], meta: PageMeta }>(
+          client<{ data: WorkProcessGroup[], meta: PageMeta }>(
             '/api/v1/work/process-groups',
             { query: params }
           )
       },
       processes: {
         list: (params?: WorkProcessesListParams) =>
-          client<{ data: OperationalProcess[], meta: PageMeta }>('/api/v1/work/processes', { query: params }),
+          client<{ data: WorkProcess[], meta: PageMeta }>('/api/v1/work/processes', { query: params }),
         get: (id: number) =>
-          client<{ data: OperationalProcess }>(`/api/v1/work/processes/${id}`),
+          client<{ data: WorkProcess }>(`/api/v1/work/processes/${id}`),
         create: (body: Record<string, unknown>) =>
-          client<{ data: OperationalProcess }>('/api/v1/work/processes', { method: 'POST', body }),
+          client<{ data: WorkProcess }>('/api/v1/work/processes', { method: 'POST', body }),
         update: (id: number, body: Record<string, unknown>) =>
-          client<{ data: OperationalProcess }>(`/api/v1/work/processes/${id}`, { method: 'PATCH', body }),
+          client<{ data: WorkProcess }>(`/api/v1/work/processes/${id}`, { method: 'PATCH', body }),
         archive: (id: number, lockVersion: number) =>
-          client<{ data: OperationalProcess }>(`/api/v1/work/processes/${id}/archive`, {
+          client<{ data: WorkProcess }>(`/api/v1/work/processes/${id}/archive`, {
             method: 'POST',
             body: { lock_version: lockVersion }
           }),
@@ -163,7 +163,7 @@ export function createWorkApi(client: ApiClient, apiUrl: ApiUrl) {
           changes: { action: string } & Record<string, unknown>
         }) =>
           client<{
-            data: OperationalProcess[]
+            data: WorkProcess[]
             meta: { succeeded: number, failed: Array<{ id: number, message: string }> }
           }>('/api/v1/work/processes/bulk', { method: 'POST', body }),
         comment: (id: number, body: string) =>
@@ -176,47 +176,47 @@ export function createWorkApi(client: ApiClient, apiUrl: ApiUrl) {
       },
       tasks: {
         get: (id: number) =>
-          client<{ data: OperationalTaskDetail }>(`/api/v1/work/tasks/${id}`),
+          client<{ data: WorkTaskDetail }>(`/api/v1/work/tasks/${id}`),
         bulk: (body: {
           items: Array<{ id: number, lock_version: number }>
           changes: Record<string, unknown>
         }) =>
           client<{
-            data: OperationalTaskDetail[]
+            data: WorkTaskDetail[]
             meta: { succeeded: number, failed: Array<{ id: number, message: string }> }
           }>('/api/v1/work/tasks/bulk', { method: 'POST', body }),
         start: (id: number, lockVersion: number) =>
-          client<{ data: OperationalTaskDetail }>(`/api/v1/work/tasks/${id}/start`, {
+          client<{ data: WorkTaskDetail }>(`/api/v1/work/tasks/${id}/start`, {
             method: 'POST',
             body: { lock_version: lockVersion }
           }),
         block: (id: number, lockVersion: number, reason: string) =>
-          client<{ data: OperationalTaskDetail }>(`/api/v1/work/tasks/${id}/block`, {
+          client<{ data: WorkTaskDetail }>(`/api/v1/work/tasks/${id}/block`, {
             method: 'POST',
             body: { lock_version: lockVersion, reason }
           }),
         resume: (id: number, lockVersion: number) =>
-          client<{ data: OperationalTaskDetail }>(`/api/v1/work/tasks/${id}/resume`, {
+          client<{ data: WorkTaskDetail }>(`/api/v1/work/tasks/${id}/resume`, {
             method: 'POST',
             body: { lock_version: lockVersion }
           }),
         complete: (id: number, lockVersion: number) =>
-          client<{ data: OperationalTaskDetail }>(`/api/v1/work/tasks/${id}/complete`, {
+          client<{ data: WorkTaskDetail }>(`/api/v1/work/tasks/${id}/complete`, {
             method: 'POST',
             body: { lock_version: lockVersion }
           }),
         dispense: (id: number, lockVersion: number, justification: string) =>
-          client<{ data: OperationalTaskDetail }>(`/api/v1/work/tasks/${id}/dispense`, {
+          client<{ data: WorkTaskDetail }>(`/api/v1/work/tasks/${id}/dispense`, {
             method: 'POST',
             body: { lock_version: lockVersion, justification }
           }),
         reopen: (id: number, lockVersion: number, justification: string) =>
-          client<{ data: OperationalTaskDetail }>(`/api/v1/work/tasks/${id}/reopen`, {
+          client<{ data: WorkTaskDetail }>(`/api/v1/work/tasks/${id}/reopen`, {
             method: 'POST',
             body: { lock_version: lockVersion, justification }
           }),
         claim: (id: number, lockVersion: number) =>
-          client<{ data: OperationalTaskDetail }>(`/api/v1/work/tasks/${id}/claim`, {
+          client<{ data: WorkTaskDetail }>(`/api/v1/work/tasks/${id}/claim`, {
             method: 'POST',
             body: { lock_version: lockVersion }
           }),
@@ -240,7 +240,7 @@ export function createWorkApi(client: ApiClient, apiUrl: ApiUrl) {
       calendar: (from: string, to: string, params?: Record<string, string | number>) =>
         client<{
           data: {
-            office_timezone: string
+            tenant_timezone: string
             today?: string
             from: string
             to: string
@@ -252,7 +252,7 @@ export function createWorkApi(client: ApiClient, apiUrl: ApiUrl) {
               completed?: number
               open?: number
               max_severity?: number
-              items?: OperationalTaskSummary[]
+              items?: WorkTaskSummary[]
             }>
           }
         }>(
@@ -260,17 +260,17 @@ export function createWorkApi(client: ApiClient, apiUrl: ApiUrl) {
           { query: { from, to, ...params } }
         ),
       calendarDay: (date: string, params?: Record<string, string | number>) =>
-        client<{ data: OperationalTaskSummary[], meta: PageMeta }>('/api/v1/work/calendar/day', {
+        client<{ data: WorkTaskSummary[], meta: PageMeta }>('/api/v1/work/calendar/day', {
           query: { date, ...params }
         }),
       exports: {
         create: (filters?: Record<string, unknown>) =>
-          client<{ data: OperationalExportJob }>('/api/v1/work/exports', {
+          client<{ data: WorkExportJob }>('/api/v1/work/exports', {
             method: 'POST',
             body: { filters: filters || {} }
           }),
         get: (id: number) =>
-          client<{ data: OperationalExportJob }>(`/api/v1/work/exports/${id}`),
+          client<{ data: WorkExportJob }>(`/api/v1/work/exports/${id}`),
         downloadUrl: (id: number) => apiUrl(`/api/v1/work/exports/${id}/download`)
       }
     }

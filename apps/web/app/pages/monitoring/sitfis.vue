@@ -94,7 +94,7 @@ function provenanceLabel(value?: string | null) {
   if (value === 'SERPRO_TRIAL') return 'Fonte SERPRO Trial'
   if (value === 'FIXTURE') return 'Fixture (desenvolvimento)'
   if (value === 'SIMULATED') return 'Simulado (desenvolvimento)'
-  if (value === 'UNVERIFIED') return 'Não verificado (legado)'
+  if (value === 'UNVERIFIED') return 'Não verificado'
   return null
 }
 const detailLoading = ref(false)
@@ -235,7 +235,7 @@ function openCommunication(row: SitfisClientRow, kind: 'preview' | 'tracking' | 
   const communication = detailOf(row).communication
   if (!communication) return
   modalClientId.value = row.client_id
-  modalClientName.value = row.legal_name || row.name || null
+  modalClientName.value = row.display_name || row.legal_name || null
   modalPreference.value = communication
   previewOpen.value = kind === 'preview'
   trackingOpen.value = kind === 'tracking'
@@ -358,7 +358,7 @@ const columns = computed(() => buildSitfisColumns({
       <USlideover
         v-model:open="slideOpen"
         :title="selected
-          ? (selected.name || selected.legal_name || `Cliente #${selected.client_id}`)
+          ? (selected.display_name || selected.legal_name || `Cliente #${selected.client_id}`)
           : 'Detalhe SITFIS'"
       >
         <template #body>

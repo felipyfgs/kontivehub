@@ -63,14 +63,14 @@ final class DteIndicatorAdapter implements FiscalSourceAdapter
     public function execute(FiscalAdapterRequest $request): FiscalAdapterResult
     {
         $result = $this->client->getIndicator([
-            'office_id' => $request->office->id,
+            'tenant_id' => $request->tenant->id,
             'client_id' => $request->client->id,
             'cnpj' => $request->client->root_cnpj,
             'correlation_id' => $request->run->correlation_id,
         ]);
 
         $state = $this->states->applyDte(
-            $request->office,
+            $request->tenant,
             $request->client,
             $result,
             $request->run->id,

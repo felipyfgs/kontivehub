@@ -9,7 +9,6 @@ use App\Models\SerproUsageMonthlyAggregate;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * Agregações por ciclo 21–20 e por mês calendário, recomputáveis a partir do ledger.
@@ -30,7 +29,7 @@ final class UsageAggregationService
      *
      * @return array{tenant_rows: int, global_rows: int}
      */
-    public function recomputeMonth(int $year, int $month, ?int $officeId = null): array
+    public function recomputeMonth(int $year, int $month, ?int $tenantId = null): array
     {
         $start = Carbon::create($year, $month, 1)->startOfMonth();
         $end = $start->copy()->endOfMonth();
@@ -42,7 +41,7 @@ final class UsageAggregationService
             periodMonth: $month,
             cycleCode: null,
             periodKind: self::PERIOD_CALENDAR,
-            officeId: $officeId,
+            tenantId: $tenantId,
         );
     }
 
@@ -51,7 +50,7 @@ final class UsageAggregationService
      *
      * @return array{tenant_rows: int, global_rows: int, cycle_code: string}
      */
-    public function recomputeBillingCycle(Carbon|string|null $at = null, ?int $officeId = null): array
+    public function recomputeBillingCycle(Carbon|string|null $at = null, ?int $tenantId = null): array
     {
         $resolved = $this->cycles->resolve($at);
         $this->cycles->ensurePersisted($at);
@@ -64,21 +63,21 @@ final class UsageAggregationService
             periodMonth: $calendar['month'],
             cycleCode: $resolved['cycle_code'],
             periodKind: self::PERIOD_BILLING_CYCLE,
-            officeId: $officeId,
+            tenantId: $tenantId,
         );
 
         return $result + ['cycle_code' => $resolved['cycle_code']];
     }
 
     /**
-     * Soma estimada interna do mês calendário (todas as offices) a partir do ledger.
+     * Soma estimada interna do mês calendário (todas as tenants) a partir do ledger.
      */
     public function internalEstimatedTotalMicros(int $year, int $month): int
     {
         $start = Carbon::create($year, $month, 1)->startOfMonth();
         $end = $start->copy()->endOfMonth();
 
-        return $this->sumEstimated($start, $end, officeId: null);
+        return $this->sumEstimated($start, $end, tenantId: null);
     }
 
     public function internalEstimatedTotalMicrosForCycle(string $cycleCode): int
@@ -90,11 +89,11 @@ final class UsageAggregationService
             return $this->sumEstimated(
                 Carbon::parse($row->period_start)->startOfDay(),
                 Carbon::parse($row->period_end)->endOfDay(),
-                officeId: null,
+                tenantId: null,
             );
         }
 
-        return $this->sumEstimated($cycle['period_start'], $cycle['period_end'], officeId: null);
+        return $this->sumEstimated($cycle['period_start'], $cycle['period_end'], tenantId: null);
     }
 
     /**
@@ -102,12 +101,12 @@ final class UsageAggregationService
      *
      * @return array{tenant_micros: int, global_micros: int, tenant_quantity: int, global_quantity: int}
      */
-    public function liveTotals(Carbon $start, Carbon $end, ?int $officeId = null): array
+    public function liveTotals(Carbon $start, Carbon $end, ?int $tenantId = null): array
     {
         $globalMicros = $this->sumEstimated($start, $end, null);
         $globalQty = $this->sumQuantity($start, $end, null);
-        $tenantMicros = $officeId !== null ? $this->sumEstimated($start, $end, $officeId) : 0;
-        $tenantQty = $officeId !== null ? $this->sumQuantity($start, $end, $officeId) : 0;
+        $tenantMicros = $tenantId !== null ? $this->sumEstimated($start, $end, $tenantId) : 0;
+        $tenantQty = $tenantId !== null ? $this->sumQuantity($start, $end, $tenantId) : 0;
 
         return [
             'tenant_micros' => $tenantMicros,
@@ -119,7 +118,7 @@ final class UsageAggregationService
 
     public function aggregateKey(
         string $scope,
-        ?int $officeId,
+        ?int $tenantId,
         int $year,
         int $month,
         ?string $system,
@@ -130,7 +129,7 @@ final class UsageAggregationService
     ): string {
         return implode(':', [
             $scope,
-            $officeId === null ? '-' : (string) $officeId,
+            $tenantId === null ? '-' : (string) $tenantId,
             (string) $year,
             (string) $month,
             $periodKind,
@@ -151,20 +150,20 @@ final class UsageAggregationService
         int $periodMonth,
         ?string $cycleCode,
         string $periodKind,
-        ?int $officeId,
+        ?int $tenantId,
     ): array {
         $query = SerproApiUsageEntry::query()
             ->withoutGlobalScopes()
             ->whereBetween('occurred_at', [$start, $end]);
 
-        if ($officeId !== null) {
-            $query->where('office_id', $officeId);
+        if ($tenantId !== null) {
+            $query->where('tenant_id', $tenantId);
         }
 
         /** @var Collection<int, object> $groups */
         $groups = $query
             ->select([
-                'office_id',
+                'tenant_id',
                 'system_code',
                 'service_code',
                 'consumption_class',
@@ -174,7 +173,7 @@ final class UsageAggregationService
                 DB::raw("SUM(CASE WHEN consumption_class = 'DESCONHECIDA' THEN 1 ELSE 0 END) as unknown_class_count"),
                 DB::raw('SUM(CASE WHEN is_billable_attempt = 1 THEN 1 ELSE 0 END) as billable_attempt_count'),
             ])
-            ->groupBy(['office_id', 'system_code', 'service_code', 'consumption_class'])
+            ->groupBy(['tenant_id', 'system_code', 'service_code', 'consumption_class'])
             ->get();
 
         $now = now();
@@ -184,20 +183,18 @@ final class UsageAggregationService
             ->where('period_year', $periodYear)
             ->where('period_month', $periodMonth);
 
-        if (Schema::hasColumn('serpro_usage_monthly_aggregates', 'period_kind')) {
-            $delete->where('period_kind', $periodKind);
-            if ($cycleCode !== null) {
-                $delete->where('cycle_code', $cycleCode);
-            } else {
-                $delete->where(function ($q): void {
-                    $q->whereNull('cycle_code')->orWhere('cycle_code', '');
-                });
-            }
+        $delete->where('period_kind', $periodKind);
+        if ($cycleCode !== null) {
+            $delete->where('cycle_code', $cycleCode);
+        } else {
+            $delete->where(function ($q): void {
+                $q->whereNull('cycle_code')->orWhere('cycle_code', '');
+            });
         }
 
-        if ($officeId !== null) {
+        if ($tenantId !== null) {
             $delete->where('scope', SerproUsageMonthlyAggregate::SCOPE_TENANT)
-                ->where('office_id', $officeId);
+                ->where('tenant_id', $tenantId);
         } else {
             $delete->where(function ($q): void {
                 $q->where('scope', SerproUsageMonthlyAggregate::SCOPE_TENANT)
@@ -210,7 +207,7 @@ final class UsageAggregationService
             $classValue = $this->classValue($row->consumption_class);
             $key = $this->aggregateKey(
                 SerproUsageMonthlyAggregate::SCOPE_TENANT,
-                (int) $row->office_id,
+                (int) $row->tenant_id,
                 $periodYear,
                 $periodMonth,
                 $row->system_code,
@@ -222,7 +219,7 @@ final class UsageAggregationService
 
             $payload = [
                 'scope' => SerproUsageMonthlyAggregate::SCOPE_TENANT,
-                'office_id' => (int) $row->office_id,
+                'tenant_id' => (int) $row->tenant_id,
                 'period_year' => $periodYear,
                 'period_month' => $periodMonth,
                 'system_code' => $row->system_code,
@@ -235,18 +232,16 @@ final class UsageAggregationService
                 'unknown_class_count' => (int) $row->unknown_class_count,
                 'billable_attempt_count' => (int) $row->billable_attempt_count,
                 'recomputed_at' => $now,
+                'cycle_code' => $cycleCode,
+                'period_kind' => $periodKind,
             ];
-            if (Schema::hasColumn('serpro_usage_monthly_aggregates', 'cycle_code')) {
-                $payload['cycle_code'] = $cycleCode;
-                $payload['period_kind'] = $periodKind;
-            }
 
             SerproUsageMonthlyAggregate::query()->create($payload);
             $tenantRows++;
         }
 
         $globalRows = 0;
-        if ($officeId === null) {
+        if ($tenantId === null) {
             $globalGroups = SerproApiUsageEntry::query()
                 ->withoutGlobalScopes()
                 ->whereBetween('occurred_at', [$start, $end])
@@ -279,7 +274,7 @@ final class UsageAggregationService
 
                 $payload = [
                     'scope' => SerproUsageMonthlyAggregate::SCOPE_GLOBAL,
-                    'office_id' => null,
+                    'tenant_id' => null,
                     'period_year' => $periodYear,
                     'period_month' => $periodMonth,
                     'system_code' => $row->system_code,
@@ -292,11 +287,9 @@ final class UsageAggregationService
                     'unknown_class_count' => (int) $row->unknown_class_count,
                     'billable_attempt_count' => (int) $row->billable_attempt_count,
                     'recomputed_at' => $now,
+                    'cycle_code' => $cycleCode,
+                    'period_kind' => $periodKind,
                 ];
-                if (Schema::hasColumn('serpro_usage_monthly_aggregates', 'cycle_code')) {
-                    $payload['cycle_code'] = $cycleCode;
-                    $payload['period_kind'] = $periodKind;
-                }
                 SerproUsageMonthlyAggregate::query()->create($payload);
                 $globalRows++;
             }
@@ -325,7 +318,7 @@ final class UsageAggregationService
                 );
                 $payload = [
                     'scope' => SerproUsageMonthlyAggregate::SCOPE_GLOBAL,
-                    'office_id' => null,
+                    'tenant_id' => null,
                     'period_year' => $periodYear,
                     'period_month' => $periodMonth,
                     'system_code' => null,
@@ -338,11 +331,9 @@ final class UsageAggregationService
                     'unknown_class_count' => (int) $total->unknown_class_count,
                     'billable_attempt_count' => (int) $total->billable_attempt_count,
                     'recomputed_at' => $now,
+                    'cycle_code' => $cycleCode,
+                    'period_kind' => $periodKind,
                 ];
-                if (Schema::hasColumn('serpro_usage_monthly_aggregates', 'cycle_code')) {
-                    $payload['cycle_code'] = $cycleCode;
-                    $payload['period_kind'] = $periodKind;
-                }
                 SerproUsageMonthlyAggregate::query()->create($payload);
                 $globalRows++;
             }
@@ -351,28 +342,28 @@ final class UsageAggregationService
         return ['tenant_rows' => $tenantRows, 'global_rows' => $globalRows];
     }
 
-    private function sumEstimated(Carbon $start, Carbon $end, ?int $officeId): int
+    private function sumEstimated(Carbon $start, Carbon $end, ?int $tenantId): int
     {
         $q = SerproApiUsageEntry::query()
             ->withoutGlobalScopes()
             ->whereBetween('occurred_at', [$start, $end])
             ->whereNotNull('estimated_cost_micros');
 
-        if ($officeId !== null) {
-            $q->where('office_id', $officeId);
+        if ($tenantId !== null) {
+            $q->where('tenant_id', $tenantId);
         }
 
         return (int) $q->sum('estimated_cost_micros');
     }
 
-    private function sumQuantity(Carbon $start, Carbon $end, ?int $officeId): int
+    private function sumQuantity(Carbon $start, Carbon $end, ?int $tenantId): int
     {
         $q = SerproApiUsageEntry::query()
             ->withoutGlobalScopes()
             ->whereBetween('occurred_at', [$start, $end]);
 
-        if ($officeId !== null) {
-            $q->where('office_id', $officeId);
+        if ($tenantId !== null) {
+            $q->where('tenant_id', $tenantId);
         }
 
         return (int) $q->sum('quantity');

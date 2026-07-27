@@ -5,13 +5,13 @@ namespace App\Models;
 use App\Enums\FgtsDigitalGuideType;
 use App\Enums\FgtsDigitalOperation;
 use App\Enums\FgtsDigitalRunStatus;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Model;
 
 #[Fillable([
-    'office_id', 'client_id', 'requested_by', 'session_id', 'fiscal_mutation_operation_id', 'tax_guide_id', 'tax_guide_version_id',
+    'tenant_id', 'client_id', 'requested_by', 'session_id', 'fiscal_mutation_operation_id', 'tax_guide_id', 'tax_guide_version_id',
     'operation', 'guide_type', 'status', 'code', 'idempotency_key', 'request_digest',
     'request_vault_object_id', 'preview_token_hash', 'confirmation_phrase', 'preview_expires_at', 'request_sanitized',
     'result_sanitized', 'correlation_id', 'started_at', 'finished_at',
@@ -19,7 +19,7 @@ use Illuminate\Database\Eloquent\Model;
 #[Hidden(['request_vault_object_id', 'preview_token_hash', 'request_digest'])]
 class FgtsDigitalRun extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {
@@ -39,7 +39,7 @@ class FgtsDigitalRun extends Model
     {
         return [
             'id' => $this->id,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'client_id' => $this->client_id,
             'operation' => $this->operation->value,
             'guide_type' => $this->guide_type?->value,

@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use App\Enums\TenantPermission;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Database\Factories\TenantPermissionProfileFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -13,11 +13,11 @@ use InvalidArgumentException;
 use RuntimeException;
 
 /**
- * Perfil de permissões isolado por tenant (office).
- * System profiles (`legacy-operator`, `legacy-viewer`) são imutáveis.
+ * Perfil de permissões isolado por tenant (tenant).
+ * System profiles (`operator`, `viewer`) são imutáveis.
  */
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'key',
     'name',
     'description',
@@ -28,11 +28,11 @@ use RuntimeException;
 class TenantPermissionProfile extends Model
 {
     /** @use HasFactory<TenantPermissionProfileFactory> */
-    use BelongsToOffice, HasFactory;
+    use BelongsToTenant, HasFactory;
 
-    public const SYSTEM_LEGACY_OPERATOR = 'legacy-operator';
+    public const SYSTEM_OPERATOR = 'operator';
 
-    public const SYSTEM_LEGACY_VIEWER = 'legacy-viewer';
+    public const SYSTEM_VIEWER = 'viewer';
 
     protected function casts(): array
     {
@@ -40,7 +40,7 @@ class TenantPermissionProfile extends Model
             'is_system' => 'boolean',
             'is_active' => 'boolean',
             'authorization_version' => 'integer',
-            'office_id' => 'integer',
+            'tenant_id' => 'integer',
         ];
     }
 
@@ -56,7 +56,7 @@ class TenantPermissionProfile extends Model
 
     public function memberships(): HasMany
     {
-        return $this->hasMany(OfficeMembership::class, 'permission_profile_id');
+        return $this->hasMany(TenantMembership::class, 'permission_profile_id');
     }
 
     public function has(TenantPermission|string $permission): bool
@@ -87,9 +87,9 @@ class TenantPermissionProfile extends Model
         return $keys;
     }
 
-    public function belongsToOffice(int $officeId): bool
+    public function belongsToTenant(int $tenantId): bool
     {
-        return (int) $this->office_id === $officeId;
+        return (int) $this->tenant_id === $tenantId;
     }
 
     public function assertMutable(): void
@@ -124,16 +124,16 @@ class TenantPermissionProfile extends Model
         sort($keys, SORT_STRING);
 
         $profileId = filter_var($this->getKey(), FILTER_VALIDATE_INT);
-        $officeId = filter_var($this->office_id, FILTER_VALIDATE_INT);
-        if (! $this->exists || $profileId === false || $profileId < 1 || $officeId === false || $officeId < 1) {
+        $tenantId = filter_var($this->tenant_id, FILTER_VALIDATE_INT);
+        if (! $this->exists || $profileId === false || $profileId < 1 || $tenantId === false || $tenantId < 1) {
             throw new RuntimeException('Perfil de permissão persistido é obrigatório.');
         }
 
-        $this->getConnection()->transaction(function () use ($allowSystem, $keys, $officeId, $profileId): void {
+        $this->getConnection()->transaction(function () use ($allowSystem, $keys, $tenantId, $profileId): void {
             $locked = self::query()
                 ->withoutGlobalScopes()
                 ->whereKey($profileId)
-                ->where('office_id', $officeId)
+                ->where('tenant_id', $tenantId)
                 ->lockForUpdate()
                 ->first();
 

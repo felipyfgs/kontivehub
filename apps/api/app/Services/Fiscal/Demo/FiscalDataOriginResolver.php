@@ -3,11 +3,11 @@
 namespace App\Services\Fiscal\Demo;
 
 use App\Enums\FiscalDataOrigin;
-use App\Models\Office;
+use App\Models\Tenant;
 
 /**
  * Resolve proveniência DEMO/SIMULATED/LIVE com guard de ambiente.
- * Em production NUNCA retorna DEMO, mesmo com office slug demo.
+ * Em production NUNCA retorna DEMO, mesmo com tenant slug demo.
  */
 final class FiscalDataOriginResolver
 {
@@ -15,18 +15,18 @@ final class FiscalDataOriginResolver
         private readonly DemoEnvironmentGuard $guard,
     ) {}
 
-    public function resolve(?Office $office, bool $recordIsDemoFixture = false): FiscalDataOrigin
+    public function resolve(?Tenant $tenant, bool $recordIsDemoFixture = false): FiscalDataOrigin
     {
         if (! $this->guard->isAllowedEnvironment()) {
             return FiscalDataOrigin::Live;
         }
 
-        if ($office !== null && $this->guard->isDemoOffice($office) && $recordIsDemoFixture) {
+        if ($tenant !== null && $this->guard->isDemoTenant($tenant) && $recordIsDemoFixture) {
             return FiscalDataOrigin::Demo;
         }
 
-        if ($office !== null && $this->guard->isDemoOffice($office)) {
-            // Office demo sem marcação explícita ainda é sintético em local/testing.
+        if ($tenant !== null && $this->guard->isDemoTenant($tenant)) {
+            // Tenant demo sem marcação explícita ainda é sintético em local/testing.
             return FiscalDataOrigin::Demo;
         }
 
@@ -40,9 +40,9 @@ final class FiscalDataOriginResolver
     /**
      * @return array{origin: string, label: string, synthetic: bool, banner: string|null, manifest_version: string|null}
      */
-    public function toPublicMeta(?Office $office, bool $recordIsDemoFixture = false): array
+    public function toPublicMeta(?Tenant $tenant, bool $recordIsDemoFixture = false): array
     {
-        $origin = $this->resolve($office, $recordIsDemoFixture);
+        $origin = $this->resolve($tenant, $recordIsDemoFixture);
         $base = $origin->toPublicArray();
         $base['manifest_version'] = $origin === FiscalDataOrigin::Demo
             ? $this->guard->manifestVersion()
@@ -51,10 +51,10 @@ final class FiscalDataOriginResolver
         return $base;
     }
 
-    public function isDemoOfficeContext(?Office $office): bool
+    public function isDemoTenantContext(?Tenant $tenant): bool
     {
-        return $office !== null
+        return $tenant !== null
             && $this->guard->isAllowedEnvironment()
-            && $this->guard->isDemoOffice($office);
+            && $this->guard->isDemoTenant($tenant);
     }
 }

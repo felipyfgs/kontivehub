@@ -53,7 +53,7 @@ final class PagtowebArrecadacaoReceiptAdapter implements FiscalSourceAdapter
 
     public function moduleKey(): ?string
     {
-        return 'guias';
+        return 'guides';
     }
 
     public function supports(FiscalAdapterRequest $request): bool
@@ -65,15 +65,15 @@ final class PagtowebArrecadacaoReceiptAdapter implements FiscalSourceAdapter
 
     public function execute(FiscalAdapterRequest $request): FiscalAdapterResult
     {
-        if (! FeatureFlags::isModuleEnabled('guias', $request->office->id) && ! (bool) config('fiscal_monitoring.enabled', false)) {
+        if (! FeatureFlags::isModuleEnabled('guides', $request->tenant->id) && ! (bool) config('fiscal_monitoring.enabled', false)) {
             return FiscalAdapterResult::blocked('Módulo guias desabilitado.', 'FEATURE_DISABLED');
         }
         try {
             $businessData = $this->codec->normalizeRequest($request->context['numeroDocumento'] ?? null);
             $response = $this->operations->execute(
-                office: $request->office, client: $request->client, operationKey: self::OPERATION_KEY,
+                tenant: $request->tenant, client: $request->client, operationKey: self::OPERATION_KEY,
                 businessData: $businessData, idempotencyKey: 'pagtoweb-receipt:'.$request->run->idempotency_key,
-                correlationId: $request->run->correlation_id, entityKey: 'fiscal-run:'.$request->run->id, module: 'guias',
+                correlationId: $request->run->correlation_id, entityKey: 'fiscal-run:'.$request->run->id, module: 'guides',
             );
         } catch (Throwable) {
             return FiscalAdapterResult::failed('Não foi possível solicitar o comprovante.', 'PAGTOWEB_RECEIPT_FAILED', $this->coverage());

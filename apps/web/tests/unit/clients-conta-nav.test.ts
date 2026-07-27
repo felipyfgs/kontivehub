@@ -5,8 +5,18 @@ import type { MeUser } from '~/types/api'
 
 const admin = {
   id: 3,
-  role: 'ADMIN',
-  context_status: 'ready'
+  tenant_role: 'tenant_admin',
+  effective_permissions: [
+    'tenant.settings.view',
+    'tenant.users.manage',
+    'work.catalog.manage'
+  ],
+  current_tenant: {
+    id: 1,
+    name: 'Escritório Teste',
+    slug: 'escritorio-teste'
+  },
+  context_status: 'ok'
 } as MeUser
 
 describe('clients + conta navigation', () => {
@@ -17,7 +27,7 @@ describe('clients + conta navigation', () => {
   })
 
   it('exposes conta paths via account navigation', () => {
-    expect(ACCOUNT_NAVIGATION.office.to).toBe('/conta/escritorio')
+    expect(ACCOUNT_NAVIGATION.tenant.to).toBe('/conta/escritorio')
     expect(ACCOUNT_NAVIGATION.team.to).toBe('/conta/equipe')
     expect(ACCOUNT_NAVIGATION.usage.to).toBe('/conta/consumo')
 

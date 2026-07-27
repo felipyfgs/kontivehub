@@ -26,7 +26,7 @@ final class SvrsNfceKillSwitchService
         return (bool) Cache::get(self::CACHE_KEY, false);
     }
 
-    public function activate(string $reason, int $userId, ?int $officeId = null): void
+    public function activate(string $reason, int $userId, ?int $tenantId = null): void
     {
         Cache::forever(self::CACHE_KEY, true);
         $this->audit->record(
@@ -35,11 +35,11 @@ final class SvrsNfceKillSwitchService
             null,
             ['reason' => mb_substr($reason, 0, 500)],
             $userId,
-            $officeId,
+            $tenantId,
         );
     }
 
-    public function deactivate(string $reason, int $userId, ?int $officeId = null): void
+    public function deactivate(string $reason, int $userId, ?int $tenantId = null): void
     {
         Cache::forget(self::CACHE_KEY);
         $this->audit->record(
@@ -48,7 +48,7 @@ final class SvrsNfceKillSwitchService
             null,
             ['reason' => mb_substr($reason, 0, 500)],
             $userId,
-            $officeId,
+            $tenantId,
         );
     }
 

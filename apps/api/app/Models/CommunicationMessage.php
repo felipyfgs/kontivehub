@@ -6,14 +6,14 @@ use App\Enums\Communication\MessageDirection;
 use App\Enums\Communication\MessageKind;
 use App\Enums\Communication\MessageSource;
 use App\Enums\Communication\MessageStatus;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'inbox_id',
     'conversation_id',
     'identity_id',
@@ -43,7 +43,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 ])]
 class CommunicationMessage extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {
@@ -89,7 +89,7 @@ class CommunicationMessage extends Model
 
     public function author(): BelongsTo
     {
-        return $this->belongsTo(OfficeMembership::class, 'author_membership_id');
+        return $this->belongsTo(TenantMembership::class, 'author_membership_id');
     }
 
     public function fiscalDispatch(): BelongsTo

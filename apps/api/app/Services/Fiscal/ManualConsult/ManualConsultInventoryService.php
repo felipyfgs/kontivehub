@@ -6,7 +6,7 @@ use App\Enums\ManualConsultEligibility;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
 use App\Models\FiscalSnapshot;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\FiscalMonitoring\Projection\MonitoringQueryProjectionFactory;
 
@@ -30,20 +30,20 @@ final class ManualConsultInventoryService
      * }
      */
     public function inventory(
-        Office $office,
+        Tenant $tenant,
         ?Client $client = null,
         ?string $surfaceKey = null,
         ?string $moduleKey = null,
         ?User $actor = null,
     ): array {
         $environment = $this->eligibility->environment();
-        $auth = $this->eligibility->authorizationFor($office, $environment);
+        $auth = $this->eligibility->authorizationFor($tenant, $environment);
         $hasToken = $this->eligibility->hasUsableToken($auth);
 
         $actions = [];
         $ready = 0;
         $canTrigger = $actor instanceof User
-            && $this->readPolicy->canTrigger($office, $client, $actor);
+            && $this->readPolicy->canTrigger($tenant, $client, $actor);
 
         foreach ($this->catalog->all() as $def) {
             if ($surfaceKey !== null && $surfaceKey !== '' && $def->surfaceKey !== $surfaceKey) {
@@ -54,7 +54,7 @@ final class ManualConsultInventoryService
             }
 
             $status = $this->eligibility->evaluateWithContext(
-                $office,
+                $tenant,
                 $def,
                 $hasToken,
                 $client,
@@ -68,7 +68,7 @@ final class ManualConsultInventoryService
                 $ready++;
             }
 
-            $actions[] = $this->toPublicAction($def, $status, $office, $client);
+            $actions[] = $this->toPublicAction($def, $status, $tenant, $client);
         }
 
         return [
@@ -83,11 +83,11 @@ final class ManualConsultInventoryService
     }
 
     public function evaluateFor(
-        Office $office,
+        Tenant $tenant,
         ManualConsultActionDefinition $def,
         ?Client $client = null,
     ): ManualConsultEligibility {
-        return $this->eligibility->evaluate($office, $def, $client);
+        return $this->eligibility->evaluate($tenant, $def, $client);
     }
 
     /**
@@ -96,7 +96,7 @@ final class ManualConsultInventoryService
     private function toPublicAction(
         ManualConsultActionDefinition $def,
         ManualConsultEligibility $eligibility,
-        Office $office,
+        Tenant $tenant,
         ?Client $client,
     ): array {
         return [
@@ -111,14 +111,14 @@ final class ManualConsultInventoryService
             'async' => $def->async,
             'params_schema' => $def->paramsSchema,
             'last_result_summary' => $client !== null
-                ? $this->lastResultSummary($office, $client, $def)
+                ? $this->lastResultSummary($tenant, $client, $def)
                 : null,
         ];
     }
 
     /** @return array<string, mixed>|null */
     private function lastResultSummary(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         ManualConsultActionDefinition $def,
     ): ?array {
@@ -129,7 +129,7 @@ final class ManualConsultInventoryService
 
         $q = FiscalMonitoringRun::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('system_code', $codes['system'])
             ->where('service_code', $codes['service']);
@@ -140,7 +140,7 @@ final class ManualConsultInventoryService
 
         $snapshotQuery = FiscalSnapshot::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('system_code', $codes['system'])
             ->where('service_code', $codes['service']);

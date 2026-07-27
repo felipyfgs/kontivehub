@@ -10,12 +10,12 @@ async function login(page: Page, email: string) {
   await expect(page).not.toHaveURL(/\/login/)
 }
 
-async function selectOffice(page: Page, name: string) {
-  const identity = page.getByTestId('office-identity')
-  if (await identity.getAttribute('data-office-name') === name) return
+async function selectTenant(page: Page, name: string) {
+  const identity = page.getByTestId('tenant-identity')
+  if (await identity.getAttribute('data-tenant-name') === name) return
   await identity.click()
   await page.locator('[role="option"]').filter({ hasText: name }).click()
-  await expect(identity).toHaveAttribute('data-office-name', name)
+  await expect(identity).toHaveAttribute('data-tenant-name', name)
 }
 
 test.beforeEach(async ({ page }) => {
@@ -29,22 +29,22 @@ test.beforeEach(async ({ page }) => {
   })
 })
 
-test('operador alterna tenant e o catálogo acompanha o CurrentOffice', async ({ page }) => {
+test('operador alterna tenant e o catálogo acompanha o CurrentTenant', async ({ page }) => {
   await login(page, 'operador@example.com')
-  await selectOffice(page, 'Escritório Contábil Demo')
+  await selectTenant(page, 'Escritório Contábil Demo')
   await page.goto('/clients')
   await expect(page.getByText('Cliente E2E Primário', { exact: true })).toBeVisible()
   await expect(page.getByText('Cliente E2E Secundário', { exact: true })).toHaveCount(0)
 
-  await selectOffice(page, 'Escritório E2E Secundário')
+  await selectTenant(page, 'Escritório E2E Secundário')
   await expect(page.getByText('Cliente E2E Secundário', { exact: true })).toBeVisible()
   await expect(page.getByText('Cliente E2E Primário', { exact: true })).toHaveCount(0)
-  await selectOffice(page, 'Escritório Contábil Demo')
+  await selectTenant(page, 'Escritório Contábil Demo')
 })
 
 test('catálogo de clientes diferencia as permissões de operador e viewer', async ({ page }) => {
   await login(page, 'viewer@example.com')
-  await selectOffice(page, 'Escritório Contábil Demo')
+  await selectTenant(page, 'Escritório Contábil Demo')
   await page.goto('/clients')
 
   await expect(page.getByTestId('page-navbar')).toBeVisible()
@@ -55,7 +55,7 @@ test('catálogo de clientes diferencia as permissões de operador e viewer', asy
 
 test('dashboard e fila de trabalho isolam o tenant e mantêm viewer sem ações mutáveis', async ({ page }) => {
   await login(page, 'viewer@example.com')
-  await selectOffice(page, 'Escritório Contábil Demo')
+  await selectTenant(page, 'Escritório Contábil Demo')
   await page.goto('/work')
 
   await expect(page.getByTestId('work-strategic-dashboard')).toBeVisible()
@@ -74,11 +74,11 @@ test('dashboard e fila de trabalho isolam o tenant e mantêm viewer sem ações 
 
   const secondaryQueueResponse = page.waitForResponse(response =>
     response.url().includes('/api/sanctum/api/v1/work/queue') && response.ok())
-  await selectOffice(page, 'Escritório E2E Secundário')
+  await selectTenant(page, 'Escritório E2E Secundário')
   await page.goto('/work/tasks')
   const secondaryQueue = await (await secondaryQueueResponse).json() as { data: Array<{ title: string }> }
   expect(secondaryQueue.data.map(task => task.title)).toContain('Tarefa E2E Secundário')
   expect(secondaryQueue.data.map(task => task.title)).not.toContain('Tarefa E2E Primário')
-  await expect(page.getByTestId('office-identity')).toHaveAttribute('data-office-name', 'Escritório E2E Secundário')
-  await selectOffice(page, 'Escritório Contábil Demo')
+  await expect(page.getByTestId('tenant-identity')).toHaveAttribute('data-tenant-name', 'Escritório E2E Secundário')
+  await selectTenant(page, 'Escritório Contábil Demo')
 })

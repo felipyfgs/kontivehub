@@ -21,7 +21,7 @@ use RuntimeException;
 
 /**
  * Console de plataforma SERPRO: credenciais, readiness, budgets e rollout.
- * PLATFORM_ADMIN + TOTP (middleware). Respostas sempre sanitizadas.
+ * PLATFORM_ADMIN; ações sensíveis exigem senha recente. Respostas sanitizadas.
  */
 class SerproPlatformOpsController extends Controller
 {
@@ -51,84 +51,6 @@ class SerproPlatformOpsController extends Controller
         return response()->json([
             'data' => $serproCredentialVersion->toSanitizedArray(),
         ]);
-    }
-
-    public function approveCredentialVersion(Request $request, SerproCredentialVersion $serproCredentialVersion): JsonResponse
-    {
-        $data = $request->validate([
-            'action' => ['required', 'string', 'max:40'],
-            'decision' => ['required', 'string', Rule::in(['APPROVE', 'REJECT'])],
-            'reason' => ['nullable', 'string', 'max:500'],
-            // Legado: totp_verified — confirmação real via EnsureRecentPasswordConfirmation + senha.
-            'totp_verified' => ['sometimes', 'boolean'],
-        ]);
-
-        $passwordGate = app(RecentPasswordConfirmationGate::class);
-        $confirmed = $passwordGate->isRecentlyConfirmed($request->user(), $request);
-
-        try {
-            $approval = $this->credentials->recordApproval(
-                $serproCredentialVersion,
-                $data['action'],
-                (int) $request->user()->id,
-                totpVerified: $confirmed,
-                decision: $data['decision'],
-                reason: $data['reason'] ?? null,
-            );
-        } catch (RuntimeException $e) {
-            return response()->json([
-                'message' => $e->getMessage(),
-                'code' => $confirmed ? 'approval_error' : 'password_confirmation_required',
-            ], $confirmed ? 422 : 403);
-        }
-
-        $ctx = is_array($approval->context) ? $approval->context : [];
-
-        return response()->json([
-            'data' => [
-                'id' => $approval->id,
-                'action' => $approval->action,
-                'decision' => $approval->decision,
-                'approver_user_id' => $approval->approver_user_id,
-                'confirmation_method' => $ctx['confirmation_method'] ?? 'PASSWORD',
-                'confirmed_at' => $ctx['confirmed_at'] ?? $approval->decided_at?->toIso8601String(),
-                // Campo legado sanitizado (nunca a senha)
-                'totp_verified' => (bool) $approval->totp_verified,
-                'decided_at' => $approval->decided_at?->toIso8601String(),
-                'credential_version' => $serproCredentialVersion->fresh()->toSanitizedArray(),
-            ],
-        ], 201);
-    }
-
-    public function cutoverCredentialVersion(Request $request, SerproCredentialVersion $serproCredentialVersion): JsonResponse
-    {
-        $data = $request->validate([
-            'skip_oauth' => ['sometimes', 'boolean'],
-            'reason' => ['nullable', 'string', 'max:500'],
-            'approval_id' => ['sometimes', 'integer', 'min:1'],
-        ]);
-
-        $passwordOk = app(RecentPasswordConfirmationGate::class)
-            ->isRecentlyConfirmed($request->user(), $request);
-        if (! $passwordOk) {
-            return response()->json([
-                'message' => 'Cutover exige reconfirmação de senha recente.',
-                'code' => 'password_confirmation_required',
-            ], 403);
-        }
-
-        try {
-            $version = $this->credentials->cutover(
-                $serproCredentialVersion,
-                actorUserId: $request->user()?->id,
-                skipOauth: (bool) ($data['skip_oauth'] ?? false),
-                approvalId: isset($data['approval_id']) ? (int) $data['approval_id'] : null,
-            );
-        } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
-        }
-
-        return response()->json(['data' => $version->toSanitizedArray()]);
     }
 
     public function readiness(Request $request): JsonResponse
@@ -173,7 +95,7 @@ class SerproPlatformOpsController extends Controller
             return [
                 'id' => $b->id,
                 'scope' => $b->scope,
-                'office_id' => $b->office_id,
+                'tenant_id' => $b->tenant_id,
                 'environment' => $b->environment,
                 'budget_kind' => $b->budget_kind,
                 'limit_micros' => (int) $b->limit_micros,
@@ -209,7 +131,7 @@ class SerproPlatformOpsController extends Controller
             'subject_id' => ['nullable', 'integer'],
             'reason' => ['required', 'string', 'max:500'],
             'environment' => ['sometimes', 'string', Rule::enum(SerproEnvironment::class)],
-            'office_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'tenant_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'context' => ['sometimes', 'array'],
             'ttl_hours' => ['sometimes', 'integer', 'min:1', 'max:168'],
             'change_window_start' => ['sometimes', 'nullable', 'date'],
@@ -220,9 +142,9 @@ class SerproPlatformOpsController extends Controller
             ? SerproEnvironment::from($data['environment'])
             : null;
 
-        // office_id do body só é aceito para delimitar canário no registro da aprovação
-        // (não altera CurrentOffice / escopo tenant de dados fiscais).
-        $officeId = isset($data['office_id']) ? (int) $data['office_id'] : null;
+        // tenant_id do body só é aceito para delimitar canário no registro da aprovação
+        // (não altera CurrentTenant / escopo tenant de dados fiscais).
+        $tenantId = isset($data['tenant_id']) ? (int) $data['tenant_id'] : null;
 
         try {
             $approval = $this->rollouts->request(
@@ -232,7 +154,7 @@ class SerproPlatformOpsController extends Controller
                 reason: $data['reason'],
                 requestedByUserId: (int) $request->user()->id,
                 environment: $env,
-                officeId: $officeId,
+                tenantId: $tenantId,
                 context: $data['context'] ?? [],
                 ttlHours: (int) ($data['ttl_hours'] ?? 24),
                 changeWindowStart: isset($data['change_window_start'])

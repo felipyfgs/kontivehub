@@ -128,7 +128,7 @@ final class PgmeiDividaAtiva24Codec
     }
 
     /**
-     * Compatibilidade controlada com o transporte: nunca procura listas em campos inventados.
+     * Leitura estrita do transporte: nunca procura listas em campos inventados.
      *
      * @param  array<string,mixed>  $body
      */

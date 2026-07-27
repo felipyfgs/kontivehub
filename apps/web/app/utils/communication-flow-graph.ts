@@ -46,7 +46,7 @@ export const FLOW_NODE_TYPE_META: Record<CommunicationFlowNodeType, {
   },
   quick_reply: {
     label: 'Resposta rápida',
-    description: 'Envia canned response do Office',
+    description: 'Envia canned response do Tenant',
     icon: 'i-lucide-zap'
   },
   question: {

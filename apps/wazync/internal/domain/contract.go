@@ -108,11 +108,9 @@ type InteractivePayload struct {
 	Options     []string `json:"options"`
 }
 
-// MessageSendPayload remains compatible with the original {to,text,media}
-// envelope while giving every rich 1:1 type an explicit field.
 type MessageSendPayload struct {
 	To          string              `json:"to"`
-	Kind        MessageKind         `json:"kind,omitempty"`
+	Kind        MessageKind         `json:"kind"`
 	Text        string              `json:"text,omitempty"`
 	Caption     string              `json:"caption,omitempty"`
 	ReplyTo     *MessageReference   `json:"reply_to,omitempty"`
@@ -241,7 +239,7 @@ func (c Command) ValidatePayload() error {
 	switch c.Type {
 	case CommandProvisionSession:
 		return decodePayload(c.Payload, &SessionProvisionPayload{})
-	case CommandPairSession, CommandConnectSession, CommandDisconnectSession, CommandResetSession,
+	case CommandPairSession, CommandConnectSession, CommandDisconnectSession,
 		CommandLogoutSession:
 		return decodePayload(c.Payload, &EmptyPayload{})
 	case CommandPairPhone:
@@ -253,7 +251,11 @@ func (c Command) ValidatePayload() error {
 	case CommandSetPassive:
 		return decodePayload(c.Payload, &PassivePayload{})
 	case CommandSendMessage:
-		return decodePayload(c.Payload, &MessageSendPayload{})
+		var payload MessageSendPayload
+		if err := decodePayload(c.Payload, &payload); err != nil {
+			return err
+		}
+		return payload.Validate()
 	case CommandEditMessage:
 		return decodePayload(c.Payload, &MessageEditPayload{})
 	case CommandRevokeMessage, CommandRequestUnavailable:
@@ -323,6 +325,48 @@ func (c Command) ValidatePayload() error {
 	default:
 		return errors.New("unsupported command payload")
 	}
+}
+
+func (p MessageSendPayload) Validate() error {
+	if strings.TrimSpace(p.To) == "" || !p.Kind.Valid() || p.Kind == MessageUnsupported {
+		return errors.New("message recipient and supported kind are required")
+	}
+
+	switch p.Kind {
+	case MessageText:
+		if strings.TrimSpace(p.Text) == "" || p.Media != nil || p.Location != nil ||
+			p.Contact != nil || p.Poll != nil || p.Interactive != nil {
+			return errors.New("invalid text message payload")
+		}
+	case MessageImage, MessageAudio, MessageVideo, MessageDocument, MessageSticker:
+		if p.Media == nil || strings.TrimSpace(p.Media.Filename) == "" ||
+			strings.TrimSpace(p.Media.MIMEType) == "" || p.Location != nil ||
+			p.Contact != nil || p.Poll != nil || p.Interactive != nil {
+			return errors.New("invalid media message payload")
+		}
+	case MessageLocation:
+		if p.Location == nil || p.Media != nil || p.Contact != nil ||
+			p.Poll != nil || p.Interactive != nil {
+			return errors.New("invalid location message payload")
+		}
+	case MessageContact:
+		if p.Contact == nil || p.Media != nil || p.Location != nil ||
+			p.Poll != nil || p.Interactive != nil {
+			return errors.New("invalid contact message payload")
+		}
+	case MessagePoll:
+		if p.Poll == nil || p.Media != nil || p.Location != nil ||
+			p.Contact != nil || p.Interactive != nil {
+			return errors.New("invalid poll message payload")
+		}
+	case MessageInteractive:
+		if p.Interactive == nil || p.Media != nil || p.Location != nil ||
+			p.Contact != nil || p.Poll != nil {
+			return errors.New("invalid interactive message payload")
+		}
+	}
+
+	return nil
 }
 
 func (q Query) ValidatePayload() error {

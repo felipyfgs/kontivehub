@@ -11,7 +11,7 @@ use App\Models\OutboundCaptureProfile;
 use App\Models\OutboundNumberState;
 
 /**
- * Avaliador de elegibilidade: UF 21, modelo 65, OUT, ambiente, perfil, allowlist e A1.
+ * Avaliador de elegibilidade: UF 21, modelo 65, OUT, ambiente, perfil, allowlist e certificado.
  */
 final class SvrsNfceRetrievalEligibility
 {
@@ -23,7 +23,7 @@ final class SvrsNfceRetrievalEligibility
     public function evaluate(
         OutboundNumberState $number,
         OutboundCaptureProfile $profile,
-        bool $a1Available = true,
+        bool $certificateAvailable = true,
     ): SvrsNfceEligibilityResult {
         if (! $this->config->retrievalEnabled()) {
             return SvrsNfceEligibilityResult::no(
@@ -125,10 +125,10 @@ final class SvrsNfceRetrievalEligibility
             );
         }
 
-        if (! $a1Available) {
+        if (! $certificateAvailable) {
             return SvrsNfceEligibilityResult::no(
-                SvrsNfceFailureReason::A1Unavailable,
-                'Credencial A1 da raiz indisponível.',
+                SvrsNfceFailureReason::CertificateUnavailable,
+                'certificado da raiz indisponível.',
             );
         }
 

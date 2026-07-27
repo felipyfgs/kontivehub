@@ -13,7 +13,7 @@ final class AssistantPendingApprovalStore
      * @param  array<string, mixed>  $args
      */
     public function put(
-        int $officeId,
+        int $tenantId,
         int $conversationId,
         string $toolCallId,
         string $toolName,
@@ -21,7 +21,7 @@ final class AssistantPendingApprovalStore
     ): string {
         $token = (string) Str::uuid();
         Cache::put($this->key($token), [
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'conversation_id' => $conversationId,
             'tool_call_id' => $toolCallId,
             'tool_name' => $toolName,
@@ -33,9 +33,9 @@ final class AssistantPendingApprovalStore
     }
 
     /**
-     * @return array{office_id: int, conversation_id: int, tool_call_id: string, tool_name: string, args: array<string, mixed>, created_at: string}|null
+     * @return array{tenant_id: int, conversation_id: int, tool_call_id: string, tool_name: string, args: array<string, mixed>, created_at: string}|null
      */
-    public function pull(string $token, int $officeId, int $conversationId): ?array
+    public function pull(string $token, int $tenantId, int $conversationId): ?array
     {
         $key = $this->key($token);
         $payload = Cache::pull($key);
@@ -43,19 +43,19 @@ final class AssistantPendingApprovalStore
             return null;
         }
 
-        if ((int) ($payload['office_id'] ?? 0) !== $officeId
+        if ((int) ($payload['tenant_id'] ?? 0) !== $tenantId
             || (int) ($payload['conversation_id'] ?? 0) !== $conversationId) {
             return null;
         }
 
-        /** @var array{office_id: int, conversation_id: int, tool_call_id: string, tool_name: string, args: array<string, mixed>, created_at: string} $payload */
+        /** @var array{tenant_id: int, conversation_id: int, tool_call_id: string, tool_name: string, args: array<string, mixed>, created_at: string} $payload */
         return $payload;
     }
 
     /**
-     * Invalida pending approval com bind office/conversa (sem consumir token alheio).
+     * Invalida pending approval com bind tenant/conversa (sem consumir token alheio).
      */
-    public function forget(string $token, int $officeId, int $conversationId): bool
+    public function forget(string $token, int $tenantId, int $conversationId): bool
     {
         $key = $this->key($token);
         $payload = Cache::get($key);
@@ -63,7 +63,7 @@ final class AssistantPendingApprovalStore
             return false;
         }
 
-        if ((int) ($payload['office_id'] ?? 0) !== $officeId
+        if ((int) ($payload['tenant_id'] ?? 0) !== $tenantId
             || (int) ($payload['conversation_id'] ?? 0) !== $conversationId) {
             return false;
         }
@@ -77,7 +77,7 @@ final class AssistantPendingApprovalStore
      */
     private function sanitizeArgs(array $args): array
     {
-        unset($args['office_id'], $args['api_key'], $args['openai_api_key']);
+        unset($args['tenant_id'], $args['api_key'], $args['openai_api_key']);
 
         return $args;
     }

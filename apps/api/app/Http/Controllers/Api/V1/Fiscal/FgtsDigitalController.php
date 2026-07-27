@@ -6,21 +6,22 @@ use App\Enums\CredentialStatus;
 use App\Enums\FgtsDigitalCredentialSource;
 use App\Enums\FgtsDigitalGuideType;
 use App\Enums\FgtsDigitalRepresentationStatus;
-use App\Enums\OfficeCredentialPurpose;
-use App\Enums\OfficeRole;
+use App\Enums\TenantPermission;
+use App\Enums\TenantRole;
 use App\Http\Controllers\Controller;
 use App\Jobs\Fiscal\ExecuteFgtsDigitalRunJob;
 use App\Models\Client;
 use App\Models\FgtsDigitalRepresentation;
 use App\Models\FgtsDigitalRun;
-use App\Models\OfficeCredential;
+use App\Models\TenantCredential;
 use App\Models\User;
+use App\Services\Authorization\TenantAuthorization;
 use App\Services\FgtsDigital\Exceptions\FgtsDigitalException;
 use App\Services\FgtsDigital\FgtsDigitalCredentialResolver;
 use App\Services\FgtsDigital\FgtsDigitalPortalService;
 use App\Services\FgtsDigital\FgtsDigitalReadinessService;
 use App\Services\FgtsDigital\FgtsDigitalSessionStore;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,11 +29,12 @@ use Illuminate\Http\Request;
 final class FgtsDigitalController extends Controller
 {
     public function __construct(
-        private readonly CurrentOffice $currentOffice,
+        private readonly CurrentTenant $currentTenant,
         private readonly FgtsDigitalReadinessService $readiness,
         private readonly FgtsDigitalPortalService $portal,
         private readonly FgtsDigitalCredentialResolver $credentials,
         private readonly FgtsDigitalSessionStore $sessions,
+        private readonly TenantAuthorization $authorization,
     ) {}
 
     public function coverage(): JsonResponse
@@ -51,7 +53,7 @@ final class FgtsDigitalController extends Controller
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
 
-        return response()->json(['data' => $this->readiness->check($this->currentOffice->office(), $client)]);
+        return response()->json(['data' => $this->readiness->check($this->currentTenant->tenant(), $client)]);
     }
 
     public function runs(Request $request): JsonResponse
@@ -61,10 +63,10 @@ final class FgtsDigitalController extends Controller
             'client_id' => ['sometimes', 'integer'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ]);
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
         $query = FgtsDigitalRun::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->orderByDesc('id');
         if (isset($data['client_id'])) {
             $query->where('client_id', (int) $data['client_id']);
@@ -82,12 +84,12 @@ final class FgtsDigitalController extends Controller
             'client_id' => ['required', 'integer'],
             'parameters' => ['sometimes', 'array'],
         ]);
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
         $client = $this->client((int) $data['client_id']);
         if ($client === null) {
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
-        $ready = $this->readiness->check($office, $client);
+        $ready = $this->readiness->check($tenant, $client);
         if (! $ready['ready_for_read']) {
             return response()->json([
                 'message' => $ready['blockers'][0]['message'] ?? 'FGTS Digital indisponível.',
@@ -97,8 +99,8 @@ final class FgtsDigitalController extends Controller
         }
 
         try {
-            $run = $this->portal->createQueryRun($office, $client, $request->user(), $data['parameters'] ?? []);
-            ExecuteFgtsDigitalRunJob::dispatch((int) $office->id, (int) $run->id);
+            $run = $this->portal->createQueryRun($tenant, $client, $request->user(), $data['parameters'] ?? []);
+            ExecuteFgtsDigitalRunJob::dispatch((int) $tenant->id, (int) $run->id);
         } catch (FgtsDigitalException $e) {
             return $this->error($e);
         }
@@ -113,18 +115,18 @@ final class FgtsDigitalController extends Controller
             'client_id' => ['required', 'integer'],
             'parameters' => ['sometimes', 'array'],
         ]);
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
         $client = $this->client((int) $data['client_id']);
         if ($client === null) {
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
-        $ready = $this->readiness->check($office, $client);
+        $ready = $this->readiness->check($tenant, $client);
         if (! $ready['ready_for_read']) {
             return $this->readinessBlocked($ready);
         }
 
         try {
-            $run = $this->portal->createQueryRun($office, $client, $request->user(), $data['parameters'] ?? []);
+            $run = $this->portal->createQueryRun($tenant, $client, $request->user(), $data['parameters'] ?? []);
             $run = $this->portal->executeRun($run);
         } catch (FgtsDigitalException $e) {
             return $this->error($e);
@@ -157,14 +159,14 @@ final class FgtsDigitalController extends Controller
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
 
-        $ready = $this->readiness->check($this->currentOffice->office(), $client);
+        $ready = $this->readiness->check($this->currentTenant->tenant(), $client);
         if (! $ready['ready_for_read']) {
             return $this->readinessBlocked($ready);
         }
 
         try {
             $result = $this->portal->preview(
-                $this->currentOffice->office(),
+                $this->currentTenant->tenant(),
                 $client,
                 $user,
                 FgtsDigitalGuideType::from($data['guide_type']),
@@ -191,10 +193,10 @@ final class FgtsDigitalController extends Controller
             'preview_token' => ['required', 'string', 'size:48'],
             'confirmation_phrase' => ['required', 'string', 'max:160'],
         ]);
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
         $preview = FgtsDigitalRun::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($run)
             ->first();
         if ($preview === null) {
@@ -203,14 +205,14 @@ final class FgtsDigitalController extends Controller
 
         try {
             $out = $this->portal->authorizeEmission(
-                $office,
+                $tenant,
                 $preview,
                 $user,
                 $data['preview_token'],
                 $data['confirmation_phrase'],
             );
             if (! $out['reused']) {
-                ExecuteFgtsDigitalRunJob::dispatch((int) $office->id, (int) $out['run']->id);
+                ExecuteFgtsDigitalRunJob::dispatch((int) $tenant->id, (int) $out['run']->id);
             }
         } catch (FgtsDigitalException $e) {
             return $this->error($e);
@@ -231,19 +233,19 @@ final class FgtsDigitalController extends Controller
             'storage_state.cookies' => ['required', 'array'],
             'storage_state.origins' => ['required', 'array'],
         ]);
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
         $client = $this->client((int) $data['client_id']);
         if ($client === null) {
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
-        $credential = $this->credentials->resolve($office, $client, includeMaterial: false);
+        $credential = $this->credentials->resolve($tenant, $client, includeMaterial: false);
         if ($credential === null) {
             return response()->json(['message' => 'Credencial/procuração não está pronta.', 'code' => 'FGTS_DIGITAL_CREDENTIAL_MISSING'], 422);
         }
 
         try {
             $session = $this->sessions->store(
-                (int) $office->id,
+                (int) $tenant->id,
                 (int) $client->id,
                 $credential['source'],
                 $credential['fingerprint'],
@@ -262,8 +264,8 @@ final class FgtsDigitalController extends Controller
     public function storeRepresentation(Request $request): JsonResponse
     {
         $this->assertCanMutate();
-        if (! (bool) config('fgts_digital.office_credential_enabled', false)) {
-            return response()->json(['message' => 'Uso do A1 do escritório está desabilitado.', 'code' => 'FGTS_DIGITAL_OFFICE_CREDENTIAL_DISABLED'], 403);
+        if (! (bool) config('fgts_digital.tenant_credential_enabled', false)) {
+            return response()->json(['message' => 'Uso do certificado do escritório está desabilitado.', 'code' => 'FGTS_DIGITAL_TENANT_CREDENTIAL_DISABLED'], 403);
         }
         $data = $request->validate([
             'client_id' => ['required', 'integer'],
@@ -271,26 +273,25 @@ final class FgtsDigitalController extends Controller
             'confirmed' => ['required', 'accepted'],
             'profile_type' => ['sometimes', 'string', 'in:PROCURADOR_PJ,RESPONSAVEL_LEGAL'],
         ]);
-        $office = $this->currentOffice->office();
+        $tenant = $this->currentTenant->tenant();
         $client = $this->client((int) $data['client_id']);
         if ($client === null) {
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
-        $credential = OfficeCredential::query()
+        $credential = TenantCredential::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
-            ->where('purpose', OfficeCredentialPurpose::CanonicalECnpjA1->value)
+            ->where('tenant_id', $tenant->id)
             ->where('status', CredentialStatus::Active->value)
             ->first();
         if ($credential === null) {
-            return response()->json(['message' => 'A1 canônico do escritório não está ativo.', 'code' => 'FGTS_DIGITAL_OFFICE_CREDENTIAL_MISSING'], 422);
+            return response()->json(['message' => 'certificado do escritório não está ativo.', 'code' => 'FGTS_DIGITAL_TENANT_CREDENTIAL_MISSING'], 422);
         }
 
         $representation = FgtsDigitalRepresentation::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
-            'office_credential_id' => $credential->id,
-            'credential_source' => FgtsDigitalCredentialSource::Office,
+            'tenant_credential_id' => $credential->id,
+            'credential_source' => FgtsDigitalCredentialSource::Tenant,
             'profile_type' => $data['profile_type'] ?? 'PROCURADOR_PJ',
             'target_identifier_hash' => FgtsDigitalCredentialResolver::identifierHash((string) $client->root_cnpj),
             'status' => FgtsDigitalRepresentationStatus::Active,
@@ -314,29 +315,30 @@ final class FgtsDigitalController extends Controller
     {
         return Client::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $this->currentOffice->office()->id)
+            ->where('tenant_id', $this->currentTenant->tenant()->id)
             ->whereKey($id)
             ->first();
     }
 
     private function assertCanRead(): void
     {
-        if ($this->currentOffice->role() === null) {
+        if ($this->currentTenant->role() === null) {
             abort(403, 'Perfil não resolvido.');
         }
     }
 
     private function assertCanOperate(): void
     {
-        $role = $this->currentOffice->role();
-        if ($role === null || ! $role->canTriggerSync()) {
+        $actor = request()->user();
+        if (! $actor instanceof User
+            || ! $this->authorization->allows($actor, TenantPermission::FiscalSyncTrigger)) {
             abort(403, 'Ação não autorizada para o perfil atual.');
         }
     }
 
     private function assertCanMutate(): void
     {
-        if ($this->currentOffice->role() !== OfficeRole::Admin) {
+        if ($this->currentTenant->role() !== TenantRole::TenantAdmin) {
             abort(403, 'Emissão e credenciais exigem administrador do escritório.');
         }
     }

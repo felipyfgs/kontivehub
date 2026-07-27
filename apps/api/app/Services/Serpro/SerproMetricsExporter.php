@@ -8,7 +8,6 @@ use App\Models\SerproUsageReconciliation;
 use App\Services\Operations\OperationsMetrics;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * Exporta métricas SERPRO sem PII (cardinalidade limitada).
@@ -113,34 +112,28 @@ final class SerproMetricsExporter
         $rateLimitedJobs = 0;
 
         try {
-            if (Schema::hasTable('serpro_usage_reconciliations')) {
-                $openReconcile = SerproUsageReconciliation::query()
-                    ->whereIn('status', ['OPEN', 'DIVERGENT'])
-                    ->count();
-            }
+            $openReconcile = SerproUsageReconciliation::query()
+                ->whereIn('status', ['OPEN', 'DIVERGENT'])
+                ->count();
         } catch (\Throwable) {
             $openReconcile = -1;
         }
 
         try {
-            if (Schema::hasTable('serpro_usage_incidents')) {
-                $openIncidents = SerproUsageIncident::query()
-                    ->whereNull('resolved_at')
-                    ->count();
-            }
+            $openIncidents = SerproUsageIncident::query()
+                ->whereNull('resolved_at')
+                ->count();
         } catch (\Throwable) {
             $openIncidents = -1;
         }
 
         try {
-            if (Schema::hasTable('serpro_async_job_runs')) {
-                $runningJobs = SerproAsyncJobRun::query()
-                    ->where('status', SerproAsyncJobRun::STATUS_RUNNING)
-                    ->count();
-                $rateLimitedJobs = SerproAsyncJobRun::query()
-                    ->where('status', SerproAsyncJobRun::STATUS_RATE_LIMITED)
-                    ->count();
-            }
+            $runningJobs = SerproAsyncJobRun::query()
+                ->where('status', SerproAsyncJobRun::STATUS_RUNNING)
+                ->count();
+            $rateLimitedJobs = SerproAsyncJobRun::query()
+                ->where('status', SerproAsyncJobRun::STATUS_RATE_LIMITED)
+                ->count();
         } catch (\Throwable) {
             $runningJobs = -1;
             $rateLimitedJobs = -1;

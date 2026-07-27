@@ -19,7 +19,7 @@ use App\Models\FiscalCompetence;
 use App\Models\FiscalMonitoringRun;
 use App\Models\FiscalMonitoringSchedule;
 use App\Models\MonitorCommercialLedgerEntry;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\Audit\AuditLogger;
 use App\Services\Fiscal\Availability\FiscalModuleAvailabilityService;
 use App\Services\Fiscal\Availability\FiscalModuleControlService;
@@ -36,7 +36,7 @@ use App\Services\Fiscal\SimplesMei\Pgmei\PgmeiCommunicationService;
 use App\Services\Fiscal\Sitfis\SitfisCommunicationService;
 use App\Services\Operations\OperationsMetrics;
 use App\Services\Operations\StructuredLogger;
-use App\Services\Platform\OfficeSubscriptionGate;
+use App\Services\Platform\TenantSubscriptionGate;
 use App\Services\Usage\CommercialMonitorCatalog;
 use App\Services\Usage\MonitorCommercialLedgerService;
 use Carbon\CarbonImmutable;
@@ -55,7 +55,7 @@ final class FiscalMonitoringRunService
         private readonly FiscalAdapterRegistry $registry,
         private readonly FiscalSnapshotPersistence $persistence,
         private readonly FiscalMonitoringScheduler $scheduler,
-        private readonly OfficeSubscriptionGate $subscriptionGate,
+        private readonly TenantSubscriptionGate $subscriptionGate,
         private readonly AuditLogger $audit,
         private readonly StructuredLogger $structuredLog,
         private readonly OperationsMetrics $metrics,
@@ -72,11 +72,11 @@ final class FiscalMonitoringRunService
     /**
      * @return LengthAwarePaginator<int, FiscalMonitoringRun>
      */
-    public function paginate(Office $office, int $perPage = 50, ?int $clientId = null, ?string $status = null): LengthAwarePaginator
+    public function paginate(Tenant $tenant, int $perPage = 50, ?int $clientId = null, ?string $status = null): LengthAwarePaginator
     {
         $q = FiscalMonitoringRun::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->orderByDesc('id');
 
         if ($clientId !== null) {
@@ -89,11 +89,11 @@ final class FiscalMonitoringRunService
         return $q->paginate($perPage);
     }
 
-    public function findForOffice(Office $office, int $runId): ?FiscalMonitoringRun
+    public function findForTenant(Tenant $tenant, int $runId): ?FiscalMonitoringRun
     {
         return FiscalMonitoringRun::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereKey($runId)
             ->first();
     }
@@ -102,7 +102,7 @@ final class FiscalMonitoringRunService
      * Cria (ou reutiliza) execução manual idempotente.
      */
     public function enqueueManual(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $systemCode,
         string $serviceCode,
@@ -112,14 +112,14 @@ final class FiscalMonitoringRunService
         ?string $correlationId = null,
         bool $dispatch = true,
     ): FiscalMonitoringRun {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new RuntimeException('Cliente não pertence ao escritório ativo.');
         }
 
         $correlationId ??= (string) Str::uuid();
         $slot = FiscalIdempotency::manualSlot($correlationId);
         $key = FiscalIdempotency::runKey(
-            (int) $office->id,
+            (int) $tenant->id,
             (int) $client->id,
             $systemCode,
             $serviceCode,
@@ -131,7 +131,7 @@ final class FiscalMonitoringRunService
 
         $run = FiscalMonitoringRun::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('idempotency_key', $key)
             ->first();
 
@@ -158,7 +158,7 @@ final class FiscalMonitoringRunService
             : null;
 
         $run = FiscalMonitoringRun::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'competence_id' => $competence?->id,
             'system_code' => strtoupper($systemCode),
@@ -233,7 +233,7 @@ final class FiscalMonitoringRunService
         }
 
         $lock = Cache::lock(
-            FiscalIdempotency::runLockKey((int) $run->office_id, $run->idempotency_key),
+            FiscalIdempotency::runLockKey((int) $run->tenant_id, $run->idempotency_key),
             (int) config('fiscal_monitoring.job.lock_ttl_seconds', 360),
         );
 
@@ -245,23 +245,23 @@ final class FiscalMonitoringRunService
 
         try {
             $run = FiscalMonitoringRun::query()->withoutGlobalScopes()->findOrFail($runId);
-            $office = Office::query()->find($run->office_id);
+            $tenant = Tenant::query()->find($run->tenant_id);
             $client = Client::query()->withoutGlobalScopes()
-                ->where('office_id', $run->office_id)
+                ->where('tenant_id', $run->tenant_id)
                 ->whereKey($run->client_id)
                 ->first();
 
-            if ($office === null || $client === null) {
-                return $this->markBlocked($run, 'OFFICE_OR_CLIENT_MISSING', 'Escritório ou cliente ausente.');
+            if ($tenant === null || $client === null) {
+                return $this->markBlocked($run, 'TENANT_OR_CLIENT_MISSING', 'Escritório ou cliente ausente.');
             }
 
             // Revalidação imediata pré-chamada
-            $block = $this->preflightBlockReason($office, $client, $run);
+            $block = $this->preflightBlockReason($tenant, $client, $run);
             if ($block !== null) {
                 return $this->markBlocked($run, $block['code'], $block['message']);
             }
 
-            $slots = $this->scheduler->acquireSlots((int) $office->id, (int) config('fiscal_monitoring.job.lock_ttl_seconds', 360));
+            $slots = $this->scheduler->acquireSlots((int) $tenant->id, (int) config('fiscal_monitoring.job.lock_ttl_seconds', 360));
             if ($slots === null) {
                 if ($transientContext !== []) {
                     return $this->markFailed(
@@ -292,7 +292,7 @@ final class FiscalMonitoringRunService
             ])->save();
 
             $request = new FiscalAdapterRequest(
-                office: $office,
+                tenant: $tenant,
                 client: $client,
                 run: $run,
                 systemCode: $run->system_code,
@@ -318,16 +318,16 @@ final class FiscalMonitoringRunService
             );
             $decision = $module === null
                 ? null
-                : $this->availability->resolve($module, $office, $operationClass);
+                : $this->availability->resolve($module, $tenant, $operationClass);
 
             if ($decision !== null && ! $decision->allowed) {
                 if (in_array($decision->state, [
                     FiscalModuleAvailabilityState::GloballyRestricted,
-                    FiscalModuleAvailabilityState::OfficeRestricted,
+                    FiscalModuleAvailabilityState::TenantRestricted,
                 ], true)) {
                     $this->moduleControls->recordBlockedJob(
                         $decision->module,
-                        $office,
+                        $tenant,
                         $decision->reasonCode ?? 'MODULE_RESTRICTED',
                         (int) $run->id,
                     );
@@ -339,7 +339,7 @@ final class FiscalMonitoringRunService
             } else {
                 // Franquia comercial: débito só no primeiro despacho remoto real.
                 $commercialBlock = $this->authorizeCommercialBeforeRemote(
-                    $office,
+                    $tenant,
                     $client,
                     $run,
                     $module,
@@ -373,13 +373,13 @@ final class FiscalMonitoringRunService
             } else {
                 try {
                     $this->pgdasdPaymentReconciliation->enqueueAfterProductiveMonitor(
-                        $office,
+                        $tenant,
                         $client,
                         $fresh,
                     );
                 } catch (\Throwable $exception) {
                     Log::warning('pgdasd.pagtoweb_reconciliation_enqueue_failed', [
-                        'office_id' => $office->id,
+                        'tenant_id' => $tenant->id,
                         'client_id' => $client->id,
                         'run_id' => $fresh->id,
                         'reason' => 'RECONCILIATION_ENQUEUE_FAILED',
@@ -415,7 +415,7 @@ final class FiscalMonitoringRunService
                     'skip_reason' => $fresh->skip_reason,
                     'latency_ms' => $latencyMs,
                 ],
-                officeId: (int) $fresh->office_id,
+                tenantId: (int) $fresh->tenant_id,
             );
 
             $this->structuredLog->externalCall(
@@ -429,7 +429,7 @@ final class FiscalMonitoringRunService
                     'module' => $adapter->moduleKey(),
                     'status' => $fresh->status->value,
                 ],
-                officeId: (int) $fresh->office_id,
+                tenantId: (int) $fresh->tenant_id,
             );
 
             $this->metrics->increment('fiscal.consulta.result', 1, [
@@ -455,7 +455,7 @@ final class FiscalMonitoringRunService
                         'last_result' => FiscalRunResult::Success->value,
                     ]);
                 $this->maybeQueueAutomaticCommunication(
-                    $office,
+                    $tenant,
                     $client,
                     $adapter->moduleKey(),
                     (string) $fresh->service_code,
@@ -475,7 +475,7 @@ final class FiscalMonitoringRunService
         $attempt = $parent->attempt + 1;
         $slot = FiscalIdempotency::continuationSlot((int) $parent->id, $attempt);
         $key = FiscalIdempotency::runKey(
-            (int) $parent->office_id,
+            (int) $parent->tenant_id,
             (int) $parent->client_id,
             $parent->system_code,
             $parent->service_code,
@@ -487,7 +487,7 @@ final class FiscalMonitoringRunService
 
         $existing = FiscalMonitoringRun::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $parent->office_id)
+            ->where('tenant_id', $parent->tenant_id)
             ->where('idempotency_key', $key)
             ->first();
 
@@ -496,7 +496,7 @@ final class FiscalMonitoringRunService
         }
 
         $child = FiscalMonitoringRun::query()->create([
-            'office_id' => $parent->office_id,
+            'tenant_id' => $parent->tenant_id,
             'client_id' => $parent->client_id,
             'fiscal_category_id' => $parent->fiscal_category_id,
             'competence_id' => $parent->competence_id,
@@ -536,22 +536,22 @@ final class FiscalMonitoringRunService
     /**
      * @return array{code:string,message:string}|null
      */
-    private function preflightBlockReason(Office $office, Client $client, FiscalMonitoringRun $run): ?array
+    private function preflightBlockReason(Tenant $tenant, Client $client, FiscalMonitoringRun $run): ?array
     {
         if ((bool) config('fiscal.kill_switch', false) || (bool) config('fiscal_monitoring.kill_switch', false)) {
             return ['code' => 'KILL_SWITCH', 'message' => 'Kill switch ativo.'];
         }
 
-        if (! $this->subscriptionGate->allowsExternalCalls($office)) {
+        if (! $this->subscriptionGate->allowsExternalCalls($tenant)) {
             return ['code' => 'SUBSCRIPTION_BLOCKED', 'message' => 'Assinatura do escritório bloqueia chamadas externas.'];
         }
 
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             return ['code' => 'CONTRIBUTOR_CROSS_TENANT', 'message' => 'Contribuinte de outro tenant.'];
         }
 
-        if (! $office->is_active) {
-            return ['code' => 'OFFICE_INACTIVE', 'message' => 'Escritório inativo.'];
+        if (! $tenant->is_active) {
+            return ['code' => 'TENANT_INACTIVE', 'message' => 'Escritório inativo.'];
         }
 
         return null;
@@ -565,7 +565,7 @@ final class FiscalMonitoringRunService
      * @return array{code:string,message:string}|null
      */
     private function authorizeCommercialBeforeRemote(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         FiscalMonitoringRun $run,
         ?string $moduleKey,
@@ -611,7 +611,7 @@ final class FiscalMonitoringRunService
             && $run->trigger === FiscalTrigger::Manual
             && $existingEntryId === null) {
             $intervalBlock = $this->commercialLedger->assertMinIntervalOrBlock(
-                (int) $office->id,
+                (int) $tenant->id,
                 (int) $client->id,
                 $monitorKey,
             );
@@ -625,19 +625,19 @@ final class FiscalMonitoringRunService
 
         $idempotency = match ($origin) {
             MonitorCommercialOrigin::Scheduled => $this->commercialLedger->scheduledIdempotencyKey(
-                (int) $office->id,
+                (int) $tenant->id,
                 (int) $client->id,
                 $monitorKey,
                 // period_key resolvido no serviço a partir da assinatura; slot estável do run.
                 (string) ($progress['period_key'] ?? $run->correlation_id ?? $run->idempotency_key),
             ),
             MonitorCommercialOrigin::Inaugural => $this->commercialLedger->inauguralIdempotencyKey(
-                (int) $office->id,
+                (int) $tenant->id,
                 (int) $client->id,
                 $monitorKey,
             ),
             default => $this->commercialLedger->manualIdempotencyKey(
-                (int) $office->id,
+                (int) $tenant->id,
                 (int) $client->id,
                 $monitorKey,
                 (string) ($progress['period_key'] ?? 'open'),
@@ -657,7 +657,7 @@ final class FiscalMonitoringRunService
         }
 
         $outcome = $this->commercialLedger->authorizeAndDebitBeforeRemoteDispatch(
-            officeId: (int) $office->id,
+            tenantId: (int) $tenant->id,
             clientId: (int) $client->id,
             monitorKey: $monitorKey,
             origin: $origin,
@@ -715,7 +715,7 @@ final class FiscalMonitoringRunService
     }
 
     private function maybeQueueAutomaticCommunication(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         ?string $moduleKey,
         string $serviceCode = '',
@@ -734,7 +734,7 @@ final class FiscalMonitoringRunService
         if ($service === null) {
             return;
         }
-        $service->maybeQueueAutomaticAfterConsult($office, $client, $periodKey);
+        $service->maybeQueueAutomaticAfterConsult($tenant, $client, $periodKey);
     }
 
     private function communicationPeriodKey(FiscalMonitoringRun $run): ?string

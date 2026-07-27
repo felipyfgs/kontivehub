@@ -8,16 +8,16 @@ use App\Enums\FiscalSituation;
 use App\Enums\FiscalSourceProvenance;
 use App\Enums\FiscalTrigger;
 use App\Enums\FiscalVerificationState;
-use App\Enums\OfficeRole;
+use App\Enums\TenantRole;
 use App\Jobs\Fiscal\ExecuteFiscalMonitoringRunJob;
 use App\Models\Client;
 use App\Models\Establishment;
 use App\Models\FiscalMonitoringRun;
 use App\Models\FiscalSnapshot;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\FiscalMonitoring\FiscalEvidenceStore;
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
@@ -30,10 +30,10 @@ class SitfisHistoryApiTest extends TestCase
 
     public function test_history_lists_local_consults_and_consolidates_reprocessed_snapshots(): void
     {
-        [$office, $user, $client] = $this->seedActor();
+        [$tenant, $user, $client] = $this->seedActor();
         Establishment::factory()->forClient($client, '11365521000169')->create();
 
-        $olderRun = $this->makeRun($office, $client);
+        $olderRun = $this->makeRun($tenant, $client);
         $olderEvidence = app(FiscalEvidenceStore::class)->store(
             run: $olderRun,
             bytes: '%PDF-1.4 older report',
@@ -56,14 +56,14 @@ class SitfisHistoryApiTest extends TestCase
             'normalized' => ['reprocessed_from_snapshot_id' => $original->id],
         ]);
 
-        $latestRun = $this->makeRun($office, $client);
+        $latestRun = $this->makeRun($tenant, $client);
         $latest = $this->makeSnapshot($latestRun, [
             'version' => 3,
             'is_current' => true,
             'observed_at' => '2026-07-15 12:00:00+00',
         ]);
 
-        $unrelatedRun = $this->makeRun($office, $client);
+        $unrelatedRun = $this->makeRun($tenant, $client);
         $this->makeSnapshot($unrelatedRun, [
             'system_code' => 'OTHER_SYSTEM',
             'service_code' => 'OTHER_SERVICE',
@@ -73,7 +73,7 @@ class SitfisHistoryApiTest extends TestCase
         ]);
 
         Sanctum::actingAs($user);
-        app(CurrentOffice::class)->clear();
+        app(CurrentTenant::class)->clear();
         Queue::fake([ExecuteFiscalMonitoringRunJob::class]);
         $runCount = FiscalMonitoringRun::query()->withoutGlobalScopes()->count();
         $snapshotCount = FiscalSnapshot::query()->withoutGlobalScopes()->count();
@@ -101,45 +101,45 @@ class SitfisHistoryApiTest extends TestCase
         Queue::assertNothingPushed();
     }
 
-    public function test_history_is_fail_closed_for_another_office(): void
+    public function test_history_is_fail_closed_for_another_tenant(): void
     {
-        [$office, $user] = $this->seedActor();
-        $foreignOffice = Office::factory()->create();
-        $foreignClient = Client::factory()->for($foreignOffice)->create();
-        $this->makeSnapshot($this->makeRun($foreignOffice, $foreignClient));
+        [$tenant, $user] = $this->seedActor();
+        $foreignTenant = Tenant::factory()->create();
+        $foreignClient = Client::factory()->for($foreignTenant)->create();
+        $this->makeSnapshot($this->makeRun($foreignTenant, $foreignClient));
 
         Sanctum::actingAs($user);
-        app(CurrentOffice::class)->clear();
+        app(CurrentTenant::class)->clear();
 
         $this->getJson("/api/v1/fiscal/sitfis/clients/{$foreignClient->id}/history")
             ->assertNotFound()
             ->assertJsonPath('code', 'CLIENT_NOT_FOUND');
 
-        $this->getJson("/api/v1/fiscal/sitfis/clients/{$foreignClient->id}/history?office_id={$office->id}")
+        $this->getJson("/api/v1/fiscal/sitfis/clients/{$foreignClient->id}/history?tenant_id={$tenant->id}")
             ->assertStatus(422)
-            ->assertJsonPath('code', 'CLIENT_OFFICE_ID_REJECTED');
+            ->assertJsonPath('code', 'CLIENT_TENANT_ID_REJECTED');
     }
 
-    /** @return array{0: Office, 1: User, 2: Client} */
+    /** @return array{0: Tenant, 1: User, 2: Client} */
     private function seedActor(): array
     {
-        $office = Office::factory()->create();
-        $user = User::factory()->forOffice($office, OfficeRole::Operator)->create();
-        $client = Client::factory()->for($office)->create([
+        $tenant = Tenant::factory()->create();
+        $user = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $client = Client::factory()->for($tenant)->create([
             'legal_name' => 'COM CONSTRUCOES E EMPREENDIMENTOS LTDA',
             'is_active' => true,
         ]);
 
-        return [$office, $user, $client];
+        return [$tenant, $user, $client];
     }
 
     private function makeRun(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         FiscalRunResult $result = FiscalRunResult::Success,
     ): FiscalMonitoringRun {
         return FiscalMonitoringRun::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'system_code' => 'INTEGRA_SITFIS',
             'service_code' => 'SITFIS',
@@ -165,7 +165,7 @@ class SitfisHistoryApiTest extends TestCase
     private function makeSnapshot(FiscalMonitoringRun $run, array $overrides = []): FiscalSnapshot
     {
         return FiscalSnapshot::query()->create(array_merge([
-            'office_id' => $run->office_id,
+            'tenant_id' => $run->tenant_id,
             'run_id' => $run->id,
             'client_id' => $run->client_id,
             'system_code' => 'INTEGRA_SITFIS',

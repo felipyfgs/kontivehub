@@ -6,7 +6,7 @@ use App\DTO\Fiscal\FiscalAdapterRequest;
 use App\Enums\FiscalTrigger;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
-use App\Models\Office;
+use App\Models\Tenant;
 use App\Services\MeiAutomation\Providers\ReceitaPortalProvider;
 use Tests\TestCase;
 
@@ -32,15 +32,15 @@ class ReceitaPortalProviderTest extends TestCase
 
     private function request(): FiscalAdapterRequest
     {
-        $office = new Office;
-        $office->id = 7;
+        $tenant = new Tenant;
+        $tenant->id = 7;
         $client = new Client;
         $client->id = 11;
-        $client->office_id = 7;
+        $client->tenant_id = 7;
         $run = new FiscalMonitoringRun;
         $run->forceFill([
             'id' => 13,
-            'office_id' => 7,
+            'tenant_id' => 7,
             'client_id' => 11,
             'system_code' => 'INTEGRA_MEI',
             'service_code' => 'PGMEI',
@@ -50,7 +50,7 @@ class ReceitaPortalProviderTest extends TestCase
         ]);
 
         return new FiscalAdapterRequest(
-            office: $office,
+            tenant: $tenant,
             client: $client,
             run: $run,
             systemCode: 'INTEGRA_MEI',

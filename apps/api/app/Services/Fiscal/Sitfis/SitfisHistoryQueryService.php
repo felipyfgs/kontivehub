@@ -4,7 +4,7 @@ namespace App\Services\Fiscal\Sitfis;
 
 use App\Models\Client;
 use App\Models\FiscalSnapshot;
-use App\Models\Office;
+use App\Models\Tenant;
 use BackedEnum;
 use Illuminate\Support\Collection;
 use RuntimeException;
@@ -20,13 +20,13 @@ final class SitfisHistoryQueryService
      *     searches: list<array<string, mixed>>
      * }
      */
-    public function history(Office $office, Client $client): array
+    public function history(Tenant $tenant, Client $client): array
     {
-        $this->assertClient($office, $client);
+        $this->assertClient($tenant, $client);
 
         $snapshots = FiscalSnapshot::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
             ->where('system_code', (string) config('fiscal_monitoring.sitfis.system_code', 'INTEGRA_SITFIS'))
             ->where('service_code', (string) config('fiscal_monitoring.sitfis.service_code', 'SITFIS'))
@@ -106,7 +106,7 @@ final class SitfisHistoryQueryService
     {
         $raw = $client->establishments()
             ->withoutGlobalScopes()
-            ->orderByDesc('is_matrix')
+            ->orderByDesc('is_headquarters')
             ->orderBy('id')
             ->value('cnpj');
         $digits = preg_replace('/\D/', '', (string) $raw) ?? '';
@@ -118,9 +118,9 @@ final class SitfisHistoryQueryService
         return substr($digits, 0, 2).'.***.***/****-'.substr($digits, -2);
     }
 
-    private function assertClient(Office $office, Client $client): void
+    private function assertClient(Tenant $tenant, Client $client): void
     {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new RuntimeException('Cliente não pertence ao escritório ativo.');
         }
     }

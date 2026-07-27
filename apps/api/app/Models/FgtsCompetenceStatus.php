@@ -5,7 +5,7 @@ namespace App\Models;
 use App\Enums\FgtsIndependentState;
 use App\Enums\FiscalCoverage;
 use App\Enums\FiscalSituation;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * Guia e pagamento do portal permanecem UNSUPPORTED sem API pública.
  */
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'client_id',
     'establishment_id',
     'fiscal_competence_id',
@@ -41,7 +41,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class FgtsCompetenceStatus extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected $table = 'fgts_competence_statuses';
 
@@ -103,7 +103,7 @@ class FgtsCompetenceStatus extends Model
     {
         return [
             'id' => $this->id,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'client_id' => $this->client_id,
             'establishment_id' => $this->establishment_id,
             'competence_period_key' => $this->competence_period_key,

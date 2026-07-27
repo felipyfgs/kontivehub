@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Database\Factories\WorkDepartmentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'name',
     'code',
     'color',
@@ -19,7 +19,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class WorkDepartment extends Model
 {
     /** @use HasFactory<WorkDepartmentFactory> */
-    use BelongsToOffice, HasFactory;
+    use BelongsToTenant, HasFactory;
 
     protected function casts(): array
     {
@@ -30,7 +30,7 @@ class WorkDepartment extends Model
 
     public function memberships(): HasMany
     {
-        return $this->hasMany(OfficeMembership::class, 'work_department_id');
+        return $this->hasMany(TenantMembership::class, 'work_department_id');
     }
 
     public function communicationInboxes(): HasMany

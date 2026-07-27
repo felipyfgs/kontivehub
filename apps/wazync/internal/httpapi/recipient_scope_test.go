@@ -32,7 +32,7 @@ func TestCommandRecipientScopeIsRejectedBeforePersistence(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			persistence := store.NewMemory()
 			server := newTestServer(persistence)
-			body := []byte(`{"contract_version":"v1","command_id":"command-scope-0001","session_id":"session-scope-0001","type":"MESSAGE_SEND","provider_message_id":"message-scope-0001","payload":{"to":"` + test.recipient + `","text":"blocked"}}`)
+			body := []byte(`{"contract_version":"v1","command_id":"command-scope-0001","session_id":"session-scope-0001","type":"MESSAGE_SEND","provider_message_id":"message-scope-0001","payload":{"to":"` + test.recipient + `","kind":"TEXT","text":"blocked"}}`)
 
 			response := performCommand(t, server, body, "nonce-command-scope-000"+string(rune('1'+index)))
 			if response.Code != http.StatusUnprocessableEntity ||

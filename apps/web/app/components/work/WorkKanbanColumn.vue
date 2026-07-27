@@ -2,7 +2,7 @@
 /**
  * Coluna droppable do board Kanban.
  */
-import type { OperationalTaskSummary } from '~/types/work'
+import type { WorkTaskSummary } from '~/types/work'
 import type { IDragEvent } from '@vue-dnd-kit/core'
 import {
   taskStatusColor,
@@ -13,11 +13,11 @@ import type { WorkKanbanColumnStatus } from '~/utils/work-kanban-transition'
 
 const props = defineProps<{
   status: WorkKanbanColumnStatus
-  items: OperationalTaskSummary[]
+  items: WorkTaskSummary[]
   selectedTaskId?: number | null
   disabled?: boolean
   onDropTask: (
-    event: IDragEvent<OperationalTaskSummary, { status: WorkKanbanColumnStatus }>
+    event: IDragEvent<WorkTaskSummary, { status: WorkKanbanColumnStatus }>
   ) => boolean | Promise<boolean>
 }>()
 
@@ -34,7 +34,7 @@ const { isDragOver, isAllowed } = makeDroppable(
     data: () => ({ status: props.status }),
     events: {
       onDrop: event => props.onDropTask(
-        event as IDragEvent<OperationalTaskSummary, { status: WorkKanbanColumnStatus }>
+        event as IDragEvent<WorkTaskSummary, { status: WorkKanbanColumnStatus }>
       )
     }
   },

@@ -21,7 +21,7 @@ final class AutoCienciaScheduler
      * @param  list<string>  $accessKeys
      * @return int jobs enfileirados
      */
-    public function enqueueForKeys(int $officeId, array $accessKeys, int $delayBaseSeconds = 0): int
+    public function enqueueForKeys(int $tenantId, array $accessKeys, int $delayBaseSeconds = 0): int
     {
         if (! $this->isEnabled() || $accessKeys === []) {
             return 0;
@@ -34,12 +34,12 @@ final class AutoCienciaScheduler
 
         $n = 0;
         foreach ($unique as $i => $accessKey) {
-            if (! $this->needsCiencia($officeId, $accessKey)) {
+            if (! $this->needsCiencia($tenantId, $accessKey)) {
                 continue;
             }
 
             $delay = $delayBaseSeconds + ($i * $step);
-            $pending = AutoCienciaNfeJob::dispatch($officeId, $accessKey);
+            $pending = AutoCienciaNfeJob::dispatch($tenantId, $accessKey);
             if ($delay > 0) {
                 $pending->delay(now()->addSeconds($delay));
             }
@@ -48,7 +48,7 @@ final class AutoCienciaScheduler
 
         if ($n > 0) {
             Log::info('sefaz.auto_ciencia.enqueued', [
-                'office_id' => $officeId,
+                'tenant_id' => $tenantId,
                 'count' => $n,
             ]);
         }
@@ -57,11 +57,11 @@ final class AutoCienciaScheduler
     }
 
     /**
-     * Catch-up: resumos PENDING sem full no office (ou filtro opcional).
+     * Catch-up: resumos PENDING sem full no tenant (ou filtro opcional).
      *
      * @return int jobs enfileirados
      */
-    public function enqueuePending(?int $officeId = null, ?int $establishmentId = null, int $limit = 100): int
+    public function enqueuePending(?int $tenantId = null, ?int $establishmentId = null, int $limit = 100): int
     {
         if (! $this->isEnabled()) {
             return 0;
@@ -75,8 +75,8 @@ final class AutoCienciaScheduler
             })
             ->orderBy('id');
 
-        if ($officeId !== null) {
-            $query->where('office_id', $officeId);
+        if ($tenantId !== null) {
+            $query->where('tenant_id', $tenantId);
         }
 
         if ($establishmentId !== null) {
@@ -85,10 +85,10 @@ final class AutoCienciaScheduler
             });
         }
 
-        $rows = $query->limit($limit)->get(['office_id', 'access_key']);
-        $byOffice = $rows->groupBy('office_id');
+        $rows = $query->limit($limit)->get(['tenant_id', 'access_key']);
+        $byTenant = $rows->groupBy('tenant_id');
         $total = 0;
-        foreach ($byOffice as $oid => $group) {
+        foreach ($byTenant as $oid => $group) {
             $keys = $group->pluck('access_key')->all();
             $total += $this->enqueueForKeys((int) $oid, $keys);
         }
@@ -96,10 +96,10 @@ final class AutoCienciaScheduler
         return $total;
     }
 
-    public function needsCiencia(int $officeId, string $accessKey): bool
+    public function needsCiencia(int $tenantId, string $accessKey): bool
     {
         $hasFull = NfeDocument::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('access_key', $accessKey)
             ->where('is_summary', false)
             ->exists();
@@ -109,7 +109,7 @@ final class AutoCienciaScheduler
         }
 
         $summary = NfeDocument::query()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('access_key', $accessKey)
             ->where('is_summary', true)
             ->first();

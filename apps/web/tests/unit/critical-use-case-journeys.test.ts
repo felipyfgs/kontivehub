@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createAuthApi } from '../../app/composables/api/createAuthApi'
 import { createClientsApi } from '../../app/composables/api/createClientsApi'
 import { createFiscalApi } from '../../app/composables/api/createFiscalApi'
+import { createPlatformApi } from '../../app/composables/api/createPlatformApi'
 import { createWorkApi } from '../../app/composables/api/createWorkApi'
 import type { ApiClient, ApiUrl } from '../../app/composables/api/types'
 
@@ -23,7 +24,18 @@ describe('critical use-case journeys', () => {
     expect(clientMock).toHaveBeenNthCalledWith(1, '/api/v1/tenants/memberships')
     expect(clientMock).toHaveBeenNthCalledWith(2, '/api/v1/tenants/switch', {
       method: 'POST',
-      body: { office_id: 42 }
+      body: { tenant_id: 42 }
+    })
+  })
+
+  it('platform tenant selector uses its canonical envelope endpoint', async () => {
+    const { client, clientMock } = harness()
+    const api = createPlatformApi(client)
+
+    await api.platform.tenants.list({ per_page: 100, q: 'contador' })
+
+    expect(clientMock).toHaveBeenCalledWith('/api/v1/platform/tenants/selector', {
+      query: { per_page: 100, q: 'contador' }
     })
   })
 
@@ -41,7 +53,7 @@ describe('critical use-case journeys', () => {
       method: 'PATCH',
       body: { client_ids: [7], is_active: false }
     })
-    expect(JSON.stringify(clientMock.mock.calls)).not.toContain('office_id')
+    expect(JSON.stringify(clientMock.mock.calls)).not.toContain('tenant_id')
   })
 
   it('operational work maps templates, tasks and processes to distinct methods', async () => {
@@ -62,7 +74,7 @@ describe('critical use-case journeys', () => {
     })
   })
 
-  it('fiscal monitoring reads portfolio without accepting a client office id', async () => {
+  it('fiscal monitoring reads portfolio without accepting a client tenant id', async () => {
     const { client, clientMock, apiUrl } = harness()
     const api = createFiscalApi(client, apiUrl)
 
@@ -76,6 +88,6 @@ describe('critical use-case journeys', () => {
       query: { submodule: 'PGDASD', page: 1 },
       signal: undefined
     })
-    expect(JSON.stringify(clientMock.mock.calls)).not.toContain('office_id')
+    expect(JSON.stringify(clientMock.mock.calls)).not.toContain('tenant_id')
   })
 })

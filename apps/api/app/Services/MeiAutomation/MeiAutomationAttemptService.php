@@ -9,7 +9,7 @@ use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
 use App\Models\FiscalMutationOperation;
 use App\Models\MeiAutomationAttempt;
-use App\Models\Office;
+use App\Models\Tenant;
 use RuntimeException;
 
 final class MeiAutomationAttemptService
@@ -21,7 +21,7 @@ final class MeiAutomationAttemptService
 
     /** @param array<string, mixed> $input */
     public function start(
-        Office $office,
+        Tenant $tenant,
         Client $client,
         string $operationKey,
         MeiProvider $provider,
@@ -31,13 +31,13 @@ final class MeiAutomationAttemptService
         ?FiscalMutationOperation $mutation = null,
         int $attemptNumber = 1,
     ): MeiAutomationAttempt {
-        if ((int) $client->office_id !== (int) $office->id) {
+        if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new RuntimeException('Cliente não pertence ao escritório da tentativa MEI.');
         }
 
         $sanitizedInput = $this->inputPolicy->sanitize($operationKey, $input);
 
-        return $this->attempts->createOrGet((int) $office->id, $idempotencyKey, $attemptNumber, [
+        return $this->attempts->createOrGet((int) $tenant->id, $idempotencyKey, $attemptNumber, [
             'client_id' => $client->id,
             'fiscal_monitoring_run_id' => $run?->id,
             'fiscal_mutation_operation_id' => $mutation?->id,
@@ -66,7 +66,7 @@ final class MeiAutomationAttemptService
             operationKey: (string) $attempt->operation_key,
             idempotencyKey: (string) $attempt->idempotency_key.':'.(int) $attempt->attempt_number,
             requestFingerprint: (string) $attempt->request_fingerprint,
-            clientRef: hash_hmac('sha256', 'office:'.$attempt->office_id.'|client:'.$attempt->client_id, $secret),
+            clientRef: hash_hmac('sha256', 'tenant:'.$attempt->tenant_id.'|client:'.$attempt->client_id, $secret),
             input: $sanitizedInput,
         );
     }

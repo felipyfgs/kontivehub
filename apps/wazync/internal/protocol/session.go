@@ -129,14 +129,6 @@ func newWhatsMeowAdapter(clients ClientResolver, settings ...ClientSettings) *Wh
 	}
 }
 
-// Connect preserves the legacy Connector contract while bounding the call.
-// Manager uses ConnectContext directly when the adapter is available.
-func (a *WhatsMeowAdapter) Connect(sessionID string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), a.settings.ConnectTimeout+a.settings.ReadyTimeout)
-	defer cancel()
-	return a.ConnectContext(ctx, sessionID)
-}
-
 func (a *WhatsMeowAdapter) ConnectContext(ctx context.Context, sessionID string) error {
 	client, err := a.resolveSessionClient(sessionID)
 	if err != nil {

@@ -3,7 +3,7 @@
  * Documentos → Por cliente — arquétipo customers.vue / lista canônica do painel.
  * Recurso: busca, filtro operacional, Exibir colunas, sort server-side,
  * refresh, loading/empty/error, carregamento incremental e ações de linha.
- * Domínio: captura/sync (sem colunas de cadastro A1/estado).
+ * Domínio: captura/sync (sem colunas de cadastro certificado/estado).
  */
 import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
 import type { Client } from '~/types/api'
@@ -32,7 +32,7 @@ const router = useRouter()
 function hydrateByClientSortingFromQuery() {
   const raw = String(route.query.sort || 'legal_name')
   const id = raw === 'cnpj' ? 'cnpj' : 'legal_name'
-  const desc = String(route.query.sort_direction ?? route.query.direction ?? 'asc') === 'desc'
+  const desc = String(route.query.sort_direction ?? 'asc') === 'desc'
   return [{ id, desc }] as { id: string, desc: boolean }[]
 }
 
@@ -50,7 +50,6 @@ async function syncByClientSortUrl() {
   if (sortId === 'legal_name' && !sort?.desc) {
     delete nextQuery.sort
     delete nextQuery.sort_direction
-    delete nextQuery.direction
   }
   await router.replace({ path: route.path, query: nextQuery })
 }
@@ -93,7 +92,7 @@ const clientsFeed = usePagedTable<Client>({
         ? undefined
         : operationalFilter.value as 'capture_problem',
       sort: sort?.id === 'cnpj' ? 'cnpj' : 'legal_name',
-      direction: sort?.desc ? 'desc' : 'asc'
+      sort_direction: sort?.desc ? 'desc' : 'asc'
     })
 
     return laravelPageBatch(response)
@@ -132,7 +131,7 @@ const columns: TableColumn<Client>[] = [
   },
   {
     id: 'cnpj',
-    accessorFn: row => row.cnpj || row.root_cnpj,
+    accessorFn: row => row.root_cnpj,
     header: ({ column }) => sortHeader('CNPJ/CPF', column),
     meta: {
       class: {
@@ -236,7 +235,7 @@ function rowActions(client: Client): DropdownMenuItem[][] {
   }, {
     label: 'Copiar CNPJ/CPF',
     icon: 'i-lucide-copy',
-    onSelect: () => void copyCnpj(client.cnpj || client.root_cnpj)
+    onSelect: () => void copyCnpj(client.root_cnpj)
   }]]
 }
 
@@ -373,11 +372,11 @@ defineExpose({ reload })
             type="button"
             class="block w-full truncate text-left font-medium text-highlighted hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             :title="row.original.display_name
-              ? `${row.original.legal_name || row.original.name} · ${row.original.display_name}`
-              : (row.original.legal_name || row.original.name)"
+              ? `${row.original.legal_name} · ${row.original.display_name}`
+              : row.original.legal_name"
             @click="emit('openClient', row.original)"
           >
-            {{ truncateText(row.original.legal_name || row.original.name, 40) || row.original.legal_name || row.original.name || '—' }}
+            {{ truncateText(row.original.legal_name, 40) || '—' }}
           </button>
           <p
             v-if="row.original.display_name"
@@ -387,7 +386,7 @@ defineExpose({ reload })
             {{ truncateText(row.original.display_name, 40) }}
           </p>
           <p class="mt-0.5 font-mono text-xs text-dimmed sm:hidden">
-            {{ formatCnpj(row.original.cnpj || row.original.root_cnpj) }}
+            {{ formatCnpj(row.original.root_cnpj) }}
           </p>
         </div>
       </template>
@@ -396,10 +395,10 @@ defineExpose({ reload })
         <button
           type="button"
           class="group inline-flex w-full max-w-full items-center gap-1.5 font-mono text-highlighted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          :title="`Copiar ${normalizeCnpj(row.original.cnpj || row.original.root_cnpj)}`"
-          @click.stop="copyCnpj(row.original.cnpj || row.original.root_cnpj)"
+          :title="`Copiar ${normalizeCnpj(row.original.root_cnpj)}`"
+          @click.stop="copyCnpj(row.original.root_cnpj)"
         >
-          <span class="min-w-0 truncate">{{ formatCnpj(row.original.cnpj || row.original.root_cnpj) }}</span>
+          <span class="min-w-0 truncate">{{ formatCnpj(row.original.root_cnpj) }}</span>
           <UIcon
             name="i-lucide-copy"
             class="size-3.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-70"
@@ -446,7 +445,7 @@ defineExpose({ reload })
             size="sm"
             square
             class="size-8"
-            :aria-label="`Documentos de ${row.original.legal_name || row.original.name}`"
+            :aria-label="`Documentos de ${row.original.display_name || row.original.legal_name}`"
             @click="emit('openClient', row.original)"
           />
           <span
@@ -464,7 +463,7 @@ defineExpose({ reload })
               size="sm"
               square
               class="size-8"
-              :aria-label="`Mais ações de ${row.original.legal_name || row.original.name}`"
+              :aria-label="`Mais ações de ${row.original.display_name || row.original.legal_name}`"
             />
           </UDropdownMenu>
         </div>

@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use App\Enums\TaxRegimeCode;
-use App\Models\Concerns\BelongsToOffice;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * Competências SN e MEI usam estes períodos para aplicabilidade.
  */
 #[Fillable([
-    'office_id',
+    'tenant_id',
     'client_id',
     'regime_code',
     'effective_from',
@@ -27,7 +27,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class ClientTaxRegimePeriod extends Model
 {
-    use BelongsToOffice;
+    use BelongsToTenant;
 
     protected function casts(): array
     {
@@ -52,7 +52,7 @@ class ClientTaxRegimePeriod extends Model
     {
         return [
             'id' => $this->id,
-            'office_id' => $this->office_id,
+            'tenant_id' => $this->tenant_id,
             'client_id' => $this->client_id,
             'regime_code' => $this->regime_code?->value,
             'effective_from' => $this->effective_from?->toDateString(),

@@ -4,30 +4,26 @@ namespace App\Services\Serpro\Usage;
 
 use App\Enums\SerproConsumptionClass;
 use App\Enums\SerproUsageReservationStatus;
-use App\Models\OfficeSubscription;
 use App\Models\SerproApiUsageEntry;
 use App\Models\SerproApiUsageReservation;
 use App\Models\SerproUsageBudget;
+use App\Models\TenantSubscription;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 /**
- * Franquia por tenant, budgets monetários atômicos, limiares e proteção ruidosa.
+ * Franquia por tenant e budgets monetários atômicos.
  *
- * Produção efetiva exige budgets monetários positivos (global, Office, canário).
+ * Produção efetiva exige budgets monetários positivos (global, Tenant, canário).
  * null/zero NÃO significam ilimitado no modo produtivo.
  */
 final class UsageBudgetGate
 {
     public const BLOCK_FRANCHISE = 'FRANCHISE_EXCEEDED';
 
-    public const BLOCK_GLOBAL = 'GLOBAL_BUDGET_EXCEEDED';
-
-    public const BLOCK_NOISY_TENANT = 'NOISY_TENANT_SHARE';
-
     public const BLOCK_MONETARY_GLOBAL = 'MONETARY_GLOBAL_BUDGET';
 
-    public const BLOCK_MONETARY_OFFICE = 'MONETARY_OFFICE_BUDGET';
+    public const BLOCK_MONETARY_TENANT = 'MONETARY_TENANT_BUDGET';
 
     public const BLOCK_MONETARY_CANARY = 'MONETARY_CANARY_BUDGET';
 
@@ -39,7 +35,7 @@ final class UsageBudgetGate
 
     public const SCOPE_GLOBAL = 'GLOBAL';
 
-    public const SCOPE_OFFICE = 'OFFICE';
+    public const SCOPE_TENANT = 'TENANT';
 
     public const SCOPE_OPERATION = 'OPERATION';
 
@@ -62,14 +58,11 @@ final class UsageBudgetGate
      *     remaining: int|null,
      *     franchise_ratio: float|null,
      *     alert_threshold_reached: bool,
-     *     global_used: int,
-     *     global_budget: int|null,
-     *     tenant_share_ratio: float|null,
      *     monetary: array<string, mixed>
      * }
      */
     public function evaluate(
-        int $officeId,
+        int $tenantId,
         SerproConsumptionClass $class,
         int $quantity,
         bool $isEssential,
@@ -84,11 +77,11 @@ final class UsageBudgetGate
         $year = (int) $at->year;
         $month = (int) $at->month;
 
-        $used = $this->billableQuantityForOffice($officeId, $cycle['period_start'], $cycle['period_end']);
-        $openReserved = $this->openReservedQuantityForOffice($officeId, $cycle['period_start'], $cycle['period_end']);
+        $used = $this->billableQuantityForTenant($tenantId, $cycle['period_start'], $cycle['period_end']);
+        $openReserved = $this->openReservedQuantityForTenant($tenantId, $cycle['period_start'], $cycle['period_end']);
         $projected = $used + $openReserved + max(0, $quantity);
 
-        $franchise = $this->franchiseQuota($officeId);
+        $franchise = $this->franchiseQuota($tenantId);
         $remaining = $franchise === null ? null : max(0, $franchise - $used - $openReserved);
         $ratio = ($franchise !== null && $franchise > 0)
             ? ($used + $openReserved) / $franchise
@@ -97,20 +90,9 @@ final class UsageBudgetGate
         $alertThreshold = (float) config('serpro_usage.franchise_alert_threshold', 0.8);
         $alertReached = $ratio !== null && $ratio >= $alertThreshold;
 
-        $globalBudget = config('serpro_usage.global_monthly_budget');
-        $globalBudget = $globalBudget === null ? null : (int) $globalBudget;
-        $globalUsed = $this->billableQuantityGlobal($cycle['period_start'], $cycle['period_end'])
-            + $this->openReservedQuantityGlobal($cycle['period_start'], $cycle['period_end']);
-
-        $maxShare = config('serpro_usage.max_tenant_share_of_global');
-        $maxShare = $maxShare === null ? null : (float) $maxShare;
-        $tenantShareRatio = ($globalBudget !== null && $globalBudget > 0)
-            ? ($used + $openReserved) / $globalBudget
-            : null;
-
         $cost = max(0, $estimatedCostMicros);
         $monetary = $this->evaluateMonetary(
-            officeId: $officeId,
+            tenantId: $tenantId,
             costMicros: $cost,
             isCanary: $isCanary,
             operationKey: $operationKey,
@@ -135,9 +117,6 @@ final class UsageBudgetGate
                 remaining: $remaining,
                 ratio: $ratio,
                 alertReached: $alertReached,
-                globalUsed: $globalUsed,
-                globalBudget: $globalBudget,
-                tenantShareRatio: $tenantShareRatio,
                 monetary: $monetary,
             );
         }
@@ -146,7 +125,7 @@ final class UsageBudgetGate
             if (! $monetary['configured']) {
                 $blockReason = self::BLOCK_BUDGET_NOT_CONFIGURED;
             } elseif (! $monetary['allowed']) {
-                $blockReason = $monetary['block_reason'] ?? self::BLOCK_MONETARY_OFFICE;
+                $blockReason = $monetary['block_reason'] ?? self::BLOCK_MONETARY_TENANT;
             }
         } elseif ($this->shadow->requiresPositiveMonetaryBudgets() && $cost === 0 && $class->isBillable()) {
             // Preço zero em classe faturável sem estimativa: exige budget configurado mesmo assim.
@@ -159,29 +138,15 @@ final class UsageBudgetGate
             $blockReason = self::BLOCK_FRANCHISE;
         }
 
-        if ($blockReason === null && $globalBudget !== null && ($globalUsed + max(0, $quantity)) > $globalBudget) {
-            $blockReason = self::BLOCK_GLOBAL;
-        }
-
-        if (
-            $blockReason === null
-            && $globalBudget !== null
-            && $maxShare !== null
-            && $maxShare > 0
-            && ($used + $openReserved + max(0, $quantity)) > (int) floor($globalBudget * $maxShare)
-        ) {
-            $blockReason = self::BLOCK_NOISY_TENANT;
-        }
-
         $wouldBlock = $blockReason !== null && ! $isEssential;
         $allowed = true;
 
         if ($this->shadow->isCommercialBlockingEnabled() && $blockReason !== null) {
-            // Essenciais ainda passam em estouro de franquia legada, mas NÃO em budget monetário / não configurado.
+            // Essenciais ainda passam em estouro de franquia, mas não em budget monetário ausente/estourado.
             $hardBlocks = [
                 self::BLOCK_BUDGET_NOT_CONFIGURED,
                 self::BLOCK_MONETARY_GLOBAL,
-                self::BLOCK_MONETARY_OFFICE,
+                self::BLOCK_MONETARY_TENANT,
                 self::BLOCK_MONETARY_CANARY,
                 self::BLOCK_MONETARY_OPERATION,
                 self::BLOCK_PRICE_UNKNOWN,
@@ -205,9 +170,6 @@ final class UsageBudgetGate
             remaining: $remaining,
             ratio: $ratio,
             alertReached: $alertReached || ($blockReason !== null),
-            globalUsed: $globalUsed,
-            globalBudget: $globalBudget,
-            tenantShareRatio: $tenantShareRatio,
             monetary: $monetary,
         );
     }
@@ -218,7 +180,7 @@ final class UsageBudgetGate
      * @return list<int> IDs de budget tocados
      */
     public function atomicReserveMicros(
-        int $officeId,
+        int $tenantId,
         int $costMicros,
         string $cycleCode,
         bool $isCanary = false,
@@ -234,7 +196,7 @@ final class UsageBudgetGate
         $ids = [];
 
         $targets = $this->activeBudgets(
-            officeId: $officeId,
+            tenantId: $tenantId,
             isCanary: $isCanary,
             operationKey: $operationKey,
             environment: $environment,
@@ -279,9 +241,9 @@ final class UsageBudgetGate
         }
     }
 
-    public function franchiseQuota(int $officeId): ?int
+    public function franchiseQuota(int $tenantId): ?int
     {
-        $sub = OfficeSubscription::query()->where('office_id', $officeId)->first();
+        $sub = TenantSubscription::query()->where('tenant_id', $tenantId)->first();
 
         if ($sub === null) {
             return null;
@@ -290,42 +252,22 @@ final class UsageBudgetGate
         return $sub->monthly_api_quota;
     }
 
-    public function billableQuantityForOffice(int $officeId, Carbon $start, Carbon $end): int
+    public function billableQuantityForTenant(int $tenantId, Carbon $start, Carbon $end): int
     {
         return (int) SerproApiUsageEntry::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->where('is_billable_attempt', true)
             ->where('consumption_class', '!=', SerproConsumptionClass::NaoFaturavel->value)
             ->whereBetween('occurred_at', [$start, $end])
             ->sum('quantity');
     }
 
-    public function openReservedQuantityForOffice(int $officeId, Carbon $start, Carbon $end): int
+    public function openReservedQuantityForTenant(int $tenantId, Carbon $start, Carbon $end): int
     {
         return (int) SerproApiUsageReservation::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
-            ->where('status', SerproUsageReservationStatus::Reserved->value)
-            ->where('consumption_class', '!=', SerproConsumptionClass::NaoFaturavel->value)
-            ->whereBetween('reserved_at', [$start, $end])
-            ->sum('quantity');
-    }
-
-    public function billableQuantityGlobal(Carbon $start, Carbon $end): int
-    {
-        return (int) SerproApiUsageEntry::query()
-            ->withoutGlobalScopes()
-            ->where('is_billable_attempt', true)
-            ->where('consumption_class', '!=', SerproConsumptionClass::NaoFaturavel->value)
-            ->whereBetween('occurred_at', [$start, $end])
-            ->sum('quantity');
-    }
-
-    public function openReservedQuantityGlobal(Carbon $start, Carbon $end): int
-    {
-        return (int) SerproApiUsageReservation::query()
-            ->withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
             ->where('status', SerproUsageReservationStatus::Reserved->value)
             ->where('consumption_class', '!=', SerproConsumptionClass::NaoFaturavel->value)
             ->whereBetween('reserved_at', [$start, $end])
@@ -335,11 +277,11 @@ final class UsageBudgetGate
     /**
      * @return array<string, mixed>
      */
-    public function tenantSnapshot(int $officeId, Carbon|string|null $at = null): array
+    public function tenantSnapshot(int $tenantId, Carbon|string|null $at = null): array
     {
         $at = $at instanceof Carbon ? $at : ($at ? Carbon::parse($at) : now());
         $eval = $this->evaluate(
-            officeId: $officeId,
+            tenantId: $tenantId,
             class: SerproConsumptionClass::Consulta,
             quantity: 0,
             isEssential: true,
@@ -349,13 +291,13 @@ final class UsageBudgetGate
         $cycle = $this->cycles->resolve($at);
         $cost = (int) SerproApiUsageEntry::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $officeId)
+            ->where('tenant_id', $tenantId)
             ->whereBetween('occurred_at', [$cycle['period_start'], $cycle['period_end']])
             ->whereNotNull('estimated_cost_micros')
             ->sum('estimated_cost_micros');
 
         return [
-            'office_id' => $officeId,
+            'tenant_id' => $tenantId,
             'period_year' => $eval['period_year'],
             'period_month' => $eval['period_month'],
             'cycle_code' => $eval['cycle_code'],
@@ -376,13 +318,13 @@ final class UsageBudgetGate
      *   allowed: bool,
      *   block_reason: string|null,
      *   global_remaining: int|null,
-     *   office_remaining: int|null,
+     *   tenant_remaining: int|null,
      *   canary_remaining: int|null,
      *   operation_remaining: int|null
      * }
      */
     private function evaluateMonetary(
-        int $officeId,
+        int $tenantId,
         int $costMicros,
         bool $isCanary,
         ?string $operationKey,
@@ -396,14 +338,14 @@ final class UsageBudgetGate
                 'allowed' => true,
                 'block_reason' => null,
                 'global_remaining' => null,
-                'office_remaining' => null,
+                'tenant_remaining' => null,
                 'canary_remaining' => null,
                 'operation_remaining' => null,
             ];
         }
 
         $budgets = $this->activeBudgets(
-            officeId: $officeId,
+            tenantId: $tenantId,
             isCanary: $isCanary,
             operationKey: $operationKey,
             environment: $environment,
@@ -413,22 +355,22 @@ final class UsageBudgetGate
         );
 
         $global = $budgets->first(fn (SerproUsageBudget $b) => $b->scope === self::SCOPE_GLOBAL && ! $b->is_canary);
-        $office = $budgets->first(fn (SerproUsageBudget $b) => $b->scope === self::SCOPE_OFFICE && ! $b->is_canary && (int) $b->office_id === $officeId);
+        $tenant = $budgets->first(fn (SerproUsageBudget $b) => $b->scope === self::SCOPE_TENANT && ! $b->is_canary && (int) $b->tenant_id === $tenantId);
         $canary = $isCanary
-            ? $budgets->first(fn (SerproUsageBudget $b) => $b->is_canary && (int) ($b->office_id ?? $officeId) === $officeId)
+            ? $budgets->first(fn (SerproUsageBudget $b) => $b->is_canary && (int) ($b->tenant_id ?? $tenantId) === $tenantId)
             : null;
         $operation = $operationKey !== null
             ? $budgets->first(fn (SerproUsageBudget $b) => $b->scope === self::SCOPE_OPERATION && $b->operation_key === $operationKey)
             : null;
 
-        // Global + Office obrigatórios; canário se is_canary; operation se configurado.
-        if ($global === null || ! $global->isPositive() || $office === null || ! $office->isPositive()) {
+        // Global + Tenant obrigatórios; canário se is_canary; operation se configurado.
+        if ($global === null || ! $global->isPositive() || $tenant === null || ! $tenant->isPositive()) {
             return [
                 'configured' => false,
                 'allowed' => false,
                 'block_reason' => self::BLOCK_BUDGET_NOT_CONFIGURED,
                 'global_remaining' => $global?->remainingMicros(),
-                'office_remaining' => $office?->remainingMicros(),
+                'tenant_remaining' => $tenant?->remainingMicros(),
                 'canary_remaining' => $canary?->remainingMicros(),
                 'operation_remaining' => $operation?->remainingMicros(),
             ];
@@ -440,7 +382,7 @@ final class UsageBudgetGate
                 'allowed' => false,
                 'block_reason' => self::BLOCK_BUDGET_NOT_CONFIGURED,
                 'global_remaining' => $global->remainingMicros(),
-                'office_remaining' => $office->remainingMicros(),
+                'tenant_remaining' => $tenant->remainingMicros(),
                 'canary_remaining' => $canary?->remainingMicros(),
                 'operation_remaining' => $operation?->remainingMicros(),
             ];
@@ -452,19 +394,19 @@ final class UsageBudgetGate
                 'allowed' => false,
                 'block_reason' => self::BLOCK_MONETARY_GLOBAL,
                 'global_remaining' => $global->remainingMicros(),
-                'office_remaining' => $office->remainingMicros(),
+                'tenant_remaining' => $tenant->remainingMicros(),
                 'canary_remaining' => $canary?->remainingMicros(),
                 'operation_remaining' => $operation?->remainingMicros(),
             ];
         }
 
-        if ($office->remainingMicros() < $costMicros) {
+        if ($tenant->remainingMicros() < $costMicros) {
             return [
                 'configured' => true,
                 'allowed' => false,
-                'block_reason' => self::BLOCK_MONETARY_OFFICE,
+                'block_reason' => self::BLOCK_MONETARY_TENANT,
                 'global_remaining' => $global->remainingMicros(),
-                'office_remaining' => $office->remainingMicros(),
+                'tenant_remaining' => $tenant->remainingMicros(),
                 'canary_remaining' => $canary?->remainingMicros(),
                 'operation_remaining' => $operation?->remainingMicros(),
             ];
@@ -476,7 +418,7 @@ final class UsageBudgetGate
                 'allowed' => false,
                 'block_reason' => self::BLOCK_MONETARY_CANARY,
                 'global_remaining' => $global->remainingMicros(),
-                'office_remaining' => $office->remainingMicros(),
+                'tenant_remaining' => $tenant->remainingMicros(),
                 'canary_remaining' => $canary->remainingMicros(),
                 'operation_remaining' => $operation?->remainingMicros(),
             ];
@@ -488,7 +430,7 @@ final class UsageBudgetGate
                 'allowed' => false,
                 'block_reason' => self::BLOCK_MONETARY_OPERATION,
                 'global_remaining' => $global->remainingMicros(),
-                'office_remaining' => $office->remainingMicros(),
+                'tenant_remaining' => $tenant->remainingMicros(),
                 'canary_remaining' => $canary?->remainingMicros(),
                 'operation_remaining' => $operation->remainingMicros(),
             ];
@@ -499,7 +441,7 @@ final class UsageBudgetGate
             'allowed' => true,
             'block_reason' => null,
             'global_remaining' => $global->remainingMicros(),
-            'office_remaining' => $office->remainingMicros(),
+            'tenant_remaining' => $tenant->remainingMicros(),
             'canary_remaining' => $canary?->remainingMicros(),
             'operation_remaining' => $operation?->remainingMicros(),
         ];
@@ -509,7 +451,7 @@ final class UsageBudgetGate
      * @return Collection<int, SerproUsageBudget>
      */
     private function activeBudgets(
-        int $officeId,
+        int $tenantId,
         bool $isCanary,
         ?string $operationKey,
         string $environment,
@@ -528,26 +470,26 @@ final class UsageBudgetGate
             ->where(function ($w) use ($cycleCode): void {
                 $w->whereNull('cycle_code')->orWhere('cycle_code', $cycleCode);
             })
-            ->where(function ($w) use ($officeId, $isCanary, $operationKey): void {
+            ->where(function ($w) use ($tenantId, $isCanary, $operationKey): void {
                 $w->where(function ($g): void {
-                    $g->where('scope', self::SCOPE_GLOBAL)->whereNull('office_id');
-                })->orWhere(function ($o) use ($officeId): void {
-                    $o->where('scope', self::SCOPE_OFFICE)->where('office_id', $officeId);
+                    $g->where('scope', self::SCOPE_GLOBAL)->whereNull('tenant_id');
+                })->orWhere(function ($o) use ($tenantId): void {
+                    $o->where('scope', self::SCOPE_TENANT)->where('tenant_id', $tenantId);
                 });
                 if ($isCanary) {
-                    $w->orWhere(function ($c) use ($officeId): void {
+                    $w->orWhere(function ($c) use ($tenantId): void {
                         $c->where('is_canary', true)
-                            ->where(function ($x) use ($officeId): void {
-                                $x->whereNull('office_id')->orWhere('office_id', $officeId);
+                            ->where(function ($x) use ($tenantId): void {
+                                $x->whereNull('tenant_id')->orWhere('tenant_id', $tenantId);
                             });
                     });
                 }
                 if ($operationKey !== null) {
-                    $w->orWhere(function ($op) use ($operationKey, $officeId): void {
+                    $w->orWhere(function ($op) use ($operationKey, $tenantId): void {
                         $op->where('scope', self::SCOPE_OPERATION)
                             ->where('operation_key', $operationKey)
-                            ->where(function ($x) use ($officeId): void {
-                                $x->whereNull('office_id')->orWhere('office_id', $officeId);
+                            ->where(function ($x) use ($tenantId): void {
+                                $x->whereNull('tenant_id')->orWhere('tenant_id', $tenantId);
                             });
                     });
                 }
@@ -577,9 +519,6 @@ final class UsageBudgetGate
         ?int $remaining,
         ?float $ratio,
         bool $alertReached,
-        int $globalUsed,
-        ?int $globalBudget,
-        ?float $tenantShareRatio,
         array $monetary,
     ): array {
         return [
@@ -595,9 +534,6 @@ final class UsageBudgetGate
             'remaining' => $remaining,
             'franchise_ratio' => $ratio,
             'alert_threshold_reached' => $alertReached,
-            'global_used' => $globalUsed,
-            'global_budget' => $globalBudget,
-            'tenant_share_ratio' => $tenantShareRatio,
             'monetary' => $monetary,
         ];
     }

@@ -16,7 +16,7 @@ describe('operations home cockpit', () => {
   it('renderiza seções do cockpit com deep-links canônicos', () => {
     expect(page).toContain('HomeBlocksBanner')
     expect(page).toContain('HomeFiscalSlice')
-    expect(page).toContain('HomeSerproOffice')
+    expect(page).toContain('HomeSerproTenant')
     expect(page).toContain('HomeCommunication')
     expect(page).toContain('HomeWorkKpisBlock')
     expect(page).toContain('HomeOperations')

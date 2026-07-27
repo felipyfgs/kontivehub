@@ -17,7 +17,7 @@ import {
 const props = withDefaults(defineProps<{
   client: Client
   canManageClients: boolean
-  /** Painel: dados | contatos | all (modal / legado). */
+  /** Seções renderizadas pelo host da ficha ou pelo modal. */
   panel?: 'dados' | 'contatos' | 'all'
 }>(), {
   panel: 'all'
@@ -35,7 +35,7 @@ const emit = defineEmits<{
 const detailCtx = inject(clientDetailKey, null)
 
 const primaryEstablishment = computed(() =>
-  props.client.establishments?.find(e => e.is_matrix)
+  props.client.establishments?.find(e => e.is_headquarters)
   || props.client.establishments?.[0]
   || null
 )
@@ -45,16 +45,17 @@ const shareholders = computed((): ShareholderPayload[] =>
 )
 
 const branchRows = computed(() => {
-  const branches = props.client.branches || []
-  return branches.map(b => ({
-    id: b.id,
-    label: b.display_name || b.legal_name || b.name,
-    cnpj: b.cnpj || '—'
-  }))
+  return (props.client.establishments || [])
+    .filter(establishment => !establishment.is_headquarters)
+    .map(establishment => ({
+      id: establishment.id,
+      label: establishment.trade_name || `Estabelecimento ${establishment.cnpj}`,
+      cnpj: establishment.cnpj
+    }))
 })
 
 const cnpjLabel = computed(() => {
-  const raw = props.client.cnpj || primaryEstablishment.value?.cnpj || props.client.root_cnpj
+  const raw = primaryEstablishment.value?.cnpj || props.client.root_cnpj
   return raw ? formatCnpj(raw) : '—'
 })
 
@@ -79,9 +80,9 @@ const stateRegistrations = computed((): StateRegistrationPayload[] => {
 
 const companyFields = computed(() => [
   { label: 'CNPJ', value: cnpjLabel.value },
-  { label: 'Razão social', value: props.client.legal_name || props.client.name || '—' },
+  { label: 'Razão social', value: props.client.legal_name || '—' },
   { label: 'ID interno', value: String(props.client.id) },
-  { label: 'Nome fantasia', value: props.client.trade_name || '—' },
+  { label: 'Nome fantasia', value: primaryEstablishment.value?.trade_name || '—' },
   {
     label: 'Início da atividade',
     value: formatDate(primaryEstablishment.value?.activity_started_at)
@@ -370,7 +371,6 @@ function onEdit() {
             <UPageCard
               v-for="branch in branchRows"
               :key="branch.id"
-              :to="clientCrmHref(branch.id, 'cadastro')"
               :title="branch.label"
               :description="branch.cnpj"
               icon="i-lucide-building-2"
@@ -380,8 +380,8 @@ function onEdit() {
           <UEmpty
             v-else
             icon="i-lucide-map-pin-house"
-            title="Sem filiais vinculadas"
-            description="Matriz e filiais aparecem aqui quando houver vínculo."
+            title="Sem filiais cadastradas"
+            description="Os estabelecimentos da mesma raiz aparecem aqui."
           />
         </template>
 
@@ -405,7 +405,7 @@ function onEdit() {
             </div>
           </div>
           <p class="mt-3 text-sm text-muted">
-            Certificado A1 fica no painel lateral; campos extras em
+            certificado fica no painel lateral; campos extras em
             <NuxtLink
               :to="adicionaisHref"
               class="font-medium text-primary"

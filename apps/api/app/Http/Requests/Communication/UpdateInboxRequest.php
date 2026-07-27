@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\Support\CurrentOffice;
+use App\Support\CurrentTenant;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -15,7 +15,7 @@ final class UpdateInboxRequest extends FormRequest
 
     public function rules(): array
     {
-        $officeId = (int) app(CurrentOffice::class)->office()->id;
+        $tenantId = (int) app(CurrentTenant::class)->tenant()->id;
         $inboxId = (int) $this->route('inbox');
 
         return [
@@ -27,7 +27,7 @@ final class UpdateInboxRequest extends FormRequest
                 Rule::unique('communication_inboxes', 'name')
                     ->ignore($inboxId)
                     ->where(fn ($query) => $query
-                        ->where('office_id', $officeId)),
+                        ->where('tenant_id', $tenantId)),
             ],
             'is_enabled' => ['sometimes', 'boolean'],
             'is_default' => ['sometimes', 'boolean'],

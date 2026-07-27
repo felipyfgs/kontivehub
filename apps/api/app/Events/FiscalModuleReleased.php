@@ -14,7 +14,7 @@ final class FiscalModuleReleased
     public function __construct(
         public FiscalControlModule $module,
         public FiscalModuleControlScope $scope,
-        public ?int $officeId,
+        public ?int $tenantId,
         public int $actorUserId,
     ) {}
 }

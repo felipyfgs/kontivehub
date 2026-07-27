@@ -2,7 +2,6 @@
 /**
  * Célula de identidade do cliente na carteira: razão social + CNPJ.
  * Com `cnpj` normalizado: máscara BR na tela e cópia dos dígitos no clique.
- * Sem `cnpj`: fallback ao masked legado (sem cópia de dígitos).
  */
 import { formatCnpj, normalizeCnpj } from '~/utils/format'
 
@@ -12,8 +11,6 @@ const props = defineProps<{
   displayName?: string | null
   /** CNPJ normalizado (14 chars) — preferido para exibição/cópia. */
   cnpj?: string | null
-  cnpjMasked?: string | null
-  rootCnpjMasked?: string | null
   clientId?: number | null
   to?: string | null
 }>()
@@ -39,7 +36,7 @@ const copyableDigits = computed(() => {
 
 const displayCnpj = computed(() => {
   if (copyableDigits.value) return formatCnpj(copyableDigits.value)
-  return props.cnpjMasked || props.rootCnpjMasked || null
+  return null
 })
 
 const href = computed(() => {

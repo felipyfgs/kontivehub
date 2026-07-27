@@ -8,18 +8,17 @@ use App\Enums\FiscalModuleAvailabilityState;
 use App\Enums\FiscalModuleControlScope;
 use App\Enums\FiscalOperationClass;
 use App\Enums\FiscalProfile;
-use App\Enums\OfficeSerproOnboardingStatus;
+use App\Enums\TenantSerproOnboardingStatus;
 use App\Exceptions\FiscalModuleUnavailableException;
 use App\Models\FiscalModuleControl;
-use App\Models\Office;
-use App\Models\OfficeSerproOnboardingState;
-use Illuminate\Support\Facades\Schema;
+use App\Models\Tenant;
+use App\Models\TenantSerproOnboardingState;
 
 final class FiscalModuleAvailabilityService
 {
     public function resolve(
         FiscalControlModule|string $module,
-        ?Office $office = null,
+        ?Tenant $tenant = null,
         FiscalOperationClass $operationClass = FiscalOperationClass::Read,
         bool $officialTrialScenario = true,
         bool $eligible = true,
@@ -36,10 +35,10 @@ final class FiscalModuleAvailabilityService
             return $this->deny($module, $profile, $operationClass, FiscalModuleAvailabilityState::GloballyRestricted, 'GLOBAL_RESTRICTION', $global->reason, $global->id);
         }
 
-        if ($office !== null) {
-            $local = $this->restrictedControl($module, FiscalModuleControlScope::Office, (int) $office->id);
+        if ($tenant !== null) {
+            $local = $this->restrictedControl($module, FiscalModuleControlScope::Tenant, (int) $tenant->id);
             if ($local !== null) {
-                return $this->deny($module, $profile, $operationClass, FiscalModuleAvailabilityState::OfficeRestricted, 'OFFICE_RESTRICTION', $local->reason, $local->id);
+                return $this->deny($module, $profile, $operationClass, FiscalModuleAvailabilityState::TenantRestricted, 'TENANT_RESTRICTION', $local->reason, $local->id);
             }
         }
 
@@ -51,8 +50,8 @@ final class FiscalModuleAvailabilityService
             return $this->deny($module, $profile, $operationClass, FiscalModuleAvailabilityState::TechnicalFailure, $code, 'O perfil fiscal atual não permite esta classe de operação.');
         }
 
-        if ($office !== null && ! $this->isTechnicallyReady($office, $profile)) {
-            return $this->deny($module, $profile, $operationClass, FiscalModuleAvailabilityState::AwaitingConfiguration, 'OFFICE_NOT_READY', 'Conclua a configuração fiscal do escritório.');
+        if ($tenant !== null && ! $this->isTechnicallyReady($tenant, $profile)) {
+            return $this->deny($module, $profile, $operationClass, FiscalModuleAvailabilityState::AwaitingConfiguration, 'TENANT_NOT_READY', 'Conclua a configuração fiscal do escritório.');
         }
 
         if (! $eligible) {
@@ -70,12 +69,12 @@ final class FiscalModuleAvailabilityService
 
     public function assertExecutionAllowed(
         FiscalControlModule|string $module,
-        Office $office,
+        Tenant $tenant,
         FiscalOperationClass $operationClass = FiscalOperationClass::Read,
         bool $officialTrialScenario = true,
         bool $eligible = true,
     ): FiscalModuleAvailabilityDecision {
-        $decision = $this->resolve($module, $office, $operationClass, $officialTrialScenario, $eligible);
+        $decision = $this->resolve($module, $tenant, $operationClass, $officialTrialScenario, $eligible);
         if (! $decision->allowed) {
             throw new FiscalModuleUnavailableException($decision);
         }
@@ -86,35 +85,29 @@ final class FiscalModuleAvailabilityService
     private function restrictedControl(
         FiscalControlModule $module,
         FiscalModuleControlScope $scope,
-        ?int $officeId = null,
+        ?int $tenantId = null,
     ): ?FiscalModuleControl {
-        // Compatibilidade durante deploy rolling: ausência da tabela equivale a
-        // ausência de exceção, conforme o contrato "liberado por padrão".
-        if (! Schema::hasTable('fiscal_module_controls')) {
-            return null;
-        }
-
         return FiscalModuleControl::query()
-            ->where('control_key', FiscalModuleControl::controlKey($module, $scope, $officeId))
+            ->where('control_key', FiscalModuleControl::controlKey($module, $scope, $tenantId))
             ->where('restricted', true)
             ->first();
     }
 
-    private function isTechnicallyReady(Office $office, FiscalProfile $profile): bool
+    private function isTechnicallyReady(Tenant $tenant, FiscalProfile $profile): bool
     {
-        if (! $office->isOperational()) {
+        if (! $tenant->isOperational()) {
             return false;
         }
         if ($profile === FiscalProfile::Dev) {
             return true;
         }
 
-        return OfficeSerproOnboardingState::query()
+        return TenantSerproOnboardingState::query()
             ->withoutGlobalScopes()
-            ->where('office_id', $office->id)
+            ->where('tenant_id', $tenant->id)
             ->whereIn('status', [
-                OfficeSerproOnboardingStatus::Ready->value,
-                OfficeSerproOnboardingStatus::Authorized->value,
+                TenantSerproOnboardingStatus::Ready->value,
+                TenantSerproOnboardingStatus::Authorized->value,
             ])
             ->exists();
     }

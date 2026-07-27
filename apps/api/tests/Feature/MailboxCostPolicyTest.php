@@ -4,9 +4,9 @@ namespace Tests\Feature;
 
 use App\Enums\SerproConsumptionClass;
 use App\Models\MailboxMonitoringSetting;
-use App\Models\Office;
 use App\Models\SerproPriceTier;
 use App\Models\SerproPriceVersion;
+use App\Models\Tenant;
 use App\Services\Integra\Mailbox\MailboxCostPolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -17,10 +17,10 @@ class MailboxCostPolicyTest extends TestCase
 
     public function test_unknown_price_blocks_and_shadow_price_is_disclosed(): void
     {
-        $office = Office::factory()->create();
+        $tenant = Tenant::factory()->create();
         SerproPriceVersion::query()->update(['is_active' => false]);
         $policy = app(MailboxCostPolicy::class);
-        $this->assertSame('PRICE_UNKNOWN', $policy->preview($office->id, 'LISTAR')['block_reason']);
+        $this->assertSame('PRICE_UNKNOWN', $policy->preview($tenant->id, 'LISTAR')['block_reason']);
 
         $version = SerproPriceVersion::query()->create([
             'version_code' => 'shadow-mailbox-1',
@@ -43,16 +43,16 @@ class MailboxCostPolicyTest extends TestCase
             'sort_order' => 1,
         ]);
 
-        $preview = $policy->preview($office->id, 'LISTAR', 2);
+        $preview = $policy->preview($tenant->id, 'LISTAR', 2);
         $this->assertTrue($preview['allowed']);
         $this->assertSame('SHADOW', $preview['price_source']);
         $this->assertSame(1_000_000, $preview['estimated_cost_micros']);
 
         MailboxMonitoringSetting::query()->create([
-            'office_id' => $office->id,
+            'tenant_id' => $tenant->id,
             'monthly_budget_micros' => 999_999,
         ]);
-        $blocked = $policy->preview($office->id, 'LISTAR', 2);
+        $blocked = $policy->preview($tenant->id, 'LISTAR', 2);
         $this->assertFalse($blocked['allowed']);
         $this->assertSame('MAILBOX_MONTHLY_BUDGET_EXCEEDED', $blocked['block_reason']);
     }

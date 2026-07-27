@@ -53,41 +53,21 @@ const DECLARATION_META: Record<DctfwebDeclarationState, DctfwebStateMeta> = {
 
 export function dctfwebSummary(row?: DctfwebClientRow | null): DctfwebClientSummary | null {
   if (!row?.detail) return null
-  const d = row.detail
-  const nested = d.dctfweb
-  if (nested) {
-    return {
-      expected_period_key: nested.expected_period_key || nested.period_key,
-      period_key: nested.period_key,
-      category: nested.category,
-      declaration_state: nested.declaration_state || d.declaration_state,
-      declaration_state_reason: nested.declaration_state_reason,
-      last_declaration: nested.last_declaration || d.last_declaration,
-      latest_declaration: nested.last_declaration || null,
-      last_search_at: nested.last_search_at || nested.last_valid_query_at || d.last_search_at,
-      last_valid_query_at: nested.last_valid_query_at || d.last_productive_consulted_at,
-      last_productive_consulted_at: d.last_productive_consulted_at,
-      calendar_verified: nested.calendar_verified,
-      communication: nested.communication || d.communication,
-      has_history: nested.has_history ?? d.has_history,
-      has_tracking: nested.has_tracking ?? d.has_tracking,
-      links: d.links
-    }
-  }
-
-  if (d.declaration_state == null && d.last_declaration == null && d.communication == null) {
-    return null
-  }
+  const nested = row.detail.dctfweb
+  if (!nested) return null
 
   return {
-    declaration_state: d.declaration_state,
-    last_declaration: d.last_declaration,
-    last_search_at: d.last_search_at,
-    last_productive_consulted_at: d.last_productive_consulted_at,
-    communication: d.communication,
-    has_history: d.has_history,
-    has_tracking: d.has_tracking,
-    links: d.links
+    expected_period_key: nested.expected_period_key,
+    category: nested.category,
+    declaration_state: nested.declaration_state,
+    declaration_state_reason: nested.declaration_state_reason,
+    latest_declaration: nested.latest_declaration,
+    last_search_at: nested.last_search_at,
+    calendar_verified: nested.calendar_verified,
+    communication: nested.communication,
+    has_history: nested.has_history,
+    has_tracking: nested.has_tracking,
+    links: row.detail.links
   }
 }
 
@@ -127,7 +107,7 @@ export function formatDctfwebDate(value?: string | null): string {
 }
 
 export function dctfwebLastDeclarationLabel(summary?: DctfwebClientSummary | null): string {
-  const decl = summary?.latest_declaration || summary?.last_declaration
+  const decl = summary?.latest_declaration
   if (!decl || typeof decl !== 'object') return '—'
   const period = formatDctfwebPeriod(
     (decl as { period_key?: string }).period_key || summary?.expected_period_key
@@ -136,11 +116,9 @@ export function dctfwebLastDeclarationLabel(summary?: DctfwebClientSummary | nul
 }
 
 export function dctfwebHistoryPeriods(
-  history?: DctfwebHistoryPayload | DctfwebHistoryPeriod[] | null
+  history?: DctfwebHistoryPayload | null
 ): DctfwebHistoryPeriod[] {
-  if (!history) return []
-  if (Array.isArray(history)) return history
-  return history.periods || history.history || []
+  return history?.periods ?? []
 }
 
 export function dctfwebTrackingMeta(value?: string | null) {
@@ -163,7 +141,7 @@ export function dctfwebSituationTooltip(summary?: DctfwebClientSummary | null): 
   return [
     `Situação: ${meta.label}.`,
     `Últ. declaração: ${dctfwebLastDeclarationLabel(summary)}.`,
-    `Última busca: ${formatDateTime(summary?.last_search_at || summary?.last_valid_query_at)}.`,
+    `Última busca: ${formatDateTime(summary?.last_search_at)}.`,
     `Motivo: ${reason}`
   ].join(' ')
 }

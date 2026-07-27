@@ -59,8 +59,8 @@ export function registrationSourceLabel(source?: string | null): string {
       return 'CNPJ.ws'
     case 'MANUAL':
       return 'Manual'
-    case 'LEGACY':
-      return 'Legado'
+    case 'SERPRO_CONSULTA':
+      return 'SERPRO'
     default:
       return source ? String(source) : '—'
   }

@@ -18,18 +18,13 @@ import (
 var errLeaseUnavailable = errors.New("session lease unavailable")
 
 type Transport interface {
-	SendText(context.Context, string, string, string, string) error
-	SendMedia(context.Context, string, string, string, string, string, string, []byte) error
+	SendTypedMessage(context.Context, string, domain.MessageSendPayload, string, []byte) error
 	Logout(context.Context, string) error
 }
 
 type SessionTransport interface {
 	HasCredentials(string) bool
 	ForgetSession(context.Context, string) error
-}
-
-type TypedTransport interface {
-	SendTypedMessage(context.Context, string, domain.MessageSendPayload, string, []byte) error
 }
 
 type ActionTransport interface {
@@ -224,11 +219,6 @@ func (w *Worker) process(ctx context.Context, command domain.Command) error {
 		}
 		return w.appendSessionEvent(ctx, command.SessionID, string(domain.SessionDisconnected), w.now().UTC())
 
-	case domain.CommandResetSession:
-		// Compatibility alias: the canonical reconnect is Connect. It selects
-		// reconnect or QR from the real credential state.
-		return w.connectSession(ctx, command.SessionID)
-
 	case domain.CommandSendMessage:
 		if _, owns := w.sessions.Owns(ctx, command.SessionID); !owns {
 			return errLeaseUnavailable
@@ -248,30 +238,10 @@ func (w *Worker) process(ctx context.Context, command domain.Command) error {
 			}
 			content = fetched
 		}
-		if typed, ok := w.transport.(TypedTransport); ok {
-			if err := typed.SendTypedMessage(
-				ctx, command.SessionID, payload, command.ProviderMessageID, content,
-			); err != nil {
-				return err
-			}
-		} else if payload.Media == nil {
-			if payload.Text == "" {
-				return errors.New("legacy transport only supports non-empty text")
-			}
-			if err := w.transport.SendText(ctx, command.SessionID, payload.To, payload.Text, command.ProviderMessageID); err != nil {
-				return err
-			}
-		} else {
-			caption := payload.Caption
-			if caption == "" {
-				caption = payload.Text
-			}
-			if err := w.transport.SendMedia(
-				ctx, command.SessionID, payload.To, caption, payload.Media.Filename,
-				payload.Media.MIMEType, command.ProviderMessageID, content,
-			); err != nil {
-				return err
-			}
+		if err := w.transport.SendTypedMessage(
+			ctx, command.SessionID, payload, command.ProviderMessageID, content,
+		); err != nil {
+			return err
 		}
 		return w.appendStatusEvent(ctx, command, "SENT", w.now().UTC())
 

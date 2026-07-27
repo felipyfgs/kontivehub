@@ -57,10 +57,6 @@ watch(open, async (isOpen) => {
       ? all.filter(c =>
           !c.module_key
           || c.module_key === mk
-          || (mk === 'dctfweb' && c.module_key === 'dctfweb_mit')
-          || (mk === 'installments' && c.module_key === 'parcelamentos')
-          || (mk === 'declarations' && c.module_key === 'declaracoes')
-          || (mk === 'guides' && c.module_key === 'guias')
         )
       : all
     if (!categories.value.length) {

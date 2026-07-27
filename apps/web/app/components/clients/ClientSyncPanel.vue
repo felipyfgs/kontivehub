@@ -7,7 +7,7 @@ import type { ClientCredential, ClientCredentialSummary, Establishment } from '~
 const props = defineProps<{
   establishments: Establishment[]
   credential: ClientCredential | null
-  /** Summary do show — evita bloquear OPERATOR por falta do detalhe ADMIN. */
+  /** Resumo público do certificado, sem exigir acesso aos detalhes protegidos. */
   credentialSummary?: ClientCredentialSummary | null
   canTriggerSync: boolean
   canManageCredentials: boolean
@@ -32,7 +32,7 @@ function canSync(establishment: Establishment) {
   if (establishment.capture_eligibility && !establishment.capture_eligibility.eligible) {
     return false
   }
-  // ADMIN precisa do detalhe; demais papéis usam summary do show.
+  // Quem gerencia certificados precisa de um certificado válido no contexto.
   if (props.canManageCredentials && !hasCredential.value) {
     return false
   }
@@ -50,7 +50,7 @@ function syncHint(establishment: Establishment): string | null {
     return 'Cliente inativo para captura.'
   }
   if (props.canManageCredentials && !hasCredential.value) {
-    return 'Credencial A1 necessária.'
+    return 'Certificado necessário.'
   }
   return null
 }
