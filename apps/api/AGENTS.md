@@ -4,7 +4,7 @@ Deltas locais. Raiz: `/AGENTS.md`.
 
 ## Escopo
 
-Laravel 13 / PHP 8.4. Tenant = `Office`. Services + contracts + jobs. Não tratar como app fora do Compose.
+Laravel 13 / PHP 8.4. Tenant = `Tenant`. Services + contracts + jobs. Não tratar como app fora do Compose.
 
 ## Agente preferido
 
