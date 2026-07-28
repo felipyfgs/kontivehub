@@ -1,4 +1,13 @@
-## ADDED Requirements
+# whatsapp-peer-identity-correlation Specification
+
+## Purpose
+
+Definir a correlação de identidades de peer WhatsApp entre Wazync e a API
+Laravel: projeção do peer remoto pelo gateway, resolução apenas de aliases
+remotos comprovados, convergência para uma conversation ativa, correlação
+transacional/concorrente/tenant-safe e rejeição fail-closed de self-chat.
+
+## Requirements
 
 ### Requirement: O gateway projeta o peer remoto pela conversa
 O Wazync SHALL usar o `MessageSource.Chat` normalizado como identidade primária de todo evento 1:1 e SHALL NOT substituir o peer pela identidade da própria sessão.
@@ -30,6 +39,10 @@ A API SHALL aceitar `from` legado, SHALL preferir `source_identity` válido quan
 - **WHEN** um evento válido contém apenas `from` remoto
 - **THEN** a API continua resolvendo o peer pelo endereço legado sem alterar o contrato público
 
+#### Scenario: Evidência estrutural incoerente
+- **WHEN** `source_identity` tenta associar PN↔PN, LID↔LID, PN→LID, endereços iguais ou evidence diferente de `MESSAGE_SOURCE_ALT`
+- **THEN** o contrato e o resolver rejeitam a correlação sem alterar contacts, identities ou conversations
+
 ### Requirement: Aliases convergem para uma conversa ativa
 Ao receber uma associação LID↔PN comprovada, a API SHALL reconciliar as identities no mesmo tenant e SHALL manter no máximo uma conversation ativa para esse peer em cada inbox.
 
@@ -45,12 +58,52 @@ Ao receber uma associação LID↔PN comprovada, a API SHALL reconciliar as iden
 - **WHEN** LID e PN comprovadamente equivalentes já pertencem a contatos e conversations ativas diferentes
 - **THEN** a API reúne as identities, preserva as mensagens na conversation sobrevivente e resolve as conversations ativas doadoras
 
+#### Scenario: Contato curado está no alias LID
+- **WHEN** o LID pertence a contato nomeado/não provisório e a PN canônica pertence a contato provisório
+- **THEN** os aliases convergem para o contato curado, seus metadados são preservados e nenhum contato doador vazio permanece ativo
+
+#### Scenario: ID de contact doador é usado após o merge
+- **WHEN** show, update, add identity, export ou purge recebe o ID de um contact já redirecionado
+- **THEN** a operação usa o contact sobrevivente; listagens omitem o donor e purge remove os dados recuperáveis de toda a classe redirecionada
+
+#### Scenario: Contact doador possui outra identity legítima
+- **WHEN** um contact doador do par LID↔PN também possui uma identity que não participa da evidência
+- **THEN** a identity adicional passa a pertencer ao contact sobrevivente, mas não recebe `canonical_identity_id` nem tem sua conversation fundida sem evidência própria
+
+#### Scenario: Writer usa alias após a consolidação
+- **WHEN** uma automação ou mutação recebe uma identity ou conversation doadora já canonicalizada
+- **THEN** a operação reutiliza a identity/conversation sobrevivente ou retorna conflito de versão, sem criar nem reabrir outro fio
+
+#### Scenario: Um fragmento possui flow run ativo
+- **WHEN** exatamente uma das conversations equivalentes possui flow run não terminal
+- **THEN** essa conversation sobrevive e o run continua apontando para o fio canônico
+
+#### Scenario: Mais de um fragmento possui flow run ativo
+- **WHEN** conversations equivalentes distintas possuem flow runs não terminais
+- **THEN** a correlação falha fechada e nenhuma conversation, message ou execução é movida
+
 ### Requirement: Correlação é transacional, concorrente e tenant-safe
-A correlação SHALL executar dentro da transação do evento, SHALL serializar eventos que compartilham aliases e SHALL NOT consultar ou alterar identities de outro tenant ou inbox fora do fio correspondente.
+A correlação SHALL executar dentro da transação do evento, SHALL serializar eventos que compartilham aliases, SHALL NOT consultar ou alterar identities de outro tenant e SHALL restringir mutations de conversations à inbox correspondente.
 
 #### Scenario: Eventos concorrentes com aliases sobrepostos
 - **WHEN** dois eventos concorrentes compartilham LID ou PN para a mesma inbox
 - **THEN** ambos convergem para um contato e uma conversation ativa sem violar constraints
+
+#### Scenario: Classes concorrentes compartilham contact
+- **WHEN** dois processos PostgreSQL correlacionam classes de identity inicialmente disjuntas que apontam para contacts da mesma classe redirecionada
+- **THEN** member/contact locks, reexpansão e retry fazem ambos convergirem para o contact curado sem donor ativo ou merge parcial
+
+#### Scenario: Retry idempotente acrescenta alias
+- **WHEN** uma mensagem já existe por LID e um retry/history com o mesmo `provider_message_id` acrescenta a PN comprovada
+- **THEN** nenhuma nova mensagem é criada, mas identities e conversations fragmentadas são reconciliadas e o evento referencia a conversation sobrevivente
+
+#### Scenario: Evento atrasado não regride atividade
+- **WHEN** live ou history chega com `occurred_at` anterior ao `last_message_at` persistido
+- **THEN** a correlação preserva o maior timestamp da timeline
+
+#### Scenario: History antigo contém uma PN anterior
+- **WHEN** um LID foi relacionado a uma PN recente em live e history atrasado apresenta outra PN com evidência mais antiga
+- **THEN** a PN recente permanece canônica e `last_seen_at` só avança nos aliases presentes no evento
 
 #### Scenario: Mesmo endereço em tenants distintos
 - **WHEN** tenants diferentes recebem o mesmo endereço normalizado

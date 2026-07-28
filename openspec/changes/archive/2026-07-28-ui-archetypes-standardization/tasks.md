@@ -98,12 +98,12 @@ Arquivos-alvo:
 - Candidato: `ShellMasterDetailWorkspace` (somente se encapsular a mesma
   hierarquia/slots; senão, compor Shell existente)
 
-- [ ] 4.1 Criar change OpenSpec do lote (ex.: `ui-archetypes-batch-master-detail`)
-- [ ] 4.2 Aplicar skill `ui-archetypes` (arquétipo inbox)
-- [ ] 4.3 Comparar as três superfícies e propor o menor delta (compor vs novo Shell)
-- [ ] 4.4 Migrar chrome (navbar/toolbar) para Shell; preservar painéis redimensionáveis e slideover mobile
-- [ ] 4.5 Preservar gates `communication-workspace-ui-gate` e `work-surface-composition`
-- [ ] 4.6 Testes focados + gates web completos
+- [x] 4.1 Criar change OpenSpec do lote (ex.: `ui-archetypes-batch-master-detail`)
+- [x] 4.2 Aplicar skill `ui-archetypes` (arquétipo inbox)
+- [x] 4.3 Comparar as três superfícies e propor o menor delta (compor vs novo Shell)
+- [x] 4.4 Migrar chrome (navbar/toolbar) para Shell; preservar painéis redimensionáveis e slideover mobile
+- [x] 4.5 Preservar gates `communication-workspace-ui-gate` e `work-surface-composition`
+- [x] 4.6 Testes focados + gates web completos
 
 ## 5. Lote 5 — Docs workspace
 
@@ -114,11 +114,11 @@ Arquivos-alvo:
 - `apps/web/app/components/docs/Workspace.vue` (~930 linhas)
 - Rotas: `docs/index`, `docs/catalog`, `docs/[accessKey]`
 
-- [ ] 5.1 Criar change OpenSpec do lote (ex.: `ui-archetypes-batch-docs`)
-- [ ] 5.2 Aplicar skill `ui-archetypes` (arquétipo lista)
-- [ ] 5.3 Migrar navbar/refresh/erro para Shell sem redesign do posto documental
-- [ ] 5.4 Manter `DocsWorkspace` na allowlist existente (não ampliar)
-- [ ] 5.5 Testes focados + gates web completos
+- [x] 5.1 Criar change OpenSpec do lote (ex.: `ui-archetypes-batch-docs`)
+- [x] 5.2 Aplicar skill `ui-archetypes` (arquétipo lista)
+- [x] 5.3 Migrar navbar/refresh/erro para Shell sem redesign do posto documental
+- [x] 5.4 Manter `DocsWorkspace` na allowlist existente (não ampliar)
+- [x] 5.5 Testes focados + gates web completos
 
 ## 6. Lote 6 — Quick wins transversais
 
@@ -132,19 +132,24 @@ Arquivos-alvo (indicativos; inventário final no change filho):
 - `UPageCard` → `ShellSectionCard` em settings filhas (conta/SERPRO) onde couber
 - Unificação contratual dos KPI strips (`ShellKpiStrip` vs `MonitoringKpiStrip`)
 
-- [ ] 6.1 Criar change OpenSpec do lote (ex.: `ui-archetypes-batch-quick-wins`)
-- [ ] 6.2 Inventariar ocorrências restantes a partir de `audit.md`
-- [ ] 6.3 Aplicar skill e migrar com menor delta por arquivo
-- [ ] 6.4 Testes focados + gates web completos
+- [x] 6.1 Criar change OpenSpec do lote (`ui-archetypes-batch-quick-wins`)
+- [x] 6.2 Inventariar ocorrências restantes a partir de `audit.md` (ver `design.md` do filho)
+- [x] 6.3 Aplicar skill e migrar com menor delta por arquivo (erro carga, closing toolbar, SectionCard drop-in; KPI strips = dívida)
+- [x] 6.4 Testes focados + gates web completos — focados OK (44); gates completos PASS
 
 ## 7. Encerramento do guarda-chuva
 
-- [ ] 7.1 Confirmar que todos os lotes planejados têm change filho criado ou
+- [x] 7.1 Confirmar que todos os lotes planejados têm change filho criado ou
       foram explicitamente descartados/reordenados pelo usuário
-- [ ] 7.2 Arquivar esta change (`openspec-archive-change`) após os lotes
+      (Lotes 1–6 arquivados em `openspec/changes/archive/2026-07-28-ui-archetypes-batch-*`.
+      Dívida documentada: KPI strips; UPageCard team/departments/SERPRO densos; calendar UDirect.)
+- [x] 7.2 Arquivar esta change (`openspec-archive-change`) após os lotes
       acordados estarem concluídos ou a dívida remanescente documentada
-- [ ] 7.3 Não sincronizar specs principais até haver comportamento
-      implementado nos lotes (delta-first; sem backfill)
+      — filho `ui-archetypes-batch-quick-wins` já arquivado; guarda-chuva arquivado
+      com sync consciente de `ui-archetypes-audit` e `ui-archetypes-batch-roadmap`
+- [x] 7.3 Não sincronizar specs principais até haver comportamento
+      implementado nos lotes (delta-first; sem backfill) — cumprido: specs main dos lotes
+      só após implementação; capabilities do guarda-chuva sincronizadas no archive consciente
 
 ## Achados secundários (fora dos lotes; só sob pedido)
 

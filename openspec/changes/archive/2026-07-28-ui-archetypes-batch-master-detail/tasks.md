@@ -19,10 +19,10 @@
 
 - [x] 4.1 Adicionar gate focado das três navbars e fortalecer testes existentes
 - [x] 4.2 Rodar testes focados de Communication, Work, Mailbox, foco e responsividade
-- [ ] 4.3 Rodar lint, typecheck, generate, test, fidelity e artifacts
-- [ ] 4.4 Inspecionar desktop/mobile, teclado, foco, resize, detalhes e slideovers
+- [x] 4.3 Rodar lint, typecheck, generate, test, fidelity e artifacts
+- [x] 4.4 Inspecionar desktop/mobile, teclado, foco, resize, detalhes e slideovers
 
 ## 5. Encerramento
 
-- [ ] 5.1 Confirmar matriz e allowlists inalteradas e marcar o Lote 4 no guarda-chuva
-- [ ] 5.2 Sincronizar `ui-archetypes-master-detail`, validar strict e arquivar
+- [x] 5.1 Confirmar matriz e allowlists inalteradas e marcar o Lote 4 no guarda-chuva
+- [x] 5.2 Sincronizar `ui-archetypes-master-detail`, validar strict e arquivar
