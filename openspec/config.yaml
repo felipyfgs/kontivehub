@@ -12,8 +12,9 @@ schema: spec-driven
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.
 # Example:
-rules:
-  specs:
-    - Escreva as especificações em português do Brasil (pt-BR), preservando em
-      inglês apenas identificadores de código, nomes oficiais e termos técnicos
-      sem tradução adequada.
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours

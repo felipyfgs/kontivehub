@@ -1,9 +1,9 @@
 {
     "schemaVersion": 1,
-    "combinedDigest": "88a43a669c7b6df19bdb78387582321e326a1131ee89b0099856821412d861d4",
+    "combinedDigest": "4ae74e9cc3234e79f1b32dd577989dd6223bdca0b0c0a6a74f6778d94188805e",
     "inventoryDigests": {
         "api": "d28168aa3c0f7970771ea7d7ef352518c068919bd8cef1dfa2f4b8c7f2f247a0",
-        "web": "58d4411cd6404cb195e4c9e3c33da1321f1d1cb1a3ef1f857a25ce23cda7cd27"
+        "web": "762269cdc723a5e84021f4a6f2932dbcc275296aa98b98f8de492f55addb6227"
     },
     "api": {
         "files": 2060,
@@ -56,7 +56,7 @@
     },
     "web": {
         "files": 643,
-        "symbols": 7121,
+        "symbols": 7125,
         "executableFiles": 616,
         "parseErrors": 0,
         "byApp": {
@@ -87,7 +87,7 @@
             "yaml": 2
         },
         "bySymbolKind": {
-            "arrow-function": 4284,
+            "arrow-function": 4288,
             "function": 2328,
             "interface": 494,
             "method": 15

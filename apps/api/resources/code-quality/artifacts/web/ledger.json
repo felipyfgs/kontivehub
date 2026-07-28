@@ -1,6 +1,6 @@
 {
     "schemaVersion": 1,
-    "inventoryDigest": "58d4411cd6404cb195e4c9e3c33da1321f1d1cb1a3ef1f857a25ce23cda7cd27",
+    "inventoryDigest": "762269cdc723a5e84021f4a6f2932dbcc275296aa98b98f8de492f55addb6227",
     "entries": [
         {
             "symbolId": "apps/web/app/app.vue::arrow-function#1@6",
@@ -20135,7 +20135,7 @@
             "status": "pending",
             "categories": [],
             "findingIds": [],
-            "note": "Aguardando revisão semântica.",
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
             "reviewBatch": null
         },
         {
@@ -20407,7 +20407,7 @@
             "status": "pending",
             "categories": [],
             "findingIds": [],
-            "note": "Aguardando revisão semântica.",
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
             "reviewBatch": null
         },
         {
@@ -51275,7 +51275,7 @@
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/critical-use-case-journeys.test.ts::arrow-function#3.<locals>.arrow-function#4@16",
+            "symbolId": "apps/web/tests/unit/critical-use-case-journeys.test.ts::arrow-function#3.<locals>.arrow-function#4@17",
             "status": "pending",
             "categories": [],
             "findingIds": [],
@@ -51283,7 +51283,47 @@
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/critical-use-case-journeys.test.ts::arrow-function#3.<locals>.arrow-function#5@30",
+            "symbolId": "apps/web/tests/unit/critical-use-case-journeys.test.ts::arrow-function#3.<locals>.arrow-function#5@31",
+            "status": "pending",
+            "categories": [],
+            "findingIds": [],
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
+            "reviewBatch": null
+        },
+        {
+            "symbolId": "apps/web/tests/unit/critical-use-case-journeys.test.ts::arrow-function#3.<locals>.arrow-function#6@42",
+            "status": "pending",
+            "categories": [],
+            "findingIds": [],
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
+            "reviewBatch": null
+        },
+        {
+            "symbolId": "apps/web/tests/unit/critical-use-case-journeys.test.ts::arrow-function#3.<locals>.arrow-function#7@59",
+            "status": "pending",
+            "categories": [],
+            "findingIds": [],
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
+            "reviewBatch": null
+        },
+        {
+            "symbolId": "apps/web/tests/unit/critical-use-case-journeys.test.ts::arrow-function#3.<locals>.arrow-function#8@77",
+            "status": "pending",
+            "categories": [],
+            "findingIds": [],
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
+            "reviewBatch": null
+        },
+        {
+            "symbolId": "apps/web/tests/unit/critical-use-case-journeys.test.ts::arrow-function#3@16",
+            "status": "pending",
+            "categories": [],
+            "findingIds": [],
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
+            "reviewBatch": null
+        },
+        {
+            "symbolId": "apps/web/tests/unit/critical-use-case-journeys.test.ts::harness.<locals>.arrow-function#1@10",
             "status": "pending",
             "categories": [],
             "findingIds": [],
@@ -51291,7 +51331,7 @@
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/critical-use-case-journeys.test.ts::arrow-function#3.<locals>.arrow-function#6@47",
+            "symbolId": "apps/web/tests/unit/critical-use-case-journeys.test.ts::harness.<locals>.arrow-function#2@12",
             "status": "pending",
             "categories": [],
             "findingIds": [],
@@ -51299,39 +51339,7 @@
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/critical-use-case-journeys.test.ts::arrow-function#3.<locals>.arrow-function#7@65",
-            "status": "pending",
-            "categories": [],
-            "findingIds": [],
-            "note": "Aguardando revisão semântica.",
-            "reviewBatch": null
-        },
-        {
-            "symbolId": "apps/web/tests/unit/critical-use-case-journeys.test.ts::arrow-function#3@15",
-            "status": "pending",
-            "categories": [],
-            "findingIds": [],
-            "note": "Aguardando revisão semântica.",
-            "reviewBatch": null
-        },
-        {
-            "symbolId": "apps/web/tests/unit/critical-use-case-journeys.test.ts::harness.<locals>.arrow-function#1@9",
-            "status": "pending",
-            "categories": [],
-            "findingIds": [],
-            "note": "Aguardando revisão semântica.",
-            "reviewBatch": null
-        },
-        {
-            "symbolId": "apps/web/tests/unit/critical-use-case-journeys.test.ts::harness.<locals>.arrow-function#2@11",
-            "status": "pending",
-            "categories": [],
-            "findingIds": [],
-            "note": "Aguardando revisão semântica.",
-            "reviewBatch": null
-        },
-        {
-            "symbolId": "apps/web/tests/unit/critical-use-case-journeys.test.ts::harness@8",
+            "symbolId": "apps/web/tests/unit/critical-use-case-journeys.test.ts::harness@9",
             "status": "pending",
             "categories": [],
             "findingIds": [],
@@ -53171,6 +53179,30 @@
             "reviewBatch": null
         },
         {
+            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#1.<locals>.arrow-function#20.<locals>.arrow-function#21@159",
+            "status": "pending",
+            "categories": [],
+            "findingIds": [],
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
+            "reviewBatch": null
+        },
+        {
+            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#1.<locals>.arrow-function#20.<locals>.arrow-function#22@161",
+            "status": "pending",
+            "categories": [],
+            "findingIds": [],
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
+            "reviewBatch": null
+        },
+        {
+            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#1.<locals>.arrow-function#20@143",
+            "status": "pending",
+            "categories": [],
+            "findingIds": [],
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
+            "reviewBatch": null
+        },
+        {
             "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#1.<locals>.arrow-function#2@26",
             "status": "pending",
             "categories": [],
@@ -53219,211 +53251,211 @@
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#20.<locals>.arrow-function#21.<locals>.arrow-function#22@147",
+            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#23.<locals>.arrow-function#24.<locals>.arrow-function#25@172",
             "status": "pending",
             "categories": [],
             "findingIds": [],
-            "note": "Aguardando revisão semântica.",
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#20.<locals>.arrow-function#21.<locals>.arrow-function#23@155",
+            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#23.<locals>.arrow-function#24.<locals>.arrow-function#26@180",
             "status": "pending",
             "categories": [],
             "findingIds": [],
-            "note": "Aguardando revisão semântica.",
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#20.<locals>.arrow-function#21.<locals>.arrow-function#24@156",
+            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#23.<locals>.arrow-function#24.<locals>.arrow-function#27@181",
             "status": "pending",
             "categories": [],
             "findingIds": [],
-            "note": "Aguardando revisão semântica.",
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#20.<locals>.arrow-function#21.<locals>.arrow-function#25@160",
+            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#23.<locals>.arrow-function#24.<locals>.arrow-function#28@185",
             "status": "pending",
             "categories": [],
             "findingIds": [],
-            "note": "Aguardando revisão semântica.",
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#20.<locals>.arrow-function#21.<locals>.arrow-function#26@161",
+            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#23.<locals>.arrow-function#24.<locals>.arrow-function#29@186",
             "status": "pending",
             "categories": [],
             "findingIds": [],
-            "note": "Aguardando revisão semântica.",
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#20.<locals>.arrow-function#21.<locals>.arrow-function#27@162",
+            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#23.<locals>.arrow-function#24.<locals>.arrow-function#30@187",
             "status": "pending",
             "categories": [],
             "findingIds": [],
-            "note": "Aguardando revisão semântica.",
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#20.<locals>.arrow-function#21.<locals>.arrow-function#28@163",
+            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#23.<locals>.arrow-function#24.<locals>.arrow-function#31@188",
             "status": "pending",
             "categories": [],
             "findingIds": [],
-            "note": "Aguardando revisão semântica.",
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#20.<locals>.arrow-function#21.<locals>.arrow-function#29@164",
+            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#23.<locals>.arrow-function#24.<locals>.arrow-function#32@189",
             "status": "pending",
             "categories": [],
             "findingIds": [],
-            "note": "Aguardando revisão semântica.",
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#20.<locals>.arrow-function#21.<locals>.arrow-function#30@165",
+            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#23.<locals>.arrow-function#24.<locals>.arrow-function#33@190",
             "status": "pending",
             "categories": [],
             "findingIds": [],
-            "note": "Aguardando revisão semântica.",
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#20.<locals>.arrow-function#21.<locals>.arrow-function#31@166",
+            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#23.<locals>.arrow-function#24.<locals>.arrow-function#34@191",
             "status": "pending",
             "categories": [],
             "findingIds": [],
-            "note": "Aguardando revisão semântica.",
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#20.<locals>.arrow-function#21.<locals>.arrow-function#32@167",
+            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#23.<locals>.arrow-function#24.<locals>.arrow-function#35@192",
             "status": "pending",
             "categories": [],
             "findingIds": [],
-            "note": "Aguardando revisão semântica.",
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#20.<locals>.arrow-function#21.<locals>.arrow-function#33@177",
+            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#23.<locals>.arrow-function#24.<locals>.arrow-function#36@202",
             "status": "pending",
             "categories": [],
             "findingIds": [],
-            "note": "Aguardando revisão semântica.",
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#20.<locals>.arrow-function#21@145",
+            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#23.<locals>.arrow-function#24@170",
             "status": "pending",
             "categories": [],
             "findingIds": [],
-            "note": "Aguardando revisão semântica.",
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#20.<locals>.arrow-function#34@180",
+            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#23.<locals>.arrow-function#37@205",
             "status": "pending",
             "categories": [],
             "findingIds": [],
-            "note": "Aguardando revisão semântica.",
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#20.<locals>.arrow-function#35@189",
+            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#23.<locals>.arrow-function#38@214",
             "status": "pending",
             "categories": [],
             "findingIds": [],
-            "note": "Aguardando revisão semântica.",
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#20@144",
+            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#23@169",
             "status": "pending",
             "categories": [],
             "findingIds": [],
-            "note": "Aguardando revisão semântica.",
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#36.<locals>.arrow-function#37@206",
+            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#39.<locals>.arrow-function#40@231",
             "status": "pending",
             "categories": [],
             "findingIds": [],
-            "note": "Aguardando revisão semântica.",
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#36.<locals>.arrow-function#38@216",
+            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#39.<locals>.arrow-function#41@241",
             "status": "pending",
             "categories": [],
             "findingIds": [],
-            "note": "Aguardando revisão semântica.",
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#36.<locals>.arrow-function#39.<locals>.arrow-function#40@237",
+            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#39.<locals>.arrow-function#42.<locals>.arrow-function#43@262",
             "status": "pending",
             "categories": [],
             "findingIds": [],
-            "note": "Aguardando revisão semântica.",
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#36.<locals>.arrow-function#39@234",
+            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#39.<locals>.arrow-function#42@259",
             "status": "pending",
             "categories": [],
             "findingIds": [],
-            "note": "Aguardando revisão semântica.",
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#36.<locals>.arrow-function#41@251",
+            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#39.<locals>.arrow-function#44@276",
             "status": "pending",
             "categories": [],
             "findingIds": [],
-            "note": "Aguardando revisão semântica.",
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#36.<locals>.arrow-function#42.<locals>.arrow-function#43@286",
+            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#39.<locals>.arrow-function#45.<locals>.arrow-function#46@311",
             "status": "pending",
             "categories": [],
             "findingIds": [],
-            "note": "Aguardando revisão semântica.",
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#36.<locals>.arrow-function#42@280",
+            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#39.<locals>.arrow-function#45@305",
             "status": "pending",
             "categories": [],
             "findingIds": [],
-            "note": "Aguardando revisão semântica.",
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#36.<locals>.arrow-function#44@293",
+            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#39.<locals>.arrow-function#47@318",
             "status": "pending",
             "categories": [],
             "findingIds": [],
-            "note": "Aguardando revisão semântica.",
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#36.<locals>.arrow-function#45@332",
+            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#39.<locals>.arrow-function#48@357",
             "status": "pending",
             "categories": [],
             "findingIds": [],
-            "note": "Aguardando revisão semântica.",
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
             "reviewBatch": null
         },
         {
-            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#36@205",
+            "symbolId": "apps/web/tests/unit/navigation.test.ts::arrow-function#39@230",
             "status": "pending",
             "categories": [],
             "findingIds": [],
-            "note": "Aguardando revisão semântica.",
+            "note": "Símbolo novo ou alterado; revisão semântica necessária.",
             "reviewBatch": null
         },
         {
