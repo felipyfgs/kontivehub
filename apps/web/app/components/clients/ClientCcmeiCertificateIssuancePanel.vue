@@ -13,6 +13,7 @@ const props = withDefaults(defineProps<{
 })
 const toast = useToast()
 const { fetchHistory, requestIssue, downloadPath } = useCcmeiCertificateIssuance()
+const { download: downloadAuthenticated, downloading: downloadBusy } = useAuthenticatedDownload()
 const loading = ref(true)
 const issuing = ref(false)
 const issueConfirmOpen = ref(false)
@@ -67,8 +68,12 @@ async function confirmIssue() {
   }
 }
 
-function download(certificate: CcmeiIssuedCertificate) {
-  window.location.assign(downloadPath(props.clientId, certificate.id))
+async function download(certificate: CcmeiIssuedCertificate) {
+  if (downloadBusy.value) return
+  await downloadAuthenticated(
+    downloadPath(props.clientId, certificate.id),
+    `certificado-ccmei-${certificate.id}.pdf`
+  )
 }
 
 watch(() => props.clientId, () => void load(), { immediate: true })
@@ -153,6 +158,8 @@ watch(() => props.clientId, () => void load(), { immediate: true })
             variant="soft"
             icon="i-lucide-download"
             label="Baixar PDF"
+            :loading="downloadBusy"
+            :disabled="downloadBusy"
             @click="download(certificate)"
           />
         </li>

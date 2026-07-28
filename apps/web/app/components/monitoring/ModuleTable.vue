@@ -153,6 +153,10 @@ const selectionScope = computed(() => monitoringSelectionScope({
 }))
 
 const surfaceIsUnavailable = computed(() => isSurfaceUnavailable(props.surfaceSummary))
+const hasInitialError = computed(() => Boolean(props.error)
+  && props.rows.length === 0
+  && !props.loading
+  && !props.refreshing)
 const surfaceUnavailableTitle = computed(() => {
   const label = props.surfaceSummary?.official_state_label?.trim()
   if (label) {
@@ -198,21 +202,14 @@ function onKpiSelect(key: Parameters<typeof fiscalKpiSituationFilter>[0]) {
 </script>
 
 <template>
-  <UDashboardPanel :id="panelId">
+  <ShellPagePanel :id="panelId">
     <template #header>
-      <UDashboardNavbar
+      <ShellPageNavbar
         :title="title"
-        data-testid="page-navbar"
       >
-        <template #leading>
-          <UDashboardSidebarCollapse />
-        </template>
-
-        <template
-          v-if="showPendingSearch && moduleKey && getClientId && !surfaceIsUnavailable"
-          #right
-        >
+        <template #right>
           <MonitoringPendingSearchButton
+            v-if="showPendingSearch && moduleKey && getClientId && !surfaceIsUnavailable"
             :module-key="moduleKey"
             :submodule="submodule"
             :competence="filters.competence"
@@ -220,8 +217,13 @@ function onKpiSelect(key: Parameters<typeof fiscalKpiSituationFilter>[0]) {
             :selected-client-ids="selectedClientIds"
             @submitted="emit('refresh')"
           />
+          <ShellNavbarRefresh
+            :loading="loading || refreshing"
+            test-id="fiscal-navbar-refresh"
+            @click="emit('refresh')"
+          />
         </template>
-      </UDashboardNavbar>
+      </ShellPageNavbar>
     </template>
 
     <template #body>
@@ -296,8 +298,15 @@ function onKpiSelect(key: Parameters<typeof fiscalKpiSituationFilter>[0]) {
           </span>
         </div>
 
+        <ShellLoadError
+          v-if="hasInitialError"
+          test-id="fiscal-error-alert"
+          :description="error"
+          @retry="emit('refresh')"
+        />
+
         <UAlert
-          v-if="error"
+          v-else-if="error"
           color="error"
           icon="i-lucide-circle-x"
           :title="error"
@@ -319,6 +328,7 @@ function onKpiSelect(key: Parameters<typeof fiscalKpiSituationFilter>[0]) {
           Sem stack flex-1 extra — o padding do #body (p-4 sm:p-6) volta a respirar.
         -->
         <MonitoringModuleDataTable
+          v-if="!hasInitialError"
           ref="dataTable"
           :columns="columns"
           :rows="rows"
@@ -407,5 +417,5 @@ function onKpiSelect(key: Parameters<typeof fiscalKpiSituationFilter>[0]) {
         <slot name="detail" />
       </div>
     </template>
-  </UDashboardPanel>
+  </ShellPagePanel>
 </template>

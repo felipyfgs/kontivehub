@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
 import type { OperationsSummary } from '~/types/api'
+import { homeDisplayValue } from '~/utils/home-cockpit'
 import { COMPACT_DASHBOARD_TABLE_UI } from '~/utils/table-ui'
 
 const props = defineProps<{
@@ -10,27 +11,33 @@ const props = defineProps<{
 
 interface TotalRow {
   label: string
-  value: number
+  value: string | number
   to: string
 }
 
-const data = computed<TotalRow[]>(() => [{
-  label: 'Clientes ativos',
-  value: props.summary?.clients ?? 0,
-  to: '/clients'
-}, {
-  label: 'Documentos',
-  value: props.summary?.notes ?? 0,
-  to: '/docs'
-}, {
-  label: 'Exportações prontas',
-  value: props.summary?.exports_ready ?? 0,
-  to: '/exports'
-}, {
-  label: 'Exportações pendentes',
-  value: props.summary?.exports_pending ?? 0,
-  to: '/exports'
-}])
+const data = computed<TotalRow[]>(() => {
+  const loading = Boolean(props.loading)
+  const hasSummary = !!props.summary
+  const n = (v: number | undefined) => homeDisplayValue(loading, hasSummary, v)
+
+  return [{
+    label: 'Clientes ativos',
+    value: n(props.summary?.clients),
+    to: '/clients'
+  }, {
+    label: 'Documentos',
+    value: n(props.summary?.notes),
+    to: '/docs'
+  }, {
+    label: 'Exportações prontas',
+    value: n(props.summary?.exports_ready),
+    to: '/exports'
+  }, {
+    label: 'Exportações pendentes',
+    value: n(props.summary?.exports_pending),
+    to: '/exports'
+  }]
+})
 
 const columns: TableColumn<TotalRow>[] = [{
   accessorKey: 'label',
@@ -60,7 +67,7 @@ const columns: TableColumn<TotalRow>[] = [{
         <span class="font-medium text-highlighted">{{ row.original.label }}</span>
       </template>
       <template #value-cell="{ row }">
-        {{ loading && !summary ? '…' : row.original.value }}
+        {{ row.original.value }}
       </template>
       <template #actions-cell="{ row }">
         <div class="text-right">

@@ -85,13 +85,14 @@ function kpiLabel(key: Exclude<FiscalKpiKey, 'total'>): string {
 const items = computed((): CounterTab[] => {
   const c = normalizedCounters.value
   const loadingPlaceholder = props.loading && !props.counters
+  const missingCounters = !props.loading && !props.counters
   const active = resolvedActiveKey.value
 
   const list: CounterTab[] = [
     {
       value: 'total',
       label: 'Total',
-      badge: loadingPlaceholder ? '…' : resolvedTotal.value
+      badge: loadingPlaceholder ? '…' : (missingCounters ? '—' : resolvedTotal.value)
     }
   ]
 
@@ -104,7 +105,7 @@ const items = computed((): CounterTab[] => {
     list.push({
       value: key,
       label: kpiLabel(key),
-      badge: loadingPlaceholder ? '…' : count
+      badge: loadingPlaceholder ? '…' : (missingCounters ? '—' : count)
     })
   }
 

@@ -161,29 +161,20 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <UDashboardPanel
+  <ShellPagePanel
     id="admin-tenants-new"
-    data-testid="admin-tenants-new"
-    :ui="{ body: 'lg:py-12' }"
+    test-id="admin-tenants-new"
+    body-class="lg:py-12"
   >
     <template #header>
-      <UDashboardNavbar
-        title="Novo escritório"
-        data-testid="page-navbar"
-      >
+      <ShellPageNavbar title="Novo escritório">
         <template #leading>
-          <UDashboardSidebarCollapse />
-        </template>
-        <template #right>
-          <UButton
+          <ShellNavbarBack
             to="/admin/tenants"
-            color="neutral"
-            variant="ghost"
-            icon="i-lucide-arrow-left"
             label="Escritórios"
           />
         </template>
-      </UDashboardNavbar>
+      </ShellPageNavbar>
     </template>
 
     <template #body>
@@ -426,5 +417,5 @@ onBeforeUnmount(() => {
         </template>
       </DashboardContent>
     </template>
-  </UDashboardPanel>
+  </ShellPagePanel>
 </template>

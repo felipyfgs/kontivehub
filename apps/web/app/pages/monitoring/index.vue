@@ -73,32 +73,23 @@ onMounted(load)
 </script>
 
 <template>
-  <UDashboardPanel
+  <ShellPagePanel
     id="monitoring-dashboard"
-    :ui="{ body: 'overflow-x-hidden' }"
+    body-class="overflow-x-hidden"
   >
     <template #header>
-      <UDashboardNavbar
+      <ShellPageNavbar
         title="Dashboard"
-        data-testid="page-navbar"
+        test-id="page-navbar"
       >
-        <template #leading>
-          <UDashboardSidebarCollapse />
-        </template>
         <template #right>
-          <UTooltip text="Atualizar leitura">
-            <UButton
-              color="neutral"
-              variant="ghost"
-              icon="i-lucide-refresh-cw"
-              square
-              aria-label="Atualizar visão fiscal"
-              :loading="loading"
-              @click="load"
-            />
-          </UTooltip>
+          <ShellNavbarRefresh
+            aria-label="Atualizar visão fiscal"
+            :loading="loading"
+            @click="load"
+          />
         </template>
-      </UDashboardNavbar>
+      </ShellPageNavbar>
     </template>
 
     <template #body>
@@ -300,5 +291,5 @@ onMounted(load)
         </ShellPanelAccordion>
       </template>
     </template>
-  </UDashboardPanel>
+  </ShellPagePanel>
 </template>

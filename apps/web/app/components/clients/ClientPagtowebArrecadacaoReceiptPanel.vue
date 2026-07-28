@@ -6,6 +6,7 @@ import { formatDateTime } from '~/utils/format'
 const props = defineProps<{ clientId: number, canConsult: boolean }>()
 const toast = useToast()
 const { fetchHistory, requestReceipt, downloadPath } = usePagtowebArrecadacaoReceipt()
+const { download: downloadAuthenticated, downloading: downloadBusy } = useAuthenticatedDownload()
 const loading = ref(true)
 const requesting = ref(false)
 const confirmOpen = ref(false)
@@ -66,8 +67,12 @@ async function confirmRequest() {
   }
 }
 
-function download(receipt: PagtowebArrecadacaoReceipt) {
-  window.location.assign(downloadPath(props.clientId, receipt.id))
+async function download(receipt: PagtowebArrecadacaoReceipt) {
+  if (downloadBusy.value) return
+  await downloadAuthenticated(
+    downloadPath(props.clientId, receipt.id),
+    `comprovante-pagtoweb-${receipt.id}.pdf`
+  )
 }
 
 watch(() => props.clientId, () => void load(), { immediate: true })
@@ -149,6 +154,8 @@ watch(() => props.clientId, () => void load(), { immediate: true })
             variant="soft"
             icon="i-lucide-download"
             label="Baixar PDF"
+            :loading="downloadBusy"
+            :disabled="downloadBusy"
             @click="download(receipt)"
           />
         </li>

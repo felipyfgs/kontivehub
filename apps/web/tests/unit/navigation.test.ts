@@ -348,7 +348,8 @@ describe('tabs locais', () => {
       'utf8'
     )
 
-    expect(kpiSource).toContain('badge: loadingPlaceholder ? \'…\' : count')
+    expect(kpiSource).toContain('badge: loadingPlaceholder ? \'…\' : (missingCounters ? \'—\' : count)')
+    expect(kpiSource).toContain('const missingCounters = !props.loading && !props.counters')
     expect(installmentsSource).toContain('badge: tabBadge(\'all\')')
     expect(installmentsSource).toContain('badge: tabBadge(item.code)')
     expect(declarationsSource).toContain('badge: tabBadge(t.value)')

@@ -125,6 +125,24 @@ export function serializeWorkQueueQuery(f: WorkQueueFilters): Record<string, str
   }
 }
 
+export function workQueueApiParams(f: WorkQueueFilters): Record<string, string | number> {
+  const params: Record<string, string | number> = {
+    tab: f.tab,
+    page: f.page,
+    per_page: f.per_page
+  }
+  if (f.scope && f.scope !== 'default') params.scope = f.scope
+  if (f.q.trim()) params.q = f.q.trim()
+  if (f.department_id) params.department_id = f.department_id
+  if (f.assignee_membership_id) params.assignee_membership_id = f.assignee_membership_id
+  if (f.client_id) params.client_id = f.client_id
+  if (f.sort) {
+    params.sort = f.sort
+    params.direction = f.direction || 'asc'
+  }
+  return params
+}
+
 /** Path canônico do recurso tarefa (deep-link / mestre–detalhe). */
 export function workTaskPath(taskId: number): string {
   return `/work/tasks/${taskId}`
@@ -191,22 +209,7 @@ export function useWorkQueueFilters() {
   }
 
   function apiParams(): Record<string, string | number> {
-    const f = filters.value
-    const params: Record<string, string | number> = {
-      tab: f.tab,
-      page: f.page,
-      per_page: f.per_page,
-      scope: f.scope
-    }
-    if (f.q.trim()) params.q = f.q.trim()
-    if (f.department_id) params.department_id = f.department_id
-    if (f.assignee_membership_id) params.assignee_membership_id = f.assignee_membership_id
-    if (f.client_id) params.client_id = f.client_id
-    if (f.sort) {
-      params.sort = f.sort
-      params.direction = f.direction || 'asc'
-    }
-    return params
+    return workQueueApiParams(filters.value)
   }
 
   function reset() {

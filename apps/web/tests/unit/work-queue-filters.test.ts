@@ -5,6 +5,7 @@ import {
   parseWorkQueueQuery,
   parseWorkQueueView,
   serializeWorkQueueQuery,
+  workQueueApiParams,
   type WorkQueueFilters
 } from '../../app/composables/useWorkQueueFilters'
 
@@ -23,6 +24,17 @@ const base: WorkQueueFilters = {
 }
 
 describe('work-queue-filters view', () => {
+  it('não envia o sentinela interno de escopo para a API', () => {
+    expect(workQueueApiParams(base)).toEqual({
+      tab: 'open',
+      page: 1,
+      per_page: 10
+    })
+    expect(workQueueApiParams({ ...base, scope: 'mine' })).toMatchObject({
+      scope: 'mine'
+    })
+  })
+
   it('parseWorkQueueView trata lista, kanban e default fila', () => {
     expect(parseWorkQueueView('lista')).toBe('lista')
     expect(parseWorkQueueView(['lista'])).toBe('lista')

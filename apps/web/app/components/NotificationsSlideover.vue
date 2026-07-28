@@ -32,71 +32,7 @@ function mapInbox(items: InboxItem[]): AppNotification[] {
   }))
 }
 
-/** Fallback sanitizado se a inbox falhar (sem corpo bruto remoto). */
-async function loadFallback(): Promise<AppNotification[]> {
-  const operational: AppNotification[] = []
-  try {
-    const summary = (await api.operations.summary()).data
-    const generatedAt = summary.generated_at || new Date().toISOString()
-    if (summary.sync_blocked > 0) {
-      operational.push({
-        id: 'sync-blocked',
-        title: 'Estabelecimentos bloqueados',
-        body: `${summary.sync_blocked} cursor(es) exigem intervenção.`,
-        date: generatedAt,
-        unread: true,
-        to: '/health',
-        color: 'error'
-      })
-    }
-    if (summary.credentials_expiring_30d > 0) {
-      operational.push({
-        id: 'credentials-expiring',
-        title: 'Certificados a vencer',
-        body: `${summary.credentials_expiring_30d} certificado(s) vencem em até 30 dias.`,
-        date: generatedAt,
-        unread: true,
-        to: '/clients',
-        color: 'warning'
-      })
-    }
-    if (summary.sync_failures_24h > 0) {
-      operational.push({
-        id: 'sync-failures-24h',
-        title: 'Falhas recentes de sincronização',
-        body: `${summary.sync_failures_24h} execução(ões) nas últimas 24 horas.`,
-        date: generatedAt,
-        unread: true,
-        to: '/syncs',
-        color: 'error'
-      })
-    }
-    if (summary.backup?.never) {
-      operational.push({
-        id: 'backup-never',
-        title: 'Nenhum backup bem-sucedido',
-        body: 'A instância ainda não registrou backup SUCCESS.',
-        date: generatedAt,
-        unread: true,
-        to: '/health',
-        color: 'error'
-      })
-    } else if (summary.backup?.stale) {
-      operational.push({
-        id: 'backup-stale',
-        title: 'Backup atrasado',
-        body: 'Mais de 24 horas sem backup SUCCESS.',
-        date: generatedAt,
-        unread: true,
-        to: '/health',
-        color: 'warning'
-      })
-    }
-  } catch {
-    // silencioso — caller decide estado de erro
-  }
-  return operational
-}
+/** Fallback sintético removido: em falha de inbox, preservar última carga ou erro explícito. */
 
 async function load() {
   const hadData = notifications.value.length > 0 || lastGoodNotifications.value.length > 0
@@ -117,14 +53,7 @@ async function load() {
     loadState.value = 'success'
   } catch {
     if (epoch !== sessionEpoch.value) return
-    const fallback = await loadFallback()
-    if (epoch !== sessionEpoch.value) return
-    if (fallback.length) {
-      notifications.value = fallback
-      lastGoodNotifications.value = fallback
-      errorMessage.value = 'Inbox indisponível; exibindo resumo sanitizado.'
-      loadState.value = 'error'
-    } else if (lastGoodNotifications.value.length) {
+    if (lastGoodNotifications.value.length) {
       // Falha de refresh: preserva última carga válida.
       notifications.value = lastGoodNotifications.value
       errorMessage.value = 'Falha ao atualizar. Exibindo alertas da última carga válida.'

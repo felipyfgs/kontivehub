@@ -349,14 +349,11 @@ function alertDescription(alert: Record<string, unknown>): string {
 <template>
   <div class="flex min-h-0 w-full flex-1 flex-col">
     <!-- Chrome Fiscal em largura total — acima do mestre–detalhe -->
-    <UDashboardNavbar
+    <ShellPageNavbar
       title="Caixas Postais"
-      data-testid="page-navbar"
+      test-id="page-navbar"
       class="shrink-0"
     >
-      <template #leading>
-        <UDashboardSidebarCollapse />
-      </template>
       <template #trailing>
         <UBadge
           :label="String(total)"
@@ -398,7 +395,7 @@ function alertDescription(alert: Record<string, unknown>): string {
           </UButton>
         </UTooltip>
       </template>
-    </UDashboardNavbar>
+    </ShellPageNavbar>
 
     <div class="shrink-0 space-y-3 px-4 pt-4 sm:px-6">
       <FiscalModuleAvailabilityBanner module-key="mailbox" />

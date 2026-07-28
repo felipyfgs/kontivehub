@@ -32,7 +32,7 @@ describe('monitoring insights dashboard fidelity', () => {
   })
 
   it('preserva scroll vertical do panel e bloqueia overflow horizontal', () => {
-    expect(page).toContain(`:ui="{ body: 'overflow-x-hidden' }"`)
+    expect(page).toContain('body-class="overflow-x-hidden"')
     expect(page).toContain('grid min-w-0 grid-cols-1')
   })
 

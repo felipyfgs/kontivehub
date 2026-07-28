@@ -269,6 +269,7 @@ const columns: TableColumn<RecentRow>[] = [
           <VisAxis type="y" />
           <VisCrosshair
             color="var(--ui-primary)"
+            :x="x"
             :template="template"
           />
           <VisTooltip />

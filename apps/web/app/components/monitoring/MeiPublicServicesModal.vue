@@ -25,6 +25,7 @@ const emit = defineEmits<{
 const api = useApi()
 const toast = useToast()
 const { sessionEpoch } = useDashboard()
+const { download: downloadAuthenticated, downloading: certificateDownloadBusy } = useAuthenticatedDownload()
 const ccmei = useCcmeiMonitoring()
 const ccmeiRegistration = useCcmeiRegistrationStatusMonitoring()
 
@@ -229,6 +230,12 @@ function certificateDownloadPath(certificateId: number): string | undefined {
     : undefined
 }
 
+async function downloadCertificate(certificateId: number) {
+  const path = certificateDownloadPath(certificateId)
+  if (!path || certificateDownloadBusy.value) return
+  await downloadAuthenticated(path, `certificado-ccmei-${certificateId}.pdf`)
+}
+
 watch(
   () => [props.open, props.clientId, sessionEpoch.value] as const,
   ([open, clientId], previous) => {
@@ -422,10 +429,9 @@ onBeforeUnmount(clearTimers)
                   variant="outline"
                   icon="i-lucide-download"
                   label="Baixar certificado existente"
-                  :to="certificateDownloadPath(certificate.id)"
-                  external
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  :loading="certificateDownloadBusy"
+                  :disabled="certificateDownloadBusy"
+                  @click="downloadCertificate(certificate.id)"
                 />
               </li>
             </ul>

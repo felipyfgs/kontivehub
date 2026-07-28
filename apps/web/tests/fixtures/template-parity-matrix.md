@@ -28,7 +28,7 @@ chrome próprio ou casca de produto; `CHILD` herda a casca do pai; `AUTH` e
 | `pages/clients/index.vue` | `/clients` | `CHILD` | lista de clientes |
 | `pages/clients/dashboard.vue` | `/clients/dashboard` | `CHILD` | dashboard de clientes |
 | `pages/clients/[id].vue` | `/clients/:id` | `SHELL` | detalhe mestre |
-| `pages/clients/[id]/cadastro.vue` | `/clients/:id/cadastro` | `CHILD` | detalhe |
+| `pages/clients/[id]/cadastro.vue` | `/clients/:id/cadastro` | `CHILD` | detalhe; alias anterior `/clients/:id/certificado` redireciona para a rota canônica |
 | `pages/clients/[id]/observacoes.vue` | `/clients/:id/observacoes` | `CHILD` | detalhe |
 | `pages/clients/[id]/dados-adicionais.vue` | `/clients/:id/dados-adicionais` | `CHILD` | detalhe |
 | `pages/clients/[id]/departamento.vue` | `/clients/:id/departamento` | `CHILD` | detalhe |

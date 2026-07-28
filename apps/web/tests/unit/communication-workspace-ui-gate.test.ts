@@ -62,7 +62,7 @@ describe('superfície de atendimento compartilhado', () => {
     expect(page).toContain('smaller(\'2xl\')')
     expect(page).toContain('communication-context-slideover')
     expect(page.match(/<USlideover/g)?.length).toBeGreaterThanOrEqual(2)
-    expect(page).toContain('UDashboardSidebarCollapse')
+    expect(page).toContain('<ShellPageNavbar title="Atendimento">')
     expect(page).not.toContain('overflow-x-auto')
     expect(page).toMatch(/CommunicationContextPanel[\s\S]*class="hidden 2xl:flex"/)
     expect(page).not.toMatch(/CommunicationContextPanel[\s\S]*class="hidden (?:lg|xl):flex"/)

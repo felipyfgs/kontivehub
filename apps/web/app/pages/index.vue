@@ -101,15 +101,12 @@ watch(sessionEpoch, () => {
 </script>
 
 <template>
-  <UDashboardPanel id="home">
+  <ShellPagePanel id="home">
     <template #header>
-      <UDashboardNavbar
+      <ShellPageNavbar
         title="Início"
-        data-testid="page-navbar"
+        test-id="page-navbar"
       >
-        <template #leading>
-          <UDashboardSidebarCollapse />
-        </template>
         <template #right>
           <AssistantTriggerButton compact />
           <UTooltip
@@ -147,17 +144,14 @@ watch(sessionEpoch, () => {
             />
           </UDropdownMenu>
         </template>
-      </UDashboardNavbar>
+      </ShellPageNavbar>
+    </template>
 
+    <template #toolbar>
       <UDashboardToolbar data-testid="page-toolbar">
         <template #left>
-          <UButton
-            color="neutral"
-            variant="ghost"
-            icon="i-lucide-refresh-cw"
-            :label="undefined"
+          <ShellNavbarRefresh
             :loading="loading"
-            square
             class="-ms-1"
             aria-label="Atualizar"
             @click="load"
@@ -229,5 +223,5 @@ watch(sessionEpoch, () => {
         />
       </div>
     </template>
-  </UDashboardPanel>
+  </ShellPagePanel>
 </template>

@@ -289,10 +289,7 @@ onBeforeUnmount(() => workspace.dispose())
       :max-size="36"
       resizable
     >
-      <UDashboardNavbar title="Atendimento">
-        <template #leading>
-          <UDashboardSidebarCollapse />
-        </template>
+      <ShellPageNavbar title="Atendimento">
         <template #trailing>
           <UBadge
             :label="String(workspace.conversations.value.length)"
@@ -319,7 +316,7 @@ onBeforeUnmount(() => workspace.dispose())
             @click="openAdministration"
           />
         </template>
-      </UDashboardNavbar>
+      </ShellPageNavbar>
 
       <UDashboardToolbar class="border-b border-default">
         <div class="flex w-full flex-col gap-2 p-2">

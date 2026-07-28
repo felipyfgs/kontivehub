@@ -4,6 +4,22 @@
  * Atualizar RFB: busca → revisão/confirmação → grava.
  */
 import type { CnpjLookupResult } from '~/types/api'
+import { clientDetailHref } from '~/utils/client-detail-tabs'
+
+definePageMeta({
+  alias: ['/clients/:id/certificado'],
+  middleware: [
+    (to) => {
+      if (!/\/certificado\/?$/.test(to.path)) return undefined
+
+      return navigateTo({
+        path: clientDetailHref(String(to.params.id || '')),
+        query: to.query,
+        hash: to.hash
+      }, { replace: true })
+    }
+  ]
+})
 
 const {
   item,

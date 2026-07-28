@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
  * Detalhe admin de Tenant (lifecycle + ativação do 1º admin).
- * Arquétipo: settings (UDashboardPanel + UPageCard naked/subtle).
- * Fonte: .local/reference/nuxt-dashboard-template/app/pages/settings.vue + settings/index.vue
+ * Arquétipo: settings (ShellPagePanel + UPageCard naked/subtle).
+ * Fonte: .local/references/dashboard/app/pages/settings.vue + settings/index.vue
  */
 import type { ActivationMethod, CredentialDeliveryPayload, PlatformTenantAdminDetail } from '~/types/api'
 import { apiErrorMessage } from '~/utils/api-error'
@@ -203,40 +203,31 @@ onBeforeUnmount(clearSecret)
 </script>
 
 <template>
-  <UDashboardPanel
+  <ShellPagePanel
     id="admin-tenant-detail"
-    data-testid="admin-tenant-detail"
-    :ui="{ body: 'lg:py-12' }"
+    test-id="admin-tenant-detail"
+    body-class="lg:py-12"
   >
     <template #header>
-      <UDashboardNavbar
-        :title="pageTitle"
-        data-testid="page-navbar"
-      >
+      <ShellPageNavbar :title="pageTitle">
         <template #leading>
-          <UDashboardSidebarCollapse />
+          <ShellNavbarBack
+            to="/admin/tenants"
+            label="Lista"
+            test-id="admin-tenant-back"
+          />
         </template>
         <template #right>
-          <div class="flex items-center gap-2">
-            <UBadge
-              v-if="tenant"
-              size="sm"
-              variant="subtle"
-              :color="lifecycleColor"
-              :label="lifecycleLabel"
-              data-testid="admin-tenant-lifecycle-badge"
-            />
-            <UButton
-              to="/admin/tenants"
-              color="neutral"
-              variant="ghost"
-              icon="i-lucide-arrow-left"
-              label="Lista"
-              data-testid="admin-tenant-back"
-            />
-          </div>
+          <UBadge
+            v-if="tenant"
+            size="sm"
+            variant="subtle"
+            :color="lifecycleColor"
+            :label="lifecycleLabel"
+            data-testid="admin-tenant-lifecycle-badge"
+          />
         </template>
-      </UDashboardNavbar>
+      </ShellPageNavbar>
     </template>
 
     <template #body>
@@ -254,13 +245,11 @@ onBeforeUnmount(clearSecret)
           <USkeleton class="h-36 w-full" />
         </div>
 
-        <UAlert
+        <ShellLoadError
           v-else-if="loadError"
-          color="error"
-          icon="i-lucide-circle-x"
-          :title="loadError"
-          :actions="[{ label: 'Tentar novamente', color: 'neutral', variant: 'subtle', onClick: load }]"
-          data-testid="admin-tenant-error"
+          test-id="admin-tenant-error"
+          :description="loadError"
+          @retry="load"
         />
 
         <template v-else-if="tenant">
@@ -646,5 +635,5 @@ onBeforeUnmount(clearSecret)
         </ShellFormModal>
       </DashboardContent>
     </template>
-  </UDashboardPanel>
+  </ShellPagePanel>
 </template>

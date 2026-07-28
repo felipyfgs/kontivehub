@@ -35,14 +35,11 @@ const viewOptions: Array<{
 </script>
 
 <template>
-  <UDashboardNavbar
+  <ShellPageNavbar
     title="Tarefas"
-    data-testid="page-navbar"
+    test-id="page-navbar"
     class="shrink-0"
   >
-    <template #leading>
-      <UDashboardSidebarCollapse />
-    </template>
     <template #trailing>
       <UBadge
         :label="String(total)"
@@ -50,7 +47,7 @@ const viewOptions: Array<{
         data-testid="work-queue-total"
       />
     </template>
-  </UDashboardNavbar>
+  </ShellPageNavbar>
 
   <UDashboardToolbar
     data-testid="work-queue-toolbar"

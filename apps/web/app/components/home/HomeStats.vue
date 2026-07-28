@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { OperationsSummary } from '~/types/api'
 import type { DashboardKpiItem } from '~/utils/kpi-ui'
+import { homeDisplayValue } from '~/utils/home-cockpit'
 
 const props = defineProps<{
   summary: OperationsSummary | null
@@ -8,8 +9,9 @@ const props = defineProps<{
 }>()
 
 const items = computed((): DashboardKpiItem[] => {
-  const loadingPlaceholder = props.loading && !props.summary
-  const n = (v: number | undefined) => (loadingPlaceholder ? '…' : (v ?? 0))
+  const loading = Boolean(props.loading)
+  const hasSummary = !!props.summary
+  const n = (v: number | undefined) => homeDisplayValue(loading, hasSummary, v)
   return [
     {
       key: 'sync_blocked',
@@ -17,7 +19,7 @@ const items = computed((): DashboardKpiItem[] => {
       icon: 'i-lucide-triangle-alert',
       value: n(props.summary?.sync_blocked),
       to: '/syncs',
-      critical: !loadingPlaceholder && (props.summary?.sync_blocked ?? 0) > 0
+      critical: hasSummary && (props.summary?.sync_blocked ?? 0) > 0
     },
     {
       key: 'sync_failures_24h',
@@ -25,7 +27,7 @@ const items = computed((): DashboardKpiItem[] => {
       icon: 'i-lucide-circle-x',
       value: n(props.summary?.sync_failures_24h),
       to: '/syncs',
-      critical: !loadingPlaceholder && (props.summary?.sync_failures_24h ?? 0) > 0
+      critical: hasSummary && (props.summary?.sync_failures_24h ?? 0) > 0
     },
     {
       key: 'sync_due',
