@@ -156,6 +156,7 @@ return [
         /** Monitoramento econômico por escritório permanece OFF até opt-in persistido. */
         'economic_monitoring' => [
             'enabled' => (bool) env('MAILBOX_ECONOMIC_MONITORING_ENABLED', false),
+            'scheduler_chunk_size' => (int) env('MAILBOX_MONITORING_SCHEDULER_CHUNK_SIZE', 100),
             'default_mode' => 'ECONOMICO',
             'daily_time' => '00:30',
             'timezone' => 'America/Sao_Paulo',

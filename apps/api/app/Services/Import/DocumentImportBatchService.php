@@ -257,29 +257,39 @@ final class DocumentImportBatchService
      */
     public function recomputeBatchCounters(DocumentImportBatch $batch): void
     {
-        $items = DocumentImportBatchItem::query()
+        $resultItems = DocumentImportBatchItem::query()
             ->where('document_import_batch_id', $batch->id)
-            ->get();
+            ->where(fn ($query) => $query
+                ->whereNull('result_code')
+                ->orWhere('result_code', '!=', 'ZIP_EXPANDED'));
 
-        $resultItems = $items->filter(
-            fn (DocumentImportBatchItem $i): bool => $i->result_code !== 'ZIP_EXPANDED'
-        );
+        $countStatuses = static function (array $statuses) use ($resultItems): int {
+            return (clone $resultItems)
+                ->whereIn(
+                    'status',
+                    array_map(
+                        static fn (ImportBatchItemStatus $status): string => $status->value,
+                        $statuses,
+                    ),
+                )
+                ->count();
+        };
 
-        $imported = $resultItems->where('status', ImportBatchItemStatus::Imported)->count();
-        $dup = $resultItems->where('status', ImportBatchItemStatus::Duplicate)->count();
-        $invalid = $resultItems->where('status', ImportBatchItemStatus::Invalid)->count();
-        $quarantined = $resultItems->where('status', ImportBatchItemStatus::Quarantined)->count();
-        $unmatched = $resultItems->where('status', ImportBatchItemStatus::Unmatched)->count();
+        $imported = $countStatuses([ImportBatchItemStatus::Imported]);
+        $dup = $countStatuses([ImportBatchItemStatus::Duplicate]);
+        $invalid = $countStatuses([ImportBatchItemStatus::Invalid]);
+        $quarantined = $countStatuses([ImportBatchItemStatus::Quarantined]);
+        $unmatched = $countStatuses([ImportBatchItemStatus::Unmatched]);
         // INVALID possui contador próprio e não compõe failed_count.
-        $failed = $resultItems->whereIn('status', [
+        $failed = $countStatuses([
             ImportBatchItemStatus::Failed,
             ImportBatchItemStatus::Unsupported,
             ImportBatchItemStatus::ClientMismatch,
-        ])->count();
-        $pending = $resultItems->where('status', ImportBatchItemStatus::Pending)->count();
+        ]);
+        $pending = $countStatuses([ImportBatchItemStatus::Pending]);
         $problem = $failed + $invalid + $unmatched + $quarantined;
 
-        $batch->item_count = $resultItems->count();
+        $batch->item_count = (clone $resultItems)->count();
         $batch->imported_count = $imported;
         $batch->duplicate_count = $dup;
         $batch->failed_count = $failed;

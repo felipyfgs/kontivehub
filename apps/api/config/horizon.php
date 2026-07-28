@@ -277,9 +277,32 @@ return [
     |
     */
     'readiness_thresholds' => [
-        'default' => ['max_pending' => 500, 'max_wait_seconds' => 120],
-        'fiscal' => ['max_pending' => 200, 'max_wait_seconds' => 180],
-        'import-xml' => ['max_pending' => 100, 'max_wait_seconds' => 300],
+        'queues' => [
+            'default' => [
+                'max_pending' => 500,
+                'max_wait_seconds' => 120,
+                'min_throughput_when_pending' => 1,
+                'max_runtime_ms' => 900000,
+                'max_recent_retries' => 20,
+                'max_recent_failures' => 10,
+            ],
+            'fiscal' => [
+                'max_pending' => 200,
+                'max_wait_seconds' => 180,
+                'min_throughput_when_pending' => 1,
+                'max_runtime_ms' => 900000,
+                'max_recent_retries' => 10,
+                'max_recent_failures' => 5,
+            ],
+            'import-xml' => [
+                'max_pending' => 100,
+                'max_wait_seconds' => 300,
+                'min_throughput_when_pending' => 1,
+                'max_runtime_ms' => 900000,
+                'max_recent_retries' => 5,
+                'max_recent_failures' => 3,
+            ],
+        ],
     ],
 
 ];

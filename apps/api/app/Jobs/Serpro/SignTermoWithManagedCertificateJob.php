@@ -12,11 +12,13 @@ use App\Services\Audit\AuditLogger;
 use App\Services\Certificates\TenantCredentialResolver;
 use App\Services\Integra\TenantSerproAuthorizationService;
 use App\Services\Integra\TermoXmlSigner;
+use App\Support\LogSanitizer;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Throwable;
 
@@ -121,14 +123,14 @@ final class SignTermoWithManagedCertificateJob implements ShouldQueue
 
     public function tags(): array
     {
-        return ['job:'.class_basename(static::class)];
+        return ['job:'.class_basename(self::class)];
     }
 
-    public function failed(?\Throwable $e): void
+    public function failed(?Throwable $e): void
     {
-        \Illuminate\Support\Facades\Log::warning('job.failed', [
-            'job' => class_basename(static::class),
-            'message' => \App\Support\LogSanitizer::scrubString((string) ($e?->getMessage() ?? '')),
+        Log::warning('job.failed', [
+            'job' => class_basename(self::class),
+            'message' => LogSanitizer::scrubString((string) ($e?->getMessage() ?? '')),
         ]);
     }
 }

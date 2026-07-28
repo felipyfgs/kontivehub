@@ -5,12 +5,14 @@ namespace App\Jobs\Serpro;
 use App\Enums\SerproEnvironment;
 use App\Models\Tenant;
 use App\Services\Integra\TenantSerproOnboardingService;
+use App\Support\LogSanitizer;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 
 final class FinalizeTenantFiscalReadinessJob implements ShouldBeUnique, ShouldQueue
 {
@@ -19,7 +21,6 @@ final class FinalizeTenantFiscalReadinessJob implements ShouldBeUnique, ShouldQu
     public int $tries = 3;
 
     public int $timeout = 300;
-
 
     public int $uniqueFor = 600;
 
@@ -53,14 +54,14 @@ final class FinalizeTenantFiscalReadinessJob implements ShouldBeUnique, ShouldQu
 
     public function tags(): array
     {
-        return ['job:'.class_basename(static::class)];
+        return ['job:'.class_basename(self::class)];
     }
 
     public function failed(?\Throwable $e): void
     {
-        \Illuminate\Support\Facades\Log::warning('job.failed', [
-            'job' => class_basename(static::class),
-            'message' => \App\Support\LogSanitizer::scrubString((string) ($e?->getMessage() ?? '')),
+        Log::warning('job.failed', [
+            'job' => class_basename(self::class),
+            'message' => LogSanitizer::scrubString((string) ($e?->getMessage() ?? '')),
         ]);
     }
 }

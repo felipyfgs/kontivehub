@@ -8,8 +8,8 @@ use App\Enums\SvrsNfceRecoveryStatus;
 use App\Enums\TenantRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Sefaz\EnqueueSvrsNfceRecoveryRequest;
-use App\Http\Requests\Sefaz\ListSvrsNfceRecoveryRequest;
 use App\Http\Requests\Sefaz\ExtendSvrsNfceEgressCooldownRequest;
+use App\Http\Requests\Sefaz\ListSvrsNfceRecoveryRequest;
 use App\Http\Requests\Sefaz\ResetSvrsNfceBreakerRequest;
 use App\Http\Requests\Sefaz\SelectSvrsNfceEgressCanaryRequest;
 use App\Http\Requests\Sefaz\ToggleSvrsNfceKillSwitchRequest;
@@ -205,6 +205,7 @@ class SvrsNfceRecoveryController extends Controller
         }
 
         $page = $q->paginate($request->perPage());
+
         return response()->json([
             'data' => collect($page->items())->map(fn (OutboundRetrievalRequest $r) => $r->toPublicArray()),
             'meta' => [

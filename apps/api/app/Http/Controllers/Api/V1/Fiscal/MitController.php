@@ -68,7 +68,7 @@ class MitController extends Controller
     public function enqueueConsult(EnqueueMitConsultRequest $request): JsonResponse
     {
         $tenant = $this->currentTenant->tenant();
-        $data = $request->payload();
+        $data = $request->consultData();
 
         $operation = strtoupper($data['operation_code'] ?? DctfwebCodes::OP_MIT_SITUACAO);
         if ($operation === DctfwebCodes::OP_MIT_ENCERRAR) {
@@ -129,17 +129,19 @@ class MitController extends Controller
                 correlationId: $data['correlation_id'] ?? null,
                 dispatch: false,
             );
-            $progress = is_array($run->progress) ? $run->progress : [];
-            $progress['period_key'] = (string) $data['period_key'];
-            if (is_numeric($idApuracao)) {
-                $progress['idApuracao'] = (int) $idApuracao;
+            if ($run->wasRecentlyCreated) {
+                $progress = is_array($run->progress) ? $run->progress : [];
+                $progress['period_key'] = (string) $data['period_key'];
+                if (is_numeric($idApuracao)) {
+                    $progress['idApuracao'] = (int) $idApuracao;
+                }
+                if ($protocol !== '') {
+                    $progress['protocoloEncerramento'] = $protocol;
+                }
+                $run->forceFill(['progress' => $progress])->save();
+                ExecuteFiscalMonitoringRunJob::dispatch($run->id)
+                    ->onQueue((string) config('fiscal_monitoring.job.queue', 'default'));
             }
-            if ($protocol !== '') {
-                $progress['protocoloEncerramento'] = $protocol;
-            }
-            $run->forceFill(['progress' => $progress])->save();
-            ExecuteFiscalMonitoringRunJob::dispatch($run->id)
-                ->onQueue((string) config('fiscal_monitoring.job.queue', 'default'));
         } catch (RuntimeException $e) {
             $text = $e->getMessage();
 
@@ -159,7 +161,7 @@ class MitController extends Controller
             return $rejection;
         }
         $tenant = $this->currentTenant->tenant();
-        $data = $request->payload();
+        $data = $request->listaData();
 
         try {
             $filters = MitListaApuracoesRequest::fromArray(array_filter([
@@ -226,7 +228,7 @@ class MitController extends Controller
     public function encerrar(EncerrarMitRequest $request): JsonResponse
     {
         $tenant = $this->currentTenant->tenant();
-        $data = $request->payload();
+        $data = $request->encerrarData();
 
         $client = Client::query()
             ->withoutGlobalScopes()

@@ -2,24 +2,20 @@
 
 namespace App\Http\Requests\Fiscal\Mutations;
 
-use App\Enums\TenantRole;
+use App\Enums\TenantPermission;
 use App\Http\Requests\AuthenticatedRequest;
 use App\Models\User;
-use App\Support\CurrentTenant;
+use App\Services\Authorization\TenantAuthorization;
 use Illuminate\Auth\Access\AuthorizationException;
 
 final class IngestDctfwebEventRequest extends AuthenticatedRequest
 {
     public function authorize(): bool
     {
-        if (! $this->user() instanceof User) {
-            return false;
-        }
+        $actor = $this->user();
 
-        $role = app(CurrentTenant::class)->role();
-
-        return $role !== null
-            && in_array($role, [TenantRole::TenantAdmin, TenantRole::TenantUser], true);
+        return $actor instanceof User
+            && app(TenantAuthorization::class)->allows($actor, TenantPermission::FiscalSyncTrigger);
     }
 
     /** @return array<string, list<mixed>> */

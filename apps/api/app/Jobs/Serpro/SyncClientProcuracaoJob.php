@@ -8,6 +8,7 @@ use App\Models\Tenant;
 use App\Services\Audit\AuditLogger;
 use App\Services\Integra\ClientProcuracaoAutoSyncPolicy;
 use App\Services\Integra\ClientProcuracaoSyncService;
+use App\Support\LogSanitizer;
 use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -15,6 +16,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
@@ -97,14 +99,14 @@ final class SyncClientProcuracaoJob implements ShouldBeUnique, ShouldQueue
 
     public function tags(): array
     {
-        return ['job:'.class_basename(static::class)];
+        return ['job:'.class_basename(self::class)];
     }
 
-    public function failed(?\Throwable $e): void
+    public function failed(?Throwable $e): void
     {
-        \Illuminate\Support\Facades\Log::warning('job.failed', [
-            'job' => class_basename(static::class),
-            'message' => \App\Support\LogSanitizer::scrubString((string) ($e?->getMessage() ?? '')),
+        Log::warning('job.failed', [
+            'job' => class_basename(self::class),
+            'message' => LogSanitizer::scrubString((string) ($e?->getMessage() ?? '')),
         ]);
     }
 }

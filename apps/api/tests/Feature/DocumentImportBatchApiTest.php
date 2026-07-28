@@ -11,6 +11,7 @@ use App\Models\DocumentImportBatch;
 use App\Models\DocumentImportBatchItem;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Import\DocumentImportBatchService;
 use App\Support\CurrentTenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -222,6 +223,64 @@ final class DocumentImportBatchApiTest extends TestCase
         $this->get(
             '/api/v1/documents/import-batches/'.$foreign->public_id.'/export.csv',
         )->assertNotFound();
+    }
+
+    public function test_recomputes_large_batch_counters_with_database_aggregates(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $batch = DocumentImportBatch::factory()
+            ->forTenant($tenant, $admin)
+            ->create(['status' => ImportBatchStatus::Processing]);
+        $statuses = [
+            ...array_fill(0, 110, ImportBatchItemStatus::Imported),
+            ...array_fill(0, 50, ImportBatchItemStatus::Duplicate),
+            ...array_fill(0, 20, ImportBatchItemStatus::Invalid),
+            ...array_fill(0, 10, ImportBatchItemStatus::Quarantined),
+            ...array_fill(0, 5, ImportBatchItemStatus::Unmatched),
+            ...array_fill(0, 5, ImportBatchItemStatus::Failed),
+            ...array_fill(0, 5, ImportBatchItemStatus::Pending),
+        ];
+        $now = now();
+        $rows = [];
+        foreach ($statuses as $index => $status) {
+            $rows[] = [
+                'tenant_id' => $tenant->id,
+                'document_import_batch_id' => $batch->id,
+                'item_index' => $index,
+                'source_name' => "document-{$index}.xml",
+                'status' => $status->value,
+                'result_code' => $status->value,
+                'attempts' => 1,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+        $rows[] = [
+            'tenant_id' => $tenant->id,
+            'document_import_batch_id' => $batch->id,
+            'item_index' => count($rows),
+            'source_name' => 'expanded.zip',
+            'status' => ImportBatchItemStatus::Imported->value,
+            'result_code' => 'ZIP_EXPANDED',
+            'attempts' => 1,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ];
+        DocumentImportBatchItem::query()->withoutGlobalScopes()->insert($rows);
+
+        app(DocumentImportBatchService::class)->recomputeBatchCounters($batch);
+        $batch->refresh();
+
+        $this->assertSame(205, $batch->item_count);
+        $this->assertSame(110, $batch->imported_count);
+        $this->assertSame(50, $batch->duplicate_count);
+        $this->assertSame(20, $batch->invalid_count);
+        $this->assertSame(10, $batch->quarantined_count);
+        $this->assertSame(5, $batch->unmatched_count);
+        $this->assertSame(5, $batch->failed_count);
+        $this->assertSame(ImportBatchStatus::Processing, $batch->status);
+        $this->assertNull($batch->completed_at);
     }
 
     private function itemFor(

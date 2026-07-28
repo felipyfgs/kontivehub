@@ -9,6 +9,8 @@ use App\Models\DocumentImportBatch;
 use App\Models\DocumentImportBatchItem;
 use App\Services\Import\DocumentImportBatchService;
 use App\Services\Import\OutboundXmlIngestionService;
+use App\Support\LogSanitizer;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Http\UploadedFile;
@@ -18,13 +20,15 @@ use Throwable;
 /**
  * Processa lote de importação de forma idempotente (itens PENDING).
  */
-class ProcessDocumentImportBatchJob implements ShouldQueue
+class ProcessDocumentImportBatchJob implements ShouldBeUnique, ShouldQueue
 {
     use Queueable;
 
     public int $tries = 1;
 
     public int $timeout = 900;
+
+    public int $uniqueFor = 1200;
 
     public function __construct(public int $batchId)
     {
@@ -52,14 +56,41 @@ class ProcessDocumentImportBatchJob implements ShouldQueue
         $pending = DocumentImportBatchItem::query()
             ->where('document_import_batch_id', $batch->id)
             ->where('status', ImportBatchItemStatus::Pending)
-            ->orderBy('item_index')
-            ->get();
+            ->lazyById(max(1, (int) config('import.processing_chunk_size', 100)));
 
         foreach ($pending as $item) {
             $this->processItem($batch, $item, $store, $ingestion, $batches);
         }
 
         $batches->recomputeBatchCounters($batch->fresh() ?? $batch);
+    }
+
+    public function uniqueId(): string
+    {
+        return (string) $this->batchId;
+    }
+
+    public function failed(?Throwable $exception): void
+    {
+        DocumentImportBatch::query()
+            ->whereKey($this->batchId)
+            ->whereNotIn('status', [
+                ImportBatchStatus::Completed->value,
+                ImportBatchStatus::CompletedWithErrors->value,
+                ImportBatchStatus::Failed->value,
+            ])
+            ->update([
+                'status' => ImportBatchStatus::Failed->value,
+                'error_code' => 'JOB_FAILED',
+                'error_message' => 'Falha ao processar lote de importação.',
+                'completed_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+        Log::warning('import.batch.failed', [
+            'batch_id' => $this->batchId,
+            'error' => LogSanitizer::scrubString((string) ($exception?->getMessage() ?? '')),
+        ]);
     }
 
     private function processItem(

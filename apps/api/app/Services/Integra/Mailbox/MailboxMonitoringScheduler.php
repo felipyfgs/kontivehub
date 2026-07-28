@@ -16,23 +16,29 @@ final class MailboxMonitoringScheduler
         }
         $now ??= CarbonImmutable::now('UTC');
         $count = 0;
-        $settings = MailboxMonitoringSetting::query()->withoutGlobalScopes()
+        $chunkSize = max(
+            1,
+            (int) config('fiscal_monitoring.mailbox.economic_monitoring.scheduler_chunk_size', 100),
+        );
+
+        MailboxMonitoringSetting::query()->withoutGlobalScopes()
             ->where('enabled', true)
             ->where(fn ($query) => $query->whereNull('next_due_at')->orWhere('next_due_at', '<=', $now))
-            ->orderBy('tenant_id')->get();
-        foreach ($settings as $setting) {
-            $lock = Cache::lock('mailbox-scheduler:'.$setting->tenant_id, 55);
-            if (! $lock->get()) {
-                continue;
-            }
-            try {
-                DispatchMailboxMonitoringJob::dispatch((int) $setting->tenant_id);
-                $setting->forceFill(['next_due_at' => $this->nextDue($setting, $now)])->save();
-                $count++;
-            } finally {
-                $lock->release();
-            }
-        }
+            ->chunkById($chunkSize, function ($settings) use ($now, &$count): void {
+                foreach ($settings as $setting) {
+                    $lock = Cache::lock('mailbox-scheduler:'.$setting->tenant_id, 55);
+                    if (! $lock->get()) {
+                        continue;
+                    }
+                    try {
+                        DispatchMailboxMonitoringJob::dispatch((int) $setting->tenant_id);
+                        $setting->forceFill(['next_due_at' => $this->nextDue($setting, $now)])->save();
+                        $count++;
+                    } finally {
+                        $lock->release();
+                    }
+                }
+            });
 
         return $count;
     }

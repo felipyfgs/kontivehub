@@ -56,6 +56,6 @@ final class FetchPgdasdRbt12Job implements ShouldQueue
 
     public function tags(): array
     {
-        return ['job:'.class_basename(static::class)];
+        return ['job:'.class_basename(self::class)];
     }
 }

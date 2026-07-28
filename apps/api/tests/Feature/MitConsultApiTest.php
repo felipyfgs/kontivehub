@@ -91,6 +91,50 @@ class MitConsultApiTest extends TestCase
         Queue::assertNothingPushed();
     }
 
+    public function test_consult_replay_reuses_the_run_without_duplicate_dispatch(): void
+    {
+        [$user, $client] = $this->actorAndClient();
+        Sanctum::actingAs($user);
+        $payload = [
+            'client_id' => $client->id,
+            'period_key' => '2025-03',
+            'operation_code' => DctfwebCodes::OP_MIT_APURACAO,
+            'id_apuracao' => 316,
+            'correlation_id' => 'mit-consapuracao-replay',
+        ];
+
+        $first = $this->postJson('/api/v1/fiscal/mit/consult', $payload)
+            ->assertCreated();
+        $second = $this->postJson('/api/v1/fiscal/mit/consult', $payload)
+            ->assertCreated();
+
+        $this->assertSame($first->json('data.id'), $second->json('data.id'));
+        $this->assertDatabaseCount('fiscal_monitoring_runs', 1);
+        Queue::assertPushed(ExecuteFiscalMonitoringRunJob::class, 1);
+    }
+
+    public function test_lista_apuracoes_replay_reuses_the_run_without_duplicate_dispatch(): void
+    {
+        [$user, $client] = $this->actorAndClient();
+        Sanctum::actingAs($user);
+        $payload = [
+            'client_id' => $client->id,
+            'anoApuracao' => 2025,
+            'correlation_id' => 'mit-lista-apuracoes-replay',
+        ];
+
+        $first = $this->postJson('/api/v1/fiscal/mit/lista-apuracoes', $payload)
+            ->assertCreated()
+            ->assertJsonPath('serpro_call', 'QUEUED');
+        $second = $this->postJson('/api/v1/fiscal/mit/lista-apuracoes', $payload)
+            ->assertCreated()
+            ->assertJsonPath('serpro_call', 'QUEUED');
+
+        $this->assertSame($first->json('data.id'), $second->json('data.id'));
+        $this->assertDatabaseCount('fiscal_monitoring_runs', 1);
+        Queue::assertPushed(ExecuteFiscalMonitoringRunJob::class, 1);
+    }
+
     /** @return array{User, Client} */
     private function actorAndClient(): array
     {

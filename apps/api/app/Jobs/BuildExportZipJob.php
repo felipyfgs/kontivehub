@@ -36,7 +36,6 @@ class BuildExportZipJob implements ShouldQueue
 
     public int $timeout = 300;
 
-
     /** Teto de chaves em exportação por seleção (catálogo / multi-select). */
     public const MAX_ACCESS_KEYS = 100;
 
@@ -748,11 +747,11 @@ class BuildExportZipJob implements ShouldQueue
         return ['job:'.class_basename(static::class)];
     }
 
-    public function failed(?\Throwable $e): void
+    public function failed(?Throwable $e): void
     {
-        \Illuminate\Support\Facades\Log::warning('job.failed', [
+        Log::warning('job.failed', [
             'job' => class_basename(static::class),
-            'message' => \App\Support\LogSanitizer::scrubString((string) ($e?->getMessage() ?? '')),
+            'message' => LogSanitizer::scrubString((string) ($e?->getMessage() ?? '')),
         ]);
     }
 }

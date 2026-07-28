@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api\V1\Fiscal;
 
-use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Fiscal\Monitoring\ListTaxInstallmentGuidesRequest;
 use App\Http\Requests\Fiscal\Monitoring\ListTaxInstallmentOrdersRequest;
@@ -16,15 +15,12 @@ use App\Http\Resources\Fiscal\TaxInstallmentOrderDetailResource;
 use App\Http\Resources\Fiscal\TaxInstallmentOrderPageResource;
 use App\Http\Resources\Fiscal\TaxInstallmentParcelPageResource;
 use App\Models\Client;
-use App\Models\User;
-use App\Services\Authorization\TenantAuthorization;
 use App\Services\FiscalMonitoring\FiscalMonitoringRunService;
 use App\Services\Integra\Parcelamento\ParcelamentoMonitorAllService;
 use App\Services\Integra\Parcelamento\ParcelamentoQueryService;
 use App\Services\Integra\Parcelamento\ParcelamentoServiceCatalog;
 use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use RuntimeException;
 
@@ -35,7 +31,6 @@ class TaxInstallmentController extends Controller
         private readonly ParcelamentoQueryService $query,
         private readonly FiscalMonitoringRunService $runs,
         private readonly ParcelamentoMonitorAllService $monitorAll,
-        private readonly TenantAuthorization $authorization,
     ) {}
 
     public function modalities(
@@ -113,7 +108,7 @@ class TaxInstallmentController extends Controller
     public function enqueue(EnqueueTaxInstallmentRequest $request): JsonResponse
     {
         $tenant = $this->currentTenant->tenant();
-        $data = $request->payload();
+        $data = $request->enqueueData();
 
         $modality = strtoupper($data['modality']);
         if (! ParcelamentoServiceCatalog::isKnownModality($modality)) {
@@ -171,7 +166,7 @@ class TaxInstallmentController extends Controller
     public function monitor(MonitorTaxInstallmentsRequest $request): JsonResponse
     {
         $tenant = $this->currentTenant->tenant();
-        $data = $request->payload();
+        $data = $request->monitorData();
 
         $clients = Client::query()
             ->withoutGlobalScopes()
@@ -217,14 +212,5 @@ class TaxInstallmentController extends Controller
                 'results' => $results,
             ],
         ], 202);
-    }
-
-    private function assertCanWrite(): void
-    {
-        $actor = request()->user();
-        if (! $actor instanceof User
-            || ! $this->authorization->allows($actor, TenantPermission::FiscalSyncTrigger)) {
-            abort(403, 'Ação não autorizada para o perfil atual.');
-        }
     }
 }

@@ -35,6 +35,7 @@ return [
     // Spool / retenção (segundos)
     'spool_retention_seconds' => (int) env('IMPORT_SPOOL_RETENTION_SECONDS', 7 * 24 * 3600),
     'queue' => env('IMPORT_QUEUE', 'import-xml'),
+    'processing_chunk_size' => (int) env('IMPORT_PROCESSING_CHUNK_SIZE', 100),
 
     // Alinhamento documentado com edge (não reconfigura o container daqui)
     'edge' => [

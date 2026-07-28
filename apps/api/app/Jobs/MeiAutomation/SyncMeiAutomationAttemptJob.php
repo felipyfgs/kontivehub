@@ -6,11 +6,13 @@ use App\Enums\MeiAutomationStatus;
 use App\Services\MeiAutomation\MeiAutomationAttemptRepository;
 use App\Services\MeiAutomation\MeiAutomationSyncService;
 use App\Services\MeiAutomation\MeiDasMutationReconciler;
+use App\Support\LogSanitizer;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 
 final class SyncMeiAutomationAttemptJob implements ShouldQueue
 {
@@ -44,14 +46,14 @@ final class SyncMeiAutomationAttemptJob implements ShouldQueue
 
     public function tags(): array
     {
-        return ['job:'.class_basename(static::class)];
+        return ['job:'.class_basename(self::class)];
     }
 
     public function failed(?\Throwable $e): void
     {
-        \Illuminate\Support\Facades\Log::warning('job.failed', [
-            'job' => class_basename(static::class),
-            'message' => \App\Support\LogSanitizer::scrubString((string) ($e?->getMessage() ?? '')),
+        Log::warning('job.failed', [
+            'job' => class_basename(self::class),
+            'message' => LogSanitizer::scrubString((string) ($e?->getMessage() ?? '')),
         ]);
     }
 }

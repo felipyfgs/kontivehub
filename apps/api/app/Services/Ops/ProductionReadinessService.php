@@ -10,7 +10,6 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Facades\Schema;
-use Laravel\Horizon\Contracts\MasterSupervisorRepository;
 
 /**
  * Readiness global de plataforma — sem Tenant, sem tenant_id, sem egress fiscal.
@@ -18,6 +17,10 @@ use Laravel\Horizon\Contracts\MasterSupervisorRepository;
 final class ProductionReadinessService
 {
     public const HEARTBEAT_CACHE_KEY = 'ops:scheduler:heartbeat';
+
+    public function __construct(
+        private readonly HorizonReadinessProbe $horizon,
+    ) {}
 
     /**
      * @return array{
@@ -153,24 +156,7 @@ final class ProductionReadinessService
      */
     private function checkHorizon(): array
     {
-        if (! interface_exists(MasterSupervisorRepository::class)) {
-            return ['id' => 'horizon', 'ok' => false, 'detail' => 'package_missing'];
-        }
-
-        try {
-            /** @var MasterSupervisorRepository $repo */
-            $repo = app(MasterSupervisorRepository::class);
-            $masters = $repo->all();
-            $count = is_countable($masters) ? count($masters) : 0;
-
-            if ($count < 1) {
-                return ['id' => 'horizon', 'ok' => false, 'detail' => 'no_master_supervisor'];
-            }
-
-            return ['id' => 'horizon', 'ok' => true, 'detail' => 'masters='.$count];
-        } catch (\Throwable) {
-            return ['id' => 'horizon', 'ok' => false, 'detail' => 'check_failed'];
-        }
+        return $this->horizon->check();
     }
 
     /**

@@ -39,15 +39,17 @@ final class MitListaApuracoesQueryService
             dispatch: false,
         );
 
-        $run->forceFill([
-            'operation_key' => DctfwebCodes::OPERATION_KEY_MIT_LISTA_APURACOES,
-            'progress' => array_merge(is_array($run->progress) ? $run->progress : [], [
-                'mit_lista_apuracoes' => $filters->toPayload(),
-            ]),
-        ])->save();
+        if ($run->wasRecentlyCreated) {
+            $run->forceFill([
+                'operation_key' => DctfwebCodes::OPERATION_KEY_MIT_LISTA_APURACOES,
+                'progress' => array_merge(is_array($run->progress) ? $run->progress : [], [
+                    'mit_lista_apuracoes' => $filters->toPayload(),
+                ]),
+            ])->save();
 
-        ExecuteFiscalMonitoringRunJob::dispatch((int) $run->id)
-            ->onQueue((string) config('fiscal_monitoring.job.queue', 'default'));
+            ExecuteFiscalMonitoringRunJob::dispatch((int) $run->id)
+                ->onQueue((string) config('fiscal_monitoring.job.queue', 'default'));
+        }
 
         return $run->fresh() ?? $run;
     }

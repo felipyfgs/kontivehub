@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api\V1\Fiscal;
 
-use App\Enums\TenantRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Fiscal\Monitoring\ListFiscalClientRecordsRequest;
 use App\Http\Requests\Fiscal\Monitoring\ViewFiscalMonitoringSurfaceRequest;
@@ -21,7 +20,6 @@ use App\Services\Integra\Dctfweb\DctfwebEvidenceVersioningService;
 use App\Services\Integra\Dctfweb\DctfwebMutationGuard;
 use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -73,7 +71,7 @@ class DctfwebController extends Controller
     public function ingestEvent(IngestDctfwebEventRequest $request): JsonResponse
     {
         $tenant = $this->currentTenant->tenant();
-        $data = $request->payload();
+        $data = $request->payload(); // IngestDctfwebEventRequest
 
         $client = Client::query()
             ->withoutGlobalScopes()
@@ -121,7 +119,7 @@ class DctfwebController extends Controller
     public function enqueueConsult(EnqueueDctfwebConsultRequest $request): JsonResponse
     {
         $tenant = $this->currentTenant->tenant();
-        $data = $request->payload();
+        $data = $request->consultData();
 
         $operation = strtoupper($data['operation_code'] ?? DctfwebCodes::OP_CONSULTAR_RECIBO);
         if (in_array($operation, DctfwebCodes::mutatingOperations(), true)) {
@@ -174,7 +172,7 @@ class DctfwebController extends Controller
     public function transmit(TransmitDctfwebRequest $request): JsonResponse
     {
         $tenant = $this->currentTenant->tenant();
-        $data = $request->payload();
+        $data = $request->transmitData();
 
         $client = Client::query()
             ->withoutGlobalScopes()
@@ -224,13 +222,5 @@ class DctfwebController extends Controller
         }
 
         return response()->json(['data' => $run->toPublicArray()], 201);
-    }
-
-    private function assertCanWrite(): void
-    {
-        $role = $this->currentTenant->role();
-        if ($role === null || ! in_array($role, [TenantRole::TenantAdmin, TenantRole::TenantUser], true)) {
-            abort(403, 'Ação não autorizada para o perfil atual.');
-        }
     }
 }
