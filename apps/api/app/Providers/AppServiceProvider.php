@@ -191,6 +191,7 @@ use App\Support\FiscalDataModel\PrivilegedTenantContext;
 use App\Support\MultitenantRbac\EffectivePermissionsResolver;
 use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Console\Events\CommandStarting;
+use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
@@ -431,6 +432,8 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        FormRequest::failOnUnknownFields($this->app->environment('local', 'testing'));
+
         $this->registerPrivilegedTenantContextListeners();
 
         // Preflight: simulated proibido em production

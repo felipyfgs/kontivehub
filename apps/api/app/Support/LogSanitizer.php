@@ -135,16 +135,43 @@ final class LogSanitizer
 
     public static function scrubString(string $text): string
     {
-        $text = preg_replace('/\s+/', ' ', trim($text)) ?? '';
+        $text = trim($text);
         if (preg_match('/<\?xml\b|<(?:cte|nfe|mdfe|soap|doczip|distdfe|procevento)\b/i', $text) === 1) {
             return 'Mensagem sanitizada (conteúdo fiscal omitido).';
         }
+
+        $text = preg_replace_callback(
+            '/(?<header>\b(?:Authorization|Cookie|X-Client-Cert|X-SSL-Cert))(?<separator>\s*(?:=|:)\s*)[^\r\n]*/i',
+            static fn (array $matches): string => $matches['header'].$matches['separator'].'[redacted]',
+            $text,
+        ) ?? $text;
+        $text = preg_replace('/\s+/', ' ', $text) ?? '';
         $text = preg_replace('/[A-Za-z0-9+\/]{80,}={0,2}/', '[redacted]', $text) ?? $text;
         $text = preg_replace('/Bearer\s+\S+/i', 'Bearer [redacted]', $text) ?? $text;
-        $text = preg_replace('/password[=:]\s*\S+/i', 'password=[redacted]', $text) ?? $text;
-        $text = preg_replace('/(Authorization|Cookie|X-Client-Cert|X-SSL-Cert)\s*:\s*\S+/i', '$1: [redacted]', $text) ?? $text;
+        $text = preg_replace_callback(
+            '/(?<key_quote>["\']?)(?<key>[A-Za-z][A-Za-z0-9_-]*)\k<key_quote>(?<separator>\s*(?:=|:)\s*)(?<value>"(?:\\\\.|[^"\\\\])*"|\'(?:\\\\.|[^\'\\\\])*\'|(?:Basic|Bearer)\s+\S+|[^\s,;]+)/i',
+            static function (array $matches): string {
+                if (! self::isSensitiveKey(strtolower($matches['key']))) {
+                    return $matches[0];
+                }
 
-        $forbidden = ['BEGIN ', 'PRIVATE KEY', 'VAULT_MASTER_KEY', 'vault_object_id', 'password=', '.pfx', '.p12'];
+                $quote = str_starts_with($matches['value'], '"') || str_starts_with($matches['value'], "'")
+                    ? $matches['value'][0]
+                    : '';
+
+                return $matches['key_quote'].$matches['key'].$matches['key_quote']
+                    .$matches['separator'].$quote.'[redacted]'.$quote;
+            },
+            $text,
+        ) ?? $text;
+        $text = preg_replace(
+            '/(?<![0-9A-Z])(?:[0-9A-Z]{2}\.?[0-9A-Z]{3}\.?[0-9A-Z]{3}\/?[0-9A-Z]{4}-?\d{2})(?![0-9A-Z])/i',
+            '[redacted]',
+            $text,
+        ) ?? $text;
+        $text = preg_replace('/(?<!\d)\d{44}(?!\d)/', '[redacted]', $text) ?? $text;
+
+        $forbidden = ['BEGIN ', 'PRIVATE KEY', 'VAULT_MASTER_KEY', 'vault_object_id', '.pfx', '.p12'];
         foreach ($forbidden as $needle) {
             if (stripos($text, $needle) !== false) {
                 return 'Mensagem sanitizada (conteúdo sensível omitido).';

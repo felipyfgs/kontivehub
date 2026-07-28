@@ -4,11 +4,11 @@ namespace App\Services\Auth;
 
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
+use App\Services\Auth\Exceptions\PasswordConfirmationFailedException;
 use Illuminate\Contracts\Session\Session;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
-use RuntimeException;
 
 /**
  * Janela de reconfirmação de senha (15 min) vinculada à sessão corrente.
@@ -61,13 +61,13 @@ final class RecentPasswordConfirmationGate
     }
 
     /**
-     * @throws RuntimeException
+     * @throws PasswordConfirmationFailedException
      */
     public function confirmWithPassword(User $user, string $password, ?Request $request = null): void
     {
         $password = (string) $password;
         if ($password === '') {
-            throw new RuntimeException('Senha obrigatória.');
+            throw new PasswordConfirmationFailedException('Senha obrigatória.');
         }
 
         if (! Hash::check($password, $user->password)) {
@@ -76,7 +76,7 @@ final class RecentPasswordConfirmationGate
                 'confirmation_method' => self::CONFIRMATION_METHOD,
             ], $user->id);
 
-            throw new RuntimeException('Senha inválida.');
+            throw new PasswordConfirmationFailedException('Senha inválida.');
         }
 
         $this->markConfirmed($user, $request);

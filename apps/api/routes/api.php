@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\ApiRateLimit;
 use App\Http\Controllers\Api\V1\Activation\PublicActivationController;
 use App\Http\Controllers\Api\V1\Assistant\AssistantChatController;
 use App\Http\Controllers\Api\V1\Assistant\AssistantConversationController;
@@ -113,20 +114,21 @@ use App\Http\Middleware\EnsureRecentPasswordConfirmation;
 use App\Http\Middleware\EnsureTenantContext;
 use App\Http\Middleware\EnsureTenantSubscriptionWritable;
 use App\Http\Middleware\EnsureWorkRealMembership;
+use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/internal/v1/communication/gateway/events', CommunicationGatewayEventController::class)
-    ->middleware('throttle:600,1');
+    ->middleware(ThrottleRequests::using(ApiRateLimit::InternalCommunicationGateway));
 Route::get('/internal/v1/communication/gateway/media/{command}', CommunicationGatewayMediaController::class)
-    ->middleware('throttle:600,1');
+    ->middleware(ThrottleRequests::using(ApiRateLimit::InternalCommunicationGateway));
 
 Route::prefix('v1')->group(function (): void {
     // EMITTER_PUSH — autenticação por token de integração (sem sessão)
     Route::post('/integrations/cte/push', [CteEmitterPushController::class, 'push'])
-        ->middleware('throttle:'.(int) config('sefaz.cte_emitter_push.rate_limit_per_minute', 30).',1');
+        ->middleware(ThrottleRequests::using(ApiRateLimit::CteEmitterPush));
 
     // Ativação pública (sem auth) — token/senha somente no body; Cache-Control no controller
-    Route::middleware('throttle:20,1')->group(function (): void {
+    Route::middleware(ThrottleRequests::using(ApiRateLimit::PublicActivation))->group(function (): void {
         Route::post('/activations/inspect', [PublicActivationController::class, 'inspect']);
         Route::post('/activations/complete', [PublicActivationController::class, 'complete']);
         Route::post('/first-access/complete', [PublicActivationController::class, 'completeFirstAccess']);
@@ -134,9 +136,9 @@ Route::prefix('v1')->group(function (): void {
 
     // Onboarding inicial da plataforma (fail-closed; token no body; no-store no controller)
     Route::get('/onboarding/status', [InitialOnboardingController::class, 'status'])
-        ->middleware('throttle:20,1');
+        ->middleware(ThrottleRequests::using(ApiRateLimit::PublicOnboardingStatus));
     Route::post('/onboarding', [InitialOnboardingController::class, 'complete'])
-        ->middleware('throttle:5,1');
+        ->middleware(ThrottleRequests::using(ApiRateLimit::PublicOnboardingCompletion));
 
     Route::middleware(['auth:sanctum', EnsureActiveUser::class])->group(function (): void {
         Route::get('/me', MeController::class);
@@ -144,15 +146,18 @@ Route::prefix('v1')->group(function (): void {
         // Troca explícita de tenant (fora de EnsureTenantContext — tenant_id de destino é validado por membership)
         Route::get('/tenants/memberships', [TenantSwitchController::class, 'memberships']);
         Route::post('/tenants/switch', [TenantSwitchController::class, 'switch'])
-            ->middleware('throttle:30,1');
+            ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedModerate));
 
         // Reconfirmação de senha (janela curta) — usada por ações privilegiadas sensíveis
         Route::post('/auth/confirm-password', ConfirmPasswordController::class)
-            ->middleware('throttle:10,1');
+            ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive));
 
         // Identidade global do próprio usuário (independe de Tenant/papel).
         Route::patch('/account', UpdateAccountController::class)
-            ->middleware(['throttle:20,1', EnsureRecentPasswordConfirmation::class]);
+            ->middleware([
+                ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard),
+                EnsureRecentPasswordConfirmation::class,
+            ]);
 
         // Administração global da plataforma (SEM tenant context de membership).
         // Navegação comum não exige reconfirmação; ações sensíveis exigem senha recente.
@@ -164,26 +169,38 @@ Route::prefix('v1')->group(function (): void {
             // Rotas estáticas antes de /tenants/{tenant}
             Route::get('/tenants/current', [PlatformTenantSelectController::class, 'current']);
             Route::post('/tenants/select', [PlatformTenantSelectController::class, 'select'])
-                ->middleware('throttle:30,1');
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedModerate));
             Route::delete('/tenants/select', [PlatformTenantSelectController::class, 'clear'])
-                ->middleware('throttle:30,1');
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedModerate));
 
             // Lista do seletor privilegiado (envelope com selected/default)
             Route::get('/tenants/selector', [PlatformTenantSelectController::class, 'index']);
             // Administração de Tenants (criação pendente, detalhe, ativação)
             Route::get('/tenants/admin', [PlatformTenantController::class, 'index']);
             Route::post('/tenants', [PlatformTenantController::class, 'store'])
-                ->middleware(['throttle:20,1', EnsureRecentPasswordConfirmation::class]);
+                ->middleware([
+                    ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard),
+                    EnsureRecentPasswordConfirmation::class,
+                ]);
             Route::get('/tenants/{tenant}', [PlatformTenantController::class, 'show']);
             Route::post('/tenants/{tenant}/activation/regenerate', [PlatformTenantController::class, 'regenerateActivation'])
-                ->middleware(['throttle:20,1', EnsureRecentPasswordConfirmation::class]);
+                ->middleware([
+                    ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard),
+                    EnsureRecentPasswordConfirmation::class,
+                ]);
             Route::patch('/tenants/{tenant}/first-admin', [PlatformTenantController::class, 'updateFirstAdmin'])
-                ->middleware(['throttle:20,1', EnsureRecentPasswordConfirmation::class]);
+                ->middleware([
+                    ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard),
+                    EnsureRecentPasswordConfirmation::class,
+                ]);
 
             // Proprietário singleton (PLATFORM_ADMIN)
             Route::get('/owner', [PlatformOwnerController::class, 'show']);
             Route::patch('/owner', [PlatformOwnerController::class, 'update'])
-                ->middleware(['throttle:20,1', EnsureRecentPasswordConfirmation::class]);
+                ->middleware([
+                    ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard),
+                    EnsureRecentPasswordConfirmation::class,
+                ]);
 
             Route::get('/tenants', [TenantAdminController::class, 'index']);
             Route::get('/tenants/{tenant}', [TenantAdminController::class, 'show']);
@@ -212,7 +229,10 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/serpro/configuration', [SerproPlatformConfigurationController::class, 'show']);
             Route::get('/serpro/production-onboarding', [SerproProductionOnboardingController::class, 'show']);
             Route::post('/serpro/production-onboarding', [SerproProductionOnboardingController::class, 'store'])
-                ->middleware(['throttle:5,1', EnsureRecentPasswordConfirmation::class]);
+                ->middleware([
+                    ThrottleRequests::using(ApiRateLimit::AuthenticatedCritical),
+                    EnsureRecentPasswordConfirmation::class,
+                ]);
             Route::post('/serpro/credential-versions', [SerproPlatformConfigurationController::class, 'storeCredentialVersion']);
             Route::post('/serpro/credential-versions/{serproCredentialVersion}/verify', [SerproPlatformConfigurationController::class, 'verifyCredentialVersion']);
             Route::post('/serpro/credential-versions/{serproCredentialVersion}/test-connection', [SerproPlatformConfigurationController::class, 'testConnection']);
@@ -234,20 +254,41 @@ Route::prefix('v1')->group(function (): void {
             // Canário DTE controlado (Proprietário) — sem payload fiscal na resposta
             Route::get('/serpro/dte-canary', [SerproDteCanaryController::class, 'summary']);
             Route::post('/serpro/dte-canary', [SerproDteCanaryController::class, 'create'])
-                ->middleware(['throttle:20,1', EnsureRecentPasswordConfirmation::class]);
+                ->middleware([
+                    ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard),
+                    EnsureRecentPasswordConfirmation::class,
+                ]);
             Route::get('/serpro/dte-canary/{serproDteCanaryRequest}', [SerproDteCanaryController::class, 'show']);
             Route::post('/serpro/dte-canary/{serproDteCanaryRequest}/target', [SerproDteCanaryController::class, 'selectTarget'])
-                ->middleware(['throttle:20,1', EnsureRecentPasswordConfirmation::class]);
+                ->middleware([
+                    ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard),
+                    EnsureRecentPasswordConfirmation::class,
+                ]);
             Route::post('/serpro/dte-canary/{serproDteCanaryRequest}/approve-owner', [SerproDteCanaryController::class, 'approveOwner'])
-                ->middleware(['throttle:20,1', EnsureRecentPasswordConfirmation::class]);
+                ->middleware([
+                    ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard),
+                    EnsureRecentPasswordConfirmation::class,
+                ]);
             Route::post('/serpro/dte-canary/{serproDteCanaryRequest}/execute', [SerproDteCanaryController::class, 'execute'])
-                ->middleware(['throttle:10,1', EnsureRecentPasswordConfirmation::class]);
+                ->middleware([
+                    ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive),
+                    EnsureRecentPasswordConfirmation::class,
+                ]);
             Route::post('/serpro/dte-canary/{serproDteCanaryRequest}/reconcile', [SerproDteCanaryController::class, 'reconcile'])
-                ->middleware(['throttle:20,1', EnsureRecentPasswordConfirmation::class]);
+                ->middleware([
+                    ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard),
+                    EnsureRecentPasswordConfirmation::class,
+                ]);
             Route::post('/serpro/dte-canary/{serproDteCanaryRequest}/promote-limited', [SerproDteCanaryController::class, 'promoteLimited'])
-                ->middleware(['throttle:10,1', EnsureRecentPasswordConfirmation::class]);
+                ->middleware([
+                    ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive),
+                    EnsureRecentPasswordConfirmation::class,
+                ]);
             Route::post('/serpro/dte-canary/disable', [SerproDteCanaryController::class, 'disable'])
-                ->middleware(['throttle:10,1', EnsureRecentPasswordConfirmation::class]);
+                ->middleware([
+                    ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive),
+                    EnsureRecentPasswordConfirmation::class,
+                ]);
         });
 
         Route::middleware([
@@ -262,21 +303,21 @@ Route::prefix('v1')->group(function (): void {
                 Route::post('/inboxes', [CommunicationInboxController::class, 'store']);
                 Route::patch('/inboxes/{inbox}', [CommunicationInboxController::class, 'update']);
                 Route::delete('/inboxes/{inbox}', [CommunicationInboxController::class, 'destroy'])
-                    ->middleware('throttle:10,1');
+                    ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive));
                 Route::put('/inboxes/{inbox}/members', [CommunicationInboxController::class, 'replaceMembers']);
                 Route::post('/inboxes/{inbox}/session/logout', [CommunicationInboxController::class, 'revoke'])
-                    ->middleware('throttle:10,1');
+                    ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive));
                 Route::get('/inboxes/{inbox}/session/status', [CommunicationInboxGatewayController::class, 'sessionStatus']);
                 Route::post('/inboxes/{inbox}/session/connect', [CommunicationInboxController::class, 'startPairing'])
-                    ->middleware('throttle:10,1');
+                    ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive));
                 Route::post('/inboxes/{inbox}/session/disconnect', [CommunicationInboxGatewayController::class, 'disconnect']);
                 Route::put('/inboxes/{inbox}/session/passive', [CommunicationInboxGatewayController::class, 'passive']);
                 Route::post('/inboxes/{inbox}/session/pair-phone', [CommunicationInboxGatewayController::class, 'pairPhone'])
-                    ->middleware('throttle:10,1');
+                    ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive));
                 Route::post('/inboxes/{inbox}/session/passkey/respond', [CommunicationInboxGatewayController::class, 'respondPasskey'])
-                    ->middleware('throttle:20,1');
+                    ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard));
                 Route::post('/inboxes/{inbox}/session/passkey/confirm', [CommunicationInboxGatewayController::class, 'confirmPasskey'])
-                    ->middleware('throttle:20,1');
+                    ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard));
                 Route::put('/inboxes/{inbox}/presence', [CommunicationInboxGatewayController::class, 'globalPresence']);
                 Route::put('/inboxes/{inbox}/default-disappearing', [CommunicationInboxGatewayController::class, 'defaultDisappearing']);
                 Route::post('/inboxes/{inbox}/app-state/sync', [CommunicationInboxGatewayController::class, 'syncState']);
@@ -311,7 +352,7 @@ Route::prefix('v1')->group(function (): void {
                 Route::get('/conversations/{conversation}', [CommunicationConversationController::class, 'show']);
                 Route::patch('/conversations/{conversation}', [CommunicationConversationController::class, 'update']);
                 Route::post('/conversations/{conversation}/messages', [CommunicationConversationController::class, 'send'])
-                    ->middleware('throttle:120,1');
+                    ->middleware(ThrottleRequests::using(ApiRateLimit::CommunicationMessageSend));
                 Route::put('/conversations/{conversation}/messages/{message}/edit', [CommunicationConversationGatewayController::class, 'edit']);
                 Route::delete('/conversations/{conversation}/messages/{message}', [CommunicationConversationGatewayController::class, 'revoke']);
                 Route::put('/conversations/{conversation}/messages/{message}/reaction', [CommunicationConversationGatewayController::class, 'react']);
@@ -400,7 +441,10 @@ Route::prefix('v1')->group(function (): void {
             // Canário DTE — confirmação Tenant ADMIN + resultado fiscal (membership)
             Route::get('/serpro/dte-canary/pending', [DteCanaryTenantController::class, 'pending']);
             Route::post('/serpro/dte-canary/{serproDteCanaryRequest}/confirm', [DteCanaryTenantController::class, 'confirmParticipation'])
-                ->middleware(['throttle:20,1', EnsureRecentPasswordConfirmation::class]);
+                ->middleware([
+                    ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard),
+                    EnsureRecentPasswordConfirmation::class,
+                ]);
             Route::get('/serpro/dte-canary/{serproDteCanaryRequest}/result', [DteCanaryTenantController::class, 'result']);
 
             // Núcleo de monitoramento fiscal (tenant-scoped; mutações off por padrão no adapter)
@@ -436,14 +480,14 @@ Route::prefix('v1')->group(function (): void {
             Route::post('/fiscal/dctfweb/events', [DctfwebController::class, 'ingestEvent']);
             Route::post('/fiscal/dctfweb/consult', [DctfwebController::class, 'enqueueConsult']);
             Route::post('/fiscal/dctfweb/transmit', [DctfwebController::class, 'transmit'])
-                ->middleware('throttle:10,1');
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive));
             Route::get('/fiscal/mit/apuracoes', [MitController::class, 'index']);
             Route::get('/fiscal/mit/apuracoes/{apuracao}', [MitController::class, 'show']);
             Route::get('/fiscal/mit/lista-apuracoes', [MitController::class, 'indexListaApuracoes']);
             Route::post('/fiscal/mit/consult', [MitController::class, 'enqueueConsult']);
             Route::post('/fiscal/mit/lista-apuracoes', [MitController::class, 'enqueueListaApuracoes']);
             Route::post('/fiscal/mit/encerrar', [MitController::class, 'encerrar'])
-                ->middleware('throttle:10,1');
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive));
 
             // Parcelamentos SN/MEI (modalidades catalogadas; mutantes OFF)
             Route::get('/fiscal/installments/modalities', [TaxInstallmentController::class, 'modalities']);
@@ -456,12 +500,18 @@ Route::prefix('v1')->group(function (): void {
 
             // Operações fiscais mutantes (OFF por default; senha recente + confirmação + idempotência)
             Route::post('/fiscal/mutations/preflight', [FiscalMutationController::class, 'preflight'])
-                ->middleware('throttle:30,1');
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedModerate));
             Route::post('/fiscal/mutations', [FiscalMutationController::class, 'execute'])
-                ->middleware(['throttle:20,1', EnsureRecentPasswordConfirmation::class]);
+                ->middleware([
+                    ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard),
+                    EnsureRecentPasswordConfirmation::class,
+                ]);
             Route::get('/fiscal/mutations/{mutation}', [FiscalMutationController::class, 'show']);
             Route::post('/fiscal/mutations/{mutation}/reconcile', [FiscalMutationController::class, 'reconcile'])
-                ->middleware(['throttle:20,1', EnsureRecentPasswordConfirmation::class]);
+                ->middleware([
+                    ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard),
+                    EnsureRecentPasswordConfirmation::class,
+                ]);
 
             // Situação Fiscal (SITFIS) — snapshot com idade; refresh respeita TTL
             Route::get('/fiscal/sitfis', [SitfisSituationController::class, 'show']);
@@ -471,28 +521,28 @@ Route::prefix('v1')->group(function (): void {
             // Explorador de consultas manuais (somente leitura; GET local; POST confirmado)
             Route::get('/fiscal/manual-consults', [ManualConsultController::class, 'index']);
             Route::post('/fiscal/manual-consults', [ManualConsultController::class, 'store'])
-                ->middleware('throttle:30,1');
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedModerate));
 
             // Cadastro/Vínculos (PNR Contador) — listagem + detalhe + refresh explícito
             Route::get('/fiscal/registrations', [RegistrationLinkController::class, 'index']);
             Route::get('/fiscal/clients/{clientId}/registrations', [RegistrationLinkController::class, 'showForClient']);
             Route::post('/fiscal/clients/{clientId}/registrations/refresh', [RegistrationLinkController::class, 'refresh'])
-                ->middleware('throttle:20,1');
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard));
 
             // PNR Contador — leituras de renúncia explicitamente acionadas pelo usuário.
             Route::get('/fiscal/clients/{clientId}/pnr-renunciations', [PnrRenunciationController::class, 'index']);
             Route::post('/fiscal/clients/{clientId}/pnr-renunciations/history', [PnrRenunciationController::class, 'history'])
-                ->middleware('throttle:10,1');
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive));
             Route::post('/fiscal/clients/{clientId}/pnr-renunciations/status', [PnrRenunciationController::class, 'status'])
-                ->middleware('throttle:10,1');
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive));
             Route::post('/fiscal/clients/{clientId}/pnr-renunciations/receipt', [PnrRenunciationController::class, 'receipt'])
-                ->middleware('throttle:10,1');
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive));
 
             // Processos fiscais (e-Processo)
             Route::get('/fiscal/tax-processes', [TaxProcessController::class, 'index']);
             Route::get('/fiscal/clients/{clientId}/tax-processes', [TaxProcessController::class, 'showForClient']);
             Route::post('/fiscal/clients/{clientId}/tax-processes/refresh', [TaxProcessController::class, 'refresh'])
-                ->middleware('throttle:20,1');
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard));
             Route::get('/fiscal/tax-processes/{id}', [TaxProcessController::class, 'show'])
                 ->whereNumber('id');
 
@@ -508,26 +558,32 @@ Route::prefix('v1')->group(function (): void {
             Route::patch('/fiscal/mailbox/monitoring', [MailboxMonitoringController::class, 'update']);
             Route::post('/fiscal/mailbox/monitoring/preview', [MailboxMonitoringController::class, 'preview']);
             Route::post('/fiscal/mailbox/monitoring/sync', [MailboxMonitoringController::class, 'sync'])
-                ->middleware('throttle:20,1');
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard));
             Route::get('/fiscal/mailbox/messages/{message}/detail-preview', [MailboxMonitoringController::class, 'detailPreview']);
             Route::post('/fiscal/mailbox/messages/{message}/detail', [MailboxMonitoringController::class, 'detail'])
-                ->middleware('throttle:20,1');
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard));
 
             // Central de declarações (catálogo versionado, projeções, recibos — sem guias)
             Route::get('/fiscal/declarations/catalog', [DeclarationHubController::class, 'catalog']);
             Route::get('/fiscal/declarations/summary', [DeclarationHubController::class, 'summary']);
             Route::get('/fiscal/declarations', [DeclarationHubController::class, 'index']);
             Route::post('/fiscal/declarations/operations/{action}/read', [DeclarationOperationController::class, 'read'])
-                ->middleware('throttle:30,1');
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedModerate));
             Route::post('/fiscal/declarations/operations/{action}/preflight', [DeclarationOperationController::class, 'preflight'])
-                ->middleware('throttle:30,1');
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedModerate));
             Route::post('/fiscal/declarations/operations/{action}/execute', [DeclarationOperationController::class, 'execute'])
-                ->middleware(['throttle:20,1', EnsureRecentPasswordConfirmation::class]);
+                ->middleware([
+                    ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard),
+                    EnsureRecentPasswordConfirmation::class,
+                ]);
             Route::get('/fiscal/declarations/operations/mutations/{mutation}', [DeclarationOperationController::class, 'show'])
                 ->whereNumber('mutation');
             Route::post('/fiscal/declarations/operations/mutations/{mutation}/reconcile', [DeclarationOperationController::class, 'reconcile'])
                 ->whereNumber('mutation')
-                ->middleware(['throttle:20,1', EnsureRecentPasswordConfirmation::class]);
+                ->middleware([
+                    ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard),
+                    EnsureRecentPasswordConfirmation::class,
+                ]);
             Route::post('/fiscal/declarations/project', [DeclarationHubController::class, 'project']);
             Route::post('/fiscal/declarations/calendar', [DeclarationHubController::class, 'publishCalendar']);
             Route::get('/fiscal/declarations/{projection}', [DeclarationHubController::class, 'show']);
@@ -538,7 +594,7 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/fiscal/guides', [TaxGuideController::class, 'index']);
             Route::post('/fiscal/guides/preflight', [TaxGuideController::class, 'preflight']);
             Route::post('/fiscal/guides', [TaxGuideController::class, 'store'])
-                ->middleware('throttle:20,1');
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard));
             Route::get('/fiscal/guides/downloads/{token}', [TaxGuideController::class, 'download']);
             Route::get('/fiscal/guides/{guide}', [TaxGuideController::class, 'show']);
             Route::post('/fiscal/guides/{guide}/download-token', [TaxGuideController::class, 'issueDownloadToken']);
@@ -553,7 +609,8 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/fiscal/guides/payments/clients/{client}/history', [PagtowebPaymentListController::class, 'history']);
             Route::post('/fiscal/guides/payments/clients/{client}/consult', [PagtowebPaymentListController::class, 'consult']);
             Route::get('/fiscal/guides/receipts/clients/{client}/history', [PagtowebArrecadacaoReceiptController::class, 'history']);
-            Route::post('/fiscal/guides/receipts/clients/{client}/request', [PagtowebArrecadacaoReceiptController::class, 'request'])->middleware('throttle:10,1');
+            Route::post('/fiscal/guides/receipts/clients/{client}/request', [PagtowebArrecadacaoReceiptController::class, 'request'])
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive));
             Route::get('/fiscal/guides/receipts/clients/{client}/{receipt}/download', [PagtowebArrecadacaoReceiptController::class, 'download']);
 
             // Simples Nacional / MEI (tenant-scoped; mutações bloqueadas no piloto)
@@ -583,9 +640,12 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/fiscal/simples-mei/pgmei/clients/{client}/history', [PgmeiMonitoringController::class, 'history']);
             Route::post('/fiscal/simples-mei/pgmei/consult', [PgmeiMonitoringController::class, 'consult']);
             Route::post('/fiscal/simples-mei/pgmei/das/preflight', [MeiDasController::class, 'preflight'])
-                ->middleware('throttle:30,1');
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedModerate));
             Route::post('/fiscal/simples-mei/pgmei/das', [MeiDasController::class, 'store'])
-                ->middleware(['throttle:20,1', EnsureRecentPasswordConfirmation::class]);
+                ->middleware([
+                    ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard),
+                    EnsureRecentPasswordConfirmation::class,
+                ]);
             Route::patch('/fiscal/simples-mei/pgmei/clients/{client}/communication-preference', [PgmeiMonitoringController::class, 'updatePreferences']);
             Route::patch('/fiscal/simples-mei/pgmei/communication-preferences/bulk', [PgmeiMonitoringController::class, 'batchPreferences']);
             Route::get('/fiscal/simples-mei/pgmei/clients/{client}/communication-preview', [PgmeiMonitoringController::class, 'preview']);
@@ -600,7 +660,8 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/fiscal/simples-mei/ccmei/clients/{client}/history', [CcmeiMonitoringController::class, 'history']);
             Route::post('/fiscal/simples-mei/ccmei/clients/{client}/consult', [CcmeiMonitoringController::class, 'consult']);
             Route::get('/fiscal/simples-mei/ccmei/clients/{client}/issued-certificates', [CcmeiMonitoringController::class, 'issuedCertificates']);
-            Route::post('/fiscal/simples-mei/ccmei/clients/{client}/issued-certificates', [CcmeiMonitoringController::class, 'issueCertificate'])->middleware('throttle:10,1');
+            Route::post('/fiscal/simples-mei/ccmei/clients/{client}/issued-certificates', [CcmeiMonitoringController::class, 'issueCertificate'])
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive));
             Route::get('/fiscal/simples-mei/ccmei/clients/{client}/issued-certificates/{certificate}/download', [CcmeiMonitoringController::class, 'downloadIssuedCertificate']);
             Route::get('/fiscal/simples-mei/ccmei/registration-status/clients/{client}/history', [CcmeiMonitoringController::class, 'registrationStatusHistory']);
             Route::post('/fiscal/simples-mei/ccmei/registration-status/clients/{client}/consult', [CcmeiMonitoringController::class, 'consultRegistrationStatus']);
@@ -652,15 +713,23 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/fiscal/fgts/digital/coverage', [FgtsDigitalController::class, 'coverage']);
             Route::get('/fiscal/fgts/digital/readiness', [FgtsDigitalController::class, 'readiness']);
             Route::get('/fiscal/fgts/digital/runs', [FgtsDigitalController::class, 'runs']);
-            Route::post('/fiscal/fgts/digital/sync', [FgtsDigitalController::class, 'sync'])->middleware('throttle:20,1');
-            Route::post('/fiscal/fgts/digital/sync-now', [FgtsDigitalController::class, 'syncNow'])->middleware('throttle:10,1');
-            Route::post('/fiscal/fgts/digital/preview', [FgtsDigitalController::class, 'preview'])->middleware('throttle:10,1');
-            Route::post('/fiscal/fgts/digital/previews/{run}/emit', [FgtsDigitalController::class, 'emit'])->whereNumber('run')->middleware('throttle:10,1');
-            Route::post('/fiscal/fgts/digital/sessions/import', [FgtsDigitalController::class, 'importSession'])->middleware('throttle:10,1');
-            Route::post('/fiscal/fgts/digital/representations', [FgtsDigitalController::class, 'storeRepresentation'])->middleware('throttle:10,1');
+            Route::post('/fiscal/fgts/digital/sync', [FgtsDigitalController::class, 'sync'])
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard));
+            Route::post('/fiscal/fgts/digital/sync-now', [FgtsDigitalController::class, 'syncNow'])
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive));
+            Route::post('/fiscal/fgts/digital/preview', [FgtsDigitalController::class, 'preview'])
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive));
+            Route::post('/fiscal/fgts/digital/previews/{run}/emit', [FgtsDigitalController::class, 'emit'])
+                ->whereNumber('run')
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive));
+            Route::post('/fiscal/fgts/digital/sessions/import', [FgtsDigitalController::class, 'importSession'])
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive));
+            Route::post('/fiscal/fgts/digital/representations', [FgtsDigitalController::class, 'storeRepresentation'])
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive));
 
             Route::get('/clients', [ClientController::class, 'index']);
-            Route::get('/cnpj/{cnpj}/lookup', CnpjLookupController::class)->middleware('throttle:30,1');
+            Route::get('/cnpj/{cnpj}/lookup', CnpjLookupController::class)
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedModerate));
             Route::post('/clients', [ClientController::class, 'store']);
             Route::patch('/clients/bulk-status', [ClientController::class, 'bulkStatus']);
             Route::patch('/clients/bulk-categories', [ClientCategoryAssignmentController::class, 'bulk']);
@@ -672,7 +741,7 @@ Route::prefix('v1')->group(function (): void {
             Route::patch('/clients/{client}', [ClientController::class, 'update']);
             Route::patch('/clients/{client}/custom-fields/{customField}', [ClientController::class, 'updateCustomField']);
             Route::post('/clients/{client}/refresh-registration', [ClientController::class, 'refreshRegistration'])
-                ->middleware('throttle:20,1');
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard));
 
             Route::post('/clients/{client}/establishments', [EstablishmentController::class, 'store']);
             Route::patch('/establishments/{establishment}', [EstablishmentController::class, 'update']);
@@ -709,17 +778,35 @@ Route::prefix('v1')->group(function (): void {
             // Equipe do escritório — exige membership ADMIN real (checado no serviço)
             Route::get('/tenant/members', [TenantMemberController::class, 'index']);
             Route::post('/tenant/members', [TenantMemberController::class, 'store'])
-                ->middleware(['throttle:30,1', EnsureRecentPasswordConfirmation::class]);
+                ->middleware([
+                    ThrottleRequests::using(ApiRateLimit::AuthenticatedModerate),
+                    EnsureRecentPasswordConfirmation::class,
+                ]);
             Route::patch('/tenant/members/{membership}', [TenantMemberController::class, 'update'])
-                ->middleware(EnsureRecentPasswordConfirmation::class);
+                ->middleware([
+                    ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard),
+                    EnsureRecentPasswordConfirmation::class,
+                ]);
             Route::patch('/tenant/members/{membership}/recipient', [TenantMemberController::class, 'updateRecipient'])
-                ->middleware(['throttle:20,1', EnsureRecentPasswordConfirmation::class]);
+                ->middleware([
+                    ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard),
+                    EnsureRecentPasswordConfirmation::class,
+                ]);
             Route::post('/tenant/members/{membership}/deactivate', [TenantMemberController::class, 'deactivate'])
-                ->middleware(EnsureRecentPasswordConfirmation::class);
+                ->middleware([
+                    ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard),
+                    EnsureRecentPasswordConfirmation::class,
+                ]);
             Route::post('/tenant/members/{membership}/reactivate', [TenantMemberController::class, 'reactivate'])
-                ->middleware(['throttle:20,1', EnsureRecentPasswordConfirmation::class]);
+                ->middleware([
+                    ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard),
+                    EnsureRecentPasswordConfirmation::class,
+                ]);
             Route::post('/tenant/members/{membership}/activation/regenerate', [TenantMemberController::class, 'regenerateActivation'])
-                ->middleware(['throttle:20,1', EnsureRecentPasswordConfirmation::class]);
+                ->middleware([
+                    ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard),
+                    EnsureRecentPasswordConfirmation::class,
+                ]);
 
             // Onboarding autXML + cursor central (sem reset de NSU)
             Route::get('/tenant/autxml', [TenantAutXmlController::class, 'overview']);
@@ -731,9 +818,15 @@ Route::prefix('v1')->group(function (): void {
             // Tokens de integração CT-e (EMITTER_PUSH) — admin com senha recente emite/revoga; sem recuperação
             Route::get('/tenant/integration-tokens', [CteEmitterPushController::class, 'listTokens']);
             Route::post('/tenant/integration-tokens', [CteEmitterPushController::class, 'issueToken'])
-                ->middleware('throttle:'.(int) config('sefaz.cte_emitter_push.admin_token_rate_limit_per_minute', 10).',1');
+                ->middleware([
+                    ThrottleRequests::using(ApiRateLimit::CteIntegrationTokenAdministration),
+                    EnsureRecentPasswordConfirmation::class,
+                ]);
             Route::post('/tenant/integration-tokens/{token}/revoke', [CteEmitterPushController::class, 'revokeToken'])
-                ->middleware('throttle:'.(int) config('sefaz.cte_emitter_push.admin_token_rate_limit_per_minute', 10).',1');
+                ->middleware([
+                    ThrottleRequests::using(ApiRateLimit::CteIntegrationTokenAdministration),
+                    EnsureRecentPasswordConfirmation::class,
+                ]);
 
             // Operação CT-e: onboarding, dois streams, cobertura e pendências sanitizadas
             Route::get('/cte/onboarding', [CteOperationsController::class, 'onboarding']);
@@ -774,17 +867,25 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/operations/inbox', OperationsInboxController::class);
 
             // Assistente de produto (OpenAI via API; fail-closed)
-            Route::prefix('assistant')->middleware('throttle:60,1')->group(function (): void {
-                Route::get('/conversations', [AssistantConversationController::class, 'index']);
-                Route::post('/conversations', [AssistantConversationController::class, 'store']);
-                Route::get('/conversations/{conversation}/messages', [AssistantConversationController::class, 'messages']);
-                Route::post('/conversations/{conversation}/chat', [AssistantChatController::class, 'chat'])
-                    ->middleware('throttle:30,1');
-                Route::post('/conversations/{conversation}/approve-tool', [AssistantChatController::class, 'approve'])
-                    ->middleware(['throttle:20,1', EnsureWorkRealMembership::class]);
-                Route::post('/conversations/{conversation}/deny-tool', [AssistantChatController::class, 'deny'])
-                    ->middleware(['throttle:20,1', EnsureWorkRealMembership::class]);
-            });
+            Route::prefix('assistant')
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AssistantAccess))
+                ->group(function (): void {
+                    Route::get('/conversations', [AssistantConversationController::class, 'index']);
+                    Route::post('/conversations', [AssistantConversationController::class, 'store']);
+                    Route::get('/conversations/{conversation}/messages', [AssistantConversationController::class, 'messages']);
+                    Route::post('/conversations/{conversation}/chat', [AssistantChatController::class, 'chat'])
+                        ->middleware(ThrottleRequests::using(ApiRateLimit::AssistantChat));
+                    Route::post('/conversations/{conversation}/approve-tool', [AssistantChatController::class, 'approve'])
+                        ->middleware([
+                            ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard),
+                            EnsureWorkRealMembership::class,
+                        ]);
+                    Route::post('/conversations/{conversation}/deny-tool', [AssistantChatController::class, 'deny'])
+                        ->middleware([
+                            ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard),
+                            EnsureWorkRealMembership::class,
+                        ]);
+                });
 
             // ── Work: processos operacionais (plano de dados; sem SERPRO/ADN/SEFAZ) ──
             // Leitura: membership ou platform_privileged. Mutação/export: membership real.

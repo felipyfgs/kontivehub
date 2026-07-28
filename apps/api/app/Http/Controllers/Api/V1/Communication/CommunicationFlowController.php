@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Communication;
 
 use App\Enums\Communication\FlowStatus;
+use App\Exceptions\CommunicationFlowException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Communication\StoreCommunicationFlowBindingRequest;
 use App\Http\Requests\Communication\StoreCommunicationFlowRequest;
@@ -25,7 +26,6 @@ use App\Services\Communication\Flows\CommunicationFlowGraphValidator;
 use App\Services\Communication\Flows\CommunicationFlowRunControlService;
 use App\Support\CurrentTenant;
 use App\Support\LogSanitizer;
-use DomainException;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
@@ -706,7 +706,7 @@ final class CommunicationFlowController extends Controller
     {
         try {
             $this->flowsAvailability->assertEnabled();
-        } catch (DomainException) {
+        } catch (CommunicationFlowException) {
             throw new HttpResponseException(response()->json([
                 'message' => 'Engine de fluxos desabilitada.',
                 'code' => 'communication_flows_disabled',

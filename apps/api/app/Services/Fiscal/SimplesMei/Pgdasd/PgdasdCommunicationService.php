@@ -7,6 +7,8 @@ use App\Enums\CommunicationChannel;
 use App\Enums\CommunicationDispatchStatus;
 use App\Enums\CommunicationExecutionMode;
 use App\Enums\TenantPermission;
+use App\Exceptions\CommunicationOperationException;
+use App\Exceptions\CommunicationUnavailableException;
 use App\Models\Client;
 use App\Models\ClientCommunicationDispatch;
 use App\Models\ClientCommunicationPreference;
@@ -500,7 +502,9 @@ final class PgdasdCommunicationService
                     $periodKey ?? $this->defaultPeriodKey($tenant),
                     (int) $actor->id,
                 );
-            } catch (\DomainException $error) {
+            } catch (CommunicationOperationException|CommunicationUnavailableException $error) {
+                // Compatibilidade do endpoint PGDAS-D: mantém o status/envelope legado
+                // sem capturar toda exception tipada da API.
                 throw new HttpException(422, $error->getMessage());
             }
 

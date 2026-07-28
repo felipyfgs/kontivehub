@@ -11,8 +11,10 @@ import type {
   FiscalCategory,
   FiscalFinding,
   FiscalMonitoringRun,
+  FiscalMutationExecutionRequest,
   FiscalMutationOperation,
   FiscalMutationPreflight,
+  FiscalMutationRequest,
   FiscalPendingItem,
   FiscalSnapshot,
   PageMeta
@@ -930,12 +932,12 @@ export function createFiscalApi(client: ApiClient, apiUrl: ApiUrl) {
         }
       },
       mutations: {
-        preflight: (body: Record<string, unknown>) =>
+        preflight: (body: FiscalMutationRequest) =>
           client<{ data: FiscalMutationPreflight }>('/api/v1/fiscal/mutations/preflight', {
             method: 'POST',
             body
           }),
-        execute: (body: Record<string, unknown>) =>
+        execute: (body: FiscalMutationExecutionRequest) =>
           client<{ data: FiscalMutationOperation }>('/api/v1/fiscal/mutations', {
             method: 'POST',
             body

@@ -5,15 +5,16 @@ namespace App\Services\Communication\Outbox;
 use App\DTO\Communication\CommunicationPayloadDigest;
 use App\DTO\Communication\GatewayCommandData;
 use App\DTO\Communication\GatewayContractPayload;
+use App\Enums\Communication\CommunicationOperationFailure;
 use App\Enums\Communication\GatewayCommandType;
 use App\Enums\Communication\OutboxStatus;
+use App\Exceptions\CommunicationOperationException;
 use App\Jobs\Communication\DispatchCommunicationOutboxJob;
 use App\Models\CommunicationInbox;
 use App\Models\CommunicationMessage;
 use App\Models\CommunicationOutboxEntry;
 use App\Services\Communication\CommunicationAvailability;
 use App\Services\Communication\Gateway\CommunicationGatewayOperationPolicy;
-use DomainException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -92,7 +93,7 @@ final readonly class CommunicationOutboxService
         ?CommunicationMessage $message,
     ): void {
         if (! $inbox->exists || trim((string) $inbox->session_id) === '') {
-            throw new DomainException('INBOX_SESSION_INVALID');
+            throw new CommunicationOperationException(CommunicationOperationFailure::InboxSessionInvalid);
         }
 
         if ($message !== null && (
@@ -100,7 +101,7 @@ final readonly class CommunicationOutboxService
             || (int) $message->tenant_id !== (int) $inbox->tenant_id
             || (int) $message->inbox_id !== (int) $inbox->id
         )) {
-            throw new DomainException('OUTBOX_TENANT_SCOPE_INVALID');
+            throw new CommunicationOperationException(CommunicationOperationFailure::OutboxTenantScopeInvalid);
         }
     }
 }

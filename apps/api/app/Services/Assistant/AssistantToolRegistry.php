@@ -2,13 +2,13 @@
 
 namespace App\Services\Assistant;
 
+use App\Exceptions\AssistantToolNotAllowedException;
 use App\Models\User;
 use App\Models\WorkDepartment;
 use App\Models\WorkProcessTemplate;
 use App\Services\Work\WorkMonitoringContextRegistry;
 use App\Services\Work\WorkProcessTemplateWriter;
 use App\Support\CurrentTenant;
-use DomainException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Gate;
 
@@ -120,7 +120,7 @@ final class AssistantToolRegistry
         ?string $toolCallId = null,
     ): array {
         if (! $this->isAllowlisted($name)) {
-            throw new DomainException('ASSISTANT_TOOL_UNKNOWN');
+            throw new AssistantToolNotAllowedException;
         }
 
         $tenantId = $this->currentTenant->id();
@@ -149,7 +149,7 @@ final class AssistantToolRegistry
                 $conversationId,
                 $toolCallId,
             ),
-            default => throw new DomainException('ASSISTANT_TOOL_UNKNOWN'),
+            default => throw new AssistantToolNotAllowedException,
         };
     }
 

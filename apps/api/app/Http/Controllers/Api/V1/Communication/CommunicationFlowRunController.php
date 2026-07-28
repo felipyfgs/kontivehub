@@ -9,7 +9,6 @@ use App\Models\User;
 use App\Services\Communication\Authorization\CommunicationAccess;
 use App\Services\Communication\Flows\CommunicationFlowRunControlService;
 use App\Support\CurrentTenant;
-use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -114,11 +113,7 @@ final class CommunicationFlowRunController extends Controller
         $this->access->assertManageFlows($actor);
         $model = CommunicationFlowRun::query()->findOrFail($run);
 
-        try {
-            $updated = $action($model);
-        } catch (DomainException $exception) {
-            return $this->domainError($exception);
-        }
+        $updated = $action($model);
 
         return response()->json(['data' => $this->serialize($updated)]);
     }
@@ -140,27 +135,6 @@ final class CommunicationFlowRunController extends Controller
             'finished_at' => $run->finished_at?->toIso8601String(),
             'waiting_until' => $run->waiting_until?->toIso8601String(),
         ];
-    }
-
-    private function domainError(DomainException $exception): JsonResponse
-    {
-        $code = $exception->getMessage();
-        $status = match ($code) {
-            'COMMUNICATION_FLOWS_DISABLED',
-            'COMMUNICATION_FLOWS_RUNTIME_DISABLED' => 403,
-            'FLOW_RUN_TERMINAL',
-            'FLOW_RUN_NOT_PAUSED',
-            'FLOW_RUN_NOT_ELIGIBLE',
-            'FLOW_RUN_RESTART_NO_BINDING',
-            'FLOW_RUN_RESTART_FLOW_PAUSED',
-            'FLOW_RUN_RESTART_INVALID' => 422,
-            default => 422,
-        };
-
-        return response()->json([
-            'message' => 'Operação de run de fluxo rejeitada.',
-            'code' => $code,
-        ], $status);
     }
 
     private function actor(Request $request): User

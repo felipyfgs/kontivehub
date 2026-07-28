@@ -2,6 +2,7 @@
 
 namespace Tests\Unit\Assistant;
 
+use App\Exceptions\AssistantUnavailableException;
 use App\Services\Assistant\AssistantAvailability;
 use Tests\TestCase;
 
@@ -29,7 +30,7 @@ class AssistantAvailabilityTest extends TestCase
         $availability = app(AssistantAvailability::class);
 
         $this->assertFalse($availability->isEnabled());
-        $this->expectException(\DomainException::class);
+        $this->expectException(AssistantUnavailableException::class);
         $this->expectExceptionMessage('ASSISTANT_DISABLED');
         $availability->assertEnabled();
     }

@@ -563,7 +563,6 @@ export interface DeclarationOperationMutation {
   competence_period_key?: string | null
   effect_summary?: string | null
   confirmation_phrase?: string | null
-  preflight_token?: string | null
   preflight_expires_at?: string | null
   result_code?: string | null
   result_message?: string | null

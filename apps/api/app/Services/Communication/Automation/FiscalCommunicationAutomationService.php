@@ -2,6 +2,7 @@
 
 namespace App\Services\Communication\Automation;
 
+use App\Enums\Communication\CommunicationOperationFailure;
 use App\Enums\Communication\ConversationStatus;
 use App\Enums\Communication\GatewayCommandType;
 use App\Enums\Communication\MessageDirection;
@@ -12,6 +13,7 @@ use App\Enums\Communication\RecipientMode;
 use App\Enums\CommunicationChannel;
 use App\Enums\CommunicationDispatchStatus;
 use App\Enums\CommunicationExecutionMode;
+use App\Exceptions\CommunicationOperationException;
 use App\Models\Client;
 use App\Models\ClientCommunicationDispatch;
 use App\Models\ClientCommunicationPreference;
@@ -28,7 +30,6 @@ use App\Services\Communication\Events\CommunicationEventRecorder;
 use App\Services\Communication\Media\CommunicationMediaStore;
 use App\Services\Communication\Outbox\CommunicationOutboxService;
 use Carbon\CarbonImmutable;
-use DomainException;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -156,11 +157,11 @@ final readonly class FiscalCommunicationAutomationService
         ?int $actorUserId = null,
     ): Collection {
         if (! $this->globallyAvailable($tenant) || ! preg_match('/^\d{4}-\d{2}$/', $periodKey)) {
-            throw new DomainException('COMMUNICATION_DISABLED_OR_PERIOD_INVALID');
+            throw new CommunicationOperationException(CommunicationOperationFailure::DisabledOrPeriodInvalid);
         }
         $preference = $this->preference($tenant, $client, $moduleKey, $submoduleKey);
         if ($preference === null || ! $preference->whatsapp_enabled) {
-            throw new DomainException('WHATSAPP_PREFERENCE_DISABLED');
+            throw new CommunicationOperationException(CommunicationOperationFailure::WhatsappPreferenceDisabled);
         }
         $policy = CommunicationAutomationPolicy::query()->withoutGlobalScopes()
             ->with(['inbox' => fn ($query) => $query->withoutGlobalScopes()])
@@ -174,12 +175,12 @@ final readonly class FiscalCommunicationAutomationService
                 ->where('tenant_id', $tenant->id)->where('is_default', true)->first();
         }
         if (! $inbox instanceof CommunicationInbox) {
-            throw new DomainException('DEFAULT_INBOX_MISSING');
+            throw new CommunicationOperationException(CommunicationOperationFailure::DefaultInboxMissing);
         }
         $this->availability->assertEnabled($inbox, true);
         $identities = $this->recipients->resolve($preference, RecipientMode::Primary);
         if ($identities->isEmpty()) {
-            throw new DomainException('ELIGIBLE_RECIPIENT_MISSING');
+            throw new CommunicationOperationException(CommunicationOperationFailure::EligibleRecipientMissing);
         }
 
         $created = collect();

@@ -2,7 +2,7 @@
 
 namespace App\Services\Assistant;
 
-use DomainException;
+use App\Exceptions\AssistantUnavailableException;
 
 final class AssistantAvailability
 {
@@ -20,7 +20,7 @@ final class AssistantAvailability
     public function assertEnabled(): void
     {
         if (! $this->isEnabled()) {
-            throw new DomainException('ASSISTANT_DISABLED');
+            throw new AssistantUnavailableException;
         }
     }
 }

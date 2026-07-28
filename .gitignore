@@ -29,6 +29,8 @@ apps/api/auth.json
 **/secrets/
 **/.secrets/
 **/*credentials*
+!apps/api/database/migrations/*_create_tenant_credentials_table.php
+!apps/api/database/migrations/*_create_client_credentials_table.php
 **/*secret*.env
 **/*secrets*.json
 !**/*.example

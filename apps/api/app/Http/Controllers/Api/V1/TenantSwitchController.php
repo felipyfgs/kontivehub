@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Actions\Platform\SwitchTenantAction;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Tenant\SwitchTenantRequest;
 use App\Models\User;
 use App\Services\Platform\TenantSwitchService;
 use App\Support\CurrentTenant;
@@ -17,6 +19,7 @@ class TenantSwitchController extends Controller
 {
     public function __construct(
         private readonly TenantSwitchService $switcher,
+        private readonly SwitchTenantAction $switchTenant,
         private readonly CurrentTenant $currentTenant,
     ) {}
 
@@ -33,16 +36,13 @@ class TenantSwitchController extends Controller
         ]);
     }
 
-    public function switch(Request $request): JsonResponse
+    public function switch(SwitchTenantRequest $request): JsonResponse
     {
-        /** @var User $user */
-        $user = $request->user();
-
-        $validated = $request->validate([
-            'tenant_id' => ['required', 'integer', 'min:1'],
-        ]);
-
-        $tenant = $this->switcher->switchTo($user, (int) $validated['tenant_id'], $request);
+        $tenant = ($this->switchTenant)(
+            $request->actor(),
+            $request->toDto(),
+            $request,
+        );
         $role = $this->currentTenant->role();
 
         return response()->json([

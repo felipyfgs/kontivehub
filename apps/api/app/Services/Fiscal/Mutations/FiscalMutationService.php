@@ -92,7 +92,7 @@ final class FiscalMutationService
 
             return new MutationPreflightResult(
                 eligible: $replayEligible,
-                payload: $this->preflightPayloadFromOperation($existing, replayed: true),
+                payload: $this->preflightPayload($existing, replayed: true),
                 operation: $existing,
             );
         }
@@ -202,7 +202,7 @@ final class FiscalMutationService
 
         return new MutationPreflightResult(
             eligible: $policy->allowed,
-            payload: $this->preflightPayloadFromOperation($operation->refresh(), replayed: false, policy: $policy),
+            payload: $this->preflightPayload($operation->refresh(), replayed: false, policy: $policy),
             operation: $operation,
         );
     }
@@ -221,9 +221,9 @@ final class FiscalMutationService
         string $operationCode,
         string $confirmationPhrase,
         bool $confirmed,
+        string $preflightToken,
         ?string $competencePeriodKey = null,
         ?string $idempotencyKey = null,
-        ?string $preflightToken = null,
         ?string $environment = null,
         array $requestPayload = [],
         ?string $module = null,
@@ -232,62 +232,46 @@ final class FiscalMutationService
         $idempotencyKey = $this->normalizeIdempotencyKey($idempotencyKey);
         $operationKey = $this->normalizeOperationKey($operationKey);
 
-        // Double-click / idempotência: retorna operação existente se já enviada/terminal
+        // A execução sempre consome a capability emitida pelo preflight.
         $existing = FiscalMutationOperation::query()
             ->withoutGlobalScopes()
             ->where('tenant_id', $tenant->id)
             ->where('idempotency_key', $idempotencyKey)
             ->first();
 
-        if ($existing !== null) {
-            $this->assertIdempotentRequestMatches(
-                $existing,
-                $client,
-                strtoupper($solutionCode),
-                strtoupper($serviceCode),
-                strtoupper($operationCode),
-                $requestPayload,
-                $operationKey,
-            );
-            if ($existing->status->blocksBlindRetry() && $existing->status !== FiscalMutationStatus::Pending) {
-                // Replay seguro — não reenvia
-                $this->audit->record('fiscal.mutation.execute_replay', 'SUCCESS', $existing, [
-                    'status' => $existing->status->value,
-                ], $user->id, $tenant->id);
-
-                return $existing;
-            }
-
-            if ($existing->status->isUncertain()) {
-                throw new FiscalMutationException(FiscalMutationDenialCode::RetryBlocked, $existing);
-            }
-
-            $operation = $existing;
-        } else {
-            // Sem preflight prévio: cria via preflight embutido
-            $pf = $this->preflight(
-                tenant: $tenant,
-                client: $client,
-                user: $user,
-                solutionCode: $solutionCode,
-                serviceCode: $serviceCode,
-                operationCode: $operationCode,
-                competencePeriodKey: $competencePeriodKey,
-                idempotencyKey: $idempotencyKey,
-                environment: $environment,
-                requestPayload: $requestPayload,
-                module: $module,
-                operationKey: $operationKey,
-            );
-            $operation = $pf->operation;
-            if ($operation === null) {
-                throw new FiscalMutationException(FiscalMutationDenialCode::NotFound);
-            }
+        if ($existing === null) {
+            throw new FiscalMutationException(FiscalMutationDenialCode::NotFound);
         }
 
-        if ($preflightToken !== null && $operation->preflight_token !== $preflightToken) {
-            throw new FiscalMutationException(FiscalMutationDenialCode::NotFound, $operation);
+        $storedToken = (string) $existing->preflight_token;
+        if ($storedToken === '' || ! hash_equals($storedToken, $preflightToken)) {
+            throw new FiscalMutationException(FiscalMutationDenialCode::NotFound);
         }
+
+        $this->assertIdempotentRequestMatches(
+            $existing,
+            $client,
+            strtoupper($solutionCode),
+            strtoupper($serviceCode),
+            strtoupper($operationCode),
+            $requestPayload,
+            $operationKey,
+        );
+
+        if ($existing->status->blocksBlindRetry() && $existing->status !== FiscalMutationStatus::Pending) {
+            // Replay seguro — não reenvia, mas só após comprovar a capability.
+            $this->audit->record('fiscal.mutation.execute_replay', 'SUCCESS', $existing, [
+                'status' => $existing->status->value,
+            ], $user->id, $tenant->id);
+
+            return $existing;
+        }
+
+        if ($existing->status->isUncertain()) {
+            throw new FiscalMutationException(FiscalMutationDenialCode::RetryBlocked, $existing);
+        }
+
+        $operation = $existing;
 
         if (! $operation->isPreflightValid()) {
             throw new FiscalMutationException(FiscalMutationDenialCode::PreflightExpired, $operation);
@@ -487,6 +471,62 @@ final class FiscalMutationService
             ->first();
     }
 
+    /**
+     * Envelope exclusivo da resposta autorizada de preflight.
+     *
+     * @return array<string, mixed>
+     */
+    private function preflightPayload(
+        FiscalMutationOperation $operation,
+        bool $replayed,
+        ?MutationPolicyResult $policy = null,
+    ): array {
+        $eligible = ($policy?->allowed
+            ?? ($operation->denial_code === null && $operation->status === FiscalMutationStatus::Pending))
+            && $operation->isPreflightValid()
+            && trim((string) $operation->preflight_token) !== '';
+
+        $payload = [
+            'eligible' => $eligible,
+            'replayed' => $replayed,
+            'confirmation_required' => $operation->confirmation_required,
+            'confirmation_phrase' => $operation->confirmation_phrase,
+            'effect' => $operation->effect_summary,
+            'contribuinte' => [
+                'client_id' => $operation->client_id,
+                // sem CNPJ completo
+            ],
+            'competence' => $operation->competence_period_key,
+            'operation' => [
+                'solution_code' => $operation->solution_code,
+                'service_code' => $operation->service_code,
+                'operation_code' => $operation->operation_code,
+                'module_key' => $operation->module_key,
+                'environment' => $operation->environment?->value,
+            ],
+            'eligibility' => $operation->eligibility_snapshot,
+            'cost_estimate' => $operation->cost_estimate,
+            'estimated_cost_micros' => $operation->estimated_cost_micros,
+            'pre_operation_snapshot' => $operation->pre_operation_snapshot,
+            'preflight_expires_at' => $operation->preflight_expires_at?->toIso8601String(),
+            'idempotency_key' => $operation->idempotency_key,
+            'correlation_id' => $operation->correlation_id,
+            'mutation_operation_id' => $operation->id,
+            'status' => $operation->status->value,
+            'denial_code' => $operation->denial_code,
+            'denial_message' => $operation->denial_message,
+            'codes' => $policy
+                ? array_map(fn ($code) => $code->value, $policy->codes)
+                : ($operation->denial_code ? [$operation->denial_code] : []),
+        ];
+
+        if ($eligible) {
+            $payload['preflight_token'] = $operation->preflight_token;
+        }
+
+        return $payload;
+    }
+
     private function dispatchTransport(FiscalMutationOperation $operation, User $user): FiscalMutationOperation
     {
         // Claim atômico PENDING → SENT: só o vencedor executa o transporte.
@@ -620,53 +660,6 @@ final class FiscalMutationService
             actorUserId: $user->id,
             result: 'REJECTED',
         );
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function preflightPayloadFromOperation(
-        FiscalMutationOperation $op,
-        bool $replayed,
-        ?MutationPolicyResult $policy = null,
-    ): array {
-        $eligible = $policy?->allowed
-            ?? ($op->denial_code === null && $op->status === FiscalMutationStatus::Pending);
-
-        return [
-            'eligible' => $eligible && $op->isPreflightValid(),
-            'replayed' => $replayed,
-            'confirmation_required' => $op->confirmation_required,
-            'confirmation_phrase' => $op->confirmation_phrase,
-            'effect' => $op->effect_summary,
-            'contribuinte' => [
-                'client_id' => $op->client_id,
-                // sem CNPJ completo
-            ],
-            'competence' => $op->competence_period_key,
-            'operation' => [
-                'solution_code' => $op->solution_code,
-                'service_code' => $op->service_code,
-                'operation_code' => $op->operation_code,
-                'module_key' => $op->module_key,
-                'environment' => $op->environment?->value,
-            ],
-            'eligibility' => $op->eligibility_snapshot,
-            'cost_estimate' => $op->cost_estimate,
-            'estimated_cost_micros' => $op->estimated_cost_micros,
-            'pre_operation_snapshot' => $op->pre_operation_snapshot,
-            'preflight_token' => $op->preflight_token,
-            'preflight_expires_at' => $op->preflight_expires_at?->toIso8601String(),
-            'idempotency_key' => $op->idempotency_key,
-            'correlation_id' => $op->correlation_id,
-            'mutation_operation_id' => $op->id,
-            'status' => $op->status->value,
-            'denial_code' => $op->denial_code,
-            'denial_message' => $op->denial_message,
-            'codes' => $policy
-                ? array_map(fn ($c) => $c->value, $policy->codes)
-                : ($op->denial_code ? [$op->denial_code] : []),
-        ];
     }
 
     /**

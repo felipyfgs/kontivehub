@@ -114,7 +114,7 @@ final class SerproInitialMailboxSyncDispatcher
                 serviceCode: 'CAIXA_POSTAL',
                 operationCode: 'LISTAR',
                 actorId: $actorUserId,
-                correlationId: 'serpro-prod-onboarding-'.$idempotencyKey,
+                correlationId: $this->correlationId($correlationId, $idempotencyKey),
                 dispatch: true,
             );
 
@@ -127,6 +127,22 @@ final class SerproInitialMailboxSyncDispatcher
         } catch (RuntimeException $e) {
             return $this->blocked('MAILBOX_DISPATCH_FAILED', $this->sanitize($e->getMessage()));
         }
+    }
+
+    private function correlationId(?string $provided, string $idempotencyKey): string
+    {
+        $provided = trim((string) $provided);
+        if ($provided !== '') {
+            return strlen($provided) <= 64
+                ? $provided
+                : 'external-'.substr(hash('sha256', $provided), 0, 55);
+        }
+
+        $fallback = 'serpro-prod-onboarding-'.$idempotencyKey;
+
+        return strlen($fallback) <= 64
+            ? $fallback
+            : 'serpro-prod-onboarding-'.substr(hash('sha256', $idempotencyKey), 0, 40);
     }
 
     /**

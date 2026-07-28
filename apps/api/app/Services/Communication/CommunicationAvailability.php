@@ -2,16 +2,17 @@
 
 namespace App\Services\Communication;
 
+use App\Enums\Communication\CommunicationAvailabilityFailure;
 use App\Enums\Communication\InboxStatus;
+use App\Exceptions\CommunicationUnavailableException;
 use App\Models\CommunicationInbox;
-use DomainException;
 
 final class CommunicationAvailability
 {
     public function assertGatewayAvailable(): void
     {
         if (! config('communication.enabled') || ! config('communication.gateway.enabled')) {
-            throw new DomainException('COMMUNICATION_DISABLED');
+            throw new CommunicationUnavailableException(CommunicationAvailabilityFailure::GatewayDisabled);
         }
     }
 
@@ -21,13 +22,13 @@ final class CommunicationAvailability
 
         $inbox->loadMissing('tenant');
         if (! $inbox->tenant?->communication_enabled) {
-            throw new DomainException('TENANT_COMMUNICATION_DISABLED');
+            throw new CommunicationUnavailableException(CommunicationAvailabilityFailure::TenantDisabled);
         }
         if (! $inbox->is_enabled) {
-            throw new DomainException('INBOX_COMMUNICATION_DISABLED');
+            throw new CommunicationUnavailableException(CommunicationAvailabilityFailure::InboxDisabled);
         }
         if ($requiresConnected && $inbox->status !== InboxStatus::Connected) {
-            throw new DomainException('INBOX_NOT_CONNECTED');
+            throw new CommunicationUnavailableException(CommunicationAvailabilityFailure::InboxNotConnected);
         }
     }
 }

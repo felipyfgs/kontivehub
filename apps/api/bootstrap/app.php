@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\ApiDomainException;
 use App\Http\Middleware\EnsurePlatformAdmin;
 use App\Http\Middleware\EnsureRecentPasswordConfirmation;
 use App\Http\Middleware\EnsureTenantContext;
@@ -9,6 +10,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withBroadcasting(
@@ -22,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->statefulApi();
+        $middleware->preventRequestForgery();
 
         // SPA: não há rota nomeada `login` no Laravel; API não autenticada deve responder 401.
         $middleware->redirectGuestsTo(fn (Request $request) => null);
@@ -35,44 +38,34 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        $exceptions->dontReportWhen(fn (Throwable $error): bool => $error instanceof DomainException
-            && in_array($error->getMessage(), [
-                'COMMUNICATION_DISABLED',
-                'TENANT_COMMUNICATION_DISABLED',
-                'INBOX_COMMUNICATION_DISABLED',
-                'INBOX_NOT_CONNECTED',
-                'ASSISTANT_DISABLED',
-                'ASSISTANT_TOOL_UNKNOWN',
-            ], true));
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
-        $exceptions->render(function (DomainException $error, Request $request) {
-            $communicationCodes = [
-                'COMMUNICATION_DISABLED',
-                'TENANT_COMMUNICATION_DISABLED',
-                'INBOX_COMMUNICATION_DISABLED',
-                'INBOX_NOT_CONNECTED',
-            ];
-            if ($request->is('api/*') && $error->getMessage() === 'ASSISTANT_DISABLED') {
-                return response()->json([
-                    'message' => 'Assistente indisponível.',
-                    'code' => 'ASSISTANT_DISABLED',
-                ], 503);
-            }
-            if ($request->is('api/*') && $error->getMessage() === 'ASSISTANT_TOOL_UNKNOWN') {
-                return response()->json([
-                    'message' => 'Tool do assistente não permitida.',
-                    'code' => 'ASSISTANT_TOOL_UNKNOWN',
-                ], 422);
-            }
-            if (! $request->is('api/*') || ! in_array($error->getMessage(), $communicationCodes, true)) {
+        $exceptions->render(function (ValidationException $error, Request $request) {
+            $invalidCredentials = trans('auth.failed');
+            $username = (string) config('fortify.username', 'email');
+            if (
+                ! $request->is('login')
+                || ! $request->expectsJson()
+                || ! in_array($invalidCredentials, $error->errors()[$username] ?? [], true)
+            ) {
                 return null;
             }
 
             return response()->json([
-                'message' => 'Canal de comunicação indisponível.',
-                'code' => $error->getMessage(),
-            ], $error->getMessage() === 'INBOX_NOT_CONNECTED' ? 409 : 503);
+                'message' => $invalidCredentials,
+                'code' => 'INVALID_CREDENTIALS',
+                'errors' => $error->errors(),
+            ], $error->status);
+        });
+        $exceptions->render(function (ApiDomainException $error, Request $request) {
+            if (! $request->is('api/*') && ! $request->expectsJson()) {
+                return null;
+            }
+
+            return response()->json(array_merge($error->responseData(), [
+                'message' => $error->safeMessage(),
+                'code' => $error->stableCode(),
+            ]), $error->httpStatus());
         });
     })->create();

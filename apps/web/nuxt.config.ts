@@ -1,3 +1,5 @@
+import { sanctumClientConfig } from './config/sanctum'
+
 // https://nuxt.com/docs/api/configuration/nuxt-config
 const useSanctumProxy = process.env.NUXT_SANCTUM_PROXY === 'true'
 const apiBase = useSanctumProxy ? '/api/sanctum' : (process.env.NUXT_PUBLIC_API_BASE || '')
@@ -204,6 +206,9 @@ export default defineNuxtConfig({
   sanctum: {
     baseUrl: apiBase,
     mode: 'cookie',
+    // O middleware global já decide quando consultar /me. A consulta automática
+    // do módulo roda antes da rota e gera um 401 esperado nas páginas públicas.
+    client: sanctumClientConfig,
     endpoints: {
       csrf: '/sanctum/csrf-cookie',
       login: '/login',

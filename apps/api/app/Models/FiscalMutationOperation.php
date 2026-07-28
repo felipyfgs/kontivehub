@@ -148,7 +148,6 @@ class FiscalMutationOperation extends Model
             'confirmed_by_user' => $this->confirmed_by_user,
             'idempotency_key' => $this->idempotency_key,
             'correlation_id' => $this->correlation_id,
-            'preflight_token' => $this->preflight_token,
             'preflight_expires_at' => $this->preflight_expires_at?->toIso8601String(),
             'cost_estimate' => $this->cost_estimate,
             'estimated_cost_micros' => $this->estimated_cost_micros,

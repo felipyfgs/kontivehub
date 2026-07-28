@@ -4,6 +4,7 @@ namespace Tests\Unit\Assistant;
 
 use App\Enums\TenantPermission;
 use App\Enums\TenantRole;
+use App\Exceptions\AssistantToolNotAllowedException;
 use App\Models\Tenant;
 use App\Models\TenantMembership;
 use App\Models\TenantPermissionProfile;
@@ -14,7 +15,6 @@ use App\Services\Assistant\AssistantPendingApprovalStore;
 use App\Services\Assistant\AssistantToolRegistry;
 use App\Services\Authorization\TenantAuthorization;
 use App\Support\CurrentTenant;
-use DomainException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -36,7 +36,7 @@ class AssistantToolRegistryTest extends TestCase
 
         $this->bindAdminTenant();
 
-        $this->expectException(DomainException::class);
+        $this->expectException(AssistantToolNotAllowedException::class);
         $this->expectExceptionMessage('ASSISTANT_TOOL_UNKNOWN');
         $registry->execute('serpro_consult', []);
     }

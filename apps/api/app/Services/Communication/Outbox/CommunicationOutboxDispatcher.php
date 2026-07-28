@@ -8,6 +8,7 @@ use App\DTO\Communication\GatewayContractPayload;
 use App\Enums\Communication\GatewayCommandType;
 use App\Enums\Communication\MessageStatus;
 use App\Enums\Communication\OutboxStatus;
+use App\Exceptions\ApiDomainException;
 use App\Exceptions\CommunicationTransportException;
 use App\Models\CommunicationMessage;
 use App\Models\CommunicationOutboxEntry;
@@ -15,7 +16,6 @@ use App\Services\Communication\Automation\FiscalDispatchStatusProjector;
 use App\Services\Communication\CommunicationAvailability;
 use App\Services\Communication\Flows\CommunicationFlowExecutor;
 use App\Services\Communication\Gateway\CommunicationGatewayOperationPolicy;
-use DomainException;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use Throwable;
@@ -55,8 +55,8 @@ final readonly class CommunicationOutboxDispatcher
             $this->markAccepted($entryId);
         } catch (CommunicationTransportException $error) {
             $this->markFailure($entryId, $error->errorCode, $error->retryable);
-        } catch (DomainException $error) {
-            $this->markFailure($entryId, $error->getMessage(), false);
+        } catch (ApiDomainException $error) {
+            $this->markFailure($entryId, $error->stableCode(), false);
         } catch (InvalidArgumentException) {
             $this->markFailure($entryId, 'GATEWAY_COMMAND_INVALID', false);
         } catch (Throwable) {

@@ -8,6 +8,7 @@ use App\Enums\Communication\MessageDirection;
 use App\Enums\Communication\MessageKind;
 use App\Enums\Communication\MessageSource;
 use App\Enums\Communication\MessageStatus;
+use App\Exceptions\UnsupportedMessageKindException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Communication\SendMessageRequest;
 use App\Http\Requests\Communication\UpdateConversationRequest;
@@ -525,7 +526,7 @@ final class CommunicationConversationController extends Controller
             MessageKind::Poll => 'pollCreationMessageV3',
             MessageKind::Interactive => 'interactiveMessage',
             MessageKind::Note => 'internalNote',
-            MessageKind::Unsupported => throw new \DomainException('MESSAGE_KIND_UNSUPPORTED'),
+            MessageKind::Unsupported => throw new UnsupportedMessageKindException,
         };
     }
 

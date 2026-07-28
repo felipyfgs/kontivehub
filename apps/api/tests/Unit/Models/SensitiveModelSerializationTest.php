@@ -101,7 +101,7 @@ final class SensitiveModelSerializationTest extends TestCase
             'request_payload_digest',
         ]);
         self::assertSame('11222333000181', $operation->request_payload_encrypted['cnpj']);
-        self::assertSame('preflight-capability-secret', $operation->toPublicArray()['preflight_token']);
+        self::assertArrayNotHasKey('preflight_token', $operation->toPublicArray());
     }
 
     public function test_serpro_attempt_hides_raw_response_envelopes(): void

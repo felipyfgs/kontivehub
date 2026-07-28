@@ -75,6 +75,14 @@ class FiscalMutationController extends Controller
         $user = $this->assertPermission($request, TenantPermission::FiscalMutationsExecute);
         $tenant = $this->currentTenant->tenant();
 
+        $headerIdempotency = $request->header('Idempotency-Key');
+        if (! $request->filled('idempotency_key')
+            && is_string($headerIdempotency)
+            && trim($headerIdempotency) !== ''
+        ) {
+            $request->merge(['idempotency_key' => $headerIdempotency]);
+        }
+
         $data = $request->validate([
             'client_id' => ['required', 'integer'],
             'solution_code' => ['required', 'string', 'max:80'],
@@ -82,8 +90,8 @@ class FiscalMutationController extends Controller
             'operation_code' => ['required', 'string', 'max:120'],
             'operation_key' => ['required', 'string', 'max:160', 'regex:/^[a-z0-9_]+(?:\.[a-z0-9_]+)+$/'],
             'competence_period_key' => ['nullable', 'string', 'max:20'],
-            'idempotency_key' => ['nullable', 'string', 'max:160'],
-            'preflight_token' => ['nullable', 'string', 'max:64'],
+            'idempotency_key' => ['required', 'string', 'max:160'],
+            'preflight_token' => ['required', 'string', 'max:64'],
             'environment' => ['nullable', 'string', 'max:20'],
             'module' => ['nullable', 'string', 'max:40'],
             'payload' => ['nullable', 'array'],
@@ -95,9 +103,6 @@ class FiscalMutationController extends Controller
         if ($client === null) {
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
-
-        $idempotency = $data['idempotency_key']
-            ?? $request->header('Idempotency-Key');
 
         try {
             $operation = $this->mutations->execute(
@@ -111,8 +116,8 @@ class FiscalMutationController extends Controller
                 confirmationPhrase: $data['confirmation_phrase'],
                 confirmed: (bool) $data['confirmed'],
                 competencePeriodKey: $data['competence_period_key'] ?? null,
-                idempotencyKey: is_string($idempotency) ? $idempotency : null,
-                preflightToken: $data['preflight_token'] ?? null,
+                idempotencyKey: $data['idempotency_key'],
+                preflightToken: $data['preflight_token'],
                 environment: $data['environment'] ?? null,
                 requestPayload: $data['payload'] ?? [],
                 module: $data['module'] ?? null,

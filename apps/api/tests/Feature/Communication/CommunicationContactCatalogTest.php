@@ -127,6 +127,34 @@ final class CommunicationContactCatalogTest extends TestCase
             ->assertJsonMissing(['id' => $linked->id]);
     }
 
+    public function test_contact_pagination_preserves_its_compact_v1_contract(): void
+    {
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $first = $this->contact($tenant, 'Alpha', provisional: false, active: true);
+        $this->contact($tenant, 'Beta', provisional: false, active: true);
+
+        $this->authenticate($admin);
+
+        $this->getJson('/api/v1/communication/contacts?sort=name&per_page=1&page=1')
+            ->assertOk()
+            ->assertExactJson([
+                'data' => [[
+                    'id' => $first->id,
+                    'name' => 'Alpha',
+                    'is_provisional' => false,
+                    'is_active' => true,
+                    'identities' => [],
+                    'purged_at' => null,
+                ]],
+                'meta' => [
+                    'current_page' => 1,
+                    'last_page' => 2,
+                    'total' => 2,
+                ],
+            ]);
+    }
+
     public function test_mutations_require_manage_contacts_not_only_manage_inboxes(): void
     {
         $tenant = Tenant::factory()->create(['communication_enabled' => true]);

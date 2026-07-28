@@ -2,11 +2,10 @@
 
 namespace App\Http\Controllers\Api\V1\Auth;
 
+use App\Actions\Auth\ConfirmPasswordAction;
 use App\Http\Controllers\Controller;
-use App\Models\User;
-use App\Services\Auth\RecentPasswordConfirmationGate;
+use App\Http\Requests\Auth\ConfirmPasswordRequest;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 /**
  * Reconfirmação de senha (janela curta) para ações sensíveis privilegiadas.
@@ -14,33 +13,19 @@ use Illuminate\Http\Request;
 class ConfirmPasswordController extends Controller
 {
     public function __construct(
-        private readonly RecentPasswordConfirmationGate $gate,
+        private readonly ConfirmPasswordAction $confirmPassword,
     ) {}
 
-    public function __invoke(Request $request): JsonResponse
+    public function __invoke(ConfirmPasswordRequest $request): JsonResponse
     {
-        /** @var User $user */
-        $user = $request->user();
-
-        $data = $request->validate([
-            'password' => ['required', 'string'],
-        ]);
-
-        try {
-            $this->gate->confirmWithPassword($user, $data['password'], $request);
-        } catch (\RuntimeException $e) {
-            return response()->json([
-                'message' => $e->getMessage(),
-                'code' => 'PASSWORD_INVALID',
-            ], 422);
-        }
+        $result = ($this->confirmPassword)(
+            $request->actor(),
+            $request->toDto(),
+            $request,
+        );
 
         return response()->json([
-            'data' => [
-                'confirmed' => true,
-                'window_minutes' => $this->gate->windowMinutes(),
-                'seconds_remaining' => $this->gate->secondsRemaining($request, $user),
-            ],
+            'data' => $result->toArray(),
         ]);
     }
 }

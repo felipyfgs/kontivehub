@@ -2173,6 +2173,7 @@ export interface FgtsDigitalPreviewResponse {
 export interface FiscalMutationPreflight {
   eligible: boolean
   preflight_token?: string | null
+  idempotency_key?: string | null
   preflight_expires_at?: string | null
   confirmation_phrase?: string | null
   effect_summary?: string | null
@@ -2190,6 +2191,26 @@ export interface FiscalMutationPreflight {
   [key: string]: unknown
 }
 
+export interface FiscalMutationRequest {
+  client_id: number
+  operation_key: string
+  solution_code: string
+  service_code: string
+  operation_code: string
+  competence_period_key?: string | null
+  idempotency_key?: string | null
+  environment?: string | null
+  module?: string | null
+  payload?: Record<string, unknown>
+}
+
+export interface FiscalMutationExecutionRequest extends Omit<FiscalMutationRequest, 'idempotency_key'> {
+  idempotency_key: string
+  preflight_token: string
+  confirmation_phrase: string
+  confirmed: true
+}
+
 export interface FiscalMutationOperation {
   id: number
   tenant_id: number
@@ -2204,7 +2225,6 @@ export interface FiscalMutationOperation {
   competence_period_key?: string | null
   effect_summary?: string | null
   confirmation_phrase?: string | null
-  preflight_token?: string | null
   cost_estimate?: Record<string, unknown> | string | null
   estimated_cost_micros?: number | null
   result_code?: string | null

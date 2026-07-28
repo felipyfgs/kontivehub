@@ -143,6 +143,13 @@ final class CommunicationFlowApiTest extends TestCase
         $flowId = (int) $created['id'];
 
         $this->putJson('/api/v1/communication/flows/'.$flowId.'/draft', [
+            'lock_version' => 1,
+            'graph' => $this->validGraph(),
+            'unexpected' => true,
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('unexpected');
+
+        $this->putJson('/api/v1/communication/flows/'.$flowId.'/draft', [
             'lock_version' => 99,
             'graph' => $this->validGraph(),
         ])->assertStatus(409)->assertJsonPath('code', 'version_conflict');

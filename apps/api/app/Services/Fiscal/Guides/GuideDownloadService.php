@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use App\Services\Fiscal\Guides\Exceptions\GuideException;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
@@ -80,54 +81,66 @@ final class GuideDownloadService
     {
         $hash = hash('sha256', $plainToken);
 
-        $token = TaxGuideDownloadToken::query()
-            ->withoutGlobalScopes()
-            ->where('tenant_id', $tenantId)
-            ->where('token_hash', $hash)
-            ->first();
+        return DB::transaction(function () use ($hash, $tenantId, $user): array {
+            $claimedAt = CarbonImmutable::now();
+            $claimed = TaxGuideDownloadToken::query()
+                ->withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->where('token_hash', $hash)
+                ->whereNull('used_at')
+                ->where('expires_at', '>', $claimedAt)
+                ->update(['used_at' => $claimedAt]);
 
-        if ($token === null || ! $token->isUsable()) {
-            throw GuideException::notFound('Token de download inválido ou expirado.');
-        }
+            if ($claimed !== 1) {
+                throw GuideException::notFound('Token de download inválido ou expirado.');
+            }
 
-        $version = TaxGuideVersion::query()
-            ->withoutGlobalScopes()
-            ->where('tenant_id', $tenantId)
-            ->whereKey($token->tax_guide_version_id)
-            ->first();
+            $token = TaxGuideDownloadToken::query()
+                ->withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->where('token_hash', $hash)
+                ->first();
 
-        if ($version === null) {
-            throw GuideException::notFound();
-        }
+            if ($token === null) {
+                throw GuideException::notFound();
+            }
 
-        $bytes = $this->storage->readDocumentAuthorized($version, $tenantId);
+            $version = TaxGuideVersion::query()
+                ->withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->whereKey($token->tax_guide_version_id)
+                ->first();
 
-        $token->used_at = CarbonImmutable::now();
-        $token->save();
+            if ($version === null) {
+                throw GuideException::notFound();
+            }
 
-        $this->audit->record(
-            action: 'tax_guide.download.deliver',
-            result: 'SUCCESS',
-            subject: $version,
-            context: [
-                'tax_guide_id' => $version->tax_guide_id,
-                'version_id' => $version->id,
-                'byte_size' => $version->byte_size,
-                // pagamento NÃO alterado
-                'payment_unchanged' => true,
-            ],
-            userId: $user?->id ?? $token->user_id,
-            tenantId: $tenantId,
-        );
+            $bytes = $this->storage->readDocumentAuthorized($version, $tenantId);
 
-        $filename = 'guia-'.$version->tax_guide_id.'-v'.$version->version_number.'.pdf';
+            DB::afterCommit(fn () => $this->audit->record(
+                action: 'tax_guide.download.deliver',
+                result: 'SUCCESS',
+                subject: $version,
+                context: [
+                    'tax_guide_id' => $version->tax_guide_id,
+                    'version_id' => $version->id,
+                    'byte_size' => $version->byte_size,
+                    // pagamento NÃO alterado
+                    'payment_unchanged' => true,
+                ],
+                userId: $user?->id ?? $token->user_id,
+                tenantId: $tenantId,
+            ));
 
-        return [
-            'bytes' => $bytes,
-            'content_type' => $version->content_type ?? 'application/pdf',
-            'filename' => $filename,
-            'sha256' => $version->content_sha256 ?? hash('sha256', $bytes),
-            'version' => $version,
-        ];
+            $filename = 'guia-'.$version->tax_guide_id.'-v'.$version->version_number.'.pdf';
+
+            return [
+                'bytes' => $bytes,
+                'content_type' => $version->content_type ?? 'application/pdf',
+                'filename' => $filename,
+                'sha256' => $version->content_sha256 ?? hash('sha256', $bytes),
+                'version' => $version,
+            ];
+        }, 3);
     }
 }

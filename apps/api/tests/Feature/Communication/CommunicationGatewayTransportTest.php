@@ -13,6 +13,7 @@ use App\Enums\Communication\OutboxStatus;
 use App\Enums\Communication\SignatureVerificationResult;
 use App\Enums\TenantRole;
 use App\Exceptions\CommunicationTransportException;
+use App\Exceptions\CommunicationUnavailableException;
 use App\Models\CommunicationInbox;
 use App\Models\CommunicationInboxMember;
 use App\Models\Tenant;
@@ -26,7 +27,6 @@ use App\Services\Communication\Security\CommunicationHmacCanonicalizer;
 use App\Services\Communication\Security\CommunicationHmacVerifier;
 use App\Services\Communication\Transport\HttpCommunicationTransport;
 use App\Support\CurrentTenant;
-use DomainException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -344,7 +344,7 @@ final class CommunicationGatewayTransportTest extends TestCase
                 'receipt' => 'READ',
             ]);
             $this->fail('Kill switch global deveria impedir persistência do comando.');
-        } catch (DomainException $error) {
+        } catch (CommunicationUnavailableException $error) {
             $this->assertSame('COMMUNICATION_DISABLED', $error->getMessage());
             $this->assertDatabaseCount('communication_outbox_entries', 0);
         }

@@ -3,22 +3,13 @@
  * Confirmação reforçada de mutação fiscal (15.10):
  * senha recente → preflight → consequência → custo → frase de confirmação.
  */
-import type { FiscalMutationPreflight } from '~/types/api'
+import type { FiscalMutationPreflight, FiscalMutationRequest } from '~/types/api'
 
 const open = defineModel<boolean>('open', { default: false })
 
 const props = defineProps<{
   /** Payload base enviado a preflight/execute. */
-  request: {
-    client_id: number
-    operation_key: string
-    solution_code: string
-    service_code: string
-    operation_code: string
-    competence_period_key?: string | null
-    module?: string | null
-    payload?: Record<string, unknown>
-  } | null
+  request: FiscalMutationRequest | null
   /** Contexto legível para o operador. */
   context?: {
     clientLabel?: string
@@ -121,6 +112,13 @@ async function runPreflight() {
 
 async function submit() {
   if (!props.request || !preflight.value) return
+  const preflightToken = preflight.value.preflight_token
+  const idempotencyKey = preflight.value.idempotency_key
+  if (!preflightToken || !idempotencyKey) {
+    toast.add({ title: 'Preflight inválido ou expirado. Execute-o novamente.', color: 'warning' })
+    reset()
+    return
+  }
   if (!confirmed.value) {
     toast.add({ title: 'Marque a confirmação explícita da consequência.', color: 'warning' })
     return
@@ -135,7 +133,8 @@ async function submit() {
     const res = await api.fiscal.mutations.execute({
       ...props.request,
       payload: props.request.payload || {},
-      preflight_token: preflight.value.preflight_token,
+      idempotency_key: idempotencyKey,
+      preflight_token: preflightToken,
       confirmation_phrase: confirmationPhrase.value.trim(),
       confirmed: true
     })

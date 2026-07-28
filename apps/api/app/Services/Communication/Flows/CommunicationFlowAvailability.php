@@ -2,7 +2,8 @@
 
 namespace App\Services\Communication\Flows;
 
-use DomainException;
+use App\Enums\Communication\CommunicationFlowFailure;
+use App\Exceptions\CommunicationFlowException;
 
 final class CommunicationFlowAvailability
 {
@@ -19,14 +20,14 @@ final class CommunicationFlowAvailability
     public function assertEnabled(): void
     {
         if (! $this->enabled()) {
-            throw new DomainException('COMMUNICATION_FLOWS_DISABLED');
+            throw new CommunicationFlowException(CommunicationFlowFailure::Disabled);
         }
     }
 
     public function assertRuntimeEnabled(): void
     {
         if (! $this->runtimeEnabled()) {
-            throw new DomainException('COMMUNICATION_FLOWS_RUNTIME_DISABLED');
+            throw new CommunicationFlowException(CommunicationFlowFailure::RuntimeDisabled);
         }
     }
 }

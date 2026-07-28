@@ -430,6 +430,9 @@ return [
     'cte_emitter_push' => [
         'enabled' => filter_var(env('SEFAZ_CTE_EMITTER_PUSH_ENABLED', false), FILTER_VALIDATE_BOOL),
         'rate_limit_per_minute' => (int) env('SEFAZ_CTE_EMITTER_PUSH_RATE_LIMIT', 30),
+        'ip_rate_limit_per_minute' => (int) env('SEFAZ_CTE_EMITTER_PUSH_IP_RATE_LIMIT', 30),
+        /** Chave estável do HMAC do limiter; usa APP_KEY como fallback seguro. */
+        'rate_limit_digest_key' => env('SEFAZ_CTE_EMITTER_PUSH_RATE_LIMIT_KEY'),
         /** Issue/revoke de token de integração (ADMIN) — mais restrito que o push público. */
         'admin_token_rate_limit_per_minute' => (int) env('SEFAZ_CTE_EMITTER_PUSH_ADMIN_TOKEN_RATE_LIMIT', 10),
         'max_payload_bytes' => (int) env('SEFAZ_CTE_EMITTER_PUSH_MAX_BYTES', 5_242_880), // 5 MiB

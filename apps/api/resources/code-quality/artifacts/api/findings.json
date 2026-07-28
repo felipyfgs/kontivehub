@@ -21,9 +21,9 @@
             "expectedTests": [
                 "SerproInitialMailboxSyncDispatcherTest deve cobrir propagação e fallback de correlação"
             ],
-            "status": "open",
-            "change": null,
-            "resolution": null
+            "status": "resolved",
+            "change": "canonicalize-laravel-api",
+            "resolution": "SerproInitialMailboxSyncDispatcher agora propaga o correlationId recebido do onboarding e deriva serpro-prod-onboarding-{idempotencyKey} apenas quando o valor é ausente ou vazio. O teste cobre propagação e ambos os fallbacks."
         },
         {
             "id": "CQ-0015",
@@ -44,9 +44,9 @@
             "expectedTests": [
                 "Teste concorrente com duas conexões comprova uma única entrega e um único consumo persistido"
             ],
-            "status": "planned",
-            "change": "reforcar-fronteiras-capacidades-sensiveis",
-            "resolution": null
+            "status": "resolved",
+            "change": "canonicalize-laravel-api",
+            "resolution": "GuideDownloadService agora faz claim condicional por tenant, hash, expiração e used_at dentro de uma transação antes da leitura do cofre. O teste com dois processos e conexões PostgreSQL prova uma única entrega e uma única auditoria; um segundo cenário prova rollback do claim quando a leitura falha."
         },
         {
             "id": "CQ-0016",
@@ -72,11 +72,11 @@
             "impact": "Um segredo de capacidade destinado à confirmação de mutação podia ser recuperado por uma superfície de consulta.",
             "recommendation": "Omitir o token de serializers gerais e retorná-lo apenas no envelope específico de preflight ao ator autorizado.",
             "expectedTests": [
-                "Feature test prova ausência em show/store/reconcile e presença apenas na resposta específica de preflight"
+                "SensitiveModelSerializationTest e FiscalMutationCapabilityTest provam ausência na representação geral, presença somente no preflight e exigência no execute"
             ],
-            "status": "planned",
-            "change": "reforcar-fronteiras-capacidades-sensiveis",
-            "resolution": null
+            "status": "resolved",
+            "change": "canonicalize-laravel-api",
+            "resolution": "FiscalMutationOperation::toPublicArray não inclui mais a capability. FiscalMutationService monta o envelope autorizado do preflight, e os testes de contrato provam ausência na representação usada por execute/show/reconcile, presença no preflight e validação do token no execute."
         },
         {
             "id": "CQ-0017",
@@ -104,9 +104,9 @@
             "expectedTests": [
                 "LogSanitizerTest cobre token/secret/password/authorization/cookie/jwt, CNPJ legado/alfanumérico e texto comum"
             ],
-            "status": "planned",
-            "change": "reforcar-fronteiras-capacidades-sensiveis",
-            "resolution": null
+            "status": "resolved",
+            "change": "canonicalize-laravel-api",
+            "resolution": "LogSanitizer::scrubString agora redige pares sensíveis curtos, cabeçalhos de autenticação, cookies, CNPJ numérico ou alfanumérico e chaves fiscais antes de truncar; LogSanitizerTest cobre os casos de regressão e a preservação de texto operacional comum."
         }
     ]
 }

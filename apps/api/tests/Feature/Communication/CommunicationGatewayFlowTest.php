@@ -67,6 +67,7 @@ final class CommunicationGatewayFlowTest extends TestCase
 
     public function test_signed_inbound_is_idempotent_creates_provisional_timeline_and_rejects_conflict(): void
     {
+        $this->app->instance('env', 'local');
         [, $inbox] = $this->context();
         $bytes = '%PDF-inbound-private';
         $event = $this->event($inbox, GatewayEventType::MessageReceived, 'gateway-inbound-0001', [
@@ -84,6 +85,9 @@ final class CommunicationGatewayFlowTest extends TestCase
         ]);
         $this->transport->media['spool-inbound-0001'] = $bytes;
 
+        $this->postJson('/api/internal/v1/communication/gateway/events', $event)
+            ->assertUnauthorized()
+            ->assertJson(['error' => 'INVALID_INTERNAL_SIGNATURE']);
         $this->postSignedEvent($event)->assertNoContent()->assertHeader('X-Communication-Result', 'processed');
         $this->postSignedEvent($event)->assertNoContent()->assertHeader('X-Communication-Result', 'duplicate');
 

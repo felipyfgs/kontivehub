@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Communication;
 use App\Enums\CommunicationChannel;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Communication\StoreContactRequest;
+use App\Http\Resources\Communication\CommunicationContactCollection;
 use App\Http\Resources\Communication\CommunicationContactResource;
 use App\Models\Client;
 use App\Models\ClientContact;
@@ -61,10 +62,7 @@ final class CommunicationContactController extends Controller
         $this->applyCatalogSort($query, $request);
         $paginator = $query->paginate(min(100, max(1, $request->integer('per_page', 30))));
 
-        return response()->json([
-            'data' => CommunicationContactResource::collection(collect($paginator->items())),
-            'meta' => ['current_page' => $paginator->currentPage(), 'last_page' => $paginator->lastPage(), 'total' => $paginator->total()],
-        ]);
+        return (new CommunicationContactCollection($paginator))->response();
     }
 
     public function show(Request $request, int $contact): CommunicationContactResource
