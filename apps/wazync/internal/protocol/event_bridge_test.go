@@ -393,6 +393,30 @@ func TestEventBridgeMapsReceiptsWithoutStatusRegressionLogic(t *testing.T) {
 	}
 }
 
+func TestEventBridgeIgnoresSelfReadAndPlayedReceipts(t *testing.T) {
+	t.Parallel()
+	persistence := store.NewMemory()
+	bridge := NewEventBridge(persistence, nil, 20<<20)
+
+	for _, receiptType := range []types.ReceiptType{
+		types.ReceiptTypeReadSelf,
+		types.ReceiptTypePlayedSelf,
+	} {
+		bridge.Handle("session-self-receipt", nil, &events.Receipt{
+			MessageSource: types.MessageSource{
+				Chat: types.NewJID("5511999991234", types.DefaultUserServer),
+			},
+			MessageIDs: []types.MessageID{"provider-message-self-0001"},
+			Timestamp:  time.Now(),
+			Type:       receiptType,
+		})
+	}
+
+	if pending := pendingEvents(t, persistence); len(pending) != 0 {
+		t.Fatalf("self receipts must not project remote message status: %+v", pending)
+	}
+}
+
 func TestEventBridgeKeepsPlayedDistinctAndReceiptsIdempotentOutOfOrder(t *testing.T) {
 	t.Parallel()
 	persistence := store.NewMemory()
@@ -514,6 +538,8 @@ func TestPeerSourceIdentityUsesOnlyTheRemoteAliasByDirection(t *testing.T) {
 	lid := types.NewJID("149865032093945", types.HiddenUserServer)
 	sessionPN := types.NewJID("559981769536", types.DefaultUserServer)
 	remotePN := types.NewJID("559992032709", types.DefaultUserServer)
+	sessionPN.Device = 3
+	remotePN.Device = 7
 
 	inbound := types.MessageSource{
 		Chat: lid, Sender: lid, SenderAlt: remotePN,
@@ -1183,16 +1209,20 @@ func assertEventPayloadAllowlist(t *testing.T, event domain.Event) {
 			"provider_type", "family", "text", "caption", "emoji", "option_names",
 			"option_hashes", "content_present", "variants", "history",
 		},
-		domain.EventSessionStatusChanged:  {"status", "reason_code", "retry_after_seconds"},
-		domain.EventPairingUpdated:        {"event", "code", "expires_at", "error_code", "passkey_request"},
-		domain.EventMediaReady:            {"provider_message_id", "spool_id", "size_bytes", "sha256", "mime_type", "filename"},
-		domain.EventChatPresenceChanged:   {"from", "presence", "media", "ttl_seconds"},
-		domain.EventPresenceChanged:       {"from", "available", "last_seen", "ttl_seconds"},
-		domain.EventContactProfileChanged: {"user", "display_name", "business_name", "picture_id", "about"},
-		domain.EventIdentityChanged:       {"user", "change"},
-		domain.EventPrivacyChanged:        {"settings"},
-		domain.EventBlocklistChanged:      {"action", "users"},
-		domain.EventChatStateChanged:      {"to", "action", "value", "target_message_id", "label_id"},
+		domain.EventSessionStatusChanged: {"status", "reason_code", "retry_after_seconds"},
+		domain.EventPairingUpdated:       {"event", "code", "expires_at", "error_code", "passkey_request"},
+		domain.EventMediaReady:           {"provider_message_id", "spool_id", "size_bytes", "sha256", "mime_type", "filename"},
+		domain.EventChatPresenceChanged:  {"from", "presence", "media", "ttl_seconds"},
+		domain.EventPresenceChanged:      {"from", "available", "last_seen", "ttl_seconds"},
+		domain.EventContactProfileChanged: {
+			"user", "display_name", "business_name", "picture_id", "about",
+			"source", "push_name", "address_book_name", "address_book_full_name", "address_book_first_name",
+			"verified_name", "cleared_fields", "source_identity", "from_full_sync",
+		},
+		domain.EventIdentityChanged:  {"user", "change"},
+		domain.EventPrivacyChanged:   {"settings"},
+		domain.EventBlocklistChanged: {"action", "users"},
+		domain.EventChatStateChanged: {"to", "action", "value", "target_message_id", "label_id"},
 		domain.EventHistorySynced: {
 			"batch_id", "cursor", "complete", "messages", "sync_type", "chunk_order", "progress",
 			"message_count", "rejected_count", "truncated",

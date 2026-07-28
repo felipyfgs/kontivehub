@@ -35,6 +35,10 @@ type queryClient interface {
 	GetUserDevicesContext(context.Context, []types.JID) ([]types.JID, error)
 }
 
+type contactProfileResolver interface {
+	LookupContact(context.Context, string, types.JID) (types.ContactInfo, error)
+}
+
 var _ queryClient = (*whatsmeow.Client)(nil)
 
 type userAvailabilityResult struct {
@@ -48,6 +52,15 @@ type userInfoResult struct {
 	User         string `json:"user"`
 	Status       string `json:"status,omitempty"`
 	VerifiedName string `json:"verified_name,omitempty"`
+}
+
+type contactProfileResult struct {
+	User                 string `json:"user"`
+	Found                bool   `json:"found"`
+	AddressBookFirstName string `json:"address_book_first_name,omitempty"`
+	AddressBookFullName  string `json:"address_book_full_name,omitempty"`
+	PushName             string `json:"push_name,omitempty"`
+	BusinessName         string `json:"business_name,omitempty"`
 }
 
 type pictureResult struct {
@@ -132,6 +145,37 @@ func (a *WhatsMeowAdapter) Execute(ctx context.Context, query domain.Query) (any
 			})
 		}
 		return map[string]any{"user_info": result}, nil
+
+	case domain.QueryContactProfiles:
+		var payload domain.UsersQueryPayload
+		if err := json.Unmarshal(query.Payload, &payload); err != nil {
+			return nil, err
+		}
+		addresses, err := normalizeQueryUsers(payload.Users)
+		if err != nil {
+			return nil, err
+		}
+		profiles, ok := a.clients.(contactProfileResolver)
+		if !ok {
+			return nil, errors.New("WhatsApp resolver does not support local contact profiles")
+		}
+		result := make([]contactProfileResult, 0, len(addresses))
+		for _, address := range addresses {
+			info, err := profiles.LookupContact(ctx, query.SessionID, address.JID)
+			if err != nil {
+				return nil, err
+			}
+			entry := contactProfileResult{
+				User:                 address.Normalized,
+				Found:                info.Found,
+				AddressBookFirstName: boundedText(info.FirstName, 512),
+				AddressBookFullName:  boundedText(info.FullName, 512),
+				PushName:             boundedText(info.PushName, 512),
+				BusinessName:         boundedText(info.BusinessName, 512),
+			}
+			result = append(result, entry)
+		}
+		return map[string]any{"profiles": result}, nil
 
 	case domain.QueryBusinessProfile:
 		var payload domain.UsersQueryPayload

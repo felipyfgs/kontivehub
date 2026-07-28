@@ -373,7 +373,7 @@ func (q Query) ValidatePayload() error {
 	switch q.Type {
 	case QueryIsOnWhatsApp:
 		return decodePayload(q.Payload, &UsersQueryPayload{})
-	case QueryUserInfo, QueryBusinessProfile:
+	case QueryUserInfo, QueryContactProfiles, QueryBusinessProfile:
 		return decodePayload(q.Payload, &UsersQueryPayload{})
 	case QueryProfilePicture:
 		return decodePayload(q.Payload, &ProfilePictureQueryPayload{})

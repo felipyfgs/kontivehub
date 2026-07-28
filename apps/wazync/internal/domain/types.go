@@ -147,6 +147,7 @@ type QueryType string
 const (
 	QueryIsOnWhatsApp       QueryType = "USER_CHECK"
 	QueryUserInfo           QueryType = "USER_INFO"
+	QueryContactProfiles    QueryType = "CONTACT_PROFILES"
 	QueryBusinessProfile    QueryType = "BUSINESS_PROFILE"
 	QueryProfilePicture     QueryType = "PROFILE_PICTURE"
 	QueryContactQRLink      QueryType = "CONTACT_QR_LINK"
@@ -158,7 +159,7 @@ const (
 
 func (t QueryType) Valid() bool {
 	switch t {
-	case QueryIsOnWhatsApp, QueryUserInfo, QueryBusinessProfile, QueryProfilePicture,
+	case QueryIsOnWhatsApp, QueryUserInfo, QueryContactProfiles, QueryBusinessProfile, QueryProfilePicture,
 		QueryContactQRLink, QueryResolveContactQR, QueryResolveBusinessURL,
 		QueryBlocklist, QueryPrivacySettings:
 		return true

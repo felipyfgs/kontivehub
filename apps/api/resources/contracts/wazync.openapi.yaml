@@ -333,6 +333,7 @@ components:
         - BUSINESS_LINK_RESOLVE
         - BLOCKLIST
         - PRIVACY_SETTINGS
+        - CONTACT_PROFILES
     GatewayEventType:
       type: string
       enum:
@@ -1129,7 +1130,7 @@ components:
         - if:
             properties:
               type:
-                enum: [USER_CHECK, USER_INFO, BUSINESS_PROFILE]
+                enum: [USER_CHECK, USER_INFO, BUSINESS_PROFILE, CONTACT_PROFILES]
             required: [type]
           then:
             properties: {payload: {$ref: '#/components/schemas/UsersQueryPayload'}}
@@ -1157,6 +1158,29 @@ components:
             required: [type]
           then:
             properties: {payload: {$ref: '#/components/schemas/EmptyPayload'}}
+    ContactProfileResult:
+      type: object
+      additionalProperties: false
+      required: [user, found]
+      properties:
+        user: {$ref: '#/components/schemas/OneToOneAddress'}
+        found: {type: boolean}
+        address_book_first_name: {type: string, maxLength: 512}
+        address_book_full_name: {type: string, maxLength: 512}
+        push_name: {type: string, maxLength: 512}
+        business_name: {type: string, maxLength: 512}
+        observed_at: {type: string, format: date-time}
+        event_id: {$ref: '#/components/schemas/Identifier'}
+    ContactProfilesResult:
+      type: object
+      additionalProperties: false
+      required: [profiles]
+      properties:
+        profiles:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: {$ref: '#/components/schemas/ContactProfileResult'}
     UsersQueryPayload:
       type: object
       additionalProperties: false
@@ -1214,6 +1238,7 @@ components:
             - $ref: '#/components/schemas/ResolvedBusinessResult'
             - $ref: '#/components/schemas/BlocklistResult'
             - $ref: '#/components/schemas/PrivacySettingsResult'
+            - $ref: '#/components/schemas/ContactProfilesResult'
     UserCheckResult:
       type: object
       additionalProperties: false
@@ -1428,7 +1453,7 @@ components:
         - if: {properties: {type: {const: GATEWAY_ALERT}}, required: [type]}
           then: {properties: {payload: {$ref: '#/components/schemas/GatewayAlertEventPayload'}}}
     SourceIdentity:
-      description: Identidade 1:1 projetada pelo gateway (LID/PN), sem JID cru.
+      description: Identidade 1:1 projetada pelo gateway, em que alternate só associa primary LID a PN remota com evidência MESSAGE_SOURCE_ALT.
       type: object
       additionalProperties: false
       required: [primary, primary_kind]
@@ -1438,6 +1463,16 @@ components:
         alternate: {$ref: '#/components/schemas/OneToOneAddress'}
         alternate_kind: {enum: [PN, LID]}
         evidence: {type: string, pattern: '^[A-Z][A-Z0-9_]{1,63}$'}
+      allOf:
+        - if: {required: [alternate]}
+          then:
+            required: [alternate_kind, evidence]
+            properties:
+              primary_kind: {const: LID}
+              alternate_kind: {const: PN}
+              evidence: {const: MESSAGE_SOURCE_ALT}
+        - if: {required: [alternate_kind]}
+          then: {required: [alternate]}
     MessageReceivedEventPayload:
       type: object
       additionalProperties: false
@@ -1634,6 +1669,30 @@ components:
         business_name: {type: string, maxLength: 512}
         picture_id: {type: string, maxLength: 512}
         about: {type: string, maxLength: 2048}
+        source:
+          type: string
+          enum: [PUSH, ADDRESS_BOOK, BUSINESS, VERIFIED, PICTURE, ABOUT]
+        push_name: {type: string, maxLength: 512}
+        address_book_name: {type: string, maxLength: 512}
+        address_book_full_name: {type: string, maxLength: 512}
+        address_book_first_name: {type: string, maxLength: 512}
+        verified_name: {type: string, maxLength: 512}
+        from_full_sync: {type: boolean}
+        cleared_fields:
+          type: array
+          maxItems: 16
+          uniqueItems: true
+          items:
+            enum:
+              - address_book_first_name
+              - address_book_full_name
+              - verified_name
+              - business_name
+              - push_name
+              - picture_id
+              - about
+        source_identity:
+          $ref: '#/components/schemas/SourceIdentity'
     IdentityEventPayload:
       type: object
       additionalProperties: false

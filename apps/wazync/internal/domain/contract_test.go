@@ -24,7 +24,7 @@ func TestOneToOneCommandAndQueryFamiliesAreExplicit(t *testing.T) {
 		}
 	}
 	queries := []QueryType{
-		QueryIsOnWhatsApp, QueryUserInfo, QueryBusinessProfile, QueryProfilePicture,
+		QueryIsOnWhatsApp, QueryUserInfo, QueryContactProfiles, QueryBusinessProfile, QueryProfilePicture,
 		QueryContactQRLink, QueryResolveContactQR, QueryResolveBusinessURL,
 		QueryBlocklist, QueryPrivacySettings,
 	}

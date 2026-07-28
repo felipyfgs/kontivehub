@@ -19,6 +19,21 @@ type fakeQueryClient struct {
 	privacyFetch  int
 }
 
+type contactProfileQueryResolver struct {
+	actionResolver
+	contacts map[string]types.ContactInfo
+	calls    int
+}
+
+func (r *contactProfileQueryResolver) LookupContact(
+	_ context.Context,
+	_ string,
+	jid types.JID,
+) (types.ContactInfo, error) {
+	r.calls++
+	return r.contacts[jid.String()], nil
+}
+
 func (c *fakeQueryClient) IsOnWhatsApp(
 	ctx context.Context,
 	phones []string,
@@ -210,6 +225,55 @@ func TestQueryExecutorRejectsGroupAndUnboundedBatchBeforeProviderCall(t *testing
 	}
 }
 
+func TestQueryExecutorReadsOnlyRequestedLocalContactProfiles(t *testing.T) {
+	t.Parallel()
+	client := &fakeQueryClient{fakeClient: fakeClient{connected: true}}
+	first := types.NewJID("5511999991234", types.DefaultUserServer)
+	resolver := &contactProfileQueryResolver{
+		actionResolver: actionResolver{client: client},
+		contacts: map[string]types.ContactInfo{
+			first.String(): {
+				Found: true, FirstName: "Maria", FullName: "Maria da Silva",
+				PushName: "Maria S.", BusinessName: "Empresa da Maria",
+			},
+		},
+	}
+	adapter := NewWhatsMeowAdapter(resolver)
+	payload, _ := json.Marshal(domain.UsersQueryPayload{Users: []string{"+5511999991234", "+5511988887777"}})
+
+	result, err := adapter.Execute(t.Context(), domain.Query{
+		ContractVersion: "v1", QueryID: "query-contact-profiles-0001", SessionID: "session-query-0001",
+		Type: domain.QueryContactProfiles, Payload: payload,
+	})
+	if err != nil {
+		t.Fatalf("execute contact profiles query: %v", err)
+	}
+	if resolver.calls != 2 {
+		t.Fatalf("must look up exactly each requested identity once, calls=%d", resolver.calls)
+	}
+	encoded, _ := json.Marshal(result)
+	var decoded struct {
+		Profiles []contactProfileResult `json:"profiles"`
+	}
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("decode profiles: %v", err)
+	}
+	if len(decoded.Profiles) != 2 || !decoded.Profiles[0].Found || decoded.Profiles[1].Found {
+		t.Fatalf("must preserve one found/not-found entry per requested identity: %s", encoded)
+	}
+	profile := decoded.Profiles[0]
+	if profile.User != "+5511999991234" || profile.AddressBookFirstName != "Maria" ||
+		profile.AddressBookFullName != "Maria da Silva" || profile.PushName != "Maria S." ||
+		profile.BusinessName != "Empresa da Maria" {
+		t.Fatalf("separate local contact fields changed: %+v", profile)
+	}
+	for _, forbidden := range []string{"verified", "address_book_name", "jid", "device", "thumbnail"} {
+		if strings.Contains(string(encoded), forbidden) {
+			t.Fatalf("contact profile query leaked protocol field %q: %s", forbidden, encoded)
+		}
+	}
+}
+
 func TestQueryExecutorMatchesStrictContractResultKeys(t *testing.T) {
 	t.Parallel()
 	client := &fakeQueryClient{fakeClient: fakeClient{connected: true}}
@@ -228,6 +292,7 @@ func TestQueryExecutorMatchesStrictContractResultKeys(t *testing.T) {
 	}{
 		{"user check", domain.QueryIsOnWhatsApp, userBatch, "users"},
 		{"user info", domain.QueryUserInfo, userBatch, "user_info"},
+		{"contact profiles", domain.QueryContactProfiles, userBatch, "profiles"},
 		{"business profile", domain.QueryBusinessProfile, userBatch, "business_profiles"},
 		{"profile picture", domain.QueryProfilePicture, user, "profile_picture"},
 		{"contact qr", domain.QueryContactQRLink, qr, "contact_qr_link"},
@@ -238,7 +303,13 @@ func TestQueryExecutorMatchesStrictContractResultKeys(t *testing.T) {
 	}
 	for index, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := adapter.Execute(t.Context(), domain.Query{
+			testAdapter := adapter
+			if test.query == domain.QueryContactProfiles {
+				testAdapter = NewWhatsMeowAdapter(&contactProfileQueryResolver{
+					actionResolver: actionResolver{client: client}, contacts: map[string]types.ContactInfo{},
+				})
+			}
+			result, err := testAdapter.Execute(t.Context(), domain.Query{
 				ContractVersion: "v1", QueryID: domainQueryID(index), SessionID: "session-query-0001",
 				Type: test.query, Payload: test.payload,
 			})

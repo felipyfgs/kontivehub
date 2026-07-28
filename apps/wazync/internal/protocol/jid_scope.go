@@ -117,7 +117,7 @@ func ValidateQueryRecipientScope(query domain.Query) error {
 	var recipients []string
 
 	switch query.Type {
-	case domain.QueryIsOnWhatsApp, domain.QueryUserInfo, domain.QueryBusinessProfile:
+	case domain.QueryIsOnWhatsApp, domain.QueryUserInfo, domain.QueryContactProfiles, domain.QueryBusinessProfile:
 		var payload domain.UsersQueryPayload
 		if err := json.Unmarshal(query.Payload, &payload); err != nil {
 			return ErrRecipientInvalid

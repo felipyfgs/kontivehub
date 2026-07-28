@@ -148,6 +148,24 @@ DELETE FROM wazync.session_devices WHERE session_id = $1`, sessionID); cleanupEr
 	return client, nil
 }
 
+// LookupContact reads a single local address-book entry for a session. It
+// deliberately exposes no whole-address-book operation to the query boundary.
+func (r *DeviceResolver) LookupContact(
+	ctx context.Context,
+	sessionID string,
+	jid types.JID,
+) (types.ContactInfo, error) {
+	resolved, err := r.Resolve(sessionID)
+	if err != nil {
+		return types.ContactInfo{}, err
+	}
+	client, ok := resolved.(*whatsmeow.Client)
+	if !ok || client.Store == nil || client.Store.Contacts == nil {
+		return types.ContactInfo{}, errors.New("WhatsApp contact store is unavailable")
+	}
+	return client.Store.Contacts.GetContact(ctx, jid)
+}
+
 // HasDevice validates both the encrypted mapping and the real WhatsMeow row.
 // Orphan mappings are removed and no identifier leaves this boundary.
 func (r *DeviceResolver) HasDevice(sessionID string) bool {

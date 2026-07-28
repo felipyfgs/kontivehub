@@ -518,6 +518,11 @@ func (b *EventBridge) handleReceipt(ctx context.Context, sessionID string, event
 	if event == nil {
 		return
 	}
+	// Self receipts describe this linked device/account consuming a message;
+	// they are not evidence that the remote peer read or played our outbound.
+	if event.Type == types.ReceiptTypeReadSelf || event.Type == types.ReceiptTypePlayedSelf {
+		return
+	}
 	_, err := normalizeMessageSource(event.MessageSource)
 	if err != nil {
 		b.rejectScope(err)
@@ -528,9 +533,9 @@ func (b *EventBridge) handleReceipt(ctx context.Context, sessionID string, event
 	switch event.Type {
 	case types.ReceiptTypeDelivered:
 		status = "DELIVERED"
-	case types.ReceiptTypeRead, types.ReceiptTypeReadSelf:
+	case types.ReceiptTypeRead:
 		status = "READ"
-	case types.ReceiptTypePlayed, types.ReceiptTypePlayedSelf:
+	case types.ReceiptTypePlayed:
 		status = "PLAYED"
 	case types.ReceiptTypeRetry:
 		status = "UNKNOWN"
@@ -829,35 +834,41 @@ func (b *EventBridge) handlePresence(ctx context.Context, sessionID string, even
 }
 
 func (b *EventBridge) handlePicture(ctx context.Context, sessionID string, event *events.Picture) {
-	peer, err := NormalizeOneToOneJID(event.JID)
+	peer, err := NormalizeOneToOneJID(event.JID.ToNonAD())
 	if err != nil {
 		b.rejectScope(err)
 		return
 	}
 	payload := map[string]any{
-		"user": peer.Normalized,
+		"user": peer.Normalized, "source": "PICTURE",
 	}
-	if !event.Remove {
+	if event.Remove {
+		payload["cleared_fields"] = []string{"picture_id"}
+	} else {
 		payload["picture_id"] = event.PictureID
 	}
-	b.append(ctx, stableID("picture", sessionID, peer.Normalized, event.PictureID), sessionID,
+	b.append(ctx, stableID("picture", sessionID, peer.Normalized, event.PictureID, event.Remove, event.Timestamp.UnixMilli()), sessionID,
 		domain.EventContactProfileChanged, event.Timestamp, payload)
 }
 
 func (b *EventBridge) handleUserAbout(ctx context.Context, sessionID string, event *events.UserAbout) {
-	peer, err := NormalizeOneToOneJID(event.JID)
+	peer, err := NormalizeOneToOneJID(event.JID.ToNonAD())
 	if err != nil {
 		b.rejectScope(err)
 		return
 	}
-	b.append(ctx, stableID("about", sessionID, peer.Normalized, event.Timestamp.UnixMilli()), sessionID,
-		domain.EventContactProfileChanged, event.Timestamp, map[string]any{
-			"user": peer.Normalized, "about": event.Status,
-		})
+	payload := map[string]any{"user": peer.Normalized, "source": "ABOUT"}
+	if strings.TrimSpace(event.Status) == "" {
+		payload["cleared_fields"] = []string{"about"}
+	} else {
+		payload["about"] = event.Status
+	}
+	b.append(ctx, stableID("about", sessionID, peer.Normalized, event.Status, event.Timestamp.UnixMilli()), sessionID,
+		domain.EventContactProfileChanged, event.Timestamp, payload)
 }
 
 func (b *EventBridge) handleIdentityChange(ctx context.Context, sessionID string, event *events.IdentityChange) {
-	peer, err := NormalizeOneToOneJID(event.JID)
+	peer, err := NormalizeOneToOneJID(event.JID.ToNonAD())
 	if err != nil {
 		b.rejectScope(err)
 		return
@@ -916,7 +927,7 @@ func (b *EventBridge) handleBlocklistChange(
 	if event == nil {
 		return
 	}
-	peer, err := NormalizeOneToOneJID(event.JID)
+	peer, err := NormalizeOneToOneJID(event.JID.ToNonAD())
 	if err != nil {
 		b.rejectScope(err)
 		return
@@ -928,43 +939,94 @@ func (b *EventBridge) handleBlocklistChange(
 }
 
 func (b *EventBridge) handleContact(ctx context.Context, sessionID string, event *events.Contact) {
-	peer, err := NormalizeOneToOneJID(event.JID)
+	peer, err := NormalizeOneToOneJID(event.JID.ToNonAD())
 	if err != nil {
 		b.rejectScope(err)
 		return
 	}
-	b.append(ctx, stableID("contact", sessionID, peer.Normalized, event.Timestamp.UnixMilli()), sessionID,
-		domain.EventContactProfileChanged, event.Timestamp, map[string]any{
-			"user": peer.Normalized, "display_name": event.Action.GetFullName(),
-		})
+	payload := map[string]any{
+		"user": peer.Normalized, "source": "ADDRESS_BOOK", "from_full_sync": event.FromFullSync,
+	}
+	cleared := make([]string, 0, 2)
+	if event.Action != nil && event.Action.FullName != nil {
+		if fullName := strings.TrimSpace(event.Action.GetFullName()); fullName != "" {
+			payload["address_book_full_name"] = fullName
+			payload["display_name"] = fullName
+		} else {
+			cleared = append(cleared, "address_book_full_name")
+		}
+	}
+	if event.Action != nil && event.Action.FirstName != nil {
+		if firstName := strings.TrimSpace(event.Action.GetFirstName()); firstName != "" {
+			payload["address_book_first_name"] = firstName
+			if _, ok := payload["display_name"]; !ok {
+				payload["display_name"] = firstName
+			}
+		} else {
+			cleared = append(cleared, "address_book_first_name")
+		}
+	}
+	if len(cleared) > 0 {
+		payload["cleared_fields"] = cleared
+	}
+	b.append(ctx, stableID("contact", sessionID, peer.Normalized, event.Timestamp.UnixMilli(), event.FromFullSync,
+		payload["address_book_full_name"], payload["address_book_first_name"], payload["cleared_fields"]), sessionID,
+		domain.EventContactProfileChanged, event.Timestamp, payload)
 }
 
 func (b *EventBridge) handlePushName(ctx context.Context, sessionID string, event *events.PushName) {
-	peer, err := NormalizeOneToOneJID(event.JID)
+	peer, err := NormalizeOneToOneJID(event.JID.ToNonAD())
 	if err != nil {
-		if alternate, alternateErr := NormalizeOneToOneJID(event.JIDAlt); alternateErr == nil {
+		if alternate, alternateErr := NormalizeOneToOneJID(event.JIDAlt.ToNonAD()); alternateErr == nil {
 			peer = alternate
 		} else {
 			b.rejectScope(err)
 			return
 		}
 	}
-	b.append(ctx, stableID("push-name", sessionID, peer.Normalized, event.NewPushName), sessionID,
-		domain.EventContactProfileChanged, messageInfoTimestamp(event.Message), map[string]any{
-			"user": peer.Normalized, "display_name": event.NewPushName,
-		})
+	payload := map[string]any{"user": peer.Normalized, "source": "PUSH"}
+	if pushName := strings.TrimSpace(event.NewPushName); pushName != "" {
+		payload["push_name"] = pushName
+		payload["display_name"] = pushName
+	} else {
+		payload["cleared_fields"] = []string{"push_name"}
+	}
+	if identity := profileSourceIdentity(peer, event.JIDAlt); identity != nil {
+		payload["source_identity"] = identity
+	}
+	b.append(ctx, stableID("push-name", sessionID, peer.Normalized, event.NewPushName, messageInfoStableID(event.Message)), sessionID,
+		domain.EventContactProfileChanged, messageInfoTimestamp(event.Message), payload)
 }
 
 func (b *EventBridge) handleBusinessName(ctx context.Context, sessionID string, event *events.BusinessName) {
-	peer, err := NormalizeOneToOneJID(event.JID)
+	peer, err := NormalizeOneToOneJID(event.JID.ToNonAD())
 	if err != nil {
 		b.rejectScope(err)
 		return
 	}
-	b.append(ctx, stableID("business-name", sessionID, peer.Normalized, event.NewBusinessName), sessionID,
-		domain.EventContactProfileChanged, messageInfoTimestamp(event.Message), map[string]any{
-			"user": peer.Normalized, "business_name": event.NewBusinessName,
-		})
+	payload := map[string]any{"user": peer.Normalized, "source": "BUSINESS"}
+	if businessName := strings.TrimSpace(event.NewBusinessName); businessName != "" {
+		payload["business_name"] = businessName
+	} else {
+		payload["cleared_fields"] = []string{"business_name"}
+	}
+	b.append(ctx, stableID("business-name", sessionID, peer.Normalized, event.NewBusinessName, messageInfoStableID(event.Message)), sessionID,
+		domain.EventContactProfileChanged, messageInfoTimestamp(event.Message), payload)
+}
+
+func profileSourceIdentity(primary OneToOneAddress, alternateJID types.JID) map[string]any {
+	if primary.Kind != AddressLID {
+		return nil
+	}
+	alternate, err := NormalizeOneToOneJID(alternateJID.ToNonAD())
+	if err != nil || alternate.Kind != AddressPN {
+		return nil
+	}
+	return map[string]any{
+		"primary": primary.Normalized, "primary_kind": string(AddressLID),
+		"alternate": alternate.Normalized, "alternate_kind": string(AddressPN),
+		"evidence": "MESSAGE_SOURCE_ALT",
+	}
 }
 
 func (b *EventBridge) handleChatState(
@@ -1042,7 +1104,7 @@ func normalizeMessageSource(source types.MessageSource) (OneToOneAddress, error)
 	if source.IsGroup {
 		return OneToOneAddress{}, ErrRecipientScopeNotAllowed
 	}
-	return NormalizeOneToOneJID(source.Chat)
+	return NormalizeOneToOneJID(source.Chat.ToNonAD())
 }
 
 // peerSourceIdentity projects LID/PN aliases without replacing the chat peer.
@@ -1065,7 +1127,7 @@ func peerSourceIdentity(source types.MessageSource, peer OneToOneAddress) map[st
 	} else {
 		alt = source.SenderAlt
 	}
-	if alternate, err := NormalizeOneToOneJID(alt); err == nil && alternate.Kind == AddressPN {
+	if alternate, err := NormalizeOneToOneJID(alt.ToNonAD()); err == nil && alternate.Kind == AddressPN {
 		identity["alternate"] = alternate.Normalized
 		identity["alternate_kind"] = string(AddressPN)
 		identity["evidence"] = "MESSAGE_SOURCE_ALT"
@@ -1342,6 +1404,16 @@ func messageInfoTimestamp(info *types.MessageInfo) time.Time {
 		return time.Now().UTC()
 	}
 	return eventTimestamp(info.Timestamp)
+}
+
+// messageInfoStableID uses the provider message ID when the app-state event
+// carries one. Unlike a value-only key, it keeps repeated profile updates as
+// separate, idempotent occurrences.
+func messageInfoStableID(info *types.MessageInfo) string {
+	if info == nil {
+		return ""
+	}
+	return info.ID
 }
 
 func eventTimestamp(timestamp time.Time) time.Time {
