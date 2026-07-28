@@ -6,7 +6,7 @@ Fortify rejeita todo login com `422`, mesmo quando a senha confere.
 
 ## What Changes
 
-- Adicionar uma migration reversível e condicionada ao schema legado para alinhar
+- Adicionar uma migration reversível e condicionada ao schema anterior para alinhar
   somente as tabelas de identidade necessárias ao login e ao endpoint `/api/v1/me`.
 - Derivar flags ativas dos valores `status` existentes, preservando usuários,
   tenants e memberships.
@@ -19,7 +19,7 @@ Fortify rejeita todo login com `422`, mesmo quando a senha confere.
 ### New Capabilities
 
 - `authentication-schema-compatibility`: compatibilidade segura de autenticação
-  entre o schema consolidado legado e o modelo de identidade atual.
+  entre o schema consolidado anterior e o modelo de identidade atual.
 
 ### Modified Capabilities
 

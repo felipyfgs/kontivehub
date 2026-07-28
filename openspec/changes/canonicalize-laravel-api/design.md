@@ -91,9 +91,9 @@ invalida somente os buckets de um minuto. O primeiro budget impede bypass
 distribuído do token; o segundo preserva a proteção contra Bearers inválidos
 rotativos, mesmo que integrações atrás do mesmo NAT ainda compartilhem esse teto.
 
-Adapters legados que já transformavam falhas de domínio podem preservar seu
+Adapters que já transformavam falhas de domínio podem preservar seu
 status/envelope publicado apenas com catches das exceptions concretas esperadas.
-O envio PGDAS-D mantém temporariamente o `422` legado; o controller de flows
+O envio PGDAS-D mantém temporariamente o `422` anterior; o controller de flows
 mantém o código lowercase de disponibilidade. Nenhum deles captura a classe base,
 evitando neutralizar novas exceptions tipadas silenciosamente.
 

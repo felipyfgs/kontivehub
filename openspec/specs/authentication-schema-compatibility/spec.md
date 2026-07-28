@@ -1,13 +1,20 @@
-## ADDED Requirements
+# authentication-schema-compatibility Specification
+
+## Purpose
+
+Definir a compatibilidade fail-closed entre schemas de identidade anteriores e
+o modelo atual, incluindo o bootstrap público e o resultado seguro do login.
+
+## Requirements
 
 ### Requirement: Compatibilidade fail-closed do schema de identidade
-O sistema SHALL alinhar instalações com colunas legadas `status` aos campos de
+O sistema SHALL alinhar instalações com colunas anteriores `status` aos campos de
 identidade atuais sem remover registros existentes e SHALL considerar ativo
-somente o registro cujo status legado seja `ACTIVE` e cujas invariantes canônicas
+somente o registro cujo status anterior seja `ACTIVE` e cujas invariantes canônicas
 de papel estejam satisfeitas. A autorização efetiva SHALL continuar exigindo
 usuário ativo, membership ativa/canônica e tenant ativo/operacional.
 
-#### Scenario: Identidade ativa no schema legado
+#### Scenario: Identidade ativa no schema anterior
 - **WHEN** a migration encontra usuário ou tenant com `status = ACTIVE`
 - **THEN** o campo `is_active` correspondente é preenchido com verdadeiro
 
@@ -15,24 +22,24 @@ usuário ativo, membership ativa/canônica e tenant ativo/operacional.
 - **WHEN** a migration encontra `tenant_admin` `ACTIVE` sem perfil, `tenant_user` `ACTIVE` com perfil existente, ativo e do mesmo tenant, ou `platform_admin` `ACTIVE`
 - **THEN** o campo `is_active` correspondente é preenchido com verdadeiro
 
-#### Scenario: Membership legada incompleta
+#### Scenario: Membership anterior incompleta
 - **WHEN** a migration encontra papel desconhecido, `tenant_admin` com perfil, `tenant_user` sem perfil ou com perfil ausente, inativo ou de outro tenant
 - **THEN** ela permanece inativa sem ampliar autorização
 
 #### Scenario: Tenant padrão da plataforma
-- **WHEN** uma platform membership legada canônica possui `tenant_id` de tenant existente, ativo e operacional e usuário associado ativo
+- **WHEN** uma platform membership anterior canônica possui `tenant_id` de tenant existente, ativo e operacional e usuário associado ativo
 - **THEN** a migration reconcilia esse valor em `default_tenant_id` sem criar membership de tenant
 
 #### Scenario: Tenant padrão inválido
-- **WHEN** o tenant legado é ausente, inativo ou não operacional, o usuário está inativo ou a platform membership não é canônica
+- **WHEN** o tenant anterior é ausente, inativo ou não operacional, o usuário está inativo ou a platform membership não é canônica
 - **THEN** `default_tenant_id` permanece nulo e nenhuma membership de tenant é fabricada
 
-#### Scenario: Registro legado não ativo
+#### Scenario: Registro anterior não ativo
 - **WHEN** a migration encontra qualquer status diferente de `ACTIVE`
 - **THEN** o campo `is_active` correspondente permanece falso
 
 #### Scenario: Schema já atualizado
-- **WHEN** a migration encontra uma tabela sem a coluna legado `status`
+- **WHEN** a migration encontra uma tabela sem a coluna anterior `status`
 - **THEN** ela não altera os campos canônicos existentes
 
 #### Scenario: Schema híbrido com valor canônico

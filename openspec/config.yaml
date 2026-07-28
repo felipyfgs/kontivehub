@@ -28,7 +28,7 @@ context: |
     Laravel-Wazync. Mudá-lo exige compatibilidade e testes nos dois consumidores.
   - `infra/docker`, `docker-compose*.yml` e `Makefile` definem desenvolvimento,
     testes e runtime. `openspec` contém mudanças, delta specs, tarefas e specs
-    canônicas; não recriar o layout legado `/docs`.
+    canônicas; não recriar o layout `/docs`.
 
   Stack
   - API: PHP 8.4, Laravel 13, Fortify, Sanctum por cookie, Horizon, Reverb,

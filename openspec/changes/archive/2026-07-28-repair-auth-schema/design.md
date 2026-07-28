@@ -26,7 +26,7 @@ middleware de rotas, produzindo um `401` esperado na página pública de login.
 ## Decisions
 
 1. Será adicionada uma migration nova, reversível e condicionada à presença da
-   coluna legado `status`. Em instalações atuais, que não possuem essa coluna,
+   coluna anterior `status`. Em instalações atuais, que não possuem essa coluna,
    ela não altera o schema.
 2. A migration acrescentará somente os campos consumidos pelo login e pelo
    presenter de `/me` em `users`, `tenants`, `tenant_memberships`,
@@ -49,7 +49,7 @@ middleware de rotas, produzindo um `401` esperado na página pública de login.
 
 ## Risks / Trade-offs
 
-- [Schema legado com status ou papel desconhecido] → somente `ACTIVE` com papel
+- [Schema anterior com status ou papel desconhecido] → somente `ACTIVE` com papel
   canônico e invariantes satisfeitas vira ativo; os demais permanecem bloqueados.
 - [Rollback após uso dos novos campos] → o `down` remove apenas colunas
   registradas como acrescentadas pela própria migration.
@@ -61,7 +61,7 @@ middleware de rotas, produzindo um `401` esperado na página pública de login.
 - [Falha durante alteração do schema] → PostgreSQL executa DDL, marker técnico,
   backfill e constraints na mesma transação (`withinTransaction`); qualquer
   falha reverte todas essas etapas sem estado parcial.
-- [Outras tabelas legadas divergentes] → ficam explicitamente fora do reparo e
+- [Outras tabelas anteriores divergentes] → ficam explicitamente fora do reparo e
   não são acessadas para autenticar ou apresentar a identidade básica.
 
 ## Migration Plan
