@@ -233,11 +233,17 @@ func (c *PairingCoordinator) setDisconnected(ctx context.Context, sessionID stri
 func (c *PairingCoordinator) appendStatus(ctx context.Context, sessionID string, status domain.SessionStatus) {
 	payload, _ := json.Marshal(map[string]string{"status": string(status)})
 	digest := sha256.Sum256(payload)
-	_, _ = c.store.AppendEvent(ctx, domain.Event{
+	if _, err := c.store.AppendEvent(ctx, domain.Event{
 		ContractVersion: "v1", EventID: randomID("session"), SessionID: sessionID,
 		Type: domain.EventSessionStatusChanged, OccurredAt: time.Now().UTC(), Payload: payload,
 		Digest: hex.EncodeToString(digest[:]),
-	})
+	}); err != nil {
+		slog.Error("wazync.pairing.append_status_failed",
+			"session_id", sessionID,
+			"status", string(status),
+			"error_class", "persist",
+		)
+	}
 }
 
 func (c *PairingCoordinator) appendUpdate(ctx context.Context, sessionID string, update domain.PairingUpdate) {
@@ -261,7 +267,13 @@ func (c *PairingCoordinator) appendUpdate(ctx context.Context, sessionID string,
 		Type: domain.EventPairingUpdated, OccurredAt: time.Now().UTC(), Payload: payload,
 		Digest: hex.EncodeToString(digest[:]),
 	}
-	_, _ = c.store.AppendEvent(ctx, event)
+	if _, err := c.store.AppendEvent(ctx, event); err != nil {
+		slog.Error("wazync.pairing.append_update_failed",
+			"session_id", sessionID,
+			"event", update.Event,
+			"error_class", "persist",
+		)
+	}
 }
 
 func randomID(prefix string) string {

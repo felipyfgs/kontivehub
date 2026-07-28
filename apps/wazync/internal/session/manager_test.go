@@ -456,6 +456,41 @@ func TestManagerTreatsLoggedOutAsDisconnectedWithoutReconnect(t *testing.T) {
 	}
 }
 
+func TestManagerPreservesPendingLogoutBeforeLaterDisconnect(t *testing.T) {
+	t.Parallel()
+	manager := NewManager(
+		store.NewMemory(),
+		&fakeConnector{connected: make(map[string]bool)},
+		"replica-lifecycle-priority",
+		1,
+		time.Minute,
+		time.Second,
+	)
+
+	for index := range cap(manager.lifecycle) {
+		manager.lifecycle <- lifecycleSignal{
+			sessionID: fmt.Sprintf("session-filler-%04d", index),
+			event:     domain.SessionLifecycleDisconnected,
+		}
+	}
+	manager.NotifyLifecycle("session-priority-0001", domain.SessionLifecycleLoggedOut)
+
+	<-manager.lifecycle
+	manager.NotifyLifecycle("session-priority-0001", domain.SessionLifecycleDisconnected)
+	manager.drainPendingLifecycle()
+
+	var observed []domain.SessionLifecycleEvent
+	for len(manager.lifecycle) > 0 {
+		signal := <-manager.lifecycle
+		if signal.sessionID == "session-priority-0001" {
+			observed = append(observed, signal.event)
+		}
+	}
+	if len(observed) != 1 || observed[0] != domain.SessionLifecycleLoggedOut {
+		t.Fatalf("pending logout lost priority to later disconnect: %+v", observed)
+	}
+}
+
 func TestManagerStopsRecoveryAfterBoundedFailures(t *testing.T) {
 	t.Parallel()
 	persistence := store.NewMemory()

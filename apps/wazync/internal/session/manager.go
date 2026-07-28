@@ -59,6 +59,8 @@ type Manager struct {
 	owned      map[string]domain.Lease
 	recovering map[string]bool
 	lifecycle  chan lifecycleSignal
+	// pendingLifecycle coalesces signals dropped when the buffered channel is full.
+	pendingLifecycle map[string]domain.SessionLifecycleEvent
 }
 
 func NewManager(
@@ -73,15 +75,58 @@ func NewManager(
 		capacity: capacity, leaseTTL: leaseTTL, heartbeat: heartbeat,
 		now: time.Now, owned: make(map[string]domain.Lease),
 		recovering: make(map[string]bool), lifecycle: make(chan lifecycleSignal, 128),
+		pendingLifecycle: make(map[string]domain.SessionLifecycleEvent),
 	}
 }
 
-// NotifyLifecycle coalesces upstream transport signals. Reconcile also checks
-// readiness, so a full channel cannot strand a session indefinitely.
+// NotifyLifecycle coalesces upstream transport signals. When the buffer is full,
+// critical events are retained in pendingLifecycle and drained on the next tick.
 func (m *Manager) NotifyLifecycle(sessionID string, event domain.SessionLifecycleEvent) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.pendingLifecycle == nil {
+		m.pendingLifecycle = make(map[string]domain.SessionLifecycleEvent)
+	}
+	if existing, ok := m.pendingLifecycle[sessionID]; ok {
+		if lifecyclePriority(event) >= lifecyclePriority(existing) {
+			m.pendingLifecycle[sessionID] = event
+		}
+		return
+	}
 	select {
 	case m.lifecycle <- lifecycleSignal{sessionID: sessionID, event: event}:
+		return
 	default:
+	}
+	m.pendingLifecycle[sessionID] = event
+}
+
+func lifecyclePriority(event domain.SessionLifecycleEvent) int {
+	switch event {
+	case domain.SessionLifecycleLoggedOut:
+		return 3
+	case domain.SessionLifecycleDisconnected:
+		return 2
+	case domain.SessionLifecycleManualLoginReconnect:
+		return 1
+	default:
+		return 0
+	}
+}
+
+func (m *Manager) drainPendingLifecycle() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.pendingLifecycle) == 0 {
+		return
+	}
+	for sessionID, event := range m.pendingLifecycle {
+		select {
+		case m.lifecycle <- lifecycleSignal{sessionID: sessionID, event: event}:
+			delete(m.pendingLifecycle, sessionID)
+		default:
+			// Channel still saturated — retain the signal for the next heartbeat.
+		}
 	}
 }
 
@@ -97,6 +142,7 @@ func (m *Manager) Run(ctx context.Context) {
 		case signal := <-m.lifecycle:
 			m.handleLifecycle(ctx, signal)
 		case <-ticker.C:
+			m.drainPendingLifecycle()
 			_ = m.Reconcile(ctx)
 		}
 	}

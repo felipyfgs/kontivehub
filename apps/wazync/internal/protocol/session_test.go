@@ -107,7 +107,17 @@ func TestSessionConnectIsCancelableAndRedactsUpstreamFailure(t *testing.T) {
 	})
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Millisecond)
 	defer cancel()
-	err := adapter.ConnectContext(ctx, "session-cancel-0001")
+	result := make(chan error, 1)
+	go func() {
+		result <- adapter.ConnectContext(ctx, "session-cancel-0001")
+	}()
+	var err error
+	select {
+	case err = <-result:
+	case <-time.After(250 * time.Millisecond):
+		close(never)
+		t.Fatal("canceled connection did not return promptly")
+	}
 	close(never)
 	if !errors.Is(err, ErrSessionConnect) {
 		t.Fatalf("expected sanitized connect error, got %v", err)

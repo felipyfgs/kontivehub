@@ -364,10 +364,10 @@ func (a *WhatsMeowAdapter) RetryMedia(
 		if json.Unmarshal(state.Descriptor, &envelope) != nil || len(envelope.Message) == 0 {
 			return ErrMediaRetryStateMissing
 		}
-		if envelope.Chat != chat.String() || envelope.IsFromMe != payload.FromMe {
+		if envelope.Chat != chat.ToNonAD().String() || envelope.IsFromMe != payload.FromMe {
 			return ErrMediaRetryStateMissing
 		}
-		if envelope.Sender != sender.JID.String() {
+		if envelope.Sender != sender.JID.ToNonAD().String() {
 			return ErrMediaRetryStateMissing
 		}
 		var message waE2E.Message

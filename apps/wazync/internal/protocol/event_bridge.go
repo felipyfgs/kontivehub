@@ -336,7 +336,9 @@ func (b *EventBridge) handleMessage(
 	}
 	payload := normalizedMessagePayload(normalized)
 	payload["provider_message_id"] = event.Info.ID
+	// Peer = Chat (GOWA/Chatwoot). Nunca SenderAlt da sessão.
 	payload["from"] = peer.Normalized
+	payload["source_identity"] = peerSourceIdentity(event.Info.MessageSource, peer)
 	payload["direction"] = messageDirection(event.Info.IsFromMe)
 	if history {
 		payload["history"] = true
@@ -484,6 +486,7 @@ func (b *EventBridge) appendMessageAction(
 	payload := map[string]any{
 		"action": action, "provider_message_id": info.ID,
 		"target_message_id": targetID, "from": peer.Normalized,
+		"source_identity": peerSourceIdentity(info.MessageSource, peer),
 	}
 	for key, value := range details {
 		payload[key] = value
@@ -659,6 +662,7 @@ func normalizedHistoryMessage(event *events.Message, peer OneToOneAddress) map[s
 	payload := normalizedMessagePayload(normalized)
 	payload["provider_message_id"] = event.Info.ID
 	payload["from"] = peer.Normalized
+	payload["source_identity"] = peerSourceIdentity(event.Info.MessageSource, peer)
 	payload["direction"] = messageDirection(event.Info.IsFromMe)
 	payload["history"] = true
 	payload["occurred_at"] = eventTimestamp(event.Info.Timestamp).Format(time.RFC3339Nano)
@@ -1031,21 +1035,42 @@ func (b *EventBridge) rejectScope(err error) {
 	}
 }
 
+// normalizeMessageSource returns the 1:1 chat peer. Aligned with GOWA/Chatwoot:
+// conversation key is always Chat — never Sender or SenderAlt (which on OUTBOUND
+// is frequently the session's own PN and creates self-chats).
 func normalizeMessageSource(source types.MessageSource) (OneToOneAddress, error) {
 	if source.IsGroup {
 		return OneToOneAddress{}, ErrRecipientScopeNotAllowed
 	}
-	chat, err := NormalizeOneToOneJID(source.Chat)
-	if err != nil {
-		return OneToOneAddress{}, err
+	return NormalizeOneToOneJID(source.Chat)
+}
+
+// peerSourceIdentity projects LID/PN aliases without replacing the chat peer.
+// OUTBOUND must not advertise SenderAlt (session) as the alternate of the chat.
+func peerSourceIdentity(source types.MessageSource, peer OneToOneAddress) map[string]any {
+	identity := map[string]any{
+		"primary":      peer.Normalized,
+		"primary_kind": string(peer.Kind),
+		"evidence":     "CHAT",
 	}
-	if chat.Kind == AddressLID {
-		if alternate, alternateErr := NormalizeOneToOneJID(source.SenderAlt); alternateErr == nil &&
-			alternate.Kind == AddressPN {
-			return alternate, nil
-		}
+	if peer.Kind != AddressLID {
+		return identity
 	}
-	return chat, nil
+	// Prefer a PN that maps the chat peer, not the session device:
+	// - INBOUND: SenderAlt is often the remote PN when Chat/Sender are LID
+	// - OUTBOUND: RecipientAlt is the remote PN; SenderAlt is typically "me"
+	var alt types.JID
+	if source.IsFromMe {
+		alt = source.RecipientAlt
+	} else {
+		alt = source.SenderAlt
+	}
+	if alternate, err := NormalizeOneToOneJID(alt); err == nil && alternate.Kind == AddressPN {
+		identity["alternate"] = alternate.Normalized
+		identity["alternate_kind"] = string(AddressPN)
+		identity["evidence"] = "MESSAGE_SOURCE_ALT"
+	}
+	return identity
 }
 
 func (b *EventBridge) append(
@@ -1172,10 +1197,18 @@ func (b *EventBridge) rememberMediaRetry(
 	if err != nil {
 		return err
 	}
+	chat := info.Chat.ToNonAD()
+	sender := info.Sender.ToNonAD()
+	if normalized, normErr := NormalizeOneToOneJID(chat); normErr == nil {
+		chat = normalized.JID
+	}
+	if normalized, normErr := NormalizeOneToOneJID(sender); normErr == nil {
+		sender = normalized.JID
+	}
 	envelope, err := json.Marshal(mediaRetryEnvelope{
 		Message:  descriptor,
-		Chat:     info.Chat.String(),
-		Sender:   info.Sender.String(),
+		Chat:     chat.String(),
+		Sender:   sender.String(),
 		IsFromMe: info.IsFromMe,
 	})
 	if err != nil {

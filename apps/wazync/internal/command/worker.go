@@ -127,7 +127,7 @@ func (w *Worker) ProcessOnce(ctx context.Context) error {
 			"type", pending.Command.Type,
 			"session_id", pending.Command.SessionID,
 			"attempt", pending.Attempts,
-			"error", err.Error(),
+			"error_class", commandErrorCode(err),
 		)
 		if err := w.store.MarkCommandFailed(
 			ctx,

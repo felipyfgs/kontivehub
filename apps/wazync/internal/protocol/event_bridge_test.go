@@ -509,6 +509,86 @@ func TestEventBridgeDecryptsPollVoteAndSecretEditBeforeProjection(t *testing.T) 
 		"ciphertext-poll-secret", "iv-secret", "ciphertext-edit-secret", "edit-iv-secret", "remote-key-secret")
 }
 
+func TestPeerSourceIdentityUsesOnlyTheRemoteAliasByDirection(t *testing.T) {
+	t.Parallel()
+	lid := types.NewJID("149865032093945", types.HiddenUserServer)
+	sessionPN := types.NewJID("559981769536", types.DefaultUserServer)
+	remotePN := types.NewJID("559992032709", types.DefaultUserServer)
+
+	inbound := types.MessageSource{
+		Chat: lid, Sender: lid, SenderAlt: remotePN,
+	}
+	inboundPeer, err := normalizeMessageSource(inbound)
+	if err != nil {
+		t.Fatalf("normalize inbound peer: %v", err)
+	}
+	inboundIdentity := peerSourceIdentity(inbound, inboundPeer)
+	if inboundIdentity["primary"] != "lid:149865032093945" ||
+		inboundIdentity["alternate"] != "+559992032709" {
+		t.Fatalf("inbound remote alias was not projected: %+v", inboundIdentity)
+	}
+
+	outbound := types.MessageSource{
+		Chat: lid, Sender: lid, SenderAlt: sessionPN, RecipientAlt: remotePN, IsFromMe: true,
+	}
+	outboundPeer, err := normalizeMessageSource(outbound)
+	if err != nil {
+		t.Fatalf("normalize outbound peer: %v", err)
+	}
+	outboundIdentity := peerSourceIdentity(outbound, outboundPeer)
+	if outboundIdentity["primary"] != "lid:149865032093945" ||
+		outboundIdentity["alternate"] != "+559992032709" {
+		t.Fatalf("outbound recipient alias was not projected: %+v", outboundIdentity)
+	}
+	if outboundIdentity["alternate"] == "+559981769536" {
+		t.Fatalf("outbound session PN leaked as peer alias: %+v", outboundIdentity)
+	}
+
+	historyPayload := normalizedHistoryMessage(&events.Message{
+		Info: types.MessageInfo{
+			MessageSource: outbound,
+			ID:            "history-lid-alias-0001",
+			Timestamp:     time.Now(),
+		},
+		Message: &waE2E.Message{Conversation: proto.String("histórico")},
+	}, outboundPeer)
+	historyIdentity, ok := historyPayload["source_identity"].(map[string]any)
+	if !ok || historyIdentity["alternate"] != "+559992032709" {
+		t.Fatalf("history lost remote alias: %+v", historyPayload)
+	}
+}
+
+func TestMessageActionCarriesTheSameRemoteSourceIdentity(t *testing.T) {
+	t.Parallel()
+	persistence := store.NewMemory()
+	bridge := NewEventBridge(persistence, nil, 20<<20)
+	source := types.MessageSource{
+		Chat:         types.NewJID("149865032093945", types.HiddenUserServer),
+		Sender:       types.NewJID("149865032093945", types.HiddenUserServer),
+		SenderAlt:    types.NewJID("559981769536", types.DefaultUserServer),
+		RecipientAlt: types.NewJID("559992032709", types.DefaultUserServer),
+		IsFromMe:     true,
+	}
+	bridge.handle(t.Context(), "session-lid-action", nil, &events.Message{
+		Info: types.MessageInfo{
+			MessageSource: source,
+			ID:            "provider-lid-reaction-0001",
+			Timestamp:     time.Now(),
+		},
+		Message: &waE2E.Message{ReactionMessage: &waE2E.ReactionMessage{
+			Key:  &waCommon.MessageKey{ID: proto.String("provider-lid-target-0001")},
+			Text: proto.String("👍"),
+		}},
+	})
+
+	action := payloadForAction(t, pendingEvents(t, persistence), "REACTION")
+	identity, ok := action["source_identity"].(map[string]any)
+	if !ok || identity["primary"] != "lid:149865032093945" ||
+		identity["alternate"] != "+559992032709" {
+		t.Fatalf("message action lost remote identity: %+v", action)
+	}
+}
+
 func TestEventBridgeProjectsMessageKindsActionsAndQuotes(t *testing.T) {
 	t.Parallel()
 	persistence := store.NewMemory()
@@ -1091,7 +1171,7 @@ func assertEventPayloadAllowlist(t *testing.T, event domain.Event) {
 	t.Helper()
 	allowedByType := map[domain.EventType][]string{
 		domain.EventMessageReceived: {
-			"provider_message_id", "provider_type", "family", "from", "kind", "text", "caption",
+			"provider_message_id", "provider_type", "family", "from", "source_identity", "kind", "text", "caption",
 			"occurred_at", "reply_to", "spool_id",
 			"media_size_bytes", "media_sha256", "mime_type", "filename", "media_error_code", "location",
 			"contacts", "poll", "interactive", "ptt", "gif", "animated", "duration_seconds",
@@ -1099,7 +1179,7 @@ func assertEventPayloadAllowlist(t *testing.T, event domain.Event) {
 		},
 		domain.EventMessageStatusChanged: {"provider_message_id", "status", "error_code"},
 		domain.EventMessageActionReceived: {
-			"action", "provider_message_id", "target_message_id", "from", "kind",
+			"action", "provider_message_id", "target_message_id", "from", "source_identity", "kind",
 			"provider_type", "family", "text", "caption", "emoji", "option_names",
 			"option_hashes", "content_present", "variants", "history",
 		},

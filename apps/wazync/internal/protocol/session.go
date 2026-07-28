@@ -372,6 +372,8 @@ func connectWithControlContext(ctx context.Context, client sessionWhatsMeowClien
 	case err := <-result:
 		return err
 	case <-ctx.Done():
+		// Interrupt in-flight Connect and return control promptly. If Connect
+		// ignores the disconnect and succeeds late, tear that socket down too.
 		client.Disconnect()
 		go func() {
 			<-result

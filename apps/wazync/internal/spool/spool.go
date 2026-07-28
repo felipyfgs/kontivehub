@@ -177,6 +177,7 @@ func (s *Store) Reader(ctx context.Context, id string) (io.ReadCloser, error) {
 				return
 			}
 			if _, err := writer.Write(plain); err != nil {
+				_ = writer.CloseWithError(fmt.Errorf("spool pipe write: %w", err))
 				return
 			}
 			index++

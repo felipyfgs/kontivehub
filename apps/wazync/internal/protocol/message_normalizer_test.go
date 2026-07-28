@@ -194,6 +194,7 @@ func TestCatalogedNormalizerUnwrapsLiveAndHistoryIdentically(t *testing.T) {
 	}, peer)
 	delete(history, "provider_message_id")
 	delete(history, "from")
+	delete(history, "source_identity")
 	delete(history, "direction")
 	delete(history, "history")
 	delete(history, "occurred_at")
