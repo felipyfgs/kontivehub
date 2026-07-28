@@ -30,7 +30,7 @@ fluxos. Wazync é apenas o gateway técnico de WhatsApp.
 - `apps/api/resources/contracts/wazync.openapi.yaml`: contrato privado Laravel↔Wazync.
 - `infra/docker`, `docker-compose*.yml` e `Makefile`: ambientes e operação.
 - `openspec`: propostas, delta specs, tarefas e ADRs. Não recrie o layout
-  legado `/docs`, que é ignorado deliberadamente.
+  `/docs`, que é ignorado deliberadamente.
 
 ## Ambiente local
 
@@ -77,6 +77,24 @@ make wazync-test
 
 Playwright E2E é validação local adicional, não gate padrão. Use
 `apps/web/tests/e2e/run-local.mjs` e não publique os artefatos gerados.
+
+## Orquestração de subagentes
+
+- Em tarefas não triviais com frentes independentes, delegue até três
+  subtarefas em paralelo.
+- Em mudanças entre apps, use no máximo um explorador somente leitura por app
+  afetado; dentro de um app, divida por responsabilidades independentes.
+- O agente principal mantém requisitos, decisões arquiteturais, integração e
+  resposta final. Aguarde a exploração antes de decidir a implementação.
+- Mantenha um único agente escritor por padrão. Só paralelize escritas quando
+  os arquivos e contratos forem comprovadamente disjuntos.
+- Cada subagente retorna conclusão, evidências com arquivos e símbolos, riscos
+  e testes recomendados. Não despeje logs ou notas brutas no contexto principal.
+- Reserve o agente `expert` para arquitetura crítica, segurança, concorrência,
+  investigação ambígua ou falhas persistentes. Se ele assumir a implementação,
+  mantenha os demais subagentes somente leitura.
+- Não delegue tarefas simples, estritamente sequenciais ou cujo custo de
+  coordenação supere o ganho de velocidade.
 
 ## Convenções
 
@@ -150,3 +168,11 @@ Playwright E2E é validação local adicional, não gate padrão. Use
 - Comportamento executável: `apps/api/tests`, `apps/web/tests` e testes Go.
 - Flags e boundaries: `apps/api/config`, `.env.example` e `apps/api/.env.example`.
 - Especificações de mudança: `openspec/changes` e `openspec/specs`.
+- Referências externas (somente local, não versionado): `.local/references`.
+  Fonte de verdade para exploração, padrões e esclarecimento de dúvidas — não
+  é código do produto. Consulte antes de inventar UX, inbox/comunicação ou
+  gateway WhatsApp. Não edite, version ou copie em massa para `apps/*` sem
+  adaptação aos boundaries do monorepo. Subpastas atuais:
+  - `dashboard` — arquétipos UI Nuxt (skill `ui-archetypes`)
+  - `chatwoot` — domínio de inbox/conversas/contatos
+  - `evolution-go` e `go-whatsapp-web-multidevice` — gateways WhatsApp em Go

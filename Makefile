@@ -1,5 +1,5 @@
 .PHONY: help init-env setup up dev down build logs shell migrate seed \
-	api-test composer-install frontend-generate wazync-test \
+	api-test composer-install frontend-generate wazync-test nginx-upstream-test \
 	prod-config prod-build prod-up prod-down \
 	backup restore prod-backup prod-restore \
 	frontend-prepare-generated frontend-install frontend-dev seed-dev seed-pilot \
@@ -31,6 +31,7 @@ help:
 	@echo "  make migrate            Migrations"
 	@echo "  make seed               Seed de desenvolvimento"
 	@echo "  make api-test           Suíte Laravel no PostgreSQL isolado"
+	@echo "  make nginx-upstream-test Verifica recuperação do edge após recriar o PHP"
 	@echo ""
 	@echo "Produção"
 	@echo "  make prod-config        Valida .env + compose prod"
@@ -90,6 +91,9 @@ api-test:
 		-e SESSION_DRIVER=array \
 		-e QUEUE_CONNECTION=sync \
 		php php artisan test
+
+nginx-upstream-test:
+	./infra/docker/nginx/verify-upstream-recovery.sh
 
 # -----------------------------------------------------------------------------
 # Produção
