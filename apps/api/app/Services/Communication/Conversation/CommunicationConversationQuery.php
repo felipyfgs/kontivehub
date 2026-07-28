@@ -7,13 +7,16 @@ use App\Models\CommunicationConversation;
 use App\Models\CommunicationMessage;
 use App\Models\User;
 use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\CommunicationConversationCanonicalizer;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 
 final readonly class CommunicationConversationQuery
 {
     public function __construct(
         private CommunicationAccess $access,
+        private CommunicationConversationCanonicalizer $canonicalizer,
     ) {}
 
     /** @return LengthAwarePaginator<int, CommunicationConversation> */
@@ -22,9 +25,10 @@ final readonly class CommunicationConversationQuery
         CommunicationConversationFiltersData $filters,
     ): LengthAwarePaginator {
         $inboxIds = $this->access->visibleInboxIds($actor);
-        $query = CommunicationConversation::query()
+        $query = $this->withUnreadProjection(CommunicationConversation::query())
             ->whereIn('inbox_id', $inboxIds)
-            ->with(['identity.contact', 'clients', 'labels', 'latestMessage.attachments'])
+            ->whereNull('merged_into_conversation_id')
+            ->with($this->workspaceRelations())
             ->withCount('messages');
 
         if ($filters->inboxId !== null) {
@@ -42,6 +46,9 @@ final readonly class CommunicationConversationQuery
         if ($filters->unassigned) {
             $query->whereNull('assignee_membership_id');
         }
+        if ($filters->unreadOnly) {
+            $query->whereHas('unreadMessages');
+        }
         if ($filters->search !== null) {
             $this->applySearch($query, $inboxIds, $filters->search);
         }
@@ -58,13 +65,53 @@ final readonly class CommunicationConversationQuery
 
     public function detail(
         CommunicationConversation $conversation,
+        bool $includeMessages = true,
     ): CommunicationConversation {
-        return $conversation->load([
+        $canonical = $this->canonicalizer->conversation($conversation);
+        $relations = $this->workspaceRelations();
+        if ($includeMessages) {
+            $relations[] = 'messages.attachments';
+        }
+
+        return $this->withUnreadProjection(CommunicationConversation::query())
+            ->whereKey($canonical->id)
+            ->with($relations)
+            ->withCount('messages')
+            ->firstOrFail();
+    }
+
+    /** @return list<string> */
+    private function workspaceRelations(): array
+    {
+        return [
             'identity.contact',
+            'identity.clientLinks.clientContact',
+            'identity.inboxProfiles',
+            'identity.canonicalIdentity.contact',
+            'identity.canonicalIdentity.clientLinks.clientContact',
+            'identity.canonicalIdentity.inboxProfiles',
             'clients',
             'labels',
-            'messages.attachments',
-        ]);
+            'latestMessage.attachments',
+            'readState',
+        ];
+    }
+
+    /** @param Builder<CommunicationConversation> $query */
+    private function withUnreadProjection(Builder $query): Builder
+    {
+        return $query
+            ->withCount('unreadMessages as unread_count')
+            ->addSelect([
+                'first_unread_message_id' => DB::table('communication_conversation_unread_messages as unread')
+                    ->select('unread.message_id')
+                    ->join('communication_messages as unread_message', 'unread_message.id', '=', 'unread.message_id')
+                    ->whereColumn('unread.tenant_id', 'communication_conversations.tenant_id')
+                    ->whereColumn('unread.conversation_id', 'communication_conversations.id')
+                    ->orderBy('unread_message.occurred_at')
+                    ->orderBy('unread_message.id')
+                    ->limit(1),
+            ]);
     }
 
     /**

@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
     'tenant_id',
@@ -100,5 +101,10 @@ class CommunicationMessage extends Model
     public function attachments(): HasMany
     {
         return $this->hasMany(CommunicationAttachment::class, 'message_id');
+    }
+
+    public function unreadEntry(): HasOne
+    {
+        return $this->hasOne(CommunicationConversationUnreadMessage::class, 'message_id');
     }
 }

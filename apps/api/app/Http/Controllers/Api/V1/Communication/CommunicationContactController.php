@@ -16,6 +16,7 @@ use App\Http\Resources\Communication\CommunicationIdentityLinkResource;
 use App\Http\Resources\Communication\CommunicationIdentitySummaryResource;
 use App\Models\CommunicationContact;
 use App\Models\CommunicationIdentity;
+use App\Services\Communication\CommunicationContactCanonicalizer;
 use App\Services\Communication\CommunicationContactQuery;
 use App\Services\Communication\CommunicationContactService;
 use Illuminate\Http\JsonResponse;
@@ -35,7 +36,10 @@ final class CommunicationContactController extends Controller
     public function show(
         ViewCommunicationContactRequest $request,
         CommunicationContact $contact,
+        CommunicationContactCanonicalizer $canonicalizer,
     ): JsonResponse {
+        $contact = $canonicalizer->contact($contact);
+
         return (new CommunicationContactResource(
             $contact->load([
                 'identities.clientLinks.client',

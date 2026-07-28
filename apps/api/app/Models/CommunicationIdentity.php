@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Fillable([
     'tenant_id',
     'contact_id',
+    'canonical_identity_id',
     'channel',
     'address_encrypted',
     'address_hash',
@@ -40,6 +41,11 @@ class CommunicationIdentity extends Model
         return $this->belongsTo(CommunicationContact::class, 'contact_id');
     }
 
+    public function canonicalIdentity(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'canonical_identity_id');
+    }
+
     public function clientLinks(): HasMany
     {
         return $this->hasMany(CommunicationIdentityLink::class, 'identity_id');
@@ -48,5 +54,10 @@ class CommunicationIdentity extends Model
     public function conversations(): HasMany
     {
         return $this->hasMany(CommunicationConversation::class, 'identity_id');
+    }
+
+    public function inboxProfiles(): HasMany
+    {
+        return $this->hasMany(CommunicationInboxIdentityProfile::class, 'identity_id');
     }
 }

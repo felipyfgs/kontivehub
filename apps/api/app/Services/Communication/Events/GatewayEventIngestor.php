@@ -24,6 +24,9 @@ use App\Models\CommunicationIdentity;
 use App\Models\CommunicationInbox;
 use App\Models\CommunicationMessage;
 use App\Services\Communication\Automation\FiscalDispatchStatusProjector;
+use App\Services\Communication\CommunicationConversationCanonicalizer;
+use App\Services\Communication\Contact\CommunicationInboxIdentityProfileMerger;
+use App\Services\Communication\Conversation\CommunicationConversationReadStateService;
 use App\Services\Communication\Flows\CommunicationFlowAvailability;
 use App\Services\Communication\Media\CommunicationMediaStore;
 use App\Services\Communication\Pairing\CommunicationPairingStateStore;
@@ -47,6 +50,9 @@ final readonly class GatewayEventIngestor
         private CommunicationPairingStateStore $pairing,
         private CommunicationEventRecorder $events,
         private FiscalDispatchStatusProjector $fiscalStatuses,
+        private CommunicationConversationCanonicalizer $peerCanonicalizer,
+        private CommunicationInboxIdentityProfileMerger $identityProfiles,
+        private CommunicationConversationReadStateService $readState,
     ) {}
 
     /** @return 'processed'|'duplicate' */
@@ -98,10 +104,16 @@ final readonly class GatewayEventIngestor
         try {
             /** @var array{tenant_id:int,conversation_id:int,message_id:int,event_key:string}|null $flowCorrelation */
             $flowCorrelation = null;
+            $attempts = in_array($incoming->type, [
+                GatewayEventType::MessageReceived,
+                GatewayEventType::MessageActionReceived,
+                GatewayEventType::HistorySynced,
+            ], true) ? 3 : 1;
             $result = DB::transaction(function () use ($incoming, $digest, $inbox, $storedMedia, &$flowCorrelation): string {
+                $flowCorrelation = null;
+                $this->lockAdvisory('gateway-event', $incoming->gatewayEventId);
                 $duplicate = CommunicationEvent::query()->withoutGlobalScopes()
                     ->where('gateway_event_id', $incoming->gatewayEventId)
-                    ->lockForUpdate()
                     ->first();
                 if ($duplicate !== null) {
                     if (! hash_equals((string) $duplicate->payload_digest, $digest)) {
@@ -159,7 +171,7 @@ final readonly class GatewayEventIngestor
                 );
 
                 return 'processed';
-            });
+            }, $attempts);
             if ($result === 'duplicate' && $storedMedia !== null) {
                 $this->media->delete($storedMedia['object_id']);
             }
@@ -194,20 +206,14 @@ final readonly class GatewayEventIngestor
         if (! preg_match('/^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$/', $providerId)) {
             throw new RuntimeException('provider_message_id inválido.');
         }
+        $this->lockAdvisory('provider-message', $inbox->id.'|'.$providerId);
+        $occurredAt = isset($incoming->payload['occurred_at'])
+            ? Carbon::parse((string) $incoming->payload['occurred_at'])->toImmutable()
+            : Carbon::instance($incoming->occurredAt)->toImmutable();
         $existing = CommunicationMessage::query()->withoutGlobalScopes()
             ->where('inbox_id', $inbox->id)
             ->where('provider_message_id', $providerId)
             ->first();
-        if ($existing !== null) {
-            return [(int) $existing->conversation_id, (int) $existing->id, [
-                'provider_message_id' => $providerId,
-                'history' => $history,
-                'direction' => $existing->direction instanceof MessageDirection
-                    ? $existing->direction->value
-                    : (string) $existing->direction,
-                'created' => false,
-            ]];
-        }
 
         try {
             $address = $this->peerResolver->resolve($incoming->payload, $inbox);
@@ -220,17 +226,36 @@ final readonly class GatewayEventIngestor
             $address,
             $aliases,
             $history,
-            $incoming->occurredAt,
+            $occurredAt,
+            $existing,
         );
+        $existing = CommunicationMessage::query()->withoutGlobalScopes()
+            ->where('inbox_id', $inbox->id)
+            ->where('provider_message_id', $providerId)
+            ->lockForUpdate()
+            ->first();
+        if ($existing !== null) {
+            if ((int) $existing->conversation_id !== (int) $conversation->id) {
+                throw new GatewayEventConflictException(
+                    'Provider message ID reutilizado para outro peer.',
+                );
+            }
+
+            return [(int) $conversation->id, (int) $existing->id, [
+                'provider_message_id' => $providerId,
+                'history' => $history,
+                'direction' => $existing->direction instanceof MessageDirection
+                    ? $existing->direction->value
+                    : (string) $existing->direction,
+                'created' => false,
+            ]];
+        }
 
         $payload = $incoming->payload;
         $kind = MessageKind::from(strtoupper((string) ($payload['kind'] ?? '')));
         $providerType = (string) $payload['provider_type'];
         $content = MessageSemanticContent::fromEvent($payload, $kind);
         $body = trim((string) ($payload['text'] ?? $payload['caption'] ?? ''));
-        $occurredAt = isset($incoming->payload['occurred_at'])
-            ? Carbon::parse((string) $incoming->payload['occurred_at'])->toImmutable()
-            : Carbon::instance($incoming->occurredAt)->toImmutable();
         $direction = match (strtoupper((string) ($incoming->payload['direction'] ?? 'INBOUND'))) {
             'OUTBOUND' => MessageDirection::Outbound,
             'INTERNAL' => MessageDirection::Internal,
@@ -310,9 +335,15 @@ final readonly class GatewayEventIngestor
             $conversation->forceFill([
                 'status' => ConversationStatus::Open,
                 'snoozed_until' => null,
-                'last_message_at' => $occurredAt,
+                'last_message_at' => $conversation->last_message_at === null
+                    || $conversation->last_message_at->isBefore($occurredAt)
+                        ? $occurredAt
+                        : $conversation->last_message_at,
                 'lock_version' => (int) $conversation->lock_version + 1,
             ])->save();
+            if ($direction === MessageDirection::Inbound) {
+                $this->readState->registerLiveInbound($conversation, $message);
+            }
         } elseif ($conversation->last_message_at === null || $conversation->last_message_at->isBefore($occurredAt)) {
             $conversation->forceFill(['last_message_at' => $occurredAt])->save();
         }
@@ -339,12 +370,11 @@ final readonly class GatewayEventIngestor
             throw new RuntimeException('Ação de mensagem do gateway inválida.');
         }
 
-        $message = CommunicationMessage::query()->withoutGlobalScopes()
+        $messagePreview = CommunicationMessage::query()->withoutGlobalScopes()
             ->where('inbox_id', $inbox->id)
             ->where('provider_message_id', $targetProviderId)
-            ->lockForUpdate()
             ->first();
-        if ($message === null) {
+        if ($messagePreview === null) {
             return [null, null, ['action' => $action, 'target_message_id' => $targetProviderId, 'orphan' => true]];
         }
 
@@ -354,12 +384,23 @@ final readonly class GatewayEventIngestor
             throw new RuntimeException($error->getMessage(), previous: $error);
         }
         $aliases = $this->peerResolver->aliases($incoming->payload, $sender, $inbox);
-        $senderHashes = array_map(
-            static fn (string $alias): string => hash('sha256', $alias),
+        [$canonicalIdentity, $canonicalConversation] = $this->peerCorrelation->correlate(
+            $inbox,
+            $sender,
             $aliases,
+            true,
+            $incoming->occurredAt,
+            $messagePreview,
         );
+        $message = CommunicationMessage::query()->withoutGlobalScopes()
+            ->where('inbox_id', $inbox->id)
+            ->where('provider_message_id', $targetProviderId)
+            ->lockForUpdate()
+            ->firstOrFail();
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()->find($message->identity_id);
-        if ($identity === null || ! in_array((string) $identity->address_hash, $senderHashes, true)) {
+        if ($identity === null
+            || ((int) $identity->id !== (int) $canonicalIdentity->id
+                && (int) $identity->canonical_identity_id !== (int) $canonicalIdentity->id)) {
             throw new RuntimeException('Ação não pertence à identidade da mensagem alvo.');
         }
 
@@ -415,6 +456,9 @@ final readonly class GatewayEventIngestor
         $message->metadata = $metadata;
         $message->content_encrypted = $content;
         $message->save();
+        if ($action === 'REVOKE') {
+            $this->readState->removePendingMessage($canonicalConversation, $message);
+        }
 
         return [(int) $message->conversation_id, (int) $message->id, array_filter([
             'action' => $action,
@@ -557,7 +601,16 @@ final readonly class GatewayEventIngestor
             'ttl_seconds' => isset($incoming->payload['ttl_seconds']) ? (int) $incoming->payload['ttl_seconds'] : null,
         ], static fn (mixed $value): bool => $value !== null);
         if ($identity !== null && isset($safe['last_seen'])) {
-            $identity->forceFill(['last_seen_at' => Carbon::parse((string) $safe['last_seen'])])->save();
+            $identity = CommunicationIdentity::query()
+                ->withoutGlobalScopes()
+                ->where('tenant_id', $inbox->tenant_id)
+                ->whereKey($identity->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $lastSeen = Carbon::parse((string) $safe['last_seen']);
+            if ($identity->last_seen_at === null || $identity->last_seen_at->isBefore($lastSeen)) {
+                $identity->forceFill(['last_seen_at' => $lastSeen])->save();
+            }
         }
 
         return [$conversation?->id, null, $safe];
@@ -568,28 +621,88 @@ final readonly class GatewayEventIngestor
     {
         $user = (string) ($incoming->payload['user'] ?? '');
         [$identity, $conversation] = $this->knownContext($inbox, $user);
+        $source = strtoupper(trim((string) ($incoming->payload['source'] ?? '')));
         $safe = array_filter([
             'user' => $user,
             'display_name' => $incoming->payload['display_name'] ?? null,
             'business_name' => $incoming->payload['business_name'] ?? null,
             'picture_id' => $incoming->payload['picture_id'] ?? null,
             'about' => $incoming->payload['about'] ?? null,
+            'source' => $source !== '' ? $source : null,
+            'verified_name' => $incoming->payload['verified_name'] ?? null,
+            'address_book_name' => $incoming->payload['address_book_name'] ?? null,
+            'address_book_full_name' => $incoming->payload['address_book_full_name'] ?? null,
+            'address_book_first_name' => $incoming->payload['address_book_first_name'] ?? null,
+            'push_name' => $incoming->payload['push_name'] ?? null,
+            'from_full_sync' => $incoming->payload['from_full_sync'] ?? null,
+            'cleared_fields' => $incoming->payload['cleared_fields'] ?? null,
+            'source_identity' => $incoming->payload['source_identity'] ?? null,
         ], static fn (mixed $value): bool => is_bool($value) || (is_scalar($value) && (string) $value !== ''));
-        if ($identity !== null) {
-            $contact = $identity->contact()->withoutGlobalScopes()->first();
-            if ($contact !== null) {
-                $metadata = is_array($contact->metadata) ? $contact->metadata : [];
-                $metadata['whatsapp_profile'] = $safe;
-                $attributes = ['metadata' => $metadata];
-                $displayName = trim((string) ($safe['display_name'] ?? $safe['business_name'] ?? ''));
-                if ($contact->is_provisional && $displayName !== '') {
-                    $attributes['name'] = $displayName;
-                }
-                $contact->forceFill($attributes)->save();
+        foreach (['cleared_fields', 'source_identity'] as $structuredField) {
+            if (is_array($incoming->payload[$structuredField] ?? null)) {
+                $safe[$structuredField] = $incoming->payload[$structuredField];
             }
+        }
+        if ($identity !== null) {
+            $fields = $this->profileFields($incoming->payload, $source);
+            $clearedFields = array_values(array_filter(
+                is_array($incoming->payload['cleared_fields'] ?? null)
+                    ? $incoming->payload['cleared_fields']
+                    : [],
+                'is_string',
+            ));
+            $this->identityProfiles->merge(
+                $inbox,
+                $identity,
+                $fields,
+                Carbon::parse($incoming->occurredAt),
+                $incoming->gatewayEventId,
+                $clearedFields,
+            );
         }
 
         return [$conversation?->id, null, $safe];
+    }
+
+    /**
+     * @param  array<string, mixed>  $safe
+     * @return array<string, string>
+     */
+    private function profileFields(array $safe, string $source): array
+    {
+        $fields = array_intersect_key($safe, array_flip([
+            'address_book_first_name', 'address_book_full_name', 'verified_name',
+            'business_name', 'push_name', 'picture_id', 'about',
+        ]));
+        if (isset($safe['address_book_name']) && is_string($safe['address_book_name'])
+            && ! isset($fields['address_book_full_name'])) {
+            $fields['address_book_full_name'] = $safe['address_book_name'];
+        }
+
+        $display = isset($safe['display_name']) && is_string($safe['display_name'])
+            ? $safe['display_name']
+            : null;
+        if ($display !== null) {
+            $fields = match ($source) {
+                'ADDRESS_BOOK' => $fields + ['address_book_full_name' => $display],
+                'VERIFIED' => $fields + ['verified_name' => $display],
+                'BUSINESS' => $fields + ['business_name' => $display],
+                'PUSH' => $fields + ['push_name' => $display],
+                default => $fields + (
+                    isset($fields['address_book_full_name']) || isset($fields['push_name'])
+                        ? []
+                        : ['push_name' => $display]
+                ),
+            };
+            // Legacy Contact full-name events used display_name without source.
+            if ($source === '' && ! isset($safe['business_name']) && ! isset($safe['push_name'])) {
+                // Prefer address book when only display_name is present (Contact action).
+                $fields['address_book_full_name'] = $fields['address_book_full_name'] ?? $display;
+                unset($fields['push_name']);
+            }
+        }
+
+        return $fields;
     }
 
     /** @return array{0:?int,1:null,2:array<string,mixed>} */
@@ -613,9 +726,17 @@ final readonly class GatewayEventIngestor
             ->where('channel', CommunicationChannel::Whatsapp->value)
             ->where('address_hash', hash('sha256', $normalized))
             ->first();
-        $conversation = $identity === null ? null : CommunicationConversation::query()->withoutGlobalScopes()
+        if ($identity === null) {
+            return [null, null];
+        }
+
+        $identityIds = $this->peerCanonicalizer->identityIds($identity);
+        $identity = $this->peerCanonicalizer->identity($identity);
+        $conversation = CommunicationConversation::query()->withoutGlobalScopes()
+            ->where('tenant_id', $inbox->tenant_id)
             ->where('inbox_id', $inbox->id)
-            ->where('identity_id', $identity->id)
+            ->whereIn('identity_id', $identityIds)
+            ->whereNull('merged_into_conversation_id')
             ->orderByDesc('last_message_at')
             ->orderByDesc('id')
             ->first();
@@ -765,6 +886,22 @@ final readonly class GatewayEventIngestor
         $mime = strtolower(trim(explode(';', $mime, 2)[0]));
 
         return preg_match('#^[a-z0-9.+-]+/[a-z0-9.+-]+$#', $mime) ? $mime : 'application/octet-stream';
+    }
+
+    private function lockAdvisory(string $scope, string $key): void
+    {
+        $bytes = substr(hash('sha256', $scope.'|'.$key, true), 0, 8);
+        /** @var array{scope:int,key:int} $parts */
+        $parts = unpack('Nscope/Nkey', $bytes);
+        DB::select('SELECT pg_advisory_xact_lock(?, ?)', [
+            $this->signedInt32($parts['scope']),
+            $this->signedInt32($parts['key']),
+        ]);
+    }
+
+    private function signedInt32(int $value): int
+    {
+        return $value > 0x7FFFFFFF ? $value - 0x100000000 : $value;
     }
 
     private function safeFilename(string $filename, MessageKind $kind): string

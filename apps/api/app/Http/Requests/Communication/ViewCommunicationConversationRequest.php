@@ -8,6 +8,13 @@ use App\Services\Communication\Authorization\CommunicationAccess;
 
 final class ViewCommunicationConversationRequest extends CommunicationRequest
 {
+    protected function prepareCommunicationValidation(): void
+    {
+        if ($this->query->has('include_messages')) {
+            $this->merge(['include_messages' => $this->boolean('include_messages')]);
+        }
+    }
+
     public function authorize(): bool
     {
         $actor = $this->user();
@@ -25,6 +32,13 @@ final class ViewCommunicationConversationRequest extends CommunicationRequest
     /** @return array<string, list<mixed>> */
     public function rules(): array
     {
-        return [];
+        return [
+            'include_messages' => ['sometimes', 'boolean'],
+        ];
+    }
+
+    public function includeMessages(): bool
+    {
+        return (bool) ($this->validated()['include_messages'] ?? true);
     }
 }

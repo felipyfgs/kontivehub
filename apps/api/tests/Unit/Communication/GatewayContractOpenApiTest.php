@@ -76,6 +76,7 @@ class GatewayContractOpenApiTest extends TestCase
             'LinkQueryPayload',
             'QueryResult',
             'GatewayEvent',
+            'SourceIdentity',
         ] as $schema) {
             $this->assertStringContainsString(
                 'additionalProperties: false',
@@ -145,7 +146,17 @@ class GatewayContractOpenApiTest extends TestCase
             $this->assertStringContainsString($field, $this->schemaBlock('MediaRetryEventPayload'));
         }
         $this->assertStringContainsString('provider_message_id', $this->schemaBlock('InboundMessageReference'));
-        $this->assertStringContainsString('history:', $this->schemaBlock('MessageActionEventPayload'));
+        $this->assertStringContainsString('source_identity:', $message);
+        $sourceIdentity = $this->schemaBlock('SourceIdentity');
+        foreach (['primary:', 'primary_kind:', 'alternate:', 'alternate_kind:', 'evidence:'] as $field) {
+            $this->assertStringContainsString($field, $sourceIdentity);
+        }
+        foreach (['const: LID', 'const: PN', 'const: MESSAGE_SOURCE_ALT'] as $constraint) {
+            $this->assertStringContainsString($constraint, $sourceIdentity);
+        }
+        $action = $this->schemaBlock('MessageActionEventPayload');
+        $this->assertStringContainsString('history:', $action);
+        $this->assertStringContainsString('source_identity:', $action);
 
         $chatState = $this->schemaBlock('ChatStateEventPayload');
         foreach (['DELETE_FOR_ME', 'CLEAR_CHAT', 'LABEL_CHAT', 'LABEL_MESSAGE', 'label_id:'] as $value) {
@@ -156,6 +167,36 @@ class GatewayContractOpenApiTest extends TestCase
         foreach (['sync_type:', 'chunk_order:', 'progress:', 'message_count:', 'rejected_count:', 'truncated:'] as $field) {
             $this->assertStringContainsString($field, $history);
         }
+    }
+
+    public function test_contact_profile_query_and_events_are_closed_and_source_aware(): void
+    {
+        $queryResult = $this->schemaBlock('QueryResult');
+        $this->assertStringContainsString('ContactProfilesResult', $queryResult);
+
+        $profile = $this->schemaBlock('ContactProfileResult');
+        foreach ([
+            'required: [user, found]',
+            'address_book_first_name:',
+            'address_book_full_name:',
+            'push_name:',
+            'business_name:',
+            'observed_at:',
+            'event_id:',
+        ] as $field) {
+            $this->assertStringContainsString($field, $profile);
+        }
+        $this->assertStringNotContainsString('verified_name:', $profile);
+        $this->assertStringNotContainsString('address_book_name:', $profile);
+
+        $event = $this->schemaBlock('ContactProfileEventPayload');
+        foreach ([
+            'ADDRESS_BOOK', 'PUSH', 'BUSINESS', 'PICTURE', 'ABOUT',
+            'cleared_fields:', 'from_full_sync:', 'source_identity:',
+        ] as $field) {
+            $this->assertStringContainsString($field, $event);
+        }
+        $this->assertStringNotContainsString('picture_url:', $event);
     }
 
     /** @return list<string> */

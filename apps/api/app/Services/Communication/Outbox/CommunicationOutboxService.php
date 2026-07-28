@@ -34,13 +34,47 @@ final readonly class CommunicationOutboxService
         ?string $commandId = null,
         ?string $effectKey = null,
     ): CommunicationOutboxEntry {
-        $this->assertTenantConsistency($inbox, $message);
-        if ($this->policy->allowsDisabledInbox($type)) {
-            $this->availability->assertGatewayAvailable();
-        } else {
-            $this->availability->assertEnabled($inbox, $this->policy->requiresConnectedInbox($type));
-        }
+        return $this->persist(
+            $inbox,
+            $type,
+            $payload,
+            $message,
+            $commandId,
+            $effectKey,
+            true,
+        );
+    }
 
+    /** @param array<string, mixed> $payload */
+    public function enqueueAcceptedFollowUp(
+        CommunicationInbox $inbox,
+        GatewayCommandType $type,
+        array $payload,
+        CommunicationMessage $message,
+        string $effectKey,
+    ): CommunicationOutboxEntry {
+        return $this->persist(
+            $inbox,
+            $type,
+            $payload,
+            $message,
+            null,
+            $effectKey,
+            false,
+        );
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function persist(
+        CommunicationInbox $inbox,
+        GatewayCommandType $type,
+        array $payload,
+        ?CommunicationMessage $message,
+        ?string $commandId,
+        ?string $effectKey,
+        bool $assertAvailability,
+    ): CommunicationOutboxEntry {
+        $this->assertTenantConsistency($inbox, $message);
         if ($effectKey !== null && $effectKey !== '') {
             $existing = CommunicationOutboxEntry::query()
                 ->withoutGlobalScopes()
@@ -48,6 +82,14 @@ final readonly class CommunicationOutboxService
                 ->first();
             if ($existing !== null) {
                 return $existing;
+            }
+        }
+
+        if ($assertAvailability) {
+            if ($this->policy->allowsDisabledInbox($type)) {
+                $this->availability->assertGatewayAvailable();
+            } else {
+                $this->availability->assertEnabled($inbox, $this->policy->requiresConnectedInbox($type));
             }
         }
 

@@ -15,6 +15,16 @@ final class CommunicationConversationApiException extends ApiDomainException imp
         );
     }
 
+    public static function readStateVersionConflict(int $currentVersion): self
+    {
+        return new self(
+            'READ_STATE_VERSION_CONFLICT',
+            'O estado de leitura foi alterado em outra sessão.',
+            409,
+            ['current_version' => $currentVersion],
+        );
+    }
+
     public static function purged(): self
     {
         return new self(
@@ -87,8 +97,14 @@ final class CommunicationConversationApiException extends ApiDomainException imp
         );
     }
 
-    private function __construct(string $code, string $message, int $status)
+    /** @param array<string, mixed> $responseData */
+    private function __construct(
+        string $code,
+        string $message,
+        int $status,
+        array $responseData = [],
+    )
     {
-        parent::__construct($code, $message, $status);
+        parent::__construct($code, $message, $status, $responseData);
     }
 }

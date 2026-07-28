@@ -7,9 +7,12 @@ use App\Models\CommunicationContact;
 use App\Models\CommunicationConversation;
 use App\Models\CommunicationIdentity;
 use App\Models\CommunicationIdentityLink;
+use App\Models\CommunicationInboxIdentityProfile;
 use App\Models\CommunicationMessage;
+use App\Services\Communication\CommunicationContactCanonicalizer;
 use App\Services\Communication\Events\CommunicationEventRecorder;
 use App\Support\CurrentTenant;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 final class ExportCommunicationContactAction
@@ -21,15 +24,17 @@ final class ExportCommunicationContactAction
     public function __construct(
         private readonly CurrentTenant $currentTenant,
         private readonly CommunicationEventRecorder $events,
+        private readonly CommunicationContactCanonicalizer $canonicalizer,
     ) {}
 
     public function execute(CommunicationContact $contact): StreamedResponse
     {
+        $requestedContactId = (int) $contact->id;
+        $contact = $this->canonicalizer->contact($contact);
         $tenantId = (int) $this->currentTenant->tenant()->id;
         $contactId = (int) $contact->id;
         $exportedAt = now()->toIso8601String();
-        $contactName = $contact->name;
-        $isProvisional = (bool) $contact->is_provisional;
+        $canonicalizer = $this->canonicalizer;
         $this->events->record(
             $tenantId,
             'CONTACT_EXPORTED',
@@ -40,112 +45,172 @@ final class ExportCommunicationContactAction
         return response()->streamDownload(
             static function () use (
                 $tenantId,
-                $contactId,
+                $requestedContactId,
                 $exportedAt,
-                $contactName,
-                $isProvisional,
+                $canonicalizer,
             ): void {
-                echo '{"exported_at":', self::encode($exportedAt);
-                echo ',"contact":{"id":', self::encode($contactId);
-                echo ',"name":', self::encode($contactName);
-                echo ',"is_provisional":', self::encode($isProvisional);
-                echo ',"identities":[';
-
-                $firstIdentity = true;
-                foreach (
-                    CommunicationIdentity::query()
+                DB::transaction(static function () use (
+                    $tenantId,
+                    $requestedContactId,
+                    $exportedAt,
+                    $canonicalizer,
+                ): void {
+                    $requestedContact = CommunicationContact::query()
                         ->withoutGlobalScopes()
                         ->where('tenant_id', $tenantId)
-                        ->where('contact_id', $contactId)
-                        ->orderBy('id')
-                        ->lazyById(100) as $identity
-                ) {
-                    self::separator($firstIdentity);
-                    echo '{"id":', self::encode((int) $identity->id);
-                    echo ',"channel":', self::encode(
-                        $identity->channel?->value ?? $identity->channel,
-                    );
-                    echo ',"address":', self::encode($identity->address_encrypted);
-                    echo ',"client_ids":[';
+                        ->findOrFail($requestedContactId);
+                    [$contact] = $canonicalizer->lockContactClass($requestedContact);
+                    $contactId = (int) $contact->id;
+                    $contactName = $contact->name;
+                    $isProvisional = (bool) $contact->is_provisional;
+                    echo '{"exported_at":', self::encode($exportedAt);
+                    echo ',"contact":{"id":', self::encode($contactId);
+                    echo ',"name":', self::encode($contactName);
+                    echo ',"is_provisional":', self::encode($isProvisional);
+                    echo ',"identities":[';
 
-                    $firstClient = true;
+                    $firstIdentity = true;
                     foreach (
-                        CommunicationIdentityLink::query()
+                        CommunicationIdentity::query()
                             ->withoutGlobalScopes()
                             ->where('tenant_id', $tenantId)
-                            ->where('identity_id', $identity->id)
+                            ->where('contact_id', $contactId)
                             ->orderBy('id')
-                            ->lazyById(100) as $link
+                            ->lazyById(100) as $identity
                     ) {
-                        self::separator($firstClient);
-                        echo self::encode((int) $link->client_id);
-                    }
-
-                    echo '],"conversations":[';
-                    $firstConversation = true;
-                    foreach (
-                        CommunicationConversation::query()
-                            ->withoutGlobalScopes()
-                            ->where('tenant_id', $tenantId)
-                            ->where('identity_id', $identity->id)
-                            ->orderBy('id')
-                            ->lazyById(100) as $conversation
-                    ) {
-                        self::separator($firstConversation);
-                        echo '{"id":', self::encode((int) $conversation->id);
-                        echo ',"status":', self::encode(
-                            $conversation->status?->value ?? $conversation->status,
+                        self::separator($firstIdentity);
+                        echo '{"id":', self::encode((int) $identity->id);
+                        echo ',"channel":', self::encode(
+                            $identity->channel?->value ?? $identity->channel,
                         );
-                        echo ',"messages":[';
+                        echo ',"address":', self::encode($identity->address_encrypted);
+                        echo ',"client_ids":[';
 
-                        $firstMessage = true;
+                        $firstClient = true;
                         foreach (
-                            CommunicationMessage::query()
+                            CommunicationIdentityLink::query()
                                 ->withoutGlobalScopes()
                                 ->where('tenant_id', $tenantId)
-                                ->where('conversation_id', $conversation->id)
-                                ->orderBy('occurred_at')
+                                ->where('identity_id', $identity->id)
                                 ->orderBy('id')
-                                ->lazy(100) as $message
+                                ->lazyById(100) as $link
                         ) {
-                            self::separator($firstMessage);
-                            echo '{"id":', self::encode((int) $message->id);
-                            echo ',"direction":', self::encode(
-                                $message->direction?->value ?? $message->direction,
-                            );
-                            echo ',"kind":', self::encode(
-                                $message->kind?->value ?? $message->kind,
-                            );
-                            echo ',"body":', self::encode($message->body_encrypted);
-                            echo ',"occurred_at":', self::encode(
-                                $message->occurred_at?->toIso8601String(),
-                            );
-                            echo ',"attachments":[';
+                            self::separator($firstClient);
+                            echo self::encode((int) $link->client_id);
+                        }
 
-                            $firstAttachment = true;
+                        echo '],"inbox_profiles":[';
+                        $firstProfile = true;
+                        foreach (
+                            CommunicationInboxIdentityProfile::query()
+                                ->withoutGlobalScopes()
+                                ->where('tenant_id', $tenantId)
+                                ->where('identity_id', $identity->id)
+                                ->orderBy('inbox_id')
+                                ->lazyById(100) as $profile
+                        ) {
+                            self::separator($firstProfile);
+                            echo self::encode([
+                                'inbox_id' => (int) $profile->inbox_id,
+                                'address_book_first_name' => $profile->address_book_first_name,
+                                'address_book_full_name' => $profile->address_book_full_name,
+                                'verified_name' => $profile->verified_name,
+                                'business_name' => $profile->business_name,
+                                'push_name' => $profile->push_name,
+                                'picture_id' => $profile->picture_id,
+                                'about' => $profile->about,
+                                'field_versions' => $profile->field_versions,
+                                'cleared_fields' => $profile->cleared_fields,
+                            ]);
+                        }
+
+                        echo '],"conversations":[';
+                        $firstConversation = true;
+                        foreach (
+                            CommunicationConversation::query()
+                                ->withoutGlobalScopes()
+                                ->where('tenant_id', $tenantId)
+                                ->where('identity_id', $identity->id)
+                                ->orderBy('id')
+                                ->lazyById(100) as $conversation
+                        ) {
+                            self::separator($firstConversation);
+                            echo '{"id":', self::encode((int) $conversation->id);
+                            echo ',"status":', self::encode(
+                                $conversation->status?->value ?? $conversation->status,
+                            );
+                            $readState = DB::table('communication_conversation_read_states')
+                                ->where('tenant_id', $tenantId)
+                                ->where('conversation_id', $conversation->id)
+                                ->first();
+                            echo ',"read_state":', self::encode($readState === null ? [
+                                'version' => 0,
+                                'last_read_through_message_id' => null,
+                                'unread_message_ids' => [],
+                            ] : [
+                                'version' => (int) $readState->version,
+                                'last_read_through_message_id' => $readState->last_read_through_message_id !== null
+                                    ? (int) $readState->last_read_through_message_id
+                                    : null,
+                                'unread_message_ids' => DB::table('communication_conversation_unread_messages')
+                                    ->where('tenant_id', $tenantId)
+                                    ->where('conversation_id', $conversation->id)
+                                    ->orderBy('message_id')
+                                    ->pluck('message_id')
+                                    ->map(static fn ($id): int => (int) $id)
+                                    ->all(),
+                            ]);
+                            echo ',"messages":[';
+
+                            $firstMessage = true;
                             foreach (
-                                CommunicationAttachment::query()
+                                CommunicationMessage::query()
                                     ->withoutGlobalScopes()
                                     ->where('tenant_id', $tenantId)
-                                    ->where('message_id', $message->id)
+                                    ->where('conversation_id', $conversation->id)
+                                    ->orderBy('occurred_at')
                                     ->orderBy('id')
-                                    ->lazyById(100) as $attachment
+                                    ->lazy(100) as $message
                             ) {
-                                self::separator($firstAttachment);
-                                echo self::encode([
-                                    'id' => (int) $attachment->id,
-                                    'mime_type' => $attachment->mime_type,
-                                    'size_bytes' => $attachment->size_bytes,
-                                    'sha256' => $attachment->sha256,
-                                ]);
+                                self::separator($firstMessage);
+                                echo '{"id":', self::encode((int) $message->id);
+                                echo ',"direction":', self::encode(
+                                    $message->direction?->value ?? $message->direction,
+                                );
+                                echo ',"kind":', self::encode(
+                                    $message->kind?->value ?? $message->kind,
+                                );
+                                echo ',"body":', self::encode($message->body_encrypted);
+                                echo ',"occurred_at":', self::encode(
+                                    $message->occurred_at?->toIso8601String(),
+                                );
+                                echo ',"attachments":[';
+
+                                $firstAttachment = true;
+                                foreach (
+                                    CommunicationAttachment::query()
+                                        ->withoutGlobalScopes()
+                                        ->where('tenant_id', $tenantId)
+                                        ->where('message_id', $message->id)
+                                        ->orderBy('id')
+                                        ->lazyById(100) as $attachment
+                                ) {
+                                    self::separator($firstAttachment);
+                                    echo self::encode([
+                                        'id' => (int) $attachment->id,
+                                        'mime_type' => $attachment->mime_type,
+                                        'size_bytes' => $attachment->size_bytes,
+                                        'sha256' => $attachment->sha256,
+                                    ]);
+                                }
+                                echo ']}';
                             }
                             echo ']}';
                         }
                         echo ']}';
                     }
-                    echo ']}';
-                }
-                echo ']}}';
+                    echo ']}}';
+                });
             },
             'contato-'.$contactId.'.json',
             [

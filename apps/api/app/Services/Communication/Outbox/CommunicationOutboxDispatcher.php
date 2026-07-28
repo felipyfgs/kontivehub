@@ -16,6 +16,7 @@ use App\Services\Communication\Automation\FiscalDispatchStatusProjector;
 use App\Services\Communication\CommunicationAvailability;
 use App\Services\Communication\Flows\CommunicationFlowExecutor;
 use App\Services\Communication\Gateway\CommunicationGatewayOperationPolicy;
+use App\Services\Communication\Events\CommunicationEventRecorder;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use Throwable;
@@ -29,6 +30,8 @@ final readonly class CommunicationOutboxDispatcher
         private FiscalDispatchStatusProjector $fiscalStatuses,
         private CommunicationAvailability $availability,
         private CommunicationGatewayOperationPolicy $policy,
+        private CommunicationOutboundReadReceiptReleaseService $readReceipts,
+        private CommunicationEventRecorder $events,
     ) {}
 
     public function dispatch(int $entryId): void
@@ -137,6 +140,9 @@ final readonly class CommunicationOutboxDispatcher
         )) {
             throw new CommunicationTransportException('OUTBOX_TENANT_SCOPE_INVALID', false);
         }
+        if ($message?->purged_at !== null) {
+            throw new CommunicationTransportException('OUTBOX_MESSAGE_PURGED', false);
+        }
 
         if ($this->policy->allowsDisabledInbox($entry->type)) {
             $this->availability->assertGatewayAvailable();
@@ -170,6 +176,23 @@ final readonly class CommunicationOutboxDispatcher
                 $message = CommunicationMessage::query()->withoutGlobalScopes()->find($entry->message_id);
                 if ($message instanceof CommunicationMessage) {
                     $this->fiscalStatuses->project($message, MessageStatus::Accepted, $acceptedAt, 'GATEWAY_ACCEPTANCE');
+                }
+            }
+            if ($entry->type === GatewayCommandType::SendMessage) {
+                try {
+                    $this->readReceipts->release($entry);
+                } catch (Throwable) {
+                    $this->events->record(
+                        tenantId: (int) $entry->tenant_id,
+                        type: 'outbound.read_receipt.release_failed',
+                        payload: [
+                            'outbox_entry_id' => (int) $entry->id,
+                            'message_id' => (int) $entry->message_id,
+                            'code' => 'RELEASE_UNEXPECTED_FAILURE',
+                        ],
+                        inboxId: (int) $entry->inbox_id,
+                        messageId: $entry->message_id !== null ? (int) $entry->message_id : null,
+                    );
                 }
             }
         });

@@ -78,6 +78,7 @@ final class SendMessageRequest extends CommunicationRequest
             'interactive.options' => ['required_with:interactive', 'array', 'min:1', 'max:20'],
             'interactive.options.*' => ['required', 'string', 'distinct', 'max:512'],
             'reply_to_message_id' => ['nullable', 'integer', 'min:1'],
+            'receipt_message_id' => ['nullable', 'integer', 'min:1', 'prohibited_if:internal_note,true'],
             'internal_note' => ['sometimes', 'boolean'],
             'idempotency_key' => ['nullable', 'string', 'regex:/^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/'],
         ];
@@ -110,6 +111,9 @@ final class SendMessageRequest extends CommunicationRequest
                 ? (string) $validated['idempotency_key']
                 : null,
             upload: $this->uploadData(),
+            receiptMessageId: isset($validated['receipt_message_id'])
+                ? (int) $validated['receipt_message_id']
+                : null,
         );
     }
 

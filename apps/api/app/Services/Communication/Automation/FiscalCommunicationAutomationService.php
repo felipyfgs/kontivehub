@@ -26,6 +26,7 @@ use App\Models\CommunicationMessage;
 use App\Models\PgdasdArtifact;
 use App\Models\Tenant;
 use App\Services\Communication\CommunicationAvailability;
+use App\Services\Communication\CommunicationConversationCanonicalizer;
 use App\Services\Communication\Events\CommunicationEventRecorder;
 use App\Services\Communication\Media\CommunicationMediaStore;
 use App\Services\Communication\Outbox\CommunicationOutboxService;
@@ -43,6 +44,7 @@ final readonly class FiscalCommunicationAutomationService
         private CommunicationRecipientResolver $recipients,
         private FiscalCommunicationArtifactResolver $artifacts,
         private CommunicationAvailability $availability,
+        private CommunicationConversationCanonicalizer $canonicalizer,
         private CommunicationMediaStore $media,
         private CommunicationOutboxService $outbox,
         private CommunicationEventRecorder $events,
@@ -298,29 +300,49 @@ final readonly class FiscalCommunicationAutomationService
                 $stored,
                 $storageContext,
             ): ?ClientCommunicationDispatch {
-                $locked = ClientCommunicationDispatch::query()->withoutGlobalScopes()
-                    ->lockForUpdate()->find($dispatch->id);
+                $lockedIdentity = CommunicationIdentity::query()
+                    ->withoutGlobalScopes()
+                    ->whereKey($identity->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+                $canonicalIdentity = $this->canonicalizer->identity($lockedIdentity);
+                $identityIds = $this->canonicalizer->identityIds($canonicalIdentity);
+                $conversations = CommunicationConversation::query()->withoutGlobalScopes()
+                    ->where('tenant_id', $tenant->id)
+                    ->where('inbox_id', $inbox->id)
+                    ->whereIn('identity_id', $identityIds)
+                    ->where('status', '!=', ConversationStatus::Resolved->value)
+                    ->whereNull('merged_into_conversation_id')
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get();
+                $locked = ClientCommunicationDispatch::query()
+                    ->withoutGlobalScopes()
+                    ->lockForUpdate()
+                    ->find($dispatch->id);
                 if (! $locked instanceof ClientCommunicationDispatch
                     || $locked->status !== CommunicationDispatchStatus::Scheduled) {
                     return null;
                 }
-                CommunicationIdentity::query()->withoutGlobalScopes()->whereKey($identity->id)->lockForUpdate()->firstOrFail();
-                $conversation = CommunicationConversation::query()->withoutGlobalScopes()
-                    ->where('tenant_id', $tenant->id)
-                    ->where('inbox_id', $inbox->id)
-                    ->where('identity_id', $identity->id)
-                    ->where('status', '!=', ConversationStatus::Resolved->value)
-                    ->first();
+                if ($conversations->count() > 1) {
+                    throw new RuntimeException('COMMUNICATION_CANONICAL_CONVERSATION_CONFLICT');
+                }
+                $conversation = $conversations->first();
                 if (! $conversation instanceof CommunicationConversation) {
                     $conversation = CommunicationConversation::query()->withoutGlobalScopes()->create([
                         'tenant_id' => $tenant->id,
                         'inbox_id' => $inbox->id,
-                        'identity_id' => $identity->id,
+                        'identity_id' => $canonicalIdentity->id,
                         'status' => ConversationStatus::Pending,
                         'work_department_id' => $inbox->work_department_id,
                         'priority' => 0,
                         'lock_version' => 1,
                     ]);
+                } elseif ((int) $conversation->identity_id !== (int) $canonicalIdentity->id) {
+                    $conversation->forceFill([
+                        'identity_id' => $canonicalIdentity->id,
+                        'lock_version' => (int) $conversation->lock_version + 1,
+                    ])->save();
                 }
                 DB::table('communication_conversation_clients')->insertOrIgnore([
                     'tenant_id' => $tenant->id,
@@ -335,7 +357,7 @@ final readonly class FiscalCommunicationAutomationService
                     'tenant_id' => $tenant->id,
                     'inbox_id' => $inbox->id,
                     'conversation_id' => $conversation->id,
-                    'identity_id' => $identity->id,
+                    'identity_id' => $canonicalIdentity->id,
                     'client_communication_dispatch_id' => $locked->id,
                     'direction' => MessageDirection::Outbound,
                     'kind' => MessageKind::Document,
@@ -372,7 +394,7 @@ final readonly class FiscalCommunicationAutomationService
                     'lock_version' => (int) $conversation->lock_version + 1,
                 ])->save();
                 $entry = $this->outbox->enqueue($inbox, GatewayCommandType::SendMessage, [
-                    'to' => (string) $identity->address_encrypted,
+                    'to' => (string) $canonicalIdentity->address_encrypted,
                     'kind' => MessageKind::Document->value,
                     'media' => [
                         'attachment_id' => (int) $attachment->id,

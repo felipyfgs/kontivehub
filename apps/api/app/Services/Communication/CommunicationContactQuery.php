@@ -15,7 +15,7 @@ final class CommunicationContactQuery
         $query = CommunicationContact::query()->with([
             'identities.clientLinks.client',
             'identities.clientLinks.clientContact',
-        ]);
+        ])->whereNull('merged_into_contact_id');
 
         if ($filters->search !== null && $filters->search !== '') {
             $needle = '%'.mb_strtolower($filters->search).'%';

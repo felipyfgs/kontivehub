@@ -200,6 +200,70 @@ class GatewayContractDataTest extends TestCase
         $this->assertSame('lid:132366714564657', $event->payload['source_identity']['primary']);
     }
 
+    public function test_source_identity_rejects_unproven_alias_shapes(): void
+    {
+        $invalid = [
+            [
+                'primary' => '+5511999990001',
+                'primary_kind' => 'PN',
+                'alternate' => '+5511999990002',
+                'alternate_kind' => 'PN',
+                'evidence' => 'MESSAGE_SOURCE_ALT',
+            ],
+            [
+                'primary' => 'lid:132366714564657',
+                'primary_kind' => 'LID',
+                'alternate' => 'lid:149865032093945',
+                'alternate_kind' => 'LID',
+                'evidence' => 'MESSAGE_SOURCE_ALT',
+            ],
+            [
+                'primary' => '+5511999990001',
+                'primary_kind' => 'PN',
+                'alternate' => 'lid:149865032093945',
+                'alternate_kind' => 'LID',
+                'evidence' => 'MESSAGE_SOURCE_ALT',
+            ],
+            [
+                'primary' => 'lid:132366714564657',
+                'primary_kind' => 'LID',
+                'alternate' => '+5511999990002',
+                'alternate_kind' => 'PN',
+                'evidence' => 'UNVERIFIED_ALIAS',
+            ],
+            [
+                'primary' => 'lid:132366714564657',
+                'primary_kind' => 'LID',
+                'alternate' => '+5511999990002',
+            ],
+        ];
+
+        foreach ($invalid as $index => $sourceIdentity) {
+            try {
+                new GatewayEventData(
+                    gatewayEventId: 'gateway-invalid-source-'.$index,
+                    sessionId: 'session-0001',
+                    type: GatewayEventType::MessageReceived,
+                    occurredAt: new DateTimeImmutable('2026-07-28T15:44:25Z'),
+                    payload: [
+                        'provider_message_id' => 'message-invalid-source-'.$index,
+                        'kind' => 'TEXT',
+                        'provider_type' => 'conversation',
+                        'family' => 'TEXT',
+                        'text' => 'oi',
+                        'source_identity' => $sourceIdentity,
+                    ],
+                );
+                $this->fail("source_identity inválido {$index} foi aceito.");
+            } catch (InvalidArgumentException $error) {
+                $this->assertStringContainsString(
+                    $index === 4 ? 'incompletos' : 'LID/PN inválida',
+                    $error->getMessage(),
+                );
+            }
+        }
+    }
+
     public function test_history_synced_accepts_segmented_progress_fields(): void
     {
         $event = new GatewayEventData(
@@ -333,6 +397,59 @@ class GatewayContractDataTest extends TestCase
             sessionId: 'session-0001',
             type: GatewayQueryType::ProfilePicture,
             payload: ['user' => '+5511999991234', 'device_jid' => true],
+        );
+    }
+
+    public function test_contact_profile_query_and_partial_event_use_closed_shapes(): void
+    {
+        $query = new GatewayQueryData(
+            queryId: 'query-contact-profiles-0001',
+            sessionId: 'session-0001',
+            type: GatewayQueryType::ContactProfiles,
+            payload: ['users' => ['+5511999991234', 'lid:123456789']],
+        );
+        $this->assertSame('CONTACT_PROFILES', $query->toArray()['type']);
+
+        $event = new GatewayEventData(
+            gatewayEventId: 'gateway-contact-profile-0001',
+            sessionId: 'session-0001',
+            type: GatewayEventType::ContactProfileChanged,
+            occurredAt: new DateTimeImmutable('2026-07-28T20:00:00Z'),
+            payload: [
+                'user' => 'lid:123456789',
+                'source' => 'ADDRESS_BOOK',
+                'address_book_first_name' => 'Maria',
+                'address_book_full_name' => 'Maria Silva',
+                'display_name' => 'Maria Silva',
+                'from_full_sync' => false,
+                'cleared_fields' => ['push_name'],
+                'source_identity' => [
+                    'primary' => 'lid:123456789',
+                    'primary_kind' => 'LID',
+                    'alternate' => '+5511999991234',
+                    'alternate_kind' => 'PN',
+                    'evidence' => 'MESSAGE_SOURCE_ALT',
+                ],
+            ],
+        );
+
+        $this->assertSame(['push_name'], $event->payload['cleared_fields']);
+    }
+
+    public function test_contact_profile_event_rejects_unknown_clear(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        new GatewayEventData(
+            gatewayEventId: 'gateway-contact-profile-invalid-0001',
+            sessionId: 'session-0001',
+            type: GatewayEventType::ContactProfileChanged,
+            occurredAt: new DateTimeImmutable('2026-07-28T20:00:00Z'),
+            payload: [
+                'user' => '+5511999991234',
+                'source' => 'PICTURE',
+                'cleared_fields' => ['picture_url'],
+            ],
         );
     }
 

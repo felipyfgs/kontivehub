@@ -12,6 +12,7 @@ use App\Models\CommunicationFlow;
 use App\Models\CommunicationFlowInboxBinding;
 use App\Models\CommunicationFlowRun;
 use App\Models\CommunicationMessage;
+use App\Services\Communication\CommunicationConversationCanonicalizer;
 use App\Services\Communication\Events\CommunicationEventRecorder;
 use Illuminate\Support\Facades\DB;
 
@@ -22,6 +23,7 @@ final class CommunicationFlowCorrelator
         private readonly CommunicationFlowLock $locks,
         private readonly CommunicationFlowConsumptionService $consumptions,
         private readonly CommunicationEventRecorder $events,
+        private readonly CommunicationConversationCanonicalizer $canonicalizer,
     ) {}
 
     public function correlateMessage(int $tenantId, int $conversationId, int $messageId, string $eventKey): void
@@ -30,28 +32,51 @@ final class CommunicationFlowCorrelator
             return;
         }
 
-        $message = CommunicationMessage::query()->withoutGlobalScopes()->find($messageId);
-        if ($message === null
-            || (int) $message->tenant_id !== $tenantId
-            || (int) $message->conversation_id !== $conversationId) {
-            return;
-        }
+        $advanceRunId = DB::transaction(function () use (
+            $tenantId,
+            $conversationId,
+            $messageId,
+            $eventKey,
+        ): ?int {
+            $requestedConversation = CommunicationConversation::query()
+                ->withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->find($conversationId);
+            if ($requestedConversation === null) {
+                return null;
+            }
+            $conversation = $this->canonicalizer->lockConversation($requestedConversation);
 
-        if (! $this->isEligibleInbound($message)) {
-            return;
-        }
+            $message = CommunicationMessage::query()
+                ->withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->whereKey($messageId)
+                ->lockForUpdate()
+                ->first();
+            if ($message === null || ! $this->isEligibleInbound($message)) {
+                return null;
+            }
 
-        $advanceRunId = DB::transaction(function () use ($tenantId, $conversationId, $message, $eventKey): ?int {
+            $messageConversation = CommunicationConversation::query()
+                ->withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->where('inbox_id', $message->inbox_id)
+                ->find($message->conversation_id);
+            if ($messageConversation === null
+                || (int) $this->canonicalizer->conversation($messageConversation)->id
+                    !== (int) $conversation->id) {
+                return null;
+            }
+
             if (! $this->consumptions->consumeOnce(
                 tenantId: $tenantId,
                 eventKey: $eventKey,
-                conversationId: $conversationId,
+                conversationId: (int) $conversation->id,
                 eventDigest: is_string($message->content_digest) ? $message->content_digest : null,
             )) {
                 return null;
             }
 
-            $conversation = $this->locks->lockConversation($conversationId);
             $active = $this->locks->findActiveRunForConversation((int) $conversation->id);
 
             if ($active !== null) {
@@ -80,7 +105,7 @@ final class CommunicationFlowCorrelator
                 tenantId: $tenantId,
                 eventKey: $eventKey.'.run:'.$run->id,
                 runId: (int) $run->id,
-                conversationId: $conversationId,
+                conversationId: (int) $conversation->id,
             );
 
             return (int) $run->id;

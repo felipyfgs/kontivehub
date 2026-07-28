@@ -5,9 +5,18 @@ namespace App\Models;
 use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['tenant_id', 'name', 'is_provisional', 'is_active', 'metadata', 'purged_at'])]
+#[Fillable([
+    'tenant_id',
+    'merged_into_contact_id',
+    'name',
+    'is_provisional',
+    'is_active',
+    'metadata',
+    'purged_at',
+])]
 class CommunicationContact extends Model
 {
     use BelongsToTenant;
@@ -25,5 +34,10 @@ class CommunicationContact extends Model
     public function identities(): HasMany
     {
         return $this->hasMany(CommunicationIdentity::class, 'contact_id');
+    }
+
+    public function mergedIntoContact(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'merged_into_contact_id');
     }
 }

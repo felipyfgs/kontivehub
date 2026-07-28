@@ -29,6 +29,9 @@ final readonly class UpdateCommunicationConversationAction
                 ->whereKey($conversation->id)
                 ->lockForUpdate()
                 ->firstOrFail();
+            if ($fresh->merged_into_conversation_id !== null) {
+                throw CommunicationConversationApiException::versionConflict();
+            }
             if ((int) $fresh->lock_version !== $data->lockVersion) {
                 throw CommunicationConversationApiException::versionConflict();
             }

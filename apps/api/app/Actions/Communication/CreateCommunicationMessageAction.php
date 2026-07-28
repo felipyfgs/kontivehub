@@ -15,6 +15,7 @@ use App\Models\CommunicationAttachment;
 use App\Models\CommunicationConversation;
 use App\Models\CommunicationMessage;
 use App\Services\Communication\CommunicationAvailability;
+use App\Services\Communication\CommunicationConversationCanonicalizer;
 use App\Services\Communication\Events\CommunicationEventRecorder;
 use App\Services\Communication\Flows\CommunicationFlowRunControlService;
 use App\Services\Communication\Media\CommunicationMediaStore;
@@ -33,6 +34,7 @@ final readonly class CreateCommunicationMessageAction
     public function __construct(
         private CurrentTenant $currentTenant,
         private CommunicationAvailability $availability,
+        private CommunicationConversationCanonicalizer $canonicalizer,
         private CommunicationOutboxService $outbox,
         private CommunicationEventRecorder $events,
         private CommunicationMediaStore $media,
@@ -43,9 +45,15 @@ final readonly class CreateCommunicationMessageAction
         CommunicationConversation $conversation,
         CommunicationMessageCreationData $data,
     ): CommunicationMessageCreationResult {
+        $conversation = $this->canonicalizer->conversation($conversation);
         $conversation->loadMissing(['inbox', 'identity']);
         if ($data->internalNote && $data->upload !== null) {
             throw CommunicationConversationApiException::internalNoteAttachment();
+        }
+        if ($data->internalNote && $data->receiptMessageId !== null) {
+            throw ValidationException::withMessages([
+                'receipt_message_id' => 'Nota interna não envia confirmação de leitura ao WhatsApp.',
+            ]);
         }
 
         $this->availability->assertEnabled($conversation->inbox, ! $data->internalNote);
@@ -87,6 +95,7 @@ final readonly class CreateCommunicationMessageAction
             $data->internalNote,
             $replyTo,
         );
+        $receiptTarget = $this->receiptTarget($conversation, $data->receiptMessageId);
         $providerId = $data->internalNote
             ? null
             : $this->providerId($data->idempotencyKey);
@@ -101,6 +110,7 @@ final readonly class CreateCommunicationMessageAction
             $replyProviderId ?? '',
             $data->ptt ? 'ptt' : 'media',
             json_encode($data->richPayload, JSON_THROW_ON_ERROR),
+            $receiptTarget?->id ?? '',
         ]));
 
         if ($providerId !== null) {
@@ -109,7 +119,20 @@ final readonly class CreateCommunicationMessageAction
                 $providerId,
             );
             if ($existing !== null) {
-                return $this->idempotentResult($existing, $contentDigest);
+                return DB::transaction(function () use (
+                    $conversation,
+                    $providerId,
+                    $contentDigest,
+                ): CommunicationMessageCreationResult {
+                    $canonical = $this->canonicalizer->lockConversation($conversation);
+                    $locked = CommunicationMessage::query()
+                        ->where('inbox_id', $canonical->inbox_id)
+                        ->where('provider_message_id', $providerId)
+                        ->lockForUpdate()
+                        ->firstOrFail();
+
+                    return $this->idempotentResult($locked, $contentDigest);
+                });
             }
         }
 
@@ -147,14 +170,13 @@ final readonly class CreateCommunicationMessageAction
                 $mime,
                 $replyTo,
                 $replyProviderId,
+                $receiptTarget,
                 $stored,
                 $storageContext,
             ): CommunicationMessage {
-                $lockedConversation = CommunicationConversation::query()
-                    ->with(['inbox', 'identity'])
-                    ->whereKey($conversation->id)
-                    ->lockForUpdate()
-                    ->firstOrFail();
+                $lockedConversation = $this->canonicalizer
+                    ->lockConversation($conversation)
+                    ->load(['inbox', 'identity']);
                 if ($lockedConversation->purged_at !== null) {
                     throw CommunicationConversationApiException::purged();
                 }
@@ -175,6 +197,9 @@ final readonly class CreateCommunicationMessageAction
                     'body_encrypted' => $data->body !== '' ? $data->body : null,
                     'content_encrypted' => $data->richPayload !== []
                         ? $this->outboundContent($data->richPayload)
+                        : null,
+                    'metadata' => $receiptTarget !== null
+                        ? ['receipt_message_id' => (int) $receiptTarget->id]
                         : null,
                     'provider_message_id' => $providerId,
                     'content_digest' => $contentDigest,
@@ -294,6 +319,30 @@ final readonly class CreateCommunicationMessageAction
         }
 
         return $providerId;
+    }
+
+    private function receiptTarget(
+        CommunicationConversation $conversation,
+        ?int $receiptMessageId,
+    ): ?CommunicationMessage {
+        if ($receiptMessageId === null) {
+            return null;
+        }
+
+        $message = CommunicationMessage::query()
+            ->where('conversation_id', $conversation->id)
+            ->whereKey($receiptMessageId)
+            ->where('direction', MessageDirection::Inbound)
+            ->whereNull('purged_at')
+            ->whereNull('revoked_at')
+            ->first();
+        if ($message === null || trim((string) $message->provider_message_id) === '') {
+            throw ValidationException::withMessages([
+                'receipt_message_id' => 'A confirmação exige uma mensagem inbound disponível desta conversa.',
+            ]);
+        }
+
+        return $message;
     }
 
     private function existingMessage(

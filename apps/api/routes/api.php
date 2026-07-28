@@ -357,6 +357,8 @@ Route::prefix('v1')->group(function (): void {
                 Route::get('/conversations', [CommunicationConversationController::class, 'index']);
                 Route::get('/conversations/{conversation}', [CommunicationConversationController::class, 'show']);
                 Route::patch('/conversations/{conversation}', [CommunicationConversationController::class, 'update']);
+                Route::get('/conversations/{conversation}/messages', [CommunicationConversationController::class, 'messages']);
+                Route::put('/conversations/{conversation}/read-state', [CommunicationConversationController::class, 'updateReadState']);
                 Route::post('/conversations/{conversation}/messages', [CommunicationConversationController::class, 'send'])
                     ->middleware(ThrottleRequests::using(ApiRateLimit::CommunicationMessageSend));
                 Route::put('/conversations/{conversation}/messages/{message}/edit', [CommunicationConversationGatewayController::class, 'edit']);

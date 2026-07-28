@@ -145,6 +145,64 @@ final class CommunicationFlowRuntimeTest extends TestCase
         $this->assertSame($outboxCount, CommunicationOutboxEntry::query()->withoutGlobalScopes()->whereNotNull('effect_key')->count());
     }
 
+    public function test_queued_correlation_follows_conversation_redirect_after_peer_merge(): void
+    {
+        Queue::fake([AdvanceCommunicationFlowRunJob::class]);
+        [$inbox, $donor] = $this->seedFlow(
+            active: true,
+            enabled: true,
+            graph: $this->messageGraph(),
+        );
+        $message = CommunicationMessage::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $inbox->tenant_id,
+            'inbox_id' => $inbox->id,
+            'conversation_id' => $donor->id,
+            'identity_id' => $donor->identity_id,
+            'direction' => MessageDirection::Inbound,
+            'kind' => 'TEXT',
+            'source' => MessageSource::Gateway,
+            'status' => 'DELIVERED',
+            'body_encrypted' => 'iniciar',
+            'provider_message_id' => 'flow-before-peer-merge-0001',
+            'content_digest' => hash('sha256', 'iniciar'),
+            'metadata' => [],
+            'occurred_at' => now(),
+        ]);
+
+        $donor->forceFill([
+            'status' => 'RESOLVED',
+            'resolved_at' => now(),
+        ])->save();
+        $survivor = CommunicationConversation::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $inbox->tenant_id,
+            'inbox_id' => $inbox->id,
+            'identity_id' => $donor->identity_id,
+            'status' => 'OPEN',
+            'lock_version' => 1,
+        ]);
+        $message->forceFill(['conversation_id' => $survivor->id])->save();
+        $donor->forceFill([
+            'merged_into_conversation_id' => $survivor->id,
+            'lock_version' => (int) $donor->lock_version + 1,
+        ])->save();
+
+        app(CommunicationFlowCorrelator::class)->correlateMessage(
+            (int) $inbox->tenant_id,
+            (int) $donor->id,
+            (int) $message->id,
+            'gw:flow-before-peer-merge-0001',
+        );
+
+        $run = CommunicationFlowRun::query()->withoutGlobalScopes()->sole();
+        $this->assertSame((int) $survivor->id, (int) $run->conversation_id);
+        $this->assertDatabaseHas('communication_flow_consumptions', [
+            'tenant_id' => $inbox->tenant_id,
+            'event_key' => 'gw:flow-before-peer-merge-0001',
+            'conversation_id' => $survivor->id,
+        ]);
+        Queue::assertPushed(AdvanceCommunicationFlowRunJob::class);
+    }
+
     public function test_flow_outbound_does_not_retrigger_runtime(): void
     {
         [$inbox, $conversation] = $this->seedFlow(active: true, enabled: true, graph: $this->messageGraph());

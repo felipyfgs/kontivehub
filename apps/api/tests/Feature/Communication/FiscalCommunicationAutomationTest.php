@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Communication;
 
+use App\Enums\Communication\ConversationStatus;
 use App\Enums\Communication\GatewayEventType;
 use App\Enums\Communication\InboxStatus;
 use App\Enums\Communication\MessageDirection;
@@ -27,6 +28,7 @@ use App\Models\ClientCommunicationPreference;
 use App\Models\CommunicationAttachment;
 use App\Models\CommunicationAutomationPolicy;
 use App\Models\CommunicationContact;
+use App\Models\CommunicationConversation;
 use App\Models\CommunicationIdentity;
 use App\Models\CommunicationIdentityLink;
 use App\Models\CommunicationInbox;
@@ -48,12 +50,14 @@ use App\Services\Communication\Automation\FiscalCommunicationArtifactResolver;
 use App\Services\Communication\Automation\FiscalCommunicationAutomationService;
 use App\Services\Communication\Media\CommunicationMediaStore;
 use App\Services\Communication\Security\CommunicationHmacSigner;
+use App\Services\Communication\WhatsappPeerCorrelationService;
 use App\Services\Fiscal\Guides\GuideStorageService;
 use App\Services\FiscalMonitoring\FiscalEvidenceStore;
 use App\Services\Integra\Dctfweb\DctfwebEvidenceVersioningService;
 use App\Support\CurrentTenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
@@ -182,6 +186,103 @@ final class FiscalCommunicationAutomationTest extends TestCase
         $this->assertDatabaseCount('communication_messages', 3);
         $this->assertDatabaseCount('communication_outbox_entries', 2);
         $this->assertDatabaseCount('communication_attachments', 1);
+    }
+
+    public function test_automation_with_a_lid_alias_reuses_the_canonical_conversation_after_merge(): void
+    {
+        [$tenant, $client, $inbox] = $this->context();
+        $lid = 'lid:149865032093945';
+        $remotePn = '+559992032709';
+        $lidContact = CommunicationContact::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Contato confirmado',
+            'is_provisional' => false,
+            'is_active' => true,
+        ]);
+        $lidIdentity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'contact_id' => $lidContact->id,
+            'channel' => CommunicationChannel::Whatsapp,
+            'address_encrypted' => $lid,
+            'address_hash' => hash('sha256', $lid),
+            'address_masked' => 'lid:***3945',
+            'is_active' => true,
+        ]);
+        CommunicationIdentityLink::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'identity_id' => $lidIdentity->id,
+            'client_id' => $client->id,
+            'is_primary' => true,
+            'receives_automatic' => true,
+        ]);
+        $remoteContact = CommunicationContact::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'is_provisional' => true,
+            'is_active' => true,
+        ]);
+        $remoteIdentity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'contact_id' => $remoteContact->id,
+            'channel' => CommunicationChannel::Whatsapp,
+            'address_encrypted' => $remotePn,
+            'address_hash' => hash('sha256', $remotePn),
+            'address_masked' => '***2709',
+            'is_active' => true,
+        ]);
+        $lidConversation = CommunicationConversation::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'inbox_id' => $inbox->id,
+            'identity_id' => $lidIdentity->id,
+            'status' => ConversationStatus::Open,
+            'last_message_at' => now()->subMinute(),
+        ]);
+        $remoteConversation = CommunicationConversation::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'inbox_id' => $inbox->id,
+            'identity_id' => $remoteIdentity->id,
+            'status' => ConversationStatus::Open,
+            'last_message_at' => now(),
+        ]);
+
+        DB::transaction(fn () => app(WhatsappPeerCorrelationService::class)->correlate(
+            $inbox,
+            $remotePn,
+            [$lid, $remotePn],
+            false,
+            now(),
+        ));
+        $this->assertSame($remoteIdentity->id, $lidIdentity->refresh()->canonical_identity_id);
+        $this->assertSame(
+            $remoteConversation->id,
+            $lidConversation->refresh()->merged_into_conversation_id,
+        );
+
+        $this->pgdasdDocument(
+            $tenant,
+            $client,
+            '2026-06',
+            CarbonImmutable::now()->subDay(),
+            '%PDF-canonical-alias',
+        );
+        $service = app(FiscalCommunicationAutomationService::class);
+        $dispatch = $service
+            ->scheduleAutomatic($tenant, $client, 'simples_mei', 'pgdasd', '2026-06')
+            ->sole();
+        $dispatch->forceFill(['scheduled_at' => now()])->save();
+        $processed = $service->process((int) $dispatch->id);
+        $message = CommunicationMessage::query()->withoutGlobalScopes()
+            ->where('source', MessageSource::FiscalAutomation)
+            ->sole();
+        $outbox = CommunicationOutboxEntry::query()->withoutGlobalScopes()->sole();
+
+        $this->assertSame(CommunicationDispatchStatus::Queued, $processed?->status);
+        $this->assertSame($remoteConversation->id, $message->conversation_id);
+        $this->assertSame($remoteIdentity->id, $message->identity_id);
+        $this->assertSame($remotePn, $outbox->payload_encrypted['to'] ?? null);
+        $this->assertSame(1, CommunicationConversation::query()->withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('status', '<>', ConversationStatus::Resolved->value)
+            ->count());
     }
 
     public function test_wrong_or_late_document_is_terminally_skipped_and_never_reopened(): void

@@ -12,6 +12,7 @@ final readonly class CommunicationConversationFiltersData
         public ?int $assigneeMembershipId,
         public ?int $workDepartmentId,
         public bool $unassigned,
+        public bool $unreadOnly,
         public ?string $search,
         public int $perPage,
         public int $page,

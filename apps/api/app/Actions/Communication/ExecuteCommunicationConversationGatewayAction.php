@@ -11,6 +11,7 @@ use App\Exceptions\CommunicationGatewayApiException;
 use App\Models\CommunicationConversation;
 use App\Models\CommunicationMessage;
 use App\Models\User;
+use App\Services\Communication\CommunicationConversationCanonicalizer;
 use App\Services\Communication\Gateway\CommunicationGatewayOperations;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use LogicException;
@@ -19,6 +20,7 @@ final readonly class ExecuteCommunicationConversationGatewayAction
 {
     public function __construct(
         private CommunicationGatewayOperations $operations,
+        private CommunicationConversationCanonicalizer $canonicalizer,
     ) {}
 
     public function handle(
@@ -28,6 +30,7 @@ final readonly class ExecuteCommunicationConversationGatewayAction
         CommunicationGatewayOperationData $data,
         ?CommunicationMessage $message = null,
     ): CommunicationGatewayCommandResult {
+        $conversation = $this->canonicalizer->conversation($conversation);
         $conversation->loadMissing(['inbox', 'identity']);
         $this->assertMessageBelongsToConversation($conversation, $message);
         $payload = $this->payload($conversation, $type, $data, $message);

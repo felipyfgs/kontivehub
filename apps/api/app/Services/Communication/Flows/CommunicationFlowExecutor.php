@@ -45,13 +45,22 @@ final class CommunicationFlowExecutor
         $shouldContinue = false;
 
         DB::transaction(function () use ($runId, &$followUpDelay, &$shouldContinue): void {
-            $run = $this->locks->lockRun($runId);
-            if ($run->conversation_id === null || $run->status->isTerminal() || $run->status === FlowRunStatus::Paused) {
+            $preview = CommunicationFlowRun::query()
+                ->withoutGlobalScopes()
+                ->find($runId);
+            if ($preview === null
+                || $preview->conversation_id === null
+                || $preview->status->isTerminal()
+                || $preview->status === FlowRunStatus::Paused) {
                 return;
             }
 
-            $this->locks->lockConversation((int) $run->conversation_id);
+            $conversation = $this->locks->lockConversation((int) $preview->conversation_id);
             $run = $this->locks->lockRun($runId);
+            if ((int) $run->conversation_id !== (int) $conversation->id
+                || $conversation->merged_into_conversation_id !== null) {
+                throw new \RuntimeException('FLOW_RUN_CONVERSATION_MISMATCH');
+            }
 
             if ($this->stopIfFlowOrBindingIneligible($run)) {
                 return;

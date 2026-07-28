@@ -75,6 +75,7 @@ final class GatewayContractPayload
         'BUSINESS_LINK_RESOLVE' => ['allowed' => ['link'], 'required' => ['link']],
         'BLOCKLIST' => ['allowed' => [], 'required' => []],
         'PRIVACY_SETTINGS' => ['allowed' => [], 'required' => []],
+        'CONTACT_PROFILES' => ['allowed' => ['users'], 'required' => ['users']],
     ];
 
     /** @param array<string, mixed> $payload */
@@ -100,6 +101,14 @@ final class GatewayContractPayload
     public static function assertQuery(GatewayQueryType $type, array $payload): void
     {
         self::assertShape($payload, self::QUERY_SHAPES[$type->value], 'query '.$type->value);
+        if (in_array($type, [
+            GatewayQueryType::CheckUsers,
+            GatewayQueryType::UserInfo,
+            GatewayQueryType::BusinessProfile,
+            GatewayQueryType::ContactProfiles,
+        ], true)) {
+            self::assertQueryUsers($payload['users'] ?? null, $type);
+        }
     }
 
     /** @param array<string, mixed> $payload */
@@ -120,6 +129,7 @@ final class GatewayContractPayload
             GatewayEventType::MediaRetryUpdated => self::assertMediaRetry($payload),
             GatewayEventType::MessageStatusChanged => self::assertMessageStatus($payload),
             GatewayEventType::MessageActionReceived => self::assertMessageAction($payload),
+            GatewayEventType::ContactProfileChanged => self::assertContactProfile($payload),
             default => null,
         };
     }
@@ -320,7 +330,12 @@ final class GatewayContractPayload
         if ($primaryKind === 'LID' && preg_match('/^lid:[1-9][0-9]{0,19}$/', $primary) !== 1) {
             throw new InvalidArgumentException("primary LID inválido em {$context}.");
         }
-        $hasAlternate = array_key_exists('alternate', $value) || array_key_exists('alternate_kind', $value);
+        $hasAlternateValue = array_key_exists('alternate', $value);
+        $hasAlternateKind = array_key_exists('alternate_kind', $value);
+        if ($hasAlternateValue !== $hasAlternateKind) {
+            throw new InvalidArgumentException("alternate/alternate_kind incompletos em {$context}.");
+        }
+        $hasAlternate = $hasAlternateValue;
         if ($hasAlternate) {
             $alternate = trim((string) ($value['alternate'] ?? ''));
             $alternateKind = strtoupper(trim((string) ($value['alternate_kind'] ?? '')));
@@ -333,10 +348,93 @@ final class GatewayContractPayload
             if ($alternateKind === 'LID' && preg_match('/^lid:[1-9][0-9]{0,19}$/', $alternate) !== 1) {
                 throw new InvalidArgumentException("alternate LID inválido em {$context}.");
             }
+            if ($primaryKind !== 'LID'
+                || $alternateKind !== 'PN'
+                || hash_equals($primary, $alternate)
+                || ($value['evidence'] ?? null) !== 'MESSAGE_SOURCE_ALT') {
+                throw new InvalidArgumentException("Associação LID/PN inválida em {$context}.");
+            }
         }
         if (isset($value['evidence'])
             && (! is_string($value['evidence']) || preg_match('/^[A-Z][A-Z0-9_]{1,63}$/', $value['evidence']) !== 1)) {
             throw new InvalidArgumentException("evidence inválido em {$context}.");
+        }
+    }
+
+    private static function assertQueryUsers(mixed $users, GatewayQueryType $type): void
+    {
+        if (! is_array($users) || ! array_is_list($users)
+            || count($users) < 1 || count($users) > 100
+            || count(array_unique($users, SORT_STRING)) !== count($users)) {
+            throw new InvalidArgumentException("users inválido em query {$type->value}.");
+        }
+        foreach ($users as $user) {
+            if (! is_string($user)
+                || preg_match('/^(?:\+[1-9][0-9]{7,14}|lid:[1-9][0-9]{0,19})$/', $user) !== 1) {
+                throw new InvalidArgumentException("Endereço 1:1 inválido em query {$type->value}.");
+            }
+        }
+    }
+
+    /** @param array<string, mixed> $payload */
+    private static function assertContactProfile(array $payload): void
+    {
+        self::assertAllowedKeys($payload, [
+            'user', 'display_name', 'address_book_name', 'address_book_first_name',
+            'address_book_full_name', 'verified_name', 'business_name', 'push_name',
+            'picture_id', 'about', 'source', 'cleared_fields', 'from_full_sync',
+            'source_identity',
+        ], 'CONTACT_PROFILE_CHANGED');
+
+        $user = $payload['user'] ?? null;
+        if (! is_string($user)
+            || preg_match('/^(?:\+[1-9][0-9]{7,14}|lid:[1-9][0-9]{0,19})$/', $user) !== 1) {
+            throw new InvalidArgumentException('user inválido em CONTACT_PROFILE_CHANGED.');
+        }
+        if (isset($payload['source']) && ! in_array($payload['source'], [
+            'PUSH', 'ADDRESS_BOOK', 'BUSINESS', 'VERIFIED', 'PICTURE', 'ABOUT',
+        ], true)) {
+            throw new InvalidArgumentException('source inválido em CONTACT_PROFILE_CHANGED.');
+        }
+        foreach ([
+            'display_name' => 512,
+            'address_book_name' => 512,
+            'address_book_first_name' => 512,
+            'address_book_full_name' => 512,
+            'verified_name' => 512,
+            'business_name' => 512,
+            'push_name' => 512,
+            'picture_id' => 512,
+            'about' => 2048,
+        ] as $field => $limit) {
+            if (! array_key_exists($field, $payload)) {
+                continue;
+            }
+            if (! is_string($payload[$field]) || mb_strlen($payload[$field]) > $limit) {
+                throw new InvalidArgumentException("{$field} inválido em CONTACT_PROFILE_CHANGED.");
+            }
+        }
+        if (isset($payload['from_full_sync']) && ! is_bool($payload['from_full_sync'])) {
+            throw new InvalidArgumentException('from_full_sync inválido em CONTACT_PROFILE_CHANGED.');
+        }
+        if (isset($payload['source_identity'])) {
+            self::assertSourceIdentity($payload['source_identity'], 'CONTACT_PROFILE_CHANGED.source_identity');
+        }
+        if (isset($payload['cleared_fields'])) {
+            $cleared = $payload['cleared_fields'];
+            $allowed = [
+                'address_book_first_name', 'address_book_full_name', 'verified_name',
+                'business_name', 'push_name', 'picture_id', 'about',
+            ];
+            if (! is_array($cleared) || ! array_is_list($cleared) || count($cleared) > 16
+                || count(array_unique($cleared, SORT_STRING)) !== count($cleared)) {
+                throw new InvalidArgumentException('cleared_fields inválido em CONTACT_PROFILE_CHANGED.');
+            }
+            foreach ($cleared as $field) {
+                if (! is_string($field) || ! in_array($field, $allowed, true)) {
+                    throw new InvalidArgumentException('Campo removido inválido em CONTACT_PROFILE_CHANGED.');
+                }
+            }
         }
     }
 

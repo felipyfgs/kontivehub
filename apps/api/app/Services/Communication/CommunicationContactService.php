@@ -17,6 +17,7 @@ use App\Services\Communication\Events\CommunicationEventRecorder;
 use App\Support\CurrentTenant;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use LogicException;
 
 final class CommunicationContactService
 {
@@ -24,6 +25,8 @@ final class CommunicationContactService
         private readonly CurrentTenant $currentTenant,
         private readonly WhatsappAddressNormalizer $normalizer,
         private readonly CommunicationEventRecorder $events,
+        private readonly CommunicationContactCanonicalizer $contactCanonicalizer,
+        private readonly CommunicationConversationCanonicalizer $peerCanonicalizer,
     ) {}
 
     public function create(CommunicationContactCreationData $data): CommunicationContact
@@ -86,7 +89,7 @@ final class CommunicationContactService
                 'identities.clientLinks.client',
                 'identities.clientLinks.clientContact',
             ]);
-        });
+        }, 3);
     }
 
     public function addIdentity(
@@ -101,7 +104,7 @@ final class CommunicationContactService
                     $this->lockMutableContact($contact),
                     $address,
                 );
-            });
+            }, 3);
         } catch (UniqueConstraintViolationException) {
             throw CommunicationContactApiException::identityAlreadyRegistered();
         }
@@ -113,6 +116,7 @@ final class CommunicationContactService
     ): CommunicationIdentityLink {
         return DB::transaction(
             fn () => $this->link($this->lockMutableIdentity($identity), $data),
+            3,
         );
     }
 
@@ -126,7 +130,7 @@ final class CommunicationContactService
                 ->where('identity_id', $lockedIdentity->id)
                 ->findOrFail($linkId)
                 ->delete();
-        });
+        }, 3);
     }
 
     private function createIdentity(
@@ -147,10 +151,7 @@ final class CommunicationContactService
     private function lockMutableContact(
         CommunicationContact $contact,
     ): CommunicationContact {
-        $locked = CommunicationContact::query()
-            ->whereKey($contact->id)
-            ->lockForUpdate()
-            ->firstOrFail();
+        [$locked] = $this->contactCanonicalizer->lockContactClass($contact);
         if ($locked->purged_at !== null) {
             throw CommunicationContactApiException::contactPurged();
         }
@@ -161,17 +162,36 @@ final class CommunicationContactService
     private function lockMutableIdentity(
         CommunicationIdentity $identity,
     ): CommunicationIdentity {
-        $contact = CommunicationContact::query()
-            ->whereKey($identity->contact_id)
-            ->lockForUpdate()
+        $freshIdentity = CommunicationIdentity::query()
+            ->withoutGlobalScopes()
+            ->where('tenant_id', $identity->tenant_id)
+            ->whereKey($identity->id)
             ->firstOrFail();
-        if ($contact->purged_at !== null) {
+        $canonicalIdentity = $this->peerCanonicalizer->identity($freshIdentity);
+        $contact = CommunicationContact::query()
+            ->withoutGlobalScopes()
+            ->where('tenant_id', $canonicalIdentity->tenant_id)
+            ->findOrFail($canonicalIdentity->contact_id);
+        [$lockedContact] = $this->contactCanonicalizer->lockContactClass($contact);
+        if ($lockedContact->purged_at !== null) {
             throw CommunicationContactApiException::contactPurged();
         }
 
-        return CommunicationIdentity::query()
-            ->where('contact_id', $contact->id)
+        $freshIdentity = CommunicationIdentity::query()
+            ->withoutGlobalScopes()
+            ->where('tenant_id', $identity->tenant_id)
             ->whereKey($identity->id)
+            ->firstOrFail();
+        $canonicalIdentity = $this->peerCanonicalizer->identity($freshIdentity);
+        if ((int) $canonicalIdentity->contact_id !== (int) $lockedContact->id) {
+            throw new LogicException('Contact da identity mudou durante a canonicalização.');
+        }
+
+        return CommunicationIdentity::query()
+            ->withoutGlobalScopes()
+            ->where('tenant_id', $identity->tenant_id)
+            ->where('contact_id', $lockedContact->id)
+            ->whereKey($canonicalIdentity->id)
             ->lockForUpdate()
             ->firstOrFail();
     }

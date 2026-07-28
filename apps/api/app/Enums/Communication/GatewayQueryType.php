@@ -13,4 +13,5 @@ enum GatewayQueryType: string
     case ResolveBusinessLink = 'BUSINESS_LINK_RESOLVE';
     case Blocklist = 'BLOCKLIST';
     case PrivacySettings = 'PRIVACY_SETTINGS';
+    case ContactProfiles = 'CONTACT_PROFILES';
 }

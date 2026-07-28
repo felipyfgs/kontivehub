@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'tenant_id',
     'inbox_id',
     'identity_id',
+    'merged_into_conversation_id',
     'status',
     'work_department_id',
     'assignee_membership_id',
@@ -53,6 +54,11 @@ class CommunicationConversation extends Model
         return $this->belongsTo(CommunicationIdentity::class, 'identity_id');
     }
 
+    public function mergedIntoConversation(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'merged_into_conversation_id');
+    }
+
     public function department(): BelongsTo
     {
         return $this->belongsTo(WorkDepartment::class, 'work_department_id');
@@ -77,6 +83,16 @@ class CommunicationConversation extends Model
                 'occurred_at' => 'max',
                 'id' => 'max',
             ]);
+    }
+
+    public function unreadMessages(): HasMany
+    {
+        return $this->hasMany(CommunicationConversationUnreadMessage::class, 'conversation_id');
+    }
+
+    public function readState(): HasOne
+    {
+        return $this->hasOne(CommunicationConversationReadState::class, 'conversation_id');
     }
 
     public function clients(): BelongsToMany

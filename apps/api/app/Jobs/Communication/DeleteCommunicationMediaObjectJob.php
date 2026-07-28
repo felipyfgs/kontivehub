@@ -3,8 +3,10 @@
 namespace App\Jobs\Communication;
 
 use App\Services\Communication\Media\CommunicationMediaStore;
+use App\Support\LogSanitizer;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Log;
 
 final class DeleteCommunicationMediaObjectJob implements ShouldQueue
 {
@@ -31,14 +33,14 @@ final class DeleteCommunicationMediaObjectJob implements ShouldQueue
 
     public function tags(): array
     {
-        return ['job:'.class_basename(static::class)];
+        return ['job:'.class_basename(self::class)];
     }
 
     public function failed(?\Throwable $e): void
     {
-        \Illuminate\Support\Facades\Log::warning('job.failed', [
-            'job' => class_basename(static::class),
-            'message' => \App\Support\LogSanitizer::scrubString((string) ($e?->getMessage() ?? '')),
+        Log::warning('job.failed', [
+            'job' => class_basename(self::class),
+            'message' => LogSanitizer::scrubString((string) ($e?->getMessage() ?? '')),
         ]);
     }
 }

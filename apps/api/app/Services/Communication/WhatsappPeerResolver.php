@@ -27,14 +27,11 @@ final class WhatsappPeerResolver
     {
         $sessionAddress = $this->sessionAddress($inbox);
         $from = $this->optionalNormalize((string) ($payload['from'] ?? ''));
-        $identity = is_array($payload['source_identity'] ?? null) ? $payload['source_identity'] : [];
-        $primary = $this->optionalNormalize((string) ($identity['primary'] ?? ''));
-        $alternate = $this->optionalNormalize((string) ($identity['alternate'] ?? ''));
-        $primaryKind = strtoupper(trim((string) ($identity['primary_kind'] ?? '')));
-        $alternateKind = strtoupper(trim((string) ($identity['alternate_kind'] ?? '')));
-
-        $hasStructuredIdentity = $primary !== null || $alternate !== null;
-        $chat = $hasStructuredIdentity ? ($primary ?? $alternate) : $from;
+        $identity = $this->structuredIdentity($payload);
+        $primary = $identity['primary'] ?? null;
+        $alternate = $identity['alternate'] ?? null;
+        $hasStructuredIdentity = $identity !== null;
+        $chat = $hasStructuredIdentity ? $primary : $from;
         if ($chat === null) {
             throw new InvalidArgumentException('Endereço do peer ausente no evento do gateway.');
         }
@@ -62,8 +59,6 @@ final class WhatsappPeerResolver
             throw new InvalidArgumentException('Peer do evento coincide com a sessão WhatsApp (self-chat).');
         }
 
-        unset($primaryKind, $alternateKind);
-
         return $peer;
     }
 
@@ -77,17 +72,12 @@ final class WhatsappPeerResolver
         array $payload,
         string $canonicalPeer,
         ?CommunicationInbox $inbox = null,
-    ): array
-    {
+    ): array {
         $sessionAddress = $this->sessionAddress($inbox);
         $aliases = [$canonicalPeer];
-        $identity = is_array($payload['source_identity'] ?? null) ? $payload['source_identity'] : [];
-        $structuredCandidates = [$identity['primary'] ?? null, $identity['alternate'] ?? null];
-        $candidates = array_filter(
-            $structuredCandidates,
-            static fn (mixed $candidate): bool => is_string($candidate) && trim($candidate) !== '',
-        ) !== []
-            ? $structuredCandidates
+        $identity = $this->structuredIdentity($payload);
+        $candidates = $identity !== null
+            ? [$identity['primary'], $identity['alternate']]
             : [$payload['from'] ?? null];
 
         foreach ($candidates as $candidate) {
@@ -135,6 +125,49 @@ final class WhatsappPeerResolver
         }
     }
 
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array{primary:string,alternate:?string}|null
+     */
+    private function structuredIdentity(array $payload): ?array
+    {
+        if (! array_key_exists('source_identity', $payload)) {
+            return null;
+        }
+        $identity = $payload['source_identity'];
+        if (! is_array($identity) || array_is_list($identity)) {
+            throw new InvalidArgumentException('source_identity inválido no evento do gateway.');
+        }
+
+        $primary = $this->optionalNormalize((string) ($identity['primary'] ?? ''));
+        $primaryKind = strtoupper(trim((string) ($identity['primary_kind'] ?? '')));
+        if ($primary === null || $this->kind($primary) !== $primaryKind) {
+            throw new InvalidArgumentException('primary/primary_kind incoerentes no evento do gateway.');
+        }
+
+        $hasAlternateValue = array_key_exists('alternate', $identity);
+        $hasAlternateKind = array_key_exists('alternate_kind', $identity);
+        if ($hasAlternateValue !== $hasAlternateKind) {
+            throw new InvalidArgumentException('alternate/alternate_kind incompletos no evento do gateway.');
+        }
+        if (! $hasAlternateValue) {
+            return ['primary' => $primary, 'alternate' => null];
+        }
+
+        $alternate = $this->optionalNormalize((string) $identity['alternate']);
+        $alternateKind = strtoupper(trim((string) $identity['alternate_kind']));
+        if ($alternate === null
+            || $primaryKind !== 'LID'
+            || $alternateKind !== 'PN'
+            || $this->kind($alternate) !== $alternateKind
+            || hash_equals($primary, $alternate)
+            || ($identity['evidence'] ?? null) !== 'MESSAGE_SOURCE_ALT') {
+            throw new InvalidArgumentException('Associação LID/PN incoerente no evento do gateway.');
+        }
+
+        return ['primary' => $primary, 'alternate' => $alternate];
+    }
+
     private function isLid(string $address): bool
     {
         return str_starts_with($address, 'lid:');
@@ -143,6 +176,18 @@ final class WhatsappPeerResolver
     private function isPn(string $address): bool
     {
         return str_starts_with($address, '+');
+    }
+
+    private function kind(string $address): string
+    {
+        if ($this->isLid($address)) {
+            return 'LID';
+        }
+        if ($this->isPn($address)) {
+            return 'PN';
+        }
+
+        throw new InvalidArgumentException('Kind de endereço WhatsApp inválido.');
     }
 
     private function sameAddress(?string $left, ?string $right): bool

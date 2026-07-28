@@ -16,9 +16,12 @@ use App\Models\Client;
 use App\Models\CommunicationAttachment;
 use App\Models\CommunicationContact;
 use App\Models\CommunicationConversation;
+use App\Models\CommunicationConversationReadState;
+use App\Models\CommunicationConversationUnreadMessage;
 use App\Models\CommunicationEvent;
 use App\Models\CommunicationIdentity;
 use App\Models\CommunicationInbox;
+use App\Models\CommunicationInboxIdentityProfile;
 use App\Models\CommunicationInboxMember;
 use App\Models\CommunicationLabel;
 use App\Models\CommunicationMessage;
@@ -745,6 +748,24 @@ final class CommunicationApiTest extends TestCase
             'metadata' => ['private' => 'metadado pessoal'],
         ])->save();
         $contact = $conversation->identity->contact;
+        CommunicationInboxIdentityProfile::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'inbox_id' => $inbox->id,
+            'identity_id' => $conversation->identity_id,
+            'address_book_full_name' => 'Nome privado da agenda',
+        ]);
+        CommunicationConversationUnreadMessage::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'inbox_id' => $inbox->id,
+            'conversation_id' => $conversation->id,
+            'message_id' => $message->id,
+        ]);
+        CommunicationConversationReadState::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'inbox_id' => $inbox->id,
+            'conversation_id' => $conversation->id,
+            'version' => 1,
+        ]);
         $metadata = [
             'tenant_id' => (int) $tenant->id,
             'inbox_id' => (int) $inbox->id,
@@ -777,6 +798,14 @@ final class CommunicationApiTest extends TestCase
             'storage_context' => $metadata,
         ]);
         $this->authenticate($admin);
+        $donorContact = CommunicationContact::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'merged_into_contact_id' => $contact->id,
+            'name' => 'Nome duplicado sensível',
+            'is_provisional' => false,
+            'is_active' => false,
+            'metadata' => ['private' => 'metadata duplicada sensível'],
+        ]);
 
         $this->deleteJson(
             '/api/v1/communication/contacts/'.$contact->id.'/personal-data',
@@ -794,8 +823,13 @@ final class CommunicationApiTest extends TestCase
             'conteúdo pessoal',
             data_get($exported, 'contact.identities.0.conversations.0.messages.0.body'),
         );
-        $this->deleteJson('/api/v1/communication/contacts/'.$contact->id.'/personal-data')
+        $this->assertSame(
+            'Nome privado da agenda',
+            data_get($exported, 'contact.identities.0.inbox_profiles.0.address_book_full_name'),
+        );
+        $this->deleteJson('/api/v1/communication/contacts/'.$donorContact->id.'/personal-data')
             ->assertOk()
+            ->assertJsonPath('data.contact_id', $contact->id)
             ->assertJsonPath('data.deleted_blobs', 1);
 
         $this->assertFalse(app(CommunicationMediaStore::class)->exists($stored['object_id']));
@@ -806,7 +840,33 @@ final class CommunicationApiTest extends TestCase
         $this->assertSame(ConversationStatus::Resolved, $conversation->refresh()->status);
         $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', (string) $conversation->tombstone_digest);
         $this->assertSame('[removido]', $conversation->identity->refresh()->address_masked);
+        $donorContact->refresh();
+        $this->assertNull($donorContact->name);
+        $this->assertNull($donorContact->metadata);
+        $this->assertNotNull($donorContact->purged_at);
+        $this->assertDatabaseMissing('communication_inbox_identity_profiles', [
+            'identity_id' => $conversation->identity_id,
+        ]);
+        $this->assertDatabaseMissing('communication_conversation_unread_messages', [
+            'conversation_id' => $conversation->id,
+        ]);
+        $this->assertDatabaseMissing('communication_conversation_read_states', [
+            'conversation_id' => $conversation->id,
+        ]);
         $this->assertDatabaseHas('communication_events', ['type' => 'CONTACT_PURGED']);
+        $readStateEvent = CommunicationEvent::query()->withoutGlobalScopes()
+            ->where('type', 'conversation.read_state.updated')
+            ->latest('id')
+            ->firstOrFail();
+        $this->assertSame(0, $readStateEvent->payload['unread_count'] ?? null);
+        $this->assertSame(
+            ['conversation_id', 'first_unread_message_id', 'inbox_id', 'last_read_through_message_id', 'unread_count', 'version'],
+            collect(array_keys($readStateEvent->payload))->sort()->values()->all(),
+        );
+        $this->putJson('/api/v1/communication/conversations/'.$conversation->id.'/read-state', [
+            'state' => 'READ',
+            'through_message_id' => $message->id,
+        ])->assertStatus(410)->assertJsonPath('code', 'conversation_purged');
         Queue::assertPushed(
             DeleteCommunicationMediaObjectJob::class,
             fn (DeleteCommunicationMediaObjectJob $job): bool => $job->objectId === $invalidObjectId,

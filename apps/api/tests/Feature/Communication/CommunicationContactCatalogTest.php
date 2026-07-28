@@ -155,6 +155,48 @@ final class CommunicationContactCatalogTest extends TestCase
             ]);
     }
 
+    public function test_contact_reads_and_mutations_follow_merge_redirect(): void
+    {
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $survivor = $this->contact($tenant, 'Canônico', provisional: false, active: true);
+        $this->identity($tenant, $survivor, '+5511999900010');
+        $donor = CommunicationContact::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'merged_into_contact_id' => $survivor->id,
+            'name' => null,
+            'is_provisional' => true,
+            'is_active' => false,
+        ]);
+        $this->authenticate($admin);
+
+        $this->getJson('/api/v1/communication/contacts/'.$donor->id)
+            ->assertOk()
+            ->assertJsonPath('data.id', $survivor->id);
+        $this->patchJson('/api/v1/communication/contacts/'.$donor->id, [
+            'name' => 'Atualizado pelo redirect',
+        ])->assertOk()
+            ->assertJsonPath('data.id', $survivor->id)
+            ->assertJsonPath('data.name', 'Atualizado pelo redirect');
+        $created = $this->postJson('/api/v1/communication/contacts/'.$donor->id.'/identities', [
+            'phone' => '+5511999900011',
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('communication_identities', [
+            'id' => $created->json('data.id'),
+            'tenant_id' => $tenant->id,
+            'contact_id' => $survivor->id,
+        ]);
+        $listedContactIds = $this->getJson('/api/v1/communication/contacts?include_inactive=true')
+            ->assertOk()
+            ->json('data.*.id');
+        $this->assertNotContains($donor->id, $listedContactIds);
+        $export = $this->get('/api/v1/communication/contacts/'.$donor->id.'/export')
+            ->assertOk();
+        $payload = json_decode($export->streamedContent(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame($survivor->id, data_get($payload, 'contact.id'));
+    }
+
     public function test_mutations_require_manage_contacts_not_only_manage_inboxes(): void
     {
         $tenant = Tenant::factory()->create(['communication_enabled' => true]);

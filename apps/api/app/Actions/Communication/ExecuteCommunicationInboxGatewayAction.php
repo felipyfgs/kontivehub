@@ -8,11 +8,13 @@ use App\DTO\Communication\CommunicationGatewayQueryResult;
 use App\Enums\Communication\GatewayCommandType;
 use App\Enums\Communication\GatewayQueryType;
 use App\Enums\Communication\InboxStatus;
+use App\Enums\CommunicationChannel;
 use App\Exceptions\CommunicationGatewayApiException;
 use App\Models\CommunicationIdentity;
 use App\Models\CommunicationInbox;
 use App\Models\User;
 use App\Services\Communication\Gateway\CommunicationGatewayOperations;
+use App\Services\Communication\Contact\CommunicationInboxIdentityProfileMerger;
 use App\Services\Communication\Pairing\CommunicationPairingStateStore;
 use Illuminate\Support\Facades\DB;
 
@@ -21,6 +23,7 @@ final readonly class ExecuteCommunicationInboxGatewayAction
     public function __construct(
         private CommunicationGatewayOperations $operations,
         private CommunicationPairingStateStore $pairing,
+        private CommunicationInboxIdentityProfileMerger $identityProfiles,
     ) {}
 
     public function command(
@@ -49,12 +52,17 @@ final readonly class ExecuteCommunicationInboxGatewayAction
         GatewayQueryType $type,
         CommunicationGatewayOperationData $data,
     ): CommunicationGatewayQueryResult {
-        return new CommunicationGatewayQueryResult($this->operations->query(
+        $result = $this->operations->query(
             $actor,
             $inbox,
             $type,
             $this->queryPayload($type, $data),
-        ));
+        );
+        if ($type === GatewayQueryType::UserInfo) {
+            $this->observeVerifiedNames($inbox, $result);
+        }
+
+        return new CommunicationGatewayQueryResult($result);
     }
 
     public function sessionStatus(
@@ -140,5 +148,49 @@ final readonly class ExecuteCommunicationInboxGatewayAction
         }
 
         return $address;
+    }
+
+    /** @param array<string, mixed> $result */
+    private function observeVerifiedNames(CommunicationInbox $inbox, array $result): void
+    {
+        $observedAt = now()->utc();
+        foreach (is_array($result['user_info'] ?? null) ? $result['user_info'] : [] as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+            $user = trim((string) ($item['user'] ?? ''));
+            $verifiedName = trim((string) ($item['verified_name'] ?? ''));
+            if ($user === '' || $verifiedName === '') {
+                continue;
+            }
+            $identity = CommunicationIdentity::query()
+                ->withoutGlobalScopes()
+                ->where('tenant_id', $inbox->tenant_id)
+                ->where('channel', CommunicationChannel::Whatsapp->value)
+                ->where('address_hash', hash('sha256', $user))
+                ->first();
+            if ($identity === null) {
+                continue;
+            }
+            $identityIds = array_values(array_unique(array_filter([
+                (int) $identity->id,
+                $identity->canonical_identity_id !== null ? (int) $identity->canonical_identity_id : null,
+            ])));
+            $knownInInbox = DB::table('communication_conversations')
+                ->where('tenant_id', $inbox->tenant_id)
+                ->where('inbox_id', $inbox->id)
+                ->whereIn('identity_id', $identityIds)
+                ->exists();
+            if (! $knownInInbox) {
+                continue;
+            }
+            $this->identityProfiles->merge(
+                $inbox,
+                $identity,
+                ['verified_name' => $verifiedName],
+                $observedAt,
+                'user-info:'.substr(hash('sha256', $user.'|'.$verifiedName.'|'.$observedAt->format('U.u')), 0, 48),
+            );
+        }
     }
 }

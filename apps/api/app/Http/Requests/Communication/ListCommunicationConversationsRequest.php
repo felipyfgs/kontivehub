@@ -14,6 +14,9 @@ final class ListCommunicationConversationsRequest extends CommunicationRequest
         if ($this->query->has('unassigned')) {
             $this->merge(['unassigned' => $this->boolean('unassigned')]);
         }
+        if ($this->query->has('unread')) {
+            $this->merge(['unread' => $this->boolean('unread')]);
+        }
         if ($this->query->has('q') && is_string($this->query('q'))) {
             $this->merge(['q' => trim($this->string('q')->toString())]);
         }
@@ -39,6 +42,7 @@ final class ListCommunicationConversationsRequest extends CommunicationRequest
             'assignee_membership_id' => ['sometimes', 'integer', 'min:1'],
             'work_department_id' => ['sometimes', 'integer', 'min:1'],
             'unassigned' => ['sometimes', 'boolean'],
+            'unread' => ['sometimes', 'boolean'],
             'q' => ['sometimes', 'nullable', 'string', 'max:120'],
             'per_page' => ['sometimes', 'integer', 'between:1,100'],
             'page' => ['sometimes', 'integer', 'min:1'],
@@ -61,6 +65,7 @@ final class ListCommunicationConversationsRequest extends CommunicationRequest
                 ? (int) $validated['work_department_id']
                 : null,
             unassigned: (bool) ($validated['unassigned'] ?? false),
+            unreadOnly: (bool) ($validated['unread'] ?? false),
             search: $search !== '' ? $search : null,
             perPage: (int) ($validated['per_page'] ?? 30),
             page: (int) ($validated['page'] ?? 1),

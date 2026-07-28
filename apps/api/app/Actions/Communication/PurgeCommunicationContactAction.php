@@ -5,6 +5,7 @@ namespace App\Actions\Communication;
 use App\DTO\Communication\CommunicationContactPurgeResult;
 use App\Enums\Communication\ConversationStatus;
 use App\Enums\Communication\FlowRunStatus;
+use App\Enums\Communication\OutboxStatus;
 use App\Jobs\Communication\DeleteCommunicationMediaObjectJob;
 use App\Models\CommunicationAttachment;
 use App\Models\CommunicationContact;
@@ -12,6 +13,8 @@ use App\Models\CommunicationConversation;
 use App\Models\CommunicationFlowRun;
 use App\Models\CommunicationIdentity;
 use App\Models\CommunicationMessage;
+use App\Services\Communication\CommunicationContactCanonicalizer;
+use App\Services\Communication\Conversation\CommunicationConversationReadStateService;
 use App\Services\Communication\Events\CommunicationEventRecorder;
 use App\Services\Communication\Media\CommunicationMediaStore;
 use App\Support\CurrentTenant;
@@ -25,30 +28,56 @@ final class PurgeCommunicationContactAction
         private readonly CurrentTenant $currentTenant,
         private readonly CommunicationMediaStore $media,
         private readonly CommunicationEventRecorder $events,
+        private readonly CommunicationContactCanonicalizer $canonicalizer,
+        private readonly CommunicationConversationReadStateService $readState,
     ) {}
 
     public function execute(CommunicationContact $contact): CommunicationContactPurgeResult
     {
         $tenantId = (int) $this->currentTenant->tenant()->id;
         $contactId = (int) $contact->id;
+        $contactIds = [$contactId];
         $now = now();
         $tombstone = hash(
             'sha256',
             'communication-contact-purge|'.$contactId.'|'.random_bytes(32),
         );
 
-        DB::transaction(function () use ($tenantId, $contactId, $now, $tombstone): void {
-            $lockedContact = CommunicationContact::query()
+        DB::transaction(function () use (
+            $contact,
+            $tenantId,
+            &$contactId,
+            &$contactIds,
+            $now,
+            $tombstone,
+        ): void {
+            [$lockedContact, $contactIds] = $this->canonicalizer->lockContactClass($contact);
+            $contactId = (int) $lockedContact->id;
+            $identityIds = $this->identityIds($tenantId, $contactIds)
+                ->pluck('id')
+                ->map(static fn ($id): int => (int) $id)
+                ->all();
+            $conversations = CommunicationConversation::query()
                 ->withoutGlobalScopes()
                 ->where('tenant_id', $tenantId)
-                ->whereKey($contactId)
+                ->whereIn('identity_id', $identityIds)
+                ->orderBy('id')
                 ->lockForUpdate()
-                ->firstOrFail();
+                ->get();
+            $conversationIds = $conversations->pluck('id')
+                ->map(static fn ($id): int => (int) $id)
+                ->all();
+
+            DB::table('communication_inbox_identity_profiles')
+                ->where('tenant_id', $tenantId)
+                ->whereIn('identity_id', $identityIds)
+                ->delete();
+            $conversations->each(fn (CommunicationConversation $conversation) => $this->readState->purge($conversation));
 
             CommunicationIdentity::query()
                 ->withoutGlobalScopes()
                 ->where('tenant_id', $tenantId)
-                ->where('contact_id', $contactId)
+                ->whereIn('contact_id', $contactIds)
                 ->orderBy('id')
                 ->lockForUpdate()
                 ->lazyById(100)
@@ -68,7 +97,7 @@ final class PurgeCommunicationContactAction
             CommunicationConversation::query()
                 ->withoutGlobalScopes()
                 ->where('tenant_id', $tenantId)
-                ->whereIn('identity_id', $this->identityIds($tenantId, $contactId))
+                ->whereIn('id', $conversationIds)
                 ->update([
                     'status' => ConversationStatus::Resolved,
                     'snoozed_until' => null,
@@ -82,7 +111,7 @@ final class PurgeCommunicationContactAction
             CommunicationAttachment::query()
                 ->withoutGlobalScopes()
                 ->where('tenant_id', $tenantId)
-                ->whereIn('message_id', $this->messageIds($tenantId, $contactId))
+                ->whereIn('message_id', $this->messageIds($tenantId, $contactIds))
                 ->update([
                     'original_name_encrypted' => null,
                     'purged_at' => $now,
@@ -91,7 +120,7 @@ final class PurgeCommunicationContactAction
             CommunicationMessage::query()
                 ->withoutGlobalScopes()
                 ->where('tenant_id', $tenantId)
-                ->whereIn('conversation_id', $this->conversationIds($tenantId, $contactId))
+                ->whereIn('conversation_id', $this->conversationIds($tenantId, $contactIds))
                 ->update([
                     'body_encrypted' => null,
                     'content_encrypted' => null,
@@ -100,8 +129,19 @@ final class PurgeCommunicationContactAction
                     'purged_at' => $now,
                     'updated_at' => $now,
                 ]);
+            DB::table('communication_outbox_entries')
+                ->where('tenant_id', $tenantId)
+                ->whereIn('message_id', $this->messageIds($tenantId, $contactIds))
+                ->whereIn('status', [OutboxStatus::Pending->value, OutboxStatus::Retry->value])
+                ->update([
+                    'status' => OutboxStatus::Canceled->value,
+                    'locked_at' => null,
+                    'last_error_code' => 'CONTACT_PURGED',
+                    'last_error_message' => null,
+                    'updated_at' => $now,
+                ]);
 
-            $runIds = $this->flowRunIds($tenantId, $contactId);
+            $runIds = $this->flowRunIds($tenantId, $contactIds);
             DB::table('communication_flow_run_steps')
                 ->where('tenant_id', $tenantId)
                 ->whereIn('run_id', clone $runIds)
@@ -131,13 +171,18 @@ final class PurgeCommunicationContactAction
                     'updated_at' => $now,
                 ]);
 
-            $lockedContact->forceFill([
-                'name' => null,
-                'metadata' => null,
-                'is_provisional' => false,
-                'is_active' => false,
-                'purged_at' => $now,
-            ])->save();
+            CommunicationContact::query()
+                ->withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->whereIn('id', $contactIds)
+                ->update([
+                    'name' => null,
+                    'metadata' => null,
+                    'is_provisional' => false,
+                    'is_active' => false,
+                    'purged_at' => $now,
+                    'updated_at' => $now,
+                ]);
             $this->events->record(
                 $tenantId,
                 'CONTACT_PURGED',
@@ -147,13 +192,13 @@ final class PurgeCommunicationContactAction
                 ],
                 actorMembershipId: $this->currentTenant->realMembership()?->id,
             );
-        });
+        }, 3);
 
         $deletedBlobs = 0;
         CommunicationAttachment::query()
             ->withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
-            ->whereIn('message_id', $this->messageIds($tenantId, $contactId))
+            ->whereIn('message_id', $this->messageIds($tenantId, $contactIds))
             ->select(['id', 'object_id'])
             ->orderBy('id')
             ->lazyById(100)
@@ -180,42 +225,42 @@ final class PurgeCommunicationContactAction
     }
 
     /** @return Builder<CommunicationIdentity> */
-    private function identityIds(int $tenantId, int $contactId): Builder
+    private function identityIds(int $tenantId, array $contactIds): Builder
     {
         return CommunicationIdentity::query()
             ->withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
-            ->where('contact_id', $contactId)
+            ->whereIn('contact_id', $contactIds)
             ->select('id');
     }
 
     /** @return Builder<CommunicationConversation> */
-    private function conversationIds(int $tenantId, int $contactId): Builder
+    private function conversationIds(int $tenantId, array $contactIds): Builder
     {
         return CommunicationConversation::query()
             ->withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
-            ->whereIn('identity_id', $this->identityIds($tenantId, $contactId))
+            ->whereIn('identity_id', $this->identityIds($tenantId, $contactIds))
             ->select('id');
     }
 
     /** @return Builder<CommunicationMessage> */
-    private function messageIds(int $tenantId, int $contactId): Builder
+    private function messageIds(int $tenantId, array $contactIds): Builder
     {
         return CommunicationMessage::query()
             ->withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
-            ->whereIn('conversation_id', $this->conversationIds($tenantId, $contactId))
+            ->whereIn('conversation_id', $this->conversationIds($tenantId, $contactIds))
             ->select('id');
     }
 
     /** @return Builder<CommunicationFlowRun> */
-    private function flowRunIds(int $tenantId, int $contactId): Builder
+    private function flowRunIds(int $tenantId, array $contactIds): Builder
     {
         return CommunicationFlowRun::query()
             ->withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
-            ->whereIn('conversation_id', $this->conversationIds($tenantId, $contactId))
+            ->whereIn('conversation_id', $this->conversationIds($tenantId, $contactIds))
             ->select('id');
     }
 }

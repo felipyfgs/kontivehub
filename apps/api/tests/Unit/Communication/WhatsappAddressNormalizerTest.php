@@ -55,12 +55,13 @@ class WhatsappAddressNormalizerTest extends TestCase
         ];
     }
 
-    public function test_resolve_peer_prefers_previous_from(): void
+    public function test_resolve_peer_delegates_to_peer_resolver_with_structured_identity(): void
     {
-        $this->assertSame('+5511999991234', app(WhatsappAddressNormalizer::class)->resolvePeerAddress([
+        // source_identity válida tem precedência: primary LID + alternate PN remota.
+        $this->assertSame('+5511988884321', app(WhatsappAddressNormalizer::class)->resolvePeerAddress([
             'from' => '+5511999991234',
             'source_identity' => [
-                'primary' => 'lid:12345',
+                'primary' => 'lid:123456789012345',
                 'primary_kind' => 'LID',
                 'alternate' => '+5511988884321',
                 'alternate_kind' => 'PN',
@@ -69,17 +70,10 @@ class WhatsappAddressNormalizerTest extends TestCase
         ]));
     }
 
-    public function test_resolve_peer_delegates_to_peer_resolver(): void
+    public function test_resolve_peer_legacy_from_without_source_identity(): void
     {
-        $this->assertSame('lid:132366714564657', app(WhatsappAddressNormalizer::class)->resolvePeerAddress([
-            'direction' => 'OUTBOUND',
-            'source_identity' => [
-                'primary' => 'lid:132366714564657',
-                'primary_kind' => 'LID',
-                'alternate' => '+559981769536',
-                'alternate_kind' => 'PN',
-                'evidence' => 'MESSAGE_SOURCE_ALT',
-            ],
+        $this->assertSame('+559981769536', app(WhatsappAddressNormalizer::class)->resolvePeerAddress([
+            'from' => '+559981769536',
         ]));
     }
 }

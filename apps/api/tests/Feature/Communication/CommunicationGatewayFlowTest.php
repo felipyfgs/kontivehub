@@ -7,6 +7,8 @@ use App\DTO\Communication\GatewayCommandData;
 use App\DTO\Communication\GatewayCommandReceipt;
 use App\DTO\Communication\GatewayQueryData;
 use App\Enums\Communication\ConversationStatus;
+use App\Enums\Communication\FlowRunStatus;
+use App\Enums\Communication\FlowStatus;
 use App\Enums\Communication\GatewayCommandType;
 use App\Enums\Communication\GatewayEventType;
 use App\Enums\Communication\InboxStatus;
@@ -27,20 +29,29 @@ use App\Models\ClientCommunicationEvent;
 use App\Models\CommunicationAttachment;
 use App\Models\CommunicationContact;
 use App\Models\CommunicationConversation;
+use App\Models\CommunicationConversationUnreadMessage;
 use App\Models\CommunicationEvent;
+use App\Models\CommunicationFlow;
+use App\Models\CommunicationFlowRun;
+use App\Models\CommunicationFlowVersion;
 use App\Models\CommunicationIdentity;
 use App\Models\CommunicationInbox;
+use App\Models\CommunicationLabel;
 use App\Models\CommunicationMessage;
 use App\Models\CommunicationOutboxEntry;
 use App\Models\Tenant;
 use App\Services\Communication\Media\CommunicationMediaStore;
+use App\Services\Communication\Conversation\CommunicationConversationReadStateService;
 use App\Services\Communication\Outbox\CommunicationOutboxDispatcher;
 use App\Services\Communication\Security\CommunicationHmacSigner;
 use GuzzleHttp\Psr7\Utils;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
+use Mockery;
 use Psr\Http\Message\StreamInterface;
 use Tests\TestCase;
 
@@ -102,11 +113,49 @@ final class CommunicationGatewayFlowTest extends TestCase
         $this->assertDatabaseHas('communication_conversations', ['status' => ConversationStatus::Open->value]);
         $this->assertDatabaseCount('communication_messages', 1);
         $this->assertDatabaseCount('communication_attachments', 1);
-        $this->assertDatabaseCount('communication_events', 1);
+        $this->assertDatabaseCount('communication_conversation_unread_messages', 1);
+        $this->assertDatabaseCount('communication_conversation_read_states', 1);
+        $this->assertDatabaseCount('communication_events', 2);
         $attachment = CommunicationAttachment::query()->withoutGlobalScopes()->firstOrFail();
         $this->assertSame(hash('sha256', $bytes), $attachment->sha256);
         $this->assertSame('comprovante.pdf', $attachment->original_name_encrypted);
         $this->assertSame(1, $this->transport->downloadCalls);
+    }
+
+    public function test_duplicate_live_inbound_does_not_recreate_unread_after_read(): void
+    {
+        [, $inbox] = $this->context();
+        $event = $this->event($inbox, GatewayEventType::MessageReceived, 'gateway-live-read-retry-0001', [
+            'provider_message_id' => 'provider-live-read-retry-0001',
+            'from' => '+5511999990044',
+            'direction' => 'INBOUND',
+            'kind' => 'TEXT',
+            'provider_type' => 'conversation',
+            'family' => 'TEXT',
+            'text' => 'Mensagem live única',
+        ]);
+        $this->postSignedEvent($event)->assertNoContent();
+        $message = CommunicationMessage::query()->withoutGlobalScopes()
+            ->where('provider_message_id', 'provider-live-read-retry-0001')
+            ->sole();
+        DB::transaction(function () use ($message): void {
+            $conversation = CommunicationConversation::query()->withoutGlobalScopes()
+                ->whereKey($message->conversation_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            app(CommunicationConversationReadStateService::class)->markRead(
+                $conversation,
+                (int) $message->id,
+                null,
+                null,
+            );
+        });
+        $this->assertDatabaseCount('communication_conversation_unread_messages', 0);
+
+        $this->postSignedEvent($event)
+            ->assertNoContent()
+            ->assertHeader('X-Communication-Result', 'duplicate');
+        $this->assertDatabaseCount('communication_conversation_unread_messages', 0);
     }
 
     public function test_lid_and_remote_pn_converge_without_materializing_the_session_pn(): void
@@ -205,6 +254,27 @@ final class CommunicationGatewayFlowTest extends TestCase
             $remotePn,
             'remote',
         );
+        $lidContact = CommunicationContact::query()->withoutGlobalScopes()
+            ->findOrFail($lidIdentity->contact_id);
+        $remoteContact = CommunicationContact::query()->withoutGlobalScopes()
+            ->findOrFail($remoteIdentity->contact_id);
+        $lidContact->forceFill([
+            'name' => 'Cliente curado',
+            'is_provisional' => false,
+            'metadata' => ['origin' => 'operator'],
+        ])->save();
+        $remoteContact->forceFill([
+            'metadata' => ['remote_hint' => true],
+        ])->save();
+        $otherRemoteIdentity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'contact_id' => $remoteContact->id,
+            'channel' => CommunicationChannel::Whatsapp,
+            'address_encrypted' => '+559992032700',
+            'address_hash' => hash('sha256', '+559992032700'),
+            'address_masked' => '***2700',
+            'is_active' => true,
+        ]);
         [, $selfConversation] = $this->identityAndConversationForAddress(
             $tenant,
             $inbox,
@@ -213,6 +283,27 @@ final class CommunicationGatewayFlowTest extends TestCase
         );
         $this->outboundMessage($tenant, $inbox, $lidIdentity, $lidConversation, 'legacy-lid');
         $this->outboundMessage($tenant, $inbox, $remoteIdentity, $remoteConversation, 'legacy-remote');
+        $client = Client::factory()->create(['tenant_id' => $tenant->id]);
+        $label = CommunicationLabel::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Alias LID',
+            'color' => 'green',
+        ]);
+        DB::table('communication_conversation_clients')->insert([
+            'tenant_id' => $tenant->id,
+            'conversation_id' => $lidConversation->id,
+            'client_id' => $client->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('communication_conversation_labels')->insert([
+            'tenant_id' => $tenant->id,
+            'conversation_id' => $lidConversation->id,
+            'label_id' => $label->id,
+            'assigned_by_membership_id' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
         $event = $this->event($inbox, GatewayEventType::MessageReceived, 'gateway-fragmented-0001', [
             'provider_message_id' => 'provider-fragmented-0001',
@@ -258,9 +349,361 @@ final class CommunicationGatewayFlowTest extends TestCase
             $lidIdentity->refresh()->contact_id,
             $remoteIdentity->refresh()->contact_id,
         );
+        $this->assertSame($lidContact->id, $lidIdentity->contact_id);
+        $this->assertNull($remoteIdentity->canonical_identity_id);
+        $this->assertSame($remoteIdentity->id, $lidIdentity->canonical_identity_id);
+        $this->assertSame('Cliente curado', $lidContact->refresh()->name);
+        $this->assertSame(
+            ['origin' => 'operator', 'remote_hint' => true],
+            $lidContact->metadata,
+        );
+        $remoteContact->refresh();
+        $this->assertFalse($remoteContact->is_active);
+        $this->assertSame($lidContact->id, $remoteContact->merged_into_contact_id);
+        $this->assertNull($remoteContact->name);
+        $this->assertNull($remoteContact->metadata);
+        $this->assertSame($lidContact->id, $otherRemoteIdentity->refresh()->contact_id);
+        $this->assertNull($otherRemoteIdentity->canonical_identity_id);
+        $this->assertSame(0, $remoteContact->identities()->withoutGlobalScopes()->count());
         $this->assertSame([$activeConversation->id], $messageConversationIds->all());
         $this->assertSame(ConversationStatus::Resolved, $selfConversation->refresh()->status);
-        $this->assertDatabaseCount('communication_contacts', 2);
+        $donor = collect([$lidConversation->refresh(), $remoteConversation->refresh()])
+            ->firstWhere('id', '!=', $activeConversation->id);
+        $this->assertSame($activeConversation->id, $donor?->merged_into_conversation_id);
+        $this->assertDatabaseHas('communication_conversation_clients', [
+            'conversation_id' => $activeConversation->id,
+            'client_id' => $client->id,
+        ]);
+        $this->assertDatabaseHas('communication_conversation_labels', [
+            'conversation_id' => $activeConversation->id,
+            'label_id' => $label->id,
+        ]);
+    }
+
+    public function test_history_retry_with_same_provider_message_id_still_correlates_lid_and_pn(): void
+    {
+        [$tenant, $inbox] = $this->context();
+        $lid = 'lid:149865032093945';
+        $remotePn = '+559992032709';
+        $firstPayload = [
+            'provider_message_id' => 'provider-retry-alias-0001',
+            'from' => $lid,
+            'source_identity' => [
+                'primary' => $lid,
+                'primary_kind' => 'LID',
+                'evidence' => 'CHAT',
+            ],
+            'direction' => 'INBOUND',
+            'kind' => 'TEXT',
+            'provider_type' => 'conversation',
+            'family' => 'TEXT',
+            'text' => 'Mensagem sem alias',
+        ];
+        $this->postSignedEvent($this->event(
+            $inbox,
+            GatewayEventType::HistorySynced,
+            'gateway-retry-lid-0001',
+            [
+                'batch_id' => 'history-retry-lid-batch-0001',
+                'complete' => true,
+                'messages' => [$firstPayload],
+            ],
+        ))->assertNoContent();
+        $message = CommunicationMessage::query()->withoutGlobalScopes()
+            ->where('provider_message_id', 'provider-retry-alias-0001')
+            ->sole();
+        $originalConversationId = (int) $message->conversation_id;
+        [, $pnConversation] = $this->identityAndConversationForAddress(
+            $tenant,
+            $inbox,
+            $remotePn,
+            'remote',
+        );
+
+        $retry = $this->event($inbox, GatewayEventType::MessageReceived, 'gateway-retry-alias-0002', [
+            ...$firstPayload,
+            'history' => true,
+            'source_identity' => [
+                'primary' => $lid,
+                'primary_kind' => 'LID',
+                'alternate' => $remotePn,
+                'alternate_kind' => 'PN',
+                'evidence' => 'MESSAGE_SOURCE_ALT',
+            ],
+        ]);
+        $this->postSignedEvent($retry)
+            ->assertNoContent()
+            ->assertHeader('X-Communication-Result', 'processed');
+
+        $message->refresh();
+        $this->assertDatabaseCount('communication_messages', 1);
+        $this->assertSame($pnConversation->id, $message->conversation_id);
+        $this->assertSame($pnConversation->id, CommunicationEvent::query()
+            ->withoutGlobalScopes()
+            ->where('gateway_event_id', 'gateway-retry-alias-0002')
+            ->value('conversation_id'));
+        $historicalConversation = CommunicationConversation::query()
+            ->withoutGlobalScopes()
+            ->findOrFail($originalConversationId);
+        $this->assertSame(ConversationStatus::Resolved, $historicalConversation->status);
+        $this->assertNull($historicalConversation->merged_into_conversation_id);
+    }
+
+    public function test_flow_run_conversation_survives_alias_merge_and_conflicting_runs_fail_closed(): void
+    {
+        [$tenant, $inbox] = $this->context();
+        $lid = 'lid:149865032093945';
+        $remotePn = '+559992032709';
+        [, $lidConversation] = $this->identityAndConversationForAddress($tenant, $inbox, $lid, 'lid');
+        [, $pnConversation] = $this->identityAndConversationForAddress($tenant, $inbox, $remotePn, 'remote');
+        [$flow, $version] = $this->flowVersion($tenant);
+        $run = $this->flowRun($tenant, $flow, $version, $lidConversation);
+
+        $event = $this->aliasEvent(
+            $inbox,
+            'gateway-flow-survivor-0001',
+            'provider-flow-survivor-0001',
+            $lid,
+            $remotePn,
+        );
+        $this->postSignedEvent($event)->assertNoContent();
+
+        $this->assertSame($lidConversation->id, $run->refresh()->conversation_id);
+        $this->assertNull($lidConversation->refresh()->merged_into_conversation_id);
+        $this->assertSame($lidConversation->id, $pnConversation->refresh()->merged_into_conversation_id);
+
+        [$otherTenant, $otherInbox] = $this->context();
+        [, $otherLidConversation] = $this->identityAndConversationForAddress(
+            $otherTenant,
+            $otherInbox,
+            $lid,
+            'lid',
+        );
+        [, $otherPnConversation] = $this->identityAndConversationForAddress(
+            $otherTenant,
+            $otherInbox,
+            $remotePn,
+            'remote',
+        );
+        [$otherFlow, $otherVersion] = $this->flowVersion($otherTenant);
+        $this->flowRun($otherTenant, $otherFlow, $otherVersion, $otherLidConversation);
+        $this->flowRun($otherTenant, $otherFlow, $otherVersion, $otherPnConversation);
+
+        Log::spy();
+        $this->postSignedEvent($this->aliasEvent(
+            $otherInbox,
+            'gateway-flow-conflict-0001',
+            'provider-flow-conflict-0001',
+            $lid,
+            $remotePn,
+        ))->assertConflict()->assertJson(['error' => 'PEER_CORRELATION_CONFLICT']);
+
+        $this->assertSame(2, CommunicationConversation::query()->withoutGlobalScopes()
+            ->where('tenant_id', $otherTenant->id)
+            ->where('status', '<>', ConversationStatus::Resolved->value)
+            ->count());
+        $this->assertDatabaseMissing('communication_messages', [
+            'tenant_id' => $otherTenant->id,
+            'provider_message_id' => 'provider-flow-conflict-0001',
+        ]);
+        Log::shouldHaveReceived('warning')
+            ->once()
+            ->with(
+                'whatsapp_peer_correlation_flow_conflict',
+                Mockery::on(static fn (array $context): bool => (
+                    ($context['code'] ?? null) === 'PEER_CORRELATION_CONFLICT'
+                    && (int) ($context['tenant_id'] ?? 0) === (int) $otherTenant->id
+                    && (int) ($context['inbox_id'] ?? 0) === (int) $otherInbox->id
+                    && count($context['conversation_ids'] ?? []) === 2
+                )),
+            );
+    }
+
+    public function test_message_timestamps_remain_monotonic_for_delayed_live_and_history(): void
+    {
+        [, $inbox] = $this->context();
+        $address = '+5511999990042';
+        $latestAt = '2026-07-28T15:00:00+00:00';
+        $delayedAt = '2026-07-28T14:00:00+00:00';
+        foreach ([
+            ['gateway-time-latest-0001', 'provider-time-latest-0001', $latestAt],
+            ['gateway-time-delayed-0001', 'provider-time-delayed-0001', $delayedAt],
+        ] as [$eventId, $providerId, $occurredAt]) {
+            $this->postSignedEvent($this->event($inbox, GatewayEventType::MessageReceived, $eventId, [
+                'provider_message_id' => $providerId,
+                'from' => $address,
+                'occurred_at' => $occurredAt,
+                'direction' => 'INBOUND',
+                'kind' => 'TEXT',
+                'provider_type' => 'conversation',
+                'family' => 'TEXT',
+                'text' => 'Mensagem temporal',
+            ]))->assertNoContent();
+        }
+        $liveConversation = CommunicationConversation::query()->withoutGlobalScopes()
+            ->whereHas('identity', fn ($query) => $query
+                ->withoutGlobalScopes()
+                ->where('address_hash', hash('sha256', $address)))
+            ->sole();
+        $this->assertSame($latestAt, $liveConversation->last_message_at?->toIso8601String());
+
+        [, $historyInbox] = $this->context();
+        $historyAt = '2025-03-10T09:30:00+00:00';
+        $this->postSignedEvent($this->event(
+            $historyInbox,
+            GatewayEventType::HistorySynced,
+            'gateway-history-time-0001',
+            [
+                'batch_id' => 'history-time-batch-0001',
+                'complete' => true,
+                'messages' => [[
+                    'provider_message_id' => 'provider-history-time-0001',
+                    'from' => '+5511999990043',
+                    'occurred_at' => $historyAt,
+                    'direction' => 'INBOUND',
+                    'kind' => 'TEXT',
+                    'provider_type' => 'conversation',
+                    'family' => 'TEXT',
+                    'text' => 'Mensagem histórica',
+                ]],
+            ],
+        ))->assertNoContent();
+        $historyMessage = CommunicationMessage::query()->withoutGlobalScopes()
+            ->where('provider_message_id', 'provider-history-time-0001')
+            ->sole();
+        $this->assertSame(
+            $historyAt,
+            CommunicationConversation::query()
+                ->withoutGlobalScopes()
+                ->findOrFail($historyMessage->conversation_id)
+                ->last_message_at
+                ?->toIso8601String(),
+        );
+        $this->assertFalse(
+            CommunicationConversationUnreadMessage::query()
+                ->withoutGlobalScopes()
+                ->where('message_id', $historyMessage->id)
+                ->exists(),
+        );
+    }
+
+    public function test_older_phone_evidence_does_not_replace_newer_canonical_phone(): void
+    {
+        [$tenant, $inbox] = $this->context();
+        $lid = 'lid:149865032093945';
+        $olderPn = '+559992032701';
+        $newerPn = '+559992032709';
+        $newerAt = '2026-07-28T16:00:00+00:00';
+        $olderAt = '2026-07-28T15:00:00+00:00';
+
+        $newer = $this->aliasEvent(
+            $inbox,
+            'gateway-canonical-newer-0001',
+            'provider-canonical-newer-0001',
+            $lid,
+            $newerPn,
+        );
+        $newer['payload']['occurred_at'] = $newerAt;
+        $this->postSignedEvent($newer)->assertNoContent();
+
+        $older = $this->aliasEvent(
+            $inbox,
+            'gateway-canonical-older-0001',
+            'provider-canonical-older-0001',
+            $lid,
+            $olderPn,
+        );
+        $older['payload']['occurred_at'] = $olderAt;
+        $older['payload']['history'] = true;
+        $this->postSignedEvent($older)->assertNoContent();
+
+        $newerIdentity = CommunicationIdentity::query()->withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('address_hash', hash('sha256', $newerPn))
+            ->sole();
+        $olderIdentity = CommunicationIdentity::query()->withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('address_hash', hash('sha256', $olderPn))
+            ->sole();
+        $lidIdentity = CommunicationIdentity::query()->withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('address_hash', hash('sha256', $lid))
+            ->sole();
+        $conversation = CommunicationConversation::query()->withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->whereNull('merged_into_conversation_id')
+            ->sole();
+
+        $this->assertNull($newerIdentity->canonical_identity_id);
+        $this->assertSame($newerIdentity->id, $olderIdentity->canonical_identity_id);
+        $this->assertSame($newerIdentity->id, $lidIdentity->canonical_identity_id);
+        $this->assertSame($newerIdentity->id, $conversation->identity_id);
+        $this->assertSame($newerAt, $newerIdentity->last_seen_at?->toIso8601String());
+        $this->assertSame($olderAt, $olderIdentity->last_seen_at?->toIso8601String());
+    }
+
+    public function test_same_lid_and_pn_remain_isolated_between_tenants(): void
+    {
+        [$firstTenant, $firstInbox] = $this->context();
+        [$secondTenant, $secondInbox] = $this->context();
+        $remotePn = '+559992032709';
+        $lid = 'lid:149865032093945';
+        foreach ([
+            [$firstInbox, '+559981769536', 'first'],
+            [$secondInbox, '+559982222222', 'second'],
+        ] as [$inbox, $sessionPn, $suffix]) {
+            $inbox->forceFill([
+                'address_encrypted' => $sessionPn,
+                'address_hash' => hash('sha256', $sessionPn),
+                'address_masked' => '***'.substr($sessionPn, -4),
+            ])->save();
+            $event = $this->event(
+                $inbox,
+                GatewayEventType::MessageReceived,
+                'gateway-tenant-alias-'.$suffix,
+                [
+                    'provider_message_id' => 'provider-tenant-alias-'.$suffix,
+                    'from' => $lid,
+                    'source_identity' => [
+                        'primary' => $lid,
+                        'primary_kind' => 'LID',
+                        'alternate' => $remotePn,
+                        'alternate_kind' => 'PN',
+                        'evidence' => 'MESSAGE_SOURCE_ALT',
+                    ],
+                    'direction' => 'INBOUND',
+                    'kind' => 'TEXT',
+                    'provider_type' => 'conversation',
+                    'family' => 'TEXT',
+                    'text' => 'Tenant '.$suffix,
+                ],
+            );
+            $this->postSignedEvent($event)->assertNoContent();
+        }
+
+        $firstIdentity = CommunicationIdentity::query()->withoutGlobalScopes()
+            ->where('tenant_id', $firstTenant->id)
+            ->where('address_hash', hash('sha256', $remotePn))
+            ->sole();
+        $secondIdentity = CommunicationIdentity::query()->withoutGlobalScopes()
+            ->where('tenant_id', $secondTenant->id)
+            ->where('address_hash', hash('sha256', $remotePn))
+            ->sole();
+
+        $this->assertNotSame($firstIdentity->id, $secondIdentity->id);
+        $this->assertNotSame($firstIdentity->contact_id, $secondIdentity->contact_id);
+        $this->assertSame(
+            1,
+            CommunicationConversation::query()->withoutGlobalScopes()
+                ->where('tenant_id', $firstTenant->id)
+                ->count(),
+        );
+        $this->assertSame(
+            1,
+            CommunicationConversation::query()->withoutGlobalScopes()
+                ->where('tenant_id', $secondTenant->id)
+                ->count(),
+        );
     }
 
     public function test_internal_event_authenticates_raw_body_before_schema_and_rejects_stale_or_replayed_evidence(): void
@@ -495,6 +938,59 @@ final class CommunicationGatewayFlowTest extends TestCase
         $dispatcher->dispatch((int) $failed->id);
         $this->assertSame(OutboxStatus::Dead, $failed->refresh()->status);
         $this->assertSame(MessageStatus::Failed, $failedMessage->refresh()->status);
+    }
+
+    public function test_accepted_human_outbound_persists_read_receipt_follow_up_atomically(): void
+    {
+        Queue::fake();
+        [$tenant, $inbox] = $this->context();
+        [$identity, $conversation] = $this->identityAndConversation($tenant, $inbox);
+        $inbound = CommunicationMessage::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'inbox_id' => $inbox->id,
+            'conversation_id' => $conversation->id,
+            'identity_id' => $identity->id,
+            'direction' => MessageDirection::Inbound,
+            'kind' => MessageKind::Text,
+            'source' => MessageSource::Gateway,
+            'status' => MessageStatus::Delivered,
+            'body_encrypted' => 'Mensagem exibida',
+            'provider_message_id' => 'provider-inbound-receipt-0001',
+            'content_digest' => hash('sha256', 'Mensagem exibida'),
+            'occurred_at' => now()->subSecond(),
+        ]);
+        $outbound = $this->outboundMessage($tenant, $inbox, $identity, $conversation, 'receipt-follow-up');
+        $outbound->forceFill(['metadata' => ['receipt_message_id' => $inbound->id]])->save();
+        $send = $this->outbox($tenant, $inbox, $outbound, 'command-receipt-follow-up-0001');
+
+        $dispatcher = app(CommunicationOutboxDispatcher::class);
+        $dispatcher->dispatch((int) $send->id);
+
+        $this->assertSame(OutboxStatus::Accepted, $send->refresh()->status);
+        $followUps = CommunicationOutboxEntry::query()->withoutGlobalScopes()
+            ->where('effect_key', 'outbound-read-receipt:'.$send->id.':'.$inbound->id)
+            ->get();
+        $this->assertCount(1, $followUps, (string) CommunicationEvent::query()
+            ->withoutGlobalScopes()
+            ->where('type', 'outbound.read_receipt.release_failed')
+            ->get(['payload'])
+            ->toJson());
+        $followUp = $followUps->firstOrFail();
+        $this->assertSame(GatewayCommandType::MarkMessage, $followUp->type);
+        $this->assertSame(OutboxStatus::Pending, $followUp->status);
+        $this->assertSame($outbound->id, $followUp->message_id);
+        $this->assertSame(
+            ['provider-inbound-receipt-0001'],
+            $followUp->payload_encrypted['message_ids'] ?? null,
+        );
+
+        $dispatcher->dispatch((int) $send->id);
+        $this->assertSame(
+            1,
+            CommunicationOutboxEntry::query()->withoutGlobalScopes()
+                ->where('effect_key', 'outbound-read-receipt:'.$send->id.':'.$inbound->id)
+                ->count(),
+        );
     }
 
     public function test_media_retry_rehydrates_original_attachment_and_schedules_durable_cleanup(): void
@@ -735,6 +1231,80 @@ final class CommunicationGatewayFlowTest extends TestCase
             'payload_digest' => hash('sha256', json_encode($payload, JSON_THROW_ON_ERROR)),
             'status' => OutboxStatus::Pending,
             'available_at' => now()->subSecond(),
+        ]);
+    }
+
+    /** @return array{CommunicationFlow,CommunicationFlowVersion} */
+    private function flowVersion(Tenant $tenant): array
+    {
+        $flow = CommunicationFlow::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Fluxo '.Str::ulid(),
+            'status' => FlowStatus::Active,
+            'lock_version' => 1,
+        ]);
+        $graph = [
+            'nodes' => [
+                ['id' => 'start', 'type' => 'start', 'data' => []],
+                ['id' => 'end', 'type' => 'end', 'data' => []],
+            ],
+            'edges' => [
+                ['id' => 'edge', 'source' => 'start', 'target' => 'end'],
+            ],
+        ];
+        $version = CommunicationFlowVersion::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'flow_id' => $flow->id,
+            'version' => 1,
+            'graph_encrypted' => $graph,
+            'graph_digest' => hash('sha256', json_encode($graph, JSON_THROW_ON_ERROR)),
+            'published_at' => now(),
+        ]);
+
+        return [$flow, $version];
+    }
+
+    private function flowRun(
+        Tenant $tenant,
+        CommunicationFlow $flow,
+        CommunicationFlowVersion $version,
+        CommunicationConversation $conversation,
+    ): CommunicationFlowRun {
+        return CommunicationFlowRun::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'flow_id' => $flow->id,
+            'flow_version_id' => $version->id,
+            'conversation_id' => $conversation->id,
+            'status' => FlowRunStatus::WaitingInput,
+            'current_node_id' => 'start',
+            'context_encrypted' => [],
+            'started_at' => now(),
+        ]);
+    }
+
+    /** @return array<string,mixed> */
+    private function aliasEvent(
+        CommunicationInbox $inbox,
+        string $gatewayEventId,
+        string $providerMessageId,
+        string $lid,
+        string $remotePn,
+    ): array {
+        return $this->event($inbox, GatewayEventType::MessageReceived, $gatewayEventId, [
+            'provider_message_id' => $providerMessageId,
+            'from' => $lid,
+            'source_identity' => [
+                'primary' => $lid,
+                'primary_kind' => 'LID',
+                'alternate' => $remotePn,
+                'alternate_kind' => 'PN',
+                'evidence' => 'MESSAGE_SOURCE_ALT',
+            ],
+            'direction' => 'INBOUND',
+            'kind' => 'TEXT',
+            'provider_type' => 'conversation',
+            'family' => 'TEXT',
+            'text' => 'Mensagem correlacionada',
         ]);
     }
 

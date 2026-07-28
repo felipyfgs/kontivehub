@@ -118,16 +118,53 @@ class WhatsappPeerResolverTest extends TestCase
         ], $inbox);
     }
 
-    public function test_legacy_from_is_preferred_when_not_session(): void
+    public function test_legacy_from_is_used_when_source_identity_is_absent(): void
+    {
+        $peer = app(WhatsappPeerResolver::class)->resolve([
+            'from' => '+5511999991234',
+        ]);
+
+        $this->assertSame('+5511999991234', $peer);
+    }
+
+    public function test_structured_primary_wins_over_legacy_from_without_remote_pn(): void
     {
         $peer = app(WhatsappPeerResolver::class)->resolve([
             'from' => '+5511999991234',
             'source_identity' => [
-                'primary' => 'lid:1',
+                'primary' => 'lid:123456789012345',
                 'primary_kind' => 'LID',
             ],
         ]);
 
-        $this->assertSame('+5511999991234', $peer);
+        $this->assertSame('lid:123456789012345', $peer);
+    }
+
+    public function test_rejects_structured_alias_without_lid_to_pn_evidence(): void
+    {
+        $resolver = app(WhatsappPeerResolver::class);
+        foreach ([
+            [
+                'primary' => '+5511999990001',
+                'primary_kind' => 'PN',
+                'alternate' => '+5511999990002',
+                'alternate_kind' => 'PN',
+                'evidence' => 'MESSAGE_SOURCE_ALT',
+            ],
+            [
+                'primary' => 'lid:123456789012345',
+                'primary_kind' => 'LID',
+                'alternate' => '+5511999990002',
+                'alternate_kind' => 'PN',
+                'evidence' => 'UNVERIFIED_ALIAS',
+            ],
+        ] as $sourceIdentity) {
+            try {
+                $resolver->resolve(['source_identity' => $sourceIdentity]);
+                $this->fail('Associação estrutural incoerente foi aceita.');
+            } catch (InvalidArgumentException $error) {
+                $this->assertStringContainsString('incoerente', $error->getMessage());
+            }
+        }
     }
 }

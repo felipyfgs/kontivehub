@@ -14,6 +14,7 @@ use App\Models\CommunicationContact;
 use App\Models\CommunicationConversation;
 use App\Models\CommunicationIdentity;
 use App\Models\CommunicationInbox;
+use App\Models\CommunicationInboxIdentityProfile;
 use App\Models\CommunicationMessage;
 use App\Models\Tenant;
 use App\Services\Communication\Pairing\CommunicationPairingStateStore;
@@ -92,6 +93,59 @@ final class CommunicationGatewayProjectionTest extends TestCase
         $this->assertTrue($message->metadata['revoked'] ?? false);
     }
 
+    public function test_message_actions_apply_alias_evidence_and_accept_the_canonical_peer_afterward(): void
+    {
+        [$inbox, $conversation, $message] = $this->context();
+        $lid = 'lid:149865032093945';
+        $remotePn = '+5511999990001';
+        $this->postEvent($inbox, GatewayEventType::MessageActionReceived, 'gateway-action-alias-0001', [
+            'action' => 'REACTION',
+            'provider_message_id' => 'provider-action-alias-0001',
+            'target_message_id' => $message->provider_message_id,
+            'from' => $lid,
+            'source_identity' => [
+                'primary' => $lid,
+                'primary_kind' => 'LID',
+                'alternate' => $remotePn,
+                'alternate_kind' => 'PN',
+                'evidence' => 'MESSAGE_SOURCE_ALT',
+            ],
+            'emoji' => '✅',
+        ])->assertNoContent();
+
+        $lidIdentity = CommunicationIdentity::query()->withoutGlobalScopes()
+            ->where('tenant_id', $inbox->tenant_id)
+            ->where('address_hash', hash('sha256', $lid))
+            ->sole();
+        $pnIdentity = CommunicationIdentity::query()->withoutGlobalScopes()
+            ->where('tenant_id', $inbox->tenant_id)
+            ->where('address_hash', hash('sha256', $remotePn))
+            ->sole();
+        $this->assertSame($pnIdentity->id, $lidIdentity->canonical_identity_id);
+        $message->forceFill(['identity_id' => $lidIdentity->id])->save();
+
+        $this->postEvent($inbox, GatewayEventType::MessageActionReceived, 'gateway-action-pn-0002', [
+            'action' => 'EDIT',
+            'provider_message_id' => 'provider-action-pn-0002',
+            'target_message_id' => $message->provider_message_id,
+            'from' => $remotePn,
+            'source_identity' => [
+                'primary' => $remotePn,
+                'primary_kind' => 'PN',
+                'evidence' => 'CHAT',
+            ],
+            'kind' => 'TEXT',
+            'provider_type' => 'conversation',
+            'family' => 'TEXT',
+            'text' => 'Editada pela PN canônica',
+        ])->assertNoContent();
+
+        $this->assertSame('Editada pela PN canônica', $message->refresh()->body_encrypted);
+        $this->assertSame(['✅'], array_values($message->content_encrypted['reactions'] ?? []));
+        $this->assertDatabaseCount('communication_conversations', 1);
+        $this->assertSame($conversation->id, $message->conversation_id);
+    }
+
     public function test_history_batch_is_idempotent_preserves_direction_quote_and_resolved_state(): void
     {
         [$inbox, $conversation, $existing] = $this->context(ConversationStatus::Resolved);
@@ -166,6 +220,85 @@ final class CommunicationGatewayProjectionTest extends TestCase
             'message_id' => null,
             'type' => GatewayEventType::ChatPresenceChanged->value,
         ]);
+    }
+
+    public function test_presence_and_profile_follow_canonical_peer_without_regressing_last_seen(): void
+    {
+        [$inbox, $conversation] = $this->context();
+        $rootIdentity = $conversation->identity()->withoutGlobalScopes()->firstOrFail();
+        $contact = $rootIdentity->contact()->withoutGlobalScopes()->firstOrFail();
+        $lid = 'lid:149865032093945';
+        $lidIdentity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $inbox->tenant_id,
+            'contact_id' => $contact->id,
+            'canonical_identity_id' => $rootIdentity->id,
+            'channel' => CommunicationChannel::Whatsapp,
+            'address_encrypted' => $lid,
+            'address_hash' => hash('sha256', $lid),
+            'address_masked' => 'lid:***3945',
+            'is_active' => true,
+        ]);
+        $donorConversation = CommunicationConversation::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $inbox->tenant_id,
+            'inbox_id' => $inbox->id,
+            'identity_id' => $lidIdentity->id,
+            'status' => ConversationStatus::Resolved,
+            'resolved_at' => now(),
+            'merged_into_conversation_id' => $conversation->id,
+            'last_message_at' => now()->subMinute(),
+        ]);
+        $donorContact = CommunicationContact::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $inbox->tenant_id,
+            'merged_into_contact_id' => $contact->id,
+            'is_provisional' => true,
+            'is_active' => false,
+        ]);
+        $rootIdentity->forceFill(['last_seen_at' => '2026-07-28T16:00:00+00:00'])->save();
+
+        $this->postEvent(
+            $inbox,
+            GatewayEventType::ContactPresenceChanged,
+            'gateway-presence-canonical-0001',
+            [
+                'from' => $lid,
+                'presence' => 'AVAILABLE',
+                'available' => true,
+                'last_seen' => '2026-07-28T15:00:00+00:00',
+            ],
+        )->assertNoContent();
+        $this->postEvent(
+            $inbox,
+            GatewayEventType::ContactProfileChanged,
+            'gateway-profile-canonical-0001',
+            [
+                'user' => $lid,
+                'display_name' => 'Nome pelo perfil',
+                'picture_id' => 'profile-picture-0001',
+            ],
+        )->assertNoContent();
+
+        $this->assertSame(
+            '2026-07-28T16:00:00+00:00',
+            $rootIdentity->refresh()->last_seen_at?->toIso8601String(),
+        );
+        $this->assertNull(data_get($contact->refresh()->metadata, 'whatsapp_profile'));
+        $profile = CommunicationInboxIdentityProfile::query()->withoutGlobalScopes()
+            ->where('inbox_id', $inbox->id)
+            ->where('identity_id', $rootIdentity->id)
+            ->firstOrFail();
+        $this->assertSame('Nome pelo perfil', $profile->address_book_full_name);
+        $this->assertSame('profile-picture-0001', $profile->picture_id);
+        $this->assertNull($donorContact->refresh()->metadata);
+        foreach (['gateway-presence-canonical-0001', 'gateway-profile-canonical-0001'] as $eventId) {
+            $this->assertDatabaseHas('communication_events', [
+                'gateway_event_id' => $eventId,
+                'conversation_id' => $conversation->id,
+            ]);
+            $this->assertDatabaseMissing('communication_events', [
+                'gateway_event_id' => $eventId,
+                'conversation_id' => $donorConversation->id,
+            ]);
+        }
     }
 
     public function test_common_semantic_families_are_encrypted_without_open_metadata_or_text_fallback(): void
