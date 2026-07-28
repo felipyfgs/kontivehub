@@ -40,7 +40,7 @@ final class WorkKpiQuery
         ];
 
         $tasks = WorkTask::query()
-            ->with('process:id,due_date,subject_to_fine,client_id,tenant_id')
+            ->with('process:id,due_date,target_due_date,subject_to_fine,client_id,tenant_id')
             ->where('tenant_id', $tenant->id)
             ->whereIn('status', array_merge($openStatuses, [
                 TaskStatus::Concluida->value,

@@ -2,20 +2,27 @@
 
 namespace App\Http\Requests\Communication;
 
+use App\DTO\Communication\CommunicationInboxCreationData;
+use App\Models\User;
+use App\Services\Communication\Authorization\CommunicationAccess;
 use App\Support\CurrentTenant;
-use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Validation\Rule;
 
-final class StoreInboxRequest extends FormRequest
+final class StoreInboxRequest extends CommunicationRequest
 {
     public function authorize(): bool
     {
-        return true;
+        $actor = $this->user();
+
+        return $actor instanceof User
+            && app(CommunicationAccess::class)->canManage($actor);
     }
 
+    /** @return array<string, list<mixed>> */
     public function rules(): array
     {
-        $tenantId = (int) app(CurrentTenant::class)->tenant()->id;
+        $tenantId = app(CurrentTenant::class)->id();
 
         return [
             'name' => [
@@ -24,19 +31,40 @@ final class StoreInboxRequest extends FormRequest
                 'min:1',
                 'max:120',
                 Rule::unique('communication_inboxes', 'name')
-                    ->where(fn ($query) => $query
+                    ->where(fn (Builder $query): Builder => $query
                         ->where('tenant_id', $tenantId)),
             ],
             'is_enabled' => ['sometimes', 'boolean'],
             'is_default' => ['sometimes', 'boolean'],
-            'work_department_id' => ['nullable', 'integer', 'min:1'],
+            'work_department_id' => [
+                'nullable',
+                'integer',
+                'min:1',
+                Rule::exists('work_departments', 'id')
+                    ->where(fn (Builder $query): Builder => $query
+                        ->where('tenant_id', $tenantId)),
+            ],
         ];
     }
 
-    protected function prepareForValidation(): void
+    protected function prepareCommunicationValidation(): void
     {
         if ($this->has('name') && is_string($this->input('name'))) {
             $this->merge(['name' => trim($this->string('name')->toString())]);
         }
+    }
+
+    public function inboxData(): CommunicationInboxCreationData
+    {
+        $validated = $this->validated();
+
+        return new CommunicationInboxCreationData(
+            name: $validated['name'],
+            isEnabled: (bool) ($validated['is_enabled'] ?? false),
+            isDefault: (bool) ($validated['is_default'] ?? false),
+            workDepartmentId: isset($validated['work_department_id'])
+                ? (int) $validated['work_department_id']
+                : null,
+        );
     }
 }

@@ -36,19 +36,4 @@ class FgtsDigitalSession extends Model
             && $this->expires_at->isFuture()
             && $this->vault_object_id !== null;
     }
-
-    public function toPublicArray(): array
-    {
-        return [
-            'id' => $this->id,
-            'tenant_id' => $this->tenant_id,
-            'client_id' => $this->client_id,
-            'credential_source' => $this->credential_source->value,
-            'profile_type' => $this->profile_type,
-            'status' => $this->status->value,
-            'expires_at' => $this->expires_at?->toIso8601String(),
-            'last_used_at' => $this->last_used_at?->toIso8601String(),
-            'created_at' => $this->created_at?->toIso8601String(),
-        ];
-    }
 }

@@ -21,24 +21,19 @@ final class DteCanaryTenantService
         SerproDteCanaryRequest $request,
         User $admin,
         Tenant $currentTenant,
-        bool $passwordRecentlyConfirmed,
     ): SerproDteCanaryRequest {
         return $this->canary->approveAsTenantAdmin(
             $request,
             $admin,
             $currentTenant,
-            $passwordRecentlyConfirmed,
         );
     }
 
-    /**
-     * @return array<string, mixed>
-     */
     public function tenantResult(
         SerproDteCanaryRequest $request,
         User $user,
         Tenant $currentTenant,
-    ): array {
+    ): SerproDteCanaryRequest {
         return $this->canary->tenantResult($request, $user, $currentTenant);
     }
 

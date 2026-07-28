@@ -7,6 +7,7 @@ use App\Enums\DocumentArtifactQuality;
 use App\Enums\NfeManifestationType;
 use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Fiscal\Documents\ManifestNfeRequest;
 use App\Models\CteDocument;
 use App\Models\DfeDocument;
 use App\Models\DocumentAcquisition;
@@ -227,25 +228,12 @@ class FiscalDocumentController extends Controller
      */
     public function manifest(
         string $accessKey,
-        Request $request,
+        ManifestNfeRequest $request,
         CurrentTenant $currentTenant,
-        TenantAuthorization $authorization,
         NfeManifestationService $manifestation,
         AuditLogger $audit,
     ): JsonResponse {
-        $actor = $request->user();
-        if (! $actor instanceof User
-            || ! $authorization->allows($actor, TenantPermission::FiscalNfeManifest)) {
-            return response()->json(['message' => 'Ação não autorizada para o perfil atual.'], 403);
-        }
-
-        $validated = $request->validate([
-            'type' => ['required', 'string'],
-            'justification' => ['nullable', 'string', 'max:255'],
-            'purpose' => ['nullable', 'string', 'in:UNLOCK_XML,FISCAL'],
-        ]);
-
-        $type = NfeManifestationType::tryFromInput((string) $validated['type']);
+        $type = NfeManifestationType::tryFromInput($request->manifestationType());
         if ($type === null) {
             return response()->json([
                 'message' => 'Tipo de manifestação inválido.',
@@ -257,8 +245,8 @@ class FiscalDocumentController extends Controller
             $accessKey,
             $currentTenant->tenant()->id,
             $type,
-            $validated['justification'] ?? null,
-            (string) ($validated['purpose'] ?? 'UNLOCK_XML'),
+            $request->justification(),
+            $request->purpose(),
         );
 
         $audit->record(
@@ -269,12 +257,12 @@ class FiscalDocumentController extends Controller
                 'access_key' => $accessKey,
                 'type' => $type->value,
                 'tp_evento' => $type->tpEvento(),
-                'purpose' => $validated['purpose'] ?? 'UNLOCK_XML',
+                'purpose' => $request->purpose(),
                 'status' => $result['status'],
                 'c_stat' => $result['c_stat'] ?? null,
                 // Nunca auditar justificativa completa se contiver dados sensíveis demais — só tamanho
-                'justification_len' => isset($validated['justification'])
-                    ? mb_strlen((string) $validated['justification'])
+                'justification_len' => $request->justification() !== null
+                    ? mb_strlen($request->justification())
                     : 0,
             ]
         );

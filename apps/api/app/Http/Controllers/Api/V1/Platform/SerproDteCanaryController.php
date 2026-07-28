@@ -2,14 +2,21 @@
 
 namespace App\Http\Controllers\Api\V1\Platform;
 
+use App\Actions\Serpro\ManageDteCanaryAction;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Platform\ApproveDteCanaryOwnerRequest;
+use App\Http\Requests\Platform\CreateDteCanaryRequest;
+use App\Http\Requests\Platform\DisableDteCanaryRequest;
+use App\Http\Requests\Platform\ExecuteDteCanaryRequest;
+use App\Http\Requests\Platform\GetDteCanarySummaryRequest;
+use App\Http\Requests\Platform\PromoteLimitedDteCanaryRequest;
+use App\Http\Requests\Platform\ReconcileDteCanaryRequest;
+use App\Http\Requests\Platform\SelectDteCanaryTargetRequest;
+use App\Http\Resources\SerproDteCanaryExecutionResource;
+use App\Http\Resources\SerproDteCanaryRequestResource;
+use App\Http\Resources\SerproDteCanarySummaryResource;
+use App\Http\Resources\SerproDteControlResource;
 use App\Models\SerproDteCanaryRequest;
-use App\Services\Auth\RecentPasswordConfirmationGate;
-use App\Services\Serpro\SerproDteCanaryService;
-use Carbon\CarbonImmutable;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
-use RuntimeException;
 
 /**
  * Superfície global do canário DTE (Proprietário / PLATFORM_ADMIN).
@@ -18,216 +25,96 @@ use RuntimeException;
 class SerproDteCanaryController extends Controller
 {
     public function __construct(
-        private readonly SerproDteCanaryService $canary,
-        private readonly RecentPasswordConfirmationGate $passwordGate,
+        private readonly ManageDteCanaryAction $canary,
     ) {}
 
-    public function summary(Request $request): JsonResponse
+    public function summary(GetDteCanarySummaryRequest $request): SerproDteCanarySummaryResource
     {
-        $requestId = $request->query('request_id');
-        $id = is_numeric($requestId) ? (int) $requestId : null;
-
-        return response()->json([
-            'data' => $this->canary->globalSummary($id),
-        ]);
+        return SerproDteCanarySummaryResource::make(
+            $this->canary->summary($request->toDto()),
+        );
     }
 
-    public function create(Request $request): JsonResponse
+    public function create(CreateDteCanaryRequest $request): SerproDteCanaryRequestResource
     {
-        $row = $this->canary->createRequest((int) $request->user()->id);
-
-        return response()->json([
-            'data' => $row->toGlobalSanitizedArray(),
-        ], 201);
+        return SerproDteCanaryRequestResource::make(
+            $this->canary->create($request->actor()),
+        );
     }
 
-    public function selectTarget(Request $request, SerproDteCanaryRequest $serproDteCanaryRequest): JsonResponse
-    {
-        // Aceita tenant_id e client_id somente neste comando de seleção global
-        // (não no execute / approve). Rejeita operação/coordenadas livres.
-        $data = $request->validate([
-            'tenant_id' => ['required', 'integer', 'min:1'],
-            'client_id' => ['required', 'integer', 'min:1'],
-            'operation_key' => ['prohibited'],
-            'id_sistema' => ['prohibited'],
-            'id_servico' => ['prohibited'],
-            'functional_route' => ['prohibited'],
-            'business_data' => ['prohibited'],
-            'payload' => ['prohibited'],
-        ]);
-
-        try {
-            $row = $this->canary->selectTarget(
+    public function selectTarget(
+        SelectDteCanaryTargetRequest $request,
+        SerproDteCanaryRequest $serproDteCanaryRequest,
+    ): SerproDteCanaryRequestResource {
+        return SerproDteCanaryRequestResource::make(
+            $this->canary->selectTarget(
                 $serproDteCanaryRequest,
-                (int) $data['tenant_id'],
-                (int) $data['client_id'],
-                (int) $request->user()->id,
-            );
-        } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage(), 'code' => 'dte_target_error'], 422);
-        }
-
-        return response()->json(['data' => $row->toGlobalSanitizedArray()]);
+                $request->toDto(),
+                $request->actor(),
+            ),
+        );
     }
 
-    public function approveOwner(Request $request, SerproDteCanaryRequest $serproDteCanaryRequest): JsonResponse
-    {
-        $confirmed = $this->passwordGate->isRecentlyConfirmed($request->user(), $request);
-        if (! $confirmed) {
-            return response()->json([
-                'message' => 'Reconfirmação de senha obrigatória (15 minutos).',
-                'code' => 'password_confirmation_required',
-            ], 403);
-        }
-
-        try {
-            $row = $this->canary->approveAsOwner(
+    public function approveOwner(
+        ApproveDteCanaryOwnerRequest $request,
+        SerproDteCanaryRequest $serproDteCanaryRequest,
+    ): SerproDteCanaryRequestResource {
+        return SerproDteCanaryRequestResource::make(
+            $this->canary->approveOwner(
                 $serproDteCanaryRequest,
-                $request->user(),
-                true,
-            );
-        } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage(), 'code' => 'dte_owner_approve_error'], 422);
-        }
-
-        return response()->json(['data' => $row->toGlobalSanitizedArray()]);
+                $request->actor(),
+            ),
+        );
     }
 
-    public function execute(Request $request, SerproDteCanaryRequest $serproDteCanaryRequest): JsonResponse
-    {
-        $confirmed = $this->passwordGate->isRecentlyConfirmed($request->user(), $request);
-        if (! $confirmed) {
-            return response()->json([
-                'message' => 'Reconfirmação de senha obrigatória (15 minutos).',
-                'code' => 'password_confirmation_required',
-            ], 403);
-        }
-
-        // Rejeitar qualquer override de escopo/operação
-        foreach (['tenant_id', 'client_id', 'operation_key', 'id_sistema', 'id_servico', 'payload', 'business_data'] as $forbidden) {
-            if ($request->exists($forbidden)) {
-                return response()->json([
-                    'message' => "Campo {$forbidden} não é aceito na execução do canário DTE.",
-                    'code' => 'forbidden_field',
-                ], 422);
-            }
-        }
-
-        try {
-            $result = $this->canary->execute($serproDteCanaryRequest, (int) $request->user()->id);
-        } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage(), 'code' => 'dte_execute_blocked'], 422);
-        }
-
-        return response()->json([
-            'data' => $result['global'],
-            'replay' => $result['replay'],
-        ]);
-    }
-
-    public function reconcile(Request $request, SerproDteCanaryRequest $serproDteCanaryRequest): JsonResponse
-    {
-        $confirmed = $this->passwordGate->isRecentlyConfirmed($request->user(), $request);
-        if (! $confirmed) {
-            return response()->json([
-                'message' => 'Reconfirmação de senha obrigatória (15 minutos).',
-                'code' => 'password_confirmation_required',
-            ], 403);
-        }
-
-        $data = $request->validate([
-            'reference' => ['required', 'string', 'max:200'],
-            'summary' => ['required', 'string', 'max:1000'],
-        ]);
-
-        try {
-            $row = $this->canary->reconcile(
+    public function execute(
+        ExecuteDteCanaryRequest $request,
+        SerproDteCanaryRequest $serproDteCanaryRequest,
+    ): SerproDteCanaryExecutionResource {
+        return SerproDteCanaryExecutionResource::make(
+            $this->canary->execute(
                 $serproDteCanaryRequest,
-                (int) $request->user()->id,
-                $data['reference'],
-                $data['summary'],
-                true,
-            );
-        } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage(), 'code' => 'dte_reconcile_error'], 422);
-        }
-
-        return response()->json(['data' => $row->toGlobalSanitizedArray()]);
+                $request->actor(),
+            ),
+        );
     }
 
-    public function promoteLimited(Request $request, SerproDteCanaryRequest $serproDteCanaryRequest): JsonResponse
-    {
-        $confirmed = $this->passwordGate->isRecentlyConfirmed($request->user(), $request);
-        if (! $confirmed) {
-            return response()->json([
-                'message' => 'Reconfirmação de senha obrigatória (15 minutos).',
-                'code' => 'password_confirmation_required',
-            ], 403);
-        }
-
-        $data = $request->validate([
-            'confirmation_phrase' => ['required', 'string', 'max:80'],
-            'reason' => ['required', 'string', 'max:500'],
-            'change_window_start' => ['nullable', 'date'],
-            'change_window_end' => ['nullable', 'date', 'after:change_window_start'],
-            'max_quantity' => ['sometimes', 'integer', 'min:1', 'max:10'],
-        ]);
-
-        try {
-            $control = $this->canary->promoteLimited(
+    public function reconcile(
+        ReconcileDteCanaryRequest $request,
+        SerproDteCanaryRequest $serproDteCanaryRequest,
+    ): SerproDteCanaryRequestResource {
+        return SerproDteCanaryRequestResource::make(
+            $this->canary->reconcile(
                 $serproDteCanaryRequest,
-                $request->user(),
-                true,
-                $data['confirmation_phrase'],
-                $data['reason'],
-                isset($data['change_window_start'])
-                    ? CarbonImmutable::parse($data['change_window_start'])
-                    : null,
-                isset($data['change_window_end'])
-                    ? CarbonImmutable::parse($data['change_window_end'])
-                    : null,
-                (int) ($data['max_quantity'] ?? 10),
-            );
-        } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage(), 'code' => 'dte_promote_error'], 422);
-        }
-
-        return response()->json(['data' => $control->toSanitizedArray()]);
+                $request->toDto(),
+                $request->actor(),
+            ),
+        );
     }
 
-    public function disable(Request $request): JsonResponse
-    {
-        $confirmed = $this->passwordGate->isRecentlyConfirmed($request->user(), $request);
-        if (! $confirmed) {
-            return response()->json([
-                'message' => 'Reconfirmação de senha obrigatória (15 minutos).',
-                'code' => 'password_confirmation_required',
-            ], 403);
-        }
-
-        $data = $request->validate([
-            'confirmation_phrase' => ['required', 'string', 'max:80'],
-            'reason' => ['required', 'string', 'max:500'],
-        ]);
-
-        try {
-            $control = $this->canary->disable(
-                $request->user(),
-                true,
-                $data['confirmation_phrase'],
-                $data['reason'],
-            );
-        } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage(), 'code' => 'dte_disable_error'], 422);
-        }
-
-        return response()->json(['data' => $control->toSanitizedArray()]);
+    public function promoteLimited(
+        PromoteLimitedDteCanaryRequest $request,
+        SerproDteCanaryRequest $serproDteCanaryRequest,
+    ): SerproDteControlResource {
+        return SerproDteControlResource::make(
+            $this->canary->promoteLimited(
+                $serproDteCanaryRequest,
+                $request->toDto(),
+                $request->actor(),
+            ),
+        );
     }
 
-    public function show(SerproDteCanaryRequest $serproDteCanaryRequest): JsonResponse
+    public function disable(DisableDteCanaryRequest $request): SerproDteControlResource
     {
-        return response()->json([
-            'data' => $serproDteCanaryRequest->toGlobalSanitizedArray(),
-        ]);
+        return SerproDteControlResource::make(
+            $this->canary->disable($request->toDto(), $request->actor()),
+        );
+    }
+
+    public function show(
+        SerproDteCanaryRequest $serproDteCanaryRequest,
+    ): SerproDteCanaryRequestResource {
+        return SerproDteCanaryRequestResource::make($serproDteCanaryRequest);
     }
 }

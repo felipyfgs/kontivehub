@@ -5,6 +5,7 @@ namespace App\Services\Platform;
 use App\Enums\TenantAccessMode;
 use App\Enums\TenantLifecycleStatus;
 use App\Enums\TenantRole;
+use App\Exceptions\PlatformTenantSelectionException;
 use App\Models\PlatformPrivilegedAuditEvent;
 use App\Models\Tenant;
 use App\Models\TenantMembership;
@@ -15,7 +16,6 @@ use App\Support\PlatformPrivilegedContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
  * Seletor global de tenant para PLATFORM_ADMIN (modo privilegiado).
@@ -67,12 +67,12 @@ final class PlatformTenantSelectService
     }
 
     /**
-     * @throws HttpException
+     * @throws PlatformTenantSelectionException
      */
     public function select(User $user, int $targetTenantId, Request $request): Tenant
     {
         if (! $user->is_active || ! $user->isPlatformAdmin()) {
-            abort(403, 'Ação restrita a administradores da plataforma.');
+            throw PlatformTenantSelectionException::forbidden();
         }
 
         if (! FeatureFlags::isPlatformPrivilegedContextEnabled()) {
@@ -82,12 +82,7 @@ final class PlatformTenantSelectService
 
             $this->auditDenied($user, $targetTenantId, 'privileged_context_disabled');
 
-            throw new HttpException(
-                403,
-                'Contexto privilegiado da plataforma indisponível.',
-                null,
-                ['X-Error-Code' => 'privileged_context_disabled'],
-            );
+            throw PlatformTenantSelectionException::privilegedContextDisabled();
         }
 
         $fromTenantId = $this->currentTenant->isPlatformPrivileged()
@@ -102,7 +97,7 @@ final class PlatformTenantSelectService
         if ($tenant === null || ! $tenant->lifecycle_status?->isSelectable()) {
             $this->auditDenied($user, $targetTenantId, 'tenant_not_found_or_inactive');
 
-            abort(404, 'Escritório não encontrado.');
+            throw PlatformTenantSelectionException::tenantNotFound();
         }
 
         DB::transaction(function () use ($user, $tenant, $request): void {

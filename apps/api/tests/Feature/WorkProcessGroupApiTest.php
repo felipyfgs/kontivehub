@@ -80,13 +80,23 @@ class WorkProcessGroupApiTest extends TestCase
 
         $response = $this->getJson('/api/v1/work/process-groups?group_by=client&sort=label&direction=asc')
             ->assertOk()
-            ->assertJsonPath('meta.total', 2);
+            ->assertJsonPath('meta', [
+                'current_page' => 1,
+                'last_page' => 1,
+                'per_page' => 25,
+                'total' => 2,
+            ])
+            ->assertJsonMissingPath('links');
 
         $data = collect($response->json('data'));
         $alphaGroup = $data->firstWhere('key', (string) $alpha->id);
         $this->assertNotNull($alphaGroup);
         $this->assertSame('Alpha', $alphaGroup['label']);
-        $this->assertSame($alpha->id, $alphaGroup['client']['id']);
+        $this->assertSame([
+            'id' => $alpha->id,
+            'name' => 'Alpha',
+            'cnpj_masked' => null,
+        ], $alphaGroup['client']);
         $this->assertSame(2, $alphaGroup['process_count']);
         $this->assertSame(1, $alphaGroup['client_count']);
         $this->assertSame(3, $alphaGroup['task_count']);
@@ -150,7 +160,10 @@ class WorkProcessGroupApiTest extends TestCase
 
         $this->assertNotNull($routine);
         $this->assertSame('PGDAS Mensal', $routine['label']);
-        $this->assertSame($template->id, $routine['routine']['id']);
+        $this->assertSame([
+            'id' => $template->id,
+            'name' => 'PGDAS Mensal',
+        ], $routine['routine']);
         $this->assertSame(1, $routine['process_count']);
 
         $this->assertNotNull($manualGroup);
@@ -268,7 +281,7 @@ class WorkProcessGroupApiTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_multi_tenant_isolation_and_ignores_client_tenant_id(): void
+    public function test_multi_tenant_isolation_and_rejects_client_tenant_id(): void
     {
         [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
         $otherTenant = Tenant::factory()->create();
@@ -288,7 +301,11 @@ class WorkProcessGroupApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $keys = $this->getJson('/api/v1/work/process-groups?group_by=client&tenant_id='.$otherTenant->id)
+        $this->getJson('/api/v1/work/process-groups?group_by=client&tenant_id='.$otherTenant->id)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('tenant_id');
+
+        $keys = $this->getJson('/api/v1/work/process-groups?group_by=client')
             ->assertOk()
             ->json('data.*.key');
 

@@ -285,7 +285,7 @@ return [
         'max_literal_bytes' => (int) env('SEFAZ_SVRS_NFCE_XML_MAX_LITERAL_BYTES', 262144), // 256 KiB
         'max_xml_bytes' => (int) env('SEFAZ_SVRS_NFCE_XML_MAX_XML_BYTES', 262144),
 
-        // Rate limit / batch — DELEGADOS ao governador; defaults defensivos (não 5/30/20)
+        // Rate limit / batch — ATRIBUÍDOS ao governador; defaults defensivos (não 5/30/20)
         'max_inflight_global' => (int) env('SEFAZ_SVRS_NFCE_XML_MAX_INFLIGHT', env('SVRS_EGRESS_MAX_INFLIGHT', 1)),
         'min_interval_global_seconds' => (float) env('SEFAZ_SVRS_NFCE_XML_MIN_INTERVAL_GLOBAL', env('SVRS_EGRESS_MIN_INTERVAL_GLOBAL', 120)),
         'min_interval_root_seconds' => (float) env('SEFAZ_SVRS_NFCE_XML_MIN_INTERVAL_ROOT', env('SVRS_EGRESS_MIN_INTERVAL_ROOT', 900)),

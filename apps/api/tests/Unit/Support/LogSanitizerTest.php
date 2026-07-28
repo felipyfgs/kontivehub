@@ -136,6 +136,21 @@ final class LogSanitizerTest extends TestCase
         ]));
     }
 
+    public function test_redacts_cnpj_keys_in_structured_context(): void
+    {
+        $redacted = LogSanitizer::redact([
+            'holder_cnpj' => '11222333000181',
+            'cnpj' => 'ABCDEF12000195',
+            'status' => 'SUCCESS',
+            'access_key' => str_repeat('1', 44),
+        ]);
+
+        self::assertSame('[redacted]', $redacted['holder_cnpj']);
+        self::assertSame('[redacted]', $redacted['cnpj']);
+        self::assertSame('[redacted]', $redacted['access_key']);
+        self::assertSame('SUCCESS', $redacted['status']);
+    }
+
     public function test_non_identifiers_do_not_match_the_closed_shapes(): void
     {
         self::assertFalse(LogSanitizer::looksLikeFiscalIdentifier('PGDASD_MONITOR'));

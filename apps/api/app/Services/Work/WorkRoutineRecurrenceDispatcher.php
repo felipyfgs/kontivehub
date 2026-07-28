@@ -4,6 +4,7 @@ namespace App\Services\Work;
 
 use App\Domain\Work\ReferencePeriod;
 use App\Domain\Work\WorkRoutineRecurrenceSchedule;
+use App\DTO\Work\WorkProcessGenerationPreviewData;
 use App\Enums\Work\GenerationBatchStatus;
 use App\Enums\Work\RecurrencePeriodOffset;
 use App\Models\Tenant;
@@ -178,10 +179,12 @@ final class WorkRoutineRecurrenceDispatcher
 
         $batch = $this->generation->preview(
             $template,
-            $period->value(),
-            $selection,
-            [],
-            $key,
+            new WorkProcessGenerationPreviewData(
+                competence: $period->value(),
+                selection: $selection,
+                overrides: [],
+                idempotencyKey: $key,
+            ),
         );
 
         return $this->confirmIfReady($batch);

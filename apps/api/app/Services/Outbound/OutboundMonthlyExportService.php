@@ -76,7 +76,7 @@ final class OutboundMonthlyExportService
                 : $ready->confirmation_notes,
         ])->save();
 
-        BuildExportZipJob::dispatch($export->id);
+        BuildExportZipJob::dispatch($export->id)->afterCommit();
 
         $this->audit->record('outbound.monthly.export.create', 'SUCCESS', $export, [
             'competence' => $competence,

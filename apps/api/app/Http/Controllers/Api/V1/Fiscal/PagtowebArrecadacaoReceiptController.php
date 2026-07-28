@@ -2,14 +2,18 @@
 
 namespace App\Http\Controllers\Api\V1\Fiscal;
 
+use App\Actions\Fiscal\FindFiscalClientAction;
+use App\Actions\Fiscal\ReadPagtowebReceiptAction;
 use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\EnsureTenantContext;
+use App\Http\Requests\Fiscal\Monitoring\DownloadPagtowebReceiptRequest;
+use App\Http\Requests\Fiscal\Monitoring\ViewFiscalClientHistoryRequest;
+use App\Http\Requests\Fiscal\Mutations\RequestPagtowebReceiptRequest;
+use App\Http\Resources\Fiscal\FiscalMonitoringDataResource;
 use App\Models\Client;
-use App\Models\PagtowebArrecadacaoReceipt;
 use App\Models\User;
 use App\Services\Authorization\TenantAuthorization;
-use App\Services\Fiscal\Guides\PagtowebArrecadacaoReceiptProjector;
 use App\Services\Fiscal\Guides\PagtowebArrecadacaoReceiptQueryService;
 use App\Support\CurrentTenant;
 use App\Support\FeatureFlags;
@@ -24,31 +28,32 @@ final class PagtowebArrecadacaoReceiptController extends Controller
     public function __construct(
         private readonly CurrentTenant $tenant,
         private readonly PagtowebArrecadacaoReceiptQueryService $receipts,
-        private readonly PagtowebArrecadacaoReceiptProjector $projector,
         private readonly TenantAuthorization $auth,
     ) {}
 
-    public function history(Request $request, int $client): JsonResponse
-    {
-        if ($rejection = $this->rejectClientTenantId($request)) {
-            return $rejection;
-        }
-        $model = $this->client($client);
+    public function history(
+        ViewFiscalClientHistoryRequest $request,
+        int $client,
+        FindFiscalClientAction $findClient,
+    ): JsonResponse|FiscalMonitoringDataResource {
+        $tenant = $this->tenant->tenant();
+        $model = $findClient->handle($tenant, $request->clientId());
         if ($model === null) {
             return $this->notFound();
         }
-        $this->allows($request, $model, TenantPermission::FiscalMonitoringView);
+        $request->ensureCanView($model, 'Sem permissão para esta operação.');
 
-        return response()->json(['data' => $this->receipts->history($this->tenant->tenant(), $model)]);
+        return new FiscalMonitoringDataResource(
+            $this->receipts->history($tenant, $model),
+        );
     }
 
-    public function request(Request $request, int $client): JsonResponse
+    public function request(RequestPagtowebReceiptRequest $request, int $client): JsonResponse
     {
         $this->enabled();
         if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
-        $request->validate(['confirmed' => ['required', 'accepted'], 'numeroDocumento' => ['required', 'string', 'max:17']]);
         $model = $this->client($client);
         if ($model === null) {
             return $this->notFound();
@@ -58,7 +63,7 @@ final class PagtowebArrecadacaoReceiptController extends Controller
             return response()->json(['data' => $this->receipts->request(
                 $this->tenant->tenant(),
                 $model,
-                $request->string('numeroDocumento')->toString(),
+                $request->documentNumber(),
                 $request->user()?->id,
             )], 201);
         } catch (InvalidArgumentException $e) {
@@ -68,35 +73,32 @@ final class PagtowebArrecadacaoReceiptController extends Controller
         }
     }
 
-    public function download(Request $request, int $client, int $receipt): Response|JsonResponse
-    {
-        if ($rejection = $this->rejectClientTenantId($request)) {
-            return $rejection;
-        }
-        $model = $this->client($client);
+    public function download(
+        DownloadPagtowebReceiptRequest $request,
+        int $client,
+        int $receipt,
+        FindFiscalClientAction $findClient,
+        ReadPagtowebReceiptAction $readReceipt,
+    ): Response|JsonResponse {
+        $tenant = $this->tenant->tenant();
+        $model = $findClient->handle($tenant, $request->clientId());
         if ($model === null) {
             return $this->notFound();
         }
-        $this->allows($request, $model, TenantPermission::FiscalMonitoringView);
-        $document = PagtowebArrecadacaoReceipt::query()->withoutGlobalScopes()
-            ->where('tenant_id', $this->tenant->tenant()->id)
-            ->where('client_id', $model->id)
-            ->whereKey($receipt)
-            ->first();
-        if ($document === null) {
+        $request->ensureCanView($model, 'Sem permissão para esta operação.');
+        $download = $readReceipt->handle(
+            $tenant,
+            $model,
+            $request->receiptId(),
+        );
+        if ($download === null) {
             return $this->notFound();
         }
 
-        try {
-            $bytes = $this->projector->readAuthorized($document, $this->tenant->tenant()->id);
-        } catch (RuntimeException) {
-            return $this->notFound();
-        }
-
-        return response($bytes, 200, [
-            'Content-Type' => 'application/pdf',
-            'Content-Length' => (string) strlen($bytes),
-            'Content-Disposition' => 'attachment; filename="comprovante-pagtoweb-'.$document->id.'.pdf"',
+        return response($download->bytes, 200, [
+            'Content-Type' => $download->contentType,
+            'Content-Length' => (string) strlen($download->bytes),
+            'Content-Disposition' => 'attachment; filename="'.$download->filename.'"',
             'Cache-Control' => 'private, no-store',
             'X-Content-Type-Options' => 'nosniff',
         ]);

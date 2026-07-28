@@ -2,16 +2,22 @@
 
 namespace App\Http\Requests\Clients;
 
+use App\DTO\Clients\ClientCategoryCreationData;
+use App\Http\Requests\AuthenticatedRequest;
 use App\Models\ClientCategory;
+use App\Models\User;
+use App\Policies\ClientCategoryPolicy;
 use App\Support\CurrentTenant;
-use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-class StoreClientCategoryRequest extends FormRequest
+final class StoreClientCategoryRequest extends AuthenticatedRequest
 {
     public function authorize(): bool
     {
-        return true;
+        $actor = $this->user();
+
+        return $actor instanceof User
+            && app(ClientCategoryPolicy::class)->create($actor);
     }
 
     protected function prepareForValidation(): void
@@ -47,5 +53,17 @@ class StoreClientCategoryRequest extends FormRequest
             'created_by' => ['prohibited'],
             'is_active' => ['prohibited'],
         ];
+    }
+
+    public function toDto(): ClientCategoryCreationData
+    {
+        $data = $this->validated();
+
+        return new ClientCategoryCreationData(
+            name: (string) $data['name'],
+            nameKey: (string) $data['_name_key'],
+            color: (string) $data['color'],
+            actorId: (int) $this->actor()->id,
+        );
     }
 }

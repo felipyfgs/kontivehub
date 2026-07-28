@@ -41,6 +41,19 @@ class TaxInstallmentMonitoringApiTest extends TestCase
         $this->assertCount(8, array_filter($catalog, fn (array $item): bool => $item['executable']));
         $this->assertCount(2, array_filter($catalog, fn (array $item): bool => ! $item['executable']));
 
+        $this->getJson('/api/v1/fiscal/installments/orders?client_id='.$client->id.'&per_page=20')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+        $this->getJson('/api/v1/fiscal/installments/parcels?client_id='.$client->id.'&per_page=20')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+        $this->getJson('/api/v1/fiscal/installments/guides?client_id='.$client->id.'&per_page=20')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+        $this->getJson('/api/v1/fiscal/installments/orders?per_page=101')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['per_page']);
+
         $this->postJson('/api/v1/fiscal/installments/monitor', [
             'client_ids' => [$client->id],
         ])->assertForbidden();

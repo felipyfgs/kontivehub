@@ -2,14 +2,20 @@
 
 namespace App\Http\Requests\Clients;
 
-use Illuminate\Foundation\Http\FormRequest;
+use App\DTO\Clients\BulkClientCategoryUpdateData;
+use App\Http\Requests\AuthenticatedRequest;
+use App\Models\User;
+use App\Policies\ClientPolicy;
 use Illuminate\Validation\Rule;
 
-class BulkUpdateClientCategoriesRequest extends FormRequest
+final class BulkUpdateClientCategoriesRequest extends AuthenticatedRequest
 {
     public function authorize(): bool
     {
-        return true;
+        $actor = $this->user();
+
+        return $actor instanceof User
+            && app(ClientPolicy::class)->create($actor);
     }
 
     /** @return array<string, mixed> */
@@ -23,5 +29,17 @@ class BulkUpdateClientCategoriesRequest extends FormRequest
             'category_ids.*' => ['required', 'integer', 'min:1', 'distinct'],
             'tenant_id' => ['prohibited'],
         ];
+    }
+
+    public function toDto(): BulkClientCategoryUpdateData
+    {
+        $data = $this->validated();
+
+        return new BulkClientCategoryUpdateData(
+            operation: (string) $data['operation'],
+            clientIds: array_values(array_map('intval', $data['client_ids'])),
+            categoryIds: array_values(array_map('intval', $data['category_ids'])),
+            actor: $this->actor(),
+        );
     }
 }

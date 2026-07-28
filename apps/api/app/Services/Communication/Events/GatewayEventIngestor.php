@@ -18,7 +18,6 @@ use App\Exceptions\GatewayEventConflictException;
 use App\Jobs\Communication\CorrelateCommunicationFlowEventJob;
 use App\Jobs\Communication\DeleteCommunicationMediaObjectJob;
 use App\Models\CommunicationAttachment;
-use App\Models\CommunicationContact;
 use App\Models\CommunicationConversation;
 use App\Models\CommunicationEvent;
 use App\Models\CommunicationIdentity;
@@ -29,8 +28,11 @@ use App\Services\Communication\Flows\CommunicationFlowAvailability;
 use App\Services\Communication\Media\CommunicationMediaStore;
 use App\Services\Communication\Pairing\CommunicationPairingStateStore;
 use App\Services\Communication\WhatsappAddressNormalizer;
+use App\Services\Communication\WhatsappPeerCorrelationService;
+use App\Services\Communication\WhatsappPeerResolver;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 use RuntimeException;
 use Throwable;
 
@@ -38,6 +40,8 @@ final readonly class GatewayEventIngestor
 {
     public function __construct(
         private WhatsappAddressNormalizer $normalizer,
+        private WhatsappPeerResolver $peerResolver,
+        private WhatsappPeerCorrelationService $peerCorrelation,
         private CommunicationTransport $transport,
         private CommunicationMediaStore $media,
         private CommunicationPairingStateStore $pairing,
@@ -205,64 +209,19 @@ final readonly class GatewayEventIngestor
             ]];
         }
 
-        $address = $this->normalizer->normalize((string) ($incoming->payload['from'] ?? ''));
-        $addressHash = hash('sha256', $address);
-        $identity = CommunicationIdentity::query()->withoutGlobalScopes()
-            ->where('tenant_id', $inbox->tenant_id)
-            ->where('channel', CommunicationChannel::Whatsapp->value)
-            ->where('address_hash', $addressHash)
-            ->lockForUpdate()
-            ->first();
-        if ($identity === null) {
-            $contact = CommunicationContact::query()->withoutGlobalScopes()->create([
-                'tenant_id' => $inbox->tenant_id,
-                'is_provisional' => true,
-                'is_active' => true,
-            ]);
-            $identity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
-                'tenant_id' => $inbox->tenant_id,
-                'contact_id' => $contact->id,
-                'channel' => CommunicationChannel::Whatsapp,
-                'address_encrypted' => $address,
-                'address_hash' => $addressHash,
-                'address_masked' => $this->maskAddress($address),
-                'is_active' => true,
-                'last_seen_at' => $incoming->occurredAt,
-            ]);
-        } else {
-            $identity->forceFill(['last_seen_at' => $incoming->occurredAt])->save();
+        try {
+            $address = $this->peerResolver->resolve($incoming->payload, $inbox);
+        } catch (InvalidArgumentException $error) {
+            throw new RuntimeException($error->getMessage(), previous: $error);
         }
-
-        CommunicationIdentity::query()->withoutGlobalScopes()->whereKey($identity->id)->lockForUpdate()->first();
-        $conversationQuery = CommunicationConversation::query()->withoutGlobalScopes()
-            ->where('inbox_id', $inbox->id)
-            ->where('identity_id', $identity->id)
-            ->lockForUpdate();
-        if (! $history) {
-            $conversationQuery->where('status', '<>', ConversationStatus::Resolved->value);
-        }
-        $conversation = $conversationQuery->orderByDesc('last_message_at')->orderByDesc('id')->first();
-        if ($conversation === null) {
-            $conversation = CommunicationConversation::query()->withoutGlobalScopes()->create([
-                'tenant_id' => $inbox->tenant_id,
-                'inbox_id' => $inbox->id,
-                'identity_id' => $identity->id,
-                'status' => $history ? ConversationStatus::Resolved : ConversationStatus::Open,
-                'work_department_id' => $inbox->work_department_id,
-                'last_message_at' => $incoming->occurredAt,
-                'resolved_at' => $history ? $incoming->occurredAt : null,
-            ]);
-            $clientIds = $identity->clientLinks()->withoutGlobalScopes()->pluck('client_id');
-            foreach ($clientIds as $clientId) {
-                DB::table('communication_conversation_clients')->insertOrIgnore([
-                    'tenant_id' => $inbox->tenant_id,
-                    'conversation_id' => $conversation->id,
-                    'client_id' => $clientId,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-            }
-        }
+        $aliases = $this->peerResolver->aliases($incoming->payload, $address, $inbox);
+        [$identity, $conversation] = $this->peerCorrelation->correlate(
+            $inbox,
+            $address,
+            $aliases,
+            $history,
+            $incoming->occurredAt,
+        );
 
         $payload = $incoming->payload;
         $kind = MessageKind::from(strtoupper((string) ($payload['kind'] ?? '')));
@@ -389,9 +348,18 @@ final readonly class GatewayEventIngestor
             return [null, null, ['action' => $action, 'target_message_id' => $targetProviderId, 'orphan' => true]];
         }
 
-        $sender = $this->normalizer->normalize((string) ($incoming->payload['from'] ?? ''));
+        try {
+            $sender = $this->peerResolver->resolve($incoming->payload, $inbox);
+        } catch (InvalidArgumentException $error) {
+            throw new RuntimeException($error->getMessage(), previous: $error);
+        }
+        $aliases = $this->peerResolver->aliases($incoming->payload, $sender, $inbox);
+        $senderHashes = array_map(
+            static fn (string $alias): string => hash('sha256', $alias),
+            $aliases,
+        );
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()->find($message->identity_id);
-        if ($identity === null || ! hash_equals((string) $identity->address_hash, hash('sha256', $sender))) {
+        if ($identity === null || ! in_array((string) $identity->address_hash, $senderHashes, true)) {
             throw new RuntimeException('Ação não pertence à identidade da mensagem alvo.');
         }
 
@@ -790,11 +758,6 @@ final readonly class GatewayEventIngestor
             'expires_at' => $incoming->payload['expires_at'] ?? null,
             'error_code' => $incoming->payload['error_code'] ?? null,
         ]];
-    }
-
-    private function maskAddress(string $address): string
-    {
-        return substr($address, 0, min(3, strlen($address))).'•••••'.substr($address, -4);
     }
 
     private function safeMime(string $mime): string

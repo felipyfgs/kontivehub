@@ -34,28 +34,4 @@ class FgtsDigitalRun extends Model
             'finished_at' => 'immutable_datetime',
         ];
     }
-
-    public function toPublicArray(): array
-    {
-        return [
-            'id' => $this->id,
-            'tenant_id' => $this->tenant_id,
-            'client_id' => $this->client_id,
-            'operation' => $this->operation->value,
-            'guide_type' => $this->guide_type?->value,
-            'status' => $this->status->value,
-            'code' => $this->code,
-            'confirmation_phrase' => $this->confirmation_phrase,
-            'preview_expires_at' => $this->preview_expires_at?->toIso8601String(),
-            'request' => $this->request_sanitized,
-            'result' => $this->result_sanitized,
-            'tax_guide_id' => $this->tax_guide_id,
-            'tax_guide_version_id' => $this->tax_guide_version_id,
-            'fiscal_mutation_operation_id' => $this->fiscal_mutation_operation_id,
-            'correlation_id' => $this->correlation_id,
-            'started_at' => $this->started_at?->toIso8601String(),
-            'finished_at' => $this->finished_at?->toIso8601String(),
-            'created_at' => $this->created_at?->toIso8601String(),
-        ];
-    }
 }

@@ -23,6 +23,8 @@ final class ProcessTenantSerproOnboardingJob implements ShouldBeUnique, ShouldQu
 
     public int $tries = 3;
 
+    public int $timeout = 300;
+
     public int $uniqueFor = 300;
 
     public function __construct(
@@ -70,5 +72,18 @@ final class ProcessTenantSerproOnboardingJob implements ShouldBeUnique, ShouldQu
 
             throw $e;
         }
+    }
+
+    public function tags(): array
+    {
+        return ['job:'.class_basename(static::class)];
+    }
+
+    public function failed(?\Throwable $e): void
+    {
+        \Illuminate\Support\Facades\Log::warning('job.failed', [
+            'job' => class_basename(static::class),
+            'message' => \App\Support\LogSanitizer::scrubString((string) ($e?->getMessage() ?? '')),
+        ]);
     }
 }

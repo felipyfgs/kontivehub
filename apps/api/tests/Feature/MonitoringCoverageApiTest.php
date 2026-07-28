@@ -48,6 +48,17 @@ class MonitoringCoverageApiTest extends TestCase
         $this->getJson('/api/v1/fiscal/monitoring/coverage')->assertForbidden();
     }
 
+    public function test_monitoring_contract_rejects_client_supplied_tenant_scope(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $viewer = User::factory()->forTenant($tenant, TenantRole::TenantUser, 'viewer')->create();
+        Sanctum::actingAs($viewer);
+
+        $this->getJson('/api/v1/fiscal/monitoring/coverage?tenant_id='.$tenant->id)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['tenant_id']);
+    }
+
     public function test_manual_inventory_is_sanitized_and_cannot_cross_the_current_tenant(): void
     {
         $tenant = Tenant::factory()->create();
@@ -82,6 +93,12 @@ class MonitoringCoverageApiTest extends TestCase
         $this->getJson('/api/v1/fiscal/manual-consults?tenant_id='.$otherTenant->id)
             ->assertUnprocessable()
             ->assertJsonPath('code', 'CLIENT_TENANT_ID_REJECTED');
+        $this->getJson('/api/v1/fiscal/manual-consults?filters[tenant_id]='.$otherTenant->id)
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'CLIENT_TENANT_ID_REJECTED');
+        $this->getJson('/api/v1/fiscal/manual-consults?client_id=invalid')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['client_id']);
     }
 
     public function test_manual_inventory_preserves_last_snapshot_when_refresh_fails(): void

@@ -32,6 +32,11 @@ class BuildExportZipJob implements ShouldQueue
 {
     use Queueable;
 
+    public int $tries = 3;
+
+    public int $timeout = 300;
+
+
     /** Teto de chaves em exportação por seleção (catálogo / multi-select). */
     public const MAX_ACCESS_KEYS = 100;
 
@@ -736,5 +741,18 @@ class BuildExportZipJob implements ShouldQueue
         $safe = preg_replace('/[^A-Z0-9_-]/i', '-', $value) ?? '';
 
         return trim($safe, '.-') ?: 'desconhecido';
+    }
+
+    public function tags(): array
+    {
+        return ['job:'.class_basename(static::class)];
+    }
+
+    public function failed(?\Throwable $e): void
+    {
+        \Illuminate\Support\Facades\Log::warning('job.failed', [
+            'job' => class_basename(static::class),
+            'message' => \App\Support\LogSanitizer::scrubString((string) ($e?->getMessage() ?? '')),
+        ]);
     }
 }

@@ -18,7 +18,7 @@ class WorkProcessGroupQueryTest extends TestCase
     #[DataProvider('sortProvider')]
     public function test_resolve_sort_whitelist(?string $sort, ?string $direction, string $expectedSort, string $expectedDirection): void
     {
-        $query = new WorkProcessGroupQuery($this->createMock(CurrentTenant::class));
+        $query = new WorkProcessGroupQuery($this->createStub(CurrentTenant::class));
 
         [$resolvedSort, $resolvedDirection] = $query->resolveSort($sort, $direction);
 

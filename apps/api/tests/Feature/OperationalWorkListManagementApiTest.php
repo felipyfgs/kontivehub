@@ -150,6 +150,40 @@ class OperationalWorkListManagementApiTest extends TestCase
         ]);
     }
 
+    public function test_bulk_task_conflict_returns_fixed_safe_failure(): void
+    {
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $client = Client::factory()->forTenant($tenant)->create();
+        $process = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
+            'client_id' => $client->id,
+            'status' => ProcessStatus::EmProgresso,
+        ]);
+        $task = WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $process->id,
+            'status' => TaskStatus::AFazer,
+            'lock_version' => 2,
+        ]);
+        Sanctum::actingAs($admin);
+
+        $this->postJson('/api/v1/work/tasks/bulk', [
+            'items' => [['id' => $task->id, 'lock_version' => 1]],
+            'changes' => ['action' => 'start'],
+        ])->assertOk()
+            ->assertJsonPath('meta.succeeded', 0)
+            ->assertJsonPath(
+                'meta.failed.0.message',
+                'Conflito de versão: a tarefa foi alterada.',
+            );
+
+        $this->assertDatabaseHas('work_tasks', [
+            'id' => $task->id,
+            'status' => TaskStatus::AFazer->value,
+            'lock_version' => 2,
+        ]);
+    }
+
     public function test_bulk_processes_archive_with_partial_failure(): void
     {
         [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
@@ -177,7 +211,11 @@ class OperationalWorkListManagementApiTest extends TestCase
         ])->assertOk()
             ->assertJsonPath('meta.succeeded', 1)
             ->assertJsonCount(1, 'meta.failed')
-            ->assertJsonPath('meta.failed.0.id', $stale->id);
+            ->assertJsonPath('meta.failed.0.id', $stale->id)
+            ->assertJsonPath(
+                'meta.failed.0.message',
+                'Conflito de versão: o processo foi alterado.',
+            );
 
         $this->assertNotNull($open->fresh()->archived_at);
         $this->assertDatabaseHas('work_processes', [

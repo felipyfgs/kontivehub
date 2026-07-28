@@ -87,6 +87,13 @@ class WorkQueueApiTest extends TestCase
         ], $statuses);
 
         $this->assertSame(4, $response->json('meta.total'));
+        $this->assertSame([
+            'current_page',
+            'last_page',
+            'per_page',
+            'total',
+        ], array_keys($response->json('meta')));
+        $this->assertArrayNotHasKey('links', $response->json());
     }
 
     public function test_tab_open_excludes_concluida_and_dispensada(): void

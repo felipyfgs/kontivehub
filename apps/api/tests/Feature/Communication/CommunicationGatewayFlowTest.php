@@ -109,6 +109,248 @@ final class CommunicationGatewayFlowTest extends TestCase
         $this->assertSame(1, $this->transport->downloadCalls);
     }
 
+    public function test_lid_and_remote_pn_converge_without_materializing_the_session_pn(): void
+    {
+        [$tenant, $inbox] = $this->context();
+        $sessionPn = '+559981769536';
+        $remotePn = '+559992032709';
+        $lid = 'lid:149865032093945';
+        $inbox->forceFill([
+            'address_encrypted' => $sessionPn,
+            'address_hash' => hash('sha256', $sessionPn),
+            'address_masked' => '***9536',
+        ])->save();
+
+        $outbound = $this->event($inbox, GatewayEventType::MessageReceived, 'gateway-lid-outbound-0001', [
+            'provider_message_id' => 'provider-lid-outbound-0001',
+            'from' => $lid,
+            'source_identity' => [
+                'primary' => $lid,
+                'primary_kind' => 'LID',
+                'alternate' => $sessionPn,
+                'alternate_kind' => 'PN',
+                'evidence' => 'MESSAGE_SOURCE_ALT',
+            ],
+            'direction' => 'OUTBOUND',
+            'kind' => 'TEXT',
+            'provider_type' => 'conversation',
+            'family' => 'TEXT',
+            'text' => 'Enviada pelo aparelho',
+        ]);
+        $inbound = $this->event($inbox, GatewayEventType::MessageReceived, 'gateway-lid-inbound-0001', [
+            'provider_message_id' => 'provider-lid-inbound-0001',
+            'from' => $lid,
+            'source_identity' => [
+                'primary' => $lid,
+                'primary_kind' => 'LID',
+                'alternate' => $remotePn,
+                'alternate_kind' => 'PN',
+                'evidence' => 'MESSAGE_SOURCE_ALT',
+            ],
+            'direction' => 'INBOUND',
+            'kind' => 'TEXT',
+            'provider_type' => 'conversation',
+            'family' => 'TEXT',
+            'text' => 'Resposta do cliente',
+        ]);
+
+        $this->postSignedEvent($outbound)->assertNoContent();
+        $this->postSignedEvent($inbound)->assertNoContent();
+
+        $lidIdentity = CommunicationIdentity::query()->withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('address_hash', hash('sha256', $lid))
+            ->firstOrFail();
+        $remoteIdentity = CommunicationIdentity::query()->withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('address_hash', hash('sha256', $remotePn))
+            ->firstOrFail();
+        $conversationIds = CommunicationMessage::query()->withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->pluck('conversation_id')
+            ->unique()
+            ->values();
+
+        $this->assertSame($lidIdentity->contact_id, $remoteIdentity->contact_id);
+        $this->assertCount(1, $conversationIds);
+        $this->assertDatabaseCount('communication_contacts', 1);
+        $this->assertDatabaseCount('communication_conversations', 1);
+        $this->assertDatabaseMissing('communication_identities', [
+            'tenant_id' => $tenant->id,
+            'address_hash' => hash('sha256', $sessionPn),
+        ]);
+    }
+
+    public function test_fragmented_lid_pn_and_self_chat_converge_to_one_active_remote_conversation(): void
+    {
+        [$tenant, $inbox] = $this->context();
+        $sessionPn = '+559981769536';
+        $remotePn = '+559992032709';
+        $lid = 'lid:149865032093945';
+        $inbox->forceFill([
+            'address_encrypted' => $sessionPn,
+            'address_hash' => hash('sha256', $sessionPn),
+            'address_masked' => '***9536',
+        ])->save();
+
+        [$lidIdentity, $lidConversation] = $this->identityAndConversationForAddress(
+            $tenant,
+            $inbox,
+            $lid,
+            'lid',
+        );
+        [$remoteIdentity, $remoteConversation] = $this->identityAndConversationForAddress(
+            $tenant,
+            $inbox,
+            $remotePn,
+            'remote',
+        );
+        [, $selfConversation] = $this->identityAndConversationForAddress(
+            $tenant,
+            $inbox,
+            $sessionPn,
+            'session',
+        );
+        $this->outboundMessage($tenant, $inbox, $lidIdentity, $lidConversation, 'legacy-lid');
+        $this->outboundMessage($tenant, $inbox, $remoteIdentity, $remoteConversation, 'legacy-remote');
+
+        $event = $this->event($inbox, GatewayEventType::MessageReceived, 'gateway-fragmented-0001', [
+            'provider_message_id' => 'provider-fragmented-0001',
+            'from' => $lid,
+            'source_identity' => [
+                'primary' => $lid,
+                'primary_kind' => 'LID',
+                'alternate' => $remotePn,
+                'alternate_kind' => 'PN',
+                'evidence' => 'MESSAGE_SOURCE_ALT',
+            ],
+            'direction' => 'INBOUND',
+            'kind' => 'TEXT',
+            'provider_type' => 'conversation',
+            'family' => 'TEXT',
+            'text' => 'Mensagem correlacionada',
+        ]);
+
+        $this->assertSame(
+            3,
+            CommunicationConversation::query()->withoutGlobalScopes()
+                ->where('status', '<>', ConversationStatus::Resolved->value)
+                ->count(),
+        );
+        $this->postSignedEvent($event)->assertNoContent();
+
+        $activeConversation = CommunicationConversation::query()->withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('inbox_id', $inbox->id)
+            ->where('status', '<>', ConversationStatus::Resolved->value)
+            ->sole();
+        $messageConversationIds = CommunicationMessage::query()->withoutGlobalScopes()
+            ->whereIn('provider_message_id', [
+                'provider-legacy-lid-0001',
+                'provider-legacy-remote-0001',
+                'provider-fragmented-0001',
+            ])
+            ->pluck('conversation_id')
+            ->unique()
+            ->values();
+
+        $this->assertSame(
+            $lidIdentity->refresh()->contact_id,
+            $remoteIdentity->refresh()->contact_id,
+        );
+        $this->assertSame([$activeConversation->id], $messageConversationIds->all());
+        $this->assertSame(ConversationStatus::Resolved, $selfConversation->refresh()->status);
+        $this->assertDatabaseCount('communication_contacts', 2);
+    }
+
+    public function test_internal_event_authenticates_raw_body_before_schema_and_rejects_stale_or_replayed_evidence(): void
+    {
+        [, $inbox] = $this->context();
+        $path = '/api/internal/v1/communication/gateway/events';
+        $signer = app(CommunicationHmacSigner::class);
+        $malformedBody = '{"contract_version":';
+
+        $this->call('POST', $path, content: $malformedBody)
+            ->assertUnauthorized()
+            ->assertJson(['error' => 'INVALID_INTERNAL_SIGNATURE']);
+
+        $malformedHeaders = $signer->headers(
+            'POST',
+            $path,
+            $malformedBody,
+            nonce: 'nonce-malformed-event-0001',
+        );
+        $this->call(
+            'POST',
+            $path,
+            server: $this->transformHeadersToServerVars($malformedHeaders),
+            content: $malformedBody,
+        )
+            ->assertUnprocessable()
+            ->assertJson(['error' => 'INVALID_EVENT']);
+
+        $event = $this->event($inbox, GatewayEventType::GatewayAlert, 'gateway-boundary-event-0001', [
+            'code' => 'GATEWAY_UNAVAILABLE',
+            'severity' => 'WARNING',
+            'retryable' => true,
+        ]);
+        $event['tenant_id'] = 999;
+        $tenantBody = json_encode($event, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+        $tenantHeaders = $signer->headers(
+            'POST',
+            $path,
+            $tenantBody,
+            nonce: 'nonce-tenant-event-0001',
+        );
+        $this->call(
+            'POST',
+            $path,
+            server: $this->transformHeadersToServerVars($tenantHeaders),
+            content: $tenantBody,
+        )
+            ->assertUnprocessable()
+            ->assertJson(['error' => 'INVALID_EVENT']);
+        $this->assertDatabaseMissing('communication_events', [
+            'gateway_event_id' => 'gateway-boundary-event-0001',
+        ]);
+
+        unset($event['tenant_id']);
+        $body = json_encode($event, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+        $staleHeaders = $signer->headers(
+            'POST',
+            $path,
+            $body,
+            now()->subSeconds(301)->getTimestamp(),
+            'nonce-stale-event-0001',
+        );
+        $this->call(
+            'POST',
+            $path,
+            server: $this->transformHeadersToServerVars($staleHeaders),
+            content: $body,
+        )
+            ->assertUnauthorized()
+            ->assertJson(['error' => 'INVALID_INTERNAL_SIGNATURE']);
+
+        $headers = $signer->headers(
+            'POST',
+            $path,
+            $body,
+            nonce: 'nonce-valid-event-0001',
+        );
+        $server = $this->transformHeadersToServerVars($headers);
+        $this->call('POST', $path, server: $server, content: $body)
+            ->assertNoContent()
+            ->assertHeader('X-Communication-Result', 'processed');
+        $this->call('POST', $path, server: $server, content: $body)
+            ->assertUnauthorized()
+            ->assertJson(['error' => 'INVALID_INTERNAL_SIGNATURE']);
+        $this->assertDatabaseHas('communication_events', [
+            'gateway_event_id' => 'gateway-boundary-event-0001',
+            'tenant_id' => $inbox->tenant_id,
+        ]);
+    }
+
     public function test_live_outbound_from_device_creates_message_reopens_pending_and_deduplicates_provider_id(): void
     {
         [$tenant, $inbox] = $this->context();
@@ -404,6 +646,43 @@ final class CommunicationGatewayFlowTest extends TestCase
             'identity_id' => $identity->id,
             'status' => $status,
             'last_message_at' => now(),
+        ]);
+
+        return [$identity, $conversation];
+    }
+
+    /** @return array{CommunicationIdentity,CommunicationConversation} */
+    private function identityAndConversationForAddress(
+        Tenant $tenant,
+        CommunicationInbox $inbox,
+        string $address,
+        string $suffix,
+    ): array {
+        $contact = CommunicationContact::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'name' => null,
+            'is_provisional' => true,
+            'is_active' => true,
+        ]);
+        $identity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'contact_id' => $contact->id,
+            'channel' => CommunicationChannel::Whatsapp,
+            'address_encrypted' => $address,
+            'address_hash' => hash('sha256', $address),
+            'address_masked' => '***'.substr($address, -4),
+            'is_active' => true,
+        ]);
+        $conversation = CommunicationConversation::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'inbox_id' => $inbox->id,
+            'identity_id' => $identity->id,
+            'status' => ConversationStatus::Open,
+            'last_message_at' => now()->addSeconds(match ($suffix) {
+                'lid' => 1,
+                'remote' => 2,
+                default => 3,
+            }),
         ]);
 
         return [$identity, $conversation];

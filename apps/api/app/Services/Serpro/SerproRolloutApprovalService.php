@@ -11,7 +11,6 @@ use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 /**
  * Aprovações sensíveis de plataforma SERPRO com política por ação:
@@ -97,14 +96,14 @@ final class SerproRolloutApprovalService
         bool $fromHttp = true,
     ): SerproRolloutApproval {
         if (! $fromHttp) {
-            throw new RuntimeException(
+            throw new SerproRolloutException(
                 'Aprovação humana SERPRO só pode ser criada via API HTTP autenticada; CLI/job não fabricam confirmação.'
             );
         }
 
         $reason = trim($reason);
         if ($reason === '') {
-            throw new RuntimeException('Motivo da aprovação é obrigatório.');
+            throw new SerproRolloutException('Motivo da aprovação é obrigatório.');
         }
 
         $action = strtoupper($action);
@@ -122,7 +121,7 @@ final class SerproRolloutApprovalService
             && in_array($action, [self::ACTION_BILLABLE_CANARY], true)
             && ($tenantId === null || $tenantId <= 0)
         ) {
-            throw new RuntimeException('Canário faturável exige tenant_id do Tenant delimitado (não injetado pelo cliente no escopo).');
+            throw new SerproRolloutException('Canário faturável exige tenant_id do Tenant delimitado (não injetado pelo cliente no escopo).');
         }
 
         $approval = SerproRolloutApproval::query()->create([
@@ -171,27 +170,27 @@ final class SerproRolloutApprovalService
         bool $fromHttp = true,
     ): array {
         if (! $fromHttp) {
-            throw new RuntimeException(
+            throw new SerproRolloutException(
                 'Confirmação humana SERPRO só pode ser registrada via API HTTP; CLI/job não fabricam ator/timestamp.'
             );
         }
 
         if (! $passwordRecentlyConfirmed) {
-            throw new RuntimeException('Aprovação de rollout SERPRO exige reconfirmação de senha recente.');
+            throw new SerproRolloutException('Aprovação de rollout SERPRO exige reconfirmação de senha recente.');
         }
 
         if (in_array($approval->status, ['EXECUTED', 'REJECTED', 'EXPIRED'], true)) {
-            throw new RuntimeException('Aprovação em estado final: '.$approval->status);
+            throw new SerproRolloutException('Aprovação em estado final: '.$approval->status);
         }
 
         if ($approval->isExpired()) {
             $approval->forceFill(['status' => 'EXPIRED'])->save();
-            throw new RuntimeException('Aprovação expirada.');
+            throw new SerproRolloutException('Aprovação expirada.');
         }
 
         $user = User::query()->find($approverUserId);
         if ($user === null || ! $user->is_active) {
-            throw new RuntimeException('Aprovador inválido ou inativo.');
+            throw new SerproRolloutException('Aprovador inválido ou inativo.');
         }
 
         return match ($approval->policy()) {
@@ -244,7 +243,7 @@ final class SerproRolloutApprovalService
     ): SerproRolloutApproval {
         $action = strtoupper($action);
         if ($this->policyForAction($action) !== SerproApprovalPolicy::OwnerConfirmation) {
-            throw new RuntimeException(
+            throw new SerproRolloutException(
                 "Ação {$action} não usa política OWNER_CONFIRMATION; não pode ser consumida como autorização singleton."
             );
         }
@@ -270,26 +269,26 @@ final class SerproRolloutApprovalService
         /** @var SerproRolloutApproval|null $locked */
         $locked = $q->first();
         if ($locked === null) {
-            throw new RuntimeException(
+            throw new SerproRolloutException(
                 'Operação bloqueada: ausência de confirmação OWNER vigente e vinculada ao recurso/ação/ambiente.'
             );
         }
 
         if ($locked->isExpired()) {
             $locked->forceFill(['status' => 'EXPIRED'])->save();
-            throw new RuntimeException('Aprovação expirada; operação bloqueada.');
+            throw new SerproRolloutException('Aprovação expirada; operação bloqueada.');
         }
 
         if (! $locked->isChangeWindowActive()) {
-            throw new RuntimeException('Janela de mudança da confirmação não está vigente.');
+            throw new SerproRolloutException('Janela de mudança da confirmação não está vigente.');
         }
 
         if (! $locked->isFullyApproved()) {
-            throw new RuntimeException('Confirmação do proprietário incompleta.');
+            throw new SerproRolloutException('Confirmação do proprietário incompleta.');
         }
 
         if ((int) $locked->first_approver_user_id !== $actorUserId) {
-            throw new RuntimeException(
+            throw new SerproRolloutException(
                 'Consumo da confirmação exige o mesmo proprietário que a registrou.'
             );
         }
@@ -302,7 +301,7 @@ final class SerproRolloutApprovalService
         int $actorUserId,
     ): SerproRolloutApproval {
         if ($approval->executed_at !== null || $approval->status === 'EXECUTED') {
-            throw new RuntimeException('Aprovação já consumida; reuso bloqueado.');
+            throw new SerproRolloutException('Aprovação já consumida; reuso bloqueado.');
         }
 
         $approval->forceFill([
@@ -448,7 +447,7 @@ final class SerproRolloutApprovalService
         ?CarbonImmutable $changeWindowEnd,
     ): array {
         if (! $user->isPlatformAdmin()) {
-            throw new RuntimeException('Confirmação OWNER exige o Proprietário PLATFORM_ADMIN da instalação.');
+            throw new SerproRolloutException('Confirmação OWNER exige o Proprietário PLATFORM_ADMIN da instalação.');
         }
 
         // Nunca PARTIAL: validação total antes de gravar APPROVED.
@@ -456,12 +455,12 @@ final class SerproRolloutApprovalService
             ?: $this->expectedConfirmationPhrase((string) $approval->action));
         $provided = trim((string) $confirmationPhrase);
         if ($provided === '' || ! hash_equals($expected, $provided)) {
-            throw new RuntimeException('Frase de confirmação inválida ou divergente da operação.');
+            throw new SerproRolloutException('Frase de confirmação inválida ou divergente da operação.');
         }
 
         $reasonFinal = trim((string) ($reason ?? $approval->reason ?? ''));
         if ($reasonFinal === '') {
-            throw new RuntimeException('Motivo da confirmação é obrigatório.');
+            throw new SerproRolloutException('Motivo da confirmação é obrigatório.');
         }
 
         $windowStart = $changeWindowStart ?? $approval->change_window_start;
@@ -472,7 +471,7 @@ final class SerproRolloutApprovalService
         );
 
         if ($windowStart === null || $windowEnd === null) {
-            throw new RuntimeException('Janela de mudança vigente é obrigatória.');
+            throw new SerproRolloutException('Janela de mudança vigente é obrigatória.');
         }
 
         $start = $windowStart instanceof CarbonImmutable
@@ -483,11 +482,11 @@ final class SerproRolloutApprovalService
             : CarbonImmutable::instance($windowEnd);
 
         if (! CarbonImmutable::now()->betweenIncluded($start, $end)) {
-            throw new RuntimeException('Janela de mudança não está vigente neste instante.');
+            throw new SerproRolloutException('Janela de mudança não está vigente neste instante.');
         }
 
         if ($approval->first_approver_user_id !== null) {
-            throw new RuntimeException('Confirmação do proprietário já registrada; reuso bloqueado.');
+            throw new SerproRolloutException('Confirmação do proprietário já registrada; reuso bloqueado.');
         }
 
         return DB::transaction(function () use ($approval, $user, $reasonFinal, $start, $end): array {
@@ -495,7 +494,7 @@ final class SerproRolloutApprovalService
             $locked = SerproRolloutApproval::query()->whereKey($approval->id)->lockForUpdate()->firstOrFail();
 
             if ($locked->first_approver_user_id !== null || $locked->status !== 'PENDING') {
-                throw new RuntimeException('Confirmação do proprietário já registrada ou estado inválido.');
+                throw new SerproRolloutException('Confirmação do proprietário já registrada ou estado inválido.');
             }
 
             $locked->forceFill([
@@ -534,7 +533,7 @@ final class SerproRolloutApprovalService
             $locked = SerproRolloutApproval::query()->whereKey($approval->id)->lockForUpdate()->firstOrFail();
 
             if (in_array($locked->status, ['EXECUTED', 'REJECTED', 'EXPIRED', 'APPROVED'], true)) {
-                throw new RuntimeException('Aprovação em estado final: '.$locked->status);
+                throw new SerproRolloutException('Aprovação em estado final: '.$locked->status);
             }
 
             $role = $this->resolveDualApproverRole($locked, $user);
@@ -560,13 +559,13 @@ final class SerproRolloutApprovalService
             }
 
             if ((int) $locked->first_approver_user_id === (int) $user->id) {
-                throw new RuntimeException(
+                throw new SerproRolloutException(
                     'Política dual exige segundo aprovador distinto; a mesma conta não preenche ambos os papéis.'
                 );
             }
 
             if ($locked->second_approver_user_id !== null) {
-                throw new RuntimeException('Aprovação dual já possui dois olhos.');
+                throw new SerproRolloutException('Aprovação dual já possui dois olhos.');
             }
 
             $firstRole = is_array($locked->context)
@@ -618,7 +617,7 @@ final class SerproRolloutApprovalService
                 $ctx = is_array($approval->context) ? $approval->context : [];
                 $firstRole = (string) ($ctx['first_approver_role'] ?? '');
                 if ($firstRole === 'PLATFORM_ADMIN') {
-                    throw new RuntimeException(
+                    throw new SerproRolloutException(
                         'Conta dual não pode preencher o papel de Tenant ADMIN no canário faturável.'
                     );
                 }
@@ -632,14 +631,14 @@ final class SerproRolloutApprovalService
                 return 'TENANT_ADMIN';
             }
 
-            throw new RuntimeException(
+            throw new SerproRolloutException(
                 'Canário faturável exige Proprietário PLATFORM_ADMIN ou Tenant ADMIN ativo do Tenant delimitado.'
             );
         }
 
         // ROLLOUT_PROMOTE / demais dual: exige PLATFORM_ADMIN distinto.
         if (! $isPlatform) {
-            throw new RuntimeException('Aprovação dual de promoção exige PLATFORM_ADMIN.');
+            throw new SerproRolloutException('Aprovação dual de promoção exige PLATFORM_ADMIN.');
         }
 
         return 'PLATFORM_ADMIN';
@@ -654,7 +653,7 @@ final class SerproRolloutApprovalService
             $roles = [$firstRole, $secondRole];
             sort($roles);
             if ($roles !== ['TENANT_ADMIN', 'PLATFORM_ADMIN']) {
-                throw new RuntimeException(
+                throw new SerproRolloutException(
                     'Canário faturável exige um Proprietário e um Tenant ADMIN distintos do Tenant delimitado.'
                 );
             }
@@ -665,7 +664,7 @@ final class SerproRolloutApprovalService
 
         // Promoções: dois PLATFORM_ADMIN distintos (IDs já checados).
         if ($firstRole !== 'PLATFORM_ADMIN' || $secondRole !== 'PLATFORM_ADMIN') {
-            throw new RuntimeException('Promoção dual exige dois PLATFORM_ADMIN distintos.');
+            throw new SerproRolloutException('Promoção dual exige dois PLATFORM_ADMIN distintos.');
         }
     }
 
@@ -711,7 +710,7 @@ final class SerproRolloutApprovalService
     {
         $solution = is_array($approval->context) ? ($approval->context['solution'] ?? null) : null;
         if (! is_string($solution) || $solution === '') {
-            throw new RuntimeException('Aprovação de solution kill-off sem código de solução.');
+            throw new SerproRolloutException('Aprovação de solution kill-off sem código de solução.');
         }
         $this->killSwitch->deactivateSolution($solution, $reason, $actorUserId);
     }
@@ -721,14 +720,14 @@ final class SerproRolloutApprovalService
         ?CarbonImmutable $end,
     ): void {
         if ($start === null || $end === null) {
-            throw new RuntimeException('Janela de mudança (início e fim) é obrigatória para confirmação do proprietário.');
+            throw new SerproRolloutException('Janela de mudança (início e fim) é obrigatória para confirmação do proprietário.');
         }
         if ($end->lessThanOrEqualTo($start)) {
-            throw new RuntimeException('Janela de mudança inválida: fim deve ser posterior ao início.');
+            throw new SerproRolloutException('Janela de mudança inválida: fim deve ser posterior ao início.');
         }
         $maxHours = max(1, (int) config('serpro.owner_confirmation.max_window_hours', 48));
         if ($start->diffInHours($end) > $maxHours) {
-            throw new RuntimeException("Janela de mudança excede o máximo de {$maxHours} horas.");
+            throw new SerproRolloutException("Janela de mudança excede o máximo de {$maxHours} horas.");
         }
     }
 

@@ -11,6 +11,7 @@ use App\DTO\Cnpj\DocumentMask;
 use App\DTO\Cnpj\EstablishmentRegistrationData;
 use App\DTO\Cnpj\ShareholderData;
 use App\Enums\RegistrationStatus;
+use App\Support\LogSanitizer;
 use Carbon\Carbon;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Cache;
@@ -64,10 +65,10 @@ final class SerproConsultaCnpjLookup
         try {
             $result = $this->request($normalized);
         } catch (RuntimeException $exception) {
-            Log::warning('serpro_consulta_cnpj.failed', [
+            Log::warning('serpro_consulta_cnpj.failed', LogSanitizer::redact([
                 'cnpj_root' => substr($normalized, 0, 8),
-                'message' => $exception->getMessage(),
-            ]);
+                'message' => LogSanitizer::scrubString($exception->getMessage()),
+            ]));
 
             return null;
         }

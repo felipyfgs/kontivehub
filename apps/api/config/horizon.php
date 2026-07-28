@@ -267,4 +267,19 @@ return [
         'composer.json',
         '.env',
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Readiness thresholds (Lote 10.4)
+    |--------------------------------------------------------------------------
+    |
+    | Depth/age limits used by ops readiness probes. Labels must stay low-cardinality.
+    |
+    */
+    'readiness_thresholds' => [
+        'default' => ['max_pending' => 500, 'max_wait_seconds' => 120],
+        'fiscal' => ['max_pending' => 200, 'max_wait_seconds' => 180],
+        'import-xml' => ['max_pending' => 100, 'max_wait_seconds' => 300],
+    ],
+
 ];

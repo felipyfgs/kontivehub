@@ -2,85 +2,41 @@
 
 namespace App\Http\Controllers\Api\V1\Fiscal;
 
-use App\Contracts\SecureObjectStore;
-use App\Enums\TenantPermission;
+use App\Actions\Fiscal\ReadMeiAutomationArtifactAction;
 use App\Http\Controllers\Controller;
-use App\Http\Middleware\EnsureTenantContext;
+use App\Http\Requests\Fiscal\Monitoring\DownloadMeiAutomationArtifactRequest;
+use App\Http\Requests\Fiscal\Monitoring\ViewMeiAutomationAttemptRequest;
 use App\Http\Resources\Fiscal\MeiAutomationAttemptResource;
-use App\Models\User;
-use App\Services\Authorization\TenantAuthorization;
-use App\Services\MeiAutomation\MeiAutomationAttemptRepository;
-use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 final class MeiAutomationAttemptController extends Controller
 {
     public function __construct(
-        private readonly CurrentTenant $currentTenant,
-        private readonly TenantAuthorization $authorization,
-        private readonly MeiAutomationAttemptRepository $attempts,
-        private readonly SecureObjectStore $objects,
+        private readonly ReadMeiAutomationArtifactAction $readArtifact,
     ) {}
 
-    public function show(Request $request, int $attempt): JsonResponse
-    {
-        if ($request->attributes->get(EnsureTenantContext::CLIENT_TENANT_ID_SUPPLIED) === true) {
-            return response()->json([
-                'message' => 'tenant_id não é aceito; o tenant vem da sessão autenticada.',
-            ], 422);
-        }
-
-        $tenant = $this->currentTenant->tenant();
-        $model = $this->attempts->findForTenant((int) $tenant->id, $attempt);
-        $actor = $request->user();
-        if (! $actor instanceof User
-            || ! $this->authorization->allows($actor, TenantPermission::FiscalMonitoringView, $model)) {
-            abort(403, 'Ação não autorizada.');
-        }
-
-        return (new MeiAutomationAttemptResource($model))->response();
+    public function show(
+        ViewMeiAutomationAttemptRequest $request,
+        int $attempt,
+    ): JsonResponse {
+        return (new MeiAutomationAttemptResource($request->attempt()))->response();
     }
 
-    public function download(Request $request, int $attempt, string $artifact): StreamedResponse
-    {
-        $tenant = $this->currentTenant->tenant();
-        $model = $this->attempts->findForTenant((int) $tenant->id, $attempt);
-        $actor = $request->user();
-        if (! $actor instanceof User
-            || ! $this->authorization->allows($actor, TenantPermission::FiscalMonitoringView, $model)) {
-            abort(403, 'Ação não autorizada.');
-        }
-
-        $descriptor = collect($model->vault_artifacts ?? [])->first(
-            static fn (mixed $item): bool => is_array($item) && ($item['id'] ?? null) === $artifact,
+    public function download(
+        DownloadMeiAutomationArtifactRequest $request,
+        int $attempt,
+        string $artifact,
+    ): StreamedResponse {
+        $download = $this->readArtifact->handle(
+            $request->attempt(),
+            $request->artifactId(),
         );
-        if (! is_array($descriptor)
-            || ! is_string($descriptor['object_id'] ?? null)
-            || ! is_string($descriptor['content_type'] ?? null)
-            || ! is_string($descriptor['sha256'] ?? null)) {
-            abort(404, 'Artefato não encontrado.');
-        }
 
-        $bytes = $this->objects->get($descriptor['object_id'], [
-            'purpose' => 'MEI_PORTAL_ARTIFACT',
-            'tenant_id' => (int) $model->tenant_id,
-            'client_id' => (int) $model->client_id,
-            'attempt_id' => (int) $model->id,
-            'artifact_id' => $artifact,
-            'content_type' => $descriptor['content_type'],
-            'sha256' => $descriptor['sha256'],
-        ]);
-        $name = basename((string) ($descriptor['name'] ?? 'artefato-mei'));
-        if ($name === '' || $name === '.' || $name === '..') {
-            $name = 'artefato-mei';
-        }
-
-        return response()->streamDownload(static function () use ($bytes): void {
-            echo $bytes;
-        }, $name, [
-            'Content-Type' => $descriptor['content_type'],
+        return response()->streamDownload(static function () use ($download): void {
+            echo $download->bytes;
+        }, $download->name, [
+            'Content-Type' => $download->contentType,
             'Cache-Control' => 'private, no-store, max-age=0',
             'Pragma' => 'no-cache',
             'X-Content-Type-Options' => 'nosniff',

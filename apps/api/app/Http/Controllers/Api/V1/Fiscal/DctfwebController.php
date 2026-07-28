@@ -4,6 +4,13 @@ namespace App\Http\Controllers\Api\V1\Fiscal;
 
 use App\Enums\TenantRole;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Fiscal\Monitoring\ListFiscalClientRecordsRequest;
+use App\Http\Requests\Fiscal\Monitoring\ViewFiscalMonitoringSurfaceRequest;
+use App\Http\Requests\Fiscal\Mutations\EnqueueDctfwebConsultRequest;
+use App\Http\Requests\Fiscal\Mutations\IngestDctfwebEventRequest;
+use App\Http\Requests\Fiscal\Mutations\TransmitDctfwebRequest;
+use App\Http\Resources\Fiscal\DctfwebDeclarationDetailResource;
+use App\Http\Resources\Fiscal\DctfwebDeclarationPageResource;
 use App\Models\Client;
 use App\Services\Fiscal\Dctfweb\DctfwebPeriod;
 use App\Services\FiscalMonitoring\FiscalMonitoringRunService;
@@ -29,34 +36,33 @@ class DctfwebController extends Controller
         private readonly DctfwebMutationGuard $mutations,
     ) {}
 
-    public function indexDeclarations(Request $request): JsonResponse
-    {
-        $this->assertCanRead();
+    public function indexDeclarations(
+        ListFiscalClientRecordsRequest $request,
+    ): DctfwebDeclarationPageResource {
         $tenant = $this->currentTenant->tenant();
-        $perPage = min(100, max(1, (int) $request->query('per_page', 50)));
-        $clientId = $request->query('client_id');
+        $filters = $request->filters();
 
-        $page = $this->declarations->paginate(
-            $tenant,
-            $perPage,
-            is_numeric($clientId) ? (int) $clientId : null,
+        return new DctfwebDeclarationPageResource(
+            $this->declarations->paginate(
+                $tenant,
+                $filters->perPage,
+                $filters->clientId,
+            ),
         );
-        $page->getCollection()->transform(fn ($d) => $d->toPublicArray());
-
-        return response()->json($page);
     }
 
-    public function showDeclaration(int $declaration): JsonResponse
-    {
-        $this->assertCanRead();
+    public function showDeclaration(
+        ViewFiscalMonitoringSurfaceRequest $request,
+        int $declaration,
+    ): DctfwebDeclarationDetailResource|JsonResponse {
         $tenant = $this->currentTenant->tenant();
         $model = $this->declarations->findForTenant($tenant, $declaration);
         if ($model === null) {
             return response()->json(['message' => 'Declaração não encontrada.'], 404);
         }
 
-        return response()->json([
-            'data' => $model->toPublicArray(),
+        return new DctfwebDeclarationDetailResource([
+            'declaration' => $model,
             'evidence_versions' => $this->versions->history($model),
         ]);
     }
@@ -64,19 +70,10 @@ class DctfwebController extends Controller
     /**
      * Ingere evento de última atualização e agenda reconciliação dirigida.
      */
-    public function ingestEvent(Request $request): JsonResponse
+    public function ingestEvent(IngestDctfwebEventRequest $request): JsonResponse
     {
-        $this->assertCanWrite();
         $tenant = $this->currentTenant->tenant();
-
-        $data = $request->validate([
-            'client_id' => ['required', 'integer'],
-            'period_key' => ['required', 'string', 'max:20'],
-            'event_type' => ['sometimes', 'string', 'max:80'],
-            'external_id' => ['sometimes', 'nullable', 'string', 'max:160'],
-            'payload_digest' => ['sometimes', 'nullable', 'string', 'max:64'],
-            'enqueue' => ['sometimes', 'boolean'],
-        ]);
+        $data = $request->payload();
 
         $client = Client::query()
             ->withoutGlobalScopes()
@@ -99,7 +96,9 @@ class DctfwebController extends Controller
                 enqueue: (bool) ($data['enqueue'] ?? true),
             );
         } catch (InvalidArgumentException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            $text = $e->getMessage();
+
+            return response()->json(['message' => $text], 422);
         }
 
         return response()->json([
@@ -119,17 +118,10 @@ class DctfwebController extends Controller
     /**
      * Enfileira consulta somente-leitura (recibo/relatório/xml/darf/monitor).
      */
-    public function enqueueConsult(Request $request): JsonResponse
+    public function enqueueConsult(EnqueueDctfwebConsultRequest $request): JsonResponse
     {
-        $this->assertCanWrite();
         $tenant = $this->currentTenant->tenant();
-
-        $data = $request->validate([
-            'client_id' => ['required', 'integer'],
-            'period_key' => ['sometimes', 'nullable', 'string', 'max:20'],
-            'operation_code' => ['sometimes', 'string', 'max:80'],
-            'correlation_id' => ['sometimes', 'string', 'max:64'],
-        ]);
+        $data = $request->payload();
 
         $operation = strtoupper($data['operation_code'] ?? DctfwebCodes::OP_CONSULTAR_RECIBO);
         if (in_array($operation, DctfwebCodes::mutatingOperations(), true)) {
@@ -168,7 +160,9 @@ class DctfwebController extends Controller
                 dispatch: true,
             );
         } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            $text = $e->getMessage();
+
+            return response()->json(['message' => $text], 422);
         }
 
         return response()->json(['data' => $run->toPublicArray()], 201);
@@ -177,17 +171,10 @@ class DctfwebController extends Controller
     /**
      * Tentativa de transmissão — rejeitada se flags mutantes OFF (9.8).
      */
-    public function transmit(Request $request): JsonResponse
+    public function transmit(TransmitDctfwebRequest $request): JsonResponse
     {
-        $this->assertCanWrite();
         $tenant = $this->currentTenant->tenant();
-
-        $data = $request->validate([
-            'client_id' => ['required', 'integer'],
-            'period_key' => ['required', 'string', 'max:20'],
-            'correlation_id' => ['sometimes', 'string', 'max:64'],
-            'confirmation' => ['required', 'accepted'],
-        ]);
+        $data = $request->payload();
 
         $client = Client::query()
             ->withoutGlobalScopes()
@@ -231,17 +218,12 @@ class DctfwebController extends Controller
                 dispatch: true,
             );
         } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            $text = $e->getMessage();
+
+            return response()->json(['message' => $text], 422);
         }
 
         return response()->json(['data' => $run->toPublicArray()], 201);
-    }
-
-    private function assertCanRead(): void
-    {
-        if ($this->currentTenant->role() === null) {
-            abort(403, 'Perfil não resolvido.');
-        }
     }
 
     private function assertCanWrite(): void

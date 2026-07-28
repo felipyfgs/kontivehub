@@ -63,5 +63,55 @@ class PlatformSessionNavigationTest extends TestCase
             $selectableTenant->id,
             PlatformMembership::query()->where('user_id', $actor->id)->value('default_tenant_id'),
         );
+
+        $this->getJson('/api/v1/platform/tenants/current')
+            ->assertOk()
+            ->assertJsonPath('data.tenant.id', $selectableTenant->id)
+            ->assertJsonPath('data.access_mode', 'platform_privileged');
+
+        $this->deleteJson('/api/v1/platform/tenants/select')
+            ->assertOk()
+            ->assertExactJson([
+                'data' => [
+                    'cleared' => true,
+                    'access_mode' => null,
+                    'tenant' => null,
+                ],
+            ]);
+    }
+
+    public function test_platform_selector_rejects_unknown_fields_and_preserves_domain_errors(): void
+    {
+        config(['features.platform_privileged_context.enabled' => true]);
+        Cache::flush();
+
+        $defaultTenant = Tenant::factory()->create();
+        $inactiveTenant = Tenant::factory()->create(['is_active' => false]);
+        $actor = User::factory()->asPlatformAdmin($defaultTenant->id)->create();
+        Sanctum::actingAs($actor);
+
+        $this->postJson('/api/v1/platform/tenants/select', [
+            'tenant_id' => $defaultTenant->id,
+            'tenant_slug' => $defaultTenant->slug,
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('tenant_slug');
+
+        $this->postJson('/api/v1/platform/tenants/select', [
+            'tenant_id' => $inactiveTenant->id,
+        ])->assertNotFound()
+            ->assertExactJson([
+                'message' => 'Escritório não encontrado.',
+                'code' => 'http_error',
+            ]);
+
+        config(['features.platform_privileged_context.enabled' => false]);
+
+        $this->postJson('/api/v1/platform/tenants/select', [
+            'tenant_id' => $defaultTenant->id,
+        ])->assertForbidden()
+            ->assertExactJson([
+                'message' => 'Contexto privilegiado da plataforma indisponível.',
+                'code' => 'privileged_context_disabled',
+            ]);
     }
 }

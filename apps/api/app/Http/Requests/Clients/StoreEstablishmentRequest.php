@@ -3,15 +3,25 @@
 namespace App\Http\Requests\Clients;
 
 use App\Enums\RegistrationStatus;
+use App\Http\Requests\AuthenticatedRequest;
+use App\Models\Client;
+use App\Models\User;
+use App\Policies\ClientPolicy;
+use App\Policies\EstablishmentPolicy;
 use App\Rules\ValidCnpj;
-use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-class StoreEstablishmentRequest extends FormRequest
+final class StoreEstablishmentRequest extends AuthenticatedRequest
 {
     public function authorize(): bool
     {
-        return true;
+        $actor = $this->user();
+        $client = $this->route('client');
+
+        return $actor instanceof User
+            && $client instanceof Client
+            && app(EstablishmentPolicy::class)->create($actor)
+            && app(ClientPolicy::class)->view($actor, $client);
     }
 
     /**

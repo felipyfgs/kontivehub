@@ -2,10 +2,12 @@
 
 namespace App\Models;
 
+use App\Enums\ActivationPurpose;
 use App\Enums\TenantLifecycleStatus;
 use App\Services\Authorization\SystemTenantPermissionProfiles;
 use Database\Factories\TenantFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -115,6 +117,20 @@ class Tenant extends Model
     public function accountActivations(): HasMany
     {
         return $this->hasMany(AccountActivation::class);
+    }
+
+    public function latestFirstAdminActivation(): HasOne
+    {
+        return $this->hasOne(AccountActivation::class)->ofMany(
+            [
+                'generation' => 'max',
+                'id' => 'max',
+            ],
+            fn (Builder $query): Builder => $query->where(
+                'purpose',
+                ActivationPurpose::TenantFirstAdmin->value,
+            ),
+        );
     }
 
     public function communicationInboxes(): HasMany

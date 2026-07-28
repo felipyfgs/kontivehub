@@ -44,20 +44,4 @@ class TenantInstitutionalProfile extends Model
             && $this->institutional_email !== null && trim($this->institutional_email) !== ''
             && $this->institutional_phone !== null && trim($this->institutional_phone) !== '';
     }
-
-    /**
-     * @return array<string, mixed>
-     */
-    public function toPublicArray(): array
-    {
-        return [
-            'id' => $this->id,
-            'cnpj' => $this->cnpj,
-            'legal_name' => $this->legal_name,
-            'institutional_email' => $this->institutional_email,
-            'institutional_phone' => $this->institutional_phone,
-            'is_complete' => $this->isComplete(),
-            'updated_at' => $this->updated_at?->toIso8601String(),
-        ];
-    }
 }

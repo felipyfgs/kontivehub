@@ -2,14 +2,19 @@
 
 namespace App\Http\Controllers\Api\V1\Fiscal;
 
+use App\Actions\Fiscal\FindFiscalClientAction;
+use App\Actions\Fiscal\ReadDefisLatestDeclarationArtifactAction;
 use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\EnsureTenantContext;
+use App\Http\Requests\Fiscal\Monitoring\DownloadDefisArtifactRequest;
+use App\Http\Requests\Fiscal\Monitoring\ListDefisLatestDeclarationHistoryRequest;
+use App\Http\Requests\Fiscal\Mutations\ConsultDefisLatestRequest;
+use App\Http\Resources\Fiscal\FiscalMonitoringDataResource;
 use App\Models\Client;
 use App\Models\User;
 use App\Services\Authorization\TenantAuthorization;
 use App\Services\Fiscal\SimplesMei\DefisLatestDeclarationMonitoringQueryService;
-use App\Services\FiscalMonitoring\FiscalEvidenceStore;
 use App\Support\CurrentTenant;
 use App\Support\FeatureFlags;
 use Illuminate\Http\JsonResponse;
@@ -22,63 +27,64 @@ final class DefisLatestDeclarationMonitoringController extends Controller
         private readonly CurrentTenant $currentTenant,
         private readonly DefisLatestDeclarationMonitoringQueryService $queries,
         private readonly TenantAuthorization $authorization,
-        private readonly FiscalEvidenceStore $evidenceStore,
     ) {}
 
-    public function history(Request $request, int $client): JsonResponse
-    {
-        if ($rejection = $this->rejectClientTenantId($request)) {
-            return $rejection;
-        }
-        $model = $this->findClient($client);
+    public function history(
+        ListDefisLatestDeclarationHistoryRequest $request,
+        int $client,
+        FindFiscalClientAction $findClient,
+    ): JsonResponse|FiscalMonitoringDataResource {
+        $tenant = $this->currentTenant->tenant();
+        $model = $findClient->handle($tenant, $request->clientId());
         if ($model === null) {
             return $this->notFound();
         }
-        $this->can($request, $model, TenantPermission::FiscalMonitoringView);
-        $validated = $request->validate(['year' => ['sometimes', 'integer', 'between:2000,2100']]);
+        $request->ensureCanView($model, 'Sem permissão para monitoramento fiscal.');
+        $filters = $request->filters();
 
-        return response()->json(['data' => $this->queries->history($this->currentTenant->tenant(), $model, isset($validated['year']) ? (int) $validated['year'] : null)]);
+        return new FiscalMonitoringDataResource(
+            $this->queries->history($tenant, $model, $filters->year),
+        );
     }
 
-    public function consult(Request $request, int $client): JsonResponse
+    public function consult(ConsultDefisLatestRequest $request, int $client): JsonResponse
     {
         if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
         $this->assertEnabled();
-        $validated = $request->validate(['confirmed' => ['required', 'accepted'], 'calendar_year' => ['required', 'integer', 'between:2000,2100']]);
         $model = $this->findClient($client);
         if ($model === null) {
             return $this->notFound();
         }
         $this->can($request, $model, TenantPermission::FiscalSyncTrigger);
 
-        return response()->json(['data' => $this->queries->enqueueManualConsult($this->currentTenant->tenant(), $model, (int) $validated['calendar_year'], $request->user()?->id)], 201);
+        return response()->json(['data' => $this->queries->enqueueManualConsult($this->currentTenant->tenant(), $model, $request->calendarYear(), $request->user()?->id)], 201);
     }
 
-    public function download(Request $request, int $artifact): Response|JsonResponse
-    {
-        if ($rejection = $this->rejectClientTenantId($request)) {
-            return $rejection;
-        }
-        $item = $this->queries->findArtifact($this->currentTenant->tenant(), $artifact);
-        if ($item === null || ($client = $this->findClient((int) $item->client_id)) === null) {
+    public function download(
+        DownloadDefisArtifactRequest $request,
+        int $artifact,
+        FindFiscalClientAction $findClient,
+        ReadDefisLatestDeclarationArtifactAction $readArtifact,
+    ): Response|JsonResponse {
+        $tenant = $this->currentTenant->tenant();
+        $item = $this->queries->findArtifact($tenant, $request->artifactId());
+        $client = $item !== null
+            ? $findClient->handle($tenant, (int) $item->client_id)
+            : null;
+        if ($item === null || $client === null) {
             return $this->notFound();
         }
-        $this->can($request, $client, TenantPermission::FiscalMonitoringView);
-        $item->loadMissing('evidenceArtifact');
-        if ($item->evidenceArtifact === null) {
-            return $this->notFound();
-        }
-        try {
-            $bytes = $this->evidenceStore->readAuthorized($item->evidenceArtifact, $this->currentTenant->tenant()->id);
-        } catch (\Throwable) {
+        $request->ensureCanView($client);
+        $download = $readArtifact->handle($tenant, $item);
+        if ($download === null) {
             return $this->notFound();
         }
 
-        return response($bytes, 200, [
-            'Content-Type' => $item->content_type ?: 'application/pdf',
-            'Content-Disposition' => 'attachment; filename="defis-'.$item->id.'.pdf"',
+        return response($download->bytes, 200, [
+            'Content-Type' => $download->contentType,
+            'Content-Disposition' => 'attachment; filename="'.$download->filename.'"',
             'X-Content-Type-Options' => 'nosniff', 'Cache-Control' => 'private, no-store, max-age=0', 'Pragma' => 'no-cache',
         ]);
     }

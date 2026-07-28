@@ -102,7 +102,7 @@
             "impact": "Mensagens de upstream podiam persistir credenciais curtas ou CNPJ completo em logs e observabilidade.",
             "recommendation": "Redigir pares sensíveis e identificadores fiscais embutidos de modo conservador antes de truncar a mensagem.",
             "expectedTests": [
-                "LogSanitizerTest cobre token/secret/password/authorization/cookie/jwt, CNPJ legado/alfanumérico e texto comum"
+                "LogSanitizerTest cobre token/secret/password/authorization/cookie/jwt, CNPJ numérico/alfanumérico e texto comum"
             ],
             "status": "resolved",
             "change": "canonicalize-laravel-api",

@@ -503,7 +503,7 @@ final class PgdasdCommunicationService
                     (int) $actor->id,
                 );
             } catch (CommunicationOperationException|CommunicationUnavailableException $error) {
-                // Compatibilidade do endpoint PGDAS-D: mantém o status/envelope legado
+                // Compatibilidade do endpoint PGDAS-D: mantém o status/envelope
                 // sem capturar toda exception tipada da API.
                 throw new HttpException(422, $error->getMessage());
             }

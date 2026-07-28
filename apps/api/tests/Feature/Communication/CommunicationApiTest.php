@@ -11,6 +11,7 @@ use App\Enums\Communication\MessageStatus;
 use App\Enums\CommunicationChannel;
 use App\Enums\TenantRole;
 use App\Events\CommunicationEventCommitted;
+use App\Jobs\Communication\DeleteCommunicationMediaObjectJob;
 use App\Models\Client;
 use App\Models\CommunicationAttachment;
 use App\Models\CommunicationContact;
@@ -19,6 +20,7 @@ use App\Models\CommunicationEvent;
 use App\Models\CommunicationIdentity;
 use App\Models\CommunicationInbox;
 use App\Models\CommunicationInboxMember;
+use App\Models\CommunicationLabel;
 use App\Models\CommunicationMessage;
 use App\Models\CommunicationOutboxEntry;
 use App\Models\Tenant;
@@ -157,6 +159,150 @@ final class CommunicationApiTest extends TestCase
         $this->assertArrayNotHasKey('object_id', $summary['last_message']['attachments'][0]);
     }
 
+    public function test_conversation_boundaries_reject_tenant_input_and_manage_labels(): void
+    {
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $foreignTenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $operator = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $inbox = $this->inbox($tenant, 'Atendimento');
+        $this->member($inbox, $operator);
+        $conversation = $this->conversation($tenant, $inbox, '+5511999991061');
+        $label = CommunicationLabel::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Prioridade',
+            'color' => 'red',
+        ]);
+        $foreignLabel = CommunicationLabel::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $foreignTenant->id,
+            'name' => 'Estrangeira',
+            'color' => 'blue',
+        ]);
+        $this->authenticate($operator);
+
+        $index = $this->getJson('/api/v1/communication/conversations')
+            ->assertOk()
+            ->assertJsonCount(1, 'data');
+        $this->assertSame([
+            'current_page' => 1,
+            'last_page' => 1,
+            'total' => 1,
+        ], $index->json('meta'));
+        $this->assertArrayNotHasKey('links', $index->json());
+
+        $this->getJson('/api/v1/communication/conversations?tenant_id='.$foreignTenant->id)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('tenant_id');
+        $this->getJson(
+            '/api/v1/communication/conversations/'.$conversation->id.'?tenant_id='.$foreignTenant->id,
+        )->assertUnprocessable()->assertJsonValidationErrors('tenant_id');
+        $this->patchJson('/api/v1/communication/conversations/'.$conversation->id, [
+            'tenant_id' => $foreignTenant->id,
+            'lock_version' => 1,
+            'priority' => 50,
+        ])->assertUnprocessable()->assertJsonValidationErrors('tenant_id');
+        $this->postJson('/api/v1/communication/conversations/'.$conversation->id.'/messages', [
+            'tenant_id' => $foreignTenant->id,
+            'body' => 'Não deve persistir',
+            'idempotency_key' => 'tenant-rejected-message-0001',
+        ])->assertUnprocessable()->assertJsonValidationErrors('tenant_id');
+        $this->putJson(
+            '/api/v1/communication/conversations/'.$conversation->id.'/labels/'.$label->id,
+            ['tenant_id' => $foreignTenant->id],
+        )->assertUnprocessable()->assertJsonValidationErrors('tenant_id');
+        $this->assertDatabaseMissing('communication_conversation_labels', [
+            'conversation_id' => $conversation->id,
+            'label_id' => $label->id,
+        ]);
+
+        $this->putJson(
+            '/api/v1/communication/conversations/'.$conversation->id.'/labels/'.$foreignLabel->id,
+        )->assertNotFound();
+        $this->putJson(
+            '/api/v1/communication/conversations/'.$conversation->id.'/labels/'.$label->id,
+        )->assertCreated()->assertExactJson([
+            'data' => ['label_id' => $label->id],
+        ]);
+        $this->assertDatabaseHas('communication_conversation_labels', [
+            'tenant_id' => $tenant->id,
+            'conversation_id' => $conversation->id,
+            'label_id' => $label->id,
+        ]);
+
+        $this->deleteJson(
+            '/api/v1/communication/conversations/'.$conversation->id.'/labels/'.$label->id,
+            ['tenant_id' => $foreignTenant->id],
+        )->assertUnprocessable()->assertJsonValidationErrors('tenant_id');
+        $this->assertDatabaseHas('communication_conversation_labels', [
+            'conversation_id' => $conversation->id,
+            'label_id' => $label->id,
+        ]);
+        $this->deleteJson(
+            '/api/v1/communication/conversations/'.$conversation->id.'/labels/'.$label->id,
+        )->assertNoContent();
+        $this->assertDatabaseMissing('communication_conversation_labels', [
+            'conversation_id' => $conversation->id,
+            'label_id' => $label->id,
+        ]);
+        $this->assertDatabaseCount('communication_messages', 0);
+        $this->assertDatabaseCount('communication_outbox_entries', 0);
+    }
+
+    public function test_conversation_update_rejections_roll_back_state_and_event(): void
+    {
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $operator = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $unassignedUser = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $inbox = $this->inbox($tenant, 'Atendimento');
+        $this->member($inbox, $operator);
+        $conversation = $this->conversation($tenant, $inbox, '+5511999991062');
+        $unassignedMembership = TenantMembership::query()->withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('user_id', $unassignedUser->id)
+            ->firstOrFail();
+        $this->authenticate($operator);
+
+        $this->patchJson('/api/v1/communication/conversations/'.$conversation->id, [
+            'lock_version' => 1,
+            'status' => ConversationStatus::Snoozed->value,
+        ])->assertUnprocessable()
+            ->assertJsonPath('code', 'snoozed_until_required');
+        $this->patchJson('/api/v1/communication/conversations/'.$conversation->id, [
+            'lock_version' => 1,
+            'assignee_membership_id' => $unassignedMembership->id,
+        ])->assertUnprocessable()
+            ->assertJsonPath('code', 'assignee_inbox_access_required');
+
+        $conversation->refresh();
+        $this->assertSame(1, $conversation->lock_version);
+        $this->assertSame(ConversationStatus::Open, $conversation->status);
+        $this->assertNull($conversation->assignee_membership_id);
+        $this->assertDatabaseMissing('communication_events', [
+            'tenant_id' => $tenant->id,
+            'conversation_id' => $conversation->id,
+            'type' => 'CONVERSATION_UPDATED',
+        ]);
+
+        $this->patchJson('/api/v1/communication/conversations/'.$conversation->id, [
+            'lock_version' => 1,
+            'status' => ConversationStatus::Resolved->value,
+        ])->assertOk()
+            ->assertJsonPath('data.status', ConversationStatus::Resolved->value)
+            ->assertJsonPath('data.lock_version', 2);
+        $this->assertDatabaseHas('communication_events', [
+            'tenant_id' => $tenant->id,
+            'conversation_id' => $conversation->id,
+            'type' => 'CONVERSATION_UPDATED',
+        ]);
+
+        $this->patchJson('/api/v1/communication/conversations/'.$conversation->id, [
+            'lock_version' => 2,
+            'snoozed_until' => now()->addHour()->toIso8601String(),
+        ])->assertOk()
+            ->assertJsonPath('data.status', ConversationStatus::Snoozed->value)
+            ->assertJsonPath('data.resolved_at', null);
+        $this->assertNull($conversation->refresh()->resolved_at);
+    }
+
     public function test_conversation_search_matches_linked_client_names_without_leaking_other_conversations(): void
     {
         $tenant = Tenant::factory()->create(['communication_enabled' => true]);
@@ -183,13 +329,14 @@ final class CommunicationApiTest extends TestCase
         $foreign->clients()->attach($foreignClient->id, ['tenant_id' => $foreignTenant->id]);
 
         $this->authenticate($operator);
-        $this->getJson('/api/v1/communication/conversations?q=aurora')
+        $response = $this->getJson('/api/v1/communication/conversations?q=aurora')
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.id', $matched->id)
-            ->assertJsonPath('data.0.clients.0.name', 'Mercado Aurora')
-            ->assertJsonMissing(['id' => $other->id])
-            ->assertJsonMissing(['id' => $foreign->id]);
+            ->assertJsonPath('data.0.clients.0.name', 'Mercado Aurora');
+        $conversationIds = array_column($response->json('data'), 'id');
+        self::assertNotContains($other->id, $conversationIds);
+        self::assertNotContains($foreign->id, $conversationIds);
 
         $this->getJson('/api/v1/communication/conversations?q=comércio')
             ->assertOk()
@@ -335,6 +482,11 @@ final class CommunicationApiTest extends TestCase
             'contact' => ['display_name' => 'X', 'vcard' => 'BEGIN:VCARD'],
         ])->assertUnprocessable()->assertJsonValidationErrors('kind');
         $this->postJson('/api/v1/communication/conversations/'.$conversation->id.'/messages', [
+            'kind' => 'LOCATION',
+            'body' => 'Legenda incompatível',
+            'location' => ['latitude' => 0, 'longitude' => 0],
+        ])->assertUnprocessable()->assertJsonValidationErrors('kind');
+        $this->postJson('/api/v1/communication/conversations/'.$conversation->id.'/messages', [
             'internal_note' => true,
             'body' => 'nota',
             'location' => ['latitude' => 0, 'longitude' => 0],
@@ -471,11 +623,29 @@ final class CommunicationApiTest extends TestCase
         ]);
 
         $this->authenticate($operator);
-        $this->getJson('/api/v1/communication/events?after=0')
+        $this->getJson('/api/v1/communication/events?after=0&tenant_id='.$tenant->id)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('tenant_id');
+
+        $events = $this->getJson('/api/v1/communication/events?after=0')
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.cursor', $first->id)
-            ->assertJsonPath('meta.next_cursor', $first->id);
+            ->assertJsonPath('meta.next_cursor', $first->id)
+            ->assertJsonPath('meta.has_more', false);
+        $this->assertSame([
+            'cursor',
+            'type',
+            'inbox_id',
+            'conversation_id',
+            'message_id',
+            'payload',
+            'occurred_at',
+        ], array_keys($events->json('data.0')));
+
+        $this->get(
+            '/api/v1/communication/attachments/'.$attachment->id.'/download?tenant_id='.$tenant->id,
+        )->assertUnprocessable();
         $download = $this->get('/api/v1/communication/attachments/'.$attachment->id.'/download')->assertOk();
         $this->assertSame('conteudo privado', $download->streamedContent());
         $this->get('/api/v1/communication/attachments/'.$attachment->id.'/preview')->assertStatus(415);
@@ -570,6 +740,10 @@ final class CommunicationApiTest extends TestCase
         $inbox = $this->inbox($tenant, 'Privacidade');
         $conversation = $this->conversation($tenant, $inbox, '+5511999994001');
         $message = $this->message($tenant, $inbox, $conversation, 'conteúdo pessoal');
+        $message->forceFill([
+            'content_encrypted' => ['text' => 'conteúdo estruturado pessoal'],
+            'metadata' => ['private' => 'metadado pessoal'],
+        ])->save();
         $contact = $conversation->identity->contact;
         $metadata = [
             'tenant_id' => (int) $tenant->id,
@@ -591,21 +765,74 @@ final class CommunicationApiTest extends TestCase
             'sha256' => $stored['sha256'],
             'storage_context' => $metadata,
         ]);
+        $invalidObjectId = 'objeto-invalido-para-retry';
+        CommunicationAttachment::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'message_id' => $message->id,
+            'object_id' => $invalidObjectId,
+            'original_name_encrypted' => 'retry.txt',
+            'mime_type' => 'text/plain',
+            'size_bytes' => 1,
+            'sha256' => hash('sha256', 'retry'),
+            'storage_context' => $metadata,
+        ]);
         $this->authenticate($admin);
 
+        $this->deleteJson(
+            '/api/v1/communication/contacts/'.$contact->id.'/personal-data',
+            ['tenant_id' => $tenant->id],
+        )->assertUnprocessable()
+            ->assertJsonValidationErrors('tenant_id');
+
         $export = $this->get('/api/v1/communication/contacts/'.$contact->id.'/export')->assertOk();
-        $this->assertStringContainsString('conteúdo pessoal', $export->streamedContent());
+        $exported = json_decode(
+            $export->streamedContent(),
+            true,
+            flags: JSON_THROW_ON_ERROR,
+        );
+        $this->assertSame(
+            'conteúdo pessoal',
+            data_get($exported, 'contact.identities.0.conversations.0.messages.0.body'),
+        );
         $this->deleteJson('/api/v1/communication/contacts/'.$contact->id.'/personal-data')
             ->assertOk()
             ->assertJsonPath('data.deleted_blobs', 1);
 
         $this->assertFalse(app(CommunicationMediaStore::class)->exists($stored['object_id']));
         $this->assertNull($message->refresh()->body_encrypted);
+        $this->assertNull($message->content_encrypted);
+        $this->assertNull($message->metadata);
         $this->assertNotNull($message->purged_at);
         $this->assertSame(ConversationStatus::Resolved, $conversation->refresh()->status);
         $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', (string) $conversation->tombstone_digest);
         $this->assertSame('[removido]', $conversation->identity->refresh()->address_masked);
         $this->assertDatabaseHas('communication_events', ['type' => 'CONTACT_PURGED']);
+        Queue::assertPushed(
+            DeleteCommunicationMediaObjectJob::class,
+            fn (DeleteCommunicationMediaObjectJob $job): bool => $job->objectId === $invalidObjectId,
+        );
+
+        $this->postJson(
+            '/api/v1/communication/contacts/'.$contact->id.'/identities',
+            ['phone' => '+5511999994999'],
+        )->assertStatus(410)
+            ->assertJsonPath('code', 'contact_purged');
+        $client = Client::factory()->for($tenant)->create();
+        $this->postJson(
+            '/api/v1/communication/identities/'.$conversation->identity_id.'/links',
+            ['client_id' => $client->id],
+        )->assertStatus(410)
+            ->assertJsonPath('code', 'contact_purged');
+        $this->assertDatabaseMissing('communication_identity_links', [
+            'identity_id' => $conversation->identity_id,
+            'client_id' => $client->id,
+        ]);
+        $this->postJson('/api/v1/communication/conversations/'.$conversation->id.'/messages', [
+            'body' => 'não pode sobreviver à purga',
+            'kind' => MessageKind::Text->value,
+            'idempotency_key' => 'purged-conversation-message-0001',
+        ])->assertStatus(410)
+            ->assertJsonPath('code', 'conversation_purged');
     }
 
     private function authenticate(User $user): void

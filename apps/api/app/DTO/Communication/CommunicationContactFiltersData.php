@@ -1,0 +1,18 @@
+<?php
+
+namespace App\DTO\Communication;
+
+final readonly class CommunicationContactFiltersData
+{
+    public function __construct(
+        public ?string $search,
+        public ?bool $isActive,
+        public bool $includeInactive,
+        public ?bool $isProvisional,
+        public ?bool $linked,
+        public string $sort,
+        public string $direction,
+        public int $perPage,
+        public int $page,
+    ) {}
+}

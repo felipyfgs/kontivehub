@@ -2,9 +2,17 @@
 
 namespace App\Http\Controllers\Api\V1\Fiscal;
 
+use App\Actions\Fiscal\ShowMailboxStateAction;
 use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
-use App\Models\MailboxClientSyncState;
+use App\Http\Requests\Fiscal\Monitoring\ListMailboxAlertsRequest;
+use App\Http\Requests\Fiscal\Monitoring\ListMailboxMessagesRequest;
+use App\Http\Requests\Fiscal\Monitoring\ShowMailboxStateRequest;
+use App\Http\Requests\Fiscal\Monitoring\ViewMailboxMessageRequest;
+use App\Http\Resources\Fiscal\MailboxAlertPageResource;
+use App\Http\Resources\Fiscal\MailboxMessageDetailResource;
+use App\Http\Resources\Fiscal\MailboxMessagePageResource;
+use App\Http\Resources\Fiscal\MailboxStateResource;
 use App\Models\User;
 use App\Services\Authorization\TenantAuthorization;
 use App\Services\Integra\Mailbox\MailboxAccessService;
@@ -28,44 +36,39 @@ class MailboxMessageController extends Controller
         private readonly TenantAuthorization $authorization,
     ) {}
 
-    public function index(Request $request): JsonResponse
-    {
-        $this->assertCanRead();
+    public function index(
+        ListMailboxMessagesRequest $request,
+    ): MailboxMessagePageResource {
         $tenant = $this->currentTenant->tenant();
+        $filters = $request->filters();
 
-        $perPage = min(100, max(1, (int) $request->query('per_page', 50)));
-        $clientId = $request->query('client_id');
-        $triage = $request->query('triage_status');
-
-        $page = $this->queries->messages(
-            $tenant,
-            $perPage,
-            is_numeric($clientId) ? (int) $clientId : null,
-            is_string($triage) ? $triage : null,
+        return new MailboxMessagePageResource(
+            $this->queries->messages(
+                $tenant,
+                $filters->perPage,
+                $filters->clientId,
+                $filters->triageStatus,
+            ),
         );
-        $page->getCollection()->transform(fn ($m) => $m->toListArray());
-
-        return response()->json($page);
     }
 
-    public function show(int $message): JsonResponse
-    {
-        $this->assertCanRead();
+    public function show(
+        ViewMailboxMessageRequest $request,
+        int $message,
+    ): JsonResponse|MailboxMessageDetailResource {
         $tenant = $this->currentTenant->tenant();
         $model = $this->queries->message($tenant, $message);
         if ($model === null) {
             return response()->json(['message' => 'Mensagem não encontrada.'], 404);
         }
 
-        $result = $this->access->view($tenant, $model, request()->user());
+        $result = $this->access->view($tenant, $model, $request->user());
 
-        return response()->json([
-            'data' => $result['message']->toDetailArray(),
-            'meta' => [
+        return (new MailboxMessageDetailResource($result['message']))
+            ->additional(['meta' => [
                 'official_read_unchanged' => $result['official_read_unchanged'],
                 'triage_status' => $result['message']->triage_status?->value,
-            ],
-        ]);
+            ]]);
     }
 
     public function triage(Request $request, int $message): JsonResponse
@@ -154,52 +157,30 @@ class MailboxMessageController extends Controller
         ]);
     }
 
-    public function state(Request $request): JsonResponse
-    {
-        $this->assertCanRead();
+    public function state(
+        ShowMailboxStateRequest $request,
+        ShowMailboxStateAction $action,
+    ): MailboxStateResource {
         $tenant = $this->currentTenant->tenant();
-        $clientId = $request->query('client_id');
-        if (! is_numeric($clientId)) {
-            return response()->json(['message' => 'client_id obrigatório.'], 422);
-        }
 
-        $state = $this->queries->state($tenant, (int) $clientId);
-        $sync = MailboxClientSyncState::query()->withoutGlobalScopes()
-            ->where('tenant_id', $tenant->id)->where('client_id', (int) $clientId)->first();
-        if ($state === null) {
-            return response()->json([
-                'data' => [
-                    'tenant_id' => $tenant->id,
-                    'client_id' => (int) $clientId,
-                    'dte' => ['status' => 'UNKNOWN', 'source' => null, 'observed_at' => null],
-                    'messages' => [
-                        'status' => 'UNKNOWN',
-                        'source' => null,
-                        'observed_at' => null,
-                        'official_unread_count' => null,
-                        'stored_message_count' => 0,
-                    ],
-                    'monitoring' => $this->syncStateArray($sync),
-                ],
-            ]);
-        }
-
-        return response()->json(['data' => array_merge($state->toPublicArray(), [
-            'monitoring' => $this->syncStateArray($sync),
-        ])]);
+        return new MailboxStateResource(
+            $action->handle($tenant, $request->clientId()),
+        );
     }
 
-    public function alerts(Request $request): JsonResponse
-    {
-        $this->assertCanRead();
+    public function alerts(
+        ListMailboxAlertsRequest $request,
+    ): MailboxAlertPageResource {
         $tenant = $this->currentTenant->tenant();
-        $perPage = min(100, max(1, (int) $request->query('per_page', 50)));
-        $activeOnly = filter_var($request->query('active_only', true), FILTER_VALIDATE_BOOL);
+        $filters = $request->filters();
 
-        $page = $this->queries->alerts($tenant, $perPage, $activeOnly);
-        $page->getCollection()->transform(fn ($a) => $a->toPublicArray());
-
-        return response()->json($page);
+        return new MailboxAlertPageResource(
+            $this->queries->alerts(
+                $tenant,
+                $filters->perPage,
+                $filters->activeOnly,
+            ),
+        );
     }
 
     private function assertCanRead(): void
@@ -214,28 +195,6 @@ class MailboxMessageController extends Controller
         if ($tenant === null || ! FeatureFlags::isModuleEnabled('mailbox', (int) $tenant->id)) {
             abort(403, 'Módulo Caixa Postal não disponível.');
         }
-    }
-
-    /** @return array<string,mixed> */
-    private function syncStateArray(?MailboxClientSyncState $state): array
-    {
-        return [
-            'status' => match (true) {
-                $state === null || $state->bootstrap_completed_at === null => 'NEVER_SYNCED',
-                $state->last_error_code !== null => 'FAILED',
-                $state->authorization_status === 'DENIED' => 'BLOCKED',
-                $state->pending_event_date !== null => 'PENDING_RECONCILIATION',
-                default => 'HEALTHY',
-            },
-            'bootstrap_completed_at' => $state?->bootstrap_completed_at?->toIso8601String(),
-            'last_event_observed_date' => $state?->last_event_observed_date?->toDateString(),
-            'pending_event_date' => $state?->pending_event_date?->toDateString(),
-            'last_reconciled_event_date' => $state?->last_reconciled_event_date?->toDateString(),
-            'last_paid_check_at' => $state?->last_list_at?->toIso8601String(),
-            'last_full_reconciliation_at' => $state?->last_full_reconciliation_at?->toIso8601String(),
-            'authorization_status' => $state?->authorization_status ?? 'UNKNOWN',
-            'block_code' => $state?->last_error_code,
-        ];
     }
 
     private function assertCanWriteTriage(): void

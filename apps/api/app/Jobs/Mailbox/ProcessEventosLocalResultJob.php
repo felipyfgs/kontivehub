@@ -17,6 +17,8 @@ final class ProcessEventosLocalResultJob implements ShouldQueue
 
     public int $tries = 5;
 
+    public int $timeout = 300;
+
     public function __construct(public readonly int $eventosRunId) {}
 
     public function middleware(): array
@@ -32,5 +34,18 @@ final class ProcessEventosLocalResultJob implements ShouldQueue
             return;
         }
         $processor->process($run); // exclusivamente local: não injeta executor HTTP.
+    }
+
+    public function tags(): array
+    {
+        return ['job:'.class_basename(static::class)];
+    }
+
+    public function failed(?\Throwable $e): void
+    {
+        \Illuminate\Support\Facades\Log::warning('job.failed', [
+            'job' => class_basename(static::class),
+            'message' => \App\Support\LogSanitizer::scrubString((string) ($e?->getMessage() ?? '')),
+        ]);
     }
 }

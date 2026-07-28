@@ -16,6 +16,8 @@ final class FetchPgdasdRbt12Job implements ShouldQueue
 
     public int $tries = 1;
 
+    public int $timeout = 300;
+
     public function __construct(public readonly int $rbt12ProjectionId) {}
 
     public function handle(PgdasdRbt12Service $rbt12, PgdasdMonitoringQueryService $queries): void
@@ -50,5 +52,10 @@ final class FetchPgdasdRbt12Job implements ShouldQueue
                 $projection->source_run_id,
             );
         }
+    }
+
+    public function tags(): array
+    {
+        return ['job:'.class_basename(static::class)];
     }
 }

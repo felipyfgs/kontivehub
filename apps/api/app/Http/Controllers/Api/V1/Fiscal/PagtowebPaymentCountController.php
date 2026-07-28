@@ -2,9 +2,13 @@
 
 namespace App\Http\Controllers\Api\V1\Fiscal;
 
+use App\Actions\Fiscal\FindFiscalClientAction;
 use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\EnsureTenantContext;
+use App\Http\Requests\Fiscal\Monitoring\ViewFiscalClientHistoryRequest;
+use App\Http\Requests\Fiscal\Mutations\ConsultPagtowebPaymentFiltersRequest;
+use App\Http\Resources\Fiscal\FiscalMonitoringDataResource;
 use App\Models\Client;
 use App\Models\User;
 use App\Services\Authorization\TenantAuthorization;
@@ -20,42 +24,39 @@ final class PagtowebPaymentCountController extends Controller
 {
     public function __construct(private readonly CurrentTenant $currentTenant, private readonly PagtowebPaymentCountQueryService $queries, private readonly TenantAuthorization $authorization) {}
 
-    public function history(Request $request, int $client): JsonResponse
-    {
-        if ($rejection = $this->rejectClientTenantId($request)) {
-            return $rejection;
-        }
-        $model = $this->client($client);
+    public function history(
+        ViewFiscalClientHistoryRequest $request,
+        int $client,
+        FindFiscalClientAction $findClient,
+    ): JsonResponse|FiscalMonitoringDataResource {
+        $tenant = $this->currentTenant->tenant();
+        $model = $findClient->handle($tenant, $request->clientId());
         if ($model === null) {
             return $this->notFound();
-        } $this->read($request, $model);
+        }
+        $request->ensureCanView($model);
         try {
-            return response()->json(['data' => $this->queries->history($this->currentTenant->tenant(), $model)]);
+            return new FiscalMonitoringDataResource(
+                $this->queries->history($tenant, $model),
+            );
         } catch (RuntimeException) {
             return response()->json(['message' => 'Histórico de contagem indisponível.', 'code' => 'HISTORY_ERROR'], 422);
         }
     }
 
-    public function consult(Request $request, int $client): JsonResponse
+    public function consult(ConsultPagtowebPaymentFiltersRequest $request, int $client): JsonResponse
     {
         $this->enabled();
         if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
-        $validated = $request->validate([
-            'confirmed' => ['required', 'accepted'],
-            'filters' => ['required', 'array'],
-            'filters.intervalo_data_arrecadacao' => ['sometimes', 'array'], 'filters.intervalo_data_arrecadacao.data_inicial' => ['required_with:filters.intervalo_data_arrecadacao', 'string'], 'filters.intervalo_data_arrecadacao.data_final' => ['required_with:filters.intervalo_data_arrecadacao', 'string'],
-            'filters.intervalo_valor_total_documento' => ['sometimes', 'array'], 'filters.intervalo_valor_total_documento.valor_inicial' => ['required_with:filters.intervalo_valor_total_documento', 'numeric'], 'filters.intervalo_valor_total_documento.valor_final' => ['required_with:filters.intervalo_valor_total_documento', 'numeric'],
-            'filters.codigo_receita_lista' => ['sometimes', 'array'], 'filters.codigo_receita_lista.*' => ['string'],
-            'filters.codigo_tipo_documento_lista' => ['sometimes', 'array'], 'filters.codigo_tipo_documento_lista.*' => ['string'],
-        ]);
         $model = $this->client($client);
         if ($model === null) {
             return $this->notFound();
-        } $this->write($request, $model);
+        }
+        $this->write($request, $model);
         try {
-            $run = $this->queries->enqueueManualConsult($this->currentTenant->tenant(), $model, (array) $request->input('filters', []), $request->user()?->id);
+            $run = $this->queries->enqueueManualConsult($this->currentTenant->tenant(), $model, $request->filters(), $request->user()?->id);
         } catch (InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage(), 'code' => 'INVALID_PAYMENT_COUNT_FILTERS'], 422);
         } catch (RuntimeException) {

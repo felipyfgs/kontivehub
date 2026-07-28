@@ -6,6 +6,7 @@ use App\Domain\Work\CompetenceMonth;
 use App\Domain\Work\DueDateCalculator;
 use App\Domain\Work\DueRule;
 use App\Domain\Work\ReferencePeriod;
+use App\DTO\Work\WorkProcessGenerationPreviewData;
 use App\Enums\Work\GenerationBatchStatus;
 use App\Enums\Work\GenerationItemStatus;
 use App\Enums\Work\ProcessOrigin;
@@ -46,15 +47,14 @@ final class WorkProcessGenerationService
      */
     public function preview(
         WorkProcessTemplate $template,
-        string $competence,
-        array $selection,
-        array $overrides = [],
-        ?string $idempotencyKey = null,
+        WorkProcessGenerationPreviewData $data,
     ): WorkProcessGenerationBatch {
         $tenant = $this->currentTenant->tenant();
+        $selection = $data->selection;
+        $overrides = $data->overrides;
 
         try {
-            $period = ReferencePeriod::fromString($competence);
+            $period = ReferencePeriod::fromString($data->competence);
         } catch (InvalidArgumentException $e) {
             throw ValidationException::withMessages([
                 'competence' => [$e->getMessage()],
@@ -190,7 +190,7 @@ final class WorkProcessGenerationService
         ];
         $payloadHash = hash('sha256', json_encode($requestSnapshot, JSON_THROW_ON_ERROR));
 
-        $idempotencyKey = $idempotencyKey ?: (string) Str::uuid();
+        $idempotencyKey = $data->idempotencyKey ?: (string) Str::uuid();
 
         return DB::transaction(function () use (
             $tenant, $template, $period, $payloadHash, $idempotencyKey,

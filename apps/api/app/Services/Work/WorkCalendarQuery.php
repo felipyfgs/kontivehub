@@ -5,6 +5,8 @@ namespace App\Services\Work;
 use App\Domain\Work\DueDateCalculator;
 use App\Domain\Work\QueueBucketResolver;
 use App\Domain\Work\WorkRiskCalculator;
+use App\DTO\Work\WorkCalendarDayData;
+use App\DTO\Work\WorkCalendarIntervalData;
 use App\Enums\Work\WorkRisk;
 use App\Models\WorkTask;
 use App\Support\CurrentTenant;
@@ -28,20 +30,10 @@ final class WorkCalendarQuery
         private readonly DueDateCalculator $dates = new DueDateCalculator,
     ) {}
 
-    /**
-     * @param  array{
-     *   from: string,
-     *   to: string,
-     *   department_id?: int|null,
-     *   assignee_membership_id?: int|null,
-     *   client_id?: int|null,
-     *   status?: string|null,
-     *   risk?: string|null
-     * }  $filters
-     * @return array<string, mixed>
-     */
-    public function interval(array $filters): array
+    /** @return array<string, mixed> */
+    public function interval(WorkCalendarIntervalData $data): array
     {
+        $filters = $data->toArray();
         $tenant = $this->currentTenant->tenant();
         $tz = TenantTimezone::for($tenant);
         $today = $this->dates->todayInTenant($tz);
@@ -52,7 +44,7 @@ final class WorkCalendarQuery
 
         $query = WorkTask::query()
             ->with([
-                'process:id,title,client_id,competence,due_date,subject_to_fine,status,tenant_id',
+                'process:id,title,client_id,competence,due_date,target_due_date,subject_to_fine,status,tenant_id',
                 'process.client:id,legal_name,display_name',
                 'department:id,name,code,color',
                 'assigneeMembership:id,user_id,tenant_id',
@@ -124,20 +116,9 @@ final class WorkCalendarQuery
         ];
     }
 
-    /**
-     * @param  array{
-     *   date: string,
-     *   department_id?: int|null,
-     *   assignee_membership_id?: int|null,
-     *   client_id?: int|null,
-     *   status?: string|null,
-     *   risk?: string|null,
-     *   per_page?: int,
-     *   page?: int
-     * }  $filters
-     */
-    public function day(array $filters): LengthAwarePaginator
+    public function day(WorkCalendarDayData $data): LengthAwarePaginator
     {
+        $filters = $data->toArray();
         $tenant = $this->currentTenant->tenant();
         $tz = TenantTimezone::for($tenant);
         $today = $this->dates->todayInTenant($tz);
@@ -146,7 +127,7 @@ final class WorkCalendarQuery
 
         $query = WorkTask::query()
             ->with([
-                'process:id,title,client_id,competence,due_date,subject_to_fine,status,tenant_id',
+                'process:id,title,client_id,competence,due_date,target_due_date,subject_to_fine,status,tenant_id',
                 'process.client:id,legal_name,display_name',
                 'department:id,name,code,color',
                 'assigneeMembership:id,user_id,tenant_id',

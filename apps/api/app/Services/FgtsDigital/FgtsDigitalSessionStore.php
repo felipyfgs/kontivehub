@@ -6,9 +6,11 @@ use App\Contracts\SecureObjectStore;
 use App\Enums\FgtsDigitalCredentialSource;
 use App\Enums\FgtsDigitalSessionStatus;
 use App\Enums\SecureObjectPurpose;
+use App\Models\Client;
 use App\Models\FgtsDigitalSession;
 use App\Services\FgtsDigital\Exceptions\FgtsDigitalException;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
 use Throwable;
 
 final class FgtsDigitalSessionStore
@@ -29,38 +31,96 @@ final class FgtsDigitalSessionStore
     ): FgtsDigitalSession {
         $this->validateState($storageState);
         $expiresAt ??= CarbonImmutable::now()->addMinutes((int) config('fgts_digital.session.ttl_minutes', 30));
-
-        $session = FgtsDigitalSession::query()->create([
-            'tenant_id' => $tenantId,
-            'client_id' => $clientId,
-            'representation_id' => $representationId,
-            'credential_source' => $source,
-            'credential_fingerprint' => $fingerprint,
-            'profile_type' => $profileType,
-            'target_identifier_hash' => $targetIdentifierHash,
-            'contract_version' => (string) config('fgts_digital.contract_version', 1),
-            'status' => FgtsDigitalSessionStatus::Ready,
-            'expires_at' => $expiresAt,
-        ]);
-
+        $json = json_encode(
+            $storageState,
+            JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES,
+        );
+        $objectId = null;
         try {
-            $json = json_encode($storageState, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
-            $objectId = $this->vault->put($json, self::aad($session));
-            $session->forceFill(['vault_object_id' => $objectId])->save();
-        } catch (Throwable $e) {
-            $session->delete();
-            throw new FgtsDigitalException('Não foi possível proteger a sessão importada.', 'FGTS_DIGITAL_SESSION_STORE_FAILED', 500);
+            return DB::transaction(function () use (
+                $tenantId,
+                $clientId,
+                $representationId,
+                $source,
+                $fingerprint,
+                $profileType,
+                $targetIdentifierHash,
+                $expiresAt,
+                $json,
+                &$objectId,
+            ): FgtsDigitalSession {
+                $client = Client::query()
+                    ->withoutGlobalScopes()
+                    ->where('tenant_id', $tenantId)
+                    ->whereKey($clientId)
+                    ->lockForUpdate()
+                    ->first(['id']);
+                if ($client === null) {
+                    throw new FgtsDigitalException(
+                        'Cliente não encontrado.',
+                        'FGTS_DIGITAL_CLIENT_NOT_FOUND',
+                        404,
+                    );
+                }
+
+                $session = FgtsDigitalSession::query()->create([
+                    'tenant_id' => $tenantId,
+                    'client_id' => $clientId,
+                    'representation_id' => $representationId,
+                    'credential_source' => $source,
+                    'credential_fingerprint' => $fingerprint,
+                    'profile_type' => $profileType,
+                    'target_identifier_hash' => $targetIdentifierHash,
+                    'contract_version' => (string) config(
+                        'fgts_digital.contract_version',
+                        1,
+                    ),
+                    'status' => FgtsDigitalSessionStatus::Ready,
+                    'expires_at' => $expiresAt,
+                ]);
+
+                try {
+                    $objectId = $this->vault->put(
+                        $json,
+                        self::aad($session),
+                    );
+                } catch (Throwable) {
+                    throw new FgtsDigitalException(
+                        'Não foi possível proteger a sessão importada.',
+                        'FGTS_DIGITAL_SESSION_STORE_FAILED',
+                        500,
+                    );
+                }
+                $session->forceFill([
+                    'vault_object_id' => $objectId,
+                ])->save();
+
+                FgtsDigitalSession::query()
+                    ->withoutGlobalScopes()
+                    ->where('tenant_id', $tenantId)
+                    ->where('client_id', $clientId)
+                    ->whereKeyNot($session->id)
+                    ->where(
+                        'status',
+                        FgtsDigitalSessionStatus::Ready->value,
+                    )
+                    ->update([
+                        'status' => FgtsDigitalSessionStatus::Revoked->value,
+                    ]);
+
+                return $session;
+            });
+        } catch (Throwable $exception) {
+            if ($objectId !== null) {
+                try {
+                    $this->vault->delete($objectId);
+                } catch (Throwable) {
+                    // A limpeza do cofre é best effort; o erro original prevalece.
+                }
+            }
+
+            throw $exception;
         }
-
-        FgtsDigitalSession::query()
-            ->withoutGlobalScopes()
-            ->where('tenant_id', $tenantId)
-            ->where('client_id', $clientId)
-            ->whereKeyNot($session->id)
-            ->where('status', FgtsDigitalSessionStatus::Ready->value)
-            ->update(['status' => FgtsDigitalSessionStatus::Revoked->value]);
-
-        return $session;
     }
 
     public function latest(

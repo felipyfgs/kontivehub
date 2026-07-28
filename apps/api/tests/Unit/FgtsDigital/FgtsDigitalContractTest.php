@@ -41,22 +41,31 @@ class FgtsDigitalContractTest extends TestCase
 
     public function test_contract_rejects_artifact_digest_mismatch(): void
     {
-        $this->expectException(FgtsDigitalException::class);
-        $this->expectExceptionMessage('Hash do artefato RPA diverge.');
-
-        FgtsDigitalPortalResult::fromTransportArray([
-            'contract_version' => 1,
-            'status' => 'SUCCEEDED',
-            'code' => 'OK',
-            'message' => 'ok',
-            'data' => [],
-            'artifacts' => [[
-                'name' => '../escape.pdf',
-                'content_type' => 'application/pdf',
-                'content_base64' => base64_encode('%PDF-test'),
-                'sha256' => str_repeat('0', 64),
-            ]],
-        ]);
+        try {
+            FgtsDigitalPortalResult::fromTransportArray([
+                'contract_version' => 1,
+                'status' => 'SUCCEEDED',
+                'code' => 'OK',
+                'message' => 'ok',
+                'data' => [],
+                'artifacts' => [[
+                    'name' => '../escape.pdf',
+                    'content_type' => 'application/pdf',
+                    'content_base64' => base64_encode('%PDF-test'),
+                    'sha256' => str_repeat('0', 64),
+                ]],
+            ]);
+            self::fail('O digest divergente deveria ser rejeitado.');
+        } catch (FgtsDigitalException $exception) {
+            self::assertSame(
+                'RPA_ARTIFACT_DIGEST_MISMATCH',
+                $exception->stableCode(),
+            );
+            self::assertSame(
+                'Hash do artefato RPA diverge.',
+                $exception->safeMessage(),
+            );
+        }
     }
 
     public function test_portal_solver_runs_in_worker_context_instead_of_php_retry_wrapper(): void

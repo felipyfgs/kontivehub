@@ -5,6 +5,7 @@ namespace App\Services\Work;
 use App\Domain\Work\DueDateCalculator;
 use App\Domain\Work\QueueBucketResolver;
 use App\Domain\Work\WorkRiskCalculator;
+use App\DTO\Work\WorkTaskQueueItemData;
 use App\Enums\TenantRole;
 use App\Enums\Work\QueueBucket;
 use App\Enums\Work\TaskStatus;
@@ -173,41 +174,14 @@ final class WorkQueueQuery
         $total = $sorted->count();
         $slice = $sorted->slice(($page - 1) * $perPage, $perPage)->values();
 
-        $items = $slice->map(fn ($row) => [
-            'id' => $row['task']->id,
-            'title' => $row['task']->title,
-            'status' => $row['task']->status->value,
-            'due_date' => $row['task']->due_date?->format('Y-m-d'),
-            'effective_due_date' => $row['effective_due'],
-            'is_critical' => $row['task']->is_critical,
-            'is_required' => $row['task']->is_required,
-            'requires_evidence' => $row['task']->requires_evidence,
-            'block_reason' => $row['task']->block_reason,
-            'lock_version' => $row['task']->lock_version,
-            'bucket' => $row['bucket']->value,
-            'risks' => $row['risks'],
-            'department' => $row['task']->department ? [
-                'id' => $row['task']->department->id,
-                'name' => $row['task']->department->name,
-                'code' => $row['task']->department->code,
-            ] : null,
-            'assignee' => $row['task']->assigneeMembership?->user ? [
-                'membership_id' => $row['task']->assigneeMembership->id,
-                'name' => $row['task']->assigneeMembership->user->name,
-            ] : null,
-            'process' => $row['task']->process ? [
-                'id' => $row['task']->process->id,
-                'title' => $row['task']->process->title,
-                'competence' => $row['task']->process->competence,
-                'status' => $row['task']->process->status->value,
-                'subject_to_fine' => $row['task']->process->subject_to_fine,
-                'client' => $row['task']->process->client ? [
-                    'id' => $row['task']->process->client->id,
-                    'name' => $row['task']->process->client->display_name
-                        ?: $row['task']->process->client->legal_name,
-                ] : null,
-            ] : null,
-        ]);
+        $items = $slice->map(
+            fn ($row) => new WorkTaskQueueItemData(
+                task: $row['task'],
+                bucket: $row['bucket']->value,
+                risks: $row['risks'],
+                effectiveDueDate: $row['effective_due'],
+            ),
+        );
 
         return new \Illuminate\Pagination\LengthAwarePaginator(
             $items,

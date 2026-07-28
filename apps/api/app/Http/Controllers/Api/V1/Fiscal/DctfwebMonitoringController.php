@@ -2,16 +2,24 @@
 
 namespace App\Http\Controllers\Api\V1\Fiscal;
 
+use App\Actions\Fiscal\FindFiscalClientAction;
+use App\Actions\Fiscal\ReadDctfwebEvidenceAction;
+use App\DTO\Fiscal\Monitoring\FiscalDownloadData;
 use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\EnsureTenantContext;
+use App\Http\Requests\Fiscal\Monitoring\DownloadDctfwebEvidenceRequest;
+use App\Http\Requests\Fiscal\Monitoring\ListDctfwebHistoryRequest;
+use App\Http\Requests\Fiscal\Monitoring\ViewDctfwebClientRequest;
+use App\Http\Requests\Fiscal\Mutations\BatchAutomaticPreferencesRequest;
+use App\Http\Requests\Fiscal\Mutations\OptionalPeriodKeyRequest;
+use App\Http\Requests\Fiscal\Mutations\UpdateCommunicationPreferencesRequest;
+use App\Http\Resources\Fiscal\FiscalMonitoringDataResource;
 use App\Models\Client;
-use App\Models\DctfwebEvidenceVersion;
 use App\Models\User;
 use App\Services\Authorization\TenantAuthorization;
 use App\Services\Fiscal\Dctfweb\DctfwebCommunicationService;
 use App\Services\Fiscal\Dctfweb\DctfwebMonitoringQueryService;
-use App\Services\FiscalMonitoring\FiscalEvidenceStore;
 use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -30,100 +38,75 @@ class DctfwebMonitoringController extends Controller
         private readonly CurrentTenant $currentTenant,
         private readonly DctfwebMonitoringQueryService $queries,
         private readonly DctfwebCommunicationService $communication,
-        private readonly FiscalEvidenceStore $evidenceStore,
         private readonly TenantAuthorization $authorization,
     ) {}
 
-    public function history(Request $request, int $client): JsonResponse
-    {
-        $this->assertCanRead();
-        if ($rejection = $this->rejectClientTenantId($request)) {
-            return $rejection;
-        }
+    public function history(
+        ListDctfwebHistoryRequest $request,
+        int $client,
+        FindFiscalClientAction $findClient,
+    ): JsonResponse|FiscalMonitoringDataResource {
         $tenant = $this->currentTenant->tenant();
-        $model = $this->findClient($tenant->id, $client);
+        $model = $findClient->handle($tenant, $request->clientId());
         if ($model === null) {
             return response()->json([
                 'message' => 'Cliente não encontrado no escritório atual.',
                 'code' => 'CLIENT_NOT_FOUND',
             ], 404);
         }
-
-        $validated = $request->validate([
-            'year' => ['sometimes', 'integer', 'between:2000,2100'],
-        ]);
-        $yearInt = isset($validated['year']) ? (int) $validated['year'] : null;
+        $filters = $request->filters();
 
         try {
-            $data = $this->queries->history($tenant, $model, $yearInt);
+            $data = $this->queries->history(
+                $tenant,
+                $model,
+                $filters->year,
+            );
         } catch (RuntimeException $e) {
             return response()->json(['message' => $e->getMessage(), 'code' => 'HISTORY_ERROR'], 422);
         }
 
-        return response()->json(['data' => $data]);
+        return new FiscalMonitoringDataResource($data);
     }
 
-    public function downloadEvidence(Request $request, int $client, int $evidence): Response|JsonResponse
-    {
-        $this->assertCanRead();
-        if ($rejection = $this->rejectClientTenantId($request)) {
-            return $rejection;
-        }
+    public function downloadEvidence(
+        DownloadDctfwebEvidenceRequest $request,
+        int $client,
+        int $evidence,
+        FindFiscalClientAction $findClient,
+        ReadDctfwebEvidenceAction $readEvidence,
+    ): Response|JsonResponse {
         $tenant = $this->currentTenant->tenant();
-        $model = $this->findClient($tenant->id, $client);
+        $model = $findClient->handle($tenant, (int) $request->clientId());
         if ($model === null) {
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
 
-        $version = $this->queries->findEvidenceVersion($tenant, $model, $evidence);
-
-        return $this->streamEvidence($tenant->id, $version);
+        return $this->downloadResponse(
+            $readEvidence->handle(
+                $tenant,
+                $request->evidenceId(),
+                $model,
+            ),
+        );
     }
 
-    public function downloadEvidenceById(Request $request, int $evidence): Response|JsonResponse
-    {
-        $this->assertCanRead();
-        if ($rejection = $this->rejectClientTenantId($request)) {
-            return $rejection;
-        }
+    public function downloadEvidenceById(
+        DownloadDctfwebEvidenceRequest $request,
+        int $evidence,
+        ReadDctfwebEvidenceAction $readEvidence,
+    ): Response|JsonResponse {
         $tenant = $this->currentTenant->tenant();
-        $version = $this->queries->findEvidenceVersionForTenant($tenant, $evidence);
 
-        return $this->streamEvidence((int) $tenant->id, $version);
+        return $this->downloadResponse(
+            $readEvidence->handle(
+                $tenant,
+                $request->evidenceId(),
+            ),
+        );
     }
 
-    private function streamEvidence(int $tenantId, ?DctfwebEvidenceVersion $version): Response|JsonResponse
-    {
-        if ($version === null) {
-            return response()->json(['message' => 'Artefato não encontrado.'], 404);
-        }
-
-        $version->loadMissing('artifact');
-        if ($version->artifact === null) {
-            return response()->json(['message' => 'Artefato não encontrado.'], 404);
-        }
-
-        try {
-            $bytes = $this->evidenceStore->readAuthorized(
-                $version->artifact,
-                $tenantId,
-            );
-        } catch (\Throwable) {
-            return response()->json(['message' => 'Artefato não encontrado.'], 404);
-        }
-
-        $document = $this->queries->documentMetadata($version);
-
-        return response($bytes, 200, [
-            'Content-Type' => $document['content_type'],
-            'Content-Disposition' => 'attachment; filename="'.$document['filename'].'"',
-            'X-Content-Type-Options' => 'nosniff',
-            'Cache-Control' => 'private, no-store, max-age=0',
-            'Pragma' => 'no-cache',
-        ]);
-    }
-
-    public function updatePreferences(Request $request, int $client): JsonResponse
+    public function updatePreferences(UpdateCommunicationPreferencesRequest $request, int $client): JsonResponse
     {
         $this->assertCanManageCommunications();
         if ($rejection = $this->rejectClientTenantId($request)) {
@@ -138,12 +121,7 @@ class DctfwebMonitoringController extends Controller
             ], 404);
         }
 
-        $data = $request->validate([
-            'email_enabled' => ['required', 'boolean'],
-            'whatsapp_enabled' => ['required', 'boolean'],
-            'automatic_requested' => ['required', 'boolean'],
-            'lock_version' => ['required', 'integer', 'min:0'],
-        ]);
+        $data = $request->preferences();
 
         $user = $request->user();
         if ($user === null) {
@@ -159,13 +137,17 @@ class DctfwebMonitoringController extends Controller
             );
         } catch (ConflictHttpException $e) {
             return response()->json([
-                'message' => $e->getMessage(),
+                'message' => ($text = $e->getMessage()),
                 'code' => 'OPTIMISTIC_LOCK_CONFLICT',
             ], 409);
         } catch (HttpException $e) {
-            return response()->json(['message' => $e->getMessage()], $e->getStatusCode());
+            $text = $e->getMessage();
+
+            return response()->json(['message' => $text], $e->getStatusCode());
         } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            $text = $e->getMessage();
+
+            return response()->json(['message' => $text], 422);
         }
 
         return response()->json([
@@ -173,18 +155,13 @@ class DctfwebMonitoringController extends Controller
         ]);
     }
 
-    public function batchPreferences(Request $request): JsonResponse
+    public function batchPreferences(BatchAutomaticPreferencesRequest $request): JsonResponse
     {
         $this->assertCanManageCommunications();
         if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
         $tenant = $this->currentTenant->tenant();
-        $data = $request->validate([
-            'client_ids' => ['required', 'array', 'min:1', 'max:100'],
-            'client_ids.*' => ['integer', 'distinct'],
-            'automatic_requested' => ['required', 'boolean'],
-        ]);
 
         $user = $request->user();
         if ($user === null) {
@@ -195,13 +172,17 @@ class DctfwebMonitoringController extends Controller
             $prefs = $this->communication->batchSetAutomatic(
                 $tenant,
                 $user,
-                $data['client_ids'],
-                (bool) $data['automatic_requested'],
+                $request->clientIds(),
+                $request->automaticRequested(),
             );
         } catch (HttpException $e) {
-            return response()->json(['message' => $e->getMessage()], $e->getStatusCode());
+            $text = $e->getMessage();
+
+            return response()->json(['message' => $text], $e->getStatusCode());
         } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            $text = $e->getMessage();
+
+            return response()->json(['message' => $text], 422);
         }
 
         $summaries = $this->communication->summariesForClients(
@@ -215,41 +196,39 @@ class DctfwebMonitoringController extends Controller
         ]);
     }
 
-    public function preview(Request $request, int $client): JsonResponse
-    {
-        $this->assertCanRead();
-        if ($rejection = $this->rejectClientTenantId($request)) {
-            return $rejection;
-        }
+    public function preview(
+        ViewDctfwebClientRequest $request,
+        int $client,
+        FindFiscalClientAction $findClient,
+    ): JsonResponse|FiscalMonitoringDataResource {
         $tenant = $this->currentTenant->tenant();
-        $model = $this->findClient($tenant->id, $client);
+        $model = $findClient->handle($tenant, $request->clientId());
         if ($model === null) {
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
 
-        return response()->json([
-            'data' => $this->communication->preview($tenant, $model),
-        ]);
+        return new FiscalMonitoringDataResource(
+            $this->communication->preview($tenant, $model),
+        );
     }
 
-    public function tracking(Request $request, int $client): JsonResponse
-    {
-        $this->assertCanRead();
-        if ($rejection = $this->rejectClientTenantId($request)) {
-            return $rejection;
-        }
+    public function tracking(
+        ViewDctfwebClientRequest $request,
+        int $client,
+        FindFiscalClientAction $findClient,
+    ): JsonResponse|FiscalMonitoringDataResource {
         $tenant = $this->currentTenant->tenant();
-        $model = $this->findClient($tenant->id, $client);
+        $model = $findClient->handle($tenant, $request->clientId());
         if ($model === null) {
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
 
-        return response()->json([
-            'data' => $this->communication->tracking($tenant, $model),
-        ]);
+        return new FiscalMonitoringDataResource(
+            $this->communication->tracking($tenant, $model),
+        );
     }
 
-    public function send(Request $request, int $client): JsonResponse
+    public function send(OptionalPeriodKeyRequest $request, int $client): JsonResponse
     {
         $this->assertCanSync();
         if ($rejection = $this->rejectClientTenantId($request)) {
@@ -262,11 +241,12 @@ class DctfwebMonitoringController extends Controller
         }
         /** @var User $actor */
         $actor = $request->user();
-        $input = $request->validate(['period_key' => ['sometimes', 'string', 'regex:/^\d{4}-\d{2}$/']]);
         try {
-            $data = $this->communication->requestSend($tenant, $model, $actor, $input['period_key'] ?? null);
+            $data = $this->communication->requestSend($tenant, $model, $actor, $request->periodKey());
         } catch (HttpException $e) {
-            return response()->json(['message' => $e->getMessage()], $e->getStatusCode());
+            $text = $e->getMessage();
+
+            return response()->json(['message' => $text], $e->getStatusCode());
         }
 
         return response()->json(['data' => $data]);
@@ -279,6 +259,22 @@ class DctfwebMonitoringController extends Controller
             ->where('tenant_id', $tenantId)
             ->whereKey($clientId)
             ->first();
+    }
+
+    private function downloadResponse(
+        ?FiscalDownloadData $download,
+    ): Response|JsonResponse {
+        if ($download === null) {
+            return response()->json(['message' => 'Artefato não encontrado.'], 404);
+        }
+
+        return response($download->bytes, 200, [
+            'Content-Type' => $download->contentType,
+            'Content-Disposition' => 'attachment; filename="'.$download->filename.'"',
+            'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'private, no-store, max-age=0',
+            'Pragma' => 'no-cache',
+        ]);
     }
 
     private function rejectClientTenantId(Request $request): ?JsonResponse

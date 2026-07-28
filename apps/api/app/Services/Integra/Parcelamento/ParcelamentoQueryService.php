@@ -73,6 +73,7 @@ final class ParcelamentoQueryService
     ): LengthAwarePaginator {
         $q = TaxGuide::query()
             ->withoutGlobalScopes()
+            ->with('currentVersion')
             ->where('tenant_id', $tenant->id)
             ->where('system_code', ParcelamentoServiceCatalog::SOLUTION)
             ->orderByDesc('id');
@@ -88,6 +89,14 @@ final class ParcelamentoQueryService
     {
         return TaxInstallmentOrder::query()
             ->withoutGlobalScopes()
+            ->with([
+                'parcels' => static fn ($query) => $query
+                    ->withoutGlobalScopes()
+                    ->where('tenant_id', $tenant->id),
+                'payments' => static fn ($query) => $query
+                    ->withoutGlobalScopes()
+                    ->where('tenant_id', $tenant->id),
+            ])
             ->where('tenant_id', $tenant->id)
             ->whereKey($id)
             ->first();

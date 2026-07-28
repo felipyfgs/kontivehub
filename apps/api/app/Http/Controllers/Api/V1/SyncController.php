@@ -5,10 +5,10 @@ namespace App\Http\Controllers\Api\V1;
 use App\Enums\SyncCursorStatus;
 use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Fiscal\Sync\TriggerAdnSyncRequest;
 use App\Models\Establishment;
 use App\Models\SyncCursor;
 use App\Models\SyncRun;
-use App\Models\User;
 use App\Services\Adn\SyncDispatchService;
 use App\Services\Audit\AuditLogger;
 use App\Services\Authorization\TenantAuthorization;
@@ -39,21 +39,18 @@ class SyncController extends Controller
     }
 
     public function trigger(
-        Request $request,
+        TriggerAdnSyncRequest $request,
         TenantAuthorization $authorization,
         SyncDispatchService $dispatcher,
         ChannelSyncCursorService $channelCursors,
         AuditLogger $audit,
         CaptureEligibilityService $eligibility,
     ): JsonResponse {
-        $data = $request->validate([
-            'establishment_id' => ['required', 'integer'],
-        ]);
-
-        $establishment = Establishment::query()->with('client')->findOrFail($data['establishment_id']);
-        $actor = $request->user();
-        if (! $actor instanceof User
-            || ! $authorization->allows($actor, TenantPermission::FiscalSyncTrigger, $establishment)) {
+        $establishment = Establishment::query()
+            ->with('client')
+            ->findOrFail($request->establishmentId());
+        $actor = $request->actor();
+        if (! $authorization->allows($actor, TenantPermission::FiscalSyncTrigger, $establishment)) {
             abort(403);
         }
 

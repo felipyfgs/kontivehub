@@ -38,4 +38,14 @@ final class WhatsappAddressNormalizer
 
         return '+'.$digits;
     }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     *
+     * @deprecated Use WhatsappPeerResolver::resolve() — mantido para compatibilidade de testes.
+     */
+    public function resolvePeerAddress(array $payload): string
+    {
+        return app(WhatsappPeerResolver::class)->resolve($payload);
+    }
 }

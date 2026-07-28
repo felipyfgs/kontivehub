@@ -62,20 +62,4 @@ class TenantCredentialPurposeLink extends Model
     {
         return $this->status === CredentialStatus::Active && $this->revoked_at === null;
     }
-
-    /**
-     * @return array<string, mixed>
-     */
-    public function toPublicArray(): array
-    {
-        return [
-            'id' => $this->id,
-            'tenant_credential_id' => $this->tenant_credential_id,
-            'purpose' => $this->purpose->value,
-            'status' => $this->status->value,
-            'linked_at' => $this->linked_at?->toIso8601String(),
-            'revoked_at' => $this->revoked_at?->toIso8601String(),
-            'active' => $this->isActive(),
-        ];
-    }
 }

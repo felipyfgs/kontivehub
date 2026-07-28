@@ -2,13 +2,13 @@
 
 namespace App\Http\Requests\Communication;
 
-use Illuminate\Foundation\Http\FormRequest;
+use App\DTO\Communication\CommunicationFlowDraftData;
 
-final class UpdateCommunicationFlowDraftRequest extends FormRequest
+final class UpdateCommunicationFlowDraftRequest extends CommunicationFlowRequest
 {
     public function authorize(): bool
     {
-        return true;
+        return $this->canManageFlow();
     }
 
     /** @return array<string, mixed> */
@@ -16,27 +16,17 @@ final class UpdateCommunicationFlowDraftRequest extends FormRequest
     {
         return [
             'lock_version' => ['required', 'integer', 'min:1'],
-            'graph' => ['required', 'array'],
-            'graph.nodes' => ['required', 'array'],
-            'graph.nodes.*' => ['nullable', 'array'],
-            'graph.nodes.*.id' => ['nullable'],
-            'graph.nodes.*.type' => ['nullable'],
-            'graph.nodes.*.label' => ['nullable'],
-            'graph.nodes.*.position' => ['nullable', 'array'],
-            'graph.nodes.*.position.x' => ['nullable'],
-            'graph.nodes.*.position.y' => ['nullable'],
-            'graph.nodes.*.data' => ['nullable', 'array'],
-            'graph.nodes.*.data.*' => ['nullable'],
-            'graph.nodes.*.data.options.*' => ['nullable'],
-            'graph.edges' => ['required', 'array'],
-            'graph.edges.*' => ['nullable', 'array'],
-            'graph.edges.*.id' => ['nullable'],
-            'graph.edges.*.source' => ['nullable'],
-            'graph.edges.*.target' => ['nullable'],
-            'graph.edges.*.label' => ['nullable'],
-            'graph.edges.*.branch' => ['nullable'],
-            'graph.edges.*.data' => ['nullable', 'array'],
-            'graph.edges.*.data.*' => ['nullable'],
+            ...$this->graphRules('required'),
         ];
+    }
+
+    public function draftData(): CommunicationFlowDraftData
+    {
+        $validated = $this->validated();
+
+        return new CommunicationFlowDraftData(
+            graph: $validated['graph'],
+            lockVersion: (int) $validated['lock_version'],
+        );
     }
 }

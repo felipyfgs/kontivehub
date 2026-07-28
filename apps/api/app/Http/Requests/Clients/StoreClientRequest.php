@@ -2,19 +2,36 @@
 
 namespace App\Http\Requests\Clients;
 
+use App\DTO\Clients\ClientCreationData;
 use App\Enums\RegistrationStatus;
 use App\Enums\TaxRegimeCode;
 use App\Enums\TenantRole;
+use App\Http\Middleware\EnsureTenantContext;
+use App\Http\Requests\AuthenticatedRequest;
+use App\Models\User;
+use App\Policies\ClientPolicy;
 use App\Rules\ValidCnpj;
 use App\Support\CurrentTenant;
-use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
-class StoreClientRequest extends FormRequest
+final class StoreClientRequest extends AuthenticatedRequest
 {
+    protected function prepareForValidation(): void
+    {
+        if ($this->attributes->getBoolean(EnsureTenantContext::CLIENT_TENANT_ID_SUPPLIED)) {
+            throw ValidationException::withMessages([
+                'tenant_id' => ['tenant_id não é aceito; use o Tenant corrente.'],
+            ]);
+        }
+    }
+
     public function authorize(): bool
     {
-        return true; // policy no controller
+        $actor = $this->user();
+
+        return $actor instanceof User
+            && app(ClientPolicy::class)->create($actor);
     }
 
     /**
@@ -134,5 +151,10 @@ class StoreClientRequest extends FormRequest
                 );
             }
         });
+    }
+
+    public function toDto(): ClientCreationData
+    {
+        return new ClientCreationData($this->validated());
     }
 }

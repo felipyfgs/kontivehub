@@ -9,6 +9,7 @@ use App\Models\FiscalMonitoringRun;
 use App\Models\MitAssessment;
 use App\Models\Tenant;
 use App\Services\FiscalMonitoring\FiscalMonitoringRunService;
+use Illuminate\Support\Collection;
 use InvalidArgumentException;
 
 /** Ação explícita e leitura local da lista MIT 317, sempre tenant-scoped. */
@@ -51,11 +52,12 @@ final class MitListaApuracoesQueryService
         return $run->fresh() ?? $run;
     }
 
-    /**
-     * @return list<array<string, mixed>>
-     */
-    public function localList(Tenant $tenant, Client $client, ?int $year = null): array
-    {
+    /** @return Collection<int, MitAssessment> */
+    public function localList(
+        Tenant $tenant,
+        Client $client,
+        ?int $year = null,
+    ): Collection {
         $this->assertClient($tenant, $client);
         if ($year !== null && ($year < 2000 || $year > 2100)) {
             throw new InvalidArgumentException('Ano da lista MIT inválido.');
@@ -73,9 +75,7 @@ final class MitListaApuracoesQueryService
 
                 return is_array($metadata['lista_apuracoes_317'] ?? null);
             })
-            ->map(static fn (MitAssessment $apuracao): array => $apuracao->toPublicArray())
-            ->values()
-            ->all();
+            ->values();
     }
 
     private function assertClient(Tenant $tenant, Client $client): void

@@ -237,6 +237,97 @@ class WorkProcessDomainApiTest extends TestCase
         ])->assertStatus(422);
     }
 
+    public function test_create_rolls_back_when_task_assignee_is_from_another_tenant(): void
+    {
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $other = Tenant::factory()->create();
+        $foreign = User::factory()
+            ->forTenant($other, TenantRole::TenantUser)
+            ->create();
+        $foreignMembership = $foreign->memberships()
+            ->where('tenant_id', $other->id)
+            ->firstOrFail();
+        $client = Client::factory()->forTenant($tenant)->create();
+        Sanctum::actingAs($admin);
+
+        $this->postJson('/api/v1/work/processes', [
+            'client_id' => $client->id,
+            'title' => 'Processo deve reverter',
+            'competence' => '2026-07',
+            'tasks' => [[
+                'title' => 'Tarefa inválida',
+                'assignee_membership_id' => $foreignMembership->id,
+            ]],
+        ])->assertUnprocessable();
+
+        $this->assertDatabaseMissing('work_processes', [
+            'tenant_id' => $tenant->id,
+            'title' => 'Processo deve reverter',
+        ]);
+        $this->assertDatabaseMissing('work_tasks', [
+            'tenant_id' => $tenant->id,
+            'title' => 'Tarefa inválida',
+        ]);
+    }
+
+    public function test_process_resources_and_tenant_boundary_preserve_contract(): void
+    {
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $client = Client::factory()->forTenant($tenant)->create();
+        $process = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
+            'client_id' => $client->id,
+            'title' => 'Contrato Work',
+            'lock_version' => 1,
+        ]);
+        WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $process->id,
+            'title' => 'Tarefa contratual',
+        ]);
+        Sanctum::actingAs($admin);
+
+        $list = $this->getJson('/api/v1/work/processes?per_page=250')
+            ->assertOk()
+            ->assertJsonPath('meta.per_page', 100);
+        $this->assertSame([
+            'current_page',
+            'last_page',
+            'per_page',
+            'total',
+        ], array_keys($list->json('meta')));
+        $this->assertArrayNotHasKey('links', $list->json());
+
+        $comment = $this->postJson(
+            "/api/v1/work/processes/{$process->id}/comments",
+            ['body' => 'Comentário de contrato'],
+        )->assertCreated();
+        $this->assertSame([
+            'id',
+            'body',
+            'author_membership_id',
+            'created_at',
+        ], array_keys($comment->json('data')));
+
+        $this->getJson("/api/v1/work/processes/{$process->id}")
+            ->assertOk()
+            ->assertJsonPath('data.comments.0.body', 'Comentário de contrato')
+            ->assertJsonPath('data.tasks.0.title', 'Tarefa contratual');
+
+        $this->patchJson("/api/v1/work/processes/{$process->id}", [
+            'tenant_id' => $tenant->id,
+            'lock_version' => 1,
+            'title' => 'Não deve persistir',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('tenant_id');
+
+        $this->assertDatabaseHas('work_processes', [
+            'id' => $process->id,
+            'title' => 'Contrato Work',
+            'lock_version' => 1,
+        ]);
+    }
+
     /** @return array{User, Tenant} */
     private function actor(TenantRole $role): array
     {

@@ -119,22 +119,6 @@ class TenantMonitorSchedulePolicy extends Model
         ]);
     }
 
-    /**
-     * @return array<string, mixed>
-     */
-    public function toPublicArray(): array
-    {
-        return [
-            'id' => $this->id,
-            'tenant_id' => $this->tenant_id,
-            'monitor_key' => $this->monitor_key,
-            'day_of_month' => $this->day_of_month,
-            'is_custom' => $this->is_custom,
-            'timezone' => $this->timezone,
-            'updated_at' => $this->updated_at?->toIso8601String(),
-        ];
-    }
-
     protected static function newFactory(): TenantMonitorSchedulePolicyFactory
     {
         return TenantMonitorSchedulePolicyFactory::new();

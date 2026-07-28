@@ -10,11 +10,11 @@ use SplFileInfo;
 
 final class ControllerBoundaryArchitectureTest extends TestCase
 {
-    private const INLINE_VALIDATION_BASELINE = 224;
+    private const INLINE_VALIDATION_BASELINE = 88;
 
-    private const MODEL_SERIALIZATION_BASELINE = 148;
+    private const DIRECT_SERIALIZATION_BASELINE = 99;
 
-    private const EXCEPTION_MESSAGE_USAGE_BASELINE = 140;
+    private const EXCEPTION_MESSAGE_USAGE_BASELINE = 74;
 
     #[Test]
     public function controller_boundary_debt_does_not_increase(): void
@@ -24,7 +24,10 @@ final class ControllerBoundaryArchitectureTest extends TestCase
             $files,
             '/(?:\$request->validate\s*\(|Validator::make\s*\(|->validateWithBag\s*\()/',
         );
-        $modelSerialization = $this->matchingOccurrences($files, '/->toPublicArray\s*\(/');
+        $directSerialization = $this->matchingOccurrences(
+            $files,
+            '/->to(?:Public|Sanitized|GlobalSanitized|SanitizedAdmin|Detail|List|Platform|Tenant)Array\s*\(/',
+        );
         $exceptionMessageUsages = $this->matchingOccurrences(
             $files,
             '/[\'"]message[\'"]\s*=>\s*\$[A-Za-z_][A-Za-z0-9_]*->getMessage\s*\(\)/',
@@ -36,9 +39,9 @@ final class ControllerBoundaryArchitectureTest extends TestCase
             'Novos controllers com validação inline: '.implode(', ', $inlineValidation),
         );
         self::assertLessThanOrEqual(
-            self::MODEL_SERIALIZATION_BASELINE,
-            count($modelSerialization),
-            'Novos controllers serializando Models: '.implode(', ', $modelSerialization),
+            self::DIRECT_SERIALIZATION_BASELINE,
+            count($directSerialization),
+            'Novos controllers serializando Models/DTOs diretamente: '.implode(', ', $directSerialization),
         );
         self::assertLessThanOrEqual(
             self::EXCEPTION_MESSAGE_USAGE_BASELINE,

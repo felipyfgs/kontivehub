@@ -77,6 +77,17 @@ class MonitoringInsightsApiTest extends TestCase
         $this->getJson('/api/v1/fiscal/monitoring/insights')->assertForbidden();
     }
 
+    public function test_insights_reject_client_supplied_tenant_scope(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $viewer = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        Sanctum::actingAs($viewer);
+
+        $this->getJson('/api/v1/fiscal/monitoring/insights?tenant_id='.$tenant->id)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['tenant_id']);
+    }
+
     public function test_insights_do_not_leak_other_tenant_pending(): void
     {
         $tenant = Tenant::factory()->create();

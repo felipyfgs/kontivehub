@@ -48,6 +48,12 @@ class PlatformFiscalModuleControlApiTest extends TestCase
             'reason' => 'Pausa operacional',
         ])->assertOk()->assertJsonPath('data.state', 'GLOBALLY_RESTRICTED');
 
+        $this->patchJson("/api/v1/platform/tenants/{$tenant->id}/fiscal/modules/mailbox/restriction", [
+            'restricted' => true,
+            'reason' => 'Pausa específica do tenant',
+        ])->assertOk()
+            ->assertJsonPath('data.tenant_restriction.restricted', true);
+
         $this->getJson("/api/v1/platform/tenants/{$tenant->id}/fiscal/modules")
             ->assertOk()
             ->assertJsonPath('data.modules.4.state', 'GLOBALLY_RESTRICTED');
@@ -62,6 +68,19 @@ class PlatformFiscalModuleControlApiTest extends TestCase
             'restricted' => false,
             'reason' => 'Operação normalizada',
         ])->assertOk()->assertJsonPath('data.state', 'AVAILABLE');
+    }
+
+    public function test_control_update_rejects_unknown_fields(): void
+    {
+        $actor = $this->platformAdmin();
+        Sanctum::actingAs($actor);
+
+        $this->patchJson('/api/v1/platform/fiscal/modules/mailbox/restriction', [
+            'restricted' => true,
+            'reason' => 'Pausa operacional',
+            'enabled' => false,
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('enabled');
     }
 
     private function platformAdmin(): User

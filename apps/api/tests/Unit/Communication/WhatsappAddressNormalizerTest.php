@@ -54,4 +54,32 @@ class WhatsappAddressNormalizerTest extends TestCase
             'unknown server' => ['5511999991234@example.invalid'],
         ];
     }
+
+    public function test_resolve_peer_prefers_previous_from(): void
+    {
+        $this->assertSame('+5511999991234', app(WhatsappAddressNormalizer::class)->resolvePeerAddress([
+            'from' => '+5511999991234',
+            'source_identity' => [
+                'primary' => 'lid:12345',
+                'primary_kind' => 'LID',
+                'alternate' => '+5511988884321',
+                'alternate_kind' => 'PN',
+                'evidence' => 'MESSAGE_SOURCE_ALT',
+            ],
+        ]));
+    }
+
+    public function test_resolve_peer_delegates_to_peer_resolver(): void
+    {
+        $this->assertSame('lid:132366714564657', app(WhatsappAddressNormalizer::class)->resolvePeerAddress([
+            'direction' => 'OUTBOUND',
+            'source_identity' => [
+                'primary' => 'lid:132366714564657',
+                'primary_kind' => 'LID',
+                'alternate' => '+559981769536',
+                'alternate_kind' => 'PN',
+                'evidence' => 'MESSAGE_SOURCE_ALT',
+            ],
+        ]));
+    }
 }

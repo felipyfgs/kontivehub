@@ -8,7 +8,9 @@ use App\Services\Audit\AuditLogger;
 use App\Support\CurrentTenant;
 use App\Support\Work\OptimisticLock;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
@@ -108,8 +110,22 @@ final class WorkBulkService
             } catch (ValidationException $e) {
                 $message = collect($e->errors())->flatten()->first() ?: 'Falha de validação.';
                 $failed[] = ['id' => $id, 'message' => (string) $message];
+            } catch (HttpResponseException) {
+                $failed[] = [
+                    'id' => $id,
+                    'message' => 'Conflito de versão: a tarefa foi alterada.',
+                ];
             } catch (Throwable $e) {
-                $failed[] = ['id' => $id, 'message' => $e->getMessage() ?: 'Falha ao processar item.'];
+                Log::error('work.task.bulk.item_failed', [
+                    'correlation_id' => $correlation,
+                    'task_id' => $id,
+                    'action' => $action,
+                    'exception_type' => $e::class,
+                ]);
+                $failed[] = [
+                    'id' => $id,
+                    'message' => 'Falha inesperada ao processar a tarefa.',
+                ];
             }
         }
 

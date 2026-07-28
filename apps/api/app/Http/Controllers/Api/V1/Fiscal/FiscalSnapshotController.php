@@ -2,16 +2,20 @@
 
 namespace App\Http\Controllers\Api\V1\Fiscal;
 
-use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
-use App\Models\User;
-use App\Services\Authorization\TenantAuthorization;
+use App\Http\Requests\Fiscal\Monitoring\DownloadFiscalEvidenceRequest;
+use App\Http\Requests\Fiscal\Monitoring\ListFiscalFindingsRequest;
+use App\Http\Requests\Fiscal\Monitoring\ListFiscalPendingItemsRequest;
+use App\Http\Requests\Fiscal\Monitoring\ListFiscalSnapshotsRequest;
+use App\Http\Requests\Fiscal\Monitoring\ViewFiscalMonitoringRequest;
+use App\Http\Resources\Fiscal\FiscalFindingPageResource;
+use App\Http\Resources\Fiscal\FiscalPendingItemPageResource;
+use App\Http\Resources\Fiscal\FiscalSnapshotPaginatorResource;
+use App\Http\Resources\Fiscal\FiscalSnapshotResource;
 use App\Services\FiscalMonitoring\FiscalEvidenceStore;
 use App\Services\FiscalMonitoring\FiscalQueryService;
 use App\Support\CurrentTenant;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -21,53 +25,46 @@ class FiscalSnapshotController extends Controller
         private readonly CurrentTenant $currentTenant,
         private readonly FiscalQueryService $queries,
         private readonly FiscalEvidenceStore $evidenceStore,
-        private readonly TenantAuthorization $authorization,
     ) {}
 
-    public function index(Request $request): JsonResponse
-    {
-        $this->assertCanRead();
+    public function index(
+        ListFiscalSnapshotsRequest $request,
+    ): FiscalSnapshotPaginatorResource {
         $tenant = $this->currentTenant->tenant();
+        $filters = $request->filters();
 
-        $perPage = min(100, max(1, (int) $request->query('per_page', 50)));
-        $clientId = $request->query('client_id');
-        $currentOnly = filter_var($request->query('current_only', true), FILTER_VALIDATE_BOOL);
-
-        $page = $this->queries->snapshots(
-            $tenant,
-            $perPage,
-            is_numeric($clientId) ? (int) $clientId : null,
-            $currentOnly,
+        return new FiscalSnapshotPaginatorResource(
+            $this->queries->snapshots(
+                $tenant,
+                $filters->perPage,
+                $filters->clientId,
+                $filters->currentOnly,
+            ),
         );
-        $page->getCollection()->transform(fn ($s) => $s->toPublicArray());
-
-        return response()->json($page);
     }
 
-    public function show(int $snapshot): JsonResponse
-    {
-        $this->assertCanRead();
+    public function show(
+        ViewFiscalMonitoringRequest $request,
+        int $snapshot,
+    ): JsonResponse|FiscalSnapshotResource {
         $tenant = $this->currentTenant->tenant();
         $model = $this->queries->snapshot($tenant, $snapshot);
         if ($model === null) {
             return response()->json(['message' => 'Snapshot não encontrado.'], 404);
         }
 
-        return response()->json(['data' => $model->toPublicArray()]);
+        return new FiscalSnapshotResource($model);
     }
 
     /**
      * Download autorizado de evidência — stream sem path interno/URL permanente.
      */
-    public function downloadEvidence(int $evidence): StreamedResponse|JsonResponse
-    {
-        $this->assertCanRead();
+    public function downloadEvidence(
+        DownloadFiscalEvidenceRequest $request,
+        int $evidence,
+    ): StreamedResponse|JsonResponse {
         $tenant = $this->currentTenant->tenant();
-        $artifact = $this->queries->evidence($tenant, $evidence);
-        if ($artifact === null) {
-            return response()->json(['message' => 'Evidência não encontrada.'], 404);
-        }
-        $this->assertCanRead($artifact);
+        $artifact = $request->artifact();
 
         try {
             $bytes = $this->evidenceStore->readAuthorized($artifact, (int) $tenant->id);
@@ -90,57 +87,35 @@ class FiscalSnapshotController extends Controller
         ]);
     }
 
-    public function findings(Request $request): JsonResponse
-    {
-        $this->assertCanRead();
+    public function findings(
+        ListFiscalFindingsRequest $request,
+    ): FiscalFindingPageResource {
         $tenant = $this->currentTenant->tenant();
-        $perPage = min(100, max(1, (int) $request->query('per_page', 50)));
-        $clientId = $request->query('client_id');
-        $activeOnly = filter_var($request->query('active_only', true), FILTER_VALIDATE_BOOL);
+        $filters = $request->filters();
 
-        $page = $this->queries->findings(
-            $tenant,
-            $perPage,
-            is_numeric($clientId) ? (int) $clientId : null,
-            $activeOnly,
+        return new FiscalFindingPageResource(
+            $this->queries->findings(
+                $tenant,
+                $filters->perPage,
+                $filters->clientId,
+                $filters->activeOnly,
+            ),
         );
-        $page->getCollection()->transform(fn ($f) => $f->toPublicArray());
-
-        return response()->json($page);
     }
 
-    public function pending(Request $request): JsonResponse
-    {
-        $this->assertCanRead();
+    public function pending(
+        ListFiscalPendingItemsRequest $request,
+    ): FiscalPendingItemPageResource {
         $tenant = $this->currentTenant->tenant();
-        $perPage = min(100, max(1, (int) $request->query('per_page', 50)));
-        $clientId = $request->query('client_id');
-        $status = $request->query('status', 'OPEN');
+        $filters = $request->filters();
 
-        $page = $this->queries->pendingItems(
-            $tenant,
-            $perPage,
-            is_numeric($clientId) ? (int) $clientId : null,
-            is_string($status) ? $status : 'OPEN',
+        return new FiscalPendingItemPageResource(
+            $this->queries->pendingItems(
+                $tenant,
+                $filters->perPage,
+                $filters->clientId,
+                $filters->status,
+            ),
         );
-        $page->getCollection()->transform(fn ($p) => $p->toPublicArray());
-
-        return response()->json($page);
-    }
-
-    private function assertCanRead(?Model $target = null): void
-    {
-        $actor = auth()->user();
-        // Não exigir realMembership(): em platform_privileged sem vínculo dual
-        // TenantAuthorization já autoriza PLATFORM_ADMIN (e barra o restante).
-        if (! $actor instanceof User
-            || ! $this->authorization->allows(
-                $actor,
-                TenantPermission::FiscalMonitoringView,
-                $target,
-            )
-        ) {
-            abort(403, 'Sem permissão para monitoramento fiscal.');
-        }
     }
 }

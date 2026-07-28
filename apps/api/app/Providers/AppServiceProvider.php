@@ -191,6 +191,7 @@ use App\Support\FiscalDataModel\PrivilegedTenantContext;
 use App\Support\MultitenantRbac\EffectivePermissionsResolver;
 use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Console\Events\CommandStarting;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
@@ -433,6 +434,9 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         FormRequest::failOnUnknownFields($this->app->environment('local', 'testing'));
+
+        // Fail closed em dev/test: N+1 vira exceção; produção permanece permissiva.
+        Model::preventLazyLoading($this->app->environment('local', 'testing'));
 
         $this->registerPrivilegedTenantContextListeners();
 

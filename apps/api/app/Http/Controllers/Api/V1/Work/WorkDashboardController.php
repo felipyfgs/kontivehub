@@ -2,132 +2,80 @@
 
 namespace App\Http\Controllers\Api\V1\Work;
 
+use App\Actions\Work\PrepareWorkExportDownloadAction;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Work\CreateWorkExportRequest;
+use App\Http\Requests\Work\DownloadWorkExportRequest;
+use App\Http\Requests\Work\ListWorkCalendarDayRequest;
+use App\Http\Requests\Work\ListWorkCalendarRequest;
+use App\Http\Requests\Work\ViewWorkExportRequest;
+use App\Http\Requests\Work\ViewWorkKpisRequest;
+use App\Http\Resources\WorkCalendarDayCollection;
+use App\Http\Resources\WorkCalendarResource;
+use App\Http\Resources\WorkExportResource;
+use App\Http\Resources\WorkKpiResource;
 use App\Models\WorkExport;
-use App\Models\WorkTask;
 use App\Services\Work\WorkCalendarQuery;
 use App\Services\Work\WorkExportService;
 use App\Services\Work\WorkKpiQuery;
-use App\Support\Work\RejectClientTenantId;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class WorkDashboardController extends Controller
 {
-    public function kpis(WorkKpiQuery $query): JsonResponse
-    {
-        $this->authorize('viewAny', WorkTask::class);
-
-        return response()->json(['data' => $query->build()]);
+    public function kpis(
+        ViewWorkKpisRequest $request,
+        WorkKpiQuery $query,
+    ): JsonResponse {
+        return (new WorkKpiResource($query->build()))->response();
     }
 
-    public function calendar(Request $request, WorkCalendarQuery $query): JsonResponse
-    {
-        $this->authorize('viewAny', WorkTask::class);
-        RejectClientTenantId::strip($request);
-
-        $data = $request->validate([
-            'from' => ['required', 'date_format:Y-m-d'],
-            'to' => ['required', 'date_format:Y-m-d'],
-            'department_id' => ['sometimes', 'nullable', 'integer'],
-            'assignee_membership_id' => ['sometimes', 'nullable', 'integer'],
-            'client_id' => ['sometimes', 'nullable', 'integer'],
-            'status' => ['sometimes', 'nullable', 'string'],
-            'risk' => ['sometimes', 'nullable', 'string'],
-        ]);
-
-        return response()->json([
-            'data' => $query->interval($data),
-        ]);
+    public function calendar(
+        ListWorkCalendarRequest $request,
+        WorkCalendarQuery $query,
+    ): JsonResponse {
+        return (new WorkCalendarResource(
+            $query->interval($request->filters()),
+        ))->response();
     }
 
-    public function calendarDay(Request $request, WorkCalendarQuery $query): JsonResponse
-    {
-        $this->authorize('viewAny', WorkTask::class);
-        RejectClientTenantId::strip($request);
-
-        $data = $request->validate([
-            'date' => ['required', 'date_format:Y-m-d'],
-            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
-            'page' => ['sometimes', 'integer', 'min:1'],
-            'department_id' => ['sometimes', 'nullable', 'integer'],
-            'assignee_membership_id' => ['sometimes', 'nullable', 'integer'],
-            'client_id' => ['sometimes', 'nullable', 'integer'],
-            'status' => ['sometimes', 'nullable', 'string'],
-            'risk' => ['sometimes', 'nullable', 'string'],
-        ]);
-
-        $paginator = $query->day($data);
-
-        return response()->json([
-            'data' => $paginator->items(),
-            'meta' => [
-                'current_page' => $paginator->currentPage(),
-                'last_page' => $paginator->lastPage(),
-                'per_page' => $paginator->perPage(),
-                'total' => $paginator->total(),
-            ],
-        ]);
+    public function calendarDay(
+        ListWorkCalendarDayRequest $request,
+        WorkCalendarQuery $query,
+    ): JsonResponse {
+        return (new WorkCalendarDayCollection(
+            $query->day($request->filters()),
+        ))->response();
     }
 
-    public function createExport(Request $request, WorkExportService $service): JsonResponse
-    {
-        $this->authorize('create', WorkExport::class);
-        RejectClientTenantId::strip($request);
-
-        $data = $request->validate([
-            'filters' => ['sometimes', 'array'],
-            'filters.status' => ['sometimes', 'nullable', 'string'],
-            'filters.department_id' => ['sometimes', 'nullable', 'integer'],
-            'filters.client_id' => ['sometimes', 'nullable', 'integer'],
-        ]);
-
-        $export = $service->create($data['filters'] ?? []);
-
-        return response()->json(['data' => $this->publicExport($export)], 201);
+    public function createExport(
+        CreateWorkExportRequest $request,
+        WorkExportService $service,
+    ): JsonResponse {
+        return (new WorkExportResource(
+            $service->create($request->filters()),
+        ))->response()->setStatusCode(201);
     }
 
-    public function showExport(WorkExport $export): JsonResponse
-    {
-        $this->authorize('view', $export);
-
-        return response()->json(['data' => $this->publicExport($export)]);
+    public function showExport(
+        ViewWorkExportRequest $request,
+        WorkExport $export,
+    ): JsonResponse {
+        return (new WorkExportResource($export))->response();
     }
 
-    public function downloadExport(WorkExport $export): StreamedResponse
-    {
-        $this->authorize('download', $export);
+    public function downloadExport(
+        DownloadWorkExportRequest $request,
+        WorkExport $export,
+        PrepareWorkExportDownloadAction $action,
+    ): StreamedResponse {
+        $download = $action->execute($export);
 
-        if ($export->status->value !== 'READY' || ! $export->storage_path) {
-            abort(404);
-        }
-
-        $path = Storage::disk('local')->path($export->storage_path);
-
-        return response()->streamDownload(function () use ($path): void {
-            echo file_get_contents($path);
-        }, 'work-export-'.$export->id.'.csv', [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-        ]);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function publicExport(WorkExport $e): array
-    {
-        return [
-            'id' => $e->id,
-            'status' => $e->status->value,
-            'filters_snapshot' => $e->filters_snapshot,
-            'byte_size' => $e->byte_size,
-            'row_count' => $e->row_count,
-            'error_message' => $e->error_message,
-            'expires_at' => $e->expires_at?->toIso8601String(),
-            'completed_at' => $e->completed_at?->toIso8601String(),
-            // storage_path omitido
-        ];
+        return Storage::disk('local')->download(
+            $download->storagePath,
+            $download->filename,
+            ['Content-Type' => 'text/csv; charset=UTF-8'],
+        );
     }
 }

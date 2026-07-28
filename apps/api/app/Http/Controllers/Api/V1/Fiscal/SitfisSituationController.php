@@ -2,19 +2,17 @@
 
 namespace App\Http\Controllers\Api\V1\Fiscal;
 
-use App\Enums\TenantPermission;
-use App\Enums\TenantRole;
+use App\Actions\Fiscal\Mutations\RefreshSitfisSituationAction;
 use App\Http\Controllers\Controller;
-use App\Http\Middleware\EnsureTenantContext;
-use App\Models\Client;
-use App\Models\User;
-use App\Services\Authorization\TenantAuthorization;
+use App\Http\Requests\Fiscal\Monitoring\ShowSitfisSituationRequest;
+use App\Http\Requests\Fiscal\Monitoring\ViewSitfisHistoryRequest;
+use App\Http\Requests\Fiscal\Mutations\RefreshSitfisSituationRequest;
 use App\Services\Fiscal\Sitfis\SitfisHistoryQueryService;
 use App\Services\Integra\Sitfis\SitfisSnapshotService;
 use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use RuntimeException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * Situação Fiscal (SITFIS): leitura com idade do snapshot; refresh respeita TTL.
@@ -25,24 +23,16 @@ class SitfisSituationController extends Controller
         private readonly CurrentTenant $currentTenant,
         private readonly SitfisSnapshotService $sitfis,
         private readonly SitfisHistoryQueryService $historyQueries,
-        private readonly TenantAuthorization $authorization,
+        private readonly RefreshSitfisSituationAction $refresh,
     ) {}
 
     /**
      * Histórico local consolidado por consulta. Nunca dispara refresh/Integra.
      */
-    public function history(Request $request, int $client): JsonResponse
+    public function history(ViewSitfisHistoryRequest $request, int $client): JsonResponse
     {
-        $this->assertCanRead();
-        if ($this->clientTenantIdWasSupplied($request)) {
-            return response()->json([
-                'message' => 'tenant_id não é aceito; o escritório é obtido do contexto autenticado.',
-                'code' => 'CLIENT_TENANT_ID_REJECTED',
-            ], 422);
-        }
-
         $tenant = $this->currentTenant->tenant();
-        $model = $this->findClient((int) $tenant->id, $client);
+        $model = $request->client();
         if ($model === null) {
             return response()->json([
                 'message' => 'Cliente não encontrado no escritório atual.',
@@ -58,16 +48,10 @@ class SitfisSituationController extends Controller
     /**
      * GET — devolve snapshot existente + idade. Nunca dispara nova chamada só por abrir a tela.
      */
-    public function show(Request $request): JsonResponse
+    public function show(ShowSitfisSituationRequest $request): JsonResponse
     {
-        $this->assertCanRead();
         $tenant = $this->currentTenant->tenant();
-
-        $data = $request->validate([
-            'client_id' => ['required', 'integer'],
-        ]);
-
-        $client = $this->findClient($tenant->id, (int) $data['client_id']);
+        $client = $request->client();
         if ($client === null) {
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
@@ -82,31 +66,17 @@ class SitfisSituationController extends Controller
     /**
      * POST — solicita nova emissão só se TTL expirado ou ausente.
      */
-    public function refresh(Request $request): JsonResponse
+    public function refresh(RefreshSitfisSituationRequest $request): JsonResponse
     {
-        $this->assertCanWrite();
-        $tenant = $this->currentTenant->tenant();
-
-        $data = $request->validate([
-            'client_id' => ['required', 'integer'],
-            'force' => ['sometimes', 'boolean'],
-        ]);
-
-        $client = $this->findClient($tenant->id, (int) $data['client_id']);
-        if ($client === null) {
-            return response()->json(['message' => 'Cliente não encontrado.'], 404);
-        }
-
         try {
-            $result = $this->sitfis->refresh(
-                tenant: $tenant,
-                client: $client,
-                force: (bool) ($data['force'] ?? false),
-                actorId: $request->user()?->id,
-                dispatch: true,
+            $result = $this->refresh->handle(
+                $request->actor(),
+                $request->refreshData(),
             );
+        } catch (NotFoundHttpException $e) {
+            return $this->failure($e, 404);
         } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return $this->failure($e, 422);
         }
 
         $status = $result['enqueued'] ? 202 : 200;
@@ -122,50 +92,10 @@ class SitfisSituationController extends Controller
         ], $status);
     }
 
-    private function findClient(int $tenantId, int $clientId): ?Client
+    private function failure(\Throwable $error, int $status): JsonResponse
     {
-        return Client::query()
-            ->withoutGlobalScopes()
-            ->where('tenant_id', $tenantId)
-            ->whereKey($clientId)
-            ->first();
-    }
+        $text = $error->getMessage();
 
-    private function assertCanRead(): void
-    {
-        $actor = request()->user();
-        if (! $actor instanceof User
-            || ! $this->authorization->allows($actor, TenantPermission::FiscalMonitoringView)) {
-            abort(403, 'Perfil não resolvido.');
-        }
-    }
-
-    private function clientTenantIdWasSupplied(Request $request): bool
-    {
-        return $request->attributes->get(EnsureTenantContext::CLIENT_TENANT_ID_SUPPLIED) === true
-            || $this->containsTenantIdKey($request->query->all());
-    }
-
-    /** @param array<array-key, mixed> $values */
-    private function containsTenantIdKey(array $values): bool
-    {
-        foreach ($values as $key => $value) {
-            if (is_string($key) && strtolower($key) === 'tenant_id') {
-                return true;
-            }
-            if (is_array($value) && $this->containsTenantIdKey($value)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private function assertCanWrite(): void
-    {
-        $role = $this->currentTenant->role();
-        if ($role === null || ! in_array($role, [TenantRole::TenantAdmin, TenantRole::TenantUser], true)) {
-            abort(403, 'Ação não autorizada para o perfil atual.');
-        }
+        return response()->json(['message' => $text], $status);
     }
 }

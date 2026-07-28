@@ -2,24 +2,13 @@
 
 namespace App\Http\Requests\Tenant;
 
+use App\DTO\Tenant\TenantInstitutionalProfileUpdateData;
 use App\Rules\ValidCnpj;
-use Illuminate\Foundation\Http\FormRequest;
 
-class UpdateTenantInstitutionalProfileRequest extends FormRequest
+final class UpdateTenantInstitutionalProfileRequest extends TenantSettingsMutationRequest
 {
-    public function authorize(): bool
+    protected function prepareTenantSettingsValidation(): void
     {
-        return true; // Policy no controller
-    }
-
-    protected function prepareForValidation(): void
-    {
-        // Defesa em profundidade: nunca aceitar tenant_id do client.
-        $this->request->remove('tenant_id');
-        if ($this->isJson() && $this->json() !== null) {
-            $this->json()->remove('tenant_id');
-        }
-
         // CNPJ vazio = omitir / limpar depois; não validar como CNPJ.
         if ($this->exists('cnpj') && trim((string) $this->input('cnpj')) === '') {
             $this->merge(['cnpj' => null]);
@@ -50,5 +39,13 @@ class UpdateTenantInstitutionalProfileRequest extends FormRequest
             'tenant_id.prohibited' => 'O escopo do escritório é derivado da sessão; tenant_id não é aceito.',
             'institutional_email.email' => 'Informe um e-mail institucional válido.',
         ];
+    }
+
+    public function toDto(): TenantInstitutionalProfileUpdateData
+    {
+        return new TenantInstitutionalProfileUpdateData(
+            attributes: $this->validated(),
+            actorUserId: $this->actor()->id,
+        );
     }
 }

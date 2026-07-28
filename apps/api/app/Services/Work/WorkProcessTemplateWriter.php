@@ -2,6 +2,7 @@
 
 namespace App\Services\Work;
 
+use App\DTO\Work\WorkProcessTemplateData;
 use App\Enums\Work\DueRuleType;
 use App\Models\WorkProcessTemplate;
 use App\Models\WorkProcessTemplateTask;
@@ -24,14 +25,16 @@ final class WorkProcessTemplateWriter
         private readonly ProcessAudienceResolver $audiences,
         private readonly WorkMonitoringContextRegistry $monitoringContexts,
         private readonly WorkProcessTemplateRecurrenceService $recurrence,
+        private readonly WorkProcessTemplateProjection $projection,
         private readonly AuditLogger $audit,
     ) {}
 
     /**
      * @param  array<string, mixed>  $input
      */
-    public function create(array $input): WorkProcessTemplate
+    public function create(WorkProcessTemplateData|array $input): WorkProcessTemplate
     {
+        $input = $input instanceof WorkProcessTemplateData ? $input->attributes : $input;
         $tenantId = $this->requireTenantId();
         $data = $this->validated($input, $tenantId);
         if (array_key_exists('audience_rules', $data)) {
@@ -78,8 +81,11 @@ final class WorkProcessTemplateWriter
     /**
      * @param  array<string, mixed>  $input
      */
-    public function update(WorkProcessTemplate $template, array $input): WorkProcessTemplate
-    {
+    public function update(
+        WorkProcessTemplate $template,
+        WorkProcessTemplateData|array $input,
+    ): WorkProcessTemplate {
+        $input = $input instanceof WorkProcessTemplateData ? $input->attributes : $input;
         $tenantId = $this->requireTenantId();
         $data = $this->validated($input, $tenantId, $template->id);
         if (array_key_exists('audience_rules', $data)) {
@@ -135,49 +141,7 @@ final class WorkProcessTemplateWriter
      */
     public function toPublic(WorkProcessTemplate $t): array
     {
-        return [
-            'id' => $t->id,
-            'catalog_key' => $t->catalog_key,
-            'catalog_version' => $t->catalog_version,
-            'name' => $t->name,
-            'description' => $t->description,
-            'monitoring_module_key' => $t->monitoring_module_key,
-            'audience_rules' => $t->audience_rules ?? [
-                'tax_regimes' => [],
-                'category_ids' => [],
-                'category_match' => 'ANY',
-                'excluded_category_ids' => [],
-            ],
-            'default_department_id' => $t->default_department_id,
-            'default_due_rule_type' => $t->default_due_rule_type?->value,
-            'default_due_rule_value' => $t->default_due_rule_value,
-            'is_active' => $t->is_active,
-            'recurrence_enabled' => (bool) $t->recurrence_enabled,
-            'recurrence_frequency' => $t->recurrence_frequency?->value,
-            'generation_day' => (int) ($t->generation_day ?? 1),
-            'anchor_month' => $t->anchor_month,
-            'period_offset' => $t->period_offset?->value ?? 'PREVIOUS',
-            'next_run_at' => $t->next_run_at?->toIso8601String(),
-            'recurrence_owner_membership_id' => $t->recurrence_owner_membership_id,
-            'lock_version' => $t->lock_version,
-            'tasks' => $t->relationLoaded('tasks')
-                ? $t->tasks->map(fn (WorkProcessTemplateTask $task) => [
-                    'id' => $task->id,
-                    'sort_order' => $task->sort_order,
-                    'title' => $task->title,
-                    'description' => $task->description,
-                    'due_rule_type' => $task->due_rule_type?->value,
-                    'due_rule_value' => $task->due_rule_value,
-                    'default_department_id' => $task->default_department_id,
-                    'default_assignee_membership_id' => $task->default_assignee_membership_id,
-                    'is_required' => $task->is_required,
-                    'is_critical' => $task->is_critical,
-                    'requires_evidence' => $task->requires_evidence,
-                ])->values()->all()
-                : [],
-            'created_at' => $t->created_at?->toIso8601String(),
-            'updated_at' => $t->updated_at?->toIso8601String(),
-        ];
+        return $this->projection->build($t);
     }
 
     /**
@@ -185,6 +149,17 @@ final class WorkProcessTemplateWriter
      * @return array<string, mixed>
      */
     public function validated(array $input, ?int $tenantId = null, ?int $ignoreId = null): array
+    {
+        return Validator::make(
+            $input,
+            $this->rules($tenantId, $ignoreId),
+        )->validate();
+    }
+
+    /**
+     * @return array<string, list<mixed>>
+     */
+    public function rules(?int $tenantId = null, ?int $ignoreId = null): array
     {
         $tenantId ??= $this->requireTenantId();
 
@@ -195,7 +170,7 @@ final class WorkProcessTemplateWriter
 
         $monitoringKeys = $this->monitoringContexts->keys();
 
-        return Validator::make($input, [
+        return [
             'name' => ['required', 'string', 'max:160', $nameRule],
             'description' => ['nullable', 'string'],
             'monitoring_module_key' => ['nullable', 'string', Rule::in($monitoringKeys)],
@@ -223,7 +198,7 @@ final class WorkProcessTemplateWriter
             'tasks.*.is_required' => ['sometimes', 'boolean'],
             'tasks.*.is_critical' => ['sometimes', 'boolean'],
             'tasks.*.requires_evidence' => ['sometimes', 'boolean'],
-        ])->validate();
+        ];
     }
 
     /**

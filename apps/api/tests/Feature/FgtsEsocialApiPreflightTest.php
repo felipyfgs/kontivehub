@@ -6,16 +6,19 @@ namespace Tests\Feature;
 
 use App\Enums\CredentialStatus;
 use App\Enums\TenantRole;
+use App\Jobs\Fiscal\ExecuteFiscalMonitoringRunJob;
 use App\Jobs\Fiscal\SyncFgtsEsocialCompetenceJob;
 use App\Models\Client;
 use App\Models\ClientCredential;
 use App\Models\EsocialBxAccessLedger;
+use App\Models\FiscalCategory;
 use App\Models\FiscalMonitoringRun;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Esocial\EsocialBxAccessGuard;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -119,6 +122,81 @@ class FgtsEsocialApiPreflightTest extends TestCase
         $this->postJson('/api/v1/fiscal/fgts/sync', $this->payload($client))->assertForbidden();
     }
 
+    public function test_default_sync_creates_one_run_and_dispatches_one_execution_path(): void
+    {
+        [$tenant, $client] = $this->tenant(TenantRole::TenantAdmin);
+        $this->credential($tenant, $client);
+        $this->fgtsCategory();
+
+        $this->postJson('/api/v1/fiscal/fgts/sync', [
+            ...$this->payload($client),
+            'correlation_id' => 'fgts-esocial-single-path',
+        ])->assertAccepted()
+            ->assertJsonPath('data.run.correlation_id', 'fgts-esocial-single-path');
+
+        $run = FiscalMonitoringRun::query()->withoutGlobalScopes()->sole();
+        $this->assertSame('2026-06', $run->progress['competence_period_key'] ?? null);
+        Queue::assertPushed(
+            SyncFgtsEsocialCompetenceJob::class,
+            static fn (SyncFgtsEsocialCompetenceJob $job): bool => $job->runId === $run->id,
+        );
+        Queue::assertPushed(SyncFgtsEsocialCompetenceJob::class, 1);
+        Queue::assertNotPushed(ExecuteFiscalMonitoringRunJob::class);
+    }
+
+    public function test_correlation_replay_reuses_run_without_duplicate_dispatch(): void
+    {
+        [$tenant, $client] = $this->tenant(TenantRole::TenantAdmin);
+        $this->credential($tenant, $client);
+        $this->fgtsCategory();
+        $payload = [
+            ...$this->payload($client),
+            'correlation_id' => 'fgts-esocial-idempotent',
+        ];
+
+        $firstRun = $this->postJson('/api/v1/fiscal/fgts/sync', $payload)
+            ->assertAccepted()
+            ->json('data.run.id');
+        $secondRun = $this->postJson('/api/v1/fiscal/fgts/sync', $payload)
+            ->assertAccepted()
+            ->json('data.run.id');
+
+        $this->assertSame($firstRun, $secondRun);
+        $this->assertDatabaseCount('fiscal_monitoring_runs', 1);
+        Queue::assertPushed(SyncFgtsEsocialCompetenceJob::class, 1);
+        Queue::assertNotPushed(ExecuteFiscalMonitoringRunJob::class);
+    }
+
+    public function test_run_progress_failure_rolls_back_and_does_not_dispatch(): void
+    {
+        [$tenant, $client] = $this->tenant(TenantRole::TenantAdmin);
+        $this->credential($tenant, $client);
+
+        DB::unprepared(<<<'SQL'
+            CREATE FUNCTION reject_fgts_esocial_progress() RETURNS trigger AS $$
+            BEGIN
+                IF NEW.progress IS NOT NULL THEN
+                    RAISE EXCEPTION 'forced progress failure';
+                END IF;
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+
+            CREATE TRIGGER reject_fgts_esocial_progress_update
+            BEFORE UPDATE ON fiscal_monitoring_runs
+            FOR EACH ROW EXECUTE FUNCTION reject_fgts_esocial_progress();
+            SQL);
+
+        $this->postJson('/api/v1/fiscal/fgts/sync', [
+            ...$this->payload($client),
+            'correlation_id' => 'fgts-esocial-rollback',
+        ])->assertStatus(422)
+            ->assertJsonPath('code', 'ESOCIAL_RUN_CREATION_FAILED');
+
+        $this->assertDatabaseCount('fiscal_monitoring_runs', 0);
+        Queue::assertNothingPushed();
+    }
+
     public function test_foreign_client_and_establishment_are_not_disclosed(): void
     {
         [$tenant, $client] = $this->tenant(TenantRole::TenantAdmin);
@@ -175,5 +253,18 @@ class FgtsEsocialApiPreflightTest extends TestCase
         $this->assertSame(0, FiscalMonitoringRun::query()->withoutGlobalScopes()->count());
         $this->assertSame(0, EsocialBxAccessLedger::query()->withoutGlobalScopes()->count());
         Queue::assertNothingPushed();
+    }
+
+    private function fgtsCategory(): FiscalCategory
+    {
+        return FiscalCategory::query()->create([
+            'code' => 'FGTS',
+            'name' => 'FGTS',
+            'module_key' => 'fgts',
+            'default_coverage' => 'PARTIAL',
+            'default_mutability' => 'READ_ONLY',
+            'system_code' => 'ESOCIAL',
+            'service_code' => 'FGTS',
+        ]);
     }
 }

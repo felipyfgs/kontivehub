@@ -1,0 +1,39 @@
+<?php
+
+namespace App\Actions\Tenant;
+
+use App\DTO\Tenant\TenantSerproAuthorizationOverviewData;
+use App\Enums\SerproEnvironment;
+use App\Services\Integra\SerproTenantActionableStatusService;
+use App\Services\Integra\TenantIntegraHealthService;
+use App\Services\Integra\TenantSerproAuthorizationService;
+use App\Support\CurrentTenant;
+
+final readonly class ShowTenantSerproAuthorizationAction
+{
+    public function __construct(
+        private CurrentTenant $currentTenant,
+        private TenantSerproAuthorizationService $authorizations,
+        private TenantIntegraHealthService $health,
+        private SerproTenantActionableStatusService $actionableStatus,
+    ) {}
+
+    public function __invoke(
+        SerproEnvironment $environment,
+    ): TenantSerproAuthorizationOverviewData {
+        $tenant = $this->currentTenant->tenant();
+        $authorization = $this->authorizations->getOrCreate($tenant, $environment);
+        $tenantStatus = $this->actionableStatus->forTenant($tenant, $environment);
+
+        return new TenantSerproAuthorizationOverviewData(
+            authorization: $authorization,
+            platformHealth: $this->health->forEnvironment($environment),
+            onboarding: $tenantStatus['onboarding'],
+            actionable: $tenantStatus['actionable'],
+            platformAvailable: $tenantStatus['platform_available'],
+            termRepresentationStrategy: $this->authorizations
+                ->representationStrategy($environment)
+                ->value,
+        );
+    }
+}

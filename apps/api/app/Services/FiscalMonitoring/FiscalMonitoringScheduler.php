@@ -32,6 +32,7 @@ use App\Services\Usage\MonitorCommercialLedgerService;
 use App\Services\Usage\SubscriptionPeriodService;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Cache\LockTimeoutException;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -402,43 +403,77 @@ final class FiscalMonitoringScheduler
             }
         }
 
-        $run = FiscalMonitoringRun::query()->create([
-            'tenant_id' => $tenantId,
-            'client_id' => $clientId,
-            'system_code' => $systemCode,
-            'service_code' => $serviceCode,
-            'operation_code' => $operationCode,
-            'operation_key' => $sitfisDriver !== null ? 'sitfis.emitir_relatorio' : null,
-            'source_provenance' => $sitfisDriver === SerproCapabilityDriver::Real
-                ? FiscalSourceProvenance::SerproReal
-                : null,
-            'verification_state' => $sitfisDriver !== null
-                ? FiscalVerificationState::Unverified
-                : null,
-            'trigger' => FiscalTrigger::Scheduled,
-            'idempotency_key' => $key,
-            'status' => FiscalRunStatus::Queued,
-            'situation' => 'UNKNOWN',
-            'coverage' => 'UNKNOWN',
-            'mutability' => 'READ_ONLY',
-            'correlation_id' => bin2hex(random_bytes(8)),
-            // PGDAS primeiro; period_key comercial por cima — não sobrescrever o ledger
-            // (assinatura = data YYYY-MM-DD) com o PA fiscal (YYYY-MM).
-            'progress' => array_merge(
-                $this->monitorProgressForCodes($systemCode, $serviceCode, $tenantId, $now),
-                [
-                    'commercial_ledger_entry_id' => $entry->id,
-                    'monitor_key' => $monitorKey,
-                    'commercial_origin' => $entry->origin->value,
-                    'period_key' => $entry->period_key,
-                ],
-            ),
-        ]);
+        try {
+            $run = DB::transaction(function () use (
+                $tenantId,
+                $clientId,
+                $systemCode,
+                $serviceCode,
+                $operationCode,
+                $sitfisDriver,
+                $key,
+                $entry,
+                $monitorKey,
+                $now,
+            ) {
+                $race = FiscalMonitoringRun::query()
+                    ->withoutGlobalScopes()
+                    ->where('tenant_id', $tenantId)
+                    ->where('idempotency_key', $key)
+                    ->lockForUpdate()
+                    ->first();
 
-        // Metadata no ledger (sem mutar identidade).
-        $meta = is_array($entry->metadata) ? $entry->metadata : [];
-        $meta['fiscal_monitoring_run_id'] = $run->id;
-        $entry->forceFill(['metadata' => $meta])->save();
+                if ($race !== null) {
+                    return null;
+                }
+
+                $created = FiscalMonitoringRun::query()->create([
+                    'tenant_id' => $tenantId,
+                    'client_id' => $clientId,
+                    'system_code' => $systemCode,
+                    'service_code' => $serviceCode,
+                    'operation_code' => $operationCode,
+                    'operation_key' => $sitfisDriver !== null ? 'sitfis.emitir_relatorio' : null,
+                    'source_provenance' => $sitfisDriver === SerproCapabilityDriver::Real
+                        ? FiscalSourceProvenance::SerproReal
+                        : null,
+                    'verification_state' => $sitfisDriver !== null
+                        ? FiscalVerificationState::Unverified
+                        : null,
+                    'trigger' => FiscalTrigger::Scheduled,
+                    'idempotency_key' => $key,
+                    'status' => FiscalRunStatus::Queued,
+                    'situation' => 'UNKNOWN',
+                    'coverage' => 'UNKNOWN',
+                    'mutability' => 'READ_ONLY',
+                    'correlation_id' => bin2hex(random_bytes(8)),
+                    // PGDAS primeiro; period_key comercial por cima — não sobrescrever o ledger
+                    // (assinatura = data YYYY-MM-DD) com o PA fiscal (YYYY-MM).
+                    'progress' => array_merge(
+                        $this->monitorProgressForCodes($systemCode, $serviceCode, $tenantId, $now),
+                        [
+                            'commercial_ledger_entry_id' => $entry->id,
+                            'monitor_key' => $monitorKey,
+                            'commercial_origin' => $entry->origin->value,
+                            'period_key' => $entry->period_key,
+                        ],
+                    ),
+                ]);
+
+                // Metadata no ledger (sem mutar identidade).
+                $meta = is_array($entry->metadata) ? $entry->metadata : [];
+                $meta['fiscal_monitoring_run_id'] = $created->id;
+                $entry->forceFill(['metadata' => $meta])->save();
+
+                return $created;
+            });
+        } catch (UniqueConstraintViolationException) {
+            return 'skipped';
+        }
+
+        if ($run === null) {
+            return 'skipped';
+        }
 
         ExecuteFiscalMonitoringRunJob::dispatch($run->id)
             ->onQueue((string) config('fiscal_monitoring.job.queue', 'default'));
@@ -481,27 +516,38 @@ final class FiscalMonitoringScheduler
                 ->first();
 
             if ($run === null) {
-                $run = FiscalMonitoringRun::query()->create([
-                    'tenant_id' => $tenantId,
-                    'client_id' => $clientId,
-                    'system_code' => ParcelamentoServiceCatalog::SOLUTION,
-                    'service_code' => $modality->value,
-                    'operation_code' => 'MONITOR',
-                    'trigger' => FiscalTrigger::Scheduled,
-                    'idempotency_key' => $key,
-                    'status' => FiscalRunStatus::Queued,
-                    'situation' => 'UNKNOWN',
-                    'coverage' => 'UNKNOWN',
-                    'mutability' => 'READ_ONLY',
-                    'correlation_id' => $correlation.':'.strtolower(str_replace('-', '_', $modality->value)),
-                    'progress' => [
-                        'commercial_ledger_entry_id' => $entry->id,
-                        'monitor_key' => 'installments',
-                        'commercial_origin' => $entry->origin->value,
-                        'period_key' => $entry->period_key,
-                    ],
-                ]);
-                $createdIds[] = (int) $run->id;
+                try {
+                    $run = FiscalMonitoringRun::query()->create([
+                        'tenant_id' => $tenantId,
+                        'client_id' => $clientId,
+                        'system_code' => ParcelamentoServiceCatalog::SOLUTION,
+                        'service_code' => $modality->value,
+                        'operation_code' => 'MONITOR',
+                        'trigger' => FiscalTrigger::Scheduled,
+                        'idempotency_key' => $key,
+                        'status' => FiscalRunStatus::Queued,
+                        'situation' => 'UNKNOWN',
+                        'coverage' => 'UNKNOWN',
+                        'mutability' => 'READ_ONLY',
+                        'correlation_id' => $correlation.':'.strtolower(str_replace('-', '_', $modality->value)),
+                        'progress' => [
+                            'commercial_ledger_entry_id' => $entry->id,
+                            'monitor_key' => 'installments',
+                            'commercial_origin' => $entry->origin->value,
+                            'period_key' => $entry->period_key,
+                        ],
+                    ]);
+                    $createdIds[] = (int) $run->id;
+                } catch (UniqueConstraintViolationException) {
+                    $run = FiscalMonitoringRun::query()
+                        ->withoutGlobalScopes()
+                        ->where('tenant_id', $tenantId)
+                        ->where('idempotency_key', $key)
+                        ->first();
+                    if ($run === null) {
+                        continue;
+                    }
+                }
             }
 
             $runIds[] = (int) $run->id;

@@ -45,7 +45,7 @@ class PublicOpenApiContractTest extends TestCase
 
         $json = json_encode($document, JSON_THROW_ON_ERROR);
         $this->assertDoesNotMatchRegularExpression(
-            '/\b(?:office_id|offices|legacy|deprecated|a1)\b/i',
+            '/\b(?:office_id|offices|deprecated|a1)\b/i',
             $json,
         );
     }

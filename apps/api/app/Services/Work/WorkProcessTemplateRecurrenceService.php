@@ -3,6 +3,7 @@
 namespace App\Services\Work;
 
 use App\Domain\Work\WorkRoutineRecurrenceSchedule;
+use App\DTO\Work\WorkProcessTemplateRecurrenceData;
 use App\Enums\Work\RecurrenceFrequency;
 use App\Enums\Work\RecurrencePeriodOffset;
 use App\Models\WorkProcessTemplate;
@@ -131,8 +132,13 @@ final class WorkProcessTemplateRecurrenceService
     /**
      * @param  array<string, mixed>  $input
      */
-    public function update(WorkProcessTemplate $template, array $input): WorkProcessTemplate
-    {
+    public function update(
+        WorkProcessTemplate $template,
+        WorkProcessTemplateRecurrenceData|array $input,
+    ): WorkProcessTemplate {
+        $input = $input instanceof WorkProcessTemplateRecurrenceData
+            ? $input->attributes
+            : $input;
         $tenantId = $this->currentTenant->id();
         if ($tenantId === null || (int) $template->tenant_id !== (int) $tenantId) {
             abort(404);
@@ -161,7 +167,13 @@ final class WorkProcessTemplateRecurrenceService
      */
     public function validated(array $input): array
     {
-        return Validator::make($input, [
+        return Validator::make($input, $this->rules())->validate();
+    }
+
+    /** @return array<string, list<mixed>> */
+    public function rules(): array
+    {
+        return [
             'recurrence_enabled' => ['sometimes', 'boolean'],
             'recurrence_frequency' => ['sometimes', 'nullable', 'string', Rule::enum(RecurrenceFrequency::class)],
             'generation_day' => [
@@ -174,6 +186,6 @@ final class WorkProcessTemplateRecurrenceService
             'period_offset' => ['sometimes', 'string', Rule::enum(RecurrencePeriodOffset::class)],
             'recurrence_owner_membership_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'lock_version' => ['sometimes', 'integer', 'min:1'],
-        ])->validate();
+        ];
     }
 }

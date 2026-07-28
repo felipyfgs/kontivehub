@@ -70,6 +70,9 @@ class MeiAutomationAttemptApiTest extends TestCase
         $this->get('/api/v1/fiscal/mei-automation/attempts/'.$attempt->id.'/artifacts/'.$artifact['id'].'/download')
             ->assertOk()
             ->assertHeader('Content-Type', 'application/pdf');
+        $this->get('/api/v1/fiscal/mei-automation/attempts/'.$attempt->id.'/artifacts/'.$artifact['id'].'/download?tenant_id='.$tenant->id)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['tenant_id']);
 
         $otherAttempt = $this->attempt(Tenant::factory()->create());
         $otherArtifact = $otherAttempt->vault_artifacts[0];

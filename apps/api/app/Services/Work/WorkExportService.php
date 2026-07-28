@@ -4,6 +4,7 @@ namespace App\Services\Work;
 
 use App\Domain\Work\DueDateCalculator;
 use App\Domain\Work\WorkRiskCalculator;
+use App\DTO\Work\WorkExportFiltersData;
 use App\Enums\Work\WorkExportStatus;
 use App\Enums\Work\WorkRisk;
 use App\Models\WorkExport;
@@ -13,6 +14,7 @@ use App\Support\CurrentTenant;
 use App\Support\Work\TenantTimezone;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -46,12 +48,9 @@ final class WorkExportService
         private readonly DueDateCalculator $dates = new DueDateCalculator,
     ) {}
 
-    /**
-     * @param  array<string, mixed>  $filters
-     */
-    public function create(array $filters): WorkExport
+    public function create(WorkExportFiltersData $data): WorkExport
     {
-        unset($filters['tenant_id']);
+        $filters = $data->toArray();
 
         $export = WorkExport::query()->create([
             'tenant_id' => $this->currentTenant->id(),
@@ -74,6 +73,9 @@ final class WorkExportService
     {
         $export->forceFill(['status' => WorkExportStatus::Processing])->save();
 
+        $stream = null;
+        $storedPath = null;
+
         try {
             $tenant = $export->tenant;
             $tz = TenantTimezone::for($tenant);
@@ -94,10 +96,17 @@ final class WorkExportService
                 $query->whereHas('process', fn ($q) => $q->where('client_id', (int) $filters['client_id']));
             }
 
-            $rows = [];
-            $rows[] = self::COLUMNS;
+            $stream = tmpfile();
+            if ($stream === false) {
+                throw new RuntimeException('Unable to allocate the work export stream.');
+            }
+            if (fwrite($stream, $this->csvLine(self::COLUMNS)) === false) {
+                throw new RuntimeException('Unable to write the work export header.');
+            }
 
-            foreach ($query->orderBy('id')->cursor() as $task) {
+            $rowCount = 0;
+
+            foreach ($query->lazyById(500) as $task) {
                 $effective = $this->risks->effectiveDueDate(
                     $task->due_date?->format('Y-m-d'),
                     $task->process?->target_due_date?->format('Y-m-d'),
@@ -113,7 +122,7 @@ final class WorkExportService
                     $today,
                 );
 
-                $rows[] = [
+                $row = [
                     $task->id,
                     $task->title,
                     $task->status->value,
@@ -132,29 +141,43 @@ final class WorkExportService
                     $task->assigneeMembership?->user?->name ?? '',
                     $task->process?->subject_to_fine ? '1' : '0',
                 ];
+                if (fwrite($stream, $this->csvLine($row)) === false) {
+                    throw new RuntimeException('Unable to write a work export row.');
+                }
+                $rowCount++;
             }
 
-            $csv = '';
-            foreach ($rows as $row) {
-                $csv .= $this->csvLine($row);
+            $byteSize = ftell($stream);
+            if ($byteSize === false || ! rewind($stream)) {
+                throw new RuntimeException('Unable to finalize the work export stream.');
             }
-
             $path = 'work-exports/'.$export->tenant_id.'/'.$export->id.'_'.Str::uuid().'.csv';
-            Storage::disk('local')->put($path, $csv);
+            if (! Storage::disk('local')->put($path, $stream)) {
+                throw new RuntimeException('Unable to persist the work export.');
+            }
+            $storedPath = $path;
 
             $export->forceFill([
                 'status' => WorkExportStatus::Ready,
                 'storage_path' => $path,
-                'byte_size' => strlen($csv),
-                'row_count' => max(count($rows) - 1, 0),
+                'byte_size' => $byteSize,
+                'row_count' => $rowCount,
                 'completed_at' => now(),
             ])->save();
         } catch (Throwable $e) {
+            if ($storedPath !== null) {
+                Storage::disk('local')->delete($storedPath);
+            }
             $export->forceFill([
                 'status' => WorkExportStatus::Failed,
                 'error_message' => 'Falha ao gerar exportação.',
+                'storage_path' => null,
             ])->save();
             report($e);
+        } finally {
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
         }
     }
 

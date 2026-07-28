@@ -12,6 +12,7 @@ use App\Models\Establishment;
 use App\Models\NfeDocument;
 use App\Services\Certificates\CredentialService;
 use App\Services\Sefaz\DistDfePageProcessor;
+use App\Support\LogSanitizer;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -92,27 +93,27 @@ class ReconsultNfeAfterManifestationJob implements ShouldQueue
                 $cUf,
             );
         } catch (Throwable $e) {
-            Log::warning('sefaz.manifest.reconsult.failed', [
+            Log::warning('sefaz.manifest.reconsult.failed', LogSanitizer::redact([
                 'access_key' => $this->accessKey,
                 'error' => mb_substr($e->getMessage(), 0, 200),
-            ]);
+            ]));
             throw $e;
         }
 
         if ($page->isAbuse()) {
-            Log::warning('sefaz.manifest.reconsult.abuse', [
+            Log::warning('sefaz.manifest.reconsult.abuse', LogSanitizer::redact([
                 'access_key' => $this->accessKey,
                 'c_stat' => $page->cStat,
-            ]);
+            ]));
 
             return;
         }
 
         if ($page->documents === []) {
-            Log::info('sefaz.manifest.reconsult.empty', [
+            Log::info('sefaz.manifest.reconsult.empty', LogSanitizer::redact([
                 'access_key' => $this->accessKey,
                 'c_stat' => $page->cStat,
-            ]);
+            ]));
 
             return;
         }
@@ -140,11 +141,11 @@ class ReconsultNfeAfterManifestationJob implements ShouldQueue
             ->where('is_summary', false)
             ->exists();
 
-        Log::info('sefaz.manifest.reconsult.done', [
+        Log::info('sefaz.manifest.reconsult.done', LogSanitizer::redact([
             'access_key' => $this->accessKey,
             'has_full' => $hasFull,
             'docs' => count($page->documents),
-        ]);
+        ]));
     }
 
     private function resolveUfAutor(Establishment $establishment): string

@@ -24,6 +24,8 @@ final class RenewTenantProcuradorTokenJob implements ShouldBeUnique, ShouldQueue
 
     public int $tries = 2;
 
+    public int $timeout = 300;
+
     public int $uniqueFor = 120;
 
     public function __construct(
@@ -78,5 +80,18 @@ final class RenewTenantProcuradorTokenJob implements ShouldBeUnique, ShouldQueue
 
             throw $e;
         }
+    }
+
+    public function tags(): array
+    {
+        return ['job:'.class_basename(static::class)];
+    }
+
+    public function failed(?\Throwable $e): void
+    {
+        \Illuminate\Support\Facades\Log::warning('job.failed', [
+            'job' => class_basename(static::class),
+            'message' => \App\Support\LogSanitizer::scrubString((string) ($e?->getMessage() ?? '')),
+        ]);
     }
 }

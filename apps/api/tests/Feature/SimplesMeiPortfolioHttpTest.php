@@ -86,6 +86,25 @@ class SimplesMeiPortfolioHttpTest extends TestCase
         $this->getJson('/api/v1/fiscal/modules/simples_mei/clients?submodule=PGDASD&tenant_id='.$seed['tenant']->id)
             ->assertStatus(422)
             ->assertJsonPath('code', 'CLIENT_TENANT_ID_REJECTED');
+
+        $this->getJson('/api/v1/fiscal/modules/simples_mei/clients?submodule=PGDASD&filters[tenant_id]='.$seed['tenant']->id)
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'CLIENT_TENANT_ID_REJECTED');
+    }
+
+    public function test_validates_pagination_and_preserves_case_insensitive_submodule(): void
+    {
+        $seed = $this->seedSimplesNacionalPortfolio();
+        $this->actingAsTenantUser($seed['operator']);
+
+        $this->getJson('/api/v1/fiscal/modules/simples_mei/clients?submodule=pgdasd&per_page=20')
+            ->assertOk();
+        $this->getJson('/api/v1/fiscal/modules/simples_mei/clients?submodule=REMOVED')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['submodule']);
+        $this->getJson('/api/v1/fiscal/modules/simples_mei/clients?submodule=PGDASD&per_page=101')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['per_page']);
     }
 
     public function test_isolates_other_tenant_clients(): void

@@ -2,6 +2,7 @@
 
 namespace App\Services\Work;
 
+use App\DTO\Work\WorkProcessGroupFiltersData;
 use App\Enums\Work\ProcessStatus;
 use App\Enums\Work\TaskStatus;
 use App\Models\Client;
@@ -37,12 +38,11 @@ final class WorkProcessGroupQuery
         private readonly CurrentTenant $currentTenant,
     ) {}
 
-    /**
-     * @param  array<string, mixed>  $filters
-     * @return LengthAwarePaginator<int, array<string, mixed>>
-     */
-    public function paginate(array $filters): LengthAwarePaginator
-    {
+    /** @return LengthAwarePaginator<int, array<string, mixed>> */
+    public function paginate(
+        WorkProcessGroupFiltersData $data,
+    ): LengthAwarePaginator {
+        $filters = $data->toArray();
         $groupBy = (string) ($filters['group_by'] ?? '');
         if (! in_array($groupBy, ['client', 'routine'], true)) {
             throw ValidationException::withMessages([

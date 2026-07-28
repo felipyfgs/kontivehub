@@ -5,8 +5,11 @@ namespace App\Http\Controllers\Api\V1;
 use App\Enums\CaptureChannel;
 use App\Enums\CteCoverageStatus;
 use App\Enums\QuarantineResolutionStatus;
-use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Sefaz\ListCteCoverageRequest;
+use App\Http\Requests\Sefaz\RepairKnownCteNsuRequest;
+use App\Http\Resources\TenantCredentialResource;
+use App\Http\Resources\TenantFiscalIdentityResource;
 use App\Jobs\RepairKnownCteNsuJob;
 use App\Models\ChannelSyncCursor;
 use App\Models\Client;
@@ -14,12 +17,10 @@ use App\Models\CteCoverageSnapshot;
 use App\Models\FiscalDocumentQuarantine;
 use App\Models\TenantDistributionCursor;
 use App\Models\TenantFiscalIdentity;
-use App\Services\Authorization\TenantAuthorization;
 use App\Services\Sefaz\CteCoverageService;
 use App\Services\Sefaz\CteOperationsMetrics;
 use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
 /** APIs CT-e somente com metadados sanitizados e tenant derivado da sessão. */
@@ -37,8 +38,12 @@ class CteOperationsController extends Controller
 
         return response()->json(['data' => [
             'tenant_cnpj' => $identity?->cnpj,
-            'identity' => $identity?->toPublicArray(),
-            'credential' => $credential?->toPublicArray(),
+            'identity' => $identity === null
+                ? null
+                : TenantFiscalIdentityResource::make($identity)->resolve(),
+            'credential' => $credential === null
+                ? null
+                : TenantCredentialResource::make($credential)->resolve(),
             'enabled' => (bool) config('sefaz.cte_autxml.enabled', false),
             'instructions' => [
                 'include_before_authorization' => true,
@@ -97,20 +102,17 @@ class CteOperationsController extends Controller
     }
 
     public function coverage(
-        Request $request,
+        ListCteCoverageRequest $request,
         CurrentTenant $currentTenant,
         CteCoverageService $coverage,
     ): JsonResponse {
-        $data = $request->validate([
-            'period' => ['nullable', 'date_format:Y-m'],
-            'client_id' => ['nullable', 'integer'],
-            'status' => ['nullable', 'string'],
-        ]);
         $tenantId = $currentTenant->tenant()->id;
-        $period = $data['period'] ?? now()->format('Y-m');
+        $period = $request->period();
+        $clientId = $request->clientId();
+        $status = $request->status();
         $clients = Client::query()
             ->where('tenant_id', $tenantId)
-            ->when(isset($data['client_id']), fn ($query) => $query->whereKey((int) $data['client_id']))
+            ->when($clientId !== null, fn ($query) => $query->whereKey($clientId))
             ->orderBy('id')
             ->limit(200)
             ->get();
@@ -122,8 +124,8 @@ class CteOperationsController extends Controller
         $snapshots = CteCoverageSnapshot::query()
             ->where('tenant_id', $tenantId)
             ->where('period', $period)
-            ->when(isset($data['client_id']), fn ($query) => $query->where('client_id', (int) $data['client_id']))
-            ->when(isset($data['status']), fn ($query) => $query->where('status', strtoupper((string) $data['status'])))
+            ->when($clientId !== null, fn ($query) => $query->where('client_id', $clientId))
+            ->when($status !== null, fn ($query) => $query->where('status', strtoupper($status)))
             ->with('client:id,legal_name,display_name')
             ->orderBy('client_id')
             ->get()
@@ -166,22 +168,14 @@ class CteOperationsController extends Controller
         return response()->json(['data' => $items]);
     }
 
-    public function repairKnownNsu(Request $request, CurrentTenant $currentTenant): JsonResponse
-    {
-        $actor = $request->user();
-        abort_unless(
-            $actor !== null
-                && app(TenantAuthorization::class)->allows($actor, TenantPermission::FiscalSyncTrigger),
-            403,
-        );
-        $data = $request->validate([
-            'cursor_id' => ['required', 'integer'],
-            'nsu' => ['required', 'integer', 'min:1'],
-        ]);
+    public function repairKnownNsu(
+        RepairKnownCteNsuRequest $request,
+        CurrentTenant $currentTenant,
+    ): JsonResponse {
         $cursor = ChannelSyncCursor::query()
             ->where('tenant_id', $currentTenant->tenant()->id)
             ->where('channel', CaptureChannel::CteDistDfe->value)
-            ->find((int) $data['cursor_id']);
+            ->find($request->cursorId());
         if ($cursor === null) {
             abort(404);
         }
@@ -192,12 +186,12 @@ class CteOperationsController extends Controller
         }
 
         $correlationId = (string) Str::uuid();
-        RepairKnownCteNsuJob::dispatch($cursor->id, (int) $data['nsu'], $correlationId);
+        RepairKnownCteNsuJob::dispatch($cursor->id, $request->nsu(), $correlationId);
 
         return response()->json(['data' => [
             'queued' => true,
             'cursor_id' => $cursor->id,
-            'nsu' => (int) $data['nsu'],
+            'nsu' => $request->nsu(),
             'correlation_id' => $correlationId,
             'cursor_last_nsu' => $cursor->last_nsu,
         ]], 202);

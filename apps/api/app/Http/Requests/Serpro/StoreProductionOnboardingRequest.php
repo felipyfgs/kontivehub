@@ -3,11 +3,11 @@
 namespace App\Http\Requests\Serpro;
 
 use App\DTO\Serpro\ProductionOnboardingInput;
-use Illuminate\Foundation\Http\FormRequest;
+use App\Http\Requests\AuthenticatedRequest;
 use Illuminate\Validation\Rule;
-use RuntimeException;
+use Illuminate\Validation\ValidationException;
 
-class StoreProductionOnboardingRequest extends FormRequest
+final class StoreProductionOnboardingRequest extends AuthenticatedRequest
 {
     /** @var list<string> */
     private const TECHNICAL_FIELDS = [
@@ -26,11 +26,7 @@ class StoreProductionOnboardingRequest extends FormRequest
         'autenticar_procurador_token',
     ];
 
-    public function authorize(): bool
-    {
-        return true;
-    }
-
+    /** @return array<string, list<mixed>> */
     public function rules(): array
     {
         $rules = [
@@ -85,12 +81,16 @@ class StoreProductionOnboardingRequest extends FormRequest
         $file = $this->file('certificate');
         $path = $file?->getRealPath();
         if ($file === null || ! is_string($path)) {
-            throw new RuntimeException('Arquivo PFX não encontrado.');
+            throw ValidationException::withMessages([
+                'certificate' => ['Arquivo PFX não encontrado.'],
+            ]);
         }
 
         $binary = file_get_contents($path);
         if ($binary === false) {
-            throw new RuntimeException('Falha ao ler arquivo PFX.');
+            throw ValidationException::withMessages([
+                'certificate' => ['Falha ao ler arquivo PFX.'],
+            ]);
         }
 
         return new ProductionOnboardingInput(

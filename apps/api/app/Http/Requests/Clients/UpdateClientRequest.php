@@ -2,16 +2,36 @@
 
 namespace App\Http\Requests\Clients;
 
+use App\DTO\Clients\ClientUpdateData;
 use App\Enums\TaxRegimeCode;
+use App\Http\Middleware\EnsureTenantContext;
+use App\Http\Requests\AuthenticatedRequest;
+use App\Models\Client;
+use App\Models\User;
+use App\Policies\ClientPolicy;
 use App\Support\CurrentTenant;
-use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
-class UpdateClientRequest extends FormRequest
+final class UpdateClientRequest extends AuthenticatedRequest
 {
+    protected function prepareForValidation(): void
+    {
+        if ($this->attributes->getBoolean(EnsureTenantContext::CLIENT_TENANT_ID_SUPPLIED)) {
+            throw ValidationException::withMessages([
+                'tenant_id' => ['tenant_id não é aceito; use o Tenant corrente.'],
+            ]);
+        }
+    }
+
     public function authorize(): bool
     {
-        return true;
+        $actor = $this->user();
+        $client = $this->route('client');
+
+        return $actor instanceof User
+            && $client instanceof Client
+            && app(ClientPolicy::class)->update($actor, $client);
     }
 
     /**
@@ -48,5 +68,10 @@ class UpdateClientRequest extends FormRequest
             'registration_source' => ['prohibited'],
             'registration_refreshed_at' => ['prohibited'],
         ];
+    }
+
+    public function toDto(): ClientUpdateData
+    {
+        return new ClientUpdateData($this->validated());
     }
 }

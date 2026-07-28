@@ -120,6 +120,29 @@ class MailboxMessageApiTest extends TestCase
         ])->assertForbidden();
     }
 
+    public function test_read_filters_are_validated_and_tenant_scope_is_rejected(): void
+    {
+        [$tenant] = $this->tenantContext(TenantRole::TenantUser);
+
+        $this->getJson('/api/v1/fiscal/mailbox/messages?per_page=101')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['per_page']);
+        $this->getJson(
+            '/api/v1/fiscal/mailbox/messages?triage_status=INVALID',
+        )->assertUnprocessable()
+            ->assertJsonValidationErrors(['triage_status']);
+        $this->getJson('/api/v1/fiscal/mailbox/state?client_id=invalid')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['client_id']);
+        $this->getJson('/api/v1/fiscal/mailbox/alerts?active_only=invalid')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['active_only']);
+        $this->getJson(
+            '/api/v1/fiscal/mailbox/messages?tenant_id='.$tenant->id,
+        )->assertUnprocessable()
+            ->assertJsonValidationErrors(['tenant_id']);
+    }
+
     /** @return array{0: Tenant, 1: User, 2: Client} */
     private function tenantContext(TenantRole $role): array
     {

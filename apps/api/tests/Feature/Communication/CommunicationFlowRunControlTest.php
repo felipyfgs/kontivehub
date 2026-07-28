@@ -19,6 +19,7 @@ use App\Models\CommunicationConversation;
 use App\Models\CommunicationFlow;
 use App\Models\CommunicationFlowInboxBinding;
 use App\Models\CommunicationFlowRun;
+use App\Models\CommunicationFlowRunStep;
 use App\Models\CommunicationFlowVersion;
 use App\Models\CommunicationIdentity;
 use App\Models\CommunicationInbox;
@@ -90,11 +91,34 @@ final class CommunicationFlowRunControlTest extends TestCase
         Sanctum::actingAs($admin);
         app(CurrentTenant::class)->clear();
 
-        $this->getJson('/api/v1/communication/flow-runs?flow_id='.$run->flow_id)
+        $this->getJson(
+            '/api/v1/communication/flow-runs?tenant_id='.$tenant->id,
+        )->assertUnprocessable()
+            ->assertJsonValidationErrors('tenant_id');
+
+        $listed = $this->getJson('/api/v1/communication/flow-runs?flow_id='.$run->flow_id)
             ->assertOk()
-            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('meta', [
+                'current_page' => 1,
+                'last_page' => 1,
+                'total' => 1,
+            ])
+            ->assertJsonMissingPath('links')
             ->assertJsonPath('data.0.id', $run->id)
             ->assertJsonPath('data.0.status', 'running');
+
+        $this->assertSame([
+            'id',
+            'flow_id',
+            'flow_version_id',
+            'binding_id',
+            'conversation_id',
+            'status',
+            'current_node_id',
+            'started_at',
+            'finished_at',
+            'waiting_until',
+        ], array_keys($listed->json('data.0')));
 
         $this->getJson('/api/v1/communication/flow-runs?flow_id='.$run->flow_id.'&active_only=1')
             ->assertOk()
@@ -137,6 +161,11 @@ final class CommunicationFlowRunControlTest extends TestCase
         [$tenant, $run, $admin] = $this->seedRun();
         Sanctum::actingAs($admin);
         app(CurrentTenant::class)->clear();
+
+        $this->postJson('/api/v1/communication/flow-runs/'.$run->id.'/pause', [
+            'tenant_id' => $tenant->id,
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('tenant_id');
 
         $this->postJson('/api/v1/communication/flow-runs/'.$run->id.'/pause')
             ->assertOk()
@@ -211,6 +240,13 @@ final class CommunicationFlowRunControlTest extends TestCase
             ->assertOk();
 
         $this->assertSame(FlowRunStatus::Purged, $run->refresh()->status);
+        $this->assertNull($run->context_encrypted);
+        $this->assertNull(
+            CommunicationFlowRunStep::query()
+                ->withoutGlobalScopes()
+                ->where('run_id', $run->id)
+                ->value('result_meta'),
+        );
     }
 
     /** @return array{0:Tenant,1:CommunicationFlowRun,2:User,3:CommunicationConversation} */
@@ -285,8 +321,17 @@ final class CommunicationFlowRunControlTest extends TestCase
             'conversation_id' => $conversation->id,
             'status' => FlowRunStatus::Running,
             'current_node_id' => 's',
-            'context_encrypted' => [],
+            'context_encrypted' => ['private' => 'conteúdo pessoal'],
             'started_at' => now(),
+        ]);
+        CommunicationFlowRunStep::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'run_id' => $run->id,
+            'node_id' => 's',
+            'node_type' => 'start',
+            'seq' => 1,
+            'status' => 'completed',
+            'result_meta' => ['private' => 'metadado pessoal'],
         ]);
 
         return [$tenant, $run, $admin, $conversation];

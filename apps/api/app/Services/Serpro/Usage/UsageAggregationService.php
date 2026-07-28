@@ -171,7 +171,7 @@ final class UsageAggregationService
                 DB::raw('COALESCE(SUM(quantity), 0) as total_quantity'),
                 DB::raw('COALESCE(SUM(estimated_cost_micros), 0) as total_estimated_cost_micros'),
                 DB::raw("SUM(CASE WHEN consumption_class = 'DESCONHECIDA' THEN 1 ELSE 0 END) as unknown_class_count"),
-                DB::raw('SUM(CASE WHEN is_billable_attempt = 1 THEN 1 ELSE 0 END) as billable_attempt_count'),
+                DB::raw('SUM(CASE WHEN is_billable_attempt THEN 1 ELSE 0 END) as billable_attempt_count'),
             ])
             ->groupBy(['tenant_id', 'system_code', 'service_code', 'consumption_class'])
             ->get();
@@ -253,7 +253,7 @@ final class UsageAggregationService
                     DB::raw('COALESCE(SUM(quantity), 0) as total_quantity'),
                     DB::raw('COALESCE(SUM(estimated_cost_micros), 0) as total_estimated_cost_micros'),
                     DB::raw("SUM(CASE WHEN consumption_class = 'DESCONHECIDA' THEN 1 ELSE 0 END) as unknown_class_count"),
-                    DB::raw('SUM(CASE WHEN is_billable_attempt = 1 THEN 1 ELSE 0 END) as billable_attempt_count'),
+                    DB::raw('SUM(CASE WHEN is_billable_attempt THEN 1 ELSE 0 END) as billable_attempt_count'),
                 ])
                 ->groupBy(['system_code', 'service_code', 'consumption_class'])
                 ->get();
@@ -301,7 +301,7 @@ final class UsageAggregationService
                 ->selectRaw('COALESCE(SUM(quantity), 0) as total_quantity')
                 ->selectRaw('COALESCE(SUM(estimated_cost_micros), 0) as total_estimated_cost_micros')
                 ->selectRaw("SUM(CASE WHEN consumption_class = 'DESCONHECIDA' THEN 1 ELSE 0 END) as unknown_class_count")
-                ->selectRaw('SUM(CASE WHEN is_billable_attempt = 1 THEN 1 ELSE 0 END) as billable_attempt_count')
+                ->selectRaw('SUM(CASE WHEN is_billable_attempt THEN 1 ELSE 0 END) as billable_attempt_count')
                 ->first();
 
             if ($total && (int) $total->entry_count > 0) {

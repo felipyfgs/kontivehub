@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Http\Requests\Communication\StoreContactRequest;
+use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Routing\Router;
 use Tests\TestCase;
 
@@ -12,7 +12,7 @@ final class FormRequestUnknownFieldsTest extends TestCase
     {
         app(Router::class)->post(
             '/api/_test/form-request-fields',
-            static fn (StoreContactRequest $request) => response()->json($request->validated()),
+            static fn (UnknownFieldsProbeRequest $request) => response()->json($request->validated()),
         );
 
         $this->postJson('/api/_test/form-request-fields', [
@@ -32,5 +32,22 @@ final class FormRequestUnknownFieldsTest extends TestCase
         ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('receives_automtic');
+    }
+}
+
+final class UnknownFieldsProbeRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return true;
+    }
+
+    /** @return array<string, list<string>> */
+    public function rules(): array
+    {
+        return [
+            'name' => ['required', 'string'],
+            'phone' => ['required', 'string'],
+        ];
     }
 }

@@ -2,9 +2,19 @@
 
 namespace App\Http\Controllers\Api\V1\Fiscal;
 
+use App\Actions\Fiscal\FindFiscalClientAction;
+use App\Actions\Fiscal\ReadPgdasdArtifactAction;
 use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\EnsureTenantContext;
+use App\Http\Requests\Fiscal\Monitoring\DownloadPgdasdArtifactRequest;
+use App\Http\Requests\Fiscal\Monitoring\ListPgdasdHistoryRequest;
+use App\Http\Requests\Fiscal\Monitoring\ViewSimplesMeiModuleClientRequest;
+use App\Http\Requests\Fiscal\Mutations\BatchAutomaticPreferencesRequest;
+use App\Http\Requests\Fiscal\Mutations\CollectPgdasdDocumentRequest;
+use App\Http\Requests\Fiscal\Mutations\OptionalPeriodKeyRequest;
+use App\Http\Requests\Fiscal\Mutations\UpdateCommunicationPreferencesRequest;
+use App\Http\Resources\Fiscal\FiscalMonitoringDataResource;
 use App\Models\Client;
 use App\Models\PgdasdArtifact;
 use App\Models\User;
@@ -31,14 +41,13 @@ class PgdasdMonitoringController extends Controller
         private readonly TenantAuthorization $authorization,
     ) {}
 
-    public function history(Request $request, int $client): JsonResponse
-    {
-        $this->assertCanRead();
-        if ($rejection = $this->rejectClientTenantId($request)) {
-            return $rejection;
-        }
+    public function history(
+        ListPgdasdHistoryRequest $request,
+        int $client,
+        FindFiscalClientAction $findClient,
+    ): JsonResponse|FiscalMonitoringDataResource {
         $tenant = $this->currentTenant->tenant();
-        $model = $this->findClient($tenant->id, $client);
+        $model = $findClient->handle($tenant, $request->clientId());
         if ($model === null) {
             // 404 sem revelar existência em outro tenant
             return response()->json([
@@ -47,21 +56,18 @@ class PgdasdMonitoringController extends Controller
             ], 404);
         }
 
-        $validated = $request->validate([
-            'year' => ['sometimes', 'integer', 'between:2000,2100'],
-        ]);
-        $yearInt = isset($validated['year']) ? (int) $validated['year'] : null;
+        $filters = $request->filters();
 
         try {
-            $data = $this->queries->history($tenant, $model, $yearInt);
+            $data = $this->queries->history($tenant, $model, $filters->year);
         } catch (RuntimeException $e) {
             return response()->json(['message' => $e->getMessage(), 'code' => 'HISTORY_ERROR'], 422);
         }
 
-        return response()->json(['data' => $data]);
+        return new FiscalMonitoringDataResource($data);
     }
 
-    public function collectDocuments(Request $request, int $client): JsonResponse
+    public function collectDocuments(CollectPgdasdDocumentRequest $request, int $client): JsonResponse
     {
         $this->assertCanSync();
         if ($rejection = $this->rejectClientTenantId($request)) {
@@ -74,17 +80,11 @@ class PgdasdMonitoringController extends Controller
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
 
-        $data = $request->validate([
-            'period_key' => ['required', 'regex:/^\d{4}-(0[1-9]|1[0-2])$/'],
-            'declaration_number' => ['sometimes', 'nullable', 'string', 'max:17'],
-            'confirmed' => ['required', 'accepted'],
-        ]);
-
-        $declarationNumber = trim((string) ($data['declaration_number'] ?? ''));
+        $declarationNumber = $request->declarationNumber();
         $operation = $declarationNumber !== '' ? 'CONSULTAR_RECIBO' : 'CONSULTAR_ULTIMA_DECLARACAO_RECIBO';
         $params = [
-            'period_key' => $data['period_key'],
-            'periodoApuracao' => str_replace('-', '', (string) $data['period_key']),
+            'period_key' => $request->periodKey(),
+            'periodoApuracao' => str_replace('-', '', $request->periodKey()),
         ];
         if ($declarationNumber !== '') {
             $params['numeroDeclaracao'] = $declarationNumber;
@@ -99,7 +99,9 @@ class PgdasdMonitoringController extends Controller
                 $request->user()?->id,
             );
         } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            $text = $e->getMessage();
+
+            return response()->json(['message' => $text], 422);
         }
 
         return response()->json([
@@ -128,16 +130,24 @@ class PgdasdMonitoringController extends Controller
     /**
      * Download por id do artefato (contrato SPA: /simples-mei/pgdasd/artifacts/{id}/download).
      */
-    public function downloadArtifactById(Request $request, int $artifact): Response|JsonResponse
-    {
-        $this->assertCanRead();
-        if ($rejection = $this->rejectClientTenantId($request)) {
-            return $rejection;
-        }
+    public function downloadArtifactById(
+        DownloadPgdasdArtifactRequest $request,
+        int $artifact,
+        ReadPgdasdArtifactAction $readArtifact,
+    ): Response|JsonResponse {
         $tenant = $this->currentTenant->tenant();
-        $pgArtifact = $this->queries->findArtifactForTenant($tenant, $artifact);
+        $download = $readArtifact->handle($tenant, $request->artifactId());
+        if ($download === null) {
+            return response()->json(['message' => 'Artefato não encontrado.'], 404);
+        }
 
-        return $this->streamArtifact((int) $tenant->id, $pgArtifact);
+        return response($download->bytes, 200, [
+            'Content-Type' => $download->contentType,
+            'Content-Disposition' => 'attachment; filename="'.$download->filename.'"',
+            'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'private, no-store, max-age=0',
+            'Pragma' => 'no-cache',
+        ]);
     }
 
     private function streamArtifact(int $tenantId, ?PgdasdArtifact $pgArtifact): Response|JsonResponse
@@ -204,7 +214,7 @@ class PgdasdMonitoringController extends Controller
         return $token !== '' ? mb_substr($token, 0, 40) : $default;
     }
 
-    public function updatePreferences(Request $request, int $client): JsonResponse
+    public function updatePreferences(UpdateCommunicationPreferencesRequest $request, int $client): JsonResponse
     {
         // Autorização antes da validação: ausência de permissão deve retornar 403.
         $this->assertCanManageCommunications();
@@ -220,12 +230,7 @@ class PgdasdMonitoringController extends Controller
             ], 404);
         }
 
-        $data = $request->validate([
-            'email_enabled' => ['required', 'boolean'],
-            'whatsapp_enabled' => ['required', 'boolean'],
-            'automatic_requested' => ['required', 'boolean'],
-            'lock_version' => ['required', 'integer', 'min:0'],
-        ]);
+        $data = $request->preferences();
 
         $user = $request->user();
         if ($user === null) {
@@ -241,13 +246,17 @@ class PgdasdMonitoringController extends Controller
             );
         } catch (ConflictHttpException $e) {
             return response()->json([
-                'message' => $e->getMessage(),
+                'message' => ($text = $e->getMessage()),
                 'code' => 'OPTIMISTIC_LOCK_CONFLICT',
             ], 409);
         } catch (HttpException $e) {
-            return response()->json(['message' => $e->getMessage()], $e->getStatusCode());
+            $text = $e->getMessage();
+
+            return response()->json(['message' => $text], $e->getStatusCode());
         } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            $text = $e->getMessage();
+
+            return response()->json(['message' => $text], 422);
         }
 
         return response()->json([
@@ -255,18 +264,13 @@ class PgdasdMonitoringController extends Controller
         ]);
     }
 
-    public function batchPreferences(Request $request): JsonResponse
+    public function batchPreferences(BatchAutomaticPreferencesRequest $request): JsonResponse
     {
         $this->assertCanManageCommunications();
         if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
         $tenant = $this->currentTenant->tenant();
-        $data = $request->validate([
-            'client_ids' => ['required', 'array', 'min:1', 'max:100'],
-            'client_ids.*' => ['integer', 'distinct'],
-            'automatic_requested' => ['required', 'boolean'],
-        ]);
 
         $user = $request->user();
         if ($user === null) {
@@ -277,13 +281,17 @@ class PgdasdMonitoringController extends Controller
             $prefs = $this->communication->batchSetAutomatic(
                 $tenant,
                 $user,
-                $data['client_ids'],
-                (bool) $data['automatic_requested'],
+                $request->clientIds(),
+                $request->automaticRequested(),
             );
         } catch (HttpException $e) {
-            return response()->json(['message' => $e->getMessage()], $e->getStatusCode());
+            $text = $e->getMessage();
+
+            return response()->json(['message' => $text], $e->getStatusCode());
         } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            $text = $e->getMessage();
+
+            return response()->json(['message' => $text], 422);
         }
 
         $summaries = $this->communication->summariesForClients(
@@ -297,41 +305,39 @@ class PgdasdMonitoringController extends Controller
         ]);
     }
 
-    public function preview(Request $request, int $client): JsonResponse
-    {
-        $this->assertCanRead();
-        if ($rejection = $this->rejectClientTenantId($request)) {
-            return $rejection;
-        }
+    public function preview(
+        ViewSimplesMeiModuleClientRequest $request,
+        int $client,
+        FindFiscalClientAction $findClient,
+    ): JsonResponse|FiscalMonitoringDataResource {
         $tenant = $this->currentTenant->tenant();
-        $model = $this->findClient($tenant->id, $client);
+        $model = $findClient->handle($tenant, $request->clientId());
         if ($model === null) {
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
 
-        return response()->json([
-            'data' => $this->communication->preview($tenant, $model),
-        ]);
+        return new FiscalMonitoringDataResource(
+            $this->communication->preview($tenant, $model),
+        );
     }
 
-    public function tracking(Request $request, int $client): JsonResponse
-    {
-        $this->assertCanRead();
-        if ($rejection = $this->rejectClientTenantId($request)) {
-            return $rejection;
-        }
+    public function tracking(
+        ViewSimplesMeiModuleClientRequest $request,
+        int $client,
+        FindFiscalClientAction $findClient,
+    ): JsonResponse|FiscalMonitoringDataResource {
         $tenant = $this->currentTenant->tenant();
-        $model = $this->findClient($tenant->id, $client);
+        $model = $findClient->handle($tenant, $request->clientId());
         if ($model === null) {
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
 
-        return response()->json([
-            'data' => $this->communication->tracking($tenant, $model),
-        ]);
+        return new FiscalMonitoringDataResource(
+            $this->communication->tracking($tenant, $model),
+        );
     }
 
-    public function send(Request $request, int $client): JsonResponse
+    public function send(OptionalPeriodKeyRequest $request, int $client): JsonResponse
     {
         $this->assertCanSync();
         if ($rejection = $this->rejectClientTenantId($request)) {
@@ -344,11 +350,12 @@ class PgdasdMonitoringController extends Controller
         }
         /** @var User $actor */
         $actor = $request->user();
-        $input = $request->validate(['period_key' => ['sometimes', 'string', 'regex:/^\d{4}-\d{2}$/']]);
         try {
-            $data = $this->communication->requestSend($tenant, $model, $actor, $input['period_key'] ?? null);
+            $data = $this->communication->requestSend($tenant, $model, $actor, $request->periodKey());
         } catch (HttpException $e) {
-            return response()->json(['message' => $e->getMessage()], $e->getStatusCode());
+            $text = $e->getMessage();
+
+            return response()->json(['message' => $text], $e->getStatusCode());
         }
 
         return response()->json(['data' => $data]);

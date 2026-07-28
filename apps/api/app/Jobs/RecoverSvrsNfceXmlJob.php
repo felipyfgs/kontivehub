@@ -19,6 +19,8 @@ class RecoverSvrsNfceXmlJob implements ShouldBeUnique, ShouldQueue
 
     public int $tries = 1;
 
+    public int $timeout;
+
     public function __construct(
         public readonly int $retrievalRequestId,
     ) {

@@ -23,6 +23,32 @@ class ClientListFiltersApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_dashboard_list_supports_created_at_sort_and_returns_growth_stats(): void
+    {
+        [$user, $tenant] = $this->actor(TenantRole::TenantUser);
+        Sanctum::actingAs($user);
+
+        $older = Client::factory()->forTenant($tenant)->create([
+            'legal_name' => 'Cliente antigo',
+            'created_at' => now()->subDay(),
+        ]);
+        $newer = Client::factory()->forTenant($tenant)->create([
+            'legal_name' => 'Cliente recente',
+            'created_at' => now(),
+        ]);
+
+        $response = $this->getJson(
+            '/api/v1/clients?page=1&per_page=8&sort=created_at&sort_direction=desc&dashboard=true',
+        )->assertOk()
+            ->assertJsonPath('data.0.id', $newer->id)
+            ->assertJsonPath('data.1.id', $older->id)
+            ->assertJsonPath('meta.current_page', 1)
+            ->assertJsonPath('meta.per_page', 8)
+            ->assertJsonPath('meta.stats.total', 2);
+
+        $response->assertJsonCount(12, 'meta.stats.client_growth_12m');
+    }
+
     public function test_operational_filter_credential_expired_and_capture_problem(): void
     {
         [$user, $tenant] = $this->actor(TenantRole::TenantUser);
@@ -60,6 +86,36 @@ class ClientListFiltersApiTest extends TestCase
             ->json('data.*.id');
         $this->assertSame([$captureProblem->id], $captureIds);
         $this->assertSame(1, (int) $this->getJson('/api/v1/clients')->json('meta.stats.capture_problem'));
+    }
+
+    public function test_credential_presence_stats_and_filters_partition_active_pending_and_absent(): void
+    {
+        [$user, $tenant] = $this->actor(TenantRole::TenantUser);
+        Sanctum::actingAs($user);
+
+        $active = Client::factory()->forTenant($tenant)->create(['legal_name' => 'Credencial ativa']);
+        $this->credential($active, CredentialStatus::Active, now()->addYear());
+        $pending = Client::factory()->forTenant($tenant)->create(['legal_name' => 'Credencial pendente']);
+        $this->credential($pending, CredentialStatus::Pending, now()->addYear());
+        $historical = Client::factory()->forTenant($tenant)->create(['legal_name' => 'Só histórico']);
+        $this->credential($historical, CredentialStatus::Expired, now()->subDay());
+        $absent = Client::factory()->forTenant($tenant)->create(['legal_name' => 'Sem credencial']);
+
+        $stats = $this->getJson('/api/v1/clients?per_page=50')
+            ->assertOk()
+            ->assertJsonPath('meta.stats.with_credential', 2)
+            ->assertJsonPath('meta.stats.without_credential', 2);
+
+        $withCredential = $this->getJson(
+            '/api/v1/clients?operational_filter=with_credential&per_page=50',
+        )->assertOk()->json('data.*.id');
+        $withoutCredential = $this->getJson(
+            '/api/v1/clients?operational_filter=without_credential&per_page=50',
+        )->assertOk()->json('data.*.id');
+
+        $this->assertEqualsCanonicalizing([$active->id, $pending->id], $withCredential);
+        $this->assertEqualsCanonicalizing([$historical->id, $absent->id], $withoutCredential);
+        $this->assertSame(4, (int) $stats->json('meta.stats.total'));
     }
 
     public function test_procuracao_statuses_filter_uses_projected_rules(): void

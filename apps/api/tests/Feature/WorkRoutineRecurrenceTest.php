@@ -66,7 +66,7 @@ class WorkRoutineRecurrenceTest extends TestCase
             ->assertJsonPath('data.generation_day', 1);
     }
 
-    public function test_viewer_cannot_update_recurrence_and_tenant_id_is_stripped(): void
+    public function test_recurrence_rejects_client_tenant_scope_before_authorization(): void
     {
         [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
         $other = Tenant::factory()->create();
@@ -79,6 +79,13 @@ class WorkRoutineRecurrenceTest extends TestCase
             'recurrence_enabled' => true,
             'recurrence_frequency' => RecurrenceFrequency::Monthly->value,
             'tenant_id' => $other->id,
+            'lock_version' => $template->lock_version,
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('tenant_id');
+
+        $this->patchJson('/api/v1/work/templates/'.$template->id.'/recurrence', [
+            'recurrence_enabled' => true,
+            'recurrence_frequency' => RecurrenceFrequency::Monthly->value,
             'lock_version' => $template->lock_version,
         ])->assertForbidden();
 
@@ -284,10 +291,30 @@ class WorkRoutineRecurrenceTest extends TestCase
         ]);
 
         Sanctum::actingAs($admin);
-        $this->getJson('/api/v1/work/templates/'.$template->id.'/generation-batches')
+        $response = $this->getJson('/api/v1/work/templates/'.$template->id.'/generation-batches')
             ->assertOk()
             ->assertJsonCount(1, 'data')
-            ->assertJsonPath('data.0.competence', '2026-01');
+            ->assertJsonPath('data.0.competence', '2026-01')
+            ->assertJsonPath('meta', [
+                'current_page' => 1,
+                'last_page' => 1,
+                'per_page' => 25,
+                'total' => 1,
+            ])
+            ->assertJsonMissingPath('links');
+
+        $this->assertSame([
+            'id',
+            'work_process_template_id',
+            'competence',
+            'reference_period_type',
+            'status',
+            'idempotency_key',
+            'preview_summary',
+            'queued_at',
+            'completed_at',
+            'created_at',
+        ], array_keys($response->json('data.0')));
 
         $this->getJson('/api/v1/work/templates/'.$foreignTemplate->id.'/generation-batches')
             ->assertNotFound();

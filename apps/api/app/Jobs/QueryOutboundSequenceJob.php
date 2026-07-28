@@ -21,6 +21,8 @@ class QueryOutboundSequenceJob implements ShouldQueue
 
     public int $tries = 1;
 
+    public int $timeout;
+
     public function __construct(
         public readonly int $seriesCursorId,
         public readonly string $triggeredBy = 'scheduler',

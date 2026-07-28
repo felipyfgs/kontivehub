@@ -2,115 +2,61 @@
 
 namespace App\Http\Controllers\Api\V1\Fiscal;
 
+use App\Actions\Fiscal\ListFiscalTaxProcessesAction;
 use App\Enums\TenantRole;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Fiscal\Monitoring\ListFiscalTaxProcessesRequest;
+use App\Http\Requests\Fiscal\Monitoring\ViewFiscalMonitoringRequest;
+use App\Http\Resources\Fiscal\ClientFiscalTaxProcessesResource;
+use App\Http\Resources\Fiscal\FiscalTaxProcessCollection;
+use App\Http\Resources\Fiscal\FiscalTaxProcessResource;
 use App\Jobs\Fiscal\RefreshTaxProcessesJob;
 use App\Models\Client;
-use App\Models\FiscalTaxProcess;
 use App\Support\CurrentTenant;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 /**
  * APIs tenant-scoped de Processos fiscais (tenant da sessão).
  */
 final class TaxProcessController extends Controller
 {
-    public function index(Request $request, CurrentTenant $currentTenant): JsonResponse
-    {
+    public function index(
+        ListFiscalTaxProcessesRequest $request,
+        CurrentTenant $currentTenant,
+        ListFiscalTaxProcessesAction $action,
+    ): FiscalTaxProcessCollection {
         $tenant = $currentTenant->tenant();
         abort_if($tenant === null, 403);
 
-        $query = FiscalTaxProcess::query()
-            ->where('tenant_id', $tenant->id)
-            ->orderByDesc('refreshed_at')
-            ->orderByDesc('id');
-
-        if ($request->filled('client_id')) {
-            $query->where('client_id', (int) $request->query('client_id'));
-        }
-        if ($request->filled('status')) {
-            $query->where('status', (string) $request->query('status'));
-        }
-        $search = trim((string) $request->query('q', ''));
-        if ($search !== '') {
-            $search = mb_substr($search, 0, 120);
-            $like = '%'.addcslashes($search, '%_\\').'%';
-            $normalizedDigits = preg_replace('/\D+/', '', $search) ?: '';
-            $digits = strlen($normalizedDigits) >= 8 ? $normalizedDigits : null;
-            $query->where(function (Builder $filter) use ($search, $like, $digits, $tenant): void {
-                $filter->where('process_number', 'like', $like)
-                    ->orWhere('source_provenance', 'like', $like)
-                    ->when(ctype_digit($search), fn (Builder $q) => $q->orWhere('client_id', (int) $search))
-                    ->orWhereHas('client', function (Builder $client) use ($like, $digits, $tenant): void {
-                        $client->where('tenant_id', $tenant->id)
-                            ->where(function (Builder $identity) use ($like, $digits): void {
-                                $identity->where('legal_name', 'like', $like)
-                                    ->orWhere('display_name', 'like', $like);
-                                if ($digits !== null) {
-                                    $identity->orWhere('root_cnpj', 'like', '%'.$digits.'%');
-                                }
-                            });
-                    });
-            });
-        }
-
-        $perPage = min(100, max(1, (int) $request->query('per_page', 25)));
-        $page = $query->paginate($perPage);
-
-        return response()->json([
-            'data' => array_map(
-                static fn (FiscalTaxProcess $row) => $row->toPublicArray(),
-                $page->items(),
-            ),
-            'meta' => [
-                'current_page' => $page->currentPage(),
-                'per_page' => $page->perPage(),
-                'total' => $page->total(),
-                'last_page' => $page->lastPage(),
-            ],
-        ]);
+        return new FiscalTaxProcessCollection(
+            $action->handle($tenant, $request->filters()),
+        );
     }
 
-    public function showForClient(int $clientId, CurrentTenant $currentTenant): JsonResponse
-    {
+    public function showForClient(
+        ViewFiscalMonitoringRequest $request,
+        int $clientId,
+        CurrentTenant $currentTenant,
+        ListFiscalTaxProcessesAction $action,
+    ): ClientFiscalTaxProcessesResource {
         $tenant = $currentTenant->tenant();
         abort_if($tenant === null, 403);
 
-        $client = Client::query()
-            ->where('tenant_id', $tenant->id)
-            ->whereKey($clientId)
-            ->firstOrFail();
-
-        $rows = FiscalTaxProcess::query()
-            ->where('tenant_id', $tenant->id)
-            ->where('client_id', $client->id)
-            ->orderByDesc('refreshed_at')
-            ->get();
-
-        return response()->json([
-            'data' => [
-                'client_id' => $client->id,
-                'processes' => $rows->map(static fn (FiscalTaxProcess $r) => $r->toPublicArray())->values(),
-            ],
-        ]);
+        return new ClientFiscalTaxProcessesResource(
+            $action->forClient($tenant, $clientId),
+        );
     }
 
-    public function show(int $id, CurrentTenant $currentTenant): JsonResponse
-    {
+    public function show(
+        ViewFiscalMonitoringRequest $request,
+        int $id,
+        CurrentTenant $currentTenant,
+        ListFiscalTaxProcessesAction $action,
+    ): FiscalTaxProcessResource {
         $tenant = $currentTenant->tenant();
         abort_if($tenant === null, 403);
 
-        $row = FiscalTaxProcess::query()
-            ->where('tenant_id', $tenant->id)
-            ->whereKey($id)
-            ->first();
-
-        // Inacessível de outro tenant — 404 sem revelar existência
-        abort_if($row === null, 404);
-
-        return response()->json(['data' => $row->toPublicArray()]);
+        return new FiscalTaxProcessResource($action->find($tenant, $id));
     }
 
     public function refresh(int $clientId, CurrentTenant $currentTenant): JsonResponse

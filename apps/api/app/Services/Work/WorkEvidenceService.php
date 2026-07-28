@@ -144,6 +144,24 @@ final class WorkEvidenceService
         ]);
     }
 
+    public function downloadForTask(
+        WorkTask $task,
+        WorkTaskEvidence $evidence,
+    ): StreamedResponse {
+        $this->assertEvidenceBelongsToTask($task, $evidence);
+
+        return $this->download($evidence);
+    }
+
+    public function removeForTask(
+        WorkTask $task,
+        WorkTaskEvidence $evidence,
+        string $reason,
+    ): void {
+        $this->assertEvidenceBelongsToTask($task, $evidence);
+        $this->remove($evidence, $reason);
+    }
+
     public function remove(WorkTaskEvidence $evidence, string $reason): void
     {
         $reason = trim($reason);
@@ -198,5 +216,14 @@ final class WorkEvidenceService
         $name = trim($name, '._ ');
 
         return mb_substr($name !== '' ? $name : 'evidence.bin', 0, 200);
+    }
+
+    private function assertEvidenceBelongsToTask(
+        WorkTask $task,
+        WorkTaskEvidence $evidence,
+    ): void {
+        if ((int) $evidence->work_task_id !== (int) $task->id) {
+            abort(404);
+        }
     }
 }

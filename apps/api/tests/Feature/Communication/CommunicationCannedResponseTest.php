@@ -74,12 +74,38 @@ final class CommunicationCannedResponseTest extends TestCase
             ->assertJsonPath('data.0.lock_version', 1)
             ->json();
         $this->assertArrayNotHasKey('meta', $composer);
+        $this->assertSame([
+            'data' => [[
+                'id' => $active->id,
+                'title' => 'Saudação',
+                'shortcut' => 'saudacao',
+                'body' => 'Olá {{contato.nome}}',
+                'is_active' => true,
+                'lock_version' => 1,
+            ]],
+        ], $composer);
 
-        $this->getJson('/api/v1/communication/canned-responses?manage=1&is_active=false&q=encer')
+        $manage = $this->getJson('/api/v1/communication/canned-responses?manage=1&is_active=false&q=encer')
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.id', $inactive->id)
-            ->assertJsonPath('meta.total', 1);
+            ->assertJsonPath('meta.total', 1)
+            ->json();
+        $this->assertSame([
+            'data' => [[
+                'id' => $inactive->id,
+                'title' => 'Encerrar',
+                'shortcut' => 'encerrar',
+                'body' => 'Até logo',
+                'is_active' => false,
+                'lock_version' => 1,
+            ]],
+            'meta' => [
+                'current_page' => 1,
+                'last_page' => 1,
+                'total' => 1,
+            ],
+        ], $manage);
 
         $this->getJson('/api/v1/communication/canned-responses?manage=1&per_page=1')
             ->assertOk()
@@ -211,6 +237,33 @@ final class CommunicationCannedResponseTest extends TestCase
         $this->assertIsString($raw);
         $this->assertNotSame('Segredo não deve ir ao evento', $raw);
 
+        $second = $this->postJson('/api/v1/communication/canned-responses', [
+            'title' => 'Dois',
+            'shortcut' => 'outro',
+            'body' => 'Outro corpo',
+        ])->assertCreated()->json('data');
+        $updatedEventCount = CommunicationEvent::query()->withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('type', 'CANNED_RESPONSE_UPDATED')
+            ->count();
+
+        $this->putJson('/api/v1/communication/canned-responses/'.$first['id'], [
+            'title' => 'Não persistir',
+            'shortcut' => $second['shortcut'],
+            'body' => 'Não persistir',
+            'lock_version' => 1,
+        ])->assertStatus(409)->assertJsonPath('code', 'shortcut_conflict');
+
+        $this->assertSame('atalho', $row->fresh()->shortcut);
+        $this->assertSame('Segredo não deve ir ao evento', $row->body_encrypted);
+        $this->assertSame(
+            $updatedEventCount,
+            CommunicationEvent::query()->withoutGlobalScopes()
+                ->where('tenant_id', $tenant->id)
+                ->where('type', 'CANNED_RESPONSE_UPDATED')
+                ->count(),
+        );
+
         $this->putJson('/api/v1/communication/canned-responses/'.$first['id'], [
             'title' => 'Um',
             'shortcut' => 'atalho',
@@ -338,6 +391,14 @@ final class CommunicationCannedResponseTest extends TestCase
             'conversation_id' => $conversation->id,
         ])->assertNotFound();
 
+        $viewer = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $this->assignProfile($viewer, $tenant, [TenantPermission::CommunicationView]);
+        $this->authenticate($viewer);
+        $this->postJson('/api/v1/communication/canned-responses/'.$canned->id.'/render', [
+            'conversation_id' => $conversation->id,
+        ])->assertForbidden();
+
+        $this->authenticate($admin);
         $this->postJson('/api/v1/communication/canned-responses/'.$canned->id.'/render', [
             'conversation_id' => $foreignConversation->id,
         ])->assertNotFound();
@@ -349,6 +410,55 @@ final class CommunicationCannedResponseTest extends TestCase
         $this->postJson('/api/v1/communication/canned-responses/'.$foreignCanned->id.'/render', [
             'conversation_id' => $conversation->id,
         ])->assertNotFound();
+    }
+
+    public function test_tenant_id_is_rejected_across_canned_response_boundaries(): void
+    {
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $foreign = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $item = $this->canned($tenant, 'base', 'Base', 'Corpo', active: true);
+        $this->authenticate($admin);
+
+        $this->getJson('/api/v1/communication/canned-responses?tenant_id='.$foreign->id)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['tenant_id']);
+
+        $this->postJson('/api/v1/communication/canned-responses', [
+            'tenant_id' => $foreign->id,
+            'title' => 'Novo',
+            'shortcut' => 'novo',
+            'body' => 'Corpo',
+        ])->assertUnprocessable()->assertJsonValidationErrors(['tenant_id']);
+
+        $this->putJson('/api/v1/communication/canned-responses/'.$item->id, [
+            'tenant_id' => $foreign->id,
+            'title' => 'Base',
+            'shortcut' => 'base',
+            'body' => 'Corpo',
+            'lock_version' => 1,
+        ])->assertUnprocessable()->assertJsonValidationErrors(['tenant_id']);
+
+        $this->postJson('/api/v1/communication/canned-responses/'.$item->id.'/duplicate', [
+            'tenant_id' => $foreign->id,
+            'shortcut' => 'base-copia',
+        ])->assertUnprocessable()->assertJsonValidationErrors(['tenant_id']);
+
+        $this->postJson('/api/v1/communication/canned-responses/'.$item->id.'/deactivate', [
+            'tenant_id' => $foreign->id,
+        ])->assertUnprocessable()->assertJsonValidationErrors(['tenant_id']);
+
+        $this->postJson('/api/v1/communication/canned-responses/'.$item->id.'/render', [
+            'tenant_id' => $foreign->id,
+            'conversation_id' => 1,
+        ])->assertUnprocessable()->assertJsonValidationErrors(['tenant_id']);
+
+        $this->deleteJson('/api/v1/communication/canned-responses/'.$item->id, [
+            'tenant_id' => $foreign->id,
+        ])->assertUnprocessable()->assertJsonValidationErrors(['tenant_id']);
+
+        $this->assertNotNull($item->fresh());
+        $this->assertTrue($item->fresh()->is_active);
     }
 
     /** @param list<TenantPermission> $permissions */

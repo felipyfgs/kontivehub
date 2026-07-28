@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Fiscal\Mei;
 
+use App\DTO\Fiscal\Mutations\GenerateMeiDasData;
 use App\Enums\TenantPermission;
+use App\Models\User;
 use Illuminate\Validation\Rule;
 
 final class GenerateMeiDasRequest extends MeiPublicOperationRequest
@@ -32,6 +34,35 @@ final class GenerateMeiDasRequest extends MeiPublicOperationRequest
             'confirmation_phrase' => ['required', 'string', 'max:120'],
             'tenant_id' => ['prohibited'],
         ];
+    }
+
+    public function generateData(): GenerateMeiDasData
+    {
+        $data = $this->validated();
+        $competencies = array_values(array_map('strval', $data['competencies']));
+        sort($competencies, SORT_STRING);
+
+        return new GenerateMeiDasData(
+            clientId: (int) $data['client_id'],
+            competencies: $competencies,
+            dueDate: is_string($data['due_date'] ?? null) && $data['due_date'] !== ''
+                ? (string) $data['due_date']
+                : now('America/Sao_Paulo')->toDateString(),
+            outputFormat: (string) $data['output_format'],
+            idempotencyKey: (string) $data['idempotency_key'],
+            preflightToken: (string) $data['preflight_token'],
+            confirmationPhrase: (string) $data['confirmation_phrase'],
+        );
+    }
+
+    public function actor(): User
+    {
+        $actor = $this->user();
+        if (! $actor instanceof User) {
+            abort(401);
+        }
+
+        return $actor;
     }
 
     protected function permission(): TenantPermission

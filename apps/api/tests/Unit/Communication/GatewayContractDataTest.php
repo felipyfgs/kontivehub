@@ -173,6 +173,74 @@ class GatewayContractDataTest extends TestCase
         );
     }
 
+    public function test_message_received_accepts_source_identity_without_from(): void
+    {
+        $event = new GatewayEventData(
+            gatewayEventId: 'gateway-source-identity-0001',
+            sessionId: 'session-0001',
+            type: GatewayEventType::MessageReceived,
+            occurredAt: new DateTimeImmutable('2026-07-28T15:44:25Z'),
+            payload: [
+                'provider_message_id' => 'ACC256A0D12BF0574B971FD67D0C6CE8',
+                'kind' => 'TEXT',
+                'provider_type' => 'conversation',
+                'family' => 'TEXT',
+                'direction' => 'INBOUND',
+                'text' => 'oi',
+                'source_identity' => [
+                    'primary' => 'lid:132366714564657',
+                    'primary_kind' => 'LID',
+                    'alternate' => '+559981769536',
+                    'alternate_kind' => 'PN',
+                    'evidence' => 'MESSAGE_SOURCE_ALT',
+                ],
+            ],
+        );
+
+        $this->assertSame('lid:132366714564657', $event->payload['source_identity']['primary']);
+    }
+
+    public function test_history_synced_accepts_segmented_progress_fields(): void
+    {
+        $event = new GatewayEventData(
+            gatewayEventId: 'history-segment-contract-0001',
+            sessionId: 'session-0001',
+            type: GatewayEventType::HistorySynced,
+            occurredAt: new DateTimeImmutable('2026-07-28T15:46:08Z'),
+            payload: [
+                'batch_id' => 'history-segment-bc764b505ff10180cc7bfa6bf95a11c3',
+                'complete' => true,
+                'sync_type' => 'RECENT',
+                'chunk_order' => 13,
+                'progress' => 100,
+                'message_count' => 1,
+                'rejected_count' => 0,
+                'truncated' => false,
+                'sync_id' => 'history-sync-d8d5ec8e17b20f00bef77cdb2b2e4cc4',
+                'segment_id' => 'history-segment-bc764b505ff10180cc7bfa6bf95a11c3',
+                'segment_index' => 0,
+                'segment_count' => 10,
+                'source_progress' => ['percent' => 100, 'upstream_complete' => true],
+                'messages' => [[
+                    'provider_message_id' => 'message-history-0001',
+                    'kind' => 'TEXT',
+                    'provider_type' => 'conversation',
+                    'family' => 'TEXT',
+                    'direction' => 'INBOUND',
+                    'history' => true,
+                    'text' => 'histórico',
+                    'source_identity' => [
+                        'primary' => '+5511999991234',
+                        'primary_kind' => 'PN',
+                        'evidence' => 'PRIMARY_ONLY',
+                    ],
+                ]],
+            ],
+        );
+
+        $this->assertSame(10, $event->payload['segment_count']);
+    }
+
     public function test_cataloged_rich_message_and_played_receipt_match_gateway_shapes(): void
     {
         $event = new GatewayEventData(

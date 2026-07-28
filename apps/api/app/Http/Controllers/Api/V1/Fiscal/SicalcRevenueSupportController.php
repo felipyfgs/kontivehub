@@ -2,9 +2,13 @@
 
 namespace App\Http\Controllers\Api\V1\Fiscal;
 
+use App\Actions\Fiscal\FindFiscalClientAction;
 use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\EnsureTenantContext;
+use App\Http\Requests\Fiscal\Monitoring\ListSicalcRevenueSupportHistoryRequest;
+use App\Http\Requests\Fiscal\Mutations\ConsultSicalcRevenueSupportRequest;
+use App\Http\Resources\Fiscal\FiscalMonitoringDataResource;
 use App\Models\Client;
 use App\Models\User;
 use App\Services\Authorization\TenantAuthorization;
@@ -25,18 +29,26 @@ final class SicalcRevenueSupportController extends Controller
         private readonly TenantAuthorization $authorization,
     ) {}
 
-    public function history(Request $request, int $client): JsonResponse
-    {
-        if ($rejection = $this->rejectClientTenantId($request)) {
-            return $rejection;
-        }
-        $model = $this->findClient($this->currentTenant->tenant()->id, $client);
+    public function history(
+        ListSicalcRevenueSupportHistoryRequest $request,
+        int $client,
+        FindFiscalClientAction $findClient,
+    ): JsonResponse|FiscalMonitoringDataResource {
+        $tenant = $this->currentTenant->tenant();
+        $model = $findClient->handle($tenant, $request->clientId());
         if ($model === null) {
             return $this->clientNotFound();
         }
-        $this->assertCanRead($request, $model);
+        $request->ensureCanView($model);
+        $filters = $request->filters();
         try {
-            return response()->json(['data' => $this->queries->history($this->currentTenant->tenant(), $model, $request->query('codigo_receita'))]);
+            return new FiscalMonitoringDataResource(
+                $this->queries->history(
+                    $tenant,
+                    $model,
+                    $filters->revenueCode,
+                ),
+            );
         } catch (InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage(), 'code' => 'INVALID_REVENUE_CODE'], 422);
         } catch (RuntimeException) {
@@ -44,23 +56,19 @@ final class SicalcRevenueSupportController extends Controller
         }
     }
 
-    public function consult(Request $request, int $client): JsonResponse
+    public function consult(ConsultSicalcRevenueSupportRequest $request, int $client): JsonResponse
     {
         $this->assertModuleEnabled();
         if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
-        $validated = $request->validate([
-            'confirmed' => ['required', 'accepted'],
-            'codigo_receita' => ['required', 'string', 'regex:/^[0-9]{1,16}$/'],
-        ]);
         $model = $this->findClient($this->currentTenant->tenant()->id, $client);
         if ($model === null) {
             return $this->clientNotFound();
         }
         $this->assertCanWrite($request, $model);
         try {
-            $run = $this->queries->enqueueManualConsult($this->currentTenant->tenant(), $model, $validated['codigo_receita'], $request->user()?->id);
+            $run = $this->queries->enqueueManualConsult($this->currentTenant->tenant(), $model, $request->revenueCode(), $request->user()?->id);
         } catch (InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage(), 'code' => 'INVALID_REVENUE_CODE'], 422);
         } catch (RuntimeException) {

@@ -9,12 +9,14 @@ abstract class ApiDomainException extends RuntimeException
 {
     /**
      * @param  array<string, mixed>  $responseData
+     * @param  array<string, string>  $responseHeaders
      */
     protected function __construct(
         private readonly string $stableCode,
         private readonly string $safeMessage,
         private readonly int $httpStatus,
         private readonly array $responseData = [],
+        private readonly array $responseHeaders = [],
     ) {
         if (preg_match('/^[A-Za-z][A-Za-z0-9_.:-]{2,127}$/', $stableCode) !== 1) {
             throw new LogicException('Código estável de exception de API inválido.');
@@ -48,5 +50,11 @@ abstract class ApiDomainException extends RuntimeException
     final public function responseData(): array
     {
         return $this->responseData;
+    }
+
+    /** @return array<string, string> */
+    final public function responseHeaders(): array
+    {
+        return $this->responseHeaders;
     }
 }

@@ -75,11 +75,19 @@ final class FgtsDigitalScheduleDispatcher
         $ready = $this->readiness->check($tenant, $client);
         $operation = strtoupper((string) $schedule->operation_code);
         if ($operation === 'QUERY_GUIDES') {
-            if (! $ready['ready_for_read']) {
-                return $this->finish($schedule, $now, 'blocked', (string) ($ready['blockers'][0]['code'] ?? 'FGTS_DIGITAL_NOT_READY'));
+            if (! $ready->readyForRead) {
+                return $this->finish(
+                    $schedule,
+                    $now,
+                    'blocked',
+                    $ready->firstBlockerCode(),
+                );
             }
             $run = $this->portal->createQueryRun($tenant, $client, null, $this->queryParameters($schedule));
-            ExecuteFgtsDigitalRunJob::dispatch((int) $tenant->id, (int) $run->id);
+            ExecuteFgtsDigitalRunJob::dispatch(
+                (int) $tenant->id,
+                (int) $run->id,
+            )->afterCommit();
 
             return $this->finish($schedule, $now, 'dispatched', null);
         }
@@ -90,14 +98,22 @@ final class FgtsDigitalScheduleDispatcher
         if (! (bool) config('fgts_digital.scheduler.emissions_enabled', false)) {
             return $this->finish($schedule, $now, 'blocked', 'FGTS_DIGITAL_SCHEDULED_EMISSIONS_DISABLED');
         }
-        if (! $ready['ready_for_mutation']) {
-            return $this->finish($schedule, $now, 'blocked', (string) ($ready['blockers'][0]['code'] ?? 'FGTS_DIGITAL_MUTATIONS_DISABLED'));
+        if (! $ready->readyForMutation) {
+            return $this->finish(
+                $schedule,
+                $now,
+                'blocked',
+                $ready->firstBlockerCode(),
+            );
         }
         if (($blocker = $this->policyBlocker($schedule, $tenant, $now)) !== null) {
             return $this->finish($schedule, $now, 'blocked', $blocker);
         }
 
-        ExecuteFgtsDigitalPolicyJob::dispatch((int) $tenant->id, (int) $schedule->id);
+        ExecuteFgtsDigitalPolicyJob::dispatch(
+            (int) $tenant->id,
+            (int) $schedule->id,
+        )->afterCommit();
 
         return $this->finish($schedule, $now, 'dispatched', null);
     }

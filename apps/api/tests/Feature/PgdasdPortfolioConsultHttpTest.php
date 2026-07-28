@@ -39,6 +39,7 @@ class PgdasdPortfolioConsultHttpTest extends TestCase
         $run = FiscalMonitoringRun::query()->withoutGlobalScopes()->findOrFail($runId);
         $this->assertSame('INTEGRA_SN', $run->system_code);
         $this->assertSame('PGDASD', $run->service_code);
+        $expected = $run->toPublicArray();
 
         Queue::assertPushed(
             ExecuteFiscalMonitoringRunJob::class,
@@ -48,8 +49,20 @@ class PgdasdPortfolioConsultHttpTest extends TestCase
 
         $this->getJson('/api/v1/fiscal/runs/'.$runId)
             ->assertOk()
-            ->assertJsonPath('data.id', $runId)
-            ->assertJsonPath('data.client_id', $seed['sn']->id);
+            ->assertExactJson(['data' => $expected]);
+
+        $this->getJson('/api/v1/fiscal/runs?client_id='.$seed['sn']->id.'&status=QUEUED&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.0', $expected)
+            ->assertJsonMissingPath('meta');
+
+        $this->getJson('/api/v1/fiscal/runs?status=INVALID')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['status']);
+
+        $this->getJson('/api/v1/fiscal/runs?tenant_id='.$seed['tenant']->id)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['tenant_id']);
     }
 
     public function test_viewer_cannot_enqueue_pgdasd_run(): void

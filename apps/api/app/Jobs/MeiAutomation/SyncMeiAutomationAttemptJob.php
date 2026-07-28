@@ -18,6 +18,8 @@ final class SyncMeiAutomationAttemptJob implements ShouldQueue
 
     public int $tries = 5;
 
+    public int $timeout = 300;
+
     /** @var list<int> */
     public array $backoff = [10, 30, 60, 120];
 
@@ -38,5 +40,18 @@ final class SyncMeiAutomationAttemptJob implements ShouldQueue
         if ($status instanceof MeiAutomationStatus && $status->shouldPoll()) {
             $sync->schedule($attempt);
         }
+    }
+
+    public function tags(): array
+    {
+        return ['job:'.class_basename(static::class)];
+    }
+
+    public function failed(?\Throwable $e): void
+    {
+        \Illuminate\Support\Facades\Log::warning('job.failed', [
+            'job' => class_basename(static::class),
+            'message' => \App\Support\LogSanitizer::scrubString((string) ($e?->getMessage() ?? '')),
+        ]);
     }
 }

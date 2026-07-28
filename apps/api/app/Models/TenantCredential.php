@@ -42,26 +42,4 @@ class TenantCredential extends Model
     {
         return $this->hasMany(TenantCredentialPurposeLink::class, 'tenant_credential_id');
     }
-
-    /**
-     * @return array<string, mixed>
-     */
-    public function toPublicArray(): array
-    {
-        return [
-            'id' => $this->id,
-            'credential_type' => 'CERTIFICATE',
-            'status' => $this->status->value,
-            'subject_name' => $this->subject_name,
-            'holder_cnpj' => $this->holder_cnpj,
-            'fingerprint_sha256' => $this->fingerprint_sha256,
-            'valid_from' => $this->valid_from?->toIso8601String(),
-            'valid_to' => $this->valid_to?->toIso8601String(),
-            'activated_at' => $this->activated_at?->toIso8601String(),
-            'last_used_at' => $this->last_used_at?->toIso8601String(),
-            'expires_alert_30' => $this->expires_alert_30,
-            'expires_alert_7' => $this->expires_alert_7,
-            'expires_alert_1' => $this->expires_alert_1,
-        ];
-    }
 }

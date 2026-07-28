@@ -2,10 +2,19 @@
 
 namespace App\Http\Controllers\Api\V1\Fiscal;
 
+use App\Actions\Fiscal\FindFiscalClientAction;
 use App\DTO\Integra\MitListaApuracoesRequest;
-use App\Enums\TenantRole;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\EnsureTenantContext;
+use App\Http\Requests\Fiscal\Monitoring\ListFiscalClientRecordsRequest;
+use App\Http\Requests\Fiscal\Monitoring\ListMitLocalAssessmentsRequest;
+use App\Http\Requests\Fiscal\Monitoring\ViewFiscalMonitoringSurfaceRequest;
+use App\Http\Requests\Fiscal\Mutations\EncerrarMitRequest;
+use App\Http\Requests\Fiscal\Mutations\EnqueueMitConsultRequest;
+use App\Http\Requests\Fiscal\Mutations\EnqueueMitListaApuracoesRequest;
+use App\Http\Resources\Fiscal\MitAssessmentPageResource;
+use App\Http\Resources\Fiscal\MitAssessmentResource;
+use App\Http\Resources\Fiscal\MitLocalAssessmentListResource;
 use App\Jobs\Fiscal\ExecuteFiscalMonitoringRunJob;
 use App\Models\Client;
 use App\Services\FiscalMonitoring\FiscalMonitoringRunService;
@@ -28,48 +37,38 @@ class MitController extends Controller
         private readonly MitListaApuracoesQueryService $listaApuracoes,
     ) {}
 
-    public function index(Request $request): JsonResponse
-    {
-        $this->assertCanRead();
+    public function index(
+        ListFiscalClientRecordsRequest $request,
+    ): MitAssessmentPageResource {
         $tenant = $this->currentTenant->tenant();
-        $perPage = min(100, max(1, (int) $request->query('per_page', 50)));
-        $clientId = $request->query('client_id');
+        $filters = $request->filters();
 
-        $page = $this->mit->paginate(
-            $tenant,
-            $perPage,
-            is_numeric($clientId) ? (int) $clientId : null,
+        return new MitAssessmentPageResource(
+            $this->mit->paginate(
+                $tenant,
+                $filters->perPage,
+                $filters->clientId,
+            ),
         );
-        $page->getCollection()->transform(fn ($m) => $m->toPublicArray());
-
-        return response()->json($page);
     }
 
-    public function show(int $apuracao): JsonResponse
-    {
-        $this->assertCanRead();
+    public function show(
+        ViewFiscalMonitoringSurfaceRequest $request,
+        int $apuracao,
+    ): JsonResponse|MitAssessmentResource {
         $tenant = $this->currentTenant->tenant();
         $model = $this->mit->findForTenant($tenant, $apuracao);
         if ($model === null) {
             return response()->json(['message' => 'Apuração MIT não encontrada.'], 404);
         }
 
-        return response()->json(['data' => $model->toPublicArray()]);
+        return new MitAssessmentResource($model);
     }
 
-    public function enqueueConsult(Request $request): JsonResponse
+    public function enqueueConsult(EnqueueMitConsultRequest $request): JsonResponse
     {
-        $this->assertCanWrite();
         $tenant = $this->currentTenant->tenant();
-
-        $data = $request->validate([
-            'client_id' => ['required', 'integer'],
-            'period_key' => ['required', 'string', 'regex:/^(20\\d{2}|2100)-(0[1-9]|1[0-2])$/'],
-            'operation_code' => ['sometimes', 'string', 'max:80'],
-            'id_apuracao' => ['sometimes', 'nullable', 'integer', 'min:0'],
-            'protocolo_encerramento' => ['sometimes', 'nullable', 'string', 'max:512'],
-            'correlation_id' => ['sometimes', 'string', 'max:64'],
-        ]);
+        $data = $request->payload();
 
         $operation = strtoupper($data['operation_code'] ?? DctfwebCodes::OP_MIT_SITUACAO);
         if ($operation === DctfwebCodes::OP_MIT_ENCERRAR) {
@@ -142,7 +141,9 @@ class MitController extends Controller
             ExecuteFiscalMonitoringRunJob::dispatch($run->id)
                 ->onQueue((string) config('fiscal_monitoring.job.queue', 'default'));
         } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            $text = $e->getMessage();
+
+            return response()->json(['message' => $text], 422);
         }
 
         return response()->json(['data' => $run->toPublicArray()], 201);
@@ -152,21 +153,13 @@ class MitController extends Controller
      * Agenda exclusivamente a consulta oficial MIT/LISTAAPURACOES317.
      * A página sempre lê a projeção local; nenhum GET dispara o SERPRO.
      */
-    public function enqueueListaApuracoes(Request $request): JsonResponse
+    public function enqueueListaApuracoes(EnqueueMitListaApuracoesRequest $request): JsonResponse
     {
-        $this->assertCanWrite();
         if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
         $tenant = $this->currentTenant->tenant();
-
-        $data = $request->validate([
-            'client_id' => ['required', 'integer'],
-            'anoApuracao' => ['sometimes', 'nullable', 'integer', 'between:2000,2100'],
-            'mesApuracao' => ['sometimes', 'nullable', 'integer', 'between:1,12'],
-            'situacaoApuracao' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:9999'],
-            'correlation_id' => ['sometimes', 'nullable', 'string', 'max:64'],
-        ]);
+        $data = $request->payload();
 
         try {
             $filters = MitListaApuracoesRequest::fromArray(array_filter([
@@ -175,7 +168,9 @@ class MitController extends Controller
                 'situacaoApuracao' => $data['situacaoApuracao'] ?? null,
             ], static fn (?int $value): bool => $value !== null));
         } catch (\InvalidArgumentException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            $text = $e->getMessage();
+
+            return response()->json(['message' => $text], 422);
         }
 
         $client = $this->findClient((int) $tenant->id, (int) $data['client_id']);
@@ -192,7 +187,9 @@ class MitController extends Controller
                 correlationId: $data['correlation_id'] ?? null,
             );
         } catch (RuntimeException|\InvalidArgumentException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            $text = $e->getMessage();
+
+            return response()->json(['message' => $text], 422);
         }
 
         return response()->json([
@@ -202,50 +199,34 @@ class MitController extends Controller
     }
 
     /** Lista exclusivamente projeções locais produzidas por LISTAAPURACOES317. */
-    public function indexListaApuracoes(Request $request): JsonResponse
-    {
-        $this->assertCanRead();
-        if ($rejection = $this->rejectClientTenantId($request)) {
-            return $rejection;
-        }
+    public function indexListaApuracoes(
+        ListMitLocalAssessmentsRequest $request,
+        FindFiscalClientAction $findClient,
+    ): JsonResponse|MitLocalAssessmentListResource {
         $tenant = $this->currentTenant->tenant();
-        $data = $request->validate([
-            'client_id' => ['required', 'integer'],
-            'year' => ['sometimes', 'nullable', 'integer', 'between:2000,2100'],
-        ]);
+        $filters = $request->filters();
 
-        $client = $this->findClient((int) $tenant->id, (int) $data['client_id']);
+        $client = $findClient->handle($tenant, $filters->clientId);
         if ($client === null) {
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
 
-        return response()->json([
-            'data' => $this->listaApuracoes->localList(
+        return new MitLocalAssessmentListResource([
+            'assessments' => $this->listaApuracoes->localList(
                 $tenant,
                 $client,
-                isset($data['year']) ? (int) $data['year'] : null,
+                $filters->year,
             ),
-            'provenance' => [
-                'source' => 'LOCAL_PROJECTION',
-                'serpro_called' => false,
-            ],
         ]);
     }
 
     /**
      * Encerramento MIT — rejeitado se flags mutantes OFF (9.8).
      */
-    public function encerrar(Request $request): JsonResponse
+    public function encerrar(EncerrarMitRequest $request): JsonResponse
     {
-        $this->assertCanWrite();
         $tenant = $this->currentTenant->tenant();
-
-        $data = $request->validate([
-            'client_id' => ['required', 'integer'],
-            'period_key' => ['required', 'string', 'max:20'],
-            'correlation_id' => ['sometimes', 'string', 'max:64'],
-            'confirmation' => ['required', 'accepted'],
-        ]);
+        $data = $request->payload();
 
         $client = Client::query()
             ->withoutGlobalScopes()
@@ -289,17 +270,12 @@ class MitController extends Controller
                 dispatch: true,
             );
         } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            $text = $e->getMessage();
+
+            return response()->json(['message' => $text], 422);
         }
 
         return response()->json(['data' => $run->toPublicArray()], 201);
-    }
-
-    private function assertCanRead(): void
-    {
-        if ($this->currentTenant->role() === null) {
-            abort(403, 'Perfil não resolvido.');
-        }
     }
 
     private function findClient(int $tenantId, int $clientId): ?Client
@@ -344,13 +320,5 @@ class MitController extends Controller
         }
 
         return false;
-    }
-
-    private function assertCanWrite(): void
-    {
-        $role = $this->currentTenant->role();
-        if ($role === null || ! in_array($role, [TenantRole::TenantAdmin, TenantRole::TenantUser], true)) {
-            abort(403, 'Ação não autorizada para o perfil atual.');
-        }
     }
 }

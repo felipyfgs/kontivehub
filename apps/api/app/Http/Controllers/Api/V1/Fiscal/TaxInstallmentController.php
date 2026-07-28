@@ -4,6 +4,17 @@ namespace App\Http\Controllers\Api\V1\Fiscal;
 
 use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Fiscal\Monitoring\ListTaxInstallmentGuidesRequest;
+use App\Http\Requests\Fiscal\Monitoring\ListTaxInstallmentOrdersRequest;
+use App\Http\Requests\Fiscal\Monitoring\ListTaxInstallmentParcelsRequest;
+use App\Http\Requests\Fiscal\Monitoring\ViewFiscalMonitoringRequest;
+use App\Http\Requests\Fiscal\Mutations\EnqueueTaxInstallmentRequest;
+use App\Http\Requests\Fiscal\Mutations\MonitorTaxInstallmentsRequest;
+use App\Http\Resources\Fiscal\TaxInstallmentGuidePageResource;
+use App\Http\Resources\Fiscal\TaxInstallmentModalityResource;
+use App\Http\Resources\Fiscal\TaxInstallmentOrderDetailResource;
+use App\Http\Resources\Fiscal\TaxInstallmentOrderPageResource;
+use App\Http\Resources\Fiscal\TaxInstallmentParcelPageResource;
 use App\Models\Client;
 use App\Models\User;
 use App\Services\Authorization\TenantAuthorization;
@@ -14,6 +25,7 @@ use App\Services\Integra\Parcelamento\ParcelamentoServiceCatalog;
 use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use RuntimeException;
 
 class TaxInstallmentController extends Controller
@@ -26,110 +38,82 @@ class TaxInstallmentController extends Controller
         private readonly TenantAuthorization $authorization,
     ) {}
 
-    public function modalities(): JsonResponse
-    {
-        $this->assertCanRead();
-
-        return response()->json(['data' => $this->query->modalities()]);
-    }
-
-    public function orders(Request $request): JsonResponse
-    {
-        $this->assertCanRead();
-        $tenant = $this->currentTenant->tenant();
-        $perPage = min(100, max(1, (int) $request->query('per_page', 50)));
-        $clientId = $request->query('client_id');
-        $modality = $request->query('modality');
-
-        $page = $this->query->paginateOrders(
-            $tenant,
-            $perPage,
-            is_numeric($clientId) ? (int) $clientId : null,
-            is_string($modality) ? $modality : null,
+    public function modalities(
+        ViewFiscalMonitoringRequest $request,
+    ): AnonymousResourceCollection {
+        return TaxInstallmentModalityResource::collection(
+            $this->query->modalities(),
         );
-        $page->getCollection()->transform(fn ($o) => $o->toPublicArray());
-
-        return response()->json($page);
     }
 
-    public function showOrder(int $order): JsonResponse
-    {
-        $this->assertCanRead();
+    public function orders(
+        ListTaxInstallmentOrdersRequest $request,
+    ): TaxInstallmentOrderPageResource {
+        $tenant = $this->currentTenant->tenant();
+        $filters = $request->filters();
+
+        return new TaxInstallmentOrderPageResource(
+            $this->query->paginateOrders(
+                $tenant,
+                $filters->perPage,
+                $filters->clientId,
+                $filters->modality,
+            ),
+        );
+    }
+
+    public function showOrder(
+        ViewFiscalMonitoringRequest $request,
+        int $order,
+    ): JsonResponse|TaxInstallmentOrderDetailResource {
         $tenant = $this->currentTenant->tenant();
         $model = $this->query->findOrder($tenant, $order);
         if ($model === null) {
             return response()->json(['message' => 'Pedido não encontrado.'], 404);
         }
 
-        $parcels = $model->parcels()
-            ->withoutGlobalScopes()
-            ->where('tenant_id', $tenant->id)
-            ->get()
-            ->map(fn ($p) => $p->toPublicArray());
-        $payments = $model->payments()
-            ->withoutGlobalScopes()
-            ->where('tenant_id', $tenant->id)
-            ->get()
-            ->map(fn ($payment) => $payment->toPublicArray());
-
-        return response()->json([
-            'data' => array_merge($model->toPublicArray(), [
-                'parcels' => $parcels,
-                'payments' => $payments,
-            ]),
-        ]);
+        return new TaxInstallmentOrderDetailResource($model);
     }
 
-    public function parcels(Request $request): JsonResponse
-    {
-        $this->assertCanRead();
+    public function parcels(
+        ListTaxInstallmentParcelsRequest $request,
+    ): TaxInstallmentParcelPageResource {
         $tenant = $this->currentTenant->tenant();
-        $perPage = min(100, max(1, (int) $request->query('per_page', 50)));
+        $filters = $request->filters();
 
-        $page = $this->query->paginateParcels(
-            $tenant,
-            $perPage,
-            is_numeric($request->query('client_id')) ? (int) $request->query('client_id') : null,
-            is_numeric($request->query('order_id')) ? (int) $request->query('order_id') : null,
-            is_string($request->query('modality')) ? (string) $request->query('modality') : null,
+        return new TaxInstallmentParcelPageResource(
+            $this->query->paginateParcels(
+                $tenant,
+                $filters->perPage,
+                $filters->clientId,
+                $filters->orderId,
+                $filters->modality,
+            ),
         );
-        $page->getCollection()->transform(fn ($p) => $p->toPublicArray());
-
-        return response()->json($page);
     }
 
-    public function guides(Request $request): JsonResponse
-    {
-        $this->assertCanRead();
+    public function guides(
+        ListTaxInstallmentGuidesRequest $request,
+    ): TaxInstallmentGuidePageResource {
         $tenant = $this->currentTenant->tenant();
-        $perPage = min(100, max(1, (int) $request->query('per_page', 50)));
-        $clientId = $request->query('client_id');
+        $filters = $request->filters();
 
-        $page = $this->query->paginateGuides(
-            $tenant,
-            $perPage,
-            is_numeric($clientId) ? (int) $clientId : null,
+        return new TaxInstallmentGuidePageResource(
+            $this->query->paginateGuides(
+                $tenant,
+                $filters->perPage,
+                $filters->clientId,
+            ),
         );
-        $page->getCollection()->transform(fn ($g) => $g->toPublicArray());
-
-        return response()->json($page);
     }
 
     /**
      * Enfileira MONITOR (ou outra operação) por modalidade — tenant-scoped.
      */
-    public function enqueue(Request $request): JsonResponse
+    public function enqueue(EnqueueTaxInstallmentRequest $request): JsonResponse
     {
-        $this->assertCanWrite();
         $tenant = $this->currentTenant->tenant();
-
-        $data = $request->validate([
-            'client_id' => ['required', 'integer'],
-            'modality' => ['required', 'string', 'max:20'],
-            'operation_code' => ['sometimes', 'string', 'max:80'],
-            'correlation_id' => ['sometimes', 'string', 'max:64'],
-            'context' => ['sometimes', 'array'],
-        ]);
+        $data = $request->payload();
 
         $modality = strtoupper($data['modality']);
         if (! ParcelamentoServiceCatalog::isKnownModality($modality)) {
@@ -175,23 +159,19 @@ class TaxInstallmentController extends Controller
                 dispatch: true,
             );
         } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            $text = $e->getMessage();
+
+            return response()->json(['message' => $text], 422);
         }
 
         return response()->json(['data' => $run->toPublicArray()], 201);
     }
 
     /** Enfileira as oito modalidades produtivas para até 25 clientes do escritório ativo. */
-    public function monitor(Request $request): JsonResponse
+    public function monitor(MonitorTaxInstallmentsRequest $request): JsonResponse
     {
-        $this->assertCanWrite();
         $tenant = $this->currentTenant->tenant();
-
-        $data = $request->validate([
-            'client_ids' => ['required', 'array', 'min:1', 'max:25'],
-            'client_ids.*' => ['required', 'integer', 'distinct'],
-            'correlation_id' => ['sometimes', 'string', 'max:48'],
-        ]);
+        $data = $request->payload();
 
         $clients = Client::query()
             ->withoutGlobalScopes()
@@ -237,15 +217,6 @@ class TaxInstallmentController extends Controller
                 'results' => $results,
             ],
         ], 202);
-    }
-
-    private function assertCanRead(): void
-    {
-        $actor = request()->user();
-        if (! $actor instanceof User
-            || ! $this->authorization->allows($actor, TenantPermission::FiscalMonitoringView)) {
-            abort(403, 'Perfil não resolvido.');
-        }
     }
 
     private function assertCanWrite(): void

@@ -2,9 +2,14 @@
 
 namespace App\Http\Controllers\Api\V1\Fiscal;
 
+use App\Actions\Fiscal\ReadMonitoringModuleCommunicationAction;
 use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\EnsureTenantContext;
+use App\Http\Requests\Fiscal\Monitoring\ViewMonitoringModuleCommunicationRequest;
+use App\Http\Requests\Fiscal\Mutations\OptionalPeriodKeyRequest;
+use App\Http\Requests\Fiscal\Mutations\UpdateCommunicationPreferencesRequest;
+use App\Http\Resources\Fiscal\MonitoringModuleCommunicationResource;
 use App\Models\Client;
 use App\Models\User;
 use App\Services\Authorization\TenantAuthorization;
@@ -29,8 +34,11 @@ class MonitoringModuleCommunicationController extends Controller
         private readonly MitCommunicationService $mit,
     ) {}
 
-    public function updatePreferences(Request $request, string $module, int $client): JsonResponse
-    {
+    public function updatePreferences(
+        UpdateCommunicationPreferencesRequest $request,
+        string $module,
+        int $client,
+    ): JsonResponse {
         $this->assertCanManage();
         if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
@@ -40,18 +48,19 @@ class MonitoringModuleCommunicationController extends Controller
         if ($model === null) {
             return response()->json(['message' => 'Cliente não encontrado.'], 404);
         }
-        $data = $request->validate([
-            'email_enabled' => ['required', 'boolean'],
-            'whatsapp_enabled' => ['required', 'boolean'],
-            'automatic_requested' => ['required', 'boolean'],
-            'lock_version' => ['required', 'integer', 'min:0'],
-        ]);
         /** @var User $actor */
         $actor = $request->user();
         try {
-            $pref = $this->service($module)->updatePreferences($tenant, $model, $actor, $data);
+            $pref = $this->service($module)->updatePreferences(
+                $tenant,
+                $model,
+                $actor,
+                $request->preferences(),
+            );
         } catch (HttpException $e) {
-            return response()->json(['message' => $e->getMessage()], $e->getStatusCode());
+            $text = $e->getMessage();
+
+            return response()->json(['message' => $text], $e->getStatusCode());
         }
 
         return response()->json([
@@ -60,38 +69,33 @@ class MonitoringModuleCommunicationController extends Controller
         ]);
     }
 
-    public function preview(Request $request, string $module, int $client): JsonResponse
-    {
-        $this->assertCanRead();
-        if ($rejection = $this->rejectClientTenantId($request)) {
-            return $rejection;
-        }
-        $tenant = $this->currentTenant->tenant();
-        $model = $this->findClient($tenant->id, $client);
-        if ($model === null) {
-            return response()->json(['message' => 'Cliente não encontrado.'], 404);
-        }
-
-        return response()->json(['data' => $this->service($module)->preview($tenant, $model)]);
+    public function preview(
+        ViewMonitoringModuleCommunicationRequest $request,
+        string $module,
+        int $client,
+        ReadMonitoringModuleCommunicationAction $read,
+    ): MonitoringModuleCommunicationResource {
+        return new MonitoringModuleCommunicationResource(
+            $read->preview($request->readData()),
+        );
     }
 
-    public function tracking(Request $request, string $module, int $client): JsonResponse
-    {
-        $this->assertCanRead();
-        if ($rejection = $this->rejectClientTenantId($request)) {
-            return $rejection;
-        }
-        $tenant = $this->currentTenant->tenant();
-        $model = $this->findClient($tenant->id, $client);
-        if ($model === null) {
-            return response()->json(['message' => 'Cliente não encontrado.'], 404);
-        }
-
-        return response()->json(['data' => $this->service($module)->tracking($tenant, $model)]);
+    public function tracking(
+        ViewMonitoringModuleCommunicationRequest $request,
+        string $module,
+        int $client,
+        ReadMonitoringModuleCommunicationAction $read,
+    ): MonitoringModuleCommunicationResource {
+        return new MonitoringModuleCommunicationResource(
+            $read->tracking($request->readData()),
+        );
     }
 
-    public function send(Request $request, string $module, int $client): JsonResponse
-    {
+    public function send(
+        OptionalPeriodKeyRequest $request,
+        string $module,
+        int $client,
+    ): JsonResponse {
         $this->assertCanSync();
         if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
@@ -103,11 +107,17 @@ class MonitoringModuleCommunicationController extends Controller
         }
         /** @var User $actor */
         $actor = $request->user();
-        $input = $request->validate(['period_key' => ['sometimes', 'string', 'regex:/^\d{4}-\d{2}$/']]);
         try {
-            $data = $this->service($module)->requestSend($tenant, $model, $actor, $input['period_key'] ?? null);
+            $data = $this->service($module)->requestSend(
+                $tenant,
+                $model,
+                $actor,
+                $request->periodKey(),
+            );
         } catch (HttpException $e) {
-            return response()->json(['message' => $e->getMessage()], $e->getStatusCode());
+            $text = $e->getMessage();
+
+            return response()->json(['message' => $text], $e->getStatusCode());
         }
 
         return response()->json(['data' => $data]);
@@ -145,11 +155,6 @@ class MonitoringModuleCommunicationController extends Controller
             'message' => 'tenant_id não é aceito; o escritório é obtido do contexto autenticado.',
             'code' => 'CLIENT_TENANT_ID_REJECTED',
         ], 422);
-    }
-
-    private function assertCanRead(): void
-    {
-        $this->assertPermission(TenantPermission::FiscalMonitoringView);
     }
 
     private function assertCanSync(): void

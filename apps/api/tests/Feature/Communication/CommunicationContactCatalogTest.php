@@ -233,6 +233,42 @@ final class CommunicationContactCatalogTest extends TestCase
         );
     }
 
+    public function test_contact_boundary_rejects_tenant_input_and_invalid_whatsapp_address(): void
+    {
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $otherTenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $contact = $this->contact($tenant, 'Contato', provisional: false, active: true);
+        $this->authenticate($admin);
+
+        $this->getJson('/api/v1/communication/contacts?tenant_id='.$otherTenant->id)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('tenant_id');
+
+        $this->postJson('/api/v1/communication/contacts', [
+            'tenant_id' => $otherTenant->id,
+            'name' => 'Escopo inválido',
+            'phone' => '+5511999988888',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('tenant_id');
+
+        $this->postJson('/api/v1/communication/contacts', [
+            'name' => 'Endereço inválido',
+            'phone' => 'grupo@g.us',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('phone');
+
+        $this->postJson('/api/v1/communication/contacts/'.$contact->id.'/identities', [
+            'phone' => 'inválido',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('phone');
+
+        $this->assertDatabaseMissing('communication_contacts', [
+            'tenant_id' => $tenant->id,
+            'name' => 'Endereço inválido',
+        ]);
+    }
+
     /** @param list<TenantPermission> $permissions */
     private function assignProfile(User $user, Tenant $tenant, array $permissions): void
     {

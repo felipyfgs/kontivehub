@@ -2,23 +2,8 @@
 
 namespace App\Http\Requests\Tenant;
 
-use Illuminate\Foundation\Http\FormRequest;
-
-class RemoveTenantCertificateRequest extends FormRequest
+final class RemoveTenantCertificateRequest extends TenantSettingsMutationRequest
 {
-    public function authorize(): bool
-    {
-        return true;
-    }
-
-    protected function prepareForValidation(): void
-    {
-        $this->request->remove('tenant_id');
-        if ($this->isJson() && $this->json() !== null) {
-            $this->json()->remove('tenant_id');
-        }
-    }
-
     /**
      * @return array<string, mixed>
      */

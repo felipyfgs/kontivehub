@@ -4,18 +4,17 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Enums\FiscalModuleKey;
 use App\Enums\FiscalSituation;
-use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Exports\StoreDocumentExportRequest;
 use App\Jobs\BuildExportZipJob;
 use App\Models\DocumentExport;
-use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use App\Services\Authorization\TenantAuthorization;
 use App\Support\CurrentTenant;
 use App\Support\FeatureFlags;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -54,55 +53,20 @@ class ExportController extends Controller
         ]);
     }
 
-    public function store(Request $request, CurrentTenant $currentTenant, AuditLogger $audit): JsonResponse
-    {
-        $actor = $request->user();
-        if (! $actor instanceof User || ! $this->authorization->allows($actor, TenantPermission::ExportsCreate)) {
-            abort(403);
-        }
-
-        // tenant_id nunca do client (top-level já stripado; reforço em filters).
-        $request->request->remove('tenant_id');
-        $request->query->remove('tenant_id');
-        if ($request->isJson() && $request->json() !== null) {
-            $request->json()->remove('tenant_id');
-        }
-
-        $data = $request->validate([
-            'filters' => ['nullable', 'array'],
-            'filters.export_scope' => ['sometimes', 'nullable', 'string', Rule::in(['documents', 'fiscal_portfolio'])],
-            'filters.competence' => ['sometimes', 'nullable', 'string', 'max:7'],
-            'filters.access_key' => ['sometimes', 'nullable', 'string', 'max:64'],
-            'filters.access_keys' => ['sometimes', 'nullable', 'array', 'max:'.BuildExportZipJob::MAX_ACCESS_KEYS],
-            'filters.access_keys.*' => ['string', 'max:64'],
-            'filters.issuer_cnpj' => ['sometimes', 'nullable', 'string', 'max:20'],
-            'filters.taker_cnpj' => ['sometimes', 'nullable', 'string', 'max:20'],
-            'filters.fiscal_role' => ['sometimes', 'nullable', 'string', 'max:32'],
-            'filters.direction' => ['sometimes', 'nullable', 'in:IN,OUT,UNKNOWN'],
-            'filters.status' => ['sometimes', 'nullable', 'string', 'max:32'],
-            'filters.issued_from' => ['sometimes', 'nullable', 'date'],
-            'filters.issued_to' => ['sometimes', 'nullable', 'date'],
-            'filters.client_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
-            'filters.establishment_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
-            // fiscal_portfolio
-            'filters.module_key' => ['required_if:filters.export_scope,fiscal_portfolio', 'nullable', 'string', 'max:64'],
-            'filters.situation' => ['sometimes', 'nullable', 'string', 'max:32'],
-            'filters.q' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'filters.submodule' => ['sometimes', 'nullable', 'string', 'max:64'],
-            'include_events' => ['sometimes', 'boolean'],
-        ]);
-
-        $rawFilters = $data['filters'] ?? [];
-        // Nunca persistir tenant_id fornecido pelo cliente.
-        unset($rawFilters['tenant_id']);
-
-        $filters = $this->normalizeFilters($rawFilters);
+    public function store(
+        StoreDocumentExportRequest $request,
+        CurrentTenant $currentTenant,
+        AuditLogger $audit,
+    ): JsonResponse {
+        $input = $request->exportInput();
+        $filters = $this->normalizeFilters($input['filters']);
         $scope = $filters['export_scope'] ?? 'documents';
+        $includeEvents = $input['include_events'];
 
         if ($scope === 'fiscal_portfolio') {
             $this->assertFiscalPortfolioFilters($filters, $currentTenant);
             // include_events não se aplica à carteira.
-            $data['include_events'] = false;
+            $includeEvents = false;
         }
 
         if (isset($filters['access_keys']) && count($filters['access_keys']) > BuildExportZipJob::MAX_ACCESS_KEYS) {
@@ -116,10 +80,12 @@ class ExportController extends Controller
             'user_id' => auth()->id(),
             'status' => 'PENDING',
             'filters' => $filters,
-            'include_events' => $data['include_events'] ?? false,
+            'include_events' => $includeEvents,
         ]);
 
-        BuildExportZipJob::dispatch($export->id);
+        DB::afterCommit(function () use ($export): void {
+            BuildExportZipJob::dispatch($export->id);
+        });
 
         $audit->record('export.create', 'SUCCESS', $export, [
             'filters' => $export->filters,

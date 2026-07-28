@@ -19,58 +19,113 @@ final readonly class CommunicationAccess
 
     public function assertView(User $actor, ?CommunicationInbox $inbox = null): void
     {
-        if (! $this->authorization->allows($actor, TenantPermission::CommunicationView, $inbox)) {
+        if (! $this->canView($actor, $inbox)) {
             throw new AuthorizationException;
         }
-        if ($inbox !== null && ! $this->canAccessInbox($actor, $inbox)) {
-            throw new AuthorizationException;
-        }
+    }
+
+    public function canView(User $actor, ?CommunicationInbox $inbox = null): bool
+    {
+        return $this->authorization->allows($actor, TenantPermission::CommunicationView, $inbox)
+            && ($inbox === null || $this->canAccessInbox($actor, $inbox));
     }
 
     public function assertReply(User $actor, CommunicationInbox $inbox): void
     {
-        if (! $this->authorization->allows($actor, TenantPermission::CommunicationReply, $inbox)
-            || ! $this->canAccessInbox($actor, $inbox)) {
+        if (! $this->canReply($actor, $inbox)) {
             throw new AuthorizationException;
         }
+    }
+
+    public function canReply(User $actor, CommunicationInbox $inbox): bool
+    {
+        return $this->authorization->allows($actor, TenantPermission::CommunicationReply, $inbox)
+            && $this->canAccessInbox($actor, $inbox);
     }
 
     public function assertManage(User $actor, mixed $target = null): void
     {
-        if (! $this->authorization->allows($actor, TenantPermission::CommunicationManageInboxes, $target)) {
+        if (! $this->canManage($actor, $target)) {
             throw new AuthorizationException;
         }
+    }
+
+    public function canManage(User $actor, mixed $target = null): bool
+    {
+        return $this->authorization->allows(
+            $actor,
+            TenantPermission::CommunicationManageInboxes,
+            $target,
+        );
     }
 
     public function assertManageContacts(User $actor, mixed $target = null): void
     {
-        if (! $this->authorization->allows($actor, TenantPermission::CommunicationManageContacts, $target)) {
+        if (! $this->canManageContacts($actor, $target)) {
             throw new AuthorizationException;
         }
+    }
+
+    public function canManageContacts(User $actor, mixed $target = null): bool
+    {
+        return $this->authorization->allows(
+            $actor,
+            TenantPermission::CommunicationManageContacts,
+            $target,
+        );
     }
 
     public function assertManageQuickReplies(User $actor, mixed $target = null): void
     {
-        if (! $this->authorization->allows($actor, TenantPermission::CommunicationManageQuickReplies, $target)) {
+        if (! $this->canManageQuickReplies($actor, $target)) {
             throw new AuthorizationException;
         }
     }
 
+    public function canManageQuickReplies(User $actor, mixed $target = null): bool
+    {
+        return $this->authorization->allows(
+            $actor,
+            TenantPermission::CommunicationManageQuickReplies,
+            $target,
+        );
+    }
+
     public function assertManageFlows(User $actor, mixed $target = null): void
     {
-        if (! $this->authorization->allows($actor, TenantPermission::CommunicationManageFlows, $target)) {
+        if (! $this->canManageFlows($actor, $target)) {
             throw new AuthorizationException;
         }
+    }
+
+    public function canManageFlows(User $actor, mixed $target = null): bool
+    {
+        return $this->authorization->allows(
+            $actor,
+            TenantPermission::CommunicationManageFlows,
+            $target,
+        );
     }
 
     /** Leitura administrativa de fluxos: view ou manage_flows. */
     public function assertViewFlows(User $actor, mixed $target = null): void
     {
-        $canView = $this->authorization->allows($actor, TenantPermission::CommunicationView, $target);
-        $canManage = $this->authorization->allows($actor, TenantPermission::CommunicationManageFlows, $target);
-        if (! $canView && ! $canManage) {
+        if (! $this->canViewFlows($actor, $target)) {
             throw new AuthorizationException;
         }
+    }
+
+    public function canViewFlows(User $actor, mixed $target = null): bool
+    {
+        return $this->authorization->allows(
+            $actor,
+            TenantPermission::CommunicationView,
+            $target,
+        ) || $this->authorization->allows(
+            $actor,
+            TenantPermission::CommunicationManageFlows,
+            $target,
+        );
     }
 
     /** @return list<int> */

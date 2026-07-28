@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Communication;
 
+use App\Enums\Communication\FlowRunStatus;
 use App\Enums\Communication\FlowStatus;
 use App\Enums\Communication\InboxStatus;
 use App\Enums\TenantPermission;
@@ -9,6 +10,7 @@ use App\Enums\TenantRole;
 use App\Events\CommunicationEventCommitted;
 use App\Jobs\Communication\AdvanceCommunicationFlowRunJob;
 use App\Jobs\Communication\CorrelateCommunicationFlowEventJob;
+use App\Models\CommunicationEvent;
 use App\Models\CommunicationFlow;
 use App\Models\CommunicationFlowDraft;
 use App\Models\CommunicationFlowInboxBinding;
@@ -293,6 +295,276 @@ final class CommunicationFlowApiTest extends TestCase
         $this->assertSame(0, CommunicationFlowVersion::query()->where('flow_id', $clone['id'])->count());
     }
 
+    public function test_catalog_detail_update_clone_version_and_delete_preserve_contracts(): void
+    {
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $this->authenticate($admin);
+
+        $created = $this->postJson('/api/v1/communication/flows', [
+            'name' => 'Fluxo contratual',
+        ])->assertCreated()->json('data');
+        $flowId = (int) $created['id'];
+
+        $this->getJson('/api/v1/communication/flows')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('meta.flows_enabled', true)
+            ->assertJsonStructure([
+                'data' => [[
+                    'id',
+                    'name',
+                    'status',
+                    'lock_version',
+                    'created_at',
+                    'updated_at',
+                ]],
+                'meta' => ['flows_enabled'],
+            ]);
+
+        $this->getJson('/api/v1/communication/flows/'.$flowId)
+            ->assertOk()
+            ->assertJsonPath('data.id', $flowId)
+            ->assertJsonStructure([
+                'data' => [
+                    'draft',
+                    'versions',
+                    'bindings',
+                ],
+            ]);
+
+        $this->patchJson('/api/v1/communication/flows/'.$flowId, [
+            'name' => 'Fluxo renomeado',
+            'status' => FlowStatus::Active->value,
+            'lock_version' => 1,
+        ])->assertOk()
+            ->assertJsonPath('data.name', 'Fluxo renomeado')
+            ->assertJsonPath('data.status', FlowStatus::Active->value)
+            ->assertJsonPath('data.lock_version', 2);
+
+        $this->putJson('/api/v1/communication/flows/'.$flowId.'/draft', [
+            'lock_version' => 1,
+            'graph' => $this->validGraph(),
+        ])->assertOk();
+        $versionId = (int) $this->postJson('/api/v1/communication/flows/'.$flowId.'/publish', [
+            'lock_version' => 2,
+        ])->assertCreated()->json('data.version.id');
+
+        $clone = $this->postJson(
+            '/api/v1/communication/flows/'.$flowId.'/versions/'.$versionId.'/clone',
+        )->assertCreated()
+            ->assertJsonPath('data.name', 'Fluxo renomeado (cópia)')
+            ->assertJsonPath('data.status', FlowStatus::Paused->value)
+            ->json('data');
+        $cloneId = (int) $clone['id'];
+        $this->getJson('/api/v1/communication/flows/'.$cloneId.'/draft')
+            ->assertOk()
+            ->assertJsonPath('data.graph.nodes.1.type', 'message');
+
+        $this->deleteJson('/api/v1/communication/flows/'.$cloneId)
+            ->assertNoContent();
+        $this->assertDatabaseMissing('communication_flows', ['id' => $cloneId]);
+        $this->assertDatabaseHas('communication_events', [
+            'tenant_id' => $tenant->id,
+            'type' => 'COMMUNICATION_FLOW_DELETED',
+        ]);
+    }
+
+    public function test_flow_boundaries_reject_tenant_selector_input(): void
+    {
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $this->authenticate($admin);
+        [$flowId, $versionId] = $this->publishedFlow('Boundary');
+        $inbox = $this->inbox($tenant, 'Boundary');
+        $binding = $this->postJson('/api/v1/communication/flows/'.$flowId.'/bindings', [
+            'inbox_id' => $inbox->id,
+            'published_version_id' => $versionId,
+        ])->assertCreated()->json('data');
+        $bindingId = (int) $binding['id'];
+
+        $responses = [
+            $this->getJson('/api/v1/communication/flows?tenant_id='.$tenant->id),
+            $this->getJson('/api/v1/communication/flows/'.$flowId.'?tenant_id='.$tenant->id),
+            $this->postJson('/api/v1/communication/flows', [
+                'name' => 'Override',
+                'tenant_id' => $tenant->id,
+            ]),
+            $this->patchJson('/api/v1/communication/flows/'.$flowId, [
+                'lock_version' => 1,
+                'tenant_id' => $tenant->id,
+            ]),
+            $this->deleteJson('/api/v1/communication/flows/'.$flowId, [
+                'tenant_id' => $tenant->id,
+            ]),
+            $this->getJson('/api/v1/communication/flows/'.$flowId.'/draft?tenant_id='.$tenant->id),
+            $this->putJson('/api/v1/communication/flows/'.$flowId.'/draft', [
+                'lock_version' => 2,
+                'graph' => $this->validGraph(),
+                'tenant_id' => $tenant->id,
+            ]),
+            $this->postJson('/api/v1/communication/flows/'.$flowId.'/validate', [
+                'tenant_id' => $tenant->id,
+            ]),
+            $this->postJson('/api/v1/communication/flows/'.$flowId.'/dry-run', [
+                'tenant_id' => $tenant->id,
+            ]),
+            $this->postJson('/api/v1/communication/flows/'.$flowId.'/preview', [
+                'tenant_id' => $tenant->id,
+            ]),
+            $this->postJson('/api/v1/communication/flows/'.$flowId.'/publish', [
+                'lock_version' => 2,
+                'tenant_id' => $tenant->id,
+            ]),
+            $this->postJson('/api/v1/communication/flows/'.$flowId.'/clone', [
+                'name' => 'Override clone',
+                'tenant_id' => $tenant->id,
+            ]),
+            $this->postJson(
+                '/api/v1/communication/flows/'.$flowId.'/versions/'.$versionId.'/clone',
+                ['tenant_id' => $tenant->id],
+            ),
+            $this->getJson('/api/v1/communication/flows/'.$flowId.'/bindings?tenant_id='.$tenant->id),
+            $this->postJson('/api/v1/communication/flows/'.$flowId.'/bindings', [
+                'inbox_id' => $inbox->id,
+                'tenant_id' => $tenant->id,
+            ]),
+            $this->patchJson('/api/v1/communication/flow-bindings/'.$bindingId, [
+                'lock_version' => 1,
+                'tenant_id' => $tenant->id,
+            ]),
+            $this->postJson('/api/v1/communication/flow-bindings/'.$bindingId.'/enable', [
+                'lock_version' => 1,
+                'tenant_id' => $tenant->id,
+            ]),
+            $this->deleteJson('/api/v1/communication/flow-bindings/'.$bindingId, [
+                'tenant_id' => $tenant->id,
+            ]),
+        ];
+
+        foreach ($responses as $response) {
+            $response->assertUnprocessable()
+                ->assertJsonValidationErrors('tenant_id');
+        }
+        $this->assertDatabaseHas('communication_flows', ['id' => $flowId]);
+        $this->assertDatabaseHas('communication_flow_inbox_bindings', ['id' => $bindingId]);
+    }
+
+    public function test_binding_updates_are_atomic_versioned_and_tenant_scoped(): void
+    {
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $foreign = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $this->authenticate($admin);
+        [$flowId, $versionId] = $this->publishedFlow('Principal');
+        [$otherFlowId, $otherVersionId] = $this->publishedFlow('Outro');
+        $inbox = $this->inbox($tenant, 'Binding');
+        $binding = $this->postJson('/api/v1/communication/flows/'.$flowId.'/bindings', [
+            'inbox_id' => $inbox->id,
+            'published_version_id' => $versionId,
+            'enabled' => true,
+        ])->assertCreated()->json('data');
+        $bindingId = (int) $binding['id'];
+        $eventsBefore = CommunicationEvent::query()
+            ->withoutGlobalScopes()
+            ->where('type', 'COMMUNICATION_FLOW_BINDING_UPDATED')
+            ->count();
+
+        $this->patchJson('/api/v1/communication/flow-bindings/'.$bindingId, [
+            'lock_version' => 1,
+            'published_version_id' => $otherVersionId,
+        ])->assertUnprocessable()
+            ->assertJsonPath('code', 'invalid_published_version');
+        $this->assertDatabaseHas('communication_flow_inbox_bindings', [
+            'id' => $bindingId,
+            'flow_id' => $flowId,
+            'published_version_id' => $versionId,
+            'enabled' => true,
+            'lock_version' => 1,
+        ]);
+        $this->assertSame(
+            $eventsBefore,
+            CommunicationEvent::query()->withoutGlobalScopes()
+                ->where('type', 'COMMUNICATION_FLOW_BINDING_UPDATED')
+                ->count(),
+        );
+
+        $this->patchJson('/api/v1/communication/flow-bindings/'.$bindingId, [
+            'lock_version' => 1,
+            'enabled' => false,
+        ])->assertOk()
+            ->assertJsonPath('data.enabled', false)
+            ->assertJsonPath('data.lock_version', 2);
+
+        $eventsAfterUpdate = CommunicationEvent::query()
+            ->withoutGlobalScopes()
+            ->where('type', 'COMMUNICATION_FLOW_BINDING_UPDATED')
+            ->count();
+        $this->postJson('/api/v1/communication/flow-bindings/'.$bindingId.'/enable', [
+            'lock_version' => 1,
+        ])->assertConflict()
+            ->assertJsonPath('code', 'version_conflict');
+        $this->assertDatabaseHas('communication_flow_inbox_bindings', [
+            'id' => $bindingId,
+            'enabled' => false,
+            'lock_version' => 2,
+        ]);
+        $this->assertSame(
+            $eventsAfterUpdate,
+            CommunicationEvent::query()->withoutGlobalScopes()
+                ->where('type', 'COMMUNICATION_FLOW_BINDING_UPDATED')
+                ->count(),
+        );
+
+        $this->postJson('/api/v1/communication/flow-bindings/'.$bindingId.'/enable', [
+            'lock_version' => 2,
+        ])->assertOk()
+            ->assertJsonPath('data.enabled', true)
+            ->assertJsonPath('data.lock_version', 3);
+        $run = CommunicationFlowRun::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'flow_id' => $flowId,
+            'flow_version_id' => $versionId,
+            'binding_id' => $bindingId,
+            'status' => FlowRunStatus::Running,
+            'current_node_id' => 's',
+            'context_encrypted' => [],
+            'started_at' => now(),
+        ]);
+        $this->deleteJson('/api/v1/communication/flow-bindings/'.$bindingId)
+            ->assertNoContent();
+        $this->assertDatabaseMissing('communication_flow_inbox_bindings', ['id' => $bindingId]);
+        $this->assertSame(FlowRunStatus::Stopped, $run->refresh()->status);
+        $this->assertNull($run->binding_id);
+        $this->assertNotNull($run->finished_at);
+
+        $foreignFlow = CommunicationFlow::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $foreign->id,
+            'name' => 'Foreign binding',
+            'status' => FlowStatus::Paused,
+            'lock_version' => 1,
+        ]);
+        $foreignInbox = $this->inbox($foreign, 'Foreign');
+        $foreignBinding = CommunicationFlowInboxBinding::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $foreign->id,
+            'flow_id' => $foreignFlow->id,
+            'inbox_id' => $foreignInbox->id,
+            'enabled' => false,
+            'lock_version' => 1,
+        ]);
+        $this->patchJson('/api/v1/communication/flow-bindings/'.$foreignBinding->id, [
+            'lock_version' => 1,
+            'enabled' => true,
+        ])->assertNotFound();
+        $this->deleteJson('/api/v1/communication/flow-bindings/'.$foreignBinding->id)
+            ->assertNotFound();
+        $this->assertDatabaseHas('communication_flow_inbox_bindings', [
+            'id' => $foreignBinding->id,
+            'flow_id' => $foreignFlow->id,
+        ]);
+        $this->assertNotSame($flowId, $otherFlowId);
+    }
+
     public function test_flow_executor_jobs_are_registered(): void
     {
         $this->assertTrue(class_exists(CorrelateCommunicationFlowEventJob::class));
@@ -332,6 +604,23 @@ final class CommunicationFlowApiTest extends TestCase
             'is_enabled' => true,
             'lock_version' => 1,
         ]);
+    }
+
+    /** @return array{int, int} */
+    private function publishedFlow(string $name): array
+    {
+        $flowId = (int) $this->postJson('/api/v1/communication/flows', [
+            'name' => $name,
+        ])->assertCreated()->json('data.id');
+        $this->putJson('/api/v1/communication/flows/'.$flowId.'/draft', [
+            'lock_version' => 1,
+            'graph' => $this->validGraph(),
+        ])->assertOk();
+        $versionId = (int) $this->postJson('/api/v1/communication/flows/'.$flowId.'/publish', [
+            'lock_version' => 2,
+        ])->assertCreated()->json('data.version.id');
+
+        return [$flowId, $versionId];
     }
 
     /** @return array{nodes: list<array<string, mixed>>, edges: list<array<string, mixed>>} */

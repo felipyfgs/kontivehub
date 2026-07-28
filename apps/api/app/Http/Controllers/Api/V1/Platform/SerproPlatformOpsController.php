@@ -2,22 +2,23 @@
 
 namespace App\Http\Controllers\Api\V1\Platform;
 
-use App\Enums\SerproEnvironment;
+use App\Actions\Serpro\ManageSerproPlatformOperationsAction;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Platform\ApproveSerproRolloutRequest;
+use App\Http\Requests\Platform\CreateSerproRolloutRequest;
+use App\Http\Requests\Platform\FilterSerproEnvironmentRequest;
+use App\Http\Requests\Platform\GetSerproReadinessRequest;
+use App\Http\Requests\Platform\ListSerproBudgetsRequest;
+use App\Http\Requests\Platform\ListSerproRolloutsRequest;
+use App\Http\Requests\Platform\RejectSerproRolloutRequest;
+use App\Http\Resources\SerproCredentialVersionResource;
+use App\Http\Resources\SerproReadinessResource;
+use App\Http\Resources\SerproRolloutApprovalResource;
+use App\Http\Resources\SerproUsageBudgetResource;
 use App\Models\SerproCredentialVersion;
 use App\Models\SerproRolloutApproval;
-use App\Models\SerproUsageBudget;
-use App\Services\Auth\RecentPasswordConfirmationGate;
-use App\Services\Serpro\SerproCredentialVersionService;
-use App\Services\Serpro\SerproKillSwitchService;
-use App\Services\Serpro\SerproMetricsExporter;
-use App\Services\Serpro\SerproReadinessService;
-use App\Services\Serpro\SerproRolloutApprovalService;
-use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
-use RuntimeException;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 /**
  * Console de plataforma SERPRO: credenciais, readiness, budgets e rollout.
@@ -26,50 +27,28 @@ use RuntimeException;
 class SerproPlatformOpsController extends Controller
 {
     public function __construct(
-        private readonly SerproCredentialVersionService $credentials,
-        private readonly SerproReadinessService $readiness,
-        private readonly SerproRolloutApprovalService $rollouts,
-        private readonly SerproKillSwitchService $killSwitch,
-        private readonly SerproMetricsExporter $metrics,
+        private readonly ManageSerproPlatformOperationsAction $operations,
     ) {}
 
-    public function listCredentialVersions(Request $request): JsonResponse
-    {
-        $env = $this->parseEnv($request->query('environment'));
-        $q = SerproCredentialVersion::query()->orderByDesc('id')->limit(100);
-        if ($env !== null) {
-            $q->where('environment', $env->value);
-        }
-
-        return response()->json([
-            'data' => $q->get()->map->toSanitizedArray()->all(),
-        ]);
-    }
-
-    public function showCredentialVersion(SerproCredentialVersion $serproCredentialVersion): JsonResponse
-    {
-        return response()->json([
-            'data' => $serproCredentialVersion->toSanitizedArray(),
-        ]);
-    }
-
-    public function readiness(Request $request): JsonResponse
-    {
-        $env = $this->parseEnv($request->query('environment'));
-        $persist = filter_var($request->query('persist', true), FILTER_VALIDATE_BOOL);
-
-        $run = $this->readiness->evaluateGlobal(
-            $env,
-            persist: $persist,
-            actorUserId: $request->user()?->id,
-            trigger: 'API',
+    public function listCredentialVersions(
+        FilterSerproEnvironmentRequest $request,
+    ): AnonymousResourceCollection {
+        return SerproCredentialVersionResource::collection(
+            $this->operations->credentialVersions($request->toDto()->environment),
         );
+    }
 
-        if (is_array($run)) {
-            return response()->json(['data' => $run]);
-        }
+    public function showCredentialVersion(
+        SerproCredentialVersion $serproCredentialVersion,
+    ): SerproCredentialVersionResource {
+        return SerproCredentialVersionResource::make($serproCredentialVersion);
+    }
 
-        return response()->json(['data' => $run->toSanitizedArray()]);
+    public function readiness(GetSerproReadinessRequest $request): SerproReadinessResource
+    {
+        return SerproReadinessResource::make(
+            $this->operations->readiness($request->toDto(), $request->actor()),
+        );
     }
 
     /**
@@ -77,169 +56,56 @@ class SerproPlatformOpsController extends Controller
      */
     public function metrics(): JsonResponse
     {
-        return response()->json(['data' => $this->metrics->snapshot()]);
+        return response()->json(['data' => $this->operations->metrics()]);
     }
 
-    public function listBudgets(Request $request): JsonResponse
+    public function listBudgets(ListSerproBudgetsRequest $request): AnonymousResourceCollection
     {
-        $q = SerproUsageBudget::query()
-            ->where('is_active', true)
-            ->orderByDesc('id')
-            ->limit(100);
-
-        if ($scope = $request->query('scope')) {
-            $q->where('scope', strtoupper((string) $scope));
-        }
-
-        $rows = $q->get()->map(function (SerproUsageBudget $b): array {
-            return [
-                'id' => $b->id,
-                'scope' => $b->scope,
-                'tenant_id' => $b->tenant_id,
-                'environment' => $b->environment,
-                'budget_kind' => $b->budget_kind,
-                'limit_micros' => (int) $b->limit_micros,
-                'reserved_micros' => (int) $b->reserved_micros,
-                'consumed_micros' => (int) $b->consumed_micros,
-                'remaining_micros' => $b->remainingMicros(),
-                'cycle_code' => $b->cycle_code,
-                'operation_key' => $b->operation_key,
-                'is_canary' => (bool) $b->is_canary,
-                'is_active' => (bool) $b->is_active,
-                'effective_from' => $b->effective_from?->toIso8601String(),
-                'effective_to' => $b->effective_to?->toIso8601String(),
-            ];
-        })->all();
-
-        return response()->json(['data' => $rows]);
+        return SerproUsageBudgetResource::collection(
+            $this->operations->budgets($request->toDto()),
+        );
     }
 
-    public function listRollouts(Request $request): JsonResponse
+    public function listRollouts(ListSerproRolloutsRequest $request): AnonymousResourceCollection
     {
-        return response()->json([
-            'data' => $this->rollouts->listSanitized(
-                status: is_string($request->query('status')) ? $request->query('status') : null,
-            ),
-        ]);
+        return SerproRolloutApprovalResource::collection(
+            $this->operations->rollouts($request->toDto()),
+        );
     }
 
-    public function requestRollout(Request $request): JsonResponse
+    public function requestRollout(CreateSerproRolloutRequest $request): JsonResponse
     {
-        $data = $request->validate([
-            'action' => ['required', 'string', 'max:40'],
-            'subject_type' => ['required', 'string', 'max:40'],
-            'subject_id' => ['nullable', 'integer'],
-            'reason' => ['required', 'string', 'max:500'],
-            'environment' => ['sometimes', 'string', Rule::enum(SerproEnvironment::class)],
-            'tenant_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
-            'context' => ['sometimes', 'array'],
-            'ttl_hours' => ['sometimes', 'integer', 'min:1', 'max:168'],
-            'change_window_start' => ['sometimes', 'nullable', 'date'],
-            'change_window_end' => ['sometimes', 'nullable', 'date', 'after:change_window_start'],
-        ]);
-
-        $env = isset($data['environment'])
-            ? SerproEnvironment::from($data['environment'])
-            : null;
-
-        // tenant_id do body só é aceito para delimitar canário no registro da aprovação
-        // (não altera CurrentTenant / escopo tenant de dados fiscais).
-        $tenantId = isset($data['tenant_id']) ? (int) $data['tenant_id'] : null;
-
-        try {
-            $approval = $this->rollouts->request(
-                action: $data['action'],
-                subjectType: $data['subject_type'],
-                subjectId: $data['subject_id'] ?? null,
-                reason: $data['reason'],
-                requestedByUserId: (int) $request->user()->id,
-                environment: $env,
-                tenantId: $tenantId,
-                context: $data['context'] ?? [],
-                ttlHours: (int) ($data['ttl_hours'] ?? 24),
-                changeWindowStart: isset($data['change_window_start'])
-                    ? CarbonImmutable::parse($data['change_window_start'])
-                    : null,
-                changeWindowEnd: isset($data['change_window_end'])
-                    ? CarbonImmutable::parse($data['change_window_end'])
-                    : null,
-                fromHttp: true,
-            );
-        } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
-        }
-
-        return response()->json([
-            'data' => $this->rollouts->toSanitized($approval),
-        ], 201);
+        return SerproRolloutApprovalResource::make(
+            $this->operations->requestRollout($request->toDto(), $request->actor()),
+        )->response()->setStatusCode(201);
     }
 
-    public function approveRollout(Request $request, SerproRolloutApproval $serproRolloutApproval): JsonResponse
-    {
-        $data = $request->validate([
-            'reason' => ['nullable', 'string', 'max:500'],
-            'confirmation_phrase' => ['sometimes', 'nullable', 'string', 'max:120'],
-            'change_window_start' => ['sometimes', 'nullable', 'date'],
-            'change_window_end' => ['sometimes', 'nullable', 'date', 'after:change_window_start'],
-        ]);
-
-        $passwordOk = app(RecentPasswordConfirmationGate::class)
-            ->isRecentlyConfirmed($request->user(), $request);
-
-        try {
-            $result = $this->rollouts->approve(
-                $serproRolloutApproval,
-                (int) $request->user()->id,
-                passwordRecentlyConfirmed: $passwordOk,
-                reason: $data['reason'] ?? null,
-                confirmationPhrase: $data['confirmation_phrase'] ?? null,
-                changeWindowStart: isset($data['change_window_start'])
-                    ? CarbonImmutable::parse($data['change_window_start'])
-                    : null,
-                changeWindowEnd: isset($data['change_window_end'])
-                    ? CarbonImmutable::parse($data['change_window_end'])
-                    : null,
-                fromHttp: true,
-            );
-        } catch (RuntimeException $e) {
-            $code = $passwordOk ? 'approval_error' : 'password_confirmation_required';
-
-            return response()->json([
-                'message' => $e->getMessage(),
-                'code' => $code,
-            ], $passwordOk ? 422 : 403);
-        }
-
-        return response()->json([
-            'data' => $this->rollouts->toSanitized($result['approval']),
-            'executed' => $result['executed'],
-            'kill_switch' => $this->killSwitch->status(),
-        ]);
-    }
-
-    public function rejectRollout(Request $request, SerproRolloutApproval $serproRolloutApproval): JsonResponse
-    {
-        $data = $request->validate([
-            'reason' => ['required', 'string', 'max:500'],
-        ]);
-
-        $approval = $this->rollouts->reject(
+    public function approveRollout(
+        ApproveSerproRolloutRequest $request,
+        SerproRolloutApproval $serproRolloutApproval,
+    ): SerproRolloutApprovalResource {
+        $result = $this->operations->approveRollout(
             $serproRolloutApproval,
-            (int) $request->user()->id,
-            $data['reason'],
+            $request->toDto(),
+            $request->actor(),
         );
 
-        return response()->json([
-            'data' => $this->rollouts->toSanitized($approval),
+        return SerproRolloutApprovalResource::make($result->approval)->additional([
+            'executed' => $result->executed,
+            'kill_switch' => $result->killSwitch,
         ]);
     }
 
-    private function parseEnv(mixed $raw): ?SerproEnvironment
-    {
-        if (! is_string($raw) || $raw === '') {
-            return null;
-        }
-
-        return SerproEnvironment::tryFrom(strtoupper($raw));
+    public function rejectRollout(
+        RejectSerproRolloutRequest $request,
+        SerproRolloutApproval $serproRolloutApproval,
+    ): SerproRolloutApprovalResource {
+        return SerproRolloutApprovalResource::make(
+            $this->operations->rejectRollout(
+                $serproRolloutApproval,
+                $request->toDto(),
+                $request->actor(),
+            ),
+        );
     }
 }

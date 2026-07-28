@@ -34,21 +34,4 @@ class ClientCustomField extends Model
     {
         return $this->belongsTo(Client::class);
     }
-
-    /**
-     * @return array{id:int,label:string,type:string,is_active:bool,value:string|null,has_value:bool}
-     */
-    public function toPublicArray(): array
-    {
-        $isSecret = $this->type === 'SECRET';
-
-        return [
-            'id' => $this->id,
-            'label' => $this->label,
-            'type' => $this->type,
-            'is_active' => (bool) $this->is_active,
-            'value' => $isSecret ? null : $this->value_text,
-            'has_value' => $isSecret ? $this->vault_object_id !== null : filled($this->value_text),
-        ];
-    }
 }

@@ -2,16 +2,24 @@
 
 namespace App\Http\Requests\Clients;
 
+use App\DTO\Clients\ClientCategoryUpdateData;
+use App\Http\Requests\AuthenticatedRequest;
 use App\Models\ClientCategory;
+use App\Models\User;
+use App\Policies\ClientCategoryPolicy;
 use App\Support\CurrentTenant;
-use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-class UpdateClientCategoryRequest extends FormRequest
+final class UpdateClientCategoryRequest extends AuthenticatedRequest
 {
     public function authorize(): bool
     {
-        return true;
+        $actor = $this->user();
+        $category = $this->route('clientCategory');
+
+        return $actor instanceof User
+            && $category instanceof ClientCategory
+            && app(ClientCategoryPolicy::class)->update($actor, $category);
     }
 
     protected function prepareForValidation(): void
@@ -51,5 +59,10 @@ class UpdateClientCategoryRequest extends FormRequest
             'tenant_id' => ['prohibited'],
             'created_by' => ['prohibited'],
         ];
+    }
+
+    public function toDto(): ClientCategoryUpdateData
+    {
+        return new ClientCategoryUpdateData($this->validated());
     }
 }

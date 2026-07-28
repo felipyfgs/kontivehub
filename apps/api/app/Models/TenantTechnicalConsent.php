@@ -57,20 +57,4 @@ class TenantTechnicalConsent extends Model
     {
         return $this->revoked_at === null;
     }
-
-    /**
-     * @return array<string, mixed>
-     */
-    public function toPublicArray(): array
-    {
-        return [
-            'id' => $this->id,
-            'version_code' => $this->version_code,
-            'purposes_presented' => $this->purposes_presented,
-            'consented_at' => $this->consented_at?->toIso8601String(),
-            'revoked_at' => $this->revoked_at?->toIso8601String(),
-            'payload_sha256' => $this->payload_sha256,
-            'active' => $this->isActive(),
-        ];
-    }
 }

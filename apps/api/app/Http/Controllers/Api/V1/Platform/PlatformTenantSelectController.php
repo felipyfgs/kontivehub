@@ -2,14 +2,15 @@
 
 namespace App\Http\Controllers\Api\V1\Platform;
 
+use App\Actions\Platform\SelectPlatformTenantAction;
 use App\Enums\TenantRole;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Platform\SelectPlatformTenantRequest;
 use App\Models\User;
 use App\Services\Platform\PlatformTenantSelectService;
 use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
  * Seletor global de escritório (PLATFORM_ADMIN, modo privilegiado).
@@ -19,6 +20,7 @@ class PlatformTenantSelectController extends Controller
 {
     public function __construct(
         private readonly PlatformTenantSelectService $selector,
+        private readonly SelectPlatformTenantAction $selectTenant,
         private readonly CurrentTenant $currentTenant,
     ) {}
 
@@ -42,25 +44,10 @@ class PlatformTenantSelectController extends Controller
         ]);
     }
 
-    public function select(Request $request): JsonResponse
+    public function select(SelectPlatformTenantRequest $request): JsonResponse
     {
-        /** @var User $user */
-        $user = $request->user();
-
-        $validated = $request->validate([
-            'tenant_id' => ['required', 'integer', 'min:1'],
-        ]);
-
-        try {
-            $tenant = $this->selector->select($user, (int) $validated['tenant_id'], $request);
-        } catch (HttpException $e) {
-            $code = $e->getHeaders()['X-Error-Code'] ?? null;
-
-            return response()->json([
-                'message' => $e->getMessage(),
-                'code' => is_string($code) ? $code : 'http_error',
-            ], $e->getStatusCode());
-        }
+        $user = $request->actor();
+        $tenant = ($this->selectTenant)($user, $request->toDto(), $request);
 
         return response()->json([
             'data' => [

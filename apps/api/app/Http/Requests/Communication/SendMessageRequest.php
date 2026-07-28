@@ -2,16 +2,42 @@
 
 namespace App\Http\Requests\Communication;
 
-use Illuminate\Foundation\Http\FormRequest;
+use App\DTO\Communication\CommunicationMessageCreationData;
+use App\DTO\Communication\CommunicationMessageUploadData;
+use App\Enums\Communication\MessageKind;
+use App\Models\CommunicationConversation;
+use App\Models\User;
+use App\Services\Communication\Authorization\CommunicationAccess;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
-final class SendMessageRequest extends FormRequest
+final class SendMessageRequest extends CommunicationRequest
 {
-    public function authorize(): bool
+    protected function prepareCommunicationValidation(): void
     {
-        return true;
+        foreach (['ptt', 'gif', 'internal_note'] as $field) {
+            if ($this->has($field)) {
+                $this->merge([$field => $this->boolean($field)]);
+            }
+        }
     }
 
+    public function authorize(): bool
+    {
+        $actor = $this->user();
+        $conversation = $this->route('conversation');
+        if (! $actor instanceof User || ! $conversation instanceof CommunicationConversation) {
+            return false;
+        }
+
+        $inbox = $conversation->inbox()->first();
+
+        return $inbox !== null
+            && app(CommunicationAccess::class)->canReply($actor, $inbox);
+    }
+
+    /** @return array<string, list<mixed>> */
     public function rules(): array
     {
         return [
@@ -55,5 +81,57 @@ final class SendMessageRequest extends FormRequest
             'internal_note' => ['sometimes', 'boolean'],
             'idempotency_key' => ['nullable', 'string', 'regex:/^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/'],
         ];
+    }
+
+    public function messageData(): CommunicationMessageCreationData
+    {
+        $validated = $this->validated();
+        $richPayload = array_filter([
+            'link_preview' => $validated['link_preview'] ?? null,
+            'location' => $validated['location'] ?? null,
+            'contact' => $validated['contact'] ?? null,
+            'poll' => $validated['poll'] ?? null,
+            'interactive' => $validated['interactive'] ?? null,
+        ], static fn (mixed $value): bool => $value !== null);
+
+        return new CommunicationMessageCreationData(
+            body: trim((string) ($validated['body'] ?? '')),
+            internalNote: (bool) ($validated['internal_note'] ?? false),
+            requestedKind: isset($validated['kind'])
+                ? MessageKind::from((string) $validated['kind'])
+                : null,
+            ptt: (bool) ($validated['ptt'] ?? false),
+            gif: (bool) ($validated['gif'] ?? false),
+            richPayload: $richPayload,
+            replyToMessageId: isset($validated['reply_to_message_id'])
+                ? (int) $validated['reply_to_message_id']
+                : null,
+            idempotencyKey: isset($validated['idempotency_key'])
+                ? (string) $validated['idempotency_key']
+                : null,
+            upload: $this->uploadData(),
+        );
+    }
+
+    private function uploadData(): ?CommunicationMessageUploadData
+    {
+        $upload = $this->file('file');
+        if (! $upload instanceof UploadedFile) {
+            return null;
+        }
+
+        $path = $upload->getRealPath();
+        if (! is_string($path) || $path === '') {
+            throw ValidationException::withMessages([
+                'file' => 'Arquivo inválido.',
+            ]);
+        }
+
+        return new CommunicationMessageUploadData(
+            path: $path,
+            originalName: $upload->getClientOriginalName(),
+            detectedMime: (string) $upload->getMimeType(),
+            clientMime: (string) $upload->getClientMimeType(),
+        );
     }
 }

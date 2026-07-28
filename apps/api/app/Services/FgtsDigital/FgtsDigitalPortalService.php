@@ -24,9 +24,11 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\FgtsDigital\Exceptions\FgtsDigitalException;
 use App\Services\Fiscal\Guides\GuideStorageService;
+use App\Support\LogSanitizer;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 final class FgtsDigitalPortalService
@@ -46,21 +48,39 @@ final class FgtsDigitalPortalService
         $this->assertTenant($tenant, $client);
         $private = $this->normalizeParameters($parameters);
         $safe = $this->sanitizeParameters($private);
+        $run = null;
 
-        $run = FgtsDigitalRun::query()->create([
-            'tenant_id' => $tenant->id,
-            'client_id' => $client->id,
-            'requested_by' => $user?->id,
-            'operation' => FgtsDigitalOperation::QueryGuides,
-            'status' => FgtsDigitalRunStatus::Pending,
-            'idempotency_key' => 'fgts-query|'.Str::uuid(),
-            'request_digest' => $this->digest($private),
-            'request_sanitized' => $safe,
-            'correlation_id' => (string) Str::uuid(),
-        ]);
-        $this->storePrivateRequest($run, $private);
+        try {
+            return DB::transaction(function () use (
+                $tenant,
+                $client,
+                $user,
+                $private,
+                $safe,
+                &$run,
+            ): FgtsDigitalRun {
+                $run = FgtsDigitalRun::query()->create([
+                    'tenant_id' => $tenant->id,
+                    'client_id' => $client->id,
+                    'requested_by' => $user?->id,
+                    'operation' => FgtsDigitalOperation::QueryGuides,
+                    'status' => FgtsDigitalRunStatus::Pending,
+                    'idempotency_key' => 'fgts-query|'.Str::uuid(),
+                    'request_digest' => $this->digest($private),
+                    'request_sanitized' => $safe,
+                    'correlation_id' => (string) Str::uuid(),
+                ]);
+                $this->storePrivateRequest($run, $private);
 
-        return $run->fresh();
+                return $run->fresh();
+            });
+        } catch (\Throwable $exception) {
+            if ($run instanceof FgtsDigitalRun) {
+                $this->discardPrivateRequestObject($run);
+            }
+
+            throw $exception;
+        }
     }
 
     /**
@@ -83,55 +103,86 @@ final class FgtsDigitalPortalService
         $expires = now()->addSeconds((int) config('fgts_digital.preview_ttl_seconds', 300));
         $correlation = (string) Str::uuid();
 
-        $mutation = FiscalMutationOperation::query()->create([
-            'tenant_id' => $tenant->id,
-            'client_id' => $client->id,
-            'requested_by' => $user->id,
-            'idempotency_key' => 'fgts-preflight|'.$correlation,
-            'logical_key' => 'fgts-digital|'.$client->id.'|'.$guideType->value.'|'.($safe['competence_period_key'] ?? 'none'),
-            'correlation_id' => $correlation,
-            'preflight_token' => hash('sha256', $token),
-            'environment' => SerproEnvironment::Production,
-            'solution_code' => 'FGTS_DIGITAL',
-            'service_code' => 'GUIAS',
-            'operation_code' => 'EMITIR_GUIA',
-            'operation_key' => 'fgts_digital.emitir_guia',
-            'module_key' => 'fgts',
-            'competence_period_key' => $safe['competence_period_key'] ?? null,
-            'status' => FiscalMutationStatus::Pending,
-            'effect_summary' => 'Emissão de guia no portal FGTS Digital; pagamento não é realizado.',
-            'confirmation_phrase' => $phrase,
-            'confirmation_required' => true,
-            'confirmed_by_user' => false,
-            'request_sanitized' => $safe,
-            'preflight_at' => now(),
-            'preflight_expires_at' => $expires,
-            'simulated' => (string) config('fgts_digital.driver') === 'fixture',
-        ]);
-
-        $run = FgtsDigitalRun::query()->create([
-            'tenant_id' => $tenant->id,
-            'client_id' => $client->id,
-            'requested_by' => $user->id,
-            'fiscal_mutation_operation_id' => $mutation->id,
-            'operation' => FgtsDigitalOperation::Preview,
-            'guide_type' => $guideType,
-            'status' => FgtsDigitalRunStatus::Pending,
-            'idempotency_key' => 'fgts-preview|'.$correlation,
-            'request_digest' => $digest,
-            'preview_token_hash' => hash('sha256', $token),
-            'confirmation_phrase' => $phrase,
-            'preview_expires_at' => $expires,
-            'request_sanitized' => $safe,
-            'correlation_id' => $correlation,
-        ]);
+        $run = null;
         try {
-            $this->storePrivateRequest($run, $private);
-        } catch (\Throwable $e) {
-            $mutation->delete();
-            throw $e;
+            DB::transaction(function () use (
+                $tenant,
+                $client,
+                $user,
+                $guideType,
+                $safe,
+                $correlation,
+                $token,
+                $phrase,
+                $expires,
+                $digest,
+                $private,
+                &$run,
+            ): void {
+                $mutation = FiscalMutationOperation::query()->create([
+                    'tenant_id' => $tenant->id,
+                    'client_id' => $client->id,
+                    'requested_by' => $user->id,
+                    'idempotency_key' => 'fgts-preflight|'.$correlation,
+                    'logical_key' => 'fgts-digital|'.$client->id.'|'
+                        .$guideType->value.'|'
+                        .($safe['competence_period_key'] ?? 'none'),
+                    'correlation_id' => $correlation,
+                    'preflight_token' => hash('sha256', $token),
+                    'environment' => SerproEnvironment::Production,
+                    'solution_code' => 'FGTS_DIGITAL',
+                    'service_code' => 'GUIAS',
+                    'operation_code' => 'EMITIR_GUIA',
+                    'operation_key' => 'fgts_digital.emitir_guia',
+                    'module_key' => 'fgts',
+                    'competence_period_key' => $safe['competence_period_key']
+                        ?? null,
+                    'status' => FiscalMutationStatus::Pending,
+                    'effect_summary' => 'Emissão de guia no portal FGTS Digital; pagamento não é realizado.',
+                    'confirmation_phrase' => $phrase,
+                    'confirmation_required' => true,
+                    'confirmed_by_user' => false,
+                    'request_sanitized' => $safe,
+                    'preflight_at' => now(),
+                    'preflight_expires_at' => $expires,
+                    'simulated' => (string) config(
+                        'fgts_digital.driver',
+                    ) === 'fixture',
+                ]);
+
+                $run = FgtsDigitalRun::query()->create([
+                    'tenant_id' => $tenant->id,
+                    'client_id' => $client->id,
+                    'requested_by' => $user->id,
+                    'fiscal_mutation_operation_id' => $mutation->id,
+                    'operation' => FgtsDigitalOperation::Preview,
+                    'guide_type' => $guideType,
+                    'status' => FgtsDigitalRunStatus::Pending,
+                    'idempotency_key' => 'fgts-preview|'.$correlation,
+                    'request_digest' => $digest,
+                    'preview_token_hash' => hash('sha256', $token),
+                    'confirmation_phrase' => $phrase,
+                    'preview_expires_at' => $expires,
+                    'request_sanitized' => $safe,
+                    'correlation_id' => $correlation,
+                ]);
+                $this->storePrivateRequest($run, $private);
+            });
+        } catch (\Throwable $exception) {
+            if ($run instanceof FgtsDigitalRun) {
+                $this->discardPrivateRequestObject($run);
+            }
+
+            throw $exception;
         }
 
+        if (! $run instanceof FgtsDigitalRun) {
+            throw new FgtsDigitalException(
+                'Não foi possível criar a prévia FGTS Digital.',
+                'FGTS_DIGITAL_PREVIEW_STORE_FAILED',
+                500,
+            );
+        }
         $run = $this->executeRun($run);
         if ($run->status !== FgtsDigitalRunStatus::Previewed) {
             $token = null;
@@ -148,69 +199,146 @@ final class FgtsDigitalPortalService
         string $previewToken,
         string $confirmationPhrase,
     ): array {
-        if ((int) $preview->tenant_id !== (int) $tenant->id || $preview->operation !== FgtsDigitalOperation::Preview) {
-            throw new FgtsDigitalException('Prévia não encontrada.', 'FGTS_DIGITAL_PREVIEW_NOT_FOUND', 404);
-        }
-        if ($preview->status !== FgtsDigitalRunStatus::Previewed
-            || $preview->preview_expires_at === null
-            || $preview->preview_expires_at->isPast()
-        ) {
-            throw new FgtsDigitalException('Prévia expirada ou indisponível.', 'FGTS_DIGITAL_PREVIEW_EXPIRED', 409);
-        }
-        if (! hash_equals((string) $preview->preview_token_hash, hash('sha256', $previewToken))) {
-            throw new FgtsDigitalException('Token da prévia inválido.', 'FGTS_DIGITAL_PREVIEW_TOKEN_INVALID', 403);
-        }
-        if (! hash_equals(mb_strtolower(trim((string) $preview->confirmation_phrase)), mb_strtolower(trim($confirmationPhrase)))) {
-            throw new FgtsDigitalException('Frase de confirmação divergente.', 'FGTS_DIGITAL_CONFIRMATION_MISMATCH', 422);
-        }
         if (! (bool) config('fgts_digital.mutations_enabled', false)) {
             throw new FgtsDigitalException('Emissões FGTS Digital desabilitadas.', 'FGTS_DIGITAL_MUTATIONS_DISABLED', 403);
         }
 
-        $idempotency = 'fgts-emit|'.$preview->client_id.'|'.$preview->request_digest;
-        $existing = FgtsDigitalRun::query()
-            ->withoutGlobalScopes()
-            ->where('tenant_id', $tenant->id)
-            ->where('idempotency_key', $idempotency)
-            ->first();
-        if ($existing !== null) {
-            $this->deletePrivateRequest($preview);
+        $previewObjectId = null;
+        $newRun = null;
+        try {
+            $result = DB::transaction(function () use (
+                $tenant,
+                $preview,
+                $user,
+                $previewToken,
+                $confirmationPhrase,
+                &$previewObjectId,
+                &$newRun,
+            ): array {
+                $lockedPreview = FgtsDigitalRun::query()
+                    ->withoutGlobalScopes()
+                    ->where('tenant_id', $tenant->id)
+                    ->whereKey($preview->id)
+                    ->lockForUpdate()
+                    ->first();
+                if ($lockedPreview === null
+                    || $lockedPreview->operation
+                        !== FgtsDigitalOperation::Preview) {
+                    throw new FgtsDigitalException(
+                        'Prévia não encontrada.',
+                        'FGTS_DIGITAL_PREVIEW_NOT_FOUND',
+                        404,
+                    );
+                }
+                if ($lockedPreview->status
+                        !== FgtsDigitalRunStatus::Previewed
+                    || $lockedPreview->preview_expires_at === null
+                    || $lockedPreview->preview_expires_at->isPast()) {
+                    throw new FgtsDigitalException(
+                        'Prévia expirada ou indisponível.',
+                        'FGTS_DIGITAL_PREVIEW_EXPIRED',
+                        409,
+                    );
+                }
+                if (! hash_equals(
+                    (string) $lockedPreview->preview_token_hash,
+                    hash('sha256', $previewToken),
+                )) {
+                    throw new FgtsDigitalException(
+                        'Token da prévia inválido.',
+                        'FGTS_DIGITAL_PREVIEW_TOKEN_INVALID',
+                        403,
+                    );
+                }
+                if (! hash_equals(
+                    mb_strtolower(trim(
+                        (string) $lockedPreview->confirmation_phrase,
+                    )),
+                    mb_strtolower(trim($confirmationPhrase)),
+                )) {
+                    throw new FgtsDigitalException(
+                        'Frase de confirmação divergente.',
+                        'FGTS_DIGITAL_CONFIRMATION_MISMATCH',
+                        422,
+                    );
+                }
 
-            return ['run' => $existing, 'reused' => true];
+                $idempotency = 'fgts-emit|'.$lockedPreview->client_id
+                    .'|'.$lockedPreview->request_digest;
+                $existing = FgtsDigitalRun::query()
+                    ->withoutGlobalScopes()
+                    ->where('tenant_id', $tenant->id)
+                    ->where('idempotency_key', $idempotency)
+                    ->first();
+                $previewObjectId = $lockedPreview->request_vault_object_id;
+                if ($existing !== null) {
+                    return ['run' => $existing, 'reused' => true];
+                }
+
+                $private = $this->loadPrivateRequest($lockedPreview);
+                if (! hash_equals(
+                    (string) $lockedPreview->request_digest,
+                    $this->digest($private),
+                )) {
+                    throw new FgtsDigitalException(
+                        'Seleção da prévia divergiu.',
+                        'FGTS_DIGITAL_PREVIEW_SELECTION_MISMATCH',
+                        409,
+                    );
+                }
+
+                $mutation = FiscalMutationOperation::query()
+                    ->withoutGlobalScopes()
+                    ->where('tenant_id', $tenant->id)
+                    ->whereKey(
+                        $lockedPreview->fiscal_mutation_operation_id,
+                    )
+                    ->lockForUpdate()
+                    ->first();
+                if ($mutation === null) {
+                    throw new FgtsDigitalException(
+                        'Prévia fiscal não encontrada.',
+                        'FGTS_DIGITAL_MUTATION_NOT_FOUND',
+                        409,
+                    );
+                }
+                $mutation->forceFill([
+                    'confirmed_by_user' => true,
+                    'confirmed_at' => now(),
+                ])->save();
+
+                $newRun = FgtsDigitalRun::query()->create([
+                    'tenant_id' => $tenant->id,
+                    'client_id' => $lockedPreview->client_id,
+                    'requested_by' => $user->id,
+                    'fiscal_mutation_operation_id' => $mutation->id,
+                    'operation' => FgtsDigitalOperation::EmitGuide,
+                    'guide_type' => $lockedPreview->guide_type,
+                    'status' => FgtsDigitalRunStatus::Authorized,
+                    'idempotency_key' => $idempotency,
+                    'request_digest' => $lockedPreview->request_digest,
+                    'request_sanitized' => $lockedPreview->request_sanitized,
+                    'correlation_id' => $lockedPreview->correlation_id,
+                ]);
+                $this->storePrivateRequest($newRun, $private);
+
+                return ['run' => $newRun, 'reused' => false];
+            });
+        } catch (\Throwable $exception) {
+            if ($newRun instanceof FgtsDigitalRun) {
+                $this->discardPrivateRequestObject($newRun);
+            }
+
+            throw $exception;
         }
 
-        $private = $this->loadPrivateRequest($preview);
-        if (! hash_equals((string) $preview->request_digest, $this->digest($private))) {
-            throw new FgtsDigitalException('Seleção da prévia divergiu.', 'FGTS_DIGITAL_PREVIEW_SELECTION_MISMATCH', 409);
-        }
+        $this->discardPreviewPrivateRequest(
+            (int) $tenant->id,
+            (int) $preview->id,
+            $previewObjectId,
+        );
 
-        $mutation = FiscalMutationOperation::query()
-            ->withoutGlobalScopes()
-            ->where('tenant_id', $tenant->id)
-            ->whereKey($preview->fiscal_mutation_operation_id)
-            ->firstOrFail();
-        $mutation->forceFill([
-            'confirmed_by_user' => true,
-            'confirmed_at' => now(),
-        ])->save();
-
-        $run = FgtsDigitalRun::query()->create([
-            'tenant_id' => $tenant->id,
-            'client_id' => $preview->client_id,
-            'requested_by' => $user->id,
-            'fiscal_mutation_operation_id' => $mutation->id,
-            'operation' => FgtsDigitalOperation::EmitGuide,
-            'guide_type' => $preview->guide_type,
-            'status' => FgtsDigitalRunStatus::Authorized,
-            'idempotency_key' => $idempotency,
-            'request_digest' => $preview->request_digest,
-            'request_sanitized' => $preview->request_sanitized,
-            'correlation_id' => $preview->correlation_id,
-        ]);
-        $this->storePrivateRequest($run, $private);
-        $this->deletePrivateRequest($preview);
-
-        return ['run' => $run, 'reused' => false];
+        return $result;
     }
 
     public function executeRun(FgtsDigitalRun $run): FgtsDigitalRun
@@ -231,12 +359,13 @@ final class FgtsDigitalPortalService
                 throw new FgtsDigitalException('Tenant da execução não encontrado.', 'FGTS_DIGITAL_TENANT_NOT_FOUND', 404);
             }
             $ready = $this->readiness->check($tenant, $client);
-            if (! $ready['ready_for_read']) {
-                $blocker = $ready['blockers'][0] ?? ['code' => 'FGTS_DIGITAL_NOT_READY', 'message' => 'FGTS Digital indisponível.'];
+            if (! $ready->readyForRead) {
                 $run->forceFill([
                     'status' => FgtsDigitalRunStatus::Blocked,
-                    'code' => $blocker['code'],
-                    'result_sanitized' => ['message' => $blocker['message']],
+                    'code' => $ready->firstBlockerCode(),
+                    'result_sanitized' => [
+                        'message' => $ready->firstBlockerMessage(),
+                    ],
                     'finished_at' => now(),
                 ])->save();
 
@@ -618,12 +747,63 @@ final class FgtsDigitalPortalService
         if ($objectId === null) {
             return;
         }
-        try {
-            $this->vault->delete((string) $objectId);
-        } catch (\Throwable) {
+        if (! $this->discardVaultObject((string) $objectId)) {
             return;
         }
         $run->forceFill(['request_vault_object_id' => null])->save();
+    }
+
+    private function discardPrivateRequestObject(FgtsDigitalRun $run): void
+    {
+        $objectId = $run->request_vault_object_id;
+        if ($objectId === null) {
+            return;
+        }
+
+        $this->discardVaultObject((string) $objectId);
+        $run->forceFill(['request_vault_object_id' => null]);
+    }
+
+    private function discardPreviewPrivateRequest(
+        int $tenantId,
+        int $previewId,
+        ?string $objectId,
+    ): void {
+        if ($objectId === null || ! $this->discardVaultObject($objectId)) {
+            return;
+        }
+
+        try {
+            FgtsDigitalRun::query()
+                ->withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->whereKey($previewId)
+                ->where('request_vault_object_id', $objectId)
+                ->update(['request_vault_object_id' => null]);
+        } catch (\Throwable) {
+            Log::warning(
+                'fgts digital preview cleanup state update failed',
+                LogSanitizer::redact([
+                    'tenant_id' => $tenantId,
+                    'run_id' => $previewId,
+                ]),
+            );
+        }
+    }
+
+    private function discardVaultObject(?string $objectId): bool
+    {
+        if ($objectId === null || $objectId === '') {
+            return true;
+        }
+
+        try {
+            $this->vault->delete($objectId);
+
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /** @return array<string, scalar|null> */

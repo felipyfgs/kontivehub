@@ -20,9 +20,11 @@ use App\Models\WorkTaskEvidence;
 use App\Services\Authorization\TenantAuthorization;
 use App\Services\Work\WorkEvidenceService;
 use App\Support\CurrentTenant;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Route as RoutingRoute;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Laravel\Sanctum\Sanctum;
 use RuntimeException;
@@ -138,6 +140,168 @@ final class WorkActionAuthorizationApiTest extends TestCase
                 'data.assignee_membership_id',
                 $executor->memberships()->where('tenant_id', $tenant->id)->value('id'),
             );
+    }
+
+    public function test_task_assignment_locks_membership_and_department_before_update(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $department = WorkDepartment::factory()->create([
+            'tenant_id' => $tenant->id,
+        ]);
+        [, $administrator] = $this->actorWithPermissions([
+            TenantPermission::WorkView,
+            TenantPermission::WorkAdminister,
+        ], $tenant);
+        [, $assignee] = $this->actorWithPermissions([
+            TenantPermission::WorkView,
+            TenantPermission::WorkTasksExecute,
+        ], $tenant, $department->id);
+        $membershipId = $assignee->memberships()
+            ->where('tenant_id', $tenant->id)
+            ->value('id');
+        $client = Client::factory()->forTenant($tenant)->create();
+        $process = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
+            'client_id' => $client->id,
+        ]);
+        $task = WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $process->id,
+            'lock_version' => 1,
+        ]);
+        $this->authenticate($administrator);
+
+        $queries = [];
+        DB::listen(static function (QueryExecuted $query) use (&$queries): void {
+            $queries[] = strtolower($query->sql);
+        });
+
+        $this->postJson("/api/v1/work/tasks/{$task->id}/assign", [
+            'lock_version' => 1,
+            'assignee_membership_id' => $membershipId,
+            'work_department_id' => $department->id,
+        ])->assertOk()
+            ->assertJsonPath('data.assignee_membership_id', $membershipId)
+            ->assertJsonPath('data.work_department_id', $department->id);
+
+        self::assertTrue(
+            collect($queries)->contains(
+                fn (string $sql): bool => str_contains($sql, 'tenant_memberships')
+                    && str_contains($sql, 'for update'),
+            ),
+        );
+        self::assertTrue(
+            collect($queries)->contains(
+                fn (string $sql): bool => str_contains($sql, 'work_departments')
+                    && str_contains($sql, 'for update'),
+            ),
+        );
+    }
+
+    public function test_task_requests_require_lock_and_reject_client_tenant_scope(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $department = WorkDepartment::factory()->create([
+            'tenant_id' => $tenant->id,
+        ]);
+        [, $executor] = $this->actorWithPermissions([
+            TenantPermission::WorkView,
+            TenantPermission::WorkTasksExecute,
+        ], $tenant, $department->id);
+        $client = Client::factory()->forTenant($tenant)->create();
+        $process = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
+            'client_id' => $client->id,
+        ]);
+        $task = WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $process->id,
+            'status' => TaskStatus::AFazer,
+            'work_department_id' => $department->id,
+            'assignee_membership_id' => $executor->memberships()
+                ->where('tenant_id', $tenant->id)
+                ->value('id'),
+            'lock_version' => 1,
+        ]);
+        $this->authenticate($executor);
+
+        $this->postJson("/api/v1/work/tasks/{$task->id}/start")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('lock_version');
+
+        $this->postJson("/api/v1/work/tasks/{$task->id}/start", [
+            'tenant_id' => $tenant->id,
+            'lock_version' => 1,
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('tenant_id');
+
+        $this->getJson("/api/v1/work/queue?tenant_id={$tenant->id}")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('tenant_id');
+
+        $this->assertDatabaseHas('work_tasks', [
+            'id' => $task->id,
+            'status' => TaskStatus::AFazer->value,
+            'lock_version' => 1,
+        ]);
+    }
+
+    public function test_task_resources_preserve_detail_and_comment_contracts(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $department = WorkDepartment::factory()->create([
+            'tenant_id' => $tenant->id,
+        ]);
+        [, $executor] = $this->actorWithPermissions([
+            TenantPermission::WorkView,
+            TenantPermission::WorkTasksExecute,
+        ], $tenant, $department->id);
+        $membership = $executor->memberships()
+            ->where('tenant_id', $tenant->id)
+            ->firstOrFail();
+        $client = Client::factory()->forTenant($tenant)->create([
+            'display_name' => 'Cliente contrato',
+        ]);
+        $process = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
+            'client_id' => $client->id,
+        ]);
+        $task = WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $process->id,
+            'work_department_id' => $department->id,
+            'assignee_membership_id' => $membership->id,
+        ]);
+        $this->authenticate($executor);
+
+        $comment = $this->postJson(
+            "/api/v1/work/tasks/{$task->id}/comments",
+            ['body' => 'Comentário contratual'],
+        )->assertCreated();
+
+        $this->assertSame(
+            ['id', 'body', 'created_at'],
+            array_keys($comment->json('data')),
+        );
+
+        $detail = $this->getJson("/api/v1/work/tasks/{$task->id}")
+            ->assertOk()
+            ->assertJsonPath('data.process.client.name', 'Cliente contrato')
+            ->assertJsonPath(
+                'data.comments.0.author_membership_id',
+                $membership->id,
+            );
+
+        foreach ([
+            'risks',
+            'effective_due_date',
+            'bucket',
+            'evidences',
+            'comments',
+            'process',
+        ] as $field) {
+            $this->assertArrayHasKey($field, $detail->json('data'));
+        }
     }
 
     public function test_processes_create_allows_store_and_denies_without_it(): void
@@ -314,7 +478,11 @@ final class WorkActionAuthorizationApiTest extends TestCase
         ])->assertNotFound();
         $this->getJson('/api/v1/work/templates/'.$foreignTemplate->id)->assertNotFound();
 
-        $keys = $this->getJson('/api/v1/work/processes?tenant_id='.$tenantB->id)
+        $this->getJson('/api/v1/work/processes?tenant_id='.$tenantB->id)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('tenant_id');
+
+        $keys = $this->getJson('/api/v1/work/processes')
             ->assertOk()
             ->json('data.*.id');
         $this->assertNotContains($foreignProcess->id, $keys);

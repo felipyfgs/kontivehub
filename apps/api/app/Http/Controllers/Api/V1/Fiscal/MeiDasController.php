@@ -2,60 +2,23 @@
 
 namespace App\Http\Controllers\Api\V1\Fiscal;
 
-use App\Enums\FiscalMutationStatus;
+use App\Actions\Fiscal\Mutations\GenerateMeiDasAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Fiscal\Mei\GenerateMeiDasPreflightRequest;
 use App\Http\Requests\Fiscal\Mei\GenerateMeiDasRequest;
-use App\Models\Client;
-use App\Models\FiscalMutationOperation;
-use App\Models\MeiAutomationAttempt;
-use App\Models\User;
-use App\Services\Fiscal\Mutations\FiscalMutationException;
-use App\Services\Fiscal\Mutations\FiscalMutationService;
-use App\Services\Serpro\Catalog\OfficialServiceCatalogManifest;
-use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 
 final class MeiDasController extends Controller
 {
     public function __construct(
-        private readonly CurrentTenant $currentTenant,
-        private readonly FiscalMutationService $mutations,
-        private readonly OfficialServiceCatalogManifest $manifest,
+        private readonly GenerateMeiDasAction $generate,
     ) {}
 
     public function preflight(GenerateMeiDasPreflightRequest $request): JsonResponse
     {
-        $tenant = $this->currentTenant->tenant();
-        $client = $this->client((int) $tenant->id, (int) $request->validated('client_id'));
-        if ($client === null) {
-            return $this->clientNotFound();
-        }
-        $actor = $request->user();
-        if (! $actor instanceof User) {
-            abort(401);
-        }
-
-        $competencies = $this->competencies($request->validated('competencies'));
-        $dueDate = $this->dueDate($request->validated('due_date'));
-        $operationKey = $this->operationKey((string) $request->validated('output_format'));
-        $operation = $this->officialOperation($operationKey);
-        $result = $this->mutations->preflight(
-            tenant: $tenant,
-            client: $client,
-            user: $actor,
-            solutionCode: (string) $operation['id_sistema'],
-            serviceCode: (string) $operation['id_sistema'],
-            operationCode: (string) $operation['id_servico'],
-            operationKey: $operationKey,
-            competencePeriodKey: $this->competenceKey($competencies),
-            idempotencyKey: (string) $request->validated('idempotency_key'),
-            requestPayload: [
-                'competencies' => $competencies,
-                'due_date' => $dueDate,
-                'output_format' => (string) $request->validated('output_format'),
-            ],
-            module: 'simples_mei',
+        $result = $this->generate->preflight(
+            $request->actor(),
+            $request->generateData(),
         );
 
         return response()->json(['data' => $result->toArray()], $result->eligible ? 200 : 422);
@@ -63,124 +26,16 @@ final class MeiDasController extends Controller
 
     public function store(GenerateMeiDasRequest $request): JsonResponse
     {
-        $tenant = $this->currentTenant->tenant();
-        $client = $this->client((int) $tenant->id, (int) $request->validated('client_id'));
-        if ($client === null) {
-            return $this->clientNotFound();
-        }
-        $actor = $request->user();
-        if (! $actor instanceof User) {
-            abort(401);
-        }
-        $competencies = $this->competencies($request->validated('competencies'));
-        $dueDate = $this->dueDate($request->validated('due_date'));
-        $operationKey = $this->operationKey((string) $request->validated('output_format'));
-        $officialOperation = $this->officialOperation($operationKey);
-
-        try {
-            $operation = $this->mutations->execute(
-                tenant: $tenant,
-                client: $client,
-                user: $actor,
-                solutionCode: (string) $officialOperation['id_sistema'],
-                serviceCode: (string) $officialOperation['id_sistema'],
-                operationCode: (string) $officialOperation['id_servico'],
-                operationKey: $operationKey,
-                confirmationPhrase: (string) $request->validated('confirmation_phrase'),
-                confirmed: true,
-                competencePeriodKey: $this->competenceKey($competencies),
-                idempotencyKey: (string) $request->validated('idempotency_key'),
-                preflightToken: (string) $request->validated('preflight_token'),
-                requestPayload: [
-                    'competencies' => $competencies,
-                    'due_date' => $dueDate,
-                    'output_format' => (string) $request->validated('output_format'),
-                ],
-                module: 'simples_mei',
-            );
-        } catch (FiscalMutationException $error) {
-            return response()->json($error->toArray(), $error->httpStatus());
-        }
-
-        $attempt = MeiAutomationAttempt::query()
-            ->withoutGlobalScopes()
-            ->where('tenant_id', $tenant->id)
-            ->where('fiscal_mutation_operation_id', $operation->id)
-            ->latest('id')
-            ->first();
+        $result = $this->generate->execute(
+            $request->actor(),
+            $request->generateData(),
+        );
 
         return response()->json([
             'data' => [
-                'mutation' => $this->publicMutation($operation),
-                'attempt' => $attempt?->toPublicArray(),
+                'mutation' => $result['mutation'],
+                'attempt' => $result['attempt'],
             ],
-        ], $operation->status === FiscalMutationStatus::Sent ? 202 : 201);
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function competencies(mixed $value): array
-    {
-        $competencies = is_array($value) ? array_values(array_map('strval', $value)) : [];
-        sort($competencies, SORT_STRING);
-
-        return $competencies;
-    }
-
-    /** @param list<string> $competencies */
-    private function competenceKey(array $competencies): string
-    {
-        if (count($competencies) === 1) {
-            return $competencies[0];
-        }
-
-        return 'MULTI:'.substr(hash('sha256', implode('|', $competencies)), 0, 12);
-    }
-
-    private function dueDate(mixed $value): string
-    {
-        return is_string($value) && $value !== ''
-            ? $value
-            : now('America/Sao_Paulo')->toDateString();
-    }
-
-    private function operationKey(string $outputFormat): string
-    {
-        return strtoupper($outputFormat) === 'BARCODE'
-            ? 'pgmei.gerardascodbarra'
-            : 'pgmei.gerardaspdf';
-    }
-
-    /** @return array<string, mixed> */
-    private function officialOperation(string $operationKey): array
-    {
-        return $this->manifest->findByOperationKey($this->manifest->load(), $operationKey);
-    }
-
-    /** @return array<string, mixed> */
-    private function publicMutation(FiscalMutationOperation $operation): array
-    {
-        $data = $operation->toPublicArray();
-        unset($data['tenant_id']);
-
-        return $data;
-    }
-
-    private function client(int $tenantId, int $clientId): ?Client
-    {
-        return Client::query()
-            ->withoutGlobalScopes()
-            ->where('tenant_id', $tenantId)
-            ->whereKey($clientId)
-            ->first();
-    }
-
-    private function clientNotFound(): JsonResponse
-    {
-        return response()->json([
-            'message' => 'Cliente não encontrado no escritório atual.',
-            'code' => 'CLIENT_NOT_FOUND',
-        ], 404);
+        ], $result['status']);
     }
 }

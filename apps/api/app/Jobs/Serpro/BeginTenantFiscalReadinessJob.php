@@ -18,6 +18,11 @@ final class BeginTenantFiscalReadinessJob implements ShouldBeUnique, ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    public int $tries = 3;
+
+    public int $timeout = 300;
+
+
     public int $uniqueFor = 600;
 
     public function __construct(
@@ -93,5 +98,18 @@ final class BeginTenantFiscalReadinessJob implements ShouldBeUnique, ShouldQueue
             })
             ->onQueue((string) config('serpro.queues.fiscal', 'fiscal'))
             ->dispatch();
+    }
+
+    public function tags(): array
+    {
+        return ['job:'.class_basename(static::class)];
+    }
+
+    public function failed(?\Throwable $e): void
+    {
+        \Illuminate\Support\Facades\Log::warning('job.failed', [
+            'job' => class_basename(static::class),
+            'message' => \App\Support\LogSanitizer::scrubString((string) ($e?->getMessage() ?? '')),
+        ]);
     }
 }

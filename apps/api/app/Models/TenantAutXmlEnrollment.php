@@ -44,20 +44,4 @@ class TenantAutXmlEnrollment extends Model
     {
         return $this->belongsTo(User::class, 'confirmed_by');
     }
-
-    /**
-     * @return array<string, mixed>
-     */
-    public function toPublicArray(): array
-    {
-        return [
-            'id' => $this->id,
-            'tenant_fiscal_identity_id' => $this->tenant_fiscal_identity_id,
-            'establishment_id' => $this->establishment_id,
-            'status' => $this->status->value,
-            'activated_at' => $this->activated_at?->toIso8601String(),
-            'first_seen_at' => $this->first_seen_at?->toIso8601String(),
-            'last_seen_at' => $this->last_seen_at?->toIso8601String(),
-        ];
-    }
 }

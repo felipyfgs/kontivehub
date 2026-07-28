@@ -2,13 +2,12 @@
 
 namespace App\Http\Controllers\Api\V1\Platform;
 
+use App\Actions\Platform\CompleteInitialOnboardingAction;
 use App\Http\Controllers\Controller;
-use App\Services\Platform\InitialOnboardingException;
+use App\Http\Requests\Platform\CompleteInitialOnboardingRequest;
 use App\Services\Platform\InitialOnboardingService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Validation\Rules\Password;
 
 /**
  * Onboarding público do primeiro PLATFORM_ADMIN (instalação vazia).
@@ -18,6 +17,7 @@ class InitialOnboardingController extends Controller
 {
     public function __construct(
         private readonly InitialOnboardingService $onboarding,
+        private readonly CompleteInitialOnboardingAction $completeOnboarding,
     ) {}
 
     public function status(): JsonResponse
@@ -29,29 +29,9 @@ class InitialOnboardingController extends Controller
         ]);
     }
 
-    public function complete(Request $request): JsonResponse
+    public function complete(CompleteInitialOnboardingRequest $request): JsonResponse
     {
-        if (app()->environment('production') && ! $request->secure()) {
-            return $this->onboardingError(InitialOnboardingException::secureTransportRequired());
-        }
-
-        $validated = $request->validate([
-            'organization_name' => ['required', 'string', 'min:2', 'max:255'],
-            'email' => ['required', 'email', 'max:255'],
-            'password' => ['required', 'string', Password::default(), 'confirmed'],
-            'onboarding_token' => ['required', 'string', 'min:32', 'max:512'],
-        ]);
-
-        try {
-            $result = $this->onboarding->complete(
-                $validated['organization_name'],
-                $validated['email'],
-                $validated['password'],
-                $validated['onboarding_token'],
-            );
-        } catch (InitialOnboardingException $e) {
-            return $this->onboardingError($e);
-        }
+        $result = ($this->completeOnboarding)($request->toDto(), $request);
 
         Auth::guard('web')->login($result['user']);
         if ($request->hasSession()) {
@@ -66,14 +46,6 @@ class InitialOnboardingController extends Controller
                 'platform_organization_name' => $result['settings']->organization_name,
             ],
         ], 201);
-    }
-
-    private function onboardingError(InitialOnboardingException $e): JsonResponse
-    {
-        return $this->noStoreJson([
-            'message' => $e->getMessage(),
-            'code' => $e->errorCode,
-        ], $e->status);
     }
 
     /**

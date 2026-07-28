@@ -2,17 +2,17 @@
 
 namespace App\Http\Controllers\Api\V1\Fiscal;
 
-use App\Enums\FiscalModuleKey;
-use App\Enums\TenantPermission;
+use App\Actions\Fiscal\Mutations\ManageMonitoringMembershipAction;
 use App\Http\Controllers\Controller;
-use App\Models\User;
-use App\Services\Authorization\TenantAuthorization;
+use App\Http\Requests\Fiscal\Monitoring\ListMonitoringModuleMembershipRequest;
+use App\Http\Requests\Fiscal\Mutations\ManageMonitoringMembershipRequest;
+use App\Http\Resources\Fiscal\MonitoringModuleMembershipResource;
 use App\Services\FiscalMonitoring\MonitoringModuleMembershipService;
 use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use RuntimeException;
+use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 /**
  * Include/exclude de clientes na carteira de monitoramento (opt-out tenant-scoped).
@@ -22,97 +22,47 @@ class MonitoringModuleMembershipController extends Controller
     public function __construct(
         private readonly CurrentTenant $currentTenant,
         private readonly MonitoringModuleMembershipService $membership,
-        private readonly TenantAuthorization $authorization,
+        private readonly ManageMonitoringMembershipAction $manage,
     ) {}
 
-    public function index(Request $request): JsonResponse
-    {
-        $this->assertCanRead();
+    public function index(
+        ListMonitoringModuleMembershipRequest $request,
+    ): JsonResponse|AnonymousResourceCollection {
         $tenant = $this->currentTenant->tenant();
-
-        $data = $request->validate([
-            'module' => ['required', 'string', Rule::in(FiscalModuleKey::values())],
-            'submodule' => ['nullable', 'string', 'max:64'],
-        ]);
-
-        $module = FiscalModuleKey::tryFromRoute($data['module'])
-            ?? FiscalModuleKey::tryFrom($data['module']);
-        if ($module === null || $module === FiscalModuleKey::Dashboard) {
+        $filters = $request->filters();
+        if ($filters->module === null) {
             return response()->json(['message' => 'Módulo inválido.'], 422);
         }
 
         $items = $this->membership->listExclusions(
             $tenant,
-            $module,
-            $data['submodule'] ?? null,
+            $filters->module,
+            $filters->submodule,
         );
 
-        return response()->json([
-            'data' => $items->map(fn ($row) => $row->toPublicArray())->values(),
-        ]);
+        return MonitoringModuleMembershipResource::collection($items);
     }
 
-    public function exclude(Request $request): JsonResponse
+    public function exclude(ManageMonitoringMembershipRequest $request): JsonResponse
     {
-        $this->assertCanWrite();
-        $tenant = $this->currentTenant->tenant();
-        $actor = $request->user();
-
-        $data = $request->validate([
-            'module' => ['required', 'string', Rule::in(FiscalModuleKey::values())],
-            'submodule' => ['nullable', 'string', 'max:64'],
-            'client_ids' => ['required', 'array', 'min:1', 'max:200'],
-            'client_ids.*' => ['integer', 'min:1'],
-        ]);
-
-        $module = FiscalModuleKey::tryFromRoute($data['module'])
-            ?? FiscalModuleKey::tryFrom($data['module']);
-        if ($module === null || $module === FiscalModuleKey::Dashboard) {
-            return response()->json(['message' => 'Módulo inválido.'], 422);
-        }
-
         try {
-            $result = $this->membership->exclude(
-                $tenant,
-                $module,
-                $data['client_ids'],
-                $data['submodule'] ?? null,
-                $actor?->id,
+            $result = $this->manage->exclude(
+                $request->actor(),
+                $request->membershipData(),
             );
-        } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+        } catch (UnprocessableEntityHttpException|RuntimeException $e) {
+            return $this->failure($e);
         }
 
         return response()->json(['data' => $result]);
     }
 
-    public function include(Request $request): JsonResponse
+    public function include(ManageMonitoringMembershipRequest $request): JsonResponse
     {
-        $this->assertCanWrite();
-        $tenant = $this->currentTenant->tenant();
-
-        $data = $request->validate([
-            'module' => ['required', 'string', Rule::in(FiscalModuleKey::values())],
-            'submodule' => ['nullable', 'string', 'max:64'],
-            'client_ids' => ['required', 'array', 'min:1', 'max:200'],
-            'client_ids.*' => ['integer', 'min:1'],
-        ]);
-
-        $module = FiscalModuleKey::tryFromRoute($data['module'])
-            ?? FiscalModuleKey::tryFrom($data['module']);
-        if ($module === null || $module === FiscalModuleKey::Dashboard) {
-            return response()->json(['message' => 'Módulo inválido.'], 422);
-        }
-
         try {
-            $result = $this->membership->include(
-                $tenant,
-                $module,
-                $data['client_ids'],
-                $data['submodule'] ?? null,
-            );
-        } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            $result = $this->manage->include($request->membershipData());
+        } catch (UnprocessableEntityHttpException|RuntimeException $e) {
+            return $this->failure($e);
         }
 
         $status = $result['errors'] !== [] && $result['included'] === 0 ? 422 : 200;
@@ -120,21 +70,10 @@ class MonitoringModuleMembershipController extends Controller
         return response()->json(['data' => $result], $status);
     }
 
-    private function assertCanRead(): void
+    private function failure(\Throwable $error): JsonResponse
     {
-        $actor = request()->user();
-        if (! $actor instanceof User
-            || ! $this->authorization->allows($actor, TenantPermission::FiscalMonitoringView)) {
-            abort(403, 'Perfil não resolvido.');
-        }
-    }
+        $text = $error->getMessage();
 
-    private function assertCanWrite(): void
-    {
-        $actor = request()->user();
-        if (! $actor instanceof User
-            || ! $this->authorization->allows($actor, TenantPermission::ClientsManage)) {
-            abort(403, 'Ação não autorizada para o perfil atual.');
-        }
+        return response()->json(['message' => $text], 422);
     }
 }

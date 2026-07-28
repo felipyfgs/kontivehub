@@ -22,6 +22,8 @@ final class LogSanitizer
         'subject_preview', 'mailbox_body', 'body_vault_object_id',
         'access_key', 'chNFe', 'chave', 'raw_body', 'response_body',
         'request_body', 'payload_xml', 'signed_xml',
+        // Identificadores fiscais / titulares
+        'cnpj', 'holder_cnpj',
         // Work operacional
         'storage_path', 'vault_path', 'evidence_bytes', 'file_bytes',
         'pfx_password',

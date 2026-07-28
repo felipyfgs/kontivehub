@@ -2,12 +2,10 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Fiscal\Documents\ResolveFiscalDocumentQuarantineRequest;
 use App\Models\FiscalDocumentQuarantine;
-use App\Models\User;
 use App\Services\Audit\AuditLogger;
-use App\Services\Authorization\TenantAuthorization;
 use App\Services\Sefaz\FiscalDocumentQuarantineService;
 use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
@@ -40,24 +38,13 @@ class FiscalDocumentQuarantineController extends Controller
     }
 
     public function resolve(
-        Request $request,
+        ResolveFiscalDocumentQuarantineRequest $request,
         int $quarantine,
         CurrentTenant $currentTenant,
-        TenantAuthorization $authorization,
         FiscalDocumentQuarantineService $quarantines,
         AuditLogger $audit,
     ): JsonResponse {
-        $actor = $request->user();
-        if (! $actor instanceof User
-            || ! $authorization->allows($actor, TenantPermission::ClientsManage)) {
-            return response()->json(['message' => 'Ação não autorizada para o perfil atual.'], 403);
-        }
-
-        $data = $request->validate([
-            'resolution_status' => ['required', 'string', 'in:RESOLVED,DISMISSED'],
-            'resolution_code' => ['nullable', 'string', 'max:64'],
-            'resolution_notes' => ['nullable', 'string', 'max:500'],
-        ]);
+        $actor = $request->actor();
 
         $model = FiscalDocumentQuarantine::query()
             ->where('tenant_id', $currentTenant->tenant()->id)
@@ -72,12 +59,14 @@ class FiscalDocumentQuarantineController extends Controller
             $updated = $quarantines->resolve(
                 item: $model,
                 actor: $actor,
-                resolutionStatus: $data['resolution_status'],
-                code: $data['resolution_code'] ?? null,
-                notes: $data['resolution_notes'] ?? null,
+                resolutionStatus: $request->resolutionStatus(),
+                code: $request->resolutionCode(),
+                notes: $request->resolutionNotes(),
             );
         } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            $text = $e->getMessage();
+
+            return response()->json(['message' => $text], 422);
         }
 
         $audit->record('fiscal_quarantine.resolve', 'SUCCESS', $updated, [

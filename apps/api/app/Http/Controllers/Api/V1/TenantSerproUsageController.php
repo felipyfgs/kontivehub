@@ -2,64 +2,38 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Actions\Tenant\QueryTenantUsageAction;
 use App\Http\Controllers\Controller;
-use App\Services\Usage\TenantUsageQueryService;
-use App\Support\CurrentTenant;
+use App\Http\Requests\Tenant\ViewTenantUsageRequest;
+use App\Http\Resources\TenantUsageEntriesResource;
+use App\Http\Resources\TenantUsageSummaryResource;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
-/**
- * Consumo/franquia do escritório ativo (tenant-scoped).
- * Não expõe custo de outros tenants, orçamento global nem credenciais SERPRO.
- *
- * Não importa models/services Serpro* (architecture test de isolamento).
- */
-class TenantSerproUsageController extends Controller
+final class TenantSerproUsageController extends Controller
 {
-    public function __construct(
-        private readonly TenantUsageQueryService $usage,
-        private readonly CurrentTenant $currentTenant,
-    ) {}
-
-    public function summary(Request $request): JsonResponse
-    {
-        $tenant = $this->currentTenant->tenant();
-        if ($tenant === null) {
-            return response()->json(['message' => 'Usuário sem escritório ativo.'], 403);
-        }
-
-        $year = $request->query('year');
-        $month = $request->query('month');
-
-        $data = $this->usage->summary(
-            tenantId: $tenant->id,
-            year: is_numeric($year) ? (int) $year : null,
-            month: is_numeric($month) ? (int) $month : null,
-        );
-
-        return response()->json(['data' => $data]);
+    public function summary(
+        ViewTenantUsageRequest $request,
+        QueryTenantUsageAction $action,
+    ): JsonResponse {
+        return TenantUsageSummaryResource::make(
+            $action->summary($request->year(), $request->month()),
+        )->response();
     }
 
-    public function entries(Request $request): JsonResponse
-    {
-        $tenant = $this->currentTenant->tenant();
-        if ($tenant === null) {
-            return response()->json(['message' => 'Usuário sem escritório ativo.'], 403);
-        }
-
-        $year = $request->query('year');
-        $month = $request->query('month');
-        $perPage = min(100, max(1, (int) $request->query('per_page', 50)));
-
-        $paginator = $this->usage->entries(
-            tenantId: $tenant->id,
-            perPage: $perPage,
-            year: is_numeric($year) ? (int) $year : null,
-            month: is_numeric($month) ? (int) $month : null,
-            sort: $request->string('sort')->toString(),
-            direction: $request->string('direction')->lower()->toString(),
+    public function entries(
+        ViewTenantUsageRequest $request,
+        QueryTenantUsageAction $action,
+    ): JsonResponse {
+        $resource = TenantUsageEntriesResource::make(
+            $action->entries(
+                perPage: $request->perPage(),
+                year: $request->year(),
+                month: $request->month(),
+                sort: $request->string('sort')->toString(),
+                direction: $request->string('direction')->toString(),
+            ),
         );
 
-        return response()->json($paginator);
+        return response()->json($resource->resolve($request));
     }
 }

@@ -14,6 +14,8 @@ use App\Models\Establishment;
 use App\Models\NfeDocument;
 use App\Models\NfeEvent;
 use App\Services\Certificates\CredentialService;
+use App\Support\LogSanitizer;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -137,11 +139,11 @@ final class NfeManifestationService
                 'type' => $type->value,
             ];
         } catch (Throwable $e) {
-            Log::warning('sefaz.manifest.failed', [
+            Log::warning('sefaz.manifest.failed', LogSanitizer::redact([
                 'access_key' => $accessKey,
                 'type' => $type->value,
                 'error' => mb_substr($e->getMessage(), 0, 200),
-            ]);
+            ]));
 
             return [
                 'status' => 'error',
@@ -163,24 +165,29 @@ final class NfeManifestationService
         }
 
         $statusValue = $type->manifestationStatus();
-        NfeDocument::query()
-            ->where('tenant_id', $tenantId)
-            ->where('access_key', $accessKey)
-            ->update(['manifestation_status' => $statusValue]);
+        $shouldReconsult = $type === NfeManifestationType::Ciencia || ! $hasFull;
 
-        NfeEvent::query()->create([
-            'tenant_id' => $tenantId,
-            'dfe_document_id' => $nfe->dfe_document_id,
-            'access_key' => $accessKey,
-            'event_type' => $type->tpEvento(),
-            'sequence' => 1,
-            'event_at' => now(),
-            'status' => 'REGISTERED',
-            'protocol' => $result->protocol,
-        ]);
+        DB::transaction(function () use ($tenantId, $accessKey, $statusValue, $nfe, $type, $result): void {
+            NfeDocument::query()
+                ->where('tenant_id', $tenantId)
+                ->where('access_key', $accessKey)
+                ->update(['manifestation_status' => $statusValue]);
 
-        // Reconsulta assíncrona após ciência (ou qualquer sucesso se ainda só resumo)
-        if ($type === NfeManifestationType::Ciencia || ! $hasFull) {
+            NfeEvent::query()->create([
+                'tenant_id' => $tenantId,
+                'dfe_document_id' => $nfe->dfe_document_id,
+                'access_key' => $accessKey,
+                'event_type' => $type->tpEvento(),
+                'sequence' => 1,
+                'event_at' => now(),
+                'status' => 'REGISTERED',
+                'protocol' => $result->protocol,
+            ]);
+        });
+
+        // Reconsulta assíncrona após ciência (ou qualquer sucesso se ainda só resumo).
+        // Dispatch após commit da persistência local.
+        if ($shouldReconsult) {
             ReconsultNfeAfterManifestationJob::dispatch(
                 $tenantId,
                 $accessKey,

@@ -44,6 +44,10 @@ class MailboxMonitoringApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.mode', 'ECONOMICO')
             ->assertJsonMissingPath('data.tenant_id');
+        $this->getJson(
+            '/api/v1/fiscal/mailbox/monitoring?tenant_id='.$other->id,
+        )->assertUnprocessable()
+            ->assertJsonValidationErrors(['tenant_id']);
 
         $this->patchJson('/api/v1/fiscal/mailbox/monitoring', [
             'tenant_id' => $other->id,
@@ -116,6 +120,34 @@ class MailboxMonitoringApiTest extends TestCase
         $this->assertSame($first, $second);
         $this->assertDatabaseCount('fiscal_monitoring_runs', 1);
         Queue::assertPushed(ExecuteFiscalMonitoringRunJob::class, 1);
+    }
+
+    public function test_detail_preview_hides_foreign_message(): void
+    {
+        [$tenant] = $this->tenant();
+        $otherTenant = Tenant::factory()->create();
+        $otherClient = Client::factory()->forTenant($otherTenant)->create();
+        $externalId = 'ISN-FOREIGN-DETAIL';
+        $message = MailboxMessage::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $otherTenant->id,
+            'client_id' => $otherClient->id,
+            'external_id' => $externalId,
+            'message_hash' => MailboxIdempotency::messageHash(
+                $otherTenant->id,
+                $otherClient->id,
+                $externalId,
+            ),
+            'source' => MailboxSource::CaixaPostal,
+            'sensitivity_class' => 'FISCAL_RESTRICTED',
+            'subject_preview' => 'Outro tenant',
+            'triage_status' => MailboxTriageStatus::New,
+            'has_body' => false,
+            'attachment_count' => 0,
+        ]);
+
+        $this->getJson(
+            '/api/v1/fiscal/mailbox/messages/'.$message->id.'/detail-preview',
+        )->assertNotFound();
     }
 
     /** @return array{Tenant,Client} */

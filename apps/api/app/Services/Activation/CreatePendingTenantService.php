@@ -10,6 +10,7 @@ use App\Enums\SubscriptionPlan;
 use App\Enums\SubscriptionStatus;
 use App\Enums\TenantLifecycleStatus;
 use App\Enums\TenantRole;
+use App\Http\Resources\TenantInstitutionalProfileResource;
 use App\Models\AccountActivation;
 use App\Models\PlatformMembership;
 use App\Models\Tenant;
@@ -19,6 +20,7 @@ use App\Models\TenantSubscription;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use App\Services\Usage\CommercialEntitlementService;
+use App\Support\FiscalDataModel\PrivilegedTenantContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -96,9 +98,12 @@ final class CreatePendingTenantService
                 );
             }
 
-            $tenant = Tenant::query()
-                ->with(['subscription', 'institutionalProfile', 'memberships.user'])
-                ->findOrFail($existing->tenant_id);
+            $tenant = PrivilegedTenantContext::run(
+                'platform:tenant-creation-idempotency',
+                static fn (): Tenant => Tenant::query()
+                    ->with(['subscription', 'institutionalProfile', 'memberships.user'])
+                    ->findOrFail($existing->tenant_id),
+            );
 
             return $this->sanitizedTenantPayload($tenant, credentialDelivery: 'regeneration_required');
         }
@@ -230,7 +235,10 @@ final class CreatePendingTenantService
                 tenantId: $tenant->id,
             );
 
-            return $tenant->fresh(['subscription', 'institutionalProfile', 'memberships.user']);
+            return PrivilegedTenantContext::run(
+                'platform:tenant-creation-refresh',
+                static fn (): Tenant => $tenant->fresh(['subscription', 'institutionalProfile', 'memberships.user']),
+            );
         });
 
         return $this->sanitizedTenantPayload(
@@ -278,57 +286,68 @@ final class CreatePendingTenantService
         ?array $secret = null,
         ?string $expiresAt = null,
     ): array {
-        $tenant->loadMissing(['subscription', 'institutionalProfile', 'memberships.user']);
+        // Platform HTTP não tem CurrentTenant; contorna BelongsToTenant com contexto tipado.
+        return PrivilegedTenantContext::run('platform:tenant-admin-payload', function () use (
+            $tenant,
+            $credentialDelivery,
+            $secret,
+            $expiresAt,
+        ): array {
+            $tenant->unsetRelation('institutionalProfile');
+            $tenant->loadMissing(['subscription', 'institutionalProfile', 'memberships.user']);
 
-        $firstAdminMembership = $tenant->memberships
-            ->sortBy('id')
-            ->first(fn (TenantMembership $m) => $m->role === TenantRole::TenantAdmin);
+            $firstAdminMembership = $tenant->memberships
+                ->sortBy('id')
+                ->first(fn (TenantMembership $m) => $m->role === TenantRole::TenantAdmin);
 
-        $activation = null;
-        if ($firstAdminMembership !== null) {
-            $activation = AccountActivation::query()
-                ->where('tenant_membership_id', $firstAdminMembership->id)
-                ->where('purpose', ActivationPurpose::TenantFirstAdmin)
-                ->orderByDesc('generation')
-                ->orderByDesc('id')
-                ->first();
-        }
+            $activation = null;
+            if ($firstAdminMembership !== null) {
+                $activation = AccountActivation::query()
+                    ->where('tenant_membership_id', $firstAdminMembership->id)
+                    ->where('purpose', ActivationPurpose::TenantFirstAdmin)
+                    ->orderByDesc('generation')
+                    ->orderByDesc('id')
+                    ->first();
+            }
 
-        $data = [
-            'tenant' => [
-                'id' => $tenant->id,
-                'name' => $tenant->name,
-                'slug' => $tenant->slug,
-                'is_active' => $tenant->is_active,
-                'lifecycle_status' => $tenant->lifecycle_status instanceof TenantLifecycleStatus
-                    ? $tenant->lifecycle_status->value
-                    : (string) $tenant->lifecycle_status,
-                'created_at' => $tenant->created_at?->toIso8601String(),
-                'profile' => $tenant->institutionalProfile?->toPublicArray(),
-                'subscription' => $tenant->subscription?->toSanitizedAdminArray(),
-                'first_admin' => $firstAdminMembership === null ? null : [
-                    'membership_id' => $firstAdminMembership->id,
-                    'user_id' => $firstAdminMembership->user_id,
-                    'name' => $firstAdminMembership->user?->name,
-                    'email' => $firstAdminMembership->user?->email,
-                    'is_active' => $firstAdminMembership->is_active,
+            $data = [
+                'tenant' => [
+                    'id' => $tenant->id,
+                    'name' => $tenant->name,
+                    'slug' => $tenant->slug,
+                    'is_active' => $tenant->is_active,
+                    'lifecycle_status' => $tenant->lifecycle_status instanceof TenantLifecycleStatus
+                        ? $tenant->lifecycle_status->value
+                        : (string) $tenant->lifecycle_status,
+                    'created_at' => $tenant->created_at?->toIso8601String(),
+                    'profile' => $tenant->institutionalProfile === null
+                        ? null
+                        : TenantInstitutionalProfileResource::make($tenant->institutionalProfile)->resolve(),
+                    'subscription' => $tenant->subscription?->toSanitizedAdminArray(),
+                    'first_admin' => $firstAdminMembership === null ? null : [
+                        'membership_id' => $firstAdminMembership->id,
+                        'user_id' => $firstAdminMembership->user_id,
+                        'name' => $firstAdminMembership->user?->name,
+                        'email' => $firstAdminMembership->user?->email,
+                        'is_active' => $firstAdminMembership->is_active,
+                    ],
+                    'activation' => $activation?->toSanitizedArray(),
                 ],
-                'activation' => $activation?->toSanitizedArray(),
-            ],
-            'credential_delivery' => $credentialDelivery,
-            'method' => $activation?->method?->value ?? $secret['method'] ?? null,
-            'expires_at' => $expiresAt ?? $activation?->expires_at?->toIso8601String(),
-        ];
+                'credential_delivery' => $credentialDelivery,
+                'method' => $activation?->method?->value ?? $secret['method'] ?? null,
+                'expires_at' => $expiresAt ?? $activation?->expires_at?->toIso8601String(),
+            ];
 
-        if ($credentialDelivery === 'delivered' && $secret !== null) {
-            if (isset($secret['activation_url'])) {
-                $data['activation_url'] = $secret['activation_url'];
+            if ($credentialDelivery === 'delivered' && $secret !== null) {
+                if (isset($secret['activation_url'])) {
+                    $data['activation_url'] = $secret['activation_url'];
+                }
+                if (isset($secret['temporary_password'])) {
+                    $data['temporary_password'] = $secret['temporary_password'];
+                }
             }
-            if (isset($secret['temporary_password'])) {
-                $data['temporary_password'] = $secret['temporary_password'];
-            }
-        }
 
-        return $data;
+            return $data;
+        });
     }
 }

@@ -2,24 +2,21 @@
 
 namespace App\Http\Controllers\Api\V1\Platform;
 
+use App\Actions\Platform\UpdateFiscalModuleRestrictionAction;
 use App\Enums\FiscalControlModule;
 use App\Enums\FiscalModuleControlScope;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Platform\UpdateFiscalModuleRestrictionRequest;
 use App\Models\FiscalModuleControl;
 use App\Models\Tenant;
-use App\Models\User;
-use App\Services\Auth\RecentPasswordConfirmationGate;
 use App\Services\Fiscal\Availability\FiscalModuleAvailabilityService;
-use App\Services\Fiscal\Availability\FiscalModuleControlService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 final class FiscalModuleControlController extends Controller
 {
     public function __construct(
         private readonly FiscalModuleAvailabilityService $availability,
-        private readonly FiscalModuleControlService $controls,
-        private readonly RecentPasswordConfirmationGate $passwordGate,
+        private readonly UpdateFiscalModuleRestrictionAction $updateRestriction,
     ) {}
 
     public function globalIndex(): JsonResponse
@@ -50,49 +47,40 @@ final class FiscalModuleControlController extends Controller
         ]);
     }
 
-    public function updateGlobal(Request $request, string $module): JsonResponse
-    {
+    public function updateGlobal(
+        UpdateFiscalModuleRestrictionRequest $request,
+        string $module,
+    ): JsonResponse {
         return $this->update($request, $this->resolveModule($module), FiscalModuleControlScope::Global, null);
     }
 
-    public function updateTenant(Request $request, Tenant $tenant, string $module): JsonResponse
-    {
+    public function updateTenant(
+        UpdateFiscalModuleRestrictionRequest $request,
+        Tenant $tenant,
+        string $module,
+    ): JsonResponse {
         return $this->update($request, $this->resolveModule($module), FiscalModuleControlScope::Tenant, $tenant);
     }
 
     private function update(
-        Request $request,
+        UpdateFiscalModuleRestrictionRequest $request,
         FiscalControlModule $module,
         FiscalModuleControlScope $scope,
         ?Tenant $tenant,
     ): JsonResponse {
-        $validated = $request->validate([
-            'restricted' => ['required', 'boolean'],
-            'reason' => ['required', 'string', 'min:3', 'max:500'],
-        ]);
-        /** @var User $actor */
-        $actor = $request->user();
-        $recent = $this->passwordGate->isRecentlyConfirmed($actor, $request);
-        if (! $validated['restricted'] && ! $recent) {
-            return response()->json([
-                'message' => 'Liberar um módulo exige reconfirmação de senha recente.',
-                'code' => 'password_confirmation_required',
-            ], 403);
-        }
-
-        $this->controls->setRestriction(
+        $data = $request->toDto();
+        ($this->updateRestriction)(
             $module,
             $scope,
             $tenant,
-            (bool) $validated['restricted'],
-            (string) $validated['reason'],
-            $actor,
-            $recent,
+            $data,
+            $request->actor(),
+            $request,
         );
 
         return response()->json([
             'data' => $this->modulePayload($module, $tenant),
-            'message' => $validated['restricted']
+            'message' => $data->restricted
                 ? 'Módulo restringido imediatamente.'
                 : 'Módulo liberado; a sincronização de recuperação será agendada.',
         ]);

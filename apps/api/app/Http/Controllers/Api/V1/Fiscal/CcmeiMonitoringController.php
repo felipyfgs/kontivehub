@@ -2,9 +2,15 @@
 
 namespace App\Http\Controllers\Api\V1\Fiscal;
 
+use App\Actions\Fiscal\FindFiscalClientAction;
+use App\Actions\Fiscal\ReadCcmeiCertificateAction;
 use App\Enums\TenantPermission;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\EnsureTenantContext;
+use App\Http\Requests\Fiscal\Monitoring\DownloadCcmeiCertificateRequest;
+use App\Http\Requests\Fiscal\Monitoring\ViewCcmeiClientRequest;
+use App\Http\Requests\Fiscal\Mutations\ConfirmFiscalOperationRequest;
+use App\Http\Resources\Fiscal\FiscalMonitoringDataResource;
 use App\Models\Client;
 use App\Models\User;
 use App\Services\Authorization\TenantAuthorization;
@@ -29,27 +35,29 @@ class CcmeiMonitoringController extends Controller
         private readonly TenantAuthorization $authorization,
     ) {}
 
-    public function issuedCertificates(Request $request, int $client): JsonResponse
-    {
-        if ($rejection = $this->rejectClientTenantId($request)) {
-            return $rejection;
-        }
-        $model = $this->findClient($this->currentTenant->tenant()->id, $client);
+    public function issuedCertificates(
+        ViewCcmeiClientRequest $request,
+        int $client,
+        FindFiscalClientAction $findClient,
+    ): JsonResponse|FiscalMonitoringDataResource {
+        $tenant = $this->currentTenant->tenant();
+        $model = $findClient->handle($tenant, $request->clientId());
         if ($model === null) {
             return $this->clientNotFound();
         }
-        $this->assertCanRead($request, $model);
+        $request->ensureCanView($model);
 
-        return response()->json(['data' => $this->issuance->history($this->currentTenant->tenant(), $model)]);
+        return new FiscalMonitoringDataResource(
+            $this->issuance->history($tenant, $model),
+        );
     }
 
-    public function issueCertificate(Request $request, int $client): JsonResponse
+    public function issueCertificate(ConfirmFiscalOperationRequest $request, int $client): JsonResponse
     {
         $this->assertModuleEnabled();
         if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
-        $request->validate(['confirmed' => ['required', 'accepted']]);
         $model = $this->findClient($this->currentTenant->tenant()->id, $client);
         if ($model === null) {
             return $this->clientNotFound();
@@ -60,50 +68,53 @@ class CcmeiMonitoringController extends Controller
         return response()->json(['data' => $result], ($result['success'] ?? false) ? 202 : 422);
     }
 
-    public function downloadIssuedCertificate(Request $request, int $client, int $certificate): Response|JsonResponse
-    {
-        if ($rejection = $this->rejectClientTenantId($request)) {
-            return $rejection;
-        }
+    public function downloadIssuedCertificate(
+        DownloadCcmeiCertificateRequest $request,
+        int $client,
+        int $certificate,
+        FindFiscalClientAction $findClient,
+        ReadCcmeiCertificateAction $readCertificate,
+    ): Response|JsonResponse {
         $tenant = $this->currentTenant->tenant();
-        $model = $this->findClient($tenant->id, $client);
+        $model = $findClient->handle($tenant, $request->clientId());
         if ($model === null) {
             return $this->clientNotFound();
         }
-        $this->assertCanRead($request, $model);
-        $item = $this->issuance->findForDownload($tenant, $model, $certificate);
-        if ($item === null) {
-            return response()->json(['message' => 'Certificado não encontrado.'], 404);
-        }
-        try {
-            $contents = $this->issuance->read($item);
-        } catch (\Throwable) {
+        $request->ensureCanView($model);
+        $download = $readCertificate->handle(
+            $tenant,
+            $model,
+            $request->certificateId(),
+        );
+        if ($download === null) {
             return response()->json(['message' => 'Certificado não encontrado.'], 404);
         }
 
-        return response($contents, 200, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'attachment; filename="ccmei-certificado-'.$item->id.'.pdf"',
+        return response($download->bytes, 200, [
+            'Content-Type' => $download->contentType,
+            'Content-Disposition' => 'attachment; filename="'.$download->filename.'"',
             'X-Content-Type-Options' => 'nosniff',
             'Cache-Control' => 'private, no-store, max-age=0',
             'Pragma' => 'no-cache',
         ]);
     }
 
-    public function history(Request $request, int $client): JsonResponse
-    {
-        if ($rejection = $this->rejectClientTenantId($request)) {
-            return $rejection;
-        }
-
-        $model = $this->findClient($this->currentTenant->tenant()->id, $client);
+    public function history(
+        ViewCcmeiClientRequest $request,
+        int $client,
+        FindFiscalClientAction $findClient,
+    ): JsonResponse|FiscalMonitoringDataResource {
+        $tenant = $this->currentTenant->tenant();
+        $model = $findClient->handle($tenant, $request->clientId());
         if ($model === null) {
             return $this->clientNotFound();
         }
-        $this->assertCanRead($request, $model);
+        $request->ensureCanView($model);
 
         try {
-            return response()->json(['data' => $this->queries->history($this->currentTenant->tenant(), $model)]);
+            return new FiscalMonitoringDataResource(
+                $this->queries->history($tenant, $model),
+            );
         } catch (HttpException $e) {
             return response()->json(['message' => $e->getMessage(), 'code' => 'CLIENT_NOT_FOUND'], $e->getStatusCode());
         } catch (RuntimeException) {
@@ -111,14 +122,13 @@ class CcmeiMonitoringController extends Controller
         }
     }
 
-    public function consult(Request $request, int $client): JsonResponse
+    public function consult(ConfirmFiscalOperationRequest $request, int $client): JsonResponse
     {
         $this->assertModuleEnabled();
         if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
 
-        $request->validate(['confirmed' => ['required', 'accepted']]);
         $model = $this->findClient($this->currentTenant->tenant()->id, $client);
         if ($model === null) {
             return $this->clientNotFound();
@@ -140,18 +150,21 @@ class CcmeiMonitoringController extends Controller
         return response()->json(['data' => $run], 201);
     }
 
-    public function registrationStatusHistory(Request $request, int $client): JsonResponse
-    {
-        if ($rejection = $this->rejectClientTenantId($request)) {
-            return $rejection;
-        }
-        $model = $this->findClient($this->currentTenant->tenant()->id, $client);
+    public function registrationStatusHistory(
+        ViewCcmeiClientRequest $request,
+        int $client,
+        FindFiscalClientAction $findClient,
+    ): JsonResponse|FiscalMonitoringDataResource {
+        $tenant = $this->currentTenant->tenant();
+        $model = $findClient->handle($tenant, $request->clientId());
         if ($model === null) {
             return $this->clientNotFound();
         }
-        $this->assertCanRead($request, $model);
+        $request->ensureCanView($model);
         try {
-            return response()->json(['data' => $this->registrationStatusQueries->history($this->currentTenant->tenant(), $model)]);
+            return new FiscalMonitoringDataResource(
+                $this->registrationStatusQueries->history($tenant, $model),
+            );
         } catch (HttpException $e) {
             return response()->json(['message' => $e->getMessage(), 'code' => 'CLIENT_NOT_FOUND'], $e->getStatusCode());
         } catch (RuntimeException) {
@@ -159,13 +172,12 @@ class CcmeiMonitoringController extends Controller
         }
     }
 
-    public function consultRegistrationStatus(Request $request, int $client): JsonResponse
+    public function consultRegistrationStatus(ConfirmFiscalOperationRequest $request, int $client): JsonResponse
     {
         $this->assertModuleEnabled();
         if ($rejection = $this->rejectClientTenantId($request)) {
             return $rejection;
         }
-        $request->validate(['confirmed' => ['required', 'accepted']]);
         $model = $this->findClient($this->currentTenant->tenant()->id, $client);
         if ($model === null) {
             return $this->clientNotFound();

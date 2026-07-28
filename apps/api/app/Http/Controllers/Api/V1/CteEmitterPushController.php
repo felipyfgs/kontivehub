@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Enums\TenantRole;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Sefaz\IssueCteEmitterTokenRequest;
+use App\Http\Requests\Sefaz\RevokeCteEmitterTokenRequest;
 use App\Models\TenantIntegrationToken;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
@@ -23,8 +25,11 @@ class CteEmitterPushController extends Controller
     /**
      * ADMIN + senha recente: emite token (plaintext uma vez).
      */
-    public function issueToken(Request $request, CurrentTenant $currentTenant, AuditLogger $audit): JsonResponse
-    {
+    public function issueToken(
+        IssueCteEmitterTokenRequest $request,
+        CurrentTenant $currentTenant,
+        AuditLogger $audit,
+    ): JsonResponse {
         if ($denied = $this->denyUnlessAdminWithRecentPassword($request, $currentTenant, 'emitir tokens de integração')) {
             return $denied;
         }
@@ -32,25 +37,21 @@ class CteEmitterPushController extends Controller
             return response()->json(['message' => 'Entrega EMITTER_PUSH desabilitada.'], 422);
         }
 
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:120'],
-            'expires_in_days' => ['nullable', 'integer', 'min:1', 'max:730'],
-        ]);
-
         $tenant = $currentTenant->tenant();
         $plain = 'cte_'.Str::random(48);
         $hash = hash('sha256', $plain);
         $prefix = substr($plain, 0, 12);
+        $expiresInDays = $request->expiresInDays();
 
         $token = TenantIntegrationToken::query()->create([
             'tenant_id' => $tenant->id,
-            'name' => $validated['name'],
+            'name' => $request->tokenName(),
             'token_prefix' => $prefix,
             'token_hash' => $hash,
             'scope' => 'cte:ingest',
             'status' => 'ACTIVE',
-            'expires_at' => isset($validated['expires_in_days'])
-                ? now()->addDays((int) $validated['expires_in_days'])
+            'expires_at' => $expiresInDays !== null
+                ? now()->addDays($expiresInDays)
                 : now()->addYear(),
             'created_by' => $request->user()?->id,
         ]);
@@ -73,8 +74,12 @@ class CteEmitterPushController extends Controller
      * Admin com senha recente revoga token sem recuperação.
      * A autorização é revalidada no controller.
      */
-    public function revokeToken(Request $request, CurrentTenant $currentTenant, TenantIntegrationToken $token, AuditLogger $audit): JsonResponse
-    {
+    public function revokeToken(
+        RevokeCteEmitterTokenRequest $request,
+        CurrentTenant $currentTenant,
+        TenantIntegrationToken $token,
+        AuditLogger $audit,
+    ): JsonResponse {
         if ($denied = $this->denyUnlessAdminWithRecentPassword($request, $currentTenant, 'revogar tokens')) {
             return $denied;
         }

@@ -1,0 +1,31 @@
+<?php
+
+namespace App\Http\Requests\Work;
+
+use App\DTO\Work\WorkCommentData;
+use App\Models\User;
+use App\Models\WorkProcess;
+
+final class CommentWorkProcessRequest extends WorkRequest
+{
+    public function authorize(): bool
+    {
+        $actor = $this->user();
+        $process = $this->route('process');
+
+        return $actor instanceof User
+            && $process instanceof WorkProcess
+            && $actor->can('comment', $process);
+    }
+
+    /** @return array<string, list<string>> */
+    public function rules(): array
+    {
+        return ['body' => ['required', 'string', 'max:5000']];
+    }
+
+    public function comment(): WorkCommentData
+    {
+        return new WorkCommentData((string) $this->validated('body'));
+    }
+}

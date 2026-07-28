@@ -52,8 +52,8 @@ final class ExecuteFgtsDigitalPolicyJob implements ShouldQueue
             return;
         }
         $ready = $readiness->check($tenant, $client);
-        if (! $ready['ready_for_mutation']) {
-            $this->block($schedule, (string) ($ready['blockers'][0]['code'] ?? 'FGTS_DIGITAL_NOT_READY'));
+        if (! $ready->readyForMutation) {
+            $this->block($schedule, $ready->firstBlockerCode());
 
             return;
         }
@@ -77,7 +77,10 @@ final class ExecuteFgtsDigitalPolicyJob implements ShouldQueue
                 (string) $preview['run']->confirmation_phrase,
             );
             if (! $authorized['reused']) {
-                ExecuteFgtsDigitalRunJob::dispatch((int) $tenant->id, (int) $authorized['run']->id);
+                ExecuteFgtsDigitalRunJob::dispatch(
+                    (int) $tenant->id,
+                    (int) $authorized['run']->id,
+                )->afterCommit();
             }
         } catch (FgtsDigitalException $e) {
             $this->block($schedule, $e->codeKey);

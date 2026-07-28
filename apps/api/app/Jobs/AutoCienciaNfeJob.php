@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Enums\NfeManifestationType;
 use App\Models\NfeDocument;
 use App\Services\Sefaz\NfeManifestationService;
+use App\Support\LogSanitizer;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -79,11 +80,11 @@ class AutoCienciaNfeJob implements ShouldBeUnique, ShouldQueue
             purpose: 'AUTO_UNLOCK',
         );
 
-        Log::info('sefaz.auto_ciencia.done', [
+        Log::info('sefaz.auto_ciencia.done', LogSanitizer::redact([
             'access_key' => $this->accessKey,
             'tenant_id' => $this->tenantId,
             'status' => $result['status'] ?? null,
             'c_stat' => $result['c_stat'] ?? null,
-        ]);
+        ]));
     }
 }

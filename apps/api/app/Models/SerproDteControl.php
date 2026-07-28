@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use App\Enums\SerproDteControlMode;
-use App\Support\Serpro\DteCanaryCoordinates;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -84,35 +83,5 @@ class SerproDteControl extends Model
         }
 
         return (int) $this->limited_used_quantity / $max;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    public function toSanitizedArray(): array
-    {
-        return [
-            'id' => $this->id,
-            'operation_key' => $this->operation_key ?? DteCanaryCoordinates::OPERATION_KEY,
-            'mode' => $this->mode instanceof SerproDteControlMode
-                ? $this->mode->value
-                : (string) $this->mode,
-            'pilot_tenant_id' => $this->pilot_tenant_id,
-            'pilot_client_id' => $this->pilot_client_id,
-            'limited_max_quantity' => $this->limited_max_quantity !== null
-                ? (int) $this->limited_max_quantity
-                : null,
-            'limited_used_quantity' => (int) $this->limited_used_quantity,
-            'remaining_quantity' => $this->remainingLimitedQuantity(),
-            'usage_ratio' => $this->usageRatio(),
-            'cycle_code' => $this->cycle_code,
-            'promoted_at' => $this->promoted_at?->toIso8601String(),
-            'disabled_at' => $this->disabled_at?->toIso8601String(),
-            'disable_reason' => $this->disable_reason,
-            'alert_percent' => (int) ($this->alert_percent ?? DteCanaryCoordinates::ALERT_PERCENT),
-            'alert_80_emitted' => (bool) $this->alert_80_emitted,
-            'alert_100_emitted' => (bool) $this->alert_100_emitted,
-            'updated_at' => $this->updated_at?->toIso8601String(),
-        ];
     }
 }

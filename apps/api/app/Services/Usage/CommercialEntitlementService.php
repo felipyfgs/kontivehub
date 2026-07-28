@@ -9,7 +9,6 @@ use App\Models\TenantSubscription;
 use App\Services\Audit\AuditLogger;
 use Carbon\CarbonImmutable;
 use InvalidArgumentException;
-use RuntimeException;
 
 /**
  * Entitlements comerciais de monitores (5/7/10) e carteira (100/150/200 + negociado >200).
@@ -174,7 +173,7 @@ final class CommercialEntitlementService
     }
 
     /**
-     * @throws RuntimeException quando acima do máximo
+     * @throws ClientQuotaException quando acima do máximo
      */
     public function assertCanCreateClient(Tenant|int $tenant): void
     {
@@ -183,14 +182,11 @@ final class CommercialEntitlementService
             return;
         }
 
-        throw new RuntimeException(match ($eval['reason']) {
-            'SUBSCRIPTION_MISSING' => 'Escritório sem assinatura ativa; cadastro de clientes bloqueado.',
-            default => sprintf(
-                'Limite de clientes do plano atingido (%d/%d).',
-                $eval['current'],
-                $eval['max'],
-            ),
-        });
+        throw new ClientQuotaException(
+            reason: (string) $eval['reason'],
+            current: $eval['current'],
+            maximum: $eval['max'],
+        );
     }
 
     /**

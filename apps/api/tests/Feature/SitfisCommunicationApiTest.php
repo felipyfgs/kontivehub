@@ -9,9 +9,13 @@ use App\Models\ClientCommunicationPreference;
 use App\Models\ClientContact;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Fiscal\Dctfweb\MitCommunicationService;
+use App\Services\Fiscal\Fgts\FgtsCommunicationService;
 use App\Services\Fiscal\Sitfis\SitfisCommunicationService;
 use App\Support\CurrentTenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Http;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -88,6 +92,62 @@ class SitfisCommunicationApiTest extends TestCase
         } else {
             $response->assertStatus(422);
         }
+    }
+
+    public function test_shared_module_reads_are_tenant_scoped_and_side_effect_free(): void
+    {
+        Bus::fake();
+        Http::fake();
+        [$tenant, $user, $client] = $this->seedReadyClient();
+        $otherTenant = Tenant::factory()->create();
+        $otherClient = Client::factory()->for($otherTenant)->create();
+        Sanctum::actingAs($user);
+        app(CurrentTenant::class)->clear();
+
+        $services = [
+            'sitfis' => app(SitfisCommunicationService::class),
+            'fgts' => app(FgtsCommunicationService::class),
+            'mit' => app(MitCommunicationService::class),
+        ];
+
+        foreach ($services as $module => $service) {
+            $this->getJson(
+                "/api/v1/fiscal/{$module}/clients/{$client->id}"
+                .'/communication-preview',
+            )
+                ->assertOk()
+                ->assertExactJson([
+                    'data' => $service->preview($tenant, $client),
+                ]);
+            $this->getJson(
+                "/api/v1/fiscal/{$module}/clients/{$client->id}"
+                .'/communications',
+            )
+                ->assertOk()
+                ->assertExactJson([
+                    'data' => $service->tracking($tenant, $client),
+                ]);
+        }
+
+        $this->getJson(
+            "/api/v1/fiscal/sitfis/clients/{$otherClient->id}"
+            .'/communication-preview',
+        )->assertNotFound();
+        $this->json(
+            'GET',
+            "/api/v1/fiscal/mit/clients/{$client->id}"
+            .'/communications',
+            ['scope' => ['tenant_id' => $tenant->id]],
+        )
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'CLIENT_TENANT_ID_REJECTED');
+        $this->getJson(
+            "/api/v1/fiscal/unknown/clients/{$client->id}"
+            .'/communication-preview',
+        )->assertNotFound();
+
+        Bus::assertNothingDispatched();
+        Http::assertNothingSent();
     }
 
     /**

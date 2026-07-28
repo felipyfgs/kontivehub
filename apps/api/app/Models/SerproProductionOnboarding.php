@@ -94,45 +94,4 @@ class SerproProductionOnboarding extends Model
 
         $this->completed_steps = $steps;
     }
-
-    /**
-     * @return array<string, mixed>
-     */
-    public function toSanitizedArray(): array
-    {
-        return [
-            'id' => $this->id,
-            'tenant_id' => $this->tenant_id,
-            'environment' => $this->environment?->value,
-            'status' => $this->status?->value,
-            'current_step' => $this->current_step?->value,
-            'completed_steps' => array_values(is_array($this->completed_steps) ? $this->completed_steps : []),
-            'correlation_id' => $this->correlation_id,
-            'consent' => [
-                'version' => $this->consent_version,
-                'text_sha256' => $this->consent_text_sha256,
-                'consented_at' => $this->consented_at?->toIso8601String(),
-                'actor_user_id' => $this->actor_user_id,
-            ],
-            'credential_version_id' => $this->serpro_credential_version_id,
-            'authorization_id' => $this->tenant_serpro_authorization_id,
-            'rollout_approval_id' => $this->serpro_rollout_approval_id,
-            'initial_mailbox_run_id' => $this->initial_mailbox_run_id,
-            'hints' => [
-                'consumer_key_hint' => $this->consumer_key_hint,
-                'certificate_fingerprint_sha256' => $this->certificate_fingerprint_sha256,
-                'contractor_cnpj_masked' => $this->contractor_cnpj_masked,
-                'certificate_valid_to' => $this->certificate_valid_to?->toIso8601String(),
-            ],
-            'error' => $this->error_code !== null ? [
-                'code' => $this->error_code,
-                'message' => $this->error_message,
-            ] : null,
-            'required_actions' => array_values(is_array($this->required_actions) ? $this->required_actions : []),
-            'started_at' => $this->started_at?->toIso8601String(),
-            'finished_at' => $this->finished_at?->toIso8601String(),
-            'created_at' => $this->created_at?->toIso8601String(),
-            'updated_at' => $this->updated_at?->toIso8601String(),
-        ];
-    }
 }

@@ -2,21 +2,32 @@
 
 namespace App\Http\Requests\Communication;
 
+use App\DTO\Communication\CommunicationInboxUpdateData;
+use App\Models\CommunicationInbox;
+use App\Models\User;
+use App\Services\Communication\Authorization\CommunicationAccess;
 use App\Support\CurrentTenant;
-use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Validation\Rule;
 
-final class UpdateInboxRequest extends FormRequest
+final class UpdateInboxRequest extends CommunicationRequest
 {
     public function authorize(): bool
     {
-        return true;
+        $actor = $this->user();
+        $inbox = $this->route('inbox');
+
+        return $actor instanceof User
+            && $inbox instanceof CommunicationInbox
+            && app(CommunicationAccess::class)->canManage($actor, $inbox);
     }
 
+    /** @return array<string, list<mixed>> */
     public function rules(): array
     {
-        $tenantId = (int) app(CurrentTenant::class)->tenant()->id;
-        $inboxId = (int) $this->route('inbox');
+        $tenantId = app(CurrentTenant::class)->id();
+        $inbox = $this->route('inbox');
+        $inboxId = $inbox instanceof CommunicationInbox ? $inbox->id : 0;
 
         return [
             'name' => [
@@ -26,20 +37,48 @@ final class UpdateInboxRequest extends FormRequest
                 'max:120',
                 Rule::unique('communication_inboxes', 'name')
                     ->ignore($inboxId)
-                    ->where(fn ($query) => $query
+                    ->where(fn (Builder $query): Builder => $query
                         ->where('tenant_id', $tenantId)),
             ],
             'is_enabled' => ['sometimes', 'boolean'],
             'is_default' => ['sometimes', 'boolean'],
-            'work_department_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'work_department_id' => [
+                'sometimes',
+                'nullable',
+                'integer',
+                'min:1',
+                Rule::exists('work_departments', 'id')
+                    ->where(fn (Builder $query): Builder => $query
+                        ->where('tenant_id', $tenantId)),
+            ],
             'lock_version' => ['required', 'integer', 'min:1'],
         ];
     }
 
-    protected function prepareForValidation(): void
+    protected function prepareCommunicationValidation(): void
     {
         if ($this->has('name') && is_string($this->input('name'))) {
             $this->merge(['name' => trim($this->string('name')->toString())]);
         }
+    }
+
+    public function inboxData(): CommunicationInboxUpdateData
+    {
+        $validated = $this->validated();
+
+        return new CommunicationInboxUpdateData(
+            name: isset($validated['name']) ? (string) $validated['name'] : null,
+            isEnabled: array_key_exists('is_enabled', $validated)
+                ? (bool) $validated['is_enabled']
+                : null,
+            isDefault: array_key_exists('is_default', $validated)
+                ? (bool) $validated['is_default']
+                : null,
+            workDepartmentId: isset($validated['work_department_id'])
+                ? (int) $validated['work_department_id']
+                : null,
+            hasWorkDepartmentId: array_key_exists('work_department_id', $validated),
+            lockVersion: (int) $validated['lock_version'],
+        );
     }
 }

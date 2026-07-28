@@ -63,7 +63,7 @@ return new class extends Migration
 
         if ($hasDuplicateHistoricalRows) {
             throw new RuntimeException(
-                'Rollback bloqueado: tenant_credentials contém históricos repetidos incompatíveis com a constraint legada.',
+                'Rollback bloqueado: tenant_credentials contém históricos repetidos incompatíveis com a constraint anterior.',
             );
         }
 

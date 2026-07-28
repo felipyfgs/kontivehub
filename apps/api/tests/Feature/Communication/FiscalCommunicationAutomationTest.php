@@ -24,6 +24,7 @@ use App\Events\CommunicationEventCommitted;
 use App\Models\Client;
 use App\Models\ClientCommunicationDispatch;
 use App\Models\ClientCommunicationPreference;
+use App\Models\CommunicationAttachment;
 use App\Models\CommunicationAutomationPolicy;
 use App\Models\CommunicationContact;
 use App\Models\CommunicationIdentity;
@@ -45,6 +46,7 @@ use App\Models\TenantMembership;
 use App\Models\User;
 use App\Services\Communication\Automation\FiscalCommunicationArtifactResolver;
 use App\Services\Communication\Automation\FiscalCommunicationAutomationService;
+use App\Services\Communication\Media\CommunicationMediaStore;
 use App\Services\Communication\Security\CommunicationHmacSigner;
 use App\Services\Fiscal\Guides\GuideStorageService;
 use App\Services\FiscalMonitoring\FiscalEvidenceStore;
@@ -238,9 +240,32 @@ final class FiscalCommunicationAutomationTest extends TestCase
         $headers = app(CommunicationHmacSigner::class)->headers('GET', $path);
         $response = $this->get($path, $headers)
             ->assertOk()
-            ->assertHeader('Content-Type', 'application/pdf');
+            ->assertHeader('Content-Type', 'application/pdf')
+            ->assertHeader('Content-Length', (string) strlen('%PDF-private-exact'))
+            ->assertHeader('Cache-Control', 'max-age=0, no-store, private')
+            ->assertHeader('X-Content-Type-Options', 'nosniff')
+            ->assertHeader('X-Content-SHA256', hash('sha256', '%PDF-private-exact'));
         $this->assertSame('%PDF-private-exact', $response->streamedContent());
         $this->get($path, $headers)->assertUnauthorized();
+
+        $attachment = CommunicationAttachment::query()->withoutGlobalScopes()->firstOrFail();
+        $message = $attachment->message()->withoutGlobalScopes()->firstOrFail();
+        $attachment->forceFill(['purged_at' => now()])->save();
+        $this->get($path, app(CommunicationHmacSigner::class)->headers('GET', $path))
+            ->assertNotFound()
+            ->assertJson(['error' => 'MEDIA_NOT_FOUND']);
+
+        $attachment->forceFill(['purged_at' => null])->save();
+        $message->forceFill(['revoked_at' => now()])->save();
+        $this->get($path, app(CommunicationHmacSigner::class)->headers('GET', $path))
+            ->assertNotFound()
+            ->assertJson(['error' => 'MEDIA_NOT_FOUND']);
+
+        $message->forceFill(['revoked_at' => null])->save();
+        app(CommunicationMediaStore::class)->delete($attachment->object_id);
+        $this->get($path, app(CommunicationHmacSigner::class)->headers('GET', $path))
+            ->assertNotFound()
+            ->assertJson(['error' => 'MEDIA_NOT_FOUND']);
     }
 
     public function test_pgmei_and_dctfweb_resolvers_choose_only_confirmed_exact_period_versions(): void

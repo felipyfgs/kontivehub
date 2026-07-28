@@ -66,6 +66,6 @@ return Application::configure(basePath: dirname(__DIR__))
             return response()->json(array_merge($error->responseData(), [
                 'message' => $error->safeMessage(),
                 'code' => $error->stableCode(),
-            ]), $error->httpStatus());
+            ]), $error->httpStatus(), $error->responseHeaders());
         });
     })->create();

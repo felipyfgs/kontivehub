@@ -2,6 +2,8 @@
 
 namespace App\Services\FgtsDigital;
 
+use App\DTO\FgtsDigital\FgtsDigitalReadinessData;
+use App\DTO\FgtsDigital\FgtsDigitalSessionData;
 use App\Models\Client;
 use App\Models\Tenant;
 
@@ -13,9 +15,10 @@ final class FgtsDigitalReadinessService
         private readonly FgtsDigitalCaptchaConfig $captchaConfig,
     ) {}
 
-    /** @return array<string, mixed> */
-    public function check(Tenant $tenant, Client $client): array
-    {
+    public function check(
+        Tenant $tenant,
+        Client $client,
+    ): FgtsDigitalReadinessData {
         $driver = (string) config('fgts_digital.driver', 'disabled');
         $blockers = [];
         if (! in_array($driver, ['disabled', 'fixture', 'portal_browser'], true)) {
@@ -57,20 +60,28 @@ final class FgtsDigitalReadinessService
 
         $readyForRead = $blockers === [];
 
-        return [
-            'driver' => $driver,
-            'ready_for_read' => $readyForRead,
-            'ready_for_mutation' => $readyForRead && (bool) config('fgts_digital.mutations_enabled', false),
-            'mutations_enabled' => (bool) config('fgts_digital.mutations_enabled', false),
-            'credential_source' => $credential['source']->value ?? null,
-            'has_authorized_session' => $session !== null,
-            'session' => $session?->toPublicArray(),
-            'human_challenge_possible' => $driver === 'portal_browser' && $session === null,
-            'captcha' => $this->captchaConfig->publicSummary(),
-            'blockers' => $blockers,
-            'supports_pdf_download' => true,
-            'supports_pix_payment' => false,
-        ];
+        $mutationsEnabled = (bool) config(
+            'fgts_digital.mutations_enabled',
+            false,
+        );
+
+        return new FgtsDigitalReadinessData(
+            driver: $driver,
+            readyForRead: $readyForRead,
+            readyForMutation: $readyForRead && $mutationsEnabled,
+            mutationsEnabled: $mutationsEnabled,
+            credentialSource: $credential['source']->value ?? null,
+            hasAuthorizedSession: $session !== null,
+            session: $session !== null
+                ? FgtsDigitalSessionData::fromModel($session)
+                : null,
+            humanChallengePossible: $driver === 'portal_browser'
+                && $session === null,
+            captcha: $this->captchaConfig->publicSummary(),
+            blockers: $blockers,
+            supportsPdfDownload: true,
+            supportsPixPayment: false,
+        );
     }
 
     /** @return array<string, mixed> */

@@ -2,15 +2,24 @@
 
 namespace App\Http\Requests\Clients;
 
+use App\DTO\Clients\EstablishmentUpdateData;
 use App\Enums\RegistrationStatus;
-use Illuminate\Foundation\Http\FormRequest;
+use App\Http\Requests\AuthenticatedRequest;
+use App\Models\Establishment;
+use App\Models\User;
+use App\Policies\EstablishmentPolicy;
 use Illuminate\Validation\Rule;
 
-class UpdateEstablishmentRequest extends FormRequest
+final class UpdateEstablishmentRequest extends AuthenticatedRequest
 {
     public function authorize(): bool
     {
-        return true;
+        $actor = $this->user();
+        $establishment = $this->route('establishment');
+
+        return $actor instanceof User
+            && $establishment instanceof Establishment
+            && app(EstablishmentPolicy::class)->update($actor, $establishment);
     }
 
     /**
@@ -49,5 +58,10 @@ class UpdateEstablishmentRequest extends FormRequest
             'client_id' => ['prohibited'],
             'registration_source' => ['prohibited'],
         ];
+    }
+
+    public function toDto(): EstablishmentUpdateData
+    {
+        return new EstablishmentUpdateData($this->validated());
     }
 }

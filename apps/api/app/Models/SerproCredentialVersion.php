@@ -84,6 +84,17 @@ class SerproCredentialVersion extends Model
     {
         $at = $at ?? now();
 
+        if ($this->relationLoaded('connectionEvidences')) {
+            return $this->connectionEvidences
+                ->filter(
+                    fn (SerproCredentialConnectionEvidence $evidence): bool => $evidence->isValidFor($this, $at),
+                )
+                ->sortByDesc(
+                    fn (SerproCredentialConnectionEvidence $evidence): int => $evidence->tested_at?->getTimestamp() ?? 0,
+                )
+                ->first();
+        }
+
         return $this->connectionEvidences()
             ->where('success', true)
             ->where('invalidated', false)

@@ -188,6 +188,149 @@ final class CommunicationGatewayActionApiTest extends TestCase
         $this->assertCount(0, $this->transport->queries);
     }
 
+    public function test_gateway_action_boundaries_reject_client_tenant_id(): void
+    {
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $inbox = $this->inbox($tenant);
+        [$conversation, $inbound, $outbound, $poll] = $this->conversation($tenant, $inbox);
+        $identity = CommunicationIdentity::query()
+            ->withoutGlobalScopes()
+            ->findOrFail($conversation->identity_id);
+        $this->authenticate($admin);
+
+        $inboxBase = '/api/v1/communication/inboxes/'.$inbox->id;
+        $conversationBase = '/api/v1/communication/conversations/'.$conversation->id;
+        $requests = [
+            ['GET', $inboxBase.'/session/status', []],
+            ['POST', $inboxBase.'/session/disconnect', []],
+            ['PUT', $inboxBase.'/session/passive', ['passive' => true]],
+            ['POST', $inboxBase.'/session/pair-phone', ['phone' => '+5511999997001']],
+            ['POST', $inboxBase.'/session/passkey/respond', [
+                'id' => 'passkey-request-0001',
+                'client_data_json' => 'client-data',
+                'authenticator_data' => 'authenticator-data',
+                'signature' => 'signature-data',
+            ]],
+            ['POST', $inboxBase.'/session/passkey/confirm', [
+                'id' => 'passkey-request-0001',
+                'confirm' => true,
+            ]],
+            ['PUT', $inboxBase.'/presence', ['presence' => 'AVAILABLE']],
+            ['PUT', $inboxBase.'/default-disappearing', ['timer_seconds' => 0]],
+            ['POST', $inboxBase.'/app-state/sync', []],
+            ['POST', $inboxBase.'/app-state/mark-clean', ['timestamp' => 1784746800]],
+            ['GET', $inboxBase.'/blocklist', []],
+            ['PUT', $inboxBase.'/blocklist', [
+                'identity_id' => $identity->id,
+                'action' => 'BLOCK',
+            ]],
+            ['GET', $inboxBase.'/privacy', []],
+            ['PUT', $inboxBase.'/privacy', ['name' => 'profile', 'value' => 'contacts']],
+            ['POST', $inboxBase.'/contacts/check', ['users' => ['+5511999997001']]],
+            ['POST', $inboxBase.'/contacts/info', ['users' => ['+5511999997001']]],
+            ['POST', $inboxBase.'/contacts/business-profiles', ['users' => ['+5511999997001']]],
+            ['POST', $inboxBase.'/contacts/profile-picture', [
+                'identity_id' => $identity->id,
+                'preview' => true,
+            ]],
+            ['POST', $inboxBase.'/contacts/qr-link', ['revoke' => false]],
+            ['POST', $inboxBase.'/contacts/qr-resolve', ['link' => 'https://wa.me/qr/example']],
+            ['POST', $inboxBase.'/contacts/business-link-resolve', ['link' => 'https://wa.me/message/example']],
+            ['PUT', $conversationBase.'/messages/'.$outbound->id.'/edit', ['text' => 'Corrigido']],
+            ['DELETE', $conversationBase.'/messages/'.$outbound->id, []],
+            ['PUT', $conversationBase.'/messages/'.$inbound->id.'/reaction', ['emoji' => '👍']],
+            ['POST', $conversationBase.'/messages/'.$poll->id.'/poll-votes', ['option_names' => ['Sim']]],
+            ['POST', $conversationBase.'/messages/'.$inbound->id.'/receipts', ['receipt' => 'READ']],
+            ['POST', $conversationBase.'/messages/'.$inbound->id.'/history', ['count' => 10]],
+            ['POST', $conversationBase.'/messages/'.$inbound->id.'/recovery', ['operation' => 'UNAVAILABLE']],
+            ['POST', $conversationBase.'/presence/subscribe', []],
+            ['PUT', $conversationBase.'/presence', ['presence' => 'COMPOSING']],
+            ['PUT', $conversationBase.'/disappearing', ['timer_seconds' => 86400]],
+            ['PUT', $conversationBase.'/state', ['action' => 'ARCHIVE', 'value' => true]],
+        ];
+
+        foreach ($requests as [$method, $uri, $payload]) {
+            if ($method === 'GET') {
+                $response = $this->getJson($uri.'?tenant_id='.$tenant->id);
+            } else {
+                $response = $this->json($method, $uri, [
+                    ...$payload,
+                    'tenant_id' => $tenant->id,
+                ]);
+            }
+
+            $response
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors('tenant_id');
+        }
+
+        $this->assertDatabaseCount('communication_outbox_entries', 0);
+        $this->assertCount(0, $this->transport->queries);
+    }
+
+    public function test_gateway_actions_reject_invalid_domain_targets_without_enqueueing(): void
+    {
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $inbox = $this->inbox($tenant);
+        [$conversation, $inbound, $outbound, $poll] = $this->conversation($tenant, $inbox);
+        $otherContact = CommunicationContact::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Outro contato',
+            'is_active' => true,
+        ]);
+        $otherIdentity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'contact_id' => $otherContact->id,
+            'channel' => 'WHATSAPP',
+            'address_encrypted' => '+5511999997002',
+            'address_hash' => hash('sha256', '+5511999997002'),
+            'address_masked' => '***7002',
+            'is_active' => true,
+        ]);
+        $otherConversation = CommunicationConversation::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'inbox_id' => $inbox->id,
+            'identity_id' => $otherIdentity->id,
+            'status' => ConversationStatus::Open,
+            'last_message_at' => now(),
+        ]);
+        $otherInbound = $this->message(
+            $tenant,
+            $inbox,
+            $otherConversation,
+            MessageDirection::Inbound,
+            MessageKind::Text,
+            'provider-other-inbound-0001',
+        );
+        $base = '/api/v1/communication/conversations/'.$conversation->id;
+        $this->authenticate($admin);
+
+        $this->putJson($base.'/messages/'.$inbound->id.'/edit', ['text' => 'Inválido'])
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'outbound_message_required');
+        $this->deleteJson($base.'/messages/'.$inbound->id)
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'outbound_message_required');
+        $this->postJson($base.'/messages/'.$outbound->id.'/receipts', ['receipt' => 'READ'])
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'inbound_message_required');
+        $this->postJson($base.'/messages/'.$outbound->id.'/recovery', ['operation' => 'UNAVAILABLE'])
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'inbound_message_required');
+        $this->postJson($base.'/messages/'.$inbound->id.'/poll-votes', ['option_names' => ['Sim']])
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'poll_message_required');
+        $this->putJson($base.'/messages/'.$otherInbound->id.'/reaction', ['emoji' => '👍'])
+            ->assertNotFound();
+        $this->putJson('/api/v1/communication/conversations/'.$otherConversation->id.'/messages/'.$poll->id.'/reaction', [
+            'emoji' => '👍',
+        ])->assertNotFound();
+
+        $this->assertDatabaseCount('communication_outbox_entries', 0);
+    }
+
     public function test_admin_controls_use_the_current_inbox_session_and_sanitized_queries(): void
     {
         $tenant = Tenant::factory()->create(['communication_enabled' => true]);
@@ -199,9 +342,13 @@ final class CommunicationGatewayActionApiTest extends TestCase
             ->findOrFail($conversation->identity_id);
         $this->authenticate($admin);
 
-        $this->putJson('/api/v1/communication/inboxes/'.$inbox->id.'/privacy', [
+        $commandResponse = $this->putJson('/api/v1/communication/inboxes/'.$inbox->id.'/privacy', [
             'name' => 'profile', 'value' => 'contacts',
         ])->assertStatus(202)->assertJsonPath('data.type', GatewayCommandType::UpdatePrivacy->value);
+        $this->assertSame(
+            ['command_id', 'type', 'status'],
+            array_keys($commandResponse->json('data')),
+        );
         $this->putJson('/api/v1/communication/inboxes/'.$inbox->id.'/blocklist', [
             'identity_id' => $identity->id, 'action' => 'BLOCK',
         ])->assertStatus(202)->assertJsonPath('data.type', GatewayCommandType::UpdateBlocklist->value);
@@ -240,9 +387,10 @@ final class CommunicationGatewayActionApiTest extends TestCase
             ->assertJsonPath('data.logged_in', true)
             ->assertJsonPath('data.ready', true)
             ->assertJsonPath('data.has_credentials', true);
-        $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/contacts/check', [
+        $queryResponse = $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/contacts/check', [
             'users' => ['+5511999997001'],
         ])->assertOk()->assertJsonPath('data.type', 'USER_CHECK');
+        $this->assertSame(['type'], array_keys($queryResponse->json('data')));
         $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/contacts/info', [
             'users' => ['+5511999997001'],
         ])->assertOk()->assertJsonPath('data.type', 'USER_INFO');

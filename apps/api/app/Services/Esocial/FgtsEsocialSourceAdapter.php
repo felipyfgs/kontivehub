@@ -79,7 +79,9 @@ final class FgtsEsocialSourceAdapter implements FiscalSourceAdapter
         }
 
         $establishment = null;
-        $estId = $request->context['establishment_id'] ?? null;
+        $estId = $request->context['establishment_id']
+            ?? $request->progress['establishment_id']
+            ?? null;
         if (is_numeric($estId)) {
             $establishment = Establishment::query()
                 ->withoutGlobalScopes()

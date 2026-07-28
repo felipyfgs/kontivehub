@@ -44,19 +44,6 @@ final class TenantTechnicalConsentService
             ->first();
     }
 
-    public function currentStatus(): array
-    {
-        $version = TenantTechnicalConsent::VERSION_CERTIFICATE_V1;
-        $active = $this->activeForCurrentTenant($version);
-
-        return [
-            'version_code' => $version,
-            'purposes_presented' => self::DEFAULT_PURPOSES,
-            'active_consent' => $active?->toPublicArray(),
-            'requires_consent' => $active === null,
-        ];
-    }
-
     /**
      * Aceita a versão vigente (checkbox explícito no client → accepted=true).
      */

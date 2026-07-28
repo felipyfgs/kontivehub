@@ -305,7 +305,8 @@ class TenantSerproAutoOnboardingTest extends TestCase
         $this->postJson('/api/v1/tenant/settings/refresh-integration')
             ->assertOk()
             ->assertJsonPath('data.status', SerproAuthorizationStatus::TokenActive->value)
-            ->assertJsonPath('data.has_procurador_token', true);
+            ->assertJsonPath('data.has_procurador_token', true)
+            ->assertJsonPath('data.onboarding_evaluated', true);
 
         $auth = TenantSerproAuthorization::query()->where('tenant_id', $tenant->id)->first();
         $this->assertSame(SerproAuthorizationStatus::TokenActive, $auth?->status);

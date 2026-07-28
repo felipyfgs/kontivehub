@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use Database\Seeders\Development\DevelopmentCertificateSeeder;
 use Database\Seeders\Development\DevelopmentSeeder;
+use Database\Seeders\Development\DevelopmentSerproSeeder;
 use Database\Seeders\Testing\TestingBaselineSeeder;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
@@ -30,6 +31,7 @@ final class DatabaseSeeder extends Seeder
         $this->call([
             DevelopmentSeeder::class,
             DevelopmentCertificateSeeder::class,
+            DevelopmentSerproSeeder::class,
         ]);
     }
 }

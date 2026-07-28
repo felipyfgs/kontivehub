@@ -3,6 +3,8 @@
 namespace App\Services\Work;
 
 use App\Domain\Work\ReferencePeriod;
+use App\DTO\Work\WorkProcessCreationData;
+use App\DTO\Work\WorkProcessUpdateData;
 use App\Enums\Work\ProcessOrigin;
 use App\Enums\Work\ProcessStatus;
 use App\Enums\Work\TaskStatus;
@@ -31,12 +33,10 @@ final class WorkProcessService
         private readonly AuditLogger $audit,
     ) {}
 
-    /**
-     * @param  array<string, mixed>  $data
-     * @param  list<array<string, mixed>>  $tasks
-     */
-    public function createManual(array $data, array $tasks): WorkProcess
+    public function createManual(WorkProcessCreationData $input): WorkProcess
     {
+        $data = $input->attributes;
+        $tasks = $input->tasks;
         $tenantId = $this->currentTenant->id();
 
         if ($tasks === []) {
@@ -53,25 +53,29 @@ final class WorkProcessService
             ]);
         }
 
-        $client = Client::query()
-            ->where('tenant_id', $tenantId)
-            ->where('id', (int) $data['client_id'])
-            ->where('is_active', true)
-            ->first();
-        if ($client === null) {
-            throw ValidationException::withMessages([
-                'client_id' => ['Cliente inválido ou inativo neste escritório.'],
-            ]);
-        }
-
-        if (! empty($data['work_department_id'])) {
-            $this->memberships->requireActiveDepartment((int) $data['work_department_id']);
-        }
-        if (! empty($data['assignee_membership_id'])) {
-            $this->memberships->requireActiveMembership((int) $data['assignee_membership_id']);
-        }
-
         return DB::transaction(function () use ($tenantId, $data, $tasks, $period): WorkProcess {
+            $client = Client::query()
+                ->where('tenant_id', $tenantId)
+                ->where('id', (int) $data['client_id'])
+                ->where('is_active', true)
+                ->lockForUpdate()
+                ->first();
+            if ($client === null) {
+                throw ValidationException::withMessages([
+                    'client_id' => ['Cliente inválido ou inativo neste escritório.'],
+                ]);
+            }
+            if (! empty($data['work_department_id'])) {
+                $this->memberships->requireActiveDepartment(
+                    (int) $data['work_department_id'],
+                );
+            }
+            if (! empty($data['assignee_membership_id'])) {
+                $this->memberships->requireActiveMembership(
+                    (int) $data['assignee_membership_id'],
+                );
+            }
+
             $process = WorkProcess::query()->create([
                 'tenant_id' => $tenantId,
                 'client_id' => $data['client_id'],
@@ -134,58 +138,80 @@ final class WorkProcessService
         });
     }
 
-    /**
-     * @param  array<string, mixed>  $data
-     */
-    public function update(WorkProcess $process, int $lockVersion, array $data): WorkProcess
-    {
-        OptimisticLock::assert($process, $lockVersion, 'work_process');
+    public function update(
+        WorkProcess $process,
+        WorkProcessUpdateData $input,
+    ): WorkProcess {
+        return DB::transaction(function () use ($process, $input): WorkProcess {
+            $data = $input->attributes;
+            OptimisticLock::assert(
+                $process,
+                $input->lockVersion,
+                'work_process',
+            );
 
-        if (! empty($data['work_department_id'])) {
-            $this->memberships->requireActiveDepartment((int) $data['work_department_id']);
-        }
-        if (array_key_exists('assignee_membership_id', $data) && $data['assignee_membership_id'] !== null) {
-            $this->memberships->requireActiveMembership((int) $data['assignee_membership_id']);
-        }
+            if (! empty($data['work_department_id'])) {
+                $this->memberships->requireActiveDepartment(
+                    (int) $data['work_department_id'],
+                );
+            }
+            if (array_key_exists('assignee_membership_id', $data)
+                && $data['assignee_membership_id'] !== null) {
+                $this->memberships->requireActiveMembership(
+                    (int) $data['assignee_membership_id'],
+                );
+            }
 
-        $allowed = collect($data)->only([
-            'title', 'description', 'due_date', 'target_due_date',
-            'monitoring_module_key',
-            'subject_to_fine', 'work_department_id', 'assignee_membership_id',
-        ])->all();
+            $allowed = collect($data)->only([
+                'title', 'description', 'due_date', 'target_due_date',
+                'monitoring_module_key',
+                'subject_to_fine', 'work_department_id', 'assignee_membership_id',
+            ])->all();
 
-        OptimisticLock::updateOrConflict($process, $lockVersion, $allowed, 'work_process');
+            OptimisticLock::updateOrConflict(
+                $process,
+                $input->lockVersion,
+                $allowed,
+                'work_process',
+            );
 
-        $this->audit->record('work.process.update', 'SUCCESS', $process, [
-            'fields' => array_keys($allowed),
-        ]);
+            $this->audit->record('work.process.update', 'SUCCESS', $process, [
+                'fields' => array_keys($allowed),
+            ]);
 
-        return $process->fresh(['tasks']);
+            return $process->fresh(['tasks']);
+        });
     }
 
     public function archive(WorkProcess $process, int $lockVersion): WorkProcess
     {
-        OptimisticLock::assert($process, $lockVersion, 'work_process');
+        return DB::transaction(function () use ($process, $lockVersion): WorkProcess {
+            OptimisticLock::assert($process, $lockVersion, 'work_process');
 
-        if ($process->archived_at !== null) {
-            throw ValidationException::withMessages([
-                'process' => ['Processo já está arquivado.'],
-            ]);
-        }
+            if ($process->archived_at !== null) {
+                throw ValidationException::withMessages([
+                    'process' => ['Processo já está arquivado.'],
+                ]);
+            }
 
-        if ($process->status !== ProcessStatus::Concluido) {
-            throw ValidationException::withMessages([
-                'status' => ['Somente processos com status terminal (CONCLUIDO) podem ser arquivados.'],
-            ]);
-        }
+            if ($process->status !== ProcessStatus::Concluido) {
+                throw ValidationException::withMessages([
+                    'status' => ['Somente processos com status terminal (CONCLUIDO) podem ser arquivados.'],
+                ]);
+            }
 
-        OptimisticLock::updateOrConflict($process, $lockVersion, [
-            'archived_at' => now(),
-        ], 'work_process');
+            OptimisticLock::updateOrConflict($process, $lockVersion, [
+                'archived_at' => now(),
+            ], 'work_process');
 
-        $this->audit->record('work.process.archive', 'SUCCESS', $process);
+            $this->audit->record(
+                'work.process.archive',
+                'SUCCESS',
+                $process,
+            );
 
-        return $process->fresh();
+            return $process->fresh();
+        });
     }
 
     public function claimTask(WorkTask $task, int $lockVersion): WorkTask

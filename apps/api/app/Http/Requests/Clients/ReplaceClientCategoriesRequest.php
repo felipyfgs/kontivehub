@@ -2,13 +2,22 @@
 
 namespace App\Http\Requests\Clients;
 
-use Illuminate\Foundation\Http\FormRequest;
+use App\DTO\Clients\ClientCategoryReplacementData;
+use App\Http\Requests\AuthenticatedRequest;
+use App\Models\Client;
+use App\Models\User;
+use App\Policies\ClientPolicy;
 
-class ReplaceClientCategoriesRequest extends FormRequest
+final class ReplaceClientCategoriesRequest extends AuthenticatedRequest
 {
     public function authorize(): bool
     {
-        return true;
+        $actor = $this->user();
+        $client = $this->route('client');
+
+        return $actor instanceof User
+            && $client instanceof Client
+            && app(ClientPolicy::class)->update($actor, $client);
     }
 
     /** @return array<string, mixed> */
@@ -20,5 +29,16 @@ class ReplaceClientCategoriesRequest extends FormRequest
             'tenant_id' => ['prohibited'],
             'client_id' => ['prohibited'],
         ];
+    }
+
+    public function toDto(): ClientCategoryReplacementData
+    {
+        return new ClientCategoryReplacementData(
+            categoryIds: array_values(array_map(
+                'intval',
+                $this->validated('category_ids'),
+            )),
+            actorId: (int) $this->actor()->id,
+        );
     }
 }

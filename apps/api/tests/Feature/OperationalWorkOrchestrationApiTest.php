@@ -49,16 +49,24 @@ class OperationalWorkOrchestrationApiTest extends TestCase
         ]);
         Sanctum::actingAs($admin);
 
-        $catalog = $this->getJson('/api/v1/work/template-catalog?tenant_id='.$otherTenant->id)
+        $this->getJson('/api/v1/work/template-catalog?tenant_id='.$otherTenant->id)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('tenant_id');
+
+        $catalog = $this->getJson('/api/v1/work/template-catalog')
             ->assertOk()
             ->assertJsonCount(5, 'data')
             ->json('data');
         $pgdas = collect($catalog)->firstWhere('key', 'PGDAS_MENSAL');
         $this->assertFalse($pgdas['installed']);
 
-        $response = $this->postJson('/api/v1/work/template-catalog/PGDAS_MENSAL/install', [
+        $this->postJson('/api/v1/work/template-catalog/PGDAS_MENSAL/install', [
             'tenant_id' => $otherTenant->id,
-        ])->assertCreated()
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('tenant_id');
+
+        $response = $this->postJson('/api/v1/work/template-catalog/PGDAS_MENSAL/install')
+            ->assertCreated()
             ->assertJsonPath('data.catalog_key', 'PGDAS_MENSAL')
             ->assertJsonPath('data.catalog_version', 1)
             ->assertJsonPath('data.default_department_id', $department->id)
@@ -145,6 +153,74 @@ class OperationalWorkOrchestrationApiTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_template_collection_preserves_paginated_contract(): void
+    {
+        [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
+        $template = WorkProcessTemplate::factory()->create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Rotina contratual',
+        ]);
+        WorkProcessTemplateTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_template_id' => $template->id,
+        ]);
+        WorkProcessTemplate::factory()->create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Segunda rotina',
+        ]);
+        Sanctum::actingAs($admin);
+
+        $response = $this->getJson(
+            '/api/v1/work/templates?q=contratual&per_page=1&page=1',
+        )->assertOk()
+            ->assertJsonPath('meta', [
+                'current_page' => 1,
+                'last_page' => 1,
+                'per_page' => 1,
+                'total' => 1,
+            ])
+            ->assertJsonMissingPath('links')
+            ->assertJsonPath('data.0.id', $template->id);
+
+        $this->assertSame([
+            'id',
+            'catalog_key',
+            'catalog_version',
+            'name',
+            'description',
+            'monitoring_module_key',
+            'audience_rules',
+            'default_department_id',
+            'default_due_rule_type',
+            'default_due_rule_value',
+            'is_active',
+            'recurrence_enabled',
+            'recurrence_frequency',
+            'generation_day',
+            'anchor_month',
+            'period_offset',
+            'next_run_at',
+            'recurrence_owner_membership_id',
+            'lock_version',
+            'tasks',
+            'created_at',
+            'updated_at',
+        ], array_keys($response->json('data.0')));
+        $this->assertSame([
+            'id',
+            'sort_order',
+            'title',
+            'description',
+            'due_rule_type',
+            'due_rule_value',
+            'default_department_id',
+            'default_assignee_membership_id',
+            'is_required',
+            'is_critical',
+            'requires_evidence',
+        ], array_keys($response->json('data.0.tasks.0')));
+    }
+
     public function test_structured_preview_uses_temporal_regime_tags_exceptions_and_frozen_idempotency(): void
     {
         [$admin, $tenant] = $this->actor(TenantRole::TenantAdmin);
@@ -173,6 +249,13 @@ class OperationalWorkOrchestrationApiTest extends TestCase
             'excluded_category_ids' => [$excludedTag->id],
         ]);
 
+        $this->postJson('/api/v1/work/templates/'.$template->id.'/preview', [
+            'tenant_id' => $otherTenant->id,
+            'competence' => '2026-01',
+            'selection' => [],
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('tenant_id');
+
         $preview = $this->postJson('/api/v1/work/templates/'.$template->id.'/preview', [
             'competence' => '2026-01',
             'selection' => [
@@ -186,6 +269,22 @@ class OperationalWorkOrchestrationApiTest extends TestCase
             ->assertJsonPath('data.preview_summary.blocked', 1)
             ->assertJsonPath('data.preview_summary.excluded_manually', 1)
             ->assertJsonPath('data.preview_summary.invalid_references', 1);
+
+        $this->assertSame([
+            'id',
+            'work_process_template_id',
+            'template_lock_version',
+            'competence',
+            'reference_period',
+            'status',
+            'payload_hash',
+            'idempotency_key',
+            'preview_summary',
+            'expires_at',
+            'queued_at',
+            'completed_at',
+            'items',
+        ], array_keys($preview->json('data')));
 
         $items = collect($preview->json('data.items'))->keyBy('client_id');
         $this->assertSame('MANUAL_INCLUDE', $items[$presumed->id]['preview_payload']['selection']['selection_source']);
@@ -205,6 +304,11 @@ class OperationalWorkOrchestrationApiTest extends TestCase
         $fallback->categories()->detach();
         $fallback->forceFill(['tax_regime' => TaxRegimeCode::LucroReal->value])->save();
 
+        $this->postJson('/api/v1/work/generation-batches/'.$batchId.'/confirm', [
+            'tenant_id' => $otherTenant->id,
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('tenant_id');
+
         $this->postJson('/api/v1/work/generation-batches/'.$batchId.'/confirm')
             ->assertOk()
             ->assertJsonPath('data.status', 'COMPLETED');
@@ -219,6 +323,10 @@ class OperationalWorkOrchestrationApiTest extends TestCase
         $this->postJson('/api/v1/work/generation-batches/'.$batchId.'/confirm')
             ->assertOk()
             ->assertJsonPath('data.status', 'COMPLETED');
+        $this->getJson('/api/v1/work/generation-batches/'.$batchId)
+            ->assertOk()
+            ->assertJsonPath('data.id', $batchId)
+            ->assertJsonCount(3, 'data.items');
         $this->assertDatabaseCount('work_processes', 2);
         Http::assertNothingSent();
     }
@@ -284,7 +392,11 @@ class OperationalWorkOrchestrationApiTest extends TestCase
         ]);
         Sanctum::actingAs($viewer);
 
-        $this->getJson('/api/v1/work/processes?client_id='.$client->id.'&active_only=1&tenant_id='.$otherTenant->id)
+        $this->getJson('/api/v1/work/processes?tenant_id='.$otherTenant->id)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('tenant_id');
+
+        $this->getJson('/api/v1/work/processes?client_id='.$client->id.'&active_only=1')
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.id', $process->id)

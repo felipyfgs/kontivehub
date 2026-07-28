@@ -21,18 +21,23 @@ final class MembershipResolver
         return $this->currentTenant->realMembership()?->id;
     }
 
-    public function requireActiveMembership(int $membershipId): TenantMembership
-    {
+    public function requireActiveMembership(
+        int $membershipId,
+        bool $lockForUpdate = false,
+    ): TenantMembership {
         $tenantId = $this->currentTenant->id();
         if ($tenantId === null) {
             abort(404);
         }
 
-        $membership = TenantMembership::query()
+        $query = TenantMembership::query()
             ->where('id', $membershipId)
             ->where('tenant_id', $tenantId)
-            ->where('is_active', true)
-            ->first();
+            ->where('is_active', true);
+        if ($lockForUpdate) {
+            $query->lockForUpdate();
+        }
+        $membership = $query->first();
 
         if ($membership === null) {
             throw ValidationException::withMessages([
@@ -43,18 +48,23 @@ final class MembershipResolver
         return $membership;
     }
 
-    public function requireActiveDepartment(?int $departmentId): ?WorkDepartment
-    {
+    public function requireActiveDepartment(
+        ?int $departmentId,
+        bool $lockForUpdate = false,
+    ): ?WorkDepartment {
         if ($departmentId === null) {
             return null;
         }
 
         $tenantId = $this->currentTenant->id();
-        $dept = WorkDepartment::query()
+        $query = WorkDepartment::query()
             ->where('id', $departmentId)
             ->where('tenant_id', $tenantId)
-            ->where('is_active', true)
-            ->first();
+            ->where('is_active', true);
+        if ($lockForUpdate) {
+            $query->lockForUpdate();
+        }
+        $dept = $query->first();
 
         if ($dept === null) {
             throw ValidationException::withMessages([

@@ -2,6 +2,9 @@
 
 namespace App\Services\Serpro;
 
+use App\Contracts\SerproOperationExecutor;
+use App\DTO\Serpro\DteCanaryExecutionResult;
+use App\DTO\Serpro\DteCanarySummaryResult;
 use App\Enums\CredentialStatus;
 use App\Enums\SerproCredentialVersionStatus;
 use App\Enums\SerproDataSegregationClass;
@@ -24,6 +27,7 @@ use App\Models\TenantMembership;
 use App\Models\TenantSerproAuthorization;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
+use App\Services\Auth\RecentPasswordConfirmationGate;
 use App\Services\Integra\TaxProxyPowerService;
 use App\Support\FeatureFlags;
 use App\Support\Serpro\DteCanaryCoordinates;
@@ -31,7 +35,6 @@ use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use RuntimeException;
 use Throwable;
 
 /**
@@ -52,9 +55,10 @@ final class SerproDteCanaryService
     public function __construct(
         private readonly AuditLogger $audit,
         private readonly SerproKillSwitchService $killSwitch,
-        private readonly SerproOperationService $operations,
+        private readonly SerproOperationExecutor $operations,
         private readonly TaxProxyPowerService $proxyPowers,
         private readonly SerproRequestTagGenerator $requestTags,
+        private readonly RecentPasswordConfirmationGate $passwordGate,
     ) {}
 
     public function ensureControl(): SerproDteControl
@@ -76,7 +80,7 @@ final class SerproDteCanaryService
     {
         $environment ??= SerproEnvironment::Production;
         if ($environment !== SerproEnvironment::Production) {
-            throw new RuntimeException('Canário DTE só é permitido em Production.');
+            throw new SerproDteCanaryException('Canário DTE só é permitido em Production.');
         }
 
         $coords = DteCanaryCoordinates::asArray();
@@ -115,22 +119,22 @@ final class SerproDteCanaryService
 
         $tenant = Tenant::query()->withoutGlobalScopes()->find($tenantId);
         if ($tenant === null || ! $tenant->is_active) {
-            throw new RuntimeException('Tenant inválido ou inativo.');
+            throw new SerproDteCanaryException('Tenant inválido ou inativo.');
         }
 
         $seg = strtoupper((string) ($tenant->serpro_segregation_class ?? ''));
         if ($seg !== '' && $seg !== SerproDataSegregationClass::Production->value) {
-            throw new RuntimeException('Tenant deve ser classificado Production (não demo/shadow/fake).');
+            throw new SerproDteCanaryException('Tenant deve ser classificado Production (não demo/shadow/fake).');
         }
         if ($seg === '' || $seg === SerproDataSegregationClass::Demo->value) {
             // default sem classificação explícita Production bloqueia em produção
             if ($seg === SerproDataSegregationClass::Demo->value
                 || str_contains(strtolower((string) $tenant->slug), 'demo')) {
-                throw new RuntimeException('Tenant demo não pode ser alvo do canário DTE.');
+                throw new SerproDteCanaryException('Tenant demo não pode ser alvo do canário DTE.');
             }
             // Exigir Production explícito
             if ($seg !== SerproDataSegregationClass::Production->value) {
-                throw new RuntimeException('Tenant deve ser classificado Production.');
+                throw new SerproDteCanaryException('Tenant deve ser classificado Production.');
             }
         }
 
@@ -139,7 +143,7 @@ final class SerproDteCanaryService
             ->first();
 
         if ($client === null || (int) $client->tenant_id !== (int) $tenant->id) {
-            throw new RuntimeException('Cliente não pertence ao Tenant selecionado.');
+            throw new SerproDteCanaryException('Cliente não pertence ao Tenant selecionado.');
         }
 
         $coords = DteCanaryCoordinates::asArray();
@@ -154,7 +158,7 @@ final class SerproDteCanaryService
             && ((int) $control->pilot_tenant_id !== (int) $tenant->id
                 || (int) $control->pilot_client_id !== (int) $client->id)
         ) {
-            throw new RuntimeException('Alvo piloto do canário DTE já foi fixado e não pode ser trocado.');
+            throw new SerproDteCanaryException('Alvo piloto do canário DTE já foi fixado e não pode ser trocado.');
         }
 
         $idempotencyParts = [
@@ -211,31 +215,30 @@ final class SerproDteCanaryService
     public function approveAsOwner(
         SerproDteCanaryRequest $request,
         User $owner,
-        bool $passwordRecentlyConfirmed,
     ): SerproDteCanaryRequest {
-        if (! $passwordRecentlyConfirmed) {
-            throw new RuntimeException('Reconfirmação de senha (15 min) obrigatória para aprovação do Proprietário.');
-        }
-
+        $this->assertRecentPassword(
+            $owner,
+            'Reconfirmação de senha (15 min) obrigatória para aprovação do Proprietário.',
+        );
         if (! $owner->isPlatformAdmin()) {
-            throw new RuntimeException('Somente o Proprietário (PLATFORM_ADMIN) pode registrar a aprovação global.');
+            throw new SerproDteCanaryException('Somente o Proprietário (PLATFORM_ADMIN) pode registrar a aprovação global.');
         }
 
         $this->assertNotExpired($request);
         if ($request->tenant_id === null || $request->client_id === null) {
-            throw new RuntimeException('Alvo do canário ainda não foi selecionado.');
+            throw new SerproDteCanaryException('Alvo do canário ainda não foi selecionado.');
         }
 
         if ($request->hasTenantAdminApproval()
             && (int) $request->tenant_admin_approver_user_id === (int) $owner->id
         ) {
-            throw new RuntimeException(
+            throw new SerproDteCanaryException(
                 'Conta dual: o mesmo usuário já aprovou como Tenant ADMIN; exige segundo usuário autorizado.'
             );
         }
 
         if ($request->hasOwnerApproval() && (int) $request->owner_approver_user_id !== (int) $owner->id) {
-            throw new RuntimeException('Aprovação do Proprietário já registrada por outro usuário.');
+            throw new SerproDteCanaryException('Aprovação do Proprietário já registrada por outro usuário.');
         }
 
         $request->forceFill([
@@ -259,19 +262,18 @@ final class SerproDteCanaryService
         SerproDteCanaryRequest $request,
         User $admin,
         Tenant $currentTenant,
-        bool $passwordRecentlyConfirmed,
     ): SerproDteCanaryRequest {
-        if (! $passwordRecentlyConfirmed) {
-            throw new RuntimeException('Reconfirmação de senha (15 min) obrigatória para confirmação do Tenant ADMIN.');
-        }
-
+        $this->assertRecentPassword(
+            $admin,
+            'Reconfirmação de senha (15 min) obrigatória para confirmação do Tenant ADMIN.',
+        );
         $this->assertNotExpired($request);
         if ($request->tenant_id === null) {
-            throw new RuntimeException('Alvo do canário ainda não foi selecionado.');
+            throw new SerproDteCanaryException('Alvo do canário ainda não foi selecionado.');
         }
 
         if ((int) $currentTenant->id !== (int) $request->tenant_id) {
-            throw new RuntimeException('Tenant corrente não corresponde ao Tenant piloto do canário.');
+            throw new SerproDteCanaryException('Tenant corrente não corresponde ao Tenant piloto do canário.');
         }
 
         $membership = TenantMembership::query()
@@ -281,7 +283,7 @@ final class SerproDteCanaryService
             ->first();
 
         if ($membership === null) {
-            throw new RuntimeException('Usuário sem membership ativa no Tenant corrente.');
+            throw new SerproDteCanaryException('Usuário sem membership ativa no Tenant corrente.');
         }
 
         $role = $membership->role instanceof TenantRole
@@ -289,13 +291,13 @@ final class SerproDteCanaryService
             : TenantRole::tryFrom((string) $membership->role);
 
         if ($role !== TenantRole::TenantAdmin) {
-            throw new RuntimeException('Somente Tenant ADMIN pode confirmar participação no canário DTE.');
+            throw new SerproDteCanaryException('Somente Tenant ADMIN pode confirmar participação no canário DTE.');
         }
 
         if ($request->hasOwnerApproval()
             && (int) $request->owner_approver_user_id === (int) $admin->id
         ) {
-            throw new RuntimeException(
+            throw new SerproDteCanaryException(
                 'Conta dual: o mesmo usuário já aprovou como Proprietário; exige segundo usuário autorizado.'
             );
         }
@@ -303,7 +305,7 @@ final class SerproDteCanaryService
         if ($request->hasTenantAdminApproval()
             && (int) $request->tenant_admin_approver_user_id !== (int) $admin->id
         ) {
-            throw new RuntimeException('Confirmação do Tenant ADMIN já registrada por outro usuário.');
+            throw new SerproDteCanaryException('Confirmação do Tenant ADMIN já registrada por outro usuário.');
         }
 
         $request->forceFill([
@@ -534,15 +536,11 @@ final class SerproDteCanaryService
 
     /**
      * Executa exatamente uma tentativa (ou replay do estado durável).
-     *
-     * @return array{
-     *   request: SerproDteCanaryRequest,
-     *   replay: bool,
-     *   global: array<string, mixed>
-     * }
      */
-    public function execute(SerproDteCanaryRequest $request, int $actorUserId): array
-    {
+    public function execute(
+        SerproDteCanaryRequest $request,
+        int $actorUserId,
+    ): DteCanaryExecutionResult {
         $request = SerproDteCanaryRequest::query()->findOrFail($request->id);
         $status = $this->requestStatus($request);
 
@@ -556,11 +554,10 @@ final class SerproDteCanaryService
                     'result_status' => $request->result_status,
                 ], $actorUserId, $request->tenant_id);
 
-                return [
-                    'request' => $request->fresh(),
-                    'replay' => true,
-                    'global' => $request->toGlobalSanitizedArray(),
-                ];
+                return new DteCanaryExecutionResult(
+                    request: $request->fresh(),
+                    replay: true,
+                );
             }
 
             if ($status->isTerminalAttempt()) {
@@ -569,11 +566,10 @@ final class SerproDteCanaryService
                     'consumption_quantity' => $request->consumption_quantity,
                 ], $actorUserId, $request->tenant_id);
 
-                return [
-                    'request' => $request->fresh(),
-                    'replay' => true,
-                    'global' => $request->toGlobalSanitizedArray(),
-                ];
+                return new DteCanaryExecutionResult(
+                    request: $request->fresh(),
+                    replay: true,
+                );
             }
         }
 
@@ -594,7 +590,7 @@ final class SerproDteCanaryService
 
             $gate = $this->evaluatePreTransportGate($locked);
             if (! $gate['allowed']) {
-                throw new RuntimeException(
+                throw new SerproDteCanaryException(
                     'Canário DTE bloqueado pré-transporte: '.implode(', ', $gate['blockers'])
                 );
             }
@@ -609,13 +605,13 @@ final class SerproDteCanaryService
                     ->whereNotNull('dispatched_at')
                     ->exists();
                 if ($alreadyReserved) {
-                    throw new RuntimeException('Canário DTE bloqueado pré-transporte: CANARY_ALREADY_DISPATCHED');
+                    throw new SerproDteCanaryException('Canário DTE bloqueado pré-transporte: CANARY_ALREADY_DISPATCHED');
                 }
             } elseif ($control->mode === SerproDteControlMode::Limited) {
                 $max = (int) ($control->limited_max_quantity ?? 0);
                 $used = (int) $control->limited_used_quantity;
                 if ($max <= 0 || $used >= $max) {
-                    throw new RuntimeException('Canário DTE bloqueado pré-transporte: LIMITED_QUOTA_EXHAUSTED');
+                    throw new SerproDteCanaryException('Canário DTE bloqueado pré-transporte: LIMITED_QUOTA_EXHAUSTED');
                 }
                 $control->forceFill(['limited_used_quantity' => $used + 1])->save();
             }
@@ -631,11 +627,10 @@ final class SerproDteCanaryService
         });
 
         if ($request->correlation_id !== $correlationId) {
-            return [
-                'request' => $request,
-                'replay' => true,
-                'global' => $request->toGlobalSanitizedArray(),
-            ];
+            return new DteCanaryExecutionResult(
+                request: $request,
+                replay: true,
+            );
         }
 
         $tenant = Tenant::query()->withoutGlobalScopes()->findOrFail($request->tenant_id);
@@ -670,11 +665,10 @@ final class SerproDteCanaryService
 
             $this->maybeEmitUsageAlerts($this->ensureControl()->fresh());
 
-            return [
-                'request' => $request->fresh(),
-                'replay' => false,
-                'global' => $request->fresh()->toGlobalSanitizedArray(),
-            ];
+            return new DteCanaryExecutionResult(
+                request: $request->fresh(),
+                replay: false,
+            );
         }
 
         $success = (bool) $response->success;
@@ -722,11 +716,10 @@ final class SerproDteCanaryService
             // sem payload fiscal
         ], $actorUserId, $tenant->id);
 
-        return [
-            'request' => $request->fresh(),
-            'replay' => false,
-            'global' => $request->fresh()->toGlobalSanitizedArray(),
-        ];
+        return new DteCanaryExecutionResult(
+            request: $request->fresh(),
+            replay: false,
+        );
     }
 
     /**
@@ -734,19 +727,18 @@ final class SerproDteCanaryService
      */
     public function reconcile(
         SerproDteCanaryRequest $request,
-        int $actorUserId,
+        User $actor,
         string $reference,
         string $summary,
-        bool $passwordRecentlyConfirmed,
     ): SerproDteCanaryRequest {
-        if (! $passwordRecentlyConfirmed) {
-            throw new RuntimeException('Reconfirmação de senha obrigatória para reconciliação.');
-        }
-
+        $this->assertRecentPassword(
+            $actor,
+            'Reconfirmação de senha obrigatória para reconciliação.',
+        );
         $reference = trim($reference);
         $summary = trim($summary);
         if ($reference === '' || $summary === '') {
-            throw new RuntimeException('Referência e resumo da reconciliação são obrigatórios.');
+            throw new SerproDteCanaryException('Referência e resumo da reconciliação são obrigatórios.');
         }
 
         $status = $request->status instanceof SerproDteCanaryRequestStatus
@@ -754,20 +746,20 @@ final class SerproDteCanaryService
             : SerproDteCanaryRequestStatus::from((string) $request->status);
 
         if (! $status->allowsReconciliation() && $status !== SerproDteCanaryRequestStatus::Reconciled) {
-            throw new RuntimeException('Pedido não está em estado reconciliável.');
+            throw new SerproDteCanaryException('Pedido não está em estado reconciliável.');
         }
 
         $request->forceFill([
             'reconciliation_reference' => mb_substr($reference, 0, 200),
             'reconciliation_summary' => mb_substr($summary, 0, 1000),
-            'reconciled_by_user_id' => $actorUserId,
+            'reconciled_by_user_id' => $actor->id,
             'reconciled_at' => now(),
             'status' => SerproDteCanaryRequestStatus::Reconciled,
         ])->save();
 
         $this->audit->record('serpro.dte_canary.reconcile', 'SUCCESS', $request, [
             'reference' => mb_substr($reference, 0, 80),
-        ], $actorUserId, $request->tenant_id);
+        ], $actor->id, $request->tenant_id);
 
         return $request->fresh();
     }
@@ -778,30 +770,30 @@ final class SerproDteCanaryService
     public function promoteLimited(
         SerproDteCanaryRequest $request,
         User $owner,
-        bool $passwordRecentlyConfirmed,
         string $confirmationPhrase,
         string $reason,
         ?CarbonImmutable $windowStart = null,
         ?CarbonImmutable $windowEnd = null,
         int $maxQuantity = DteCanaryCoordinates::LIMITED_DEFAULT_MAX_QUANTITY,
     ): SerproDteControl {
-        if (! $passwordRecentlyConfirmed) {
-            throw new RuntimeException('Reconfirmação de senha obrigatória para promoção LIMITED.');
-        }
+        $this->assertRecentPassword(
+            $owner,
+            'Reconfirmação de senha obrigatória para promoção LIMITED.',
+        );
         if (! $owner->isPlatformAdmin()) {
-            throw new RuntimeException('Somente o Proprietário pode promover DTE LIMITED.');
+            throw new SerproDteCanaryException('Somente o Proprietário pode promover DTE LIMITED.');
         }
         if (trim($confirmationPhrase) !== self::CONFIRM_PROMOTE_PHRASE) {
-            throw new RuntimeException('Frase de confirmação inválida (esperado CONFIRMO-DTE-LIMITED).');
+            throw new SerproDteCanaryException('Frase de confirmação inválida (esperado CONFIRMO-DTE-LIMITED).');
         }
         if (trim($reason) === '') {
-            throw new RuntimeException('Motivo da promoção é obrigatório.');
+            throw new SerproDteCanaryException('Motivo da promoção é obrigatório.');
         }
 
         $now = CarbonImmutable::now();
         if ($windowStart !== null && $windowEnd !== null) {
             if (! $now->betweenIncluded($windowStart, $windowEnd)) {
-                throw new RuntimeException('Fora da janela de mudança autorizada.');
+                throw new SerproDteCanaryException('Fora da janela de mudança autorizada.');
             }
         }
 
@@ -812,15 +804,15 @@ final class SerproDteCanaryService
         if ($status !== SerproDteCanaryRequestStatus::Reconciled
             && $request->reconciled_at === null
         ) {
-            throw new RuntimeException('Promoção LIMITED exige reconciliação manual válida do canário.');
+            throw new SerproDteCanaryException('Promoção LIMITED exige reconciliação manual válida do canário.');
         }
 
         if ($request->result_status !== 'SUCCEEDED') {
-            throw new RuntimeException('Promoção LIMITED só após canário com sucesso e reconciliação.');
+            throw new SerproDteCanaryException('Promoção LIMITED só após canário com sucesso e reconciliação.');
         }
 
         if ($request->tenant_id === null) {
-            throw new RuntimeException('Tenant piloto ausente no pedido.');
+            throw new SerproDteCanaryException('Tenant piloto ausente no pedido.');
         }
 
         $maxQuantity = max(1, min(10, $maxQuantity));
@@ -860,21 +852,21 @@ final class SerproDteCanaryService
      */
     public function disable(
         User $owner,
-        bool $passwordRecentlyConfirmed,
         string $confirmationPhrase,
         string $reason,
     ): SerproDteControl {
-        if (! $passwordRecentlyConfirmed) {
-            throw new RuntimeException('Reconfirmação de senha obrigatória para desativação DTE.');
-        }
+        $this->assertRecentPassword(
+            $owner,
+            'Reconfirmação de senha obrigatória para desativação DTE.',
+        );
         if (! $owner->isPlatformAdmin()) {
-            throw new RuntimeException('Somente o Proprietário pode desativar DTE.');
+            throw new SerproDteCanaryException('Somente o Proprietário pode desativar DTE.');
         }
         if (trim($confirmationPhrase) !== self::CONFIRM_DISABLE_PHRASE) {
-            throw new RuntimeException('Frase de confirmação inválida (esperado CONFIRMO-DTE-DISABLE).');
+            throw new SerproDteCanaryException('Frase de confirmação inválida (esperado CONFIRMO-DTE-DISABLE).');
         }
         if (trim($reason) === '') {
-            throw new RuntimeException('Motivo da desativação é obrigatório.');
+            throw new SerproDteCanaryException('Motivo da desativação é obrigatório.');
         }
 
         $control = $this->ensureControl();
@@ -894,10 +886,8 @@ final class SerproDteCanaryService
 
     /**
      * Resumo global sanitizado (sem payload fiscal).
-     *
-     * @return array<string, mixed>
      */
-    public function globalSummary(?int $requestId = null): array
+    public function globalSummary(?int $requestId = null): DteCanarySummaryResult
     {
         $control = $this->ensureControl();
         $q = SerproDteCanaryRequest::query()->orderByDesc('id');
@@ -906,23 +896,24 @@ final class SerproDteCanaryService
         }
         $latest = $q->first();
 
-        return [
-            'control' => $control->toSanitizedArray(),
-            'coordinates' => DteCanaryCoordinates::asArray(),
-            'request' => $latest?->toGlobalSanitizedArray(),
-            'gate' => $latest !== null ? $this->evaluatePreTransportGate($latest) : null,
-        ];
+        return new DteCanarySummaryResult(
+            control: $control,
+            coordinates: DteCanaryCoordinates::asArray(),
+            request: $latest,
+            gate: $latest !== null ? $this->evaluatePreTransportGate($latest) : null,
+        );
     }
 
     /**
      * Resultado tenant — exige membership no Tenant do pedido.
-     *
-     * @return array<string, mixed>
      */
-    public function tenantResult(SerproDteCanaryRequest $request, User $user, Tenant $currentTenant): array
-    {
+    public function tenantResult(
+        SerproDteCanaryRequest $request,
+        User $user,
+        Tenant $currentTenant,
+    ): SerproDteCanaryRequest {
         if ((int) $currentTenant->id !== (int) $request->tenant_id) {
-            throw new RuntimeException('Resultado DTE indisponível para o Tenant corrente.');
+            throw new SerproDteCanaryException('Resultado DTE indisponível para o Tenant corrente.');
         }
 
         $membership = TenantMembership::query()
@@ -932,12 +923,12 @@ final class SerproDteCanaryService
             ->exists();
 
         if (! $membership) {
-            throw new RuntimeException('Membership ativa no Tenant é obrigatória para ver resultado fiscal DTE.');
+            throw new SerproDteCanaryException('Membership ativa no Tenant é obrigatória para ver resultado fiscal DTE.');
         }
 
         $request->loadMissing('attempt');
 
-        return $request->toTenantResultArray();
+        return $request;
     }
 
     private function refreshApprovalStatus(SerproDteCanaryRequest $request): void
@@ -995,20 +986,27 @@ final class SerproDteCanaryService
             : SerproDteCanaryRequestStatus::tryFrom((string) $request->status);
 
         if ($status !== null && $status->isTerminalAttempt()) {
-            throw new RuntimeException('Pedido já finalizado; alvo imutável.');
+            throw new SerproDteCanaryException('Pedido já finalizado; alvo imutável.');
         }
         if ($request->hasOwnerApproval() || $request->hasTenantAdminApproval()) {
-            throw new RuntimeException('Alvo imutável após início das aprovações.');
+            throw new SerproDteCanaryException('Alvo imutável após início das aprovações.');
         }
         if ($status === SerproDteCanaryRequestStatus::Dispatched) {
-            throw new RuntimeException('Pedido já despachado; alvo imutável.');
+            throw new SerproDteCanaryException('Pedido já despachado; alvo imutável.');
         }
     }
 
     private function assertNotExpired(SerproDteCanaryRequest $request): void
     {
         if ($request->expires_at !== null && $request->expires_at->isPast()) {
-            throw new RuntimeException('Pedido de canário DTE expirado.');
+            throw new SerproDteCanaryException('Pedido de canário DTE expirado.');
+        }
+    }
+
+    private function assertRecentPassword(User $actor, string $message): void
+    {
+        if (! $this->passwordGate->isRecentlyConfirmed($actor)) {
+            throw new SerproDteCanaryException($message);
         }
     }
 

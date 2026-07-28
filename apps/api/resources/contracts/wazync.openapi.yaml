@@ -1427,13 +1427,25 @@ components:
           then: {properties: {payload: {$ref: '#/components/schemas/MediaRetryEventPayload'}}}
         - if: {properties: {type: {const: GATEWAY_ALERT}}, required: [type]}
           then: {properties: {payload: {$ref: '#/components/schemas/GatewayAlertEventPayload'}}}
+    SourceIdentity:
+      description: Identidade 1:1 projetada pelo gateway (LID/PN), sem JID cru.
+      type: object
+      additionalProperties: false
+      required: [primary, primary_kind]
+      properties:
+        primary: {$ref: '#/components/schemas/OneToOneAddress'}
+        primary_kind: {enum: [PN, LID]}
+        alternate: {$ref: '#/components/schemas/OneToOneAddress'}
+        alternate_kind: {enum: [PN, LID]}
+        evidence: {type: string, pattern: '^[A-Z][A-Z0-9_]{1,63}$'}
     MessageReceivedEventPayload:
       type: object
       additionalProperties: false
-      required: [provider_message_id, from, kind, provider_type, family]
+      required: [provider_message_id, kind, provider_type, family]
       properties:
         provider_message_id: {$ref: '#/components/schemas/Identifier'}
         from: {$ref: '#/components/schemas/OneToOneAddress'}
+        source_identity: {$ref: '#/components/schemas/SourceIdentity'}
         kind: {$ref: '#/components/schemas/MessageKind'}
         provider_type: {type: string, pattern: '^[A-Za-z][A-Za-z0-9._-]{0,79}$'}
         family: {type: string, pattern: '^[A-Z][A-Z0-9_]{1,31}$'}
@@ -1477,12 +1489,13 @@ components:
     MessageActionEventPayload:
       type: object
       additionalProperties: false
-      required: [action, target_message_id, from]
+      required: [action, target_message_id]
       properties:
         action: {enum: [EDIT, REVOKE, REACTION, POLL_VOTE, INTERACTIVE_RESPONSE]}
         provider_message_id: {$ref: '#/components/schemas/Identifier'}
         target_message_id: {$ref: '#/components/schemas/Identifier'}
         from: {$ref: '#/components/schemas/OneToOneAddress'}
+        source_identity: {$ref: '#/components/schemas/SourceIdentity'}
         kind: {$ref: '#/components/schemas/MessageKind'}
         provider_type: {type: string, pattern: '^[A-Za-z][A-Za-z0-9._-]{0,79}$'}
         family: {type: string, pattern: '^[A-Z][A-Z0-9_]{1,31}$'}
@@ -1670,6 +1683,16 @@ components:
         message_count: {type: integer, minimum: 0, maximum: 100}
         rejected_count: {type: integer, minimum: 0}
         truncated: {type: boolean}
+        sync_id: {$ref: '#/components/schemas/Identifier'}
+        segment_id: {$ref: '#/components/schemas/Identifier'}
+        segment_index: {type: integer, minimum: 0}
+        segment_count: {type: integer, minimum: 1}
+        source_progress:
+          type: object
+          additionalProperties: false
+          properties:
+            percent: {type: integer, minimum: 0, maximum: 100}
+            upstream_complete: {type: boolean}
         messages:
           type: array
           maxItems: 100

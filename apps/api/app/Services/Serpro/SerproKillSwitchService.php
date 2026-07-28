@@ -5,6 +5,7 @@ namespace App\Services\Serpro;
 use App\Models\SerproRuntimeControl;
 use App\Services\Audit\AuditLogger;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Kill switch global e por solução Integra Contador.
@@ -74,7 +75,9 @@ final class SerproKillSwitchService
             $reason,
             $userId,
         );
-        Cache::forever(self::GLOBAL_CACHE_KEY, true);
+        DB::afterCommit(static function (): void {
+            Cache::forever(self::GLOBAL_CACHE_KEY, true);
+        });
 
         $this->audit->record('serpro.kill_switch.global_on', 'SUCCESS', null, [
             'reason' => mb_substr($reason, 0, 500),
@@ -96,7 +99,9 @@ final class SerproKillSwitchService
             $reason,
             $userId,
         );
-        Cache::forget(self::GLOBAL_CACHE_KEY);
+        DB::afterCommit(static function (): void {
+            Cache::forget(self::GLOBAL_CACHE_KEY);
+        });
 
         $this->audit->record('serpro.kill_switch.global_off', 'SUCCESS', null, [
             'reason' => mb_substr($reason, 0, 500),
@@ -115,7 +120,9 @@ final class SerproKillSwitchService
             $userId,
             ['solution' => $code],
         );
-        Cache::forever(self::SOLUTION_PREFIX.$code, true);
+        DB::afterCommit(static function () use ($code): void {
+            Cache::forever(self::SOLUTION_PREFIX.$code, true);
+        });
 
         $this->audit->record('serpro.kill_switch.solution_on', 'SUCCESS', null, [
             'solution' => $code,
@@ -135,7 +142,9 @@ final class SerproKillSwitchService
             $userId,
             ['solution' => $code],
         );
-        Cache::forget(self::SOLUTION_PREFIX.$code);
+        DB::afterCommit(static function () use ($code): void {
+            Cache::forget(self::SOLUTION_PREFIX.$code);
+        });
 
         $this->audit->record('serpro.kill_switch.solution_off', 'SUCCESS', null, [
             'solution' => $code,

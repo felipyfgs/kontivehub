@@ -225,13 +225,21 @@ final class GatewayContractPayload
     private static function assertMessageReceived(array $payload): void
     {
         $allowed = [
-            'provider_message_id', 'from', 'direction', 'history', 'occurred_at', 'kind',
+            'provider_message_id', 'from', 'source_identity', 'direction', 'history', 'occurred_at', 'kind',
             'provider_type', 'family', 'reply_to', 'reply_to_provider_message_id',
             'spool_id', 'media_size_bytes', 'media_sha256', 'mime_type', 'filename',
             'media_state', 'media_error_code', 'ephemeral', 'view_once',
             ...MessageSemanticContent::KEYS,
         ];
         self::assertAllowedKeys($payload, $allowed, 'MESSAGE_RECEIVED');
+        $hasFrom = trim((string) ($payload['from'] ?? '')) !== '';
+        $hasSourceIdentity = isset($payload['source_identity']);
+        if (! $hasFrom && ! $hasSourceIdentity) {
+            throw new InvalidArgumentException('from ou source_identity obrigatório em MESSAGE_RECEIVED.');
+        }
+        if ($hasSourceIdentity) {
+            self::assertSourceIdentity($payload['source_identity'], 'MESSAGE_RECEIVED.source_identity');
+        }
         $kind = MessageKind::tryFrom(strtoupper((string) ($payload['kind'] ?? '')));
         if ($kind === null || $kind === MessageKind::Note) {
             throw new InvalidArgumentException('kind inválido em MESSAGE_RECEIVED.');
@@ -249,7 +257,37 @@ final class GatewayContractPayload
         self::assertAllowedKeys($payload, [
             'batch_id', 'complete', 'messages', 'sync_type', 'chunk_order', 'progress',
             'message_count', 'rejected_count', 'truncated',
+            'sync_id', 'segment_id', 'segment_index', 'segment_count', 'source_progress',
         ], 'HISTORY_SYNCED');
+        if (isset($payload['source_progress'])) {
+            self::assertSourceProgress($payload['source_progress']);
+        }
+        foreach (['segment_index', 'segment_count', 'chunk_order', 'message_count', 'rejected_count', 'progress'] as $numeric) {
+            if (! array_key_exists($numeric, $payload)) {
+                continue;
+            }
+            if (! is_int($payload[$numeric]) && ! (is_float($payload[$numeric]) && floor($payload[$numeric]) == $payload[$numeric])) {
+                throw new InvalidArgumentException("{$numeric} inválido em HISTORY_SYNCED.");
+            }
+            if ((int) $payload[$numeric] < 0) {
+                throw new InvalidArgumentException("{$numeric} inválido em HISTORY_SYNCED.");
+            }
+        }
+        if (isset($payload['segment_count']) && (int) $payload['segment_count'] < 1) {
+            throw new InvalidArgumentException('segment_count inválido em HISTORY_SYNCED.');
+        }
+        if (isset($payload['segment_index'], $payload['segment_count'])
+            && (int) $payload['segment_index'] >= (int) $payload['segment_count']) {
+            throw new InvalidArgumentException('segment_index inválido em HISTORY_SYNCED.');
+        }
+        foreach (['sync_id', 'segment_id'] as $idField) {
+            if (! isset($payload[$idField])) {
+                continue;
+            }
+            if (! is_string($payload[$idField]) || preg_match('/^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/', $payload[$idField]) !== 1) {
+                throw new InvalidArgumentException("{$idField} inválido em HISTORY_SYNCED.");
+            }
+        }
         if (isset($payload['messages'])) {
             if (! is_array($payload['messages']) || count($payload['messages']) > 100) {
                 throw new InvalidArgumentException('messages inválido em HISTORY_SYNCED.');
@@ -260,6 +298,63 @@ final class GatewayContractPayload
                 }
                 self::assertMessageReceived($message);
             }
+        }
+    }
+
+    private static function assertSourceIdentity(mixed $value, string $context): void
+    {
+        if (! is_array($value) || ($value !== [] && array_is_list($value))) {
+            throw new InvalidArgumentException("{$context} deve ser objeto.");
+        }
+        self::assertAllowedKeys($value, [
+            'primary', 'primary_kind', 'alternate', 'alternate_kind', 'evidence',
+        ], $context);
+        $primary = trim((string) ($value['primary'] ?? ''));
+        $primaryKind = strtoupper(trim((string) ($value['primary_kind'] ?? '')));
+        if ($primary === '' || ! in_array($primaryKind, ['PN', 'LID'], true)) {
+            throw new InvalidArgumentException("primary/primary_kind inválidos em {$context}.");
+        }
+        if ($primaryKind === 'PN' && preg_match('/^\+[1-9][0-9]{7,14}$/', $primary) !== 1) {
+            throw new InvalidArgumentException("primary PN inválido em {$context}.");
+        }
+        if ($primaryKind === 'LID' && preg_match('/^lid:[1-9][0-9]{0,19}$/', $primary) !== 1) {
+            throw new InvalidArgumentException("primary LID inválido em {$context}.");
+        }
+        $hasAlternate = array_key_exists('alternate', $value) || array_key_exists('alternate_kind', $value);
+        if ($hasAlternate) {
+            $alternate = trim((string) ($value['alternate'] ?? ''));
+            $alternateKind = strtoupper(trim((string) ($value['alternate_kind'] ?? '')));
+            if ($alternate === '' || ! in_array($alternateKind, ['PN', 'LID'], true)) {
+                throw new InvalidArgumentException("alternate/alternate_kind inválidos em {$context}.");
+            }
+            if ($alternateKind === 'PN' && preg_match('/^\+[1-9][0-9]{7,14}$/', $alternate) !== 1) {
+                throw new InvalidArgumentException("alternate PN inválido em {$context}.");
+            }
+            if ($alternateKind === 'LID' && preg_match('/^lid:[1-9][0-9]{0,19}$/', $alternate) !== 1) {
+                throw new InvalidArgumentException("alternate LID inválido em {$context}.");
+            }
+        }
+        if (isset($value['evidence'])
+            && (! is_string($value['evidence']) || preg_match('/^[A-Z][A-Z0-9_]{1,63}$/', $value['evidence']) !== 1)) {
+            throw new InvalidArgumentException("evidence inválido em {$context}.");
+        }
+    }
+
+    private static function assertSourceProgress(mixed $value): void
+    {
+        if (! is_array($value) || ($value !== [] && array_is_list($value))) {
+            throw new InvalidArgumentException('source_progress deve ser objeto em HISTORY_SYNCED.');
+        }
+        self::assertAllowedKeys($value, ['percent', 'upstream_complete'], 'HISTORY_SYNCED.source_progress');
+        if (isset($value['percent'])) {
+            $percent = $value['percent'];
+            if ((! is_int($percent) && ! (is_float($percent) && floor($percent) == $percent))
+                || (int) $percent < 0 || (int) $percent > 100) {
+                throw new InvalidArgumentException('source_progress.percent inválido em HISTORY_SYNCED.');
+            }
+        }
+        if (isset($value['upstream_complete']) && ! is_bool($value['upstream_complete'])) {
+            throw new InvalidArgumentException('source_progress.upstream_complete inválido em HISTORY_SYNCED.');
         }
     }
 
@@ -305,16 +400,24 @@ final class GatewayContractPayload
     private static function assertMessageAction(array $payload): void
     {
         self::assertAllowedKeys($payload, [
-            'action', 'provider_message_id', 'target_message_id', 'from', 'history',
+            'action', 'provider_message_id', 'target_message_id', 'from', 'source_identity', 'history',
             'kind', 'provider_type', 'family', 'text', 'caption', 'link_preview', 'location',
             'contacts', 'poll', 'interactive', 'ptt', 'gif', 'animated', 'duration_seconds',
             'content_present', 'variants', 'emoji', 'removed', 'option_names', 'option_hashes',
             'selected_id',
         ], 'MESSAGE_ACTION_RECEIVED');
-        foreach (['action', 'target_message_id', 'from'] as $required) {
+        foreach (['action', 'target_message_id'] as $required) {
             if (! isset($payload[$required]) || trim((string) $payload[$required]) === '') {
                 throw new InvalidArgumentException("{$required} obrigatório em MESSAGE_ACTION_RECEIVED.");
             }
+        }
+        $hasFrom = trim((string) ($payload['from'] ?? '')) !== '';
+        $hasSourceIdentity = isset($payload['source_identity']);
+        if (! $hasFrom && ! $hasSourceIdentity) {
+            throw new InvalidArgumentException('from ou source_identity obrigatório em MESSAGE_ACTION_RECEIVED.');
+        }
+        if ($hasSourceIdentity) {
+            self::assertSourceIdentity($payload['source_identity'], 'MESSAGE_ACTION_RECEIVED.source_identity');
         }
         $action = strtoupper((string) $payload['action']);
         if (! in_array($action, ['EDIT', 'REVOKE', 'REACTION', 'POLL_VOTE', 'INTERACTIVE_RESPONSE'], true)) {

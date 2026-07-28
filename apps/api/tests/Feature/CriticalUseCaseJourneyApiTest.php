@@ -112,7 +112,11 @@ class CriticalUseCaseJourneyApiTest extends TestCase
         ]);
         Sanctum::actingAs($viewer);
 
-        $ids = $this->getJson('/api/v1/work/processes?tenant_id='.$otherTenant->id)
+        $this->getJson('/api/v1/work/processes?tenant_id='.$otherTenant->id)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('tenant_id');
+
+        $ids = $this->getJson('/api/v1/work/processes')
             ->assertOk()
             ->json('data.*.id');
         $this->assertContains($own->id, $ids);

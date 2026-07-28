@@ -180,6 +180,28 @@ class MonitoringModuleMembershipTest extends TestCase
             ->assertOk();
     }
 
+    public function test_membership_read_validates_filters_and_rejects_tenant_scope(): void
+    {
+        [$tenant] = $this->seedMixed();
+        $viewer = User::factory()
+            ->forTenant($tenant, TenantRole::TenantUser, 'viewer')
+            ->create();
+        Sanctum::actingAs($viewer);
+        app(CurrentTenant::class)->clear();
+
+        $this->getJson('/api/v1/fiscal/monitoring/membership?module=invalid')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['module']);
+        $this->getJson('/api/v1/fiscal/monitoring/membership?module=dashboard')
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Módulo inválido.');
+        $this->getJson(
+            '/api/v1/fiscal/monitoring/membership?module=simples_mei'
+            .'&tenant_id='.$tenant->id,
+        )->assertUnprocessable()
+            ->assertJsonValidationErrors(['tenant_id']);
+    }
+
     /**
      * @return array{0: Tenant, 1: Client, 2: Client}
      */

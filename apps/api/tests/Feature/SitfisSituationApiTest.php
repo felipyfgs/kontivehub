@@ -107,6 +107,20 @@ class SitfisSituationApiTest extends TestCase
             ->assertJsonPath('data.links.evidence_download', null);
     }
 
+    public function test_show_validates_client_and_rejects_client_supplied_tenant_scope(): void
+    {
+        [$tenant, $user] = $this->seedActor();
+        Sanctum::actingAs($user);
+        app(CurrentTenant::class)->clear();
+
+        $this->getJson('/api/v1/fiscal/sitfis?client_id=invalid')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['client_id']);
+        $this->getJson('/api/v1/fiscal/sitfis?client_id=1&tenant_id='.$tenant->id)
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'CLIENT_TENANT_ID_REJECTED');
+    }
+
     public function test_refresh_within_ttl_healthy_snapshot_does_not_enqueue(): void
     {
         [$tenant, $user, $client] = $this->seedActor();

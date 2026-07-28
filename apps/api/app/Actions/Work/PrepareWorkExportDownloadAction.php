@@ -1,0 +1,28 @@
+<?php
+
+namespace App\Actions\Work;
+
+use App\DTO\Work\WorkExportDownloadData;
+use App\Enums\Work\WorkExportStatus;
+use App\Models\WorkExport;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+
+final class PrepareWorkExportDownloadAction
+{
+    public function execute(WorkExport $export): WorkExportDownloadData
+    {
+        $storagePath = $export->storage_path;
+        if ($export->status !== WorkExportStatus::Ready
+            || ! is_string($storagePath)
+            || $storagePath === ''
+            || ! Storage::disk('local')->exists($storagePath)) {
+            throw new NotFoundHttpException;
+        }
+
+        return new WorkExportDownloadData(
+            storagePath: $storagePath,
+            filename: 'work-export-'.$export->id.'.csv',
+        );
+    }
+}

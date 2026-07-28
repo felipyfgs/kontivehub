@@ -182,6 +182,7 @@ Route::prefix('v1')->group(function (): void {
                     ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard),
                     EnsureRecentPasswordConfirmation::class,
                 ]);
+            // Detalhe admin (lifecycle/profile/first_admin) — deve preceder o show comercial genérico.
             Route::get('/tenants/{tenant}', [PlatformTenantController::class, 'show']);
             Route::post('/tenants/{tenant}/activation/regenerate', [PlatformTenantController::class, 'regenerateActivation'])
                 ->middleware([
@@ -203,7 +204,6 @@ Route::prefix('v1')->group(function (): void {
                 ]);
 
             Route::get('/tenants', [TenantAdminController::class, 'index']);
-            Route::get('/tenants/{tenant}', [TenantAdminController::class, 'show']);
             Route::patch('/tenants/{tenant}/subscription', [TenantAdminController::class, 'updateSubscription']);
 
             Route::get('/fiscal/modules', [FiscalModuleControlController::class, 'globalIndex']);
@@ -247,9 +247,15 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/serpro/metrics', [SerproPlatformOpsController::class, 'metrics']);
             Route::get('/serpro/budgets', [SerproPlatformOpsController::class, 'listBudgets']);
             Route::get('/serpro/rollouts', [SerproPlatformOpsController::class, 'listRollouts']);
-            Route::post('/serpro/rollouts', [SerproPlatformOpsController::class, 'requestRollout']);
-            Route::post('/serpro/rollouts/{serproRolloutApproval}/approve', [SerproPlatformOpsController::class, 'approveRollout']);
-            Route::post('/serpro/rollouts/{serproRolloutApproval}/reject', [SerproPlatformOpsController::class, 'rejectRollout']);
+            Route::post('/serpro/rollouts', [SerproPlatformOpsController::class, 'requestRollout'])
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard));
+            Route::post('/serpro/rollouts/{serproRolloutApproval}/approve', [SerproPlatformOpsController::class, 'approveRollout'])
+                ->middleware([
+                    ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive),
+                    EnsureRecentPasswordConfirmation::class,
+                ]);
+            Route::post('/serpro/rollouts/{serproRolloutApproval}/reject', [SerproPlatformOpsController::class, 'rejectRollout'])
+                ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard));
 
             // Canário DTE controlado (Proprietário) — sem payload fiscal na resposta
             Route::get('/serpro/dte-canary', [SerproDteCanaryController::class, 'summary']);
@@ -424,7 +430,8 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/tenant/serpro-authorization', [TenantSerproAuthorizationController::class, 'show']);
             Route::post('/tenant/serpro-authorization/author', [TenantSerproAuthorizationController::class, 'configureAuthor']);
             Route::post('/tenant/serpro-authorization/termo/draft', [TenantSerproAuthorizationController::class, 'generateTermoDraft']);
-            Route::get('/tenant/serpro-authorization/termo/draft', [TenantSerproAuthorizationController::class, 'downloadTermoDraft']);
+            Route::get('/tenant/serpro-authorization/termo/draft', [TenantSerproAuthorizationController::class, 'downloadTermoDraft'])
+                ->middleware(EnsureRecentPasswordConfirmation::class);
             Route::post('/tenant/serpro-authorization/termo', [TenantSerproAuthorizationController::class, 'uploadTermo']);
             Route::post('/tenant/serpro-authorization/termo/sign-with-certificate', [TenantSerproAuthorizationController::class, 'signTermoManagedCertificate']);
             Route::post('/tenant/serpro-authorization/refresh-token', [TenantSerproAuthorizationController::class, 'refreshToken']);
