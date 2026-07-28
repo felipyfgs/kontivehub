@@ -42,8 +42,7 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "Tests\\": "tests/",
-            "Tools\\CodeQuality\\": "tools/code-quality/src/"
+            "Tests\\": "tests/"
         }
     },
     "scripts": {

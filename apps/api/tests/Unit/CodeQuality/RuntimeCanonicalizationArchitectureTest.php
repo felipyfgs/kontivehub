@@ -67,6 +67,30 @@ final class RuntimeCanonicalizationArchitectureTest extends TestCase
     }
 
     #[Test]
+    public function queue_retry_windows_exceed_the_longest_job_timeout(): void
+    {
+        $apiRoot = dirname(__DIR__, 3);
+        $job = (string) file_get_contents($apiRoot.'/app/Jobs/ProcessDocumentImportBatchJob.php');
+        $queue = (string) file_get_contents($apiRoot.'/config/queue.php');
+
+        self::assertMatchesRegularExpression('/implements ShouldBeUnique, ShouldQueue/', $job);
+        self::assertMatchesRegularExpression('/->lazyById\s*\(/', $job);
+        self::assertMatchesRegularExpression('/public int \$timeout = 900;/', $job);
+        foreach (['DB_QUEUE_RETRY_AFTER', 'BEANSTALKD_QUEUE_RETRY_AFTER'] as $environmentKey) {
+            self::assertMatchesRegularExpression(
+                "/env\\('{$environmentKey}', 960\\)/",
+                $queue,
+                "{$environmentKey} deve permanecer acima do timeout máximo de 900 segundos.",
+            );
+        }
+        self::assertMatchesRegularExpression(
+            "/REDIS_QUEUE_RETRY_AFTER', env\\('ADN_LOCK_TTL_SECONDS', 960\\)/",
+            $queue,
+            'REDIS_QUEUE_RETRY_AFTER deve permanecer acima do timeout máximo de 900 segundos.',
+        );
+    }
+
+    #[Test]
     public function console_commands_avoid_unbounded_get_all_materialization(): void
     {
         $root = dirname(__DIR__, 3).'/app/Console/Commands';
@@ -139,7 +163,7 @@ final class RuntimeCanonicalizationArchitectureTest extends TestCase
     {
         $modelsRoot = dirname(__DIR__, 3).'/app/Models';
         $factoriesRoot = dirname(__DIR__, 3).'/database/factories';
-        $classification = dirname(__DIR__, 3).'/resources/code-quality/model-classification.json';
+        $classification = dirname(__DIR__, 3).'/tests/Fixtures/model-classification.json';
 
         self::assertFileExists($classification, 'Classificação canônica de models ausente.');
         $map = json_decode((string) file_get_contents($classification), true);

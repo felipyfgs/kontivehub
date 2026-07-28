@@ -51,7 +51,6 @@ x-php: &php
     WAZYNC_HMAC_PREVIOUS_SECRET: ${WAZYNC_HMAC_PREVIOUS_SECRET:-}
     SANCTUM_STATEFUL_DOMAINS: ${SANCTUM_STATEFUL_DOMAINS:-localhost,localhost:3000,127.0.0.1,127.0.0.1:3000}
     VAULT_DISK_ROOT: /var/vault
-    CODE_QUALITY_ARTIFACT_ROOT: /var/www/html/resources/code-quality/artifacts
     DEVELOPMENT_DATA_PATH: /var/www/html/.local/dados
   volumes:
     - ./apps/api:/var/www/html
@@ -152,7 +151,6 @@ services:
     working_dir: /app
     volumes:
       - ./apps/web:/app
-      - ./apps/api/resources/code-quality:/workspace/api-code-quality:ro
       - ./apps/api/resources/contracts:/workspace/api-contracts:ro
       - ./apps/api/app/Services/FiscalMonitoring/Surfaces:/workspace/api-monitoring-surfaces:ro
       - ./docker-compose.prod.yml:/workspace/docker-compose.prod.yml:ro
@@ -178,8 +176,6 @@ services:
       NUXT_PUBLIC_REVERB_HOST: ${PUBLIC_HOST:-localhost}
       NUXT_PUBLIC_REVERB_PORT: ${APP_PORT:-8080}
       NUXT_PUBLIC_REVERB_SCHEME: http
-      CODE_QUALITY_ARTIFACT_ROOT: /workspace/api-code-quality/artifacts
-      CODE_QUALITY_SCHEMA_PATH: /workspace/api-code-quality/schema.json
     init: true
     profiles: ["dev"]
     depends_on:
