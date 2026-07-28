@@ -241,9 +241,8 @@ onMounted(load)
         title="Sem dados de consumo"
       />
 
-      <UPageCard
+      <ShellSectionCard
         v-if="usage?.by_service?.length"
-        variant="subtle"
         title="Por serviço"
       >
         <ShellDataTable
@@ -261,10 +260,9 @@ onMounted(load)
           @update:items-per-page="servicePage.setPerPage"
         />
       <!-- Intencionalmente sem coluna de preço global / fatura consolidada -->
-      </UPageCard>
+      </ShellSectionCard>
 
-      <UPageCard
-        variant="subtle"
+      <ShellSectionCard
         title="Lançamentos do período"
         description="Operações deste escritório."
       >
@@ -305,7 +303,7 @@ onMounted(load)
             <span class="tabular-nums">{{ entriesTotal }}</span> lançamento(s)
           </template>
         </ShellDataTable>
-      </UPageCard>
+      </ShellSectionCard>
     </div>
   </div>
 </template>

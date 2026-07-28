@@ -70,9 +70,8 @@ onMounted(load)
       Carregando…
     </div>
 
-    <UPageCard
+    <ShellSectionCard
       v-else-if="subscription"
-      variant="subtle"
       :title="subscription.plan"
       :description="`Status: ${subscription.status}`"
     >
@@ -134,6 +133,6 @@ onMounted(load)
           </dd>
         </div>
       </dl>
-    </UPageCard>
+    </ShellSectionCard>
   </div>
 </template>

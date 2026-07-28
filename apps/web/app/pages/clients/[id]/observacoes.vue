@@ -76,7 +76,7 @@ async function save() {
       />
     </ShellSectionHeader>
 
-    <UPageCard variant="subtle">
+    <ShellSectionCard>
       <UFormField
         label="Observações"
         name="notes"
@@ -91,6 +91,6 @@ async function save() {
           data-testid="client-observacoes-input"
         />
       </UFormField>
-    </UPageCard>
+    </ShellSectionCard>
   </div>
 </template>

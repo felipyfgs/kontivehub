@@ -120,6 +120,7 @@ const _useCommunicationWorkspace = () => {
   const assigneeFilter = ref<number | null>(null)
   const departmentFilter = ref<number | null>(null)
   const unassignedOnly = ref(false)
+  const unreadOnly = ref(false)
   const conversationsHasMore = computed(() =>
     conversationsPage.value > 0 && conversationsPage.value < conversationsLastPage.value)
   const conversationsInitialLoading = computed(() =>
@@ -198,8 +199,76 @@ const _useCommunicationWorkspace = () => {
       assignee_membership_id: assigneeFilter.value || undefined,
       work_department_id: departmentFilter.value || undefined,
       unassigned: unassignedOnly.value || undefined,
+      unread: unreadOnly.value || undefined,
       page,
       per_page: COMMUNICATION_CONVERSATION_PAGE_SIZE
+    }
+  }
+
+  function resolveThroughMessageId(conversationId: number, preferred?: number | null): number | null {
+    if (preferred != null && preferred > 0) return preferred
+    const detail = conversationDetails.value[conversationId]
+      ?? conversations.value.find(item => item.id === conversationId)
+    if (!detail) return null
+    const messages = detail.messages
+    if (Array.isArray(messages) && messages.length > 0) {
+      return Math.max(...messages.map(message => message.id))
+    }
+    return detail.last_message?.id ?? null
+  }
+
+  async function markConversationRead(
+    conversationId: number,
+    upToMessageId?: number | null
+  ): Promise<void> {
+    const throughMessageId = resolveThroughMessageId(conversationId, upToMessageId)
+    if (throughMessageId == null) return
+    try {
+      const response = await api.communication.conversations.markRead(conversationId, {
+        through_message_id: throughMessageId
+      })
+      patchConversationReadState(response.data)
+    } catch {
+      // Fail closed: keep last known unread without inventing local counts.
+    }
+  }
+
+  async function markConversationUnread(conversationId: number): Promise<void> {
+    const detail = conversationDetails.value[conversationId]
+      ?? conversations.value.find(item => item.id === conversationId)
+    const expectedVersion = detail?.read_state?.version ?? 0
+    try {
+      const response = await api.communication.conversations.markUnread(conversationId, {
+        expected_version: expectedVersion
+      })
+      patchConversationReadState(response.data)
+    } catch {
+      // Fail closed: keep last known unread without inventing local counts.
+    }
+  }
+
+  function patchConversationReadState(conversation: CommunicationConversation): void {
+    const apply = (item: CommunicationConversation): CommunicationConversation => ({
+      ...item,
+      unread_count: conversation.unread_count ?? item.unread_count ?? 0,
+      first_unread_message_id: conversation.first_unread_message_id ?? null,
+      last_read_message_id: conversation.last_read_message_id
+        ?? conversation.read_state?.last_read_through_message_id
+        ?? item.last_read_message_id
+        ?? null,
+      last_read_at: conversation.last_read_at ?? item.last_read_at ?? null,
+      read_state: conversation.read_state ?? item.read_state ?? null,
+      lock_version: conversation.lock_version ?? item.lock_version
+    })
+    conversations.value = conversations.value.map(item =>
+      item.id === conversation.id ? apply(item) : item
+    )
+    const detail = conversationDetails.value[conversation.id]
+    if (detail) {
+      conversationDetails.value = {
+        ...conversationDetails.value,
+        [conversation.id]: apply(detail)
+      }
     }
   }
 
@@ -393,6 +462,7 @@ const _useCommunicationWorkspace = () => {
       openingConversationId.value = null
       selectedConversationId.value = id
       void refreshConversationDetail(id, { reportError: false })
+      void markConversationRead(id)
       return true
     }
     openingConversationId.value = id
@@ -401,6 +471,7 @@ const _useCommunicationWorkspace = () => {
     openingConversationId.value = null
     if (!ok) return false
     selectedConversationId.value = id
+    void markConversationRead(id)
     return true
   }
 
@@ -983,7 +1054,7 @@ const _useCommunicationWorkspace = () => {
     }, 5_000)
   }
 
-  watch([search, inboxFilter, statusFilter, assigneeFilter, departmentFilter, unassignedOnly], reloadForFilters)
+  watch([search, inboxFilter, statusFilter, assigneeFilter, departmentFilter, unassignedOnly, unreadOnly], reloadForFilters)
   watch(realtime.state, (next, previous) => {
     // Transporte voltou: re-assina canais (subscriptions Map podia estar stale).
     if (previous === 'unavailable' && (next === 'connecting' || next === 'connected')) {
@@ -1124,6 +1195,9 @@ const _useCommunicationWorkspace = () => {
     synchronize,
     toggleLabel,
     unassignedOnly,
+    unreadOnly,
+    markConversationRead,
+    markConversationUnread,
     updateConversation,
     updateInbox,
     updateTenantEnabled,

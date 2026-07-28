@@ -496,24 +496,12 @@ onMounted(() => {
         </div>
       </UPageCard>
 
-      <UAlert
+      <ShellLoadError
         v-if="loadError"
-        color="error"
-        icon="i-lucide-circle-x"
         :title="loadError || 'Não foi possível carregar a configuração'"
-        data-testid="serpro-config-error"
-      >
-        <template #actions>
-          <UButton
-            label="Tentar novamente"
-            color="error"
-            variant="soft"
-            size="sm"
-            :loading="loading"
-            @click="load"
-          />
-        </template>
-      </UAlert>
+        test-id="serpro-config-error"
+        @retry="load"
+      />
 
       <UAlert
         v-if="onboardingLoadError"

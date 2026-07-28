@@ -44,9 +44,20 @@ export const COMMUNICATION_MESSAGE_STATUS: Record<CommunicationMessageStatus, Co
   SENT: { label: 'Enviada', color: 'info', icon: 'i-lucide-check-check' },
   DELIVERED: { label: 'Entregue', color: 'success', icon: 'i-lucide-check-check' },
   READ: { label: 'Lida', color: 'primary', icon: 'i-lucide-check-check' },
+  PLAYED: { label: 'Reproduzida', color: 'primary', icon: 'i-lucide-check-check' },
   FAILED: { label: 'Falhou', color: 'error', icon: 'i-lucide-circle-x' },
   UNKNOWN: { label: 'Resultado incerto', color: 'warning', icon: 'i-lucide-circle-help' },
   CANCELED: { label: 'Cancelada', color: 'neutral', icon: 'i-lucide-ban' }
+}
+
+/** Resolve status de receipt com fallback seguro para valores desconhecidos da API. */
+export function communicationMessageStatusMeta(
+  status?: string | null
+): CommunicationStatusMeta {
+  if (status && status in COMMUNICATION_MESSAGE_STATUS) {
+    return COMMUNICATION_MESSAGE_STATUS[status as CommunicationMessageStatus]
+  }
+  return COMMUNICATION_MESSAGE_STATUS.UNKNOWN
 }
 
 export const COMMUNICATION_REALTIME_META: Record<CommunicationRealtimeState, CommunicationStatusMeta> = {
@@ -75,7 +86,8 @@ const successfulMessageRank: Partial<Record<CommunicationMessageStatus, number>>
   ACCEPTED: 20,
   SENT: 30,
   DELIVERED: 40,
-  READ: 50
+  READ: 50,
+  PLAYED: 60
 }
 
 /** Espelha a projeção monotônica do backend para merges locais/realtime. */
@@ -83,7 +95,9 @@ export function mergeCommunicationMessageStatus(
   current: CommunicationMessageStatus,
   incoming: CommunicationMessageStatus
 ): CommunicationMessageStatus {
-  if (current === incoming || current === 'READ' || current === 'CANCELED') return current
+  if (current === incoming || current === 'READ' || current === 'PLAYED' || current === 'CANCELED') {
+    return current === 'READ' && incoming === 'PLAYED' ? incoming : current
+  }
   if (incoming === 'CANCELED') {
     return current === 'QUEUED' || current === 'ACCEPTED' ? incoming : current
   }
@@ -271,8 +285,31 @@ export function communicationPollVoteCount(message: CommunicationMessage, option
     total + (vote.option_names?.includes(option) ? 1 : 0), 0)
 }
 
+/** Preferência explícita pelo E.164 completo; máscara só como fallback. */
+export function communicationPeerAddress(conversation: CommunicationConversation | null): string | null {
+  if (!conversation?.contact) return null
+  const full = conversation.contact.address?.trim()
+  if (full) return full
+  const masked = conversation.contact.address_masked?.trim()
+  return masked || null
+}
+
+function looksMaskedAddress(value: string, conversation: CommunicationConversation): boolean {
+  const full = conversation.contact?.address?.trim()
+  const masked = conversation.contact?.address_masked?.trim()
+  if (full && value === masked) return true
+  return value.includes('***') || value.includes('*****')
+}
+
 export function communicationDisplayName(conversation: CommunicationConversation | null): string {
   if (!conversation) return 'Conversa'
+  const address = communicationPeerAddress(conversation)
+  const resolved = conversation.display_title?.trim()
+  if (resolved) {
+    if (address && looksMaskedAddress(resolved, conversation)) return address
+    return resolved
+  }
+
   const clientNames = [...new Set(
     (conversation.clients ?? []).map(client => client.name.trim()).filter(Boolean)
   )]
@@ -280,19 +317,55 @@ export function communicationDisplayName(conversation: CommunicationConversation
   if (clientNames.length > 1) return `${clientNames[0]} +${clientNames.length - 1}`
 
   return conversation.contact?.name?.trim()
-    || conversation.contact?.address || conversation.contact?.address_masked
+    || address
     || `Contato #${conversation.contact?.id ?? conversation.id}`
+}
+
+export function communicationSecondaryTitle(conversation: CommunicationConversation | null): string | null {
+  if (!conversation) return null
+  const secondary = conversation.secondary_title?.trim()
+  if (secondary) {
+    const address = communicationPeerAddress(conversation)
+    if (address && looksMaskedAddress(secondary, conversation)) return address
+    return secondary
+  }
+  return communicationContactLabel(conversation)
+}
+
+/** Linha de telefone/endereço da lista: sempre preferir número completo. */
+export function communicationListPhoneLine(conversation: CommunicationConversation | null): string {
+  if (!conversation) return '—'
+  const address = communicationPeerAddress(conversation)
+  if (address) return address
+  const secondary = conversation.secondary_title?.trim()
+  if (secondary && !looksMaskedAddress(secondary, conversation)) return secondary
+  return '—'
+}
+
+export function communicationPreviewText(conversation: CommunicationConversation | null): string | null {
+  if (!conversation) return null
+  const preview = conversation.preview
+  if (preview?.text?.trim()) return preview.text.trim()
+  const last = conversation.last_message
+  if (!last || last.revoked_at) return last?.revoked_at ? 'Mensagem apagada' : null
+  if (last.body?.trim()) return last.body.trim().slice(0, 160)
+  return null
 }
 
 export function communicationContactLabel(conversation: CommunicationConversation | null): string | null {
   if (!conversation) return null
+  const address = communicationPeerAddress(conversation)
+  if (conversation.secondary_title?.trim()) {
+    const secondary = conversation.secondary_title.trim()
+    if (address && looksMaskedAddress(secondary, conversation)) return address
+    return secondary
+  }
   const contact = conversation.contact?.name?.trim()
-  const address = (conversation.contact?.address || conversation.contact?.address_masked)?.trim()
   const hasClient = Boolean(conversation.clients?.some(client => client.name.trim()))
   if (hasClient && contact && address) return `${contact} · ${address}`
   if (hasClient) return contact || address || null
   if (contact && address && contact !== address) return address
-  return null
+  return address
 }
 
 export function formatCommunicationDate(value?: string | null): string {

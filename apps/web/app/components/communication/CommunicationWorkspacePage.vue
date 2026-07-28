@@ -284,9 +284,9 @@ onBeforeUnmount(() => workspace.dispose())
     <UDashboardPanel
       id="communication-list"
       data-testid="communication-list-panel"
-      :default-size="27"
-      :min-size="22"
-      :max-size="36"
+      :default-size="24"
+      :min-size="20"
+      :max-size="32"
       resizable
     >
       <ShellPageNavbar title="Atendimento">
@@ -341,10 +341,17 @@ onBeforeUnmount(() => workspace.dispose())
               class="w-full"
             />
           </div>
-          <UCheckbox
-            v-model="workspace.unassignedOnly.value"
-            label="Somente sem responsável"
-          />
+          <div class="flex flex-wrap items-center gap-3">
+            <UCheckbox
+              v-model="workspace.unassignedOnly.value"
+              label="Somente sem responsável"
+            />
+            <UCheckbox
+              v-model="workspace.unreadOnly.value"
+              label="Não lidas"
+              data-testid="communication-filter-unread"
+            />
+          </div>
         </div>
       </UDashboardToolbar>
 
@@ -383,7 +390,6 @@ onBeforeUnmount(() => workspace.dispose())
         :selected-id="workspace.selectedConversationId.value"
         :opening-id="workspace.openingConversationId.value"
         :loading="workspace.conversationsInitialLoading.value"
-        :refreshing="workspace.conversationsRefreshing.value"
         :empty="workspace.conversationsEmpty.value"
         :has-more="workspace.conversationsHasMore.value"
         :loading-more="workspace.conversationsLoadingMore.value"

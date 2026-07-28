@@ -45,6 +45,26 @@ describe('shell-list-migration-gate', () => {
     expect(page).not.toContain('WorkProcessAccordionList')
   })
 
+  it('fechamento usa ShellListFilterToolbar e ShellLoadError de carga', () => {
+    const page = readFileSync(resolve(process.cwd(), 'app/pages/closing.vue'), 'utf8')
+
+    expect(page).toContain('ShellListFilterToolbar')
+    expect(page).toContain('ShellLoadError')
+    expect(page).toContain('closing-filter-toolbar')
+    expect(page).toContain('closing-competence')
+    expect(page).toContain('surface="closing.list"')
+    expect(page).not.toMatch(/from '~\/components\/data-table-filter\//)
+  })
+
+  it('sincronizações usam ShellLoadError e ShellSectionCard nos cards de saúde', () => {
+    const page = readFileSync(resolve(process.cwd(), 'app/pages/syncs.vue'), 'utf8')
+
+    expect(page).toContain('ShellLoadError')
+    expect(page).toContain('ShellSectionCard')
+    expect(page).toContain('syncs-load-error')
+    expect(page).toContain('syncs-cte-error')
+  })
+
   it('ShellPagePanel encaminha #toolbar para o header do painel', () => {
     const source = readFileSync(resolve(process.cwd(), 'app/components/shell/PagePanel.vue'), 'utf8')
     expect(source).toContain('$slots.toolbar')

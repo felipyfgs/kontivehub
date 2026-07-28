@@ -230,9 +230,8 @@ onMounted(refreshAll)
         class="grid gap-4 lg:grid-cols-2"
         data-testid="cte-channel-health"
       >
-        <UPageCard
+        <ShellSectionCard
           title="CT-e (clientes)"
-          variant="subtle"
           icon="i-lucide-building-2"
         >
           <div
@@ -316,12 +315,11 @@ onMounted(refreshAll)
               </li>
             </ul>
           </template>
-        </UPageCard>
+        </ShellSectionCard>
 
-        <UPageCard
+        <ShellSectionCard
           title="CT-e autXML do escritório"
           description="CT-e com CNPJ do escritório em autXML."
-          variant="subtle"
           icon="i-lucide-truck"
         >
           <div
@@ -385,24 +383,23 @@ onMounted(refreshAll)
               />
             </div>
           </template>
-        </UPageCard>
+        </ShellSectionCard>
       </div>
 
-      <UAlert
+      <ShellLoadError
         v-if="cteError"
         color="warning"
-        variant="subtle"
-        icon="i-lucide-wifi-off"
         :title="cteError"
-        :actions="[{ label: 'Tentar novamente', color: 'neutral', variant: 'subtle', onClick: loadCteHealth }]"
+        test-id="syncs-cte-error"
+        @retry="loadCteHealth"
       />
 
-      <UAlert
+      <ShellLoadError
         v-if="loadError"
         :color="items.length ? 'warning' : 'error'"
-        icon="i-lucide-wifi-off"
         :title="loadError"
-        :actions="[{ label: 'Tentar novamente', color: 'neutral', variant: 'subtle', onClick: () => load(true) }]"
+        test-id="syncs-load-error"
+        @retry="() => load(true)"
       />
 
       <ShellDataTable

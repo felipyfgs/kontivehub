@@ -10,7 +10,7 @@ import type {
 } from '~/types/communication'
 import {
   COMMUNICATION_CONVERSATION_STATUS,
-  COMMUNICATION_MESSAGE_STATUS,
+  communicationMessageStatusMeta,
   communicationContactLabel,
   communicationDisplayName,
   communicationMessageSummary,
@@ -407,13 +407,28 @@ onBeforeUnmount(() => {
           </div>
 
           <div v-else class="space-y-3.5 sm:space-y-4">
-            <article
+            <template
               v-for="message in conversation.messages"
               :key="message.id"
-              class="group/message flex scroll-m-8"
-              :class="message.direction === 'OUTBOUND' ? 'justify-end' : 'justify-start'"
-              :data-message-id="message.id"
             >
+              <div
+                v-if="conversation.first_unread_message_id === message.id"
+                data-testid="communication-unread-divider"
+                class="flex items-center gap-3 py-1"
+                role="separator"
+                aria-label="Mensagens não lidas"
+              >
+                <div class="h-px flex-1 bg-primary/40" />
+                <span class="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-primary">
+                  Não lidas
+                </span>
+                <div class="h-px flex-1 bg-primary/40" />
+              </div>
+              <article
+                class="group/message flex scroll-m-8"
+                :class="message.direction === 'OUTBOUND' ? 'justify-end' : 'justify-start'"
+                :data-message-id="message.id"
+              >
               <div class="min-w-0 w-fit max-w-[92%] sm:max-w-[78%] lg:max-w-[72%]">
                 <div
                   data-testid="communication-message-bubble"
@@ -549,13 +564,14 @@ onBeforeUnmount(() => {
                       {{ formatCommunicationDate(message.occurred_at) }}
                     </time>
                     <template v-if="message.direction === 'OUTBOUND'">
-                      <UIcon :name="COMMUNICATION_MESSAGE_STATUS[message.status].icon" class="size-3.5" />
-                      <span class="sr-only">{{ COMMUNICATION_MESSAGE_STATUS[message.status].label }}</span>
+                      <UIcon :name="communicationMessageStatusMeta(message.status).icon" class="size-3.5" />
+                      <span class="sr-only">{{ communicationMessageStatusMeta(message.status).label }}</span>
                     </template>
                   </div>
                 </div>
               </div>
             </article>
+            </template>
           </div>
         </div>
       </div>

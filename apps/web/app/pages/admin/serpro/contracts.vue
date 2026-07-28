@@ -143,24 +143,12 @@ onMounted(load)
       </div>
     </div>
 
-    <UAlert
+    <ShellLoadError
       v-if="loadError"
-      color="error"
-      icon="i-lucide-circle-x"
       :title="loadError || 'Não foi possível carregar os contratos'"
-      class="mb-4"
-    >
-      <template #actions>
-        <UButton
-          label="Tentar novamente"
-          color="error"
-          variant="soft"
-          size="sm"
-          :loading="loading"
-          @click="load"
-        />
-      </template>
-    </UAlert>
+      test-id="admin-serpro-contracts-error"
+      @retry="load"
+    />
 
     <UPageCard
       variant="subtle"

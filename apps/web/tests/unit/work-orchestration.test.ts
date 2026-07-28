@@ -288,7 +288,7 @@ describe('integração entre modelos, tarefas e monitoramento', () => {
     // Chrome full-width único acima das três visões.
     expect(workspace).toContain('flex min-h-0 min-w-0 w-full flex-1 flex-col')
     expect(workspace.match(/<WorkQueueChrome/g)).toHaveLength(1)
-    expect(chrome.match(/data-testid="page-navbar"/g)).toHaveLength(1)
+    expect(chrome.match(/test-id="page-navbar"/g)).toHaveLength(1)
     expect(chrome.match(/data-testid="work-queue-toolbar"/g)).toHaveLength(1)
     expect(workspace).toContain('data-testid="work-queue-panel"')
 

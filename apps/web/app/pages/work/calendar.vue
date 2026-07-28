@@ -324,12 +324,16 @@ watch(sessionEpoch, () => {
         Calendário operacional
       </h1>
 
-      <div v-if="loadError && !usingStaleInterval" class="p-4">
-        <UAlert color="error" :title="loadError">
-          <template #actions>
-            <UButton size="xs" label="Tentar de novo" @click="loadInterval" />
-          </template>
-        </UAlert>
+      <div
+        v-if="loadError && !usingStaleInterval"
+        class="p-4"
+      >
+        <ShellLoadError
+          :title="loadError"
+          retry-label="Tentar de novo"
+          test-id="work-calendar-interval-error"
+          @retry="loadInterval"
+        />
       </div>
 
       <div v-else-if="loading && !days.length && !usingStaleInterval" class="p-4 space-y-3">

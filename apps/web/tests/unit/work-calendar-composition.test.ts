@@ -60,7 +60,10 @@ describe('work calendar composition', () => {
     expect(calendar).toContain('work-calendar-day-error')
     expect(calendar).toContain('work-calendar-rail-day-error')
     expect(calendar).toContain('work-calendar-mobile-day-error')
-    expect(calendar).toContain('@click="loadInterval"')
+    // Falha inicial de intervalo: ShellLoadError; stale e dayError permanecem UAlert local.
+    expect(calendar).toContain('ShellLoadError')
+    expect(calendar).toContain('work-calendar-interval-error')
+    expect(calendar).toContain('@retry="loadInterval"')
     expect(calendar).toContain('@click="loadDay"')
     expect(calendar).toContain('workCalendarLoadPlan(previous, next)')
   })

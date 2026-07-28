@@ -144,7 +144,7 @@ watch(removeOpen, (v) => {
       />
     </div>
 
-    <UPageCard variant="subtle">
+    <ShellSectionCard>
       <div
         v-if="loading && !credential"
         class="space-y-2"
@@ -233,7 +233,7 @@ watch(removeOpen, (v) => {
           @click="() => { open = true }"
         />
       </UEmpty>
-    </UPageCard>
+    </ShellSectionCard>
 
     <ShellFormModal
       v-if="!readonly"

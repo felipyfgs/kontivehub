@@ -19,8 +19,13 @@
     "test:fidelity": "node scripts/template-fidelity-gate.mjs",
     "cleanup:browsers": "node scripts/cleanup-dev-browsers.mjs",
     "test:e2e": "node tests/e2e/run-local.mjs",
-    "test:e2e:direct": "playwright test"
+    "test:e2e:direct": "playwright test",
+    "pw:cli": "playwright-cli --config .playwright/cli.config.json",
+    "pw:open": "playwright-cli --config .playwright/cli.config.json open http://127.0.0.1:3000 --headed",
+    "pw:snapshot": "playwright-cli --config .playwright/cli.config.json snapshot",
+    "pw:screenshot": "playwright-cli --config .playwright/cli.config.json screenshot"
   },
+
   "dependencies": {
     "@iconify-json/lucide": "^1.2.116",
     "@internationalized/date": "^3.12.2",
@@ -47,6 +52,7 @@
   "devDependencies": {
     "@nuxt/eslint": "^1.16.0",
     "@nuxt/test-utils": "^4.0.3",
+    "@playwright/cli": "^0.1.17",
     "@playwright/test": "1.61.1",
     "@types/node": "^26.1.1",
     "@types/qrcode": "^1.5.6",

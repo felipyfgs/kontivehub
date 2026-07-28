@@ -86,10 +86,7 @@ onMounted(() => {
       />
     </ShellSectionHeader>
 
-    <UPageCard
-      v-if="departments.length || loadingDepartments"
-      variant="subtle"
-    >
+    <ShellSectionCard v-if="departments.length || loadingDepartments">
       <UFormField
         label="Departamento vinculado"
         description="Usado para organização da carteira e filas de trabalho."
@@ -110,7 +107,7 @@ onMounted(() => {
       >
         Atual: {{ item.work_department.name }}
       </p>
-    </UPageCard>
+    </ShellSectionCard>
 
     <UEmpty
       v-else

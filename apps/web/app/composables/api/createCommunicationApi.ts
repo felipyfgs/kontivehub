@@ -44,6 +44,7 @@ export interface CommunicationConversationFilters {
   assignee_membership_id?: number
   work_department_id?: number
   unassigned?: boolean
+  unread?: boolean
   page?: number
   per_page?: number
 }
@@ -162,6 +163,37 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
             { query: params, signal: options?.signal }
           ),
         get: (id: number) => client<{ data: CommunicationConversation }>(`${base}/conversations/${id}`),
+        messages: (id: number, params?: {
+          limit?: number
+          before?: string
+          after?: string
+          anchor?: 'first_unread'
+        }) =>
+          client<{ data: CommunicationMessage[], meta: {
+            next_before?: string | null
+            next_after?: string | null
+            first_unread_message_id?: number | null
+            unread_count?: number
+            limit?: number
+          } }>(`${base}/conversations/${id}/messages`, { query: params }),
+        updateReadState: (id: number, body:
+          | { state: 'READ', through_message_id: number }
+          | { state: 'UNREAD', expected_version: number }
+        ) =>
+          client<{ data: CommunicationConversation }>(`${base}/conversations/${id}/read-state`, {
+            method: 'PUT',
+            body
+          }),
+        markRead: (id: number, body: { through_message_id: number }) =>
+          client<{ data: CommunicationConversation }>(`${base}/conversations/${id}/read-state`, {
+            method: 'PUT',
+            body: { state: 'READ', through_message_id: body.through_message_id }
+          }),
+        markUnread: (id: number, body: { expected_version: number }) =>
+          client<{ data: CommunicationConversation }>(`${base}/conversations/${id}/read-state`, {
+            method: 'PUT',
+            body: { state: 'UNREAD', expected_version: body.expected_version }
+          }),
         update: (id: number, body: {
           lock_version: number
           status?: CommunicationConversationStatus

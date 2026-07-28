@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import type { CommunicationConversation, CommunicationInbox } from '~/types/communication'
-import type { CommunicationConversationImageEvidence } from '~/utils/communication'
 import {
   COMMUNICATION_CONVERSATION_STATUS,
-  communicationContactLabel,
   communicationConversationImageEvidence,
   communicationDisplayName,
+  communicationListPhoneLine,
+  communicationPreviewText,
   formatCommunicationDate
 } from '~/utils/communication'
 
@@ -15,7 +15,6 @@ const props = defineProps<{
   selectedId?: number | null
   openingId?: number | null
   loading?: boolean
-  refreshing?: boolean
   empty?: boolean
   hasMore?: boolean
   loadingMore?: boolean
@@ -23,18 +22,18 @@ const props = defineProps<{
   total?: number
 }>()
 
+/** Altura única da linha: avatar + 3 faixas de texto/badge com folga para UBadge sm. */
+const ROW_HEIGHT_CLASS = 'h-[5.75rem]'
+const skeletonRows = Array.from({ length: 8 }, (_, index) => index)
+
 const emit = defineEmits<{
   select: [conversation: CommunicationConversation]
   prefetch: [conversationId: number]
   loadMore: []
 }>()
 
-const conversationRows = computed(() => props.conversations.map(conversation => ({
-  conversation,
-  imageEvidence: communicationConversationImageEvidence(conversation)
-})))
-const failedImagePreviewIds = ref(new Set<number>())
 const conversationButtons = new Map<number, HTMLButtonElement>()
+const showInboxName = computed(() => props.inboxes.length > 1)
 
 function setConversationButton(conversationId: number, element: unknown): void {
   if (element instanceof HTMLButtonElement) {
@@ -55,16 +54,32 @@ async function focusConversation(conversationId: number): Promise<boolean> {
 
 defineExpose({ focusConversation })
 
-function imagePreviewAvailable(evidence: CommunicationConversationImageEvidence): boolean {
-  return Boolean(evidence.previewUrl) && !failedImagePreviewIds.value.has(evidence.messageId)
-}
-
-function markImagePreviewUnavailable(messageId: number): void {
-  failedImagePreviewIds.value = new Set([...failedImagePreviewIds.value, messageId])
-}
-
 function inboxName(id: number): string {
   return props.inboxes.find(inbox => inbox.id === id)?.name || `Inbox #${id}`
+}
+
+function previewLine(conversation: CommunicationConversation): string {
+  const preview = communicationPreviewText(conversation)
+  if (preview) return preview
+  if (communicationConversationImageEvidence(conversation)) return 'Imagem'
+  return '—'
+}
+
+function isUnread(conversation: CommunicationConversation): boolean {
+  return (conversation.unread_count ?? 0) > 0
+}
+
+function statusMeta(conversation: CommunicationConversation) {
+  return COMMUNICATION_CONVERSATION_STATUS[conversation.status]
+}
+
+/** Status OPEN é o default da fila; só destaca os demais (e o estado “Abrindo”). */
+function showStatusBadge(conversation: CommunicationConversation): boolean {
+  return conversation.status !== 'OPEN' || props.openingId === conversation.id
+}
+
+function phoneLine(conversation: CommunicationConversation): string {
+  return communicationListPhoneLine(conversation)
 }
 </script>
 
@@ -74,53 +89,50 @@ function inboxName(id: number): string {
     class="min-h-0 flex-1 overflow-y-auto divide-y divide-default"
   >
     <div
-      v-if="refreshing && conversations.length"
-      class="sticky top-0 z-10 flex items-center justify-center gap-2 border-b border-default bg-default/95 px-3 py-2 text-xs text-muted backdrop-blur"
-      role="status"
-      aria-live="polite"
-      data-testid="communication-conversations-refreshing"
-    >
-      <UIcon
-        name="i-lucide-loader-circle"
-        class="size-4 animate-spin"
-        aria-hidden="true"
-      />
-      Atualizando conversas
-    </div>
-
-    <div
       v-if="loading && !conversations.length"
-      class="flex h-full min-h-64 flex-col items-center justify-center gap-3 p-8 text-center"
+      class="divide-y divide-default"
       role="status"
       aria-live="polite"
+      aria-label="Carregando conversas"
+      data-testid="communication-conversations-skeleton"
     >
-      <UIcon
-        name="i-lucide-message-circle-more"
-        class="size-12 text-dimmed"
-      />
-      <div>
-        <p class="font-medium text-highlighted">
-          Preparando conversas
-        </p>
-        <p class="mt-1 text-sm text-muted">
-          O atendimento aparecerá assim que os dados estiverem prontos.
-        </p>
+      <div
+        v-for="row in skeletonRows"
+        :key="row"
+        class="flex w-full shrink-0 items-center gap-3 border-l-2 border-transparent px-3 py-2.5"
+        :class="ROW_HEIGHT_CLASS"
+      >
+        <USkeleton class="size-9 shrink-0 rounded-full" />
+        <div class="flex min-w-0 flex-1 flex-col justify-center gap-1.5">
+          <div class="flex items-center gap-2">
+            <USkeleton class="h-4 w-32" />
+            <USkeleton class="ms-auto h-3 w-12" />
+          </div>
+          <USkeleton class="h-3 w-28" />
+          <div class="flex items-center gap-1.5">
+            <USkeleton class="h-3 w-36" />
+            <USkeleton class="h-5 w-14 rounded-md" />
+          </div>
+        </div>
       </div>
     </div>
 
     <button
-      v-for="{ conversation, imageEvidence } in conversationRows"
+      v-for="conversation in conversations"
       :id="`communication-conversation-${conversation.id}`"
       :key="conversation.id"
       :ref="element => setConversationButton(conversation.id, element)"
       :data-conversation-id="conversation.id"
       type="button"
-      class="flex w-full gap-3 border-l-2 p-3 text-left text-sm transition-colors sm:px-4 sm:py-4"
-      :class="selectedId === conversation.id
-        ? 'border-primary bg-primary/10'
-        : openingId === conversation.id
-          ? 'border-muted bg-elevated/60'
-          : 'border-transparent hover:border-primary hover:bg-primary/5'"
+      class="flex w-full shrink-0 items-center gap-3 overflow-hidden border-l-2 px-3 py-2.5 text-left transition-colors"
+      :class="[
+        ROW_HEIGHT_CLASS,
+        selectedId === conversation.id
+          ? 'border-primary bg-primary/10'
+          : openingId === conversation.id
+            ? 'border-muted bg-elevated/60'
+            : 'border-transparent hover:border-primary hover:bg-primary/5'
+      ]"
       :aria-current="selectedId === conversation.id ? 'true' : undefined"
       :aria-busy="openingId === conversation.id"
       @pointerenter="emit('prefetch', conversation.id)"
@@ -131,63 +143,53 @@ function inboxName(id: number): string {
       <UAvatar
         :alt="communicationDisplayName(conversation)"
         size="md"
-        class="mt-0.5 shrink-0"
+        class="shrink-0"
       />
-      <div class="min-w-0 flex-1">
-        <div class="flex min-w-0 items-center justify-between gap-3">
-          <span class="truncate font-semibold text-highlighted">
+
+      <div class="flex min-h-0 min-w-0 flex-1 flex-col justify-center gap-1">
+        <!-- Linha 1: nome + unread + horário -->
+        <div class="flex min-w-0 items-center gap-2">
+          <span
+            class="min-w-0 flex-1 truncate text-sm leading-5 text-highlighted"
+            :class="isUnread(conversation) ? 'font-semibold' : 'font-medium'"
+          >
             {{ communicationDisplayName(conversation) }}
           </span>
-          <span class="shrink-0 text-[11px] text-muted">
+          <UBadge
+            v-if="isUnread(conversation)"
+            data-testid="communication-conversation-unread"
+            :label="String(conversation.unread_count)"
+            color="primary"
+            variant="solid"
+            size="sm"
+            class="min-w-5 shrink-0 justify-center px-1.5"
+          />
+          <span class="shrink-0 text-[11px] leading-4 tabular-nums text-muted">
             {{ formatCommunicationDate(conversation.last_message_at) }}
           </span>
         </div>
 
-        <p v-if="communicationContactLabel(conversation)" class="mt-0.5 truncate text-xs text-muted">
-          {{ communicationContactLabel(conversation) }}
+        <!-- Linha 2: telefone completo (sempre reserva altura) -->
+        <p
+          class="truncate text-[11px] leading-4 text-muted"
+          data-testid="communication-conversation-secondary"
+        >
+          {{ phoneLine(conversation) }}
         </p>
 
-        <div
-          v-if="imageEvidence"
-          data-testid="communication-conversation-image-evidence"
-          class="mt-2 flex min-w-0 items-center gap-2 rounded-md border border-default bg-elevated/60 p-1.5"
-        >
-          <div
-            class="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-md bg-accented"
+        <!-- Linha 3: preview + chips (mesma faixa, sem 4ª linha que estourava) -->
+        <div class="flex min-w-0 items-center gap-1.5">
+          <p
+            class="min-w-0 flex-1 truncate text-xs leading-4"
+            :class="isUnread(conversation) ? 'font-medium text-highlighted' : 'text-toned'"
+            data-testid="communication-conversation-preview"
           >
-            <img
-              v-if="imagePreviewAvailable(imageEvidence)"
-              :src="imageEvidence.previewUrl || undefined"
-              :alt="`Prévia da imagem recebida de ${communicationDisplayName(conversation)}`"
-              class="size-full object-cover"
-              loading="lazy"
-              decoding="async"
-              @error="markImagePreviewUnavailable(imageEvidence.messageId)"
-            >
-            <UIcon
-              v-else
-              name="i-lucide-image-off"
-              class="size-5 text-dimmed"
-              aria-hidden="true"
-            />
-          </div>
-          <div class="min-w-0 flex-1">
-            <p class="flex items-center gap-1 text-xs font-medium text-highlighted">
-              <UIcon
-                name="i-lucide-image"
-                class="size-3.5 shrink-0 text-muted"
-                aria-hidden="true"
-              />
-              <span class="truncate">Imagem recebida</span>
-            </p>
-            <p class="mt-0.5 truncate text-[11px] text-muted">
-              {{ imagePreviewAvailable(imageEvidence) ? 'Prévia da última mensagem' : 'Prévia indisponível' }}
-            </p>
-          </div>
-        </div>
-
-        <div class="mt-1 flex min-w-0 items-center justify-between gap-2">
-          <span class="truncate text-[11px] text-dimmed">
+            {{ previewLine(conversation) }}
+          </p>
+          <span
+            v-if="showInboxName"
+            class="max-w-14 shrink-0 truncate text-[10px] text-dimmed"
+          >
             {{ inboxName(conversation.inbox_id) }}
           </span>
           <UBadge
@@ -196,39 +198,40 @@ function inboxName(id: number): string {
             color="neutral"
             variant="subtle"
             size="sm"
+            class="shrink-0"
           />
           <UBadge
-            v-else
-            :label="COMMUNICATION_CONVERSATION_STATUS[conversation.status].label"
-            :color="COMMUNICATION_CONVERSATION_STATUS[conversation.status].color"
+            v-else-if="showStatusBadge(conversation)"
+            :label="statusMeta(conversation).label"
+            :color="statusMeta(conversation).color"
             variant="subtle"
             size="sm"
+            class="shrink-0"
           />
-        </div>
-
-        <div class="mt-2 flex min-w-0 flex-wrap items-center gap-1.5">
           <UBadge
             v-if="conversation.assignee_membership_id == null"
-            label="Sem responsável"
+            label="Sem resp."
             color="warning"
             variant="soft"
             size="sm"
+            class="shrink-0"
           />
           <UBadge
             v-if="conversation.priority > 0"
-            :label="`Prioridade ${conversation.priority}`"
+            :label="`P${conversation.priority}`"
             color="error"
             variant="soft"
             size="sm"
+            class="shrink-0"
           />
           <UBadge
-            v-for="label in conversation.labels?.slice(0, 2)"
+            v-for="label in conversation.labels?.slice(0, 1)"
             :key="label.id"
             :label="label.name"
             color="neutral"
             variant="outline"
             size="sm"
-            class="max-w-28 truncate"
+            class="max-w-16 shrink-0 truncate"
           />
         </div>
       </div>
@@ -236,7 +239,7 @@ function inboxName(id: number): string {
 
     <div
       v-if="conversations.length && (hasMore || loadingMore || loadMoreError)"
-      class="space-y-2 border-t border-default p-3 text-center"
+      class="space-y-2 border-t border-default p-2.5 text-center"
       data-testid="communication-conversations-pagination"
     >
       <UAlert
@@ -258,6 +261,7 @@ function inboxName(id: number): string {
         icon="i-lucide-chevron-down"
         color="neutral"
         variant="soft"
+        size="sm"
         :loading="loadingMore"
         :disabled="loadingMore"
         :aria-label="loadingMore ? 'Carregando mais conversas' : 'Carregar mais conversas'"
@@ -266,7 +270,7 @@ function inboxName(id: number): string {
       />
       <p
         v-if="total !== undefined"
-        class="text-xs text-muted"
+        class="text-[11px] text-muted"
       >
         {{ conversations.length }} de {{ total }} conversas carregadas
       </p>
@@ -274,17 +278,17 @@ function inboxName(id: number): string {
 
     <div
       v-if="empty && !conversations.length"
-      class="flex h-full min-h-64 flex-col items-center justify-center gap-3 p-8 text-center"
+      class="flex h-full min-h-64 flex-col items-center justify-center gap-3 p-6 text-center"
     >
       <UIcon
         name="i-lucide-message-circle-dashed"
-        class="size-12 text-dimmed"
+        class="size-10 text-dimmed"
       />
       <div>
-        <p class="font-medium text-highlighted">
+        <p class="text-sm font-medium text-highlighted">
           Nenhuma conversa encontrada
         </p>
-        <p class="mt-1 text-sm text-muted">
+        <p class="mt-1 text-xs text-muted">
           Ajuste os filtros ou aguarde uma nova mensagem.
         </p>
       </div>

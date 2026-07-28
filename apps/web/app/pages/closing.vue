@@ -16,20 +16,13 @@ import type {
 } from '~/types/api'
 import type { DataTableFilterDefinition, DataTableFilterModel } from '~/types/data-table-filter'
 import { createFilterModel, findDefinition } from '~/utils/data-table-filters'
+import type { SavedListFilterPayload } from '~/types/saved-list-filters'
 import {
   closingFiltersToPayload,
   closingPayloadToFilters,
   hasActiveClosingFiltersForSave
 } from '~/utils/saved-list-filters'
-import DataTableFilterRoot from '~/components/data-table-filter/Root.vue'
-import DataTableFilterSaveFilterModal from '~/components/data-table-filter/SaveFilterModal.vue'
-import DataTableFilterSavedFiltersMenu from '~/components/data-table-filter/SavedFiltersMenu.vue'
-import DataTableFilterManageSavedFiltersModal from '~/components/data-table-filter/ManageSavedFiltersModal.vue'
-import {
-  COMPACT_BUTTON_LABEL_UI,
-  LIST_FILTER_ACTIONS_ROW,
-  LIST_FILTER_TOOLBAR_STACK
-} from '~/utils/list-filter-layout'
+import ShellListFilterToolbar from '~/components/shell/ListFilterToolbar.vue'
 
 const api = useApi()
 const route = useRoute()
@@ -63,59 +56,6 @@ const modelFilter = ref(
 const rootFilter = ref(String(route.query.root || ''))
 const sourceFilter = ref(String(route.query.source || FILTER_ALL))
 const clientFilter = ref(String(route.query.client_id || ''))
-
-const {
-  canSavePreset,
-  canShare: canShareFilters,
-  presets,
-  presetsLoading,
-  saveOpen,
-  manageOpen,
-  saveLoading,
-  saveError,
-  manageError,
-  actingId,
-  clearPresetCache,
-  onSavedMenuOpen,
-  applyPreset,
-  onSaveConfirm,
-  onRename,
-  onToggleShare,
-  onDeletePreset,
-  openManage,
-  openSave
-} = useSavedListPresets({
-  surface: 'closing.list',
-  resetKey: sessionEpoch,
-  getPayload: () => closingFiltersToPayload({
-    competence: competence.value,
-    band: bandFilter.value,
-    model: modelFilter.value,
-    root: rootFilter.value,
-    source: sourceFilter.value,
-    client_id: clientFilter.value
-  }),
-  canSave: () => hasActiveClosingFiltersForSave({
-    competence: competence.value,
-    band: bandFilter.value,
-    model: modelFilter.value,
-    root: rootFilter.value,
-    source: sourceFilter.value,
-    client_id: clientFilter.value
-  }),
-  onApply: (payload) => {
-    const next = closingPayloadToFilters(payload, competence.value)
-    competence.value = next.competence || competence.value
-    bandFilter.value = next.band
-    modelFilter.value = next.model
-    rootFilter.value = next.root
-    sourceFilter.value = next.source
-    clientFilter.value = next.client_id
-    pendingPage.value = 1
-    syncClosingChips()
-    // watch nos filtros dispara load
-  }
-})
 
 const summary = ref<OutboundCompetenceSummary | null>(null)
 const capacity = ref<OutboundCapacityForecast | null>(null)
@@ -237,6 +177,41 @@ function onClearStructuredFilters() {
   rootFilter.value = ''
   clientFilter.value = ''
   chipModels.value = []
+}
+
+function closingGetPayload(): SavedListFilterPayload {
+  return closingFiltersToPayload({
+    competence: competence.value,
+    band: bandFilter.value,
+    model: modelFilter.value,
+    root: rootFilter.value,
+    source: sourceFilter.value,
+    client_id: clientFilter.value
+  })
+}
+
+function closingCanSave(): boolean {
+  return hasActiveClosingFiltersForSave({
+    competence: competence.value,
+    band: bandFilter.value,
+    model: modelFilter.value,
+    root: rootFilter.value,
+    source: sourceFilter.value,
+    client_id: clientFilter.value
+  })
+}
+
+function onApplyClosingPreset(payload: SavedListFilterPayload) {
+  const next = closingPayloadToFilters(payload, competence.value)
+  competence.value = next.competence || competence.value
+  bandFilter.value = next.band
+  modelFilter.value = next.model
+  rootFilter.value = next.root
+  sourceFilter.value = next.source
+  clientFilter.value = next.client_id
+  pendingPage.value = 1
+  syncClosingChips()
+  // watch nos filtros dispara load
 }
 
 const columns: TableColumn<OutboundDeadlinePendingItem>[] = [
@@ -544,7 +519,7 @@ watch(sessionEpoch, () => {
   rootFilter.value = ''
   clientFilter.value = ''
   chipModels.value = []
-  clearPresetCache()
+  // ShellListFilterToolbar limpa presets via reset-key=sessionEpoch
   void load()
 })
 
@@ -586,82 +561,49 @@ watch(
 
     <template #body>
       <!--
-        Competência fica fixa (contexto da tela).
-        Demais campos: DataTableFilterRoot (mesmo núcleo do portfolio).
+        Competência no slot de ações (contexto da tela).
+        Chips/presets: ShellListFilterToolbar (surface closing.list).
       -->
       <div
         class="mb-4 w-full min-w-0"
         data-testid="closing-filter-toolbar"
       >
-        <div :class="LIST_FILTER_TOOLBAR_STACK">
-          <UFormField
-            label="Competência"
-            class="w-full shrink-0 sm:w-40"
-          >
-            <UInput
-              v-model="competence"
-              type="month"
-              data-testid="closing-competence"
-              aria-label="Competência (AAAA-MM)"
-            />
-          </UFormField>
-          <div :class="LIST_FILTER_ACTIONS_ROW">
-            <DataTableFilterRoot
-              :definitions="closingFilterDefinitions"
-              :model-value="chipModels"
-              :reset-key="sessionEpoch"
-              data-testid="closing-structured-filters"
-              @update:model-value="onStructuredFilters"
-              @clear="onClearStructuredFilters"
-            />
-            <UButton
-              v-if="canSavePreset"
-              color="neutral"
-              variant="outline"
-              icon="i-lucide-save"
-              label="Salvar"
-              aria-label="Salvar filtros"
-              :ui="COMPACT_BUTTON_LABEL_UI"
-              data-testid="save-filters-button"
-              @click="openSave"
-            />
-            <DataTableFilterSavedFiltersMenu
-              :items="presets"
-              :loading="presetsLoading"
-              @apply="applyPreset"
-              @manage="openManage"
-              @open="onSavedMenuOpen"
-            />
-          </div>
-        </div>
+        <ShellListFilterToolbar
+          :show-search="false"
+          :definitions="closingFilterDefinitions"
+          :models="chipModels"
+          :loading="loading"
+          :reset-key="sessionEpoch"
+          surface="closing.list"
+          :get-payload="closingGetPayload"
+          :can-save="closingCanSave"
+          test-id-prefix="closing"
+          @update:models="onStructuredFilters"
+          @clear="onClearStructuredFilters"
+          @refresh="load"
+          @apply-preset="onApplyClosingPreset"
+        >
+          <template #actions>
+            <UFormField
+              label="Competência"
+              class="w-full shrink-0 sm:w-40"
+            >
+              <UInput
+                v-model="competence"
+                type="month"
+                data-testid="closing-competence"
+                aria-label="Competência (AAAA-MM)"
+              />
+            </UFormField>
+          </template>
+        </ShellListFilterToolbar>
       </div>
 
-      <DataTableFilterSaveFilterModal
-        v-model:open="saveOpen"
-        :can-share="canShareFilters"
-        :loading="saveLoading"
-        :error="saveError"
-        @confirm="onSaveConfirm"
-      />
-      <DataTableFilterManageSavedFiltersModal
-        v-model:open="manageOpen"
-        :items="presets"
-        :can-share="canShareFilters"
-        :loading="presetsLoading"
-        :acting-id="actingId"
-        :error="manageError"
-        @rename="onRename"
-        @toggle-share="onToggleShare"
-        @delete="onDeletePreset"
-      />
-
-      <UAlert
+      <ShellLoadError
         v-if="loadError"
-        color="error"
-        icon="i-lucide-wifi-off"
         :title="loadError"
-        class="mb-4"
-        :actions="[{ label: 'Tentar novamente', color: 'neutral', variant: 'subtle', onClick: () => load() }]"
+        test-id="closing-load-error"
+        @retry="load"
       />
 
       <UAlert

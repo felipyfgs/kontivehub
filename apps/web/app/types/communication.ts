@@ -25,6 +25,7 @@ export type CommunicationMessageStatus
     | 'SENT'
     | 'DELIVERED'
     | 'READ'
+    | 'PLAYED'
     | 'FAILED'
     | 'UNKNOWN'
     | 'CANCELED'
@@ -173,6 +174,13 @@ export interface CommunicationComposerPayload {
   ptt: boolean
 }
 
+export interface CommunicationConversationPreview {
+  kind: string
+  text?: string | null
+  attachment_kind?: string | null
+  direction?: CommunicationMessageDirection | null
+}
+
 export interface CommunicationConversation {
   id: number
   inbox_id: number
@@ -184,6 +192,18 @@ export interface CommunicationConversation {
   last_message_at?: string | null
   lock_version: number
   messages_count?: number
+  unread_count?: number
+  first_unread_message_id?: number | null
+  last_read_message_id?: number | null
+  last_read_at?: string | null
+  read_state?: {
+    version?: number
+    last_read_through_message_id?: number | null
+  } | null
+  display_title?: string | null
+  display_title_source?: string | null
+  secondary_title?: string | null
+  preview?: CommunicationConversationPreview | null
   contact?: CommunicationContactSummary | null
   clients?: CommunicationClientReference[]
   labels?: CommunicationLabel[]

@@ -90,6 +90,15 @@ const persistedFilters = useState<DocumentFilterState>('notes-workspace-filters'
 const filters = reactive<DocumentFilterState>({ ...persistedFilters.value })
 const view = ref<NotesViewMode>(props.initialView)
 
+const activeRowCount = computed(() => view.value === 'client'
+  ? byClientRows.value.length
+  : notes.value.length)
+const initialLoadError = computed(() =>
+  !loading.value && loadError.value && activeRowCount.value === 0
+    ? loadError.value
+    : null
+)
+
 /** Contexto CT-e (autXML, pendências) só no catálogo com filtro kind=CTE. */
 const showCteContext = computed(() => view.value === 'document' && filters.kind === 'CTE')
 
@@ -682,28 +691,17 @@ onMounted(async () => {
   -->
   <UDashboardPanel id="docs" class="min-w-0">
     <template #header>
-      <UDashboardNavbar title="Documentos" data-testid="page-navbar">
-        <template #leading>
-          <UDashboardSidebarCollapse />
-        </template>
-        <template #trailing>
-          <UBadge
-            :label="view === 'client' ? String(byClientTotal) : String(listTotal || notes.length)"
-            variant="subtle"
-          />
-        </template>
+      <ShellPageNavbar
+        title="Documentos"
+        test-id="page-navbar"
+        :badge="view === 'client' ? String(byClientTotal) : String(listTotal || notes.length)"
+      >
         <template #right>
-          <UTooltip text="Atualizar">
-            <UButton
-              icon="i-lucide-refresh-cw"
-              color="neutral"
-              variant="ghost"
-              square
-              aria-label="Atualizar catálogo de documentos"
-              :loading="loading"
-              @click="reloadActive"
-            />
-          </UTooltip>
+          <ShellNavbarRefresh
+            :loading="loading"
+            aria-label="Atualizar catálogo de documentos"
+            @click="reloadActive"
+          />
           <UButton
             to="/docs/imports"
             icon="i-lucide-history"
@@ -736,7 +734,7 @@ onMounted(async () => {
             @click="exportCurrentFilter"
           />
         </template>
-      </UDashboardNavbar>
+      </ShellPageNavbar>
     </template>
 
     <template #body>
@@ -840,7 +838,14 @@ onMounted(async () => {
       <!--
         Body: insights (HomeStats-like) → toolbar busca → tabela (customers).
       -->
-      <div class="flex w-full flex-col gap-4 sm:gap-5">
+      <ShellLoadError
+        v-if="initialLoadError"
+        :title="initialLoadError"
+        test-id="docs-initial-load-error"
+        @retry="reloadActive"
+      />
+
+      <div v-else class="flex w-full flex-col gap-4 sm:gap-5">
         <!-- Insights de triagem só no catálogo de documentos — por cliente é só captura. -->
         <DocsInsightsBar
           v-if="view === 'document'"

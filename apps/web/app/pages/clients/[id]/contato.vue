@@ -18,12 +18,12 @@ const {
       test-id="client-section-contato"
     />
 
-    <UPageCard variant="subtle">
+    <ShellSectionCard>
       <ClientsClientContactsSection
         :client="item"
         :can-manage-clients="canManageClients"
         @updated="load"
       />
-    </UPageCard>
+    </ShellSectionCard>
   </div>
 </template>
