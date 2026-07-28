@@ -1,0 +1,17 @@
+---
+description: Quando o usuário pedir ship/commit automático, rode review→fix→commit
+alwaysApply: false
+---
+
+# Auto review ship
+
+Se o usuário pedir ship, “revisa corrige e commita”, `/ship`, ou equivalente:
+
+1. Skill `auto-review-ship` (ou `.agents/skills/auto-review-ship/SKILL.md`).
+2. `make code-review` → fix Critical/Warning → re-review (máx. 3).
+3. Gates dos apps tocados.
+4. Commit(s) Conventional pt-BR, paths explícitos, sem secrets.
+5. **Não faça push** a menos que o usuário cite **remoto e branch** (ex. `origin main`).
+   A palavra “push” sozinha não basta.
+
+Não peça confirmação a cada micro-passo do loop; só pare em secrets, Critical humano, ou push ambíguo.

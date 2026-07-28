@@ -78,6 +78,26 @@ make wazync-test
 Playwright E2E é validação local adicional, não gate padrão. Use
 `apps/web/tests/e2e/run-local.mjs` e não publique os artefatos gerados.
 
+## Code review automático
+
+Superfície pronta (CodeRabbit + skills do monorepo):
+
+```bash
+make code-review                    # diff local, saída --agent
+make code-review ARGS='--base main' # branch vs main
+make code-review ARGS='--human'     # saída legível no terminal
+```
+
+| Fluxo | Como acionar | Faz |
+|-------|----------------|-----|
+| Só review + fix | skill `auto-code-review` / `/code-review` | não commita |
+| Review + fix + **commit** | skill `auto-review-ship` / `/ship` | commita; **não** dá push |
+
+- Config PR: `.coderabbit.yaml` (auto-review + path_instructions por app).
+- Cursor: rules em `.cursor/rules/` e commands `/code-review`, `/ship`.
+- CLI: `coderabbit auth login`. No GitHub, instale o app CodeRabbit no org/repo.
+- Push continua opt-in: só com pedido que cite remoto e branch (ex. `origin main`).
+
 ## Orquestração de subagentes
 
 - Em tarefas não triviais com frentes independentes, delegue até três

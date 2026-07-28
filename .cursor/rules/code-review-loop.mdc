@@ -1,0 +1,28 @@
+---
+description: Loop de code review automático após implementar (CodeRabbit + gates KontiveHub)
+alwaysApply: false
+---
+
+# Code review loop
+
+Quando o usuário pedir implementação + review, "revisa e corrige", `/code-review`,
+ou após mudança não trivial antes do handoff:
+
+1. Implemente o pedido.
+2. Confirme que o diff não contém secrets (`.env`, PEM, tokens, vault).
+3. Rode review local via wrapper (barreira de secrets + CodeRabbit):
+
+```bash
+make code-review
+# ou branch inteira:
+make code-review ARGS='--base main'
+```
+
+4. Corrija **Critical** e **Warning** reais (bugs, security, tenant, contratos).
+   Ignore nits de estilo que Pint/ESLint cobrem, salvo violação de `AGENTS.md`.
+5. Re-rode o review. **Máximo 3 ciclos** de review no total.
+6. Rode gates só dos apps tocados (`AGENTS.md` raiz + nested).
+7. Entregue resumo: corrigido / residual / gates.
+
+Não commitar, não pushar, não ligar kill switches fiscais. Preferir skill
+`auto-code-review` do monorepo quando disponível.

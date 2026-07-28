@@ -1,5 +1,6 @@
 .PHONY: help init-env setup up dev down build logs shell migrate seed \
 	api-test composer-install frontend-generate wazync-test nginx-upstream-test \
+	code-review \
 	prod-config prod-build prod-up prod-down \
 	backup restore prod-backup prod-restore \
 	frontend-prepare-generated frontend-install frontend-dev seed-dev seed-pilot \
@@ -32,6 +33,7 @@ help:
 	@echo "  make seed               Seed de desenvolvimento"
 	@echo "  make api-test           Suíte Laravel no PostgreSQL isolado"
 	@echo "  make nginx-upstream-test Verifica recuperação do edge após recriar o PHP"
+	@echo "  make code-review        CodeRabbit no diff local (--agent; use ARGS='--base main')"
 	@echo ""
 	@echo "Produção"
 	@echo "  make prod-config        Valida .env + compose prod"
@@ -80,6 +82,13 @@ migrate:
 
 seed seed-dev:
 	docker compose exec php php artisan db:seed --force
+
+# Code review local (CodeRabbit CLI). Exemplos:
+#   make code-review
+#   make code-review ARGS='--base main'
+#   make code-review ARGS='--human'
+code-review:
+	./scripts/code-review.sh $(ARGS)
 
 api-test:
 	docker compose --profile test up -d --wait postgres-test
