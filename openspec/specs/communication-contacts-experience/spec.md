@@ -46,14 +46,14 @@ A listagem de contatos SHALL aceitar em `POST /communication/contacts/search` um
 
 ### Requirement: Lista operacional de contatos
 
-A SPA SHALL apresentar `/communication/contacts` como coleção full-width e full-height de cards `rounded-xl`, separados por 16 px, com avatar de 42 px, nome, indicação provisória, telefone completo ou “Número indisponível”, vínculos, situação e ações. O avatar SHALL usar `profile_picture_url` quando disponível e iniciais/`?` como fallback. Um único card SHALL poder expandir para edição resumida sem substituir os detalhes completos. Detalhes, nova conversa e expansão SHALL possuir gatilhos distintos e nenhuma ação SHALL aparecer duas vezes no mesmo card. A busca SHALL usar debounce de 300 ms; estado não sensível SHALL permanecer na URL e busca telefônica SHALL ser enviada somente por POST/body. A interface MUST NOT introduzir bulk selection, segments, infinite scroll ou dados sintéticos.
+A SPA SHALL apresentar `/communication/contacts` como coleção full-width e full-height de cards `rounded-xl`, separados por 16 px, com avatar de 42 px, nome, indicação provisória, telefone completo ou “Número indisponível”, vínculos, situação e ações. O avatar SHALL usar `profile_picture_url` somente quando `profile_picture_state=READY` e a URL for não nula; todas as demais combinações SHALL manter iniciais/`?` como fallback. Um único card SHALL poder expandir para edição resumida sem substituir os detalhes completos. Detalhes, nova conversa e expansão SHALL possuir gatilhos distintos e nenhuma ação SHALL aparecer duas vezes no mesmo card. A busca SHALL usar debounce de 300 ms; estado não sensível SHALL permanecer na URL e busca telefônica SHALL ser enviada somente por POST/body. A interface MUST NOT introduzir bulk selection, segments, infinite scroll ou dados sintéticos.
 
 #### Scenario: Contato com telefone
 - **WHEN** a lista recebe uma identidade com `phone`
 - **THEN** o card exibe o número completo, oferece ação acessível para copiá-lo e não exibe `address_masked`
 
 #### Scenario: Contato com foto
-- **WHEN** a API devolve `profile_picture_url`
+- **WHEN** a API devolve `profile_picture_state=READY` e `profile_picture_url` não nula
 - **THEN** o card usa a imagem same-origin mantendo tamanho, formato e ações existentes
 
 #### Scenario: Expansão exclusiva
@@ -66,11 +66,15 @@ A SPA SHALL apresentar `/communication/contacts` como coleção full-width e ful
 
 ### Requirement: Foto do contato é consistente entre catálogo e detalhes
 
-Catálogo e perfil principal de `/communication/contacts/:id` SHALL consumir o mesmo `profile_picture_url` resolvido pelo Laravel. A SPA SHALL manter iniciais/`?` quando o campo estiver ausente, nulo ou quando a imagem falhar e MUST NOT consultar Wazync ou CDN do WhatsApp.
+Catálogo e perfil principal de `/communication/contacts/:id` SHALL consumir o mesmo `profile_picture_url` e `profile_picture_state` resolvidos pelo Laravel. A SPA SHALL usar a foto somente em `READY`, manter iniciais/`?` nos demais estados ou quando a imagem falhar e MUST NOT consultar Wazync ou CDN do WhatsApp. O evento durável `contact.profile_picture.updated` SHALL ser transmitido no canal privado da inbox autorizada com cursor e payload sanitizado contendo `inbox_id`, `identity_id`, estado e versão; consumidores SHALL usar `identity_id` somente como chave de invalidação e recarregar a projeção Laravel ainda autorizada, sem inferir contato, conversa ou identidade fora desse escopo.
 
 #### Scenario: Detalhe aberto a partir do catálogo
 - **WHEN** um contato com foto é aberto a partir de um card
 - **THEN** o perfil de Detalhes mostra a mesma URL/version da lista sem novo endpoint de descoberta
+
+#### Scenario: Foto fica pronta com catálogo aberto
+- **WHEN** o job promove uma versão `READY` e publica evento sanitizado no canal privado da inbox
+- **THEN** o catálogo recarrega a projeção autorizada e o detalhe afetado por `identity_id` exibe a foto real sem aplicar o payload diretamente
 
 #### Scenario: Asset deixa de existir
 - **WHEN** a imagem responde 404 após purge, clear ou troca de versão

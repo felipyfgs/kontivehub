@@ -23,7 +23,7 @@ fenced da tentativa corrente, publicando apenas eventos e métricas sanitizados.
 - **THEN** o store PostgreSQL muda o comando de `PROCESSING` para `PROCESSED` usando o tipo canônico e ele não volta à fila após expirar o lock
 
 #### Scenario: Falha retryável do comando técnico
-- **WHEN** a tentativa corrente falha com uma condição retryável
+- **WHEN** a tentativa corrente falha por indisponibilidade temporária do provider, decrypt ou download antes de esgotar o orçamento
 - **THEN** o store PostgreSQL muda o comando para `RETRY`, libera o lock e preserva o backoff calculado
 
 #### Scenario: Finalização de tentativa obsoleta
@@ -39,7 +39,7 @@ fenced da tentativa corrente, publicando apenas eventos e métricas sanitizados.
 - **THEN** a primeira tentativa termina em `ERROR`, publica o código allowlisted correspondente e não consome backoff adicional
 
 #### Scenario: Falha terminal
-- **WHEN** descriptor expirou, provider recusou, decrypt/download falhou ou o digest divergiu
+- **WHEN** uma falha não determinística atinge o máximo de tentativas ou uma recusa determinística allowlisted encerra o comando
 - **THEN** Laravel marca `MEDIA_FAILED`/`UNAVAILABLE` com código allowlisted e a UI permite nova tentativa somente quando a política disser recuperável
 
 #### Scenario: Evento READY duplicado

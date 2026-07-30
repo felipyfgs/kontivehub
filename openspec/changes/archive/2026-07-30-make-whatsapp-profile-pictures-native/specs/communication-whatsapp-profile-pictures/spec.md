@@ -24,6 +24,8 @@ O Laravel SHALL consultar `PROFILE_PICTURE` somente para identities WhatsApp já
 
 A URL retornada pelo gateway SHALL existir somente durante a execução do job. O sistema SHALL armazenar os bytes em storage cifrado e MUST NOT persistir, registrar ou expor a URL remota, JID, `picture_id`, path ou payload bruto.
 
+Agendamentos concorrentes SHALL ser coalescidos pela identidade estável `(tenant, inbox, identity WhatsApp canônica, profile_picture_version)`. Um perfil `PENDING` SHALL permanecer elegível para recuperação, mas repetições enquanto a chave única do job estiver vigente MUST NOT iniciar um segundo egress; após falha ou expiração do lock, uma execução posterior MAY recuperar o mesmo snapshot ainda atual.
+
 #### Scenario: Primeira conversation agenda foto
 - **WHEN** a primeira conversation de uma identity WhatsApp é commitada em inbox operacional
 - **THEN** um job único é agendado após commit e a resposta da conversation não espera sua conclusão
@@ -64,7 +66,7 @@ Somente JPEG, PNG ou WebP com header, assinatura e dimensões coerentes de até 
 
 ### Requirement: Backfill e lifecycle são limitados e completos
 
-O despachante agendado SHALL selecionar automaticamente tenants com Communication ativa, inboxes habilitadas/conectadas e identities WhatsApp ativas; SHALL rodar a cada quinze minutos com singleton/overlap lock, priorizar activity recente e respeitar limites globais e por inbox de 100 e 25 jobs. Contatos conhecidos pela inbox SHALL ser elegíveis mesmo sem conversation.
+O despachante agendado SHALL selecionar automaticamente tenants com Communication ativa, inboxes habilitadas/conectadas e identities WhatsApp ativas; SHALL rodar a cada quinze minutos com singleton/overlap lock, priorizar activity recente e respeitar, por execução, os limites de 100 jobs globais e 25 jobs por inbox. Candidatos excedentes MUST NOT ser descartados e SHALL permanecer elegíveis para execuções posteriores sob a mesma ordenação e cotas. Contatos conhecidos pela inbox SHALL ser elegíveis mesmo sem conversation.
 
 Merge SHALL manter somente asset coerente com o perfil vencedor; purge SHALL apagar todos os objetos da classe de contato e export SHALL incluir apenas estado e metadados allowlisted, nunca bytes, URL ou path.
 

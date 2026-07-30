@@ -22,4 +22,6 @@
 - [x] 4.1 Rodar testes focados API, Web e Wazync e validar a change OpenSpec em modo strict.
 - [x] 4.2 Rodar os gates completos dos três apps e corrigir regressões dentro do escopo.
 - [x] 4.3 Subir a stack do checkout, aplicar/reconciliar/backfill e validar visualmente desktop/mobile sem mocks.
-- [ ] 4.4 Executar um único smoke real idempotente no contato terminado em `2709` e registrar evidências sanitizadas.
+- [x] 4.4 Executar um único smoke real idempotente no contato terminado em `2709` e registrar evidências sanitizadas.
+  - Evidência sanitizada (2026-07-30): o alvo `***2709` convergiu para `READY` após consulta real, com asset JPEG privado de 2.741 bytes diferente da fixture E2E; o evento after-commit registrou somente `state`, `version`, `inbox_id` e `identity_id`.
+  - Entrega validada sem repetir egress: `200 image/jpeg`, cache privado, `nosniff`, ETag com revalidação `304` e avatar 96×96 carregado pelo proxy same-origin no catálogo e no detalhe.
