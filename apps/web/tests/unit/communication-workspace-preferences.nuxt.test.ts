@@ -12,6 +12,10 @@ describe('preferências da lista de conversas', () => {
     const sessionEpoch = ref(1)
     const preferencesGet = vi.fn().mockRejectedValueOnce(new Error('ausente'))
     const preferencesUpdate = vi.fn().mockRejectedValue(new Error('offline'))
+    const conversationsList = vi.fn().mockResolvedValue({
+      data: [],
+      meta: { current_page: 1, last_page: 1, per_page: 50, total: 0 }
+    })
     const addToast = vi.fn()
     const realtime = {
       enabled: false,
@@ -50,10 +54,7 @@ describe('preferências da lista de conversas', () => {
           update: preferencesUpdate
         },
         conversations: {
-          list: vi.fn().mockResolvedValue({
-            data: [],
-            meta: { current_page: 1, last_page: 1, per_page: 50, total: 0 }
-          })
+          list: conversationsList
         },
         events: {
           sync: vi.fn().mockResolvedValue({
@@ -71,6 +72,24 @@ describe('preferências da lista de conversas', () => {
     await vi.waitFor(() => expect(workspace.initialized.value).toBe(true))
     expect(workspace.statusFilter.value).toBe('OPEN')
     expect(workspace.sortBy.value).toBe('last_activity_desc')
+
+    conversationsList.mockClear()
+    workspace.inboxFilter.value = 7
+    workspace.assigneeFilter.value = 4
+    workspace.departmentFilter.value = 3
+    workspace.labelIdsFilter.value = [9, 10]
+    workspace.unreadOnly.value = true
+    // Contrato integrado do change: alterações no mesmo tick geram uma única recarga consolidada.
+    await vi.waitFor(() => expect(conversationsList).toHaveBeenCalledTimes(1), { timeout: 1_000 })
+    await new Promise(resolve => setTimeout(resolve, 200))
+    expect(conversationsList).toHaveBeenCalledTimes(1)
+    expect(conversationsList.mock.calls[0]?.[0]).toEqual(expect.objectContaining({
+      inbox_id: 7,
+      assignee_membership_id: 4,
+      work_department_id: 3,
+      label_ids: [9, 10],
+      unread: true
+    }))
 
     workspace.statusFilter.value = 'PENDING'
     workspace.sortBy.value = 'priority_desc'

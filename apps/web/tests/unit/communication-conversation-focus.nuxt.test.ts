@@ -119,6 +119,39 @@ describe('ConversationList — foco acessível', () => {
     }).focusConversation(999)).resolves.toBe(false)
   })
 
+  it('oferece o contêiner da lista como fallback de foco', async () => {
+    wrapper = await mountSuspended(ConversationList, {
+      attachTo: document.body,
+      props: {
+        conversations: [],
+        inboxes: []
+      },
+      global: {
+        stubs: {
+          UAlert: true,
+          UAvatar: true,
+          UBadge: true,
+          UIcon: true,
+          UCheckbox: true,
+          UButton: true,
+          UDropdownMenu: true,
+          USkeleton: true,
+          ShellInfiniteTableLoader: true
+        }
+      }
+    })
+
+    const list = wrapper.get('[data-testid="communication-conversation-list"]')
+    const focused = await (wrapper.vm as unknown as {
+      focusList: () => Promise<boolean>
+    }).focusList()
+
+    expect(focused).toBe(true)
+    expect(document.activeElement).toBe(list.element)
+    expect(list.attributes('tabindex')).toBe('-1')
+    expect(list.attributes('role')).toBe('region')
+  })
+
   it('acompanha a fonte em rem e materializa uma conversa distante antes de focar', async () => {
     document.documentElement.style.fontSize = '20px'
     const conversations: CommunicationConversation[] = Array.from({ length: 200 }, (_, index) => ({

@@ -34,8 +34,6 @@ const props = defineProps<{
   total?: number
   canView?: boolean
   canReply?: boolean
-  allLoadedSelected?: boolean
-  selectionIndeterminate?: boolean
 }>()
 
 /** Altura base de 92 px em 16 px, ampliada junto com a preferência de fonte. */
@@ -49,7 +47,6 @@ const emit = defineEmits<{
   'prefetch': [conversationId: number]
   'loadMore': []
   'toggle-select': [conversationId: number, selected: boolean]
-  'toggle-select-all': [selected: boolean]
   'row-action': [payload: {
     conversation: CommunicationConversation
     action: CommunicationBulkAction | 'OPEN'
@@ -102,13 +99,12 @@ function measureViewport(): void {
   if (!listRoot.value) return
   const measuredRowHeight = rowProbe.value?.getBoundingClientRect().height
   const rootFontSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize)
+  const effectiveRootFontSize = Number.isFinite(rootFontSize) && rootFontSize > 0
+    ? rootFontSize
+    : DEFAULT_ROOT_FONT_SIZE_PX
   rowHeightPx.value = measuredRowHeight && measuredRowHeight > 0
     ? measuredRowHeight
-    : ROW_HEIGHT_REM * (
-        Number.isFinite(rootFontSize) && rootFontSize > 0
-          ? rootFontSize
-          : DEFAULT_ROOT_FONT_SIZE_PX
-      )
+    : ROW_HEIGHT_REM * effectiveRootFontSize
   viewportHeight.value = listRoot.value.clientHeight || 600
 }
 
@@ -156,7 +152,14 @@ async function focusConversation(conversationId: number): Promise<boolean> {
   return document.activeElement === button
 }
 
-defineExpose({ focusConversation })
+async function focusList(): Promise<boolean> {
+  await nextTick()
+  if (!listRoot.value?.isConnected) return false
+  listRoot.value.focus({ preventScroll: true })
+  return document.activeElement === listRoot.value
+}
+
+defineExpose({ focusConversation, focusList })
 
 function inboxName(id: number): string {
   return props.inboxes.find(inbox => inbox.id === id)?.name || `Inbox #${id}`
@@ -268,44 +271,17 @@ function rowMenuItems(conversation: CommunicationConversation): DropdownMenuItem
 function onCheckboxChange(conversationId: number, value: boolean | 'indeterminate'): void {
   emit('toggle-select', conversationId, value === true)
 }
-
-function onSelectAllChange(value: boolean | 'indeterminate'): void {
-  emit('toggle-select-all', value === true)
-}
 </script>
 
 <template>
   <div class="flex min-h-0 flex-1 flex-col">
     <div
-      v-if="conversations.length"
-      class="flex shrink-0 items-center gap-2 border-b border-default px-3 py-1.5"
-      data-testid="communication-select-loaded"
-    >
-      <UCheckbox
-        :model-value="allLoadedSelected
-          ? true
-          : (selectionIndeterminate ? 'indeterminate' : false)"
-        aria-label="Selecionar conversas carregadas"
-        data-testid="communication-select-loaded-checkbox"
-        @update:model-value="onSelectAllChange"
-      />
-      <button
-        type="button"
-        class="text-xs text-muted hover:text-highlighted"
-        data-testid="communication-select-loaded-label"
-        @click="emit('toggle-select-all', !allLoadedSelected)"
-      >
-        Selecionar carregadas
-        <span v-if="conversations.length">
-          ({{ conversations.length }})
-        </span>
-      </button>
-    </div>
-
-    <div
       ref="listRoot"
       data-testid="communication-conversation-list"
-      class="min-h-0 flex-1 overflow-y-auto"
+      tabindex="-1"
+      role="region"
+      aria-label="Lista de conversas"
+      class="min-h-0 flex-1 overflow-y-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary/50"
       @scroll.passive="onListScroll"
     >
       <div
@@ -328,7 +304,6 @@ function onSelectAllChange(value: boolean | 'indeterminate'): void {
           class="flex w-full shrink-0 items-center gap-3 border-l-2 border-transparent px-3 py-2.5"
           :style="rowHeightStyle"
         >
-          <USkeleton class="size-4 shrink-0 rounded-sm" />
           <USkeleton class="size-9 shrink-0 rounded-full" />
           <div class="flex min-w-0 flex-1 flex-col justify-center gap-1.5">
             <div class="flex items-center gap-2">
@@ -361,7 +336,7 @@ function onSelectAllChange(value: boolean | 'indeterminate'): void {
             role="listitem"
             :aria-posinset="virtualRange.start + offset + 1"
             :aria-setsize="total ?? conversations.length"
-            class="group flex w-full shrink-0 items-center gap-1.5 overflow-hidden border-l-2 px-2 py-2.5 transition-colors"
+            class="group/row flex w-full shrink-0 items-center gap-1.5 overflow-hidden border-l-2 px-2 py-2.5 transition-colors"
             :style="rowHeightStyle"
             :class="[
               selectedId === conversation.id
@@ -374,7 +349,10 @@ function onSelectAllChange(value: boolean | 'indeterminate'): void {
             ]"
             :data-testid="`communication-conversation-row-${conversation.id}`"
           >
-            <div class="relative size-8 shrink-0">
+            <div
+              class="group/avatar relative size-8 shrink-0"
+              :data-testid="`communication-conversation-avatar-select-${conversation.id}`"
+            >
               <UAvatar
                 :src="communicationProfilePictureSrc(conversation.contact, apiBase)"
                 :alt="communicationDisplayName(conversation)"
@@ -382,17 +360,24 @@ function onSelectAllChange(value: boolean | 'indeterminate'): void {
                 class="size-8"
                 :data-testid="`communication-conversation-avatar-${conversation.id}`"
               />
-              <UCheckbox
-                :model-value="isSelected(conversation.id)"
-                :aria-label="`Selecionar ${communicationDisplayName(conversation)}`"
-                class="pointer-events-none absolute -bottom-1 -end-1 z-10 rounded-md bg-default p-0.5 opacity-0 shadow-sm ring-1 ring-default transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 [@media(pointer:coarse)]:pointer-events-auto [@media(pointer:coarse)]:opacity-100"
-                :class="isSelected(conversation.id) ? 'pointer-events-auto opacity-100' : ''"
-                :data-testid="`communication-conversation-check-${conversation.id}`"
-                @update:model-value="value => onCheckboxChange(conversation.id, value)"
-                @click.stop
-                @keydown.enter.stop.prevent="onCheckboxChange(conversation.id, !isSelected(conversation.id))"
-                @keydown.space.stop
-              />
+              <div
+                class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-full bg-default/45 opacity-0 backdrop-blur-[2px] transition-[opacity,background-color] group-hover/avatar:pointer-events-auto group-hover/avatar:opacity-100 group-focus-within/row:pointer-events-auto group-focus-within/row:opacity-100 [@media(pointer:coarse)]:pointer-events-auto [@media(pointer:coarse)]:opacity-100"
+                :class="isSelected(conversation.id)
+                  ? 'pointer-events-auto bg-default/75 opacity-100'
+                  : ''"
+                @click.stop="onCheckboxChange(conversation.id, !isSelected(conversation.id))"
+              >
+                <UCheckbox
+                  :model-value="isSelected(conversation.id)"
+                  size="md"
+                  :aria-label="`Selecionar ${communicationDisplayName(conversation)}`"
+                  :data-testid="`communication-conversation-check-${conversation.id}`"
+                  @update:model-value="value => onCheckboxChange(conversation.id, value)"
+                  @click.stop
+                  @keydown.enter.stop.prevent="onCheckboxChange(conversation.id, !isSelected(conversation.id))"
+                  @keydown.space.stop
+                />
+              </div>
             </div>
 
             <button

@@ -34,7 +34,52 @@ async function expectNoHorizontalOverflow(page: Page) {
   )).toBeLessThanOrEqual(1)
 }
 
-async function expectSelectionControlKeepsAvatarVisible(row: Locator) {
+async function expectNoElementHorizontalOverflow(locator: Locator) {
+  await expect.poll(() => locator.evaluate(
+    element => element.scrollWidth - element.clientWidth
+  )).toBeLessThanOrEqual(1)
+}
+
+async function expectSquareControl(locator: Locator) {
+  await expect.poll(async () => {
+    const box = await locator.boundingBox()
+    return box ? Math.abs(box.width - box.height) : Number.POSITIVE_INFINITY
+  }).toBeLessThanOrEqual(1)
+}
+
+async function dismissOpenMenu(page: Page) {
+  await page.keyboard.press('Escape')
+  if (await page.locator('[role="menu"]:visible').count()) {
+    const viewport = page.viewportSize()
+    expect(viewport).not.toBeNull()
+    await page.mouse.click(viewport!.width - 8, viewport!.height - 8)
+  }
+}
+
+async function expectDropdownAlignment(
+  page: Page,
+  trigger: Locator,
+  itemName: string,
+  expectedAlign: 'end' | 'start'
+) {
+  await trigger.click()
+  const item = page.getByRole('menuitem', { name: itemName })
+  await expect(item).toBeVisible()
+  const menu = page.locator('[role="menu"]').filter({ has: item })
+  await expect(menu).toHaveAttribute('data-align', expectedAlign)
+
+  const viewport = page.viewportSize()
+  const menuBox = await menu.boundingBox()
+  expect(viewport).not.toBeNull()
+  expect(menuBox).not.toBeNull()
+  expect(menuBox!.x).toBeGreaterThanOrEqual(7)
+  expect(menuBox!.x + menuBox!.width).toBeLessThanOrEqual(viewport!.width - 7)
+
+  await dismissOpenMenu(page)
+  await expect(item).toHaveCount(0)
+}
+
+async function expectSelectionControlCentered(row: Locator) {
   const avatar = row.locator('[data-testid^="communication-conversation-avatar-"]')
   const checkbox = row.locator('[data-testid^="communication-conversation-check-"]')
   const avatarBox = await avatar.boundingBox()
@@ -44,6 +89,16 @@ async function expectSelectionControlKeepsAvatarVisible(row: Locator) {
   expect(checkboxBox).not.toBeNull()
   expect(checkboxBox!.width).toBeLessThan(avatarBox!.width)
   expect(checkboxBox!.height).toBeLessThan(avatarBox!.height)
+  const avatarCenter = {
+    x: avatarBox!.x + avatarBox!.width / 2,
+    y: avatarBox!.y + avatarBox!.height / 2
+  }
+  const checkboxCenter = {
+    x: checkboxBox!.x + checkboxBox!.width / 2,
+    y: checkboxBox!.y + checkboxBox!.height / 2
+  }
+  expect(Math.abs(checkboxCenter.x - avatarCenter.x)).toBeLessThanOrEqual(1)
+  expect(Math.abs(checkboxCenter.y - avatarCenter.y)).toBeLessThanOrEqual(1)
 }
 
 test('desktop: lista, timeline e contexto consomem a foto real', async ({ page }) => {
@@ -64,7 +119,7 @@ test('desktop: lista, timeline e contexto consomem a foto real', async ({ page }
   await expect(unavailableRow.locator('[data-testid^="communication-conversation-avatar-"]')).toContainText('CS')
 
   await readyRow.locator('[id^="communication-conversation-"]').click()
-  await expectSelectionControlKeepsAvatarVisible(readyRow)
+  await expectSelectionControlCentered(readyRow)
   await expect(page.getByTestId('communication-timeline-panel')).toBeVisible({ timeout: 45_000 })
   const timelineAvatar = page.getByTestId('communication-timeline-avatar')
   await expect(timelineAvatar).toHaveAttribute('src', /\/api\/v1\/communication\/profile-pictures\/\d+\/\d+$/)
@@ -85,10 +140,214 @@ test('mobile: abre a timeline real e preserva o fallback', async ({ page }) => {
   const readyRow = page.locator('[data-testid^="communication-conversation-row-"]').filter({ hasText: readyConversation })
   const unavailableRow = page.locator('[data-testid^="communication-conversation-row-"]').filter({ hasText: unavailableConversation })
   await expect(unavailableRow.locator('[data-testid^="communication-conversation-avatar-"]')).toContainText('CS')
-  await expectSelectionControlKeepsAvatarVisible(readyRow)
+  await expectSelectionControlCentered(readyRow)
   await readyRow.locator('[id^="communication-conversation-"]').click()
   await expect(page.getByRole('button', { name: 'Voltar à lista' })).toBeVisible({ timeout: 45_000 })
   await expect(page.locator('[data-testid="communication-timeline-avatar"]:visible'))
     .toHaveAttribute('src', /\/api\/v1\/communication\/profile-pictures\/\d+\/\d+$/)
   await expectNoHorizontalOverflow(page)
+})
+
+test('filtros usam ícones e popover de regras sem margem ou overflow', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await login(page)
+  const listPanel = await openWorkspace(page)
+
+  for (const width of [320, 390, 1024, 1440]) {
+    await page.setViewportSize({ width, height: width < 600 ? 844 : 900 })
+
+    const filters = page.getByTestId('communication-list-filters')
+    const firstRow = page.locator('[data-testid^="communication-conversation-row-"]').first()
+    await expect(filters).toBeVisible()
+    await expect(firstRow).toBeVisible()
+
+    const filtersBox = await filters.boundingBox()
+    const rowBox = await firstRow.boundingBox()
+    expect(filtersBox).not.toBeNull()
+    expect(rowBox).not.toBeNull()
+    expect(Math.abs(filtersBox!.x - rowBox!.x)).toBeLessThanOrEqual(1)
+    expect(Math.abs(filtersBox!.width - rowBox!.width)).toBeLessThanOrEqual(1)
+
+    const status = page.getByTestId('communication-filter-status')
+    const sort = page.getByTestId('communication-filter-sort')
+    const advanced = page.getByTestId('communication-filter-advanced-toggle')
+    await expectSquareControl(status)
+    await expectSquareControl(sort)
+    await expectSquareControl(advanced)
+
+    await advanced.click()
+    const advancedPanel = page.getByTestId('communication-filter-advanced-panel')
+    await expect(advancedPanel).toBeVisible()
+    await expect(advancedPanel).toContainText('Todas as regras são combinadas com “E”.')
+    const popoverBox = await advancedPanel.boundingBox()
+    expect(popoverBox).not.toBeNull()
+    expect(popoverBox!.x).toBeGreaterThanOrEqual(0)
+    expect(popoverBox!.x + popoverBox!.width).toBeLessThanOrEqual(width)
+    await expectNoHorizontalOverflow(page)
+    await expectNoElementHorizontalOverflow(listPanel)
+    await advanced.click()
+    await expect(advancedPanel).toHaveCount(0)
+  }
+
+  await expectDropdownAlignment(
+    page,
+    page.getByTestId('communication-filter-status'),
+    'Pendentes',
+    'start'
+  )
+  await expectDropdownAlignment(
+    page,
+    page.getByTestId('communication-filter-sort'),
+    'Não lidas primeiro',
+    'end'
+  )
+})
+
+test('seleção contextual cobre teclado, todas carregadas, conteúdo e foco', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 900 })
+  await login(page)
+  await openWorkspace(page)
+
+  const rows = page.locator('[data-testid^="communication-conversation-row-"]')
+  await expect(rows).not.toHaveCount(0)
+  const firstRow = rows.first()
+  const secondRow = rows.nth(1)
+  const firstAvatar = firstRow.locator('[data-testid^="communication-conversation-avatar-select-"]')
+  const firstCheckbox = firstRow.locator('[data-testid^="communication-conversation-check-"]')
+  const secondCheckbox = secondRow.locator('[data-testid^="communication-conversation-check-"]')
+
+  await firstAvatar.hover()
+  await firstCheckbox.click()
+  await expect(page.getByTestId('communication-bulk-bar')).toBeVisible()
+  await expect(page.getByTestId('communication-timeline-panel')).toHaveCount(0)
+
+  await secondCheckbox.focus()
+  await secondCheckbox.press('Enter')
+  await expect(secondCheckbox).toHaveAttribute('aria-checked', 'true')
+  await secondCheckbox.press('Space')
+  await expect(secondCheckbox).toHaveAttribute('aria-checked', 'false')
+  await expect(page.getByTestId('communication-timeline-panel')).toHaveCount(0)
+
+  const bulkToggle = page.getByTestId('communication-bulk-select-all')
+  await expect(bulkToggle).toHaveAttribute('aria-checked', 'mixed')
+  await bulkToggle.click()
+  await expect(bulkToggle).toHaveAttribute('aria-checked', 'true')
+
+  const list = page.getByTestId('communication-conversation-list')
+  for (const width of [320, 390, 1024, 1440]) {
+    await page.setViewportSize({ width, height: width < 600 ? 844 : 900 })
+    await list.evaluate((element) => {
+      element.scrollTop = element.scrollHeight
+      element.dispatchEvent(new Event('scroll'))
+    })
+    await expect.poll(() => list.evaluate(element => element.scrollTop)).toBeGreaterThan(0)
+
+    const lastVisibleRow = rows.last()
+    const lastVisibleCheckbox = lastVisibleRow.locator('[data-testid^="communication-conversation-check-"]')
+    await expect(lastVisibleCheckbox).toHaveAttribute('aria-checked', 'true')
+    const lastRowBox = await lastVisibleRow.boundingBox()
+    const bulkBar = page.getByTestId('communication-bulk-bar')
+    const bulkBarBox = await bulkBar.boundingBox()
+    const listBox = await list.boundingBox()
+    expect(lastRowBox).not.toBeNull()
+    expect(bulkBarBox).not.toBeNull()
+    expect(listBox).not.toBeNull()
+    expect(bulkBarBox!.y + bulkBarBox!.height).toBeLessThanOrEqual(listBox!.y + 1)
+    expect(lastRowBox!.y).toBeGreaterThanOrEqual(listBox!.y - 1)
+    expect(lastRowBox!.y + lastRowBox!.height)
+      .toBeLessThanOrEqual(listBox!.y + listBox!.height + 1)
+    await expect.poll(() => page.locator('[data-testid^="communication-bulk-menu-"]').count())
+      .toBeGreaterThanOrEqual(3)
+    await expectNoHorizontalOverflow(page)
+    await expectNoElementHorizontalOverflow(bulkBar)
+    await expectNoElementHorizontalOverflow(page.getByTestId('communication-list-panel'))
+
+    if (width === 320) {
+      await expectDropdownAlignment(
+        page,
+        page.getByTestId('communication-bulk-menu-read'),
+        'Marcar como lidas',
+        'start'
+      )
+    }
+  }
+
+  const bulkMenus = [
+    ['read', 'Marcar como lidas', 'start'],
+    ['status', 'Resolver', 'start'],
+    ['assignee', 'Sem responsável', 'end'],
+    ['organization', 'Mover para fila', 'end']
+  ] as const
+  for (const [key, itemName, align] of bulkMenus) {
+    const trigger = page.getByTestId(`communication-bulk-menu-${key}`)
+    if (await trigger.count()) {
+      await expectDropdownAlignment(page, trigger, itemName, align)
+    }
+  }
+
+  await page.getByTestId('communication-bulk-clear').click()
+  await expect(page.getByTestId('communication-bulk-bar')).toHaveCount(0)
+  await expect.poll(() => page.evaluate(() => {
+    const active = document.activeElement as HTMLElement | null
+    return Boolean(active?.dataset.conversationId)
+      || active?.dataset.testid === 'communication-conversation-list'
+  })).toBe(true)
+
+  const fallbackRowTestId = await page
+    .locator('[data-testid^="communication-conversation-row-"]:visible')
+    .first()
+    .getAttribute('data-testid')
+  expect(fallbackRowTestId).not.toBeNull()
+  const fallbackRow = page.getByTestId(fallbackRowTestId!)
+  const checkbox = fallbackRow.locator('[data-testid^="communication-conversation-check-"]')
+  await fallbackRow.locator('[data-testid^="communication-conversation-avatar-select-"]').hover()
+  await checkbox.click()
+  await page.getByTestId('communication-bulk-select-all').click()
+  await expect(page.getByTestId('communication-bulk-select-all')).toHaveAttribute('aria-checked', 'true')
+  await page.getByTestId('communication-bulk-select-all').click()
+  await expect(page.getByTestId('communication-bulk-bar')).toHaveCount(0)
+})
+
+test.describe('painel mestre com toque', () => {
+  test.use({
+    hasTouch: true,
+    viewport: { width: 1024, height: 900 }
+  })
+
+  test('mantém todas as ações bulk acessíveis na largura mínima', async ({ page }) => {
+    await login(page)
+    const listPanel = await openWorkspace(page)
+    await expect.poll(() => page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true)
+
+    await listPanel.evaluate((element) => {
+      const panel = element as HTMLElement
+      panel.style.setProperty('flex', '0 0 205px', 'important')
+      panel.style.setProperty('width', '205px', 'important')
+      panel.style.setProperty('max-width', '205px', 'important')
+    })
+    await expect.poll(async () => (await listPanel.boundingBox())?.width ?? 0).toBeLessThanOrEqual(206)
+
+    const firstRow = page.locator('[data-testid^="communication-conversation-row-"]').first()
+    await firstRow.locator('[data-testid^="communication-conversation-check-"]').click()
+
+    const bulkBar = page.getByTestId('communication-bulk-bar')
+    await expect(bulkBar).toBeVisible()
+    await expectNoElementHorizontalOverflow(bulkBar)
+
+    const controls = bulkBar.locator(
+      '[data-testid^="communication-bulk-menu-"], [data-testid="communication-bulk-clear"]'
+    )
+    await expect.poll(() => controls.count()).toBeGreaterThanOrEqual(4)
+    const barBox = await bulkBar.boundingBox()
+    expect(barBox).not.toBeNull()
+    const controlsCount = await controls.count()
+    for (let index = 0; index < controlsCount; index += 1) {
+      const control = controls.nth(index)
+      await expect(control).toBeVisible()
+      const controlBox = await control.boundingBox()
+      expect(controlBox).not.toBeNull()
+      expect(controlBox!.x).toBeGreaterThanOrEqual(barBox!.x - 1)
+      expect(controlBox!.x + controlBox!.width).toBeLessThanOrEqual(barBox!.x + barBox!.width + 1)
+    }
+  })
 })

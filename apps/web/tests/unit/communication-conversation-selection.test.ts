@@ -37,6 +37,42 @@ function conversation(
 }
 
 describe('seleção operacional da lista de conversas', () => {
+  it('distingue seleção vazia, parcial e total inclusive nos limites', () => {
+    const oneLoaded = [conversation(1)]
+    const threeLoaded = [conversation(1), conversation(2), conversation(3)]
+
+    expect(conversationSelectionState(new Set(), oneLoaded)).toEqual({
+      selectedCount: 0,
+      allLoadedSelected: false,
+      indeterminate: false
+    })
+    expect(conversationSelectionState(new Set([1]), oneLoaded)).toEqual({
+      selectedCount: 1,
+      allLoadedSelected: true,
+      indeterminate: false
+    })
+    expect(conversationSelectionState(new Set([1, 2]), threeLoaded)).toEqual({
+      selectedCount: 2,
+      allLoadedSelected: false,
+      indeterminate: true
+    })
+    expect(conversationSelectionState(new Set([1, 2, 3]), threeLoaded)).toEqual({
+      selectedCount: 3,
+      allLoadedSelected: true,
+      indeterminate: false
+    })
+    expect(conversationSelectionState(new Set(), [])).toEqual({
+      selectedCount: 0,
+      allLoadedSelected: false,
+      indeterminate: false
+    })
+    expect(conversationSelectionState(new Set([9]), threeLoaded)).toEqual({
+      selectedCount: 1,
+      allLoadedSelected: false,
+      indeterminate: false
+    })
+  })
+
   it('seleciona individualmente e todas as carregadas', () => {
     const loaded = [conversation(1), conversation(2), conversation(3)]
     let selected = new Set<number>()

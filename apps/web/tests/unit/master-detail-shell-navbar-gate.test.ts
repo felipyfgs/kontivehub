@@ -12,7 +12,9 @@ describe('master-detail shell navbar gate', () => {
     expect(master.match(/<ShellPageNavbar\b/g)).toHaveLength(1)
     expect(master).not.toContain('<UDashboardNavbar')
     expect(master).not.toContain('<UDashboardSidebarCollapse')
-    expect(master).toContain('workspace.conversations.value.length')
+    expect(master).toMatch(
+      /<template #trailing>[\s\S]*?<UBadge[\s\S]*?:label="String\(workspace\.conversationsTotal\.value\)"[\s\S]*?<\/template>/
+    )
     expect(master).toContain('Estado da atualização em tempo real')
     expect(master).toContain('Administrar comunicação')
     expect(master).toContain(':default-size="24"')
