@@ -119,3 +119,42 @@ A API SHALL NOT criar ou reabrir uma conversation cujo único peer seja o endere
 #### Scenario: Self-chat legado é encontrado
 - **WHEN** uma correlação confiável encontra uma conversation ativa ligada à identity da própria sessão
 - **THEN** essa conversation não é usada como peer remoto nem recebe novas mensagens
+### Requirement: Merge PN↔LID consolida perfil e ledger exatamente
+Ao consolidar peers LID↔PN com evidência válida, a API SHALL transferir perfis por inbox e a união exata do ledger para a identity/conversation sobreviventes.
+
+A escolha SHALL usar uma ordenação total única em retries e merges concorrentes. O contato sobrevivente prioriza, nesta ordem, raiz não expurgada, não provisória, com nome, ativa e menor `id`. A identity prioriza PN sobre LID e, entre PNs, maior `last_seen_at`, raiz canônica e menor `id`; sem PN, permanece a identity do endereço canônico comprovado pelo evento. A conversation prioriza a única execução de flow não terminal; sem flow, prioriza estado não resolvido, maior `last_message_at` e maior `id`. Mais de uma conversation com flow não terminal é conflito fail-closed. Donors, profiles, ledger, read-state e redirects MUST convergir para esses mesmos survivors.
+
+#### Scenario: Fragmentos provisórios empatam
+- **WHEN** retries ou workers concorrentes encontram fragmentos com a mesma prioridade funcional
+- **THEN** locks de aliases ordenados e os desempates por `id` escolhem o mesmo survivor, e todos os donors apontam para ele sem cadeia divergente
+
+#### Scenario: Perfis escolhem a fonte mais recente
+- **WHEN** survivor e donor possuem observações diferentes da mesma fonte
+- **THEN** vence o maior `(observed_at,event_id)` daquela fonte, preservando fontes independentes
+
+#### Scenario: Ledger contém lacunas
+- **WHEN** os fragmentos possuem pendências não contíguas
+- **THEN** cada `message_id` pendente é movido uma única vez para a sobrevivente
+
+#### Scenario: Read-state é consolidado
+- **WHEN** fragmentos possuem read-states diferentes
+- **THEN** a sobrevivente recebe cursor compatível, autoria preservada quando aplicável e uma nova versão
+
+#### Scenario: Writer recebe ID donor
+- **WHEN** READ ou UNREAD recebe uma conversa redirecionada
+- **THEN** a operação aplica-se à sobrevivente e mantém a regra de conflito de versão
+
+### Requirement: Correlação não inventa PN
+O Wazync SHALL converter `JIDAlt` válido do provider no objeto normalizado `source_identity`; a API SHALL aceitar somente esse objeto contratual e SHALL NOT consumir campos protobuf crus. Para inbound, `source_identity.primary` é o peer remoto LID e `alternate` MAY vir de `SenderAlt` remoto PN. Para outbound, o alternate remoto MAY vir somente de `RecipientAlt`; `SenderAlt` representa a sessão e MUST NOT promover o peer. Evidência válida exige `primary_kind=LID`, `alternate_kind=PN`, `evidence=MESSAGE_SOURCE_ALT`, endereços 1:1 normalizados e alternate diferente da PN da sessão. Grupo/broadcast, kinds trocados, alternate ausente/inválido ou a PN da própria sessão são rejeitados como prova de associação. O sistema SHALL NOT inferir PN para LID desconhecido.
+
+#### Scenario: Evento outbound contém PNs de sessão e destinatário
+- **WHEN** `SenderAlt` é a PN da sessão e `RecipientAlt` é a PN remota válida
+- **THEN** somente `RecipientAlt` é publicado como alternate em `source_identity`, e a PN da sessão não participa do merge
+
+#### Scenario: Alternate não comprova peer 1:1
+- **WHEN** `JIDAlt` é grupo/broadcast, usa kind incompatível, falha normalização ou coincide com a PN da sessão
+- **THEN** `source_identity` não contém associação LID↔PN e o LID permanece sem PN canônica
+
+#### Scenario: LID sem alternate
+- **WHEN** um perfil/evento contém somente LID
+- **THEN** ele permanece LID até existir evidência válida de PN

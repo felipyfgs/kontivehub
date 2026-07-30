@@ -70,8 +70,10 @@ negado e identificador inválido — por meio de `ShellLoadError`, com ação
 
 A migração SHALL preservar rotas, permissões, fluxos de negócio e os
 identificadores de teste (`data-testid`) existentes, e MUST passar nos gates
-web sem ampliar allowlists do gate de fidelidade nem alterar a matriz de
-paridade.
+web sem ampliar allowlists do gate de fidelidade. A matriz de paridade MAY ser
+atualizada somente para registrar a nova superfície dentro de arquétipos já
+vigentes; a atualização MUST NOT mudar o arquétipo canônico, reclassificar
+falhas ou criar exceções visuais.
 
 #### Scenario: Gates de qualidade web
 
@@ -86,3 +88,19 @@ paridade.
   documentados das três páginas (painéis, navbar, alertas, navegação,
   ações do wizard e do detalhe)
 - **THEN** todos os identificadores continuam presentes após a migração
+
+### Requirement: Catálogo de contatos usa chrome administrativo responsivo
+
+O catálogo de contatos SHALL manter `ShellPagePanel`, uma única navbar/header no desktop, toolbar móvel responsiva, corpo rolável e paginação do arquétipo administrativo, adaptando o corpo para cards semânticos expansíveis em toda a largura e altura úteis. A mudança MUST usar componentes, tokens semânticos e ícones Lucide disponíveis e MUST NOT ampliar allowlists do gate de fidelidade.
+
+#### Scenario: Chrome desktop
+- **WHEN** `/communication/contacts` é aberta em viewport desktop
+- **THEN** header único com busca/filtros/ordenação, coleção ocupando a largura e altura úteis e paginação aparecem na ordem canônica, com cards espaçados em 16 px
+
+#### Scenario: Chrome móvel
+- **WHEN** a mesma rota é aberta em viewport móvel
+- **THEN** controles refluem, cards expandem verticalmente sem scroll horizontal e ações continuam nomeadas e alcançáveis por teclado
+
+#### Scenario: Gates de fidelidade
+- **WHEN** `test:fidelity` e `test:artifacts` são executados
+- **THEN** ambos passam com a matriz de paridade vigente ou com atualização limitada às linhas da superfície Communication coberta por esta mudança, sem alterar mapeamentos canônicos, allowlists ou introduzir exceção visual nova
