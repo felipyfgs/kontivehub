@@ -225,12 +225,9 @@ final class CommunicationInboxGatewayController extends Controller
         QueryCommunicationInboxProfilePictureRequest $request,
         CommunicationInbox $inbox,
     ): JsonResponse {
-        return $this->query(
-            $request,
-            $inbox,
-            GatewayQueryType::ProfilePicture,
-            $request->gatewayData(),
-        );
+        return (new CommunicationGatewayQueryResource(
+            $this->gateway->scheduleProfilePicture($inbox, $request->gatewayData()),
+        ))->response();
     }
 
     public function contactQrLink(

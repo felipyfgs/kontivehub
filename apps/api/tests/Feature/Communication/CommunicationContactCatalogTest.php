@@ -3,6 +3,7 @@
 namespace Tests\Feature\Communication;
 
 use App\Enums\CommunicationChannel;
+use App\Enums\SubscriptionStatus;
 use App\Enums\TenantPermission;
 use App\Enums\TenantRole;
 use App\Events\CommunicationEventCommitted;
@@ -17,6 +18,7 @@ use App\Models\TenantPermissionProfile;
 use App\Models\User;
 use App\Support\CurrentTenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
@@ -144,6 +146,8 @@ final class CommunicationContactCatalogTest extends TestCase
                     'name' => 'Alpha',
                     'is_provisional' => false,
                     'is_active' => true,
+                    'profile_picture_url' => null,
+                    'profile_picture_state' => 'UNKNOWN',
                     'identities' => [],
                     'purged_at' => null,
                 ]],
@@ -309,6 +313,106 @@ final class CommunicationContactCatalogTest extends TestCase
             'tenant_id' => $tenant->id,
             'name' => 'Endereço inválido',
         ]);
+    }
+
+    public function test_identity_phone_is_safe_e164_and_never_exposes_technical_addresses(): void
+    {
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $managerWithoutView = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $this->assignProfile($managerWithoutView, $tenant, [
+            TenantPermission::CommunicationManageContacts,
+        ]);
+        $contact = $this->contact($tenant, 'Seguro', provisional: false, active: true);
+        $phone = $this->identity($tenant, $contact, '+5511999900101');
+        $lid = $this->identity($tenant, $contact, 'lid:123456789');
+        $jid = $this->identity($tenant, $contact, '5511999900102@s.whatsapp.net');
+        $invalid = $this->identity($tenant, $contact, 'not-a-phone');
+        $email = $this->identity($tenant, $contact, '+5511999900105');
+        $email->update(['channel' => CommunicationChannel::Email]);
+        $purgedPhone = $this->identity($tenant, $contact, '+5511999900106');
+        $purgedPhone->update(['purged_at' => now()]);
+        $corrupted = $this->identity($tenant, $contact, '+5511999900107');
+        DB::table('communication_identities')
+            ->where('id', $corrupted->id)
+            ->update(['address_encrypted' => 'ciphertext-inválido']);
+        $purgedContact = $this->contact($tenant, 'Expurgado', provisional: false, active: false);
+        $purgedContactPhone = $this->identity($tenant, $purgedContact, '+5511999900108');
+        $purgedContact->update(['purged_at' => now()]);
+
+        $this->authenticate($admin);
+        $identities = collect($this->getJson('/api/v1/communication/contacts/'.$contact->id)
+            ->assertOk()
+            ->json('data.identities'))
+            ->keyBy('id');
+
+        $this->assertSame('+5511999900101', $identities[$phone->id]['phone']);
+        $this->assertNull($identities[$lid->id]['phone']);
+        $this->assertNull($identities[$jid->id]['phone']);
+        $this->assertNull($identities[$invalid->id]['phone']);
+        $this->assertNull($identities[$email->id]['phone']);
+        $this->assertNull($identities[$purgedPhone->id]['phone']);
+        $this->assertNull($identities[$corrupted->id]['phone']);
+        foreach ($identities as $identity) {
+            $this->assertArrayNotHasKey('address', $identity);
+            $this->assertArrayNotHasKey('address_encrypted', $identity);
+            $this->assertArrayNotHasKey('address_hash', $identity);
+        }
+        $this->getJson('/api/v1/communication/contacts/'.$purgedContact->id)
+            ->assertOk()
+            ->assertJsonPath('data.identities.0.id', $purgedContactPhone->id)
+            ->assertJsonPath('data.identities.0.phone', null);
+
+        $this->authenticate($managerWithoutView);
+        $restricted = collect($this->patchJson('/api/v1/communication/contacts/'.$contact->id, [
+            'name' => 'Seguro atualizado',
+        ])
+            ->assertOk()
+            ->json('data.identities'))
+            ->keyBy('id');
+        $this->assertNull($restricted[$phone->id]['phone']);
+        $this->getJson('/api/v1/communication/contacts/'.$contact->id)->assertForbidden();
+    }
+
+    public function test_contact_search_matches_normalized_phone_hash_without_cross_tenant_leak(): void
+    {
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $foreignTenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $contact = $this->contact($tenant, 'Por telefone', provisional: false, active: true);
+        $this->identity($tenant, $contact, '+5511999900103');
+        $foreign = $this->contact($foreignTenant, 'Estrangeiro', provisional: false, active: true);
+        $this->identity($foreignTenant, $foreign, '+5511999900104');
+
+        $this->authenticate($admin);
+        $this->postJson('/api/v1/communication/contacts/search', [
+            'q' => '(11) 99990-0103',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $contact->id)
+            ->assertJsonPath('meta.total', 1);
+        $this->postJson('/api/v1/communication/contacts/search', [
+            'q' => '+5511999900104',
+        ])
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+        $this->postJson('/api/v1/communication/contacts/search', [])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['q']);
+        $this->getJson('/api/v1/communication/contacts?q=%2B5511999900103')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        $tenant->subscription()->update([
+            'status' => SubscriptionStatus::Suspended,
+        ]);
+        app(CurrentTenant::class)->clear();
+
+        $this->postJson('/api/v1/communication/contacts/search', [
+            'q' => '(11) 99990-0103',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $contact->id);
     }
 
     /** @param list<TenantPermission> $permissions */

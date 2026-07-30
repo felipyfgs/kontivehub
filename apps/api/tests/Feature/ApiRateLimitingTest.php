@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\Enums\ApiRateLimit;
 use App\Http\Middleware\EnsureRecentPasswordConfirmation;
+use App\Models\Tenant;
 use App\Models\User;
+use App\Support\CurrentTenant;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\ThrottleRequests;
@@ -30,6 +32,10 @@ class ApiRateLimitingTest extends TestCase
             ApiRateLimit::AuthenticatedSensitive->value => [10],
             ApiRateLimit::AuthenticatedCritical->value => [5],
             ApiRateLimit::CommunicationMessageSend->value => [120],
+            ApiRateLimit::CommunicationProfilePicture->value => [
+                max(1, (int) config('communication.profile_pictures.stream_rate_limit_per_minute', 600)),
+                max(1, (int) config('communication.profile_pictures.stream_ip_rate_limit_per_minute', 1_200)),
+            ],
             ApiRateLimit::AssistantAccess->value => [60],
             ApiRateLimit::AssistantChat->value => [30],
             ApiRateLimit::CteIntegrationTokenAdministration->value => [(int) config(
@@ -61,9 +67,11 @@ class ApiRateLimitingTest extends TestCase
         $request = Request::create('/api/v1/test', 'GET', server: ['REMOTE_ADDR' => '203.0.113.20']);
         $publicResolver = RateLimiter::limiter(ApiRateLimit::PublicActivation);
         $authenticatedResolver = RateLimiter::limiter(ApiRateLimit::AuthenticatedStandard);
+        $profilePictureResolver = RateLimiter::limiter(ApiRateLimit::CommunicationProfilePicture);
 
         $this->assertNotNull($publicResolver);
         $this->assertNotNull($authenticatedResolver);
+        $this->assertNotNull($profilePictureResolver);
         $this->assertSame('ip:203.0.113.20', $publicResolver($request)->key);
         $this->assertSame('ip:203.0.113.20', $authenticatedResolver($request)->key);
 
@@ -72,6 +80,14 @@ class ApiRateLimitingTest extends TestCase
         $request->setUserResolver(static fn (): User => $user);
 
         $this->assertSame('user:42', $authenticatedResolver($request)->key);
+
+        $tenant = new Tenant;
+        $tenant->forceFill(['id' => 73]);
+        app(CurrentTenant::class)->bindSystem($tenant);
+        $profileLimits = $profilePictureResolver($request);
+        $this->assertIsArray($profileLimits);
+        $this->assertSame('communication-profile-picture:user:42:tenant:73', $profileLimits[0]->key);
+        $this->assertSame('communication-profile-picture:ip:203.0.113.20', $profileLimits[1]->key);
     }
 
     public function test_cte_emitter_push_limits_by_opaque_token_digest_and_separate_ip_ceiling(): void
@@ -150,6 +166,21 @@ class ApiRateLimitingTest extends TestCase
         }
 
         $this->assertSame([], $numeric, 'Rotas API com throttle numérico: '.implode(', ', $numeric));
+    }
+
+    public function test_profile_picture_scheduling_route_uses_the_scoped_limiter(): void
+    {
+        $route = collect(Route::getRoutes())->first(
+            fn ($route): bool => $route->uri() === 'api/v1/communication/inboxes/{inbox}/contacts/profile-picture'
+                && in_array('POST', $route->methods(), true),
+        );
+
+        $this->assertNotNull($route, 'Rota de agendamento de foto não registrada.');
+        $this->assertContains(
+            ThrottleRequests::using(ApiRateLimit::CommunicationProfilePicture),
+            $route->gatherMiddleware(),
+            'Agendamento de foto sem limiter por ator, tenant e IP.',
+        );
     }
 
     public function test_sensitive_tenant_admin_routes_preserve_rate_limit_and_recent_password_boundaries(): void

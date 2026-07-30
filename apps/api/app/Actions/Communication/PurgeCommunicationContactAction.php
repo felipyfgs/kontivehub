@@ -6,7 +6,6 @@ use App\DTO\Communication\CommunicationContactPurgeResult;
 use App\Enums\Communication\ConversationStatus;
 use App\Enums\Communication\FlowRunStatus;
 use App\Enums\Communication\OutboxStatus;
-use App\Jobs\Communication\DeleteCommunicationMediaObjectJob;
 use App\Models\CommunicationAttachment;
 use App\Models\CommunicationContact;
 use App\Models\CommunicationConversation;
@@ -16,6 +15,7 @@ use App\Models\CommunicationMessage;
 use App\Services\Communication\CommunicationContactCanonicalizer;
 use App\Services\Communication\Conversation\CommunicationConversationReadStateService;
 use App\Services\Communication\Events\CommunicationEventRecorder;
+use App\Services\Communication\Media\CommunicationMediaDeletionService;
 use App\Services\Communication\Media\CommunicationMediaStore;
 use App\Support\CurrentTenant;
 use Illuminate\Database\Eloquent\Builder;
@@ -27,6 +27,7 @@ final class PurgeCommunicationContactAction
     public function __construct(
         private readonly CurrentTenant $currentTenant,
         private readonly CommunicationMediaStore $media,
+        private readonly CommunicationMediaDeletionService $deletions,
         private readonly CommunicationEventRecorder $events,
         private readonly CommunicationContactCanonicalizer $canonicalizer,
         private readonly CommunicationConversationReadStateService $readState,
@@ -37,6 +38,7 @@ final class PurgeCommunicationContactAction
         $tenantId = (int) $this->currentTenant->tenant()->id;
         $contactId = (int) $contact->id;
         $contactIds = [$contactId];
+        $profileObjectIds = [];
         $now = now();
         $tombstone = hash(
             'sha256',
@@ -48,12 +50,20 @@ final class PurgeCommunicationContactAction
             $tenantId,
             &$contactId,
             &$contactIds,
+            &$profileObjectIds,
             $now,
             $tombstone,
         ): void {
             [$lockedContact, $contactIds] = $this->canonicalizer->lockContactClass($contact);
             $contactId = (int) $lockedContact->id;
-            $identityIds = $this->identityIds($tenantId, $contactIds)
+            $identities = CommunicationIdentity::query()
+                ->withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->whereIn('contact_id', $contactIds)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+            $identityIds = $identities
                 ->pluck('id')
                 ->map(static fn ($id): int => (int) $id)
                 ->all();
@@ -68,31 +78,35 @@ final class PurgeCommunicationContactAction
                 ->map(static fn ($id): int => (int) $id)
                 ->all();
 
+            $profileObjectIds = DB::table('communication_inbox_identity_profiles')
+                ->where('tenant_id', $tenantId)
+                ->whereIn('identity_id', $identityIds)
+                ->whereNotNull('profile_picture_object_id')
+                ->pluck('profile_picture_object_id')
+                ->filter()
+                ->map(static fn ($id): string => (string) $id)
+                ->all();
             DB::table('communication_inbox_identity_profiles')
                 ->where('tenant_id', $tenantId)
                 ->whereIn('identity_id', $identityIds)
                 ->delete();
+            foreach ($profileObjectIds as $objectId) {
+                $this->deletions->request($objectId, $tenantId);
+            }
             $conversations->each(fn (CommunicationConversation $conversation) => $this->readState->purge($conversation));
 
-            CommunicationIdentity::query()
-                ->withoutGlobalScopes()
-                ->where('tenant_id', $tenantId)
-                ->whereIn('contact_id', $contactIds)
-                ->orderBy('id')
-                ->lockForUpdate()
-                ->lazyById(100)
-                ->each(function (CommunicationIdentity $identity) use ($now, $tombstone): void {
-                    $identity->forceFill([
-                        'address_encrypted' => null,
-                        'address_hash' => hash(
-                            'sha256',
-                            'purged-identity|'.$identity->id.'|'.$tombstone,
-                        ),
-                        'address_masked' => '[removido]',
-                        'is_active' => false,
-                        'purged_at' => $now,
-                    ])->save();
-                });
+            $identities->each(function (CommunicationIdentity $identity) use ($now, $tombstone): void {
+                $identity->forceFill([
+                    'address_encrypted' => null,
+                    'address_hash' => hash(
+                        'sha256',
+                        'purged-identity|'.$identity->id.'|'.$tombstone,
+                    ),
+                    'address_masked' => '[removido]',
+                    'is_active' => false,
+                    'purged_at' => $now,
+                ])->save();
+            });
 
             CommunicationConversation::query()
                 ->withoutGlobalScopes()
@@ -202,8 +216,11 @@ final class PurgeCommunicationContactAction
             ->select(['id', 'object_id'])
             ->orderBy('id')
             ->lazyById(100)
-            ->each(function (CommunicationAttachment $attachment) use (&$deletedBlobs): void {
+            ->each(function (CommunicationAttachment $attachment) use (&$deletedBlobs, $tenantId): void {
                 $objectId = (string) $attachment->object_id;
+                if (preg_match('/^[0-9A-HJKMNP-TV-Z]{26}$/i', $objectId) !== 1) {
+                    return;
+                }
                 try {
                     $exists = $this->media->exists($objectId);
                     $this->media->delete($objectId);
@@ -212,7 +229,7 @@ final class PurgeCommunicationContactAction
                     }
                 } catch (Throwable $error) {
                     report($error);
-                    DeleteCommunicationMediaObjectJob::dispatch($objectId);
+                    $this->deletions->request($objectId, $tenantId);
                 }
             });
 

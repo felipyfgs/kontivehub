@@ -17,6 +17,7 @@ use App\Enums\Communication\MessageKind;
 use App\Enums\Communication\MessageSource;
 use App\Enums\Communication\MessageStatus;
 use App\Enums\Communication\OutboxStatus;
+use App\Enums\Communication\ProfilePictureState;
 use App\Enums\CommunicationChannel;
 use App\Enums\CommunicationDispatchStatus;
 use App\Enums\CommunicationExecutionMode;
@@ -36,12 +37,13 @@ use App\Models\CommunicationFlowRun;
 use App\Models\CommunicationFlowVersion;
 use App\Models\CommunicationIdentity;
 use App\Models\CommunicationInbox;
+use App\Models\CommunicationInboxIdentityProfile;
 use App\Models\CommunicationLabel;
 use App\Models\CommunicationMessage;
 use App\Models\CommunicationOutboxEntry;
 use App\Models\Tenant;
-use App\Services\Communication\Media\CommunicationMediaStore;
 use App\Services\Communication\Conversation\CommunicationConversationReadStateService;
+use App\Services\Communication\Media\CommunicationMediaStore;
 use App\Services\Communication\Outbox\CommunicationOutboxDispatcher;
 use App\Services\Communication\Security\CommunicationHmacSigner;
 use GuzzleHttp\Psr7\Utils;
@@ -115,7 +117,11 @@ final class CommunicationGatewayFlowTest extends TestCase
         $this->assertDatabaseCount('communication_attachments', 1);
         $this->assertDatabaseCount('communication_conversation_unread_messages', 1);
         $this->assertDatabaseCount('communication_conversation_read_states', 1);
-        $this->assertDatabaseCount('communication_events', 2);
+        $identity = CommunicationIdentity::query()->withoutGlobalScopes()->sole();
+        $this->assertSame(1, CommunicationEvent::query()->withoutGlobalScopes()
+            ->where('gateway_event_id', 'gateway-inbound-0001')->count());
+        $this->assertDatabaseCount('communication_events', 3);
+        $this->assertUnavailableProfilePictureEvent($inbox, $identity);
         $attachment = CommunicationAttachment::query()->withoutGlobalScopes()->firstOrFail();
         $this->assertSame(hash('sha256', $bytes), $attachment->sha256);
         $this->assertSame('comprovante.pdf', $attachment->original_name_encrypted);
@@ -642,6 +648,61 @@ final class CommunicationGatewayFlowTest extends TestCase
         $this->assertSame($olderAt, $olderIdentity->last_seen_at?->toIso8601String());
     }
 
+    public function test_profile_follows_a_new_canonical_phone_without_a_donor_conversation(): void
+    {
+        [$tenant, $inbox] = $this->context();
+        $lid = 'lid:149865032093946';
+        $olderPn = '+559992032711';
+        $newerPn = '+559992032712';
+
+        $older = $this->aliasEvent(
+            $inbox,
+            'gateway-profile-root-older-0001',
+            'provider-profile-root-older-0001',
+            $lid,
+            $olderPn,
+        );
+        $older['payload']['occurred_at'] = '2026-07-28T15:00:00+00:00';
+        $this->postSignedEvent($older)->assertNoContent();
+
+        $olderIdentity = CommunicationIdentity::query()->withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('address_hash', hash('sha256', $olderPn))
+            ->sole();
+        $profile = CommunicationInboxIdentityProfile::query()->withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('inbox_id', $inbox->id)
+            ->where('identity_id', $olderIdentity->id)
+            ->sole();
+        $profile->forceFill(['picture_id' => 'provider-profile-before-root-change'])->save();
+
+        $newer = $this->aliasEvent(
+            $inbox,
+            'gateway-profile-root-newer-0001',
+            'provider-profile-root-newer-0001',
+            $lid,
+            $newerPn,
+        );
+        $newer['payload']['occurred_at'] = '2026-07-28T16:00:00+00:00';
+        $this->postSignedEvent($newer)->assertNoContent();
+
+        $newerIdentity = CommunicationIdentity::query()->withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('address_hash', hash('sha256', $newerPn))
+            ->sole();
+        $this->assertNull($newerIdentity->canonical_identity_id);
+        $this->assertSame($newerIdentity->id, $olderIdentity->refresh()->canonical_identity_id);
+        $this->assertSame($newerIdentity->id, $profile->refresh()->identity_id);
+        $this->assertSame('provider-profile-before-root-change', $profile->picture_id);
+        $this->assertSame(
+            1,
+            CommunicationInboxIdentityProfile::query()->withoutGlobalScopes()
+                ->where('tenant_id', $tenant->id)
+                ->where('inbox_id', $inbox->id)
+                ->count(),
+        );
+    }
+
     public function test_same_lid_and_pn_remain_isolated_between_tenants(): void
     {
         [$firstTenant, $firstInbox] = $this->context();
@@ -904,7 +965,20 @@ final class CommunicationGatewayFlowTest extends TestCase
         $this->assertDatabaseHas('communication_events', [
             'gateway_event_id' => 'gateway-receipt-played-0001',
         ]);
-        $this->assertSame(5, CommunicationEvent::query()->withoutGlobalScopes()->count());
+        foreach ([
+            'gateway-reply-0001',
+            'gateway-receipt-played-0001',
+            'gateway-receipt-retry-0001',
+            'gateway-receipt-read-0001',
+            'gateway-receipt-sent-0001',
+        ] as $gatewayEventId) {
+            $this->assertSame(1, CommunicationEvent::query()->withoutGlobalScopes()
+                ->where('gateway_event_id', $gatewayEventId)->count());
+        }
+        // O inbound live também publica a projeção durável do ledger compartilhado
+        // e a indisponibilidade sanitizada da foto inicial.
+        $this->assertSame(7, CommunicationEvent::query()->withoutGlobalScopes()->count());
+        $this->assertUnavailableProfilePictureEvent($inbox, $identity);
     }
 
     public function test_outbox_accepts_retries_and_terminally_classifies_failures(): void
@@ -1333,6 +1407,31 @@ final class CommunicationGatewayFlowTest extends TestCase
         $headers = app(CommunicationHmacSigner::class)->headers('POST', $path, $body);
 
         return $this->json('POST', $path, $event, $headers, JSON_UNESCAPED_SLASHES);
+    }
+
+    private function assertUnavailableProfilePictureEvent(
+        CommunicationInbox $inbox,
+        CommunicationIdentity $identity,
+    ): void {
+        $event = CommunicationEvent::query()->withoutGlobalScopes()
+            ->where('type', 'contact.profile_picture.updated')
+            ->where('inbox_id', $inbox->id)
+            ->sole();
+
+        $this->assertNull($event->gateway_event_id);
+        $this->assertNull($event->conversation_id);
+        $this->assertNull($event->message_id);
+        $expectedPayload = [
+            'inbox_id' => (int) $inbox->id,
+            'identity_id' => (int) $identity->id,
+            'state' => ProfilePictureState::Unavailable->value,
+            'version' => 1,
+        ];
+        $payload = $event->payload;
+        ksort($expectedPayload);
+        ksort($payload);
+
+        $this->assertSame($expectedPayload, $payload);
     }
 }
 

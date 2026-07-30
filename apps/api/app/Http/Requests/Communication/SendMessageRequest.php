@@ -41,7 +41,11 @@ final class SendMessageRequest extends CommunicationRequest
     public function rules(): array
     {
         return [
-            'body' => ['nullable', 'string', 'max:4096', 'required_without_all:file,location,contact,poll,interactive'],
+            'body' => ['nullable', 'string', 'required_without_all:file,location,contact,poll,interactive', static function (string $attribute, mixed $value, \Closure $fail): void {
+                if (is_string($value) && strlen($value) > 4096) {
+                    $fail('O campo '.$attribute.' não pode ter mais que 4096 bytes.');
+                }
+            }],
             'file' => [
                 'nullable',
                 'file',

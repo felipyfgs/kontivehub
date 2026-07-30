@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Enums\ApiRateLimit;
+use App\Support\CurrentTenant;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -58,6 +59,10 @@ final class ApiRateLimitServiceProvider extends ServiceProvider
             fn (Request $request): Limit => $this->perMinuteForUserOrIp($request, 120),
         );
         RateLimiter::for(
+            ApiRateLimit::CommunicationProfilePicture,
+            fn (Request $request): array => $this->profilePictureLimits($request),
+        );
+        RateLimiter::for(
             ApiRateLimit::AssistantAccess,
             fn (Request $request): Limit => $this->perMinuteForUserOrIp($request, 60),
         );
@@ -87,6 +92,23 @@ final class ApiRateLimitServiceProvider extends ServiceProvider
             : 'user:'.$identifier;
 
         return Limit::perMinute($maxAttempts)->by($key);
+    }
+
+    /** @return list<Limit> */
+    private function profilePictureLimits(Request $request): array
+    {
+        $userId = $request->user()?->getAuthIdentifier();
+        $tenantId = app(CurrentTenant::class)->id();
+        $actorKey = $userId === null
+            ? 'ip:'.$request->ip()
+            : 'user:'.$userId;
+
+        return [
+            Limit::perMinute(max(1, (int) config('communication.profile_pictures.stream_rate_limit_per_minute', 600)))
+                ->by('communication-profile-picture:'.$actorKey.':tenant:'.($tenantId ?? 'none')),
+            Limit::perMinute(max(1, (int) config('communication.profile_pictures.stream_ip_rate_limit_per_minute', 1_200)))
+                ->by('communication-profile-picture:ip:'.$request->ip()),
+        ];
     }
 
     /**

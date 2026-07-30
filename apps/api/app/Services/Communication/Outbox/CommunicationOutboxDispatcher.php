@@ -10,13 +10,16 @@ use App\Enums\Communication\MessageStatus;
 use App\Enums\Communication\OutboxStatus;
 use App\Exceptions\ApiDomainException;
 use App\Exceptions\CommunicationTransportException;
+use App\Models\CommunicationIdentity;
 use App\Models\CommunicationMessage;
 use App\Models\CommunicationOutboxEntry;
 use App\Services\Communication\Automation\FiscalDispatchStatusProjector;
 use App\Services\Communication\CommunicationAvailability;
+use App\Services\Communication\CommunicationMessageAvailability;
+use App\Services\Communication\Conversation\CommunicationOutboundConversationGate;
+use App\Services\Communication\Events\CommunicationEventRecorder;
 use App\Services\Communication\Flows\CommunicationFlowExecutor;
 use App\Services\Communication\Gateway\CommunicationGatewayOperationPolicy;
-use App\Services\Communication\Events\CommunicationEventRecorder;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use Throwable;
@@ -29,6 +32,8 @@ final readonly class CommunicationOutboxDispatcher
         private CommunicationTransport $transport,
         private FiscalDispatchStatusProjector $fiscalStatuses,
         private CommunicationAvailability $availability,
+        private CommunicationMessageAvailability $messageAvailability,
+        private CommunicationOutboundConversationGate $outboundConversationGate,
         private CommunicationGatewayOperationPolicy $policy,
         private CommunicationOutboundReadReceiptReleaseService $readReceipts,
         private CommunicationEventRecorder $events,
@@ -143,6 +148,26 @@ final readonly class CommunicationOutboxDispatcher
         if ($message?->purged_at !== null) {
             throw new CommunicationTransportException('OUTBOX_MESSAGE_PURGED', false);
         }
+        if ($message?->quarantined_at !== null) {
+            throw new CommunicationTransportException('OUTBOX_MESSAGE_QUARANTINED', false);
+        }
+        if ($entry->type === GatewayCommandType::RequestMediaRetry
+            && ($message === null || (
+                ! $this->messageAvailability->isRecoverable($message)
+                && ! $this->isLegacyMediaRescue($entry, $message)
+            ))) {
+            throw new CommunicationTransportException('MEDIA_RETRY_INVALID_REQUEST', false);
+        }
+        if ($entry->type === GatewayCommandType::SendMessage && (bool) data_get($message?->metadata, 'outbound_initiation')) {
+            $identity = $message === null ? null : CommunicationIdentity::query()
+                ->withoutGlobalScopes()
+                ->where('tenant_id', $entry->tenant_id)
+                ->find($message->identity_id);
+            if ($identity === null) {
+                throw new CommunicationTransportException('OUTBOX_TENANT_SCOPE_INVALID', false);
+            }
+            $this->outboundConversationGate->assertAllowed($inbox, $identity);
+        }
 
         if ($this->policy->allowsDisabledInbox($entry->type)) {
             $this->availability->assertGatewayAvailable();
@@ -168,13 +193,27 @@ final readonly class CommunicationOutboxDispatcher
                 'locked_at' => null,
             ])->save();
             if ($entry->message_id !== null) {
-                CommunicationMessage::query()->withoutGlobalScopes()->whereKey($entry->message_id)->update([
-                    'status' => MessageStatus::Accepted->value,
-                    'accepted_at' => $acceptedAt,
-                    'updated_at' => $acceptedAt,
-                ]);
-                $message = CommunicationMessage::query()->withoutGlobalScopes()->find($entry->message_id);
-                if ($message instanceof CommunicationMessage) {
+                $message = CommunicationMessage::query()
+                    ->withoutGlobalScopes()
+                    ->whereKey($entry->message_id)
+                    ->where('tenant_id', $entry->tenant_id)
+                    ->where('inbox_id', $entry->inbox_id)
+                    ->lockForUpdate()
+                    ->first();
+                if ($message instanceof CommunicationMessage
+                    && $entry->type === GatewayCommandType::RequestMediaRetry) {
+                    $metadata = is_array($message->metadata) ? $message->metadata : [];
+                    if (strtoupper((string) ($metadata['media_state'] ?? '')) !== 'READY') {
+                        $metadata['media_state'] = 'REQUESTED';
+                        unset($metadata['media_error_code']);
+                        $message->forceFill(['metadata' => $metadata])->save();
+                        $this->recordMediaRetryState($entry, $message, 'REQUESTED');
+                    }
+                } elseif ($message instanceof CommunicationMessage) {
+                    $message->forceFill([
+                        'status' => MessageStatus::Accepted,
+                        'accepted_at' => $acceptedAt,
+                    ])->save();
                     $this->fiscalStatuses->project($message, MessageStatus::Accepted, $acceptedAt, 'GATEWAY_ACCEPTANCE');
                 }
             }
@@ -221,20 +260,86 @@ final readonly class CommunicationOutboxDispatcher
             ])->save();
 
             if ($terminal && $entry->message_id !== null) {
-                $message = CommunicationMessage::query()->withoutGlobalScopes()->find($entry->message_id);
+                $message = CommunicationMessage::query()
+                    ->withoutGlobalScopes()
+                    ->whereKey($entry->message_id)
+                    ->where('tenant_id', $entry->tenant_id)
+                    ->where('inbox_id', $entry->inbox_id)
+                    ->lockForUpdate()
+                    ->first();
                 if ($message !== null) {
-                    $current = $message->status instanceof MessageStatus
-                        ? $message->status
-                        : MessageStatus::from((string) $message->status);
-                    $incoming = $retryable ? MessageStatus::Unknown : MessageStatus::Failed;
-                    $merged = $current->merge($incoming);
-                    $message->forceFill([
-                        'status' => $merged,
-                        'failed_at' => $merged === MessageStatus::Failed ? now() : null,
-                    ])->save();
-                    $this->fiscalStatuses->project($message, $merged, now(), 'GATEWAY_DISPATCH');
+                    if ($entry->type === GatewayCommandType::RequestMediaRetry) {
+                        $failureCode = $this->mediaRetryFailureCode($code);
+                        $metadata = is_array($message->metadata) ? $message->metadata : [];
+                        if (strtoupper((string) ($metadata['media_state'] ?? '')) !== 'READY') {
+                            $metadata['media_state'] = 'FAILED';
+                            $metadata['media_error_code'] = $failureCode;
+                            $message->forceFill(['metadata' => $metadata])->save();
+                            $this->recordMediaRetryState($entry, $message, 'FAILED', $failureCode);
+                        }
+                    } else {
+                        $current = $message->status instanceof MessageStatus
+                            ? $message->status
+                            : MessageStatus::from((string) $message->status);
+                        $incoming = $retryable ? MessageStatus::Unknown : MessageStatus::Failed;
+                        $merged = $current->merge($incoming);
+                        $message->forceFill([
+                            'status' => $merged,
+                            'failed_at' => $merged === MessageStatus::Failed
+                                ? ($message->failed_at ?? now())
+                                : null,
+                        ])->save();
+                        $this->fiscalStatuses->project($message, $merged, now(), 'GATEWAY_DISPATCH');
+                    }
                 }
             }
         });
+    }
+
+    private function mediaRetryFailureCode(string $code): string
+    {
+        return in_array($code, [
+            'MEDIA_RETRY_STATE_MISSING',
+            'MEDIA_RETRY_INVALID_REQUEST',
+            'MEDIA_RETRY_DESCRIPTOR_INVALID',
+            'MEDIA_RETRY_DESCRIPTOR_EXPIRED',
+            'MEDIA_RETRY_NOT_AVAILABLE',
+        ], true) ? $code : 'MEDIA_RETRY_REQUEST_FAILED';
+    }
+
+    private function isLegacyMediaRescue(
+        CommunicationOutboxEntry $entry,
+        CommunicationMessage $message,
+    ): bool {
+        $metadata = is_array($message->metadata) ? $message->metadata : [];
+        $kind = $message->kind?->value ?? $message->kind;
+
+        return str_starts_with((string) $entry->effect_key, 'media-rescue:')
+            && ($metadata['history'] ?? false) === true
+            && trim((string) ($metadata['media_state'] ?? '')) === ''
+            && in_array($kind, ['IMAGE', 'AUDIO', 'VIDEO', 'DOCUMENT', 'STICKER'], true)
+            && ! $message->attachments()->withoutGlobalScopes()->whereNull('purged_at')->exists();
+    }
+
+    private function recordMediaRetryState(
+        CommunicationOutboxEntry $entry,
+        CommunicationMessage $message,
+        string $state,
+        ?string $errorCode = null,
+    ): void {
+        $this->events->record(
+            tenantId: (int) $entry->tenant_id,
+            type: 'communication.media_retry.updated',
+            payload: array_filter([
+                'outbox_entry_id' => (int) $entry->id,
+                'state' => $state,
+                'direction' => $message->direction?->value ?? $message->direction,
+                'kind' => $message->kind?->value ?? $message->kind,
+                'error_code' => $errorCode,
+            ], static fn (mixed $value): bool => $value !== null),
+            inboxId: (int) $entry->inbox_id,
+            conversationId: (int) $message->conversation_id,
+            messageId: (int) $message->id,
+        );
     }
 }

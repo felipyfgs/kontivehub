@@ -6,8 +6,11 @@ use App\Contracts\CommunicationTransport;
 use App\DTO\Communication\GatewayQueryData;
 use App\Enums\Communication\GatewayQueryType;
 use App\Enums\CommunicationChannel;
+use App\Exceptions\CommunicationUnavailableException;
 use App\Models\CommunicationIdentity;
 use App\Models\CommunicationInbox;
+use App\Services\Communication\CommunicationAvailability;
+use App\Services\Communication\ProfilePicture\CommunicationProfilePictureRefreshScheduler;
 use Carbon\CarbonImmutable;
 
 /** System-context reconciler. It queries only identities already materialised by Laravel. */
@@ -16,6 +19,8 @@ final readonly class CommunicationInboxIdentityProfileReconciler
     public function __construct(
         private CommunicationTransport $transport,
         private CommunicationInboxIdentityProfileMerger $profiles,
+        private CommunicationProfilePictureRefreshScheduler $profilePictures,
+        private CommunicationAvailability $availability,
     ) {}
 
     /** @return array{applied:int,next_identity_id:?int} */
@@ -24,8 +29,13 @@ final readonly class CommunicationInboxIdentityProfileReconciler
         int $afterIdentityId = 0,
         ?string $observedAt = null,
         ?string $reconciliationId = null,
-    ): array
-    {
+    ): array {
+        try {
+            $this->availability->assertEnabled($inbox, true);
+        } catch (CommunicationUnavailableException) {
+            return ['applied' => 0, 'next_identity_id' => null];
+        }
+
         $stableObservedAt = CarbonImmutable::parse($observedAt ?? now())->utc();
         $stableReconciliationId = $reconciliationId
             ?? 'reconcile-'.substr(hash('sha256', $inbox->id.'|'.$stableObservedAt->format('Y-m-d\\TH:i:s.u\\Z')), 0, 48);
@@ -79,6 +89,7 @@ final readonly class CommunicationInboxIdentityProfileReconciler
                 $stableReconciliationId.':'.$identity->id,
                 $cleared,
             );
+            $this->profilePictures->schedule($inbox, $identity);
             $applied++;
         }
         $last = (int) $identities->last()->id;

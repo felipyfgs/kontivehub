@@ -29,6 +29,7 @@ class CommunicationConversationUnreadMessage extends Model
 
     public function message(): BelongsTo
     {
-        return $this->belongsTo(CommunicationMessage::class, 'message_id');
+        return $this->belongsTo(CommunicationMessage::class, 'message_id')
+            ->visibleToWorkspace();
     }
 }

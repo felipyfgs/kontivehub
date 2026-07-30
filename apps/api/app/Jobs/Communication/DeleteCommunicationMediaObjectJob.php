@@ -2,13 +2,15 @@
 
 namespace App\Jobs\Communication;
 
+use App\Services\Communication\Media\CommunicationMediaDeletionService;
 use App\Services\Communication\Media\CommunicationMediaStore;
 use App\Support\LogSanitizer;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
 
-final class DeleteCommunicationMediaObjectJob implements ShouldQueue
+final class DeleteCommunicationMediaObjectJob implements ShouldBeUnique, ShouldQueue
 {
     use Queueable;
 
@@ -16,24 +18,43 @@ final class DeleteCommunicationMediaObjectJob implements ShouldQueue
 
     public int $timeout = 300;
 
+    public int $uniqueFor = 600;
+
     /** @var list<int> */
     public array $backoff = [10, 30, 60, 300, 900];
 
-    public function __construct(public readonly string $objectId)
+    public function __construct(public readonly string $objectId, public readonly ?int $intentId = null)
     {
+        $this->onQueue('communication');
         $this->afterCommit();
     }
 
-    public function handle(CommunicationMediaStore $media): void
+    public function handle(CommunicationMediaStore $media, ?CommunicationMediaDeletionService $deletions = null): void
     {
-        if ($media->exists($this->objectId)) {
-            $media->delete($this->objectId);
+        $deletions ??= app(CommunicationMediaDeletionService::class);
+        try {
+            if ($media->exists($this->objectId)) {
+                $media->delete($this->objectId);
+            }
+            if ($this->intentId !== null) {
+                $deletions->markDeleted($this->intentId);
+            }
+        } catch (\Throwable $error) {
+            if ($this->intentId !== null) {
+                $deletions->retry($this->intentId, $error);
+            }
+            throw $error;
         }
     }
 
     public function tags(): array
     {
-        return ['job:'.class_basename(self::class)];
+        return ['communication', 'media-deletion', 'job:'.class_basename(self::class)];
+    }
+
+    public function uniqueId(): string
+    {
+        return $this->objectId;
     }
 
     public function failed(?\Throwable $e): void

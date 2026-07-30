@@ -12,6 +12,31 @@ use InvalidArgumentException;
 final class GatewayContractPayload
 {
     /** @var list<string> */
+    private const TECHNICAL_MESSAGE_TYPES = [
+        'protocolmessage',
+        'reactionmessage',
+        'pollupdatemessage',
+        'editedmessage',
+        'keepinchatmessage',
+        'senderkeydistributionmessage',
+    ];
+
+    /** @var list<string> */
+    private const MEDIA_RETRY_FAILURE_CODES = [
+        'MEDIA_RETRY_STATE_MISSING',
+        'MEDIA_RETRY_INVALID_REQUEST',
+        'MEDIA_RETRY_REQUEST_FAILED',
+        'MEDIA_RETRY_DESCRIPTOR_INVALID',
+        'MEDIA_RETRY_DESCRIPTOR_EXPIRED',
+        'MEDIA_RETRY_DECRYPT_FAILED',
+        'MEDIA_RETRY_PROVIDER_ERROR',
+        'MEDIA_RETRY_NOT_AVAILABLE',
+        'MEDIA_RETRY_SPOOL_UNAVAILABLE',
+        'MEDIA_RETRY_DOWNLOAD_FAILED',
+        'MEDIA_RETRY_DIGEST_MISMATCH',
+    ];
+
+    /** @var list<string> */
     private const FORBIDDEN_KEYS = [
         'access_token',
         'credentials',
@@ -52,7 +77,7 @@ final class GatewayContractPayload
         'POLL_VOTE' => ['allowed' => ['to', 'target_message_id', 'sender', 'option_names'], 'required' => ['to', 'target_message_id', 'option_names']],
         'MESSAGE_MARK' => ['allowed' => ['to', 'message_ids', 'receipt', 'sender', 'timestamp', 'protocol'], 'required' => ['to', 'message_ids', 'receipt']],
         'MESSAGE_REQUEST_UNAVAILABLE' => ['allowed' => ['to', 'target_message_id', 'sender'], 'required' => ['to', 'target_message_id']],
-        'MEDIA_RETRY_REQUEST' => ['allowed' => ['to', 'target_message_id', 'sender', 'from_me'], 'required' => ['to', 'target_message_id', 'sender', 'from_me']],
+        'MEDIA_RETRY_REQUEST' => ['allowed' => ['to', 'target_message_id', 'sender', 'from_me', 'expected_direction'], 'required' => ['to', 'target_message_id']],
         'PRESENCE_SET' => ['allowed' => ['presence', 'force_active_delivery_receipts'], 'required' => ['presence']],
         'PRESENCE_SUBSCRIBE' => ['allowed' => ['to'], 'required' => ['to']],
         'CHAT_PRESENCE_SET' => ['allowed' => ['to', 'presence', 'media'], 'required' => ['to', 'presence']],
@@ -94,6 +119,9 @@ final class GatewayContractPayload
                 && trim((string) ($payload['to'] ?? '')) === '') {
                 throw new InvalidArgumentException('to é obrigatório para ação de chat 1:1.');
             }
+        }
+        if ($type === GatewayCommandType::RequestMediaRetry) {
+            self::assertMediaRetryCommand($payload);
         }
     }
 
@@ -258,7 +286,83 @@ final class GatewayContractPayload
         if (! preg_match('/^[A-Za-z][A-Za-z0-9._-]{0,79}$/', $providerType)) {
             throw new InvalidArgumentException('provider_type inválido em MESSAGE_RECEIVED.');
         }
-        MessageSemanticContent::fromEvent($payload, $kind);
+        if (in_array(strtolower($providerType), self::TECHNICAL_MESSAGE_TYPES, true)) {
+            throw new InvalidArgumentException('provider_type de controle inválido em MESSAGE_RECEIVED.');
+        }
+        if (isset($payload['direction'])
+            && ! in_array(strtoupper((string) $payload['direction']), ['INBOUND', 'OUTBOUND'], true)) {
+            throw new InvalidArgumentException('direction inválida em MESSAGE_RECEIVED.');
+        }
+
+        $family = strtoupper(trim((string) ($payload['family'] ?? '')));
+        if (in_array($family, ['ACTION', 'CONTROL', 'OUT_OF_SCOPE'], true)) {
+            throw new InvalidArgumentException('family técnica inválida em MESSAGE_RECEIVED.');
+        }
+        $expectedFamily = $kind === MessageKind::Unsupported ? 'UNSUPPORTED' : $kind->value;
+        if ($family !== $expectedFamily) {
+            throw new InvalidArgumentException('kind/family incoerentes em MESSAGE_RECEIVED.');
+        }
+
+        $content = MessageSemanticContent::fromEvent($payload, $kind);
+        $hasSpool = trim((string) ($payload['spool_id'] ?? '')) !== '';
+        $mediaState = strtoupper(trim((string) ($payload['media_state'] ?? '')));
+        $hasExplicitMediaAbsence = in_array($mediaState, [
+            'RETRY_AVAILABLE', 'REQUESTED', 'FAILED', 'UNAVAILABLE',
+        ], true);
+        if ($mediaState !== '' && ! in_array($mediaState, [
+            'RETRY_AVAILABLE', 'REQUESTED', 'READY', 'FAILED', 'UNAVAILABLE',
+        ], true)) {
+            throw new InvalidArgumentException('media_state inválido em MESSAGE_RECEIVED.');
+        }
+
+        match ($kind) {
+            MessageKind::Text => trim((string) ($payload['text'] ?? '')) !== ''
+                ?: throw new InvalidArgumentException('text obrigatório em MESSAGE_RECEIVED TEXT.'),
+            MessageKind::Image, MessageKind::Audio, MessageKind::Video,
+            MessageKind::Document, MessageKind::Sticker => ($hasSpool xor $hasExplicitMediaAbsence)
+                ?: throw new InvalidArgumentException('Mídia exige spool completo ou estado de ausência exclusivo.'),
+            MessageKind::Location => isset($content['location'])
+                ?: throw new InvalidArgumentException('location obrigatório em MESSAGE_RECEIVED LOCATION.'),
+            MessageKind::Contact => isset($content['contacts'])
+                ?: throw new InvalidArgumentException('contacts obrigatório em MESSAGE_RECEIVED CONTACT.'),
+            MessageKind::Poll => isset($content['poll'])
+                ?: throw new InvalidArgumentException('poll obrigatório em MESSAGE_RECEIVED POLL.'),
+            MessageKind::Interactive => isset($content['interactive'])
+                ?: throw new InvalidArgumentException('interactive obrigatório em MESSAGE_RECEIVED INTERACTIVE.'),
+            MessageKind::Unsupported => (($payload['content_present'] ?? false) === true)
+                ?: throw new InvalidArgumentException('UNSUPPORTED exige content_present=true.'),
+            MessageKind::Note => throw new InvalidArgumentException('NOTE inválida em MESSAGE_RECEIVED.'),
+        };
+
+        if ($hasSpool) {
+            foreach (['media_size_bytes', 'media_sha256', 'mime_type'] as $required) {
+                if (! array_key_exists($required, $payload)) {
+                    throw new InvalidArgumentException("{$required} obrigatório com spool_id.");
+                }
+            }
+        }
+    }
+
+    /** @param array<string, mixed> $payload */
+    private static function assertMediaRetryCommand(array $payload): void
+    {
+        $legacy = array_key_exists('sender', $payload) || array_key_exists('from_me', $payload);
+        $v2 = array_key_exists('expected_direction', $payload);
+        if ($legacy === $v2) {
+            throw new InvalidArgumentException('MEDIA_RETRY_REQUEST exige shape legado ou v2 exclusivo.');
+        }
+        if ($legacy) {
+            if (trim((string) ($payload['sender'] ?? '')) === ''
+                || ! array_key_exists('from_me', $payload)
+                || $payload['from_me'] !== false) {
+                throw new InvalidArgumentException('MEDIA_RETRY_REQUEST legado aceita somente inbound válido.');
+            }
+
+            return;
+        }
+        if (! in_array(strtoupper((string) $payload['expected_direction']), ['INBOUND', 'OUTBOUND'], true)) {
+            throw new InvalidArgumentException('expected_direction inválida em MEDIA_RETRY_REQUEST.');
+        }
     }
 
     /** @param array<string, mixed> $payload */
@@ -467,6 +571,9 @@ final class GatewayContractPayload
         if (! in_array($status, ['REQUESTED', 'FAILED', 'READY'], true)) {
             throw new InvalidArgumentException('status inválido em MEDIA_RETRY_UPDATED.');
         }
+        if (! preg_match('/^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/', (string) ($payload['provider_message_id'] ?? ''))) {
+            throw new InvalidArgumentException('provider_message_id inválido em MEDIA_RETRY_UPDATED.');
+        }
         if ($status === 'READY') {
             foreach (['provider_message_id', 'spool_id', 'size_bytes', 'sha256', 'mime_type'] as $required) {
                 if (! array_key_exists($required, $payload)) {
@@ -474,7 +581,14 @@ final class GatewayContractPayload
                 }
             }
         }
-        if ($status === 'FAILED' && ! preg_match('/^[A-Z][A-Z0-9_]{2,79}$/', (string) ($payload['error_code'] ?? ''))) {
+        if ($status !== 'READY' && array_key_exists('spool_id', $payload)) {
+            throw new InvalidArgumentException('spool_id só é permitido em MEDIA_RETRY_UPDATED READY.');
+        }
+        if ($status === 'FAILED' && ! in_array(
+            (string) ($payload['error_code'] ?? ''),
+            self::MEDIA_RETRY_FAILURE_CODES,
+            true,
+        )) {
             throw new InvalidArgumentException('error_code inválido em MEDIA_RETRY_UPDATED FAILED.');
         }
     }

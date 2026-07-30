@@ -258,6 +258,8 @@ final class DocumentImportBatchService
     public function recomputeBatchCounters(DocumentImportBatch $batch): void
     {
         $resultItems = DocumentImportBatchItem::query()
+            ->withoutGlobalScopes()
+            ->where('tenant_id', $batch->tenant_id)
             ->where('document_import_batch_id', $batch->id)
             ->where(fn ($query) => $query
                 ->whereNull('result_code')

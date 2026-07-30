@@ -30,6 +30,7 @@ use App\Services\Communication\CommunicationConversationCanonicalizer;
 use App\Services\Communication\Events\CommunicationEventRecorder;
 use App\Services\Communication\Media\CommunicationMediaStore;
 use App\Services\Communication\Outbox\CommunicationOutboxService;
+use App\Services\Communication\ProfilePicture\CommunicationProfilePictureRefreshScheduler;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
@@ -48,6 +49,7 @@ final readonly class FiscalCommunicationAutomationService
         private CommunicationMediaStore $media,
         private CommunicationOutboxService $outbox,
         private CommunicationEventRecorder $events,
+        private CommunicationProfilePictureRefreshScheduler $profilePictures,
     ) {}
 
     /**
@@ -344,6 +346,7 @@ final readonly class FiscalCommunicationAutomationService
                         'lock_version' => (int) $conversation->lock_version + 1,
                     ])->save();
                 }
+                $this->profilePictures->schedule($inbox, $canonicalIdentity);
                 DB::table('communication_conversation_clients')->insertOrIgnore([
                     'tenant_id' => $tenant->id,
                     'conversation_id' => $conversation->id,

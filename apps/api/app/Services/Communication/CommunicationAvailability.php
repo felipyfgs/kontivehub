@@ -21,7 +21,9 @@ final class CommunicationAvailability
         $this->assertGatewayAvailable();
 
         $inbox->loadMissing('tenant');
-        if (! $inbox->tenant?->communication_enabled) {
+        if (! $inbox->tenant?->communication_enabled
+            || ! $inbox->tenant->is_active
+            || ! $inbox->tenant->isOperational()) {
             throw new CommunicationUnavailableException(CommunicationAvailabilityFailure::TenantDisabled);
         }
         if (! $inbox->is_enabled) {

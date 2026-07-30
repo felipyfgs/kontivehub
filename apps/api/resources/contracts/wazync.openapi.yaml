@@ -93,8 +93,14 @@ paths:
                 $ref: '#/components/schemas/QueryResult'
         '401':
           $ref: '#/components/responses/InvalidSignature'
+        '403':
+          description: Foto de perfil indisponível por privacidade do titular.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
-          description: Alvo da consulta inexistente.
+          description: Alvo da consulta ou foto de perfil inexistente.
           content:
             application/json:
               schema:
@@ -942,7 +948,7 @@ components:
     MediaRetryPayload:
       type: object
       additionalProperties: false
-      required: [to, target_message_id, sender, from_me]
+      required: [to, target_message_id]
       properties:
         to:
           $ref: '#/components/schemas/OneToOneAddress'
@@ -952,6 +958,18 @@ components:
           $ref: '#/components/schemas/OneToOneAddress'
         from_me:
           type: boolean
+        expected_direction:
+          enum: [INBOUND, OUTBOUND]
+      oneOf:
+        - required: [sender, from_me]
+          properties:
+            from_me: {const: false}
+          not: {required: [expected_direction]}
+        - required: [expected_direction]
+          not:
+            anyOf:
+              - required: [sender]
+              - required: [from_me]
     PresencePayload:
       type: object
       additionalProperties: false
@@ -1491,6 +1509,7 @@ components:
         reply_to: {$ref: '#/components/schemas/InboundMessageReference'}
         direction: {enum: [INBOUND, OUTBOUND]}
         history: {type: boolean}
+        media_state: {enum: [RETRY_AVAILABLE, REQUESTED, READY, FAILED, UNAVAILABLE]}
         spool_id: {$ref: '#/components/schemas/Identifier'}
         media_size_bytes: {type: integer, minimum: 0, maximum: 52428800}
         media_sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
@@ -1513,6 +1532,60 @@ components:
           type: array
           maxItems: 16
           items: {type: string, maxLength: 80}
+      allOf:
+        - properties:
+            provider_type:
+              not:
+                enum: [protocolMessage, reactionMessage, pollUpdateMessage, editedMessage, keepInChatMessage, senderKeyDistributionMessage]
+            family:
+              not: {enum: [ACTION, CONTROL, OUT_OF_SCOPE]}
+        - if: {properties: {kind: {const: TEXT}}, required: [kind]}
+          then: {properties: {family: {const: TEXT}}, required: [text]}
+        - if: {properties: {kind: {const: IMAGE}}, required: [kind]}
+          then:
+            allOf:
+              - {$ref: '#/components/schemas/MessageReceivedMediaInvariant'}
+              - {properties: {family: {const: IMAGE}}}
+        - if: {properties: {kind: {const: AUDIO}}, required: [kind]}
+          then:
+            allOf:
+              - {$ref: '#/components/schemas/MessageReceivedMediaInvariant'}
+              - {properties: {family: {const: AUDIO}}}
+        - if: {properties: {kind: {const: VIDEO}}, required: [kind]}
+          then:
+            allOf:
+              - {$ref: '#/components/schemas/MessageReceivedMediaInvariant'}
+              - {properties: {family: {const: VIDEO}}}
+        - if: {properties: {kind: {const: DOCUMENT}}, required: [kind]}
+          then:
+            allOf:
+              - {$ref: '#/components/schemas/MessageReceivedMediaInvariant'}
+              - {properties: {family: {const: DOCUMENT}}}
+        - if: {properties: {kind: {const: STICKER}}, required: [kind]}
+          then:
+            allOf:
+              - {$ref: '#/components/schemas/MessageReceivedMediaInvariant'}
+              - {properties: {family: {const: STICKER}}}
+        - if: {properties: {kind: {const: LOCATION}}, required: [kind]}
+          then: {properties: {family: {const: LOCATION}}, required: [location]}
+        - if: {properties: {kind: {const: CONTACT}}, required: [kind]}
+          then: {properties: {family: {const: CONTACT}}, required: [contacts]}
+        - if: {properties: {kind: {const: POLL}}, required: [kind]}
+          then: {properties: {family: {const: POLL}}, required: [poll]}
+        - if: {properties: {kind: {const: INTERACTIVE}}, required: [kind]}
+          then: {properties: {family: {const: INTERACTIVE}}, required: [interactive]}
+        - if: {properties: {kind: {const: UNSUPPORTED}}, required: [kind]}
+          then:
+            properties:
+              family: {const: UNSUPPORTED}
+              content_present: {const: true}
+            required: [content_present]
+    MessageReceivedMediaInvariant:
+      oneOf:
+        - required: [spool_id, media_size_bytes, media_sha256, mime_type]
+        - properties:
+            media_state: {enum: [RETRY_AVAILABLE, REQUESTED, FAILED, UNAVAILABLE]}
+          required: [media_state]
     MessageStatusEventPayload:
       type: object
       additionalProperties: false
@@ -1778,7 +1851,24 @@ components:
         sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
         mime_type: {type: string, maxLength: 127}
         filename: {type: string, maxLength: 255}
-        error_code: {type: string, pattern: '^[A-Z][A-Z0-9_]{2,79}$'}
+        error_code:
+          enum:
+            - MEDIA_RETRY_STATE_MISSING
+            - MEDIA_RETRY_INVALID_REQUEST
+            - MEDIA_RETRY_REQUEST_FAILED
+            - MEDIA_RETRY_DESCRIPTOR_INVALID
+            - MEDIA_RETRY_DESCRIPTOR_EXPIRED
+            - MEDIA_RETRY_DECRYPT_FAILED
+            - MEDIA_RETRY_PROVIDER_ERROR
+            - MEDIA_RETRY_NOT_AVAILABLE
+            - MEDIA_RETRY_SPOOL_UNAVAILABLE
+            - MEDIA_RETRY_DOWNLOAD_FAILED
+            - MEDIA_RETRY_DIGEST_MISMATCH
+      allOf:
+        - if: {properties: {status: {const: READY}}, required: [status]}
+          then: {required: [spool_id, size_bytes, sha256, mime_type]}
+        - if: {properties: {status: {const: FAILED}}, required: [status]}
+          then: {required: [error_code]}
     GatewayAlertEventPayload:
       type: object
       additionalProperties: false

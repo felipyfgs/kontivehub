@@ -6,8 +6,10 @@ use App\DTO\Communication\CommunicationInboxCommandResult;
 use App\Enums\Communication\GatewayCommandType;
 use App\Enums\Communication\InboxStatus;
 use App\Models\CommunicationInbox;
+use App\Models\CommunicationInboxIdentityProfile;
 use App\Models\CommunicationOutboxEntry;
 use App\Services\Communication\Events\CommunicationEventRecorder;
+use App\Services\Communication\Media\CommunicationMediaDeletionService;
 use App\Services\Communication\Outbox\CommunicationOutboxService;
 use App\Services\Communication\Pairing\CommunicationPairingStateStore;
 use App\Support\CurrentTenant;
@@ -19,6 +21,7 @@ final readonly class DeleteCommunicationInboxAction
         private CommunicationOutboxService $outbox,
         private CommunicationPairingStateStore $pairing,
         private CommunicationEventRecorder $events,
+        private CommunicationMediaDeletionService $mediaDeletions,
         private CurrentTenant $currentTenant,
     ) {}
 
@@ -50,6 +53,16 @@ final readonly class DeleteCommunicationInboxAction
                 ->where('tenant_id', $locked->tenant_id)
                 ->where('inbox_id', $locked->id)
                 ->update(['inbox_id' => null]);
+
+            CommunicationInboxIdentityProfile::query()
+                ->withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->where('inbox_id', $inboxId)
+                ->whereNotNull('profile_picture_object_id')
+                ->lockForUpdate()
+                ->pluck('profile_picture_object_id')
+                ->filter(static fn (mixed $objectId): bool => is_string($objectId) && $objectId !== '')
+                ->each(fn (string $objectId) => $this->mediaDeletions->request($objectId, $tenantId));
 
             $locked->delete();
 

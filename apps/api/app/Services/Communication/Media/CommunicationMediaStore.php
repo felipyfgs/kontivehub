@@ -230,6 +230,66 @@ final readonly class CommunicationMediaStore
         return is_file($this->path($objectId));
     }
 
+    /** @return Generator<int, string> Object ids older than the supplied cutoff; never returns paths. */
+    public function oldObjectIds(\DateTimeInterface $cutoff, int $limit, ?string $afterObjectId = null): Generator
+    {
+        if ($limit <= 0) {
+            return;
+        }
+
+        $remaining = min($limit, 500);
+        $root = rtrim($this->root, '/');
+        if (! is_dir($root)) {
+            return;
+        }
+        $directories = [];
+        foreach (new \DirectoryIterator($root) as $directory) {
+            if ($directory->isDir() && ! $directory->isDot()) {
+                $directories[$directory->getFilename()] = $directory->getPathname();
+            }
+        }
+        ksort($directories, SORT_STRING);
+
+        $afterDirectory = $afterObjectId !== null
+            && preg_match('/^[0-9A-HJKMNP-TV-Z]{26}$/i', $afterObjectId) === 1
+                ? strtolower(substr($afterObjectId, 0, 2))
+                : null;
+
+        foreach ($directories as $directoryName => $directory) {
+            if ($remaining < 1) {
+                break;
+            }
+            if ($afterDirectory !== null && strcmp(strtolower($directoryName), $afterDirectory) < 0) {
+                continue;
+            }
+            $files = [];
+            foreach (new \DirectoryIterator($directory) as $file) {
+                $name = pathinfo($file->getFilename(), PATHINFO_FILENAME);
+                if ($file->isFile() && $file->getExtension() === 'media'
+                    && $file->getMTime() <= $cutoff->getTimestamp()
+                    && preg_match('/^[0-9A-HJKMNP-TV-Z]{26}$/i', $name)) {
+                    if ($afterObjectId !== null && strcmp($name, $afterObjectId) <= 0) {
+                        continue;
+                    }
+                    $files[$name] = true;
+                    if (count($files) > $remaining) {
+                        $largest = max(array_keys($files));
+                        unset($files[$largest]);
+                    }
+                }
+            }
+            ksort($files, SORT_STRING);
+
+            foreach (array_keys($files) as $name) {
+                if ($remaining < 1) {
+                    break 2;
+                }
+                $remaining--;
+                yield $name;
+            }
+        }
+    }
+
     private function path(string $objectId): string
     {
         if (! preg_match('/^[0-9A-HJKMNP-TV-Z]{26}$/i', $objectId)) {

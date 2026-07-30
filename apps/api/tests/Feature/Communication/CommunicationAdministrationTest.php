@@ -744,6 +744,7 @@ final class CommunicationAdministrationTest extends TestCase
             'requires_permission',
             'kinds',
             'max_media_bytes',
+            'conversation_initiation',
         ], array_keys($capabilities->json('data')));
 
         $this->authenticate($viewer);

@@ -2,6 +2,7 @@
 
 namespace App\Actions\Communication;
 
+use App\Contracts\CommunicationOutboundMessageWriter;
 use App\DTO\Communication\CommunicationMessageCreationData;
 use App\DTO\Communication\CommunicationMessageCreationResult;
 use App\Enums\Communication\GatewayCommandType;
@@ -16,6 +17,7 @@ use App\Models\CommunicationConversation;
 use App\Models\CommunicationMessage;
 use App\Services\Communication\CommunicationAvailability;
 use App\Services\Communication\CommunicationConversationCanonicalizer;
+use App\Services\Communication\Conversation\CommunicationMessageIdempotency;
 use App\Services\Communication\Events\CommunicationEventRecorder;
 use App\Services\Communication\Flows\CommunicationFlowRunControlService;
 use App\Services\Communication\Media\CommunicationMediaStore;
@@ -27,7 +29,8 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
-final readonly class CreateCommunicationMessageAction
+/** Writer compartilhado de outbound: staging de blob, TX, evento/outbox e cleanup. */
+final readonly class CreateCommunicationMessageAction implements CommunicationOutboundMessageWriter
 {
     private const PROVIDER_MESSAGE_CONSTRAINT = 'communication_messages_inbox_id_provider_message_id_unique';
 
@@ -35,6 +38,7 @@ final readonly class CreateCommunicationMessageAction
         private CurrentTenant $currentTenant,
         private CommunicationAvailability $availability,
         private CommunicationConversationCanonicalizer $canonicalizer,
+        private CommunicationMessageIdempotency $idempotency,
         private CommunicationOutboxService $outbox,
         private CommunicationEventRecorder $events,
         private CommunicationMediaStore $media,
@@ -56,7 +60,6 @@ final readonly class CreateCommunicationMessageAction
             ]);
         }
 
-        $this->availability->assertEnabled($conversation->inbox, ! $data->internalNote);
         if ($data->requestedKind === MessageKind::Unsupported) {
             throw CommunicationConversationApiException::unsupportedMessageKind();
         }
@@ -98,12 +101,12 @@ final readonly class CreateCommunicationMessageAction
         $receiptTarget = $this->receiptTarget($conversation, $data->receiptMessageId);
         $providerId = $data->internalNote
             ? null
-            : $this->providerId($data->idempotencyKey);
+            : $this->idempotency->providerId($data->idempotencyKey, $data->outboundInitiation);
         $uploadDigest = $data->upload !== null
             ? hash_file('sha256', $data->upload->path)
             : null;
         $uploadDigest = is_string($uploadDigest) ? $uploadDigest : null;
-        $contentDigest = hash('sha256', implode('|', [
+        $contentDigestParts = [
             $kind->value,
             $data->body,
             $uploadDigest ?? '',
@@ -111,7 +114,11 @@ final readonly class CreateCommunicationMessageAction
             $data->ptt ? 'ptt' : 'media',
             json_encode($data->richPayload, JSON_THROW_ON_ERROR),
             $receiptTarget?->id ?? '',
-        ]));
+        ];
+        if ($data->outboundInitiation) {
+            array_unshift($contentDigestParts, $this->idempotency->namespace(true));
+        }
+        $contentDigest = hash('sha256', implode('|', $contentDigestParts));
 
         if ($providerId !== null) {
             $existing = $this->existingMessage(
@@ -131,10 +138,12 @@ final readonly class CreateCommunicationMessageAction
                         ->lockForUpdate()
                         ->firstOrFail();
 
-                    return $this->idempotentResult($locked, $contentDigest);
+                    return $this->idempotentResult($locked, $contentDigest, (int) $canonical->id);
                 });
             }
         }
+
+        $this->availability->assertEnabled($conversation->inbox, ! $data->internalNote);
 
         $stored = null;
         $storageContext = null;
@@ -198,9 +207,10 @@ final readonly class CreateCommunicationMessageAction
                     'content_encrypted' => $data->richPayload !== []
                         ? $this->outboundContent($data->richPayload)
                         : null,
-                    'metadata' => $receiptTarget !== null
-                        ? ['receipt_message_id' => (int) $receiptTarget->id]
-                        : null,
+                    'metadata' => array_filter([
+                        'receipt_message_id' => $receiptTarget?->id,
+                        'outbound_initiation' => $data->outboundInitiation ?: null,
+                    ], static fn (mixed $value): bool => $value !== null),
                     'provider_message_id' => $providerId,
                     'content_digest' => $contentDigest,
                     'occurred_at' => now(),
@@ -267,7 +277,7 @@ final readonly class CreateCommunicationMessageAction
                     $providerId,
                 );
                 if ($existing !== null) {
-                    return $this->idempotentResult($existing, $contentDigest);
+                    return $this->idempotentResult($existing, $contentDigest, (int) $conversation->id);
                 }
             }
 
@@ -358,8 +368,10 @@ final readonly class CreateCommunicationMessageAction
     private function idempotentResult(
         CommunicationMessage $existing,
         string $contentDigest,
+        ?int $conversationId = null,
     ): CommunicationMessageCreationResult {
-        if (! hash_equals((string) $existing->content_digest, $contentDigest)) {
+        if (! hash_equals((string) $existing->content_digest, $contentDigest)
+            || ($conversationId !== null && (int) $existing->conversation_id !== $conversationId)) {
             throw CommunicationConversationApiException::idempotencyConflict();
         }
 
@@ -452,13 +464,6 @@ final readonly class CreateCommunicationMessageAction
             $payload,
             $message,
         );
-    }
-
-    private function providerId(?string $idempotencyKey): string
-    {
-        return $idempotencyKey === null
-            ? 'message-'.strtolower((string) Str::ulid())
-            : 'message-'.substr(hash('sha256', $idempotencyKey), 0, 40);
     }
 
     /**

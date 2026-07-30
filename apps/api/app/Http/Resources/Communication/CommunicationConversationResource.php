@@ -2,7 +2,11 @@
 
 namespace App\Http\Resources\Communication;
 
+use App\Enums\Communication\ProfilePictureState;
+use App\Models\User;
 use App\Services\Communication\Contact\CommunicationConversationDisplayNameResolver;
+use App\Services\Communication\Contact\CommunicationIdentityPhonePresenter;
+use App\Services\Communication\Contact\CommunicationProfilePictureUrlResolver;
 use App\Services\Communication\Conversation\CommunicationConversationPreviewBuilder;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -15,6 +19,8 @@ final class CommunicationConversationResource extends JsonResource
         $preview = $this->relationLoaded('latestMessage')
             ? app(CommunicationConversationPreviewBuilder::class)->fromMessage($this->latestMessage)
             : null;
+        $phonePresenter = app(CommunicationIdentityPhonePresenter::class);
+        $actor = $request->user();
 
         return [
             'id' => $this->id,
@@ -43,15 +49,28 @@ final class CommunicationConversationResource extends JsonResource
             'display_title_source' => $display['display_name_source'],
             'secondary_title' => $display['secondary_context'],
             'preview' => $preview,
-            'contact' => $this->whenLoaded('identity', fn () => [
-                'id' => $this->identity->contact_id,
-                'name' => $this->identity->relationLoaded('contact') ? $this->identity->contact?->name : null,
-                'is_provisional' => $this->identity->relationLoaded('contact')
-                    ? (bool) $this->identity->contact?->is_provisional
-                    : null,
-                'address_masked' => $this->identity->address_masked,
-                'address' => $this->identity->address_encrypted,
-            ]),
+            'contact' => $this->whenLoaded('identity', function () use ($phonePresenter, $actor): array {
+                $phone = $phonePresenter->present(
+                    $this->identity,
+                    $this->identity->relationLoaded('contact') ? $this->identity->contact : null,
+                    $actor instanceof User ? $actor : null,
+                );
+
+                return [
+                    'id' => $this->identity->contact_id,
+                    'name' => $this->identity->relationLoaded('contact') ? $this->identity->contact?->name : null,
+                    'is_provisional' => $this->identity->relationLoaded('contact')
+                        ? (bool) $this->identity->contact?->is_provisional
+                        : null,
+                    'address_masked' => $this->identity->address_masked,
+                    'phone' => $phone,
+                    // Alias legado: preserva shape, mas nunca devolve o endereço técnico bruto.
+                    'address' => $phone,
+                    'profile_picture_url' => app(CommunicationProfilePictureUrlResolver::class)->forConversation($this->resource),
+                    'profile_picture_state' => app(CommunicationProfilePictureUrlResolver::class)->stateForConversation($this->resource)
+                        ?? ProfilePictureState::Unknown->value,
+                ];
+            }),
             'clients' => $this->whenLoaded('clients', fn () => $this->clients->map(fn ($client) => [
                 'id' => $client->id,
                 'name' => $client->display_name ?: $client->legal_name,

@@ -8,6 +8,7 @@ use App\Enums\Communication\MessageSource;
 use App\Enums\Communication\MessageStatus;
 use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -65,7 +66,22 @@ class CommunicationMessage extends Model
             'revoked_at' => 'immutable_datetime',
             'failed_at' => 'immutable_datetime',
             'purged_at' => 'immutable_datetime',
+            'quarantined_at' => 'immutable_datetime',
         ];
+    }
+
+    /** @param Builder<self> $query */
+    public function scopeVisibleToWorkspace(Builder $query): Builder
+    {
+        return self::constrainWorkspaceVisibility(
+            $query,
+            $query->getModel()->getTable(),
+        );
+    }
+
+    public static function constrainWorkspaceVisibility(Builder $query, string $table): Builder
+    {
+        return $query->whereNull($table.'.quarantined_at');
     }
 
     public function inbox(): BelongsTo

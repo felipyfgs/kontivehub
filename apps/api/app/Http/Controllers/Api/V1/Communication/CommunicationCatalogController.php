@@ -49,7 +49,7 @@ final class CommunicationCatalogController extends Controller
         ViewCommunicationOutboundCapabilitiesRequest $request,
     ): JsonResponse {
         return (new CommunicationOutboundCapabilitiesResource(
-            $this->catalog->outboundCapabilities(),
+            $this->catalog->outboundCapabilities($request->user()),
         ))->response()->header('Cache-Control', 'private, no-store');
     }
 

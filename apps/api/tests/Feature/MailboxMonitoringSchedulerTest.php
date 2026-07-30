@@ -104,6 +104,7 @@ class MailboxMonitoringSchedulerTest extends TestCase
             $this->assertSame(1, $scheduler->dispatchDue($now));
             $this->assertNull(
                 MailboxMonitoringSetting::query()
+                    ->withoutGlobalScopes()
                     ->where('tenant_id', $blockedTenant->id)
                     ->firstOrFail()
                     ->next_due_at,

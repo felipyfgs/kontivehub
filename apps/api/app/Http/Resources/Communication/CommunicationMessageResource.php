@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Communication;
 
+use App\Services\Communication\CommunicationMessageAvailability;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -9,7 +10,8 @@ final class CommunicationMessageResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $available = $this->purged_at === null && $this->revoked_at === null;
+        $availability = app(CommunicationMessageAvailability::class)->forMessage($this->resource);
+        $available = $availability->state->value === 'AVAILABLE';
 
         return [
             'id' => $this->id,
@@ -21,6 +23,7 @@ final class CommunicationMessageResource extends JsonResource
             'status' => $this->status?->value ?? $this->status,
             'body' => $available ? $this->body_encrypted : null,
             'content' => $available ? $this->safeContent() : null,
+            'availability' => $availability->toArray(),
             'reply_to_message_id' => $this->reply_to_message_id,
             'author_membership_id' => $this->author_membership_id,
             'occurred_at' => $this->occurred_at?->toIso8601String(),

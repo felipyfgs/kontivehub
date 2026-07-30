@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\Communication\ConversationStatus;
 use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -72,6 +73,7 @@ class CommunicationConversation extends Model
     public function messages(): HasMany
     {
         return $this->hasMany(CommunicationMessage::class, 'conversation_id')
+            ->visibleToWorkspace()
             ->orderBy('occurred_at')
             ->orderBy('id');
     }
@@ -79,6 +81,7 @@ class CommunicationConversation extends Model
     public function latestMessage(): HasOne
     {
         return $this->hasOne(CommunicationMessage::class, 'conversation_id')
+            ->visibleToWorkspace()
             ->ofMany([
                 'occurred_at' => 'max',
                 'id' => 'max',
@@ -87,7 +90,11 @@ class CommunicationConversation extends Model
 
     public function unreadMessages(): HasMany
     {
-        return $this->hasMany(CommunicationConversationUnreadMessage::class, 'conversation_id');
+        return $this->hasMany(CommunicationConversationUnreadMessage::class, 'conversation_id')
+            ->whereHas(
+                'message',
+                fn (Builder $messages): Builder => $messages->visibleToWorkspace(),
+            );
     }
 
     public function readState(): HasOne

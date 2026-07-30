@@ -97,14 +97,23 @@ final class CommunicationConversationApiException extends ApiDomainException imp
         );
     }
 
+    public static function outboundInitiationDisabled(): self
+    {
+        return new self('outbound_initiation_disabled', 'A iniciação de conversas está indisponível.', 403);
+    }
+
+    public static function selfChat(): self
+    {
+        return new self('outbound_self_chat_forbidden', 'Não é permitido iniciar conversa com a própria inbox.', 422);
+    }
+
     /** @param array<string, mixed> $responseData */
     private function __construct(
         string $code,
         string $message,
         int $status,
         array $responseData = [],
-    )
-    {
+    ) {
         parent::__construct($code, $message, $status, $responseData);
     }
 }

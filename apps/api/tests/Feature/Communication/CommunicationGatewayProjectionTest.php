@@ -10,8 +10,10 @@ use App\Enums\Communication\MessageKind;
 use App\Enums\Communication\MessageSource;
 use App\Enums\Communication\MessageStatus;
 use App\Enums\CommunicationChannel;
+use App\Events\CommunicationEventCommitted;
 use App\Models\CommunicationContact;
 use App\Models\CommunicationConversation;
+use App\Models\CommunicationEvent;
 use App\Models\CommunicationIdentity;
 use App\Models\CommunicationInbox;
 use App\Models\CommunicationInboxIdentityProfile;
@@ -81,6 +83,20 @@ final class CommunicationGatewayProjectionTest extends TestCase
         $this->assertDatabaseCount('communication_conversations', 1);
         $this->assertDatabaseCount('communication_messages', 1);
         $this->assertSame($conversation->id, $message->conversation_id);
+
+        $this->postEvent($inbox, GatewayEventType::MessageReceived, 'gateway-original-after-edit-0001', [
+            'provider_message_id' => $message->provider_message_id,
+            'from' => '+5511999990001',
+            'kind' => 'TEXT',
+            'provider_type' => 'conversation',
+            'family' => 'TEXT',
+            'text' => 'Conteúdo original',
+        ])->assertNoContent();
+        $message->refresh();
+        $this->assertSame('Conteúdo editado', $message->body_encrypted);
+        $this->assertSame('Conteúdo editado', $message->content_encrypted['text'] ?? null);
+        $this->assertSame(['👍'], array_values($message->content_encrypted['reactions'] ?? []));
+        $this->assertDatabaseCount('communication_messages', 1);
 
         $this->postEvent($inbox, GatewayEventType::MessageActionReceived, 'gateway-revoke-action-0001', [
             'action' => 'REVOKE',
@@ -201,6 +217,46 @@ final class CommunicationGatewayProjectionTest extends TestCase
         $this->assertSame($existing->conversation_id, $outbound->conversation_id);
     }
 
+    public function test_contact_profile_event_persists_and_broadcasts_only_sanitized_projection(): void
+    {
+        [$inbox, $conversation] = $this->context();
+
+        $this->postEvent($inbox, GatewayEventType::ContactProfileChanged, 'gateway-profile-sanitized-0001', [
+            'user' => '+5511999990001',
+            'source' => 'ADDRESS_BOOK',
+            'display_name' => 'Maria Silva',
+            'address_book_first_name' => 'Maria',
+            'address_book_full_name' => 'Maria Silva',
+            'about' => 'Dados privados do contato',
+            'picture_id' => 'picture-private-0001',
+            'from_full_sync' => true,
+            'cleared_fields' => ['push_name'],
+            'source_identity' => [
+                'primary' => 'lid:149865032093945',
+                'primary_kind' => 'LID',
+                'alternate' => '+5511999990001',
+                'alternate_kind' => 'PN',
+                'evidence' => 'MESSAGE_SOURCE_ALT',
+            ],
+        ])->assertNoContent();
+
+        $event = CommunicationEvent::query()->withoutGlobalScopes()
+            ->where('gateway_event_id', 'gateway-profile-sanitized-0001')
+            ->sole();
+        $expectedPayload = [
+            'source' => 'ADDRESS_BOOK',
+            'identity_id' => $conversation->identity_id,
+            'changed_fields' => ['address_book_first_name', 'address_book_full_name', 'about', 'picture_id'],
+            'cleared_fields' => ['push_name'],
+            'from_full_sync' => true,
+        ];
+        $this->assertSame($expectedPayload, $event->payload);
+        $this->assertSame($conversation->id, $event->conversation_id);
+        $broadcast = CommunicationEventCommitted::fromModel($event)->broadcastWith();
+        $this->assertSame($expectedPayload, $broadcast['payload']);
+        $this->assertSame($conversation->id, $broadcast['conversation_id']);
+    }
+
     public function test_ephemeral_presence_is_scoped_to_the_conversation_without_creating_message(): void
     {
         [$inbox, $conversation] = $this->context();
@@ -308,8 +364,12 @@ final class CommunicationGatewayProjectionTest extends TestCase
             ['TEXT', 'extendedTextMessage', ['text' => 'Veja', 'link_preview' => [
                 'url' => 'http://example.com', 'title' => 'Exemplo', 'description' => 'Descrição',
             ]]],
-            ['AUDIO', 'audioMessage', ['ptt' => true, 'duration_seconds' => 12]],
-            ['VIDEO', 'videoMessage', ['gif' => true, 'duration_seconds' => 3]],
+            ['AUDIO', 'audioMessage', [
+                'ptt' => true, 'duration_seconds' => 12, 'media_state' => 'UNAVAILABLE',
+            ]],
+            ['VIDEO', 'videoMessage', [
+                'gif' => true, 'duration_seconds' => 3, 'media_state' => 'UNAVAILABLE',
+            ]],
             ['LOCATION', 'liveLocationMessage', ['location' => [
                 'latitude' => -23.5, 'longitude' => -46.6, 'caption' => 'Ao vivo', 'live' => true,
                 'accuracy_meters' => 5, 'sequence' => 2,

@@ -22,6 +22,9 @@ use App\Http\Controllers\Api\V1\Communication\CommunicationFlowController;
 use App\Http\Controllers\Api\V1\Communication\CommunicationFlowRunController;
 use App\Http\Controllers\Api\V1\Communication\CommunicationInboxController;
 use App\Http\Controllers\Api\V1\Communication\CommunicationInboxGatewayController;
+use App\Http\Controllers\Api\V1\Communication\CommunicationProfilePictureController;
+use App\Http\Controllers\Api\V1\Communication\ConversationBulkOperationController;
+use App\Http\Controllers\Api\V1\Communication\ConversationListPreferenceController;
 use App\Http\Controllers\Api\V1\CteEmitterPushController;
 use App\Http\Controllers\Api\V1\CteOperationsController;
 use App\Http\Controllers\Api\V1\DocumentImportBatchController;
@@ -335,7 +338,8 @@ Route::prefix('v1')->group(function (): void {
                 Route::post('/inboxes/{inbox}/contacts/check', [CommunicationInboxGatewayController::class, 'checkUsers']);
                 Route::post('/inboxes/{inbox}/contacts/info', [CommunicationInboxGatewayController::class, 'userInfo']);
                 Route::post('/inboxes/{inbox}/contacts/business-profiles', [CommunicationInboxGatewayController::class, 'businessProfiles']);
-                Route::post('/inboxes/{inbox}/contacts/profile-picture', [CommunicationInboxGatewayController::class, 'profilePicture']);
+                Route::post('/inboxes/{inbox}/contacts/profile-picture', [CommunicationInboxGatewayController::class, 'profilePicture'])
+                    ->middleware(ThrottleRequests::using(ApiRateLimit::CommunicationProfilePicture));
                 Route::post('/inboxes/{inbox}/contacts/qr-link', [CommunicationInboxGatewayController::class, 'contactQrLink']);
                 Route::post('/inboxes/{inbox}/contacts/qr-resolve', [CommunicationInboxGatewayController::class, 'resolveContactQr']);
                 Route::post('/inboxes/{inbox}/contacts/business-link-resolve', [CommunicationInboxGatewayController::class, 'resolveBusinessLink']);
@@ -347,17 +351,35 @@ Route::prefix('v1')->group(function (): void {
                 Route::put('/clients/{client}/automation-recipients', [CommunicationAutomationController::class, 'updateRecipients']);
 
                 Route::get('/contacts', [CommunicationContactController::class, 'index']);
+                Route::get('/profile-pictures/{profile}/{version}', [CommunicationProfilePictureController::class, 'show'])
+                    ->middleware(ThrottleRequests::using(ApiRateLimit::CommunicationProfilePicture))
+                    ->whereNumber('version')
+                    ->name('communication.profile-pictures.show');
+                Route::post('/contacts/search', [CommunicationContactController::class, 'search'])
+                    ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive))
+                    // Busca por telefone é leitura; o POST mantém PII fora da URL.
+                    ->withoutMiddleware(EnsureTenantSubscriptionWritable::class);
                 Route::post('/contacts', [CommunicationContactController::class, 'store']);
                 Route::get('/contacts/{contact}', [CommunicationContactController::class, 'show']);
+                Route::get('/contacts/{contact}/shared-content', [CommunicationContactController::class, 'sharedContent']);
                 Route::patch('/contacts/{contact}', [CommunicationContactController::class, 'update']);
                 Route::post('/contacts/{contact}/identities', [CommunicationContactController::class, 'addIdentity']);
                 Route::post('/identities/{identity}/links', [CommunicationContactController::class, 'linkIdentity']);
                 Route::delete('/identities/{identity}/links/{link}', [CommunicationContactController::class, 'unlinkIdentity']);
 
                 Route::get('/conversations', [CommunicationConversationController::class, 'index']);
+                Route::post('/conversations', [CommunicationConversationController::class, 'store'])
+                    ->middleware(ThrottleRequests::using(ApiRateLimit::CommunicationMessageSend));
+                Route::get('/conversation-list-preferences', [ConversationListPreferenceController::class, 'show']);
+                Route::put('/conversation-list-preferences', [ConversationListPreferenceController::class, 'update']);
+                Route::post('/conversation-bulk-operations', [ConversationBulkOperationController::class, 'store'])
+                    ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard));
+                Route::get('/conversation-bulk-operations/{operation}', [ConversationBulkOperationController::class, 'show']);
+                Route::get('/conversation-bulk-operations/{operation}/items', [ConversationBulkOperationController::class, 'items']);
                 Route::get('/conversations/{conversation}', [CommunicationConversationController::class, 'show']);
                 Route::patch('/conversations/{conversation}', [CommunicationConversationController::class, 'update']);
                 Route::get('/conversations/{conversation}/messages', [CommunicationConversationController::class, 'messages']);
+                Route::get('/conversations/{conversation}/shared-content', [CommunicationConversationController::class, 'sharedContent']);
                 Route::put('/conversations/{conversation}/read-state', [CommunicationConversationController::class, 'updateReadState']);
                 Route::post('/conversations/{conversation}/messages', [CommunicationConversationController::class, 'send'])
                     ->middleware(ThrottleRequests::using(ApiRateLimit::CommunicationMessageSend));
@@ -366,8 +388,10 @@ Route::prefix('v1')->group(function (): void {
                 Route::put('/conversations/{conversation}/messages/{message}/reaction', [CommunicationConversationGatewayController::class, 'react']);
                 Route::post('/conversations/{conversation}/messages/{message}/poll-votes', [CommunicationConversationGatewayController::class, 'votePoll']);
                 Route::post('/conversations/{conversation}/messages/{message}/receipts', [CommunicationConversationGatewayController::class, 'receipt']);
-                Route::post('/conversations/{conversation}/messages/{message}/history', [CommunicationConversationGatewayController::class, 'history']);
-                Route::post('/conversations/{conversation}/messages/{message}/recovery', [CommunicationConversationGatewayController::class, 'recovery']);
+                Route::post('/conversations/{conversation}/messages/{message}/history', [CommunicationConversationGatewayController::class, 'history'])
+                    ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive));
+                Route::post('/conversations/{conversation}/messages/{message}/recovery', [CommunicationConversationGatewayController::class, 'recovery'])
+                    ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive));
                 Route::post('/conversations/{conversation}/presence/subscribe', [CommunicationConversationGatewayController::class, 'subscribePresence']);
                 Route::put('/conversations/{conversation}/presence', [CommunicationConversationGatewayController::class, 'chatPresence']);
                 Route::put('/conversations/{conversation}/disappearing', [CommunicationConversationGatewayController::class, 'disappearing']);

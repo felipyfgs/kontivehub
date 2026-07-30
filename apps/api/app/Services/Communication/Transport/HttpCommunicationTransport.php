@@ -7,6 +7,7 @@ use App\DTO\Communication\GatewayCommandData;
 use App\DTO\Communication\GatewayCommandReceipt;
 use App\DTO\Communication\GatewayContractPayload;
 use App\DTO\Communication\GatewayQueryData;
+use App\Enums\Communication\GatewayQueryType;
 use App\Exceptions\CommunicationTransportException;
 use App\Services\Communication\Gateway\GatewayQueryResultValidator;
 use App\Services\Communication\Security\CommunicationHmacSigner;
@@ -18,6 +19,28 @@ use Psr\Http\Message\StreamInterface;
 
 final readonly class HttpCommunicationTransport implements CommunicationTransport
 {
+    /** @var list<string> */
+    private const SAFE_REMOTE_ERROR_CODES = [
+        'BODY_TOO_LARGE',
+        'COMMAND_DIGEST_CONFLICT',
+        'COMMAND_PERSISTENCE_UNAVAILABLE',
+        'GATEWAY_DISABLED',
+        'INVALID_COMMAND',
+        'INVALID_INTERNAL_SIGNATURE',
+        'INVALID_QUERY',
+        'MEDIA_NOT_FOUND',
+        'MEDIA_SPOOL_UNAVAILABLE',
+        'METRICS_UNAVAILABLE',
+        'PROFILE_PICTURE_NOT_FOUND',
+        'PROFILE_PICTURE_PRIVACY',
+        'QUERY_EXECUTION_FAILED',
+        'QUERY_EXECUTOR_UNAVAILABLE',
+        'QUERY_TARGET_NOT_FOUND',
+        'RECIPIENT_INVALID',
+        'RECIPIENT_SCOPE_NOT_ALLOWED',
+        'SESSION_STORE_UNAVAILABLE',
+    ];
+
     public function __construct(
         private CommunicationHmacSigner $signer,
         private GatewayQueryResultValidator $queryResults,
@@ -57,10 +80,11 @@ final readonly class HttpCommunicationTransport implements CommunicationTranspor
         $this->assertEnabled();
         $path = '/internal/v1/queries';
         $body = json_encode($query->toArray(), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $timeout = $this->queryTimeout($query);
 
         try {
-            $response = Http::timeout($this->timeout())
-                ->connectTimeout(min(5, $this->timeout()))
+            $response = Http::timeout($timeout)
+                ->connectTimeout(min(5, $timeout))
                 ->acceptJson()
                 ->withHeaders($this->signer->headers('POST', $path, $body))
                 ->withBody($body, 'application/json')
@@ -179,8 +203,9 @@ final readonly class HttpCommunicationTransport implements CommunicationTranspor
             return;
         }
         $status = $response->status();
-        $code = is_string($response->json('error'))
-            ? (string) $response->json('error')
+        $remoteCode = $response->json('error');
+        $code = is_string($remoteCode) && in_array($remoteCode, self::SAFE_REMOTE_ERROR_CODES, true)
+            ? $remoteCode
             : 'GATEWAY_HTTP_'.$status;
 
         throw new CommunicationTransportException(
@@ -193,6 +218,17 @@ final readonly class HttpCommunicationTransport implements CommunicationTranspor
     private function timeout(): int
     {
         return max(1, (int) config('communication.gateway.timeout_seconds', 10));
+    }
+
+    private function queryTimeout(GatewayQueryData $query): int
+    {
+        if ($query->type !== GatewayQueryType::ProfilePicture) {
+            return $this->timeout();
+        }
+
+        // Profile pictures can take up to 80 seconds in WhatsMeow; leave a
+        // small margin to receive and validate the signed response.
+        return min(90, max(16, (int) config('communication.profile_pictures.gateway_timeout_seconds', 90)));
     }
 
     private function url(string $path): string

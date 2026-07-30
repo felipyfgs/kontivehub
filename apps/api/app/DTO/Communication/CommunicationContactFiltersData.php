@@ -6,6 +6,7 @@ final readonly class CommunicationContactFiltersData
 {
     public function __construct(
         public ?string $search,
+        public bool $phoneSearch,
         public ?bool $isActive,
         public bool $includeInactive,
         public ?bool $isProvisional,

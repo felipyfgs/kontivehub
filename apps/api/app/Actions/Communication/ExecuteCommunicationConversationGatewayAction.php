@@ -5,15 +5,20 @@ namespace App\Actions\Communication;
 use App\DTO\Communication\CommunicationGatewayCommandResult;
 use App\DTO\Communication\CommunicationGatewayOperationData;
 use App\Enums\Communication\GatewayCommandType;
+use App\Enums\Communication\MessageAvailabilityState;
 use App\Enums\Communication\MessageDirection;
 use App\Enums\Communication\MessageKind;
+use App\Enums\Communication\OutboxStatus;
 use App\Exceptions\CommunicationGatewayApiException;
 use App\Models\CommunicationConversation;
 use App\Models\CommunicationMessage;
+use App\Models\CommunicationOutboxEntry;
 use App\Models\User;
 use App\Services\Communication\CommunicationConversationCanonicalizer;
+use App\Services\Communication\CommunicationMessageAvailability;
 use App\Services\Communication\Gateway\CommunicationGatewayOperations;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Facades\DB;
 use LogicException;
 
 final readonly class ExecuteCommunicationConversationGatewayAction
@@ -21,6 +26,7 @@ final readonly class ExecuteCommunicationConversationGatewayAction
     public function __construct(
         private CommunicationGatewayOperations $operations,
         private CommunicationConversationCanonicalizer $canonicalizer,
+        private CommunicationMessageAvailability $availability,
     ) {}
 
     public function handle(
@@ -31,6 +37,11 @@ final readonly class ExecuteCommunicationConversationGatewayAction
         ?CommunicationMessage $message = null,
     ): CommunicationGatewayCommandResult {
         $conversation = $this->canonicalizer->conversation($conversation);
+
+        if ($type === GatewayCommandType::RequestMediaRetry) {
+            return $this->enqueueMediaRetry($actor, $conversation, $message);
+        }
+
         $conversation->loadMissing(['inbox', 'identity']);
         $this->assertMessageBelongsToConversation($conversation, $message);
         $payload = $this->payload($conversation, $type, $data, $message);
@@ -206,17 +217,105 @@ final readonly class ExecuteCommunicationConversationGatewayAction
         CommunicationMessage $message,
         GatewayCommandType $type,
     ): array {
+        if ($type === GatewayCommandType::RequestMediaRetry) {
+            return [
+                'to' => $this->conversationAddress($conversation),
+                'target_message_id' => $this->providerId($message),
+                'expected_direction' => $message->direction instanceof MessageDirection
+                    ? $message->direction->value
+                    : (string) $message->direction,
+            ];
+        }
+
         $this->assertInbound($message);
-        $payload = [
+
+        return [
             'to' => $this->conversationAddress($conversation),
             'target_message_id' => $this->providerId($message),
             'sender' => $this->sender($conversation, $message),
         ];
-        if ($type === GatewayCommandType::RequestMediaRetry) {
-            $payload['from_me'] = false;
-        }
+    }
 
-        return $payload;
+    private function enqueueMediaRetry(
+        User $actor,
+        CommunicationConversation $conversation,
+        ?CommunicationMessage $message,
+    ): CommunicationGatewayCommandResult {
+        $target = $this->target($message);
+
+        return DB::transaction(function () use ($actor, $conversation, $target): CommunicationGatewayCommandResult {
+            $lockedConversation = $this->canonicalizer->lockConversation($conversation);
+            $lockedConversation->loadMissing(['inbox', 'identity']);
+            $this->operations->authorizeCommand(
+                $actor,
+                $lockedConversation->inbox,
+                GatewayCommandType::RequestMediaRetry,
+                [],
+            );
+            $lockedMessage = CommunicationMessage::query()
+                ->withoutGlobalScopes()
+                ->where('tenant_id', $lockedConversation->tenant_id)
+                ->where('inbox_id', $lockedConversation->inbox_id)
+                ->where('conversation_id', $lockedConversation->id)
+                ->visibleToWorkspace()
+                ->whereKey($target->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $availability = $this->availability->forMessage($lockedMessage);
+            $active = CommunicationOutboxEntry::query()
+                ->withoutGlobalScopes()
+                ->where('tenant_id', $lockedMessage->tenant_id)
+                ->where('inbox_id', $lockedMessage->inbox_id)
+                ->where('message_id', $lockedMessage->id)
+                ->where('type', GatewayCommandType::RequestMediaRetry->value)
+                ->whereIn('status', array_map(
+                    static fn (OutboxStatus $status): string => $status->value,
+                    [
+                        OutboxStatus::Pending,
+                        OutboxStatus::Dispatching,
+                        OutboxStatus::Retry,
+                        OutboxStatus::Accepted,
+                    ],
+                ))
+                ->orderByDesc('id')
+                ->lockForUpdate()
+                ->first();
+            if ($active !== null && (
+                $active->status !== OutboxStatus::Accepted
+                || $availability->state === MessageAvailabilityState::MediaRequested
+            )) {
+                return CommunicationGatewayCommandResult::fromEntry($active);
+            }
+            if (! $availability->recoverable) {
+                throw CommunicationGatewayApiException::mediaNotRecoverable();
+            }
+
+            $metadata = is_array($lockedMessage->metadata) ? $lockedMessage->metadata : [];
+            $attempt = max(0, (int) ($metadata['media_request_generation'] ?? 0)) + 1;
+            $metadata['media_request_generation'] = $attempt;
+            $lockedMessage->forceFill(['metadata' => $metadata])->save();
+            $payload = $this->recoveryPayload(
+                $lockedConversation,
+                $lockedMessage,
+                GatewayCommandType::RequestMediaRetry,
+            );
+            $entry = $this->operations->enqueue(
+                $actor,
+                $lockedConversation->inbox,
+                GatewayCommandType::RequestMediaRetry,
+                $payload,
+                $lockedMessage,
+                effectKey: implode(':', [
+                    'media-retry',
+                    $lockedMessage->tenant_id,
+                    $lockedMessage->inbox_id,
+                    $lockedMessage->id,
+                    $attempt,
+                ]),
+            );
+
+            return CommunicationGatewayCommandResult::fromEntry($entry);
+        }, 3);
     }
 
     /** @return array<string, mixed> */

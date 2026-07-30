@@ -2,7 +2,11 @@
 
 namespace App\Services\Communication\Catalog;
 
+use App\Enums\Communication\InboxStatus;
+use App\Models\CommunicationInbox;
 use App\Models\CommunicationLabel;
+use App\Models\User;
+use App\Services\Communication\Authorization\CommunicationAccess;
 use App\Support\CurrentTenant;
 use Illuminate\Support\Collection;
 
@@ -10,6 +14,7 @@ final readonly class CommunicationCatalogQuery
 {
     public function __construct(
         private CurrentTenant $currentTenant,
+        private CommunicationAccess $access,
     ) {}
 
     /** @return Collection<int, CommunicationLabel> */
@@ -19,7 +24,7 @@ final readonly class CommunicationCatalogQuery
     }
 
     /** @return array<string, mixed> */
-    public function outboundCapabilities(): array
+    public function outboundCapabilities(?User $actor = null): array
     {
         $enabled = (bool) config('communication.enabled')
             && (bool) config('communication.gateway.enabled')
@@ -42,6 +47,56 @@ final readonly class CommunicationCatalogQuery
                 'UNSUPPORTED' => ['supported' => false, 'error_code' => 'MESSAGE_KIND_UNSUPPORTED'],
             ],
             'max_media_bytes' => (int) config('communication.media.max_bytes', 20_971_520),
+            'conversation_initiation' => $this->conversationInitiationCapability($actor),
+        ];
+    }
+
+    /** @return array{enabled:bool,reason:string|null,requires_permission:string} */
+    private function conversationInitiationCapability(?User $actor): array
+    {
+        $tenant = $this->currentTenant->tenant();
+        $allowlisted = array_map('intval', (array) config('communication.outbound_conversation.allowed_tenant_ids', []));
+        $reason = match (true) {
+            ! (bool) config('communication.outbound_conversation.enabled', false) => 'rollout_disabled',
+            (bool) config('communication.outbound_conversation.kill_switch', true) => 'kill_switch_active',
+            ! (bool) config('communication.outbound_conversation.allow_all_tenants', false) && ! in_array((int) $tenant->id, $allowlisted, true) => 'tenant_not_allowlisted',
+            ! (bool) config('communication.enabled') || ! (bool) config('communication.gateway.enabled') => 'gateway_unavailable',
+            ! $tenant->is_active || ! $tenant->isOperational() || ! (bool) $tenant->communication_enabled => 'tenant_disabled',
+            default => null,
+        };
+
+        if ($reason === null) {
+            $replyState = $this->actorReplyState($actor);
+            $reason = match (true) {
+                ! $replyState['can_reply'] => 'permission_denied',
+                ! $replyState['has_operational_inbox'] => 'inbox_unavailable',
+                default => null,
+            };
+        }
+
+        return ['enabled' => $reason === null, 'reason' => $reason, 'requires_permission' => 'communication.reply'];
+    }
+
+    /** @return array{can_reply:bool,has_operational_inbox:bool} */
+    private function actorReplyState(?User $actor): array
+    {
+        if ($actor === null) {
+            return ['can_reply' => false, 'has_operational_inbox' => false];
+        }
+
+        $inboxes = CommunicationInbox::query()
+            ->whereIn('id', $this->access->visibleInboxIds($actor))
+            ->get();
+        $replyable = $inboxes->filter(
+            fn (CommunicationInbox $inbox): bool => $this->access->canReply($actor, $inbox),
+        );
+
+        return [
+            'can_reply' => $replyable->isNotEmpty(),
+            'has_operational_inbox' => $replyable->contains(
+                fn (CommunicationInbox $inbox): bool => $inbox->is_enabled
+                    && $inbox->status === InboxStatus::Connected,
+            ),
         ];
     }
 }

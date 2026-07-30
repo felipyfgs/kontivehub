@@ -31,11 +31,15 @@ $lock(Schedule::command('communication:dispatch-outbox')->everyMinute());
 $lock(Schedule::command('communication:dispatch-fiscal')->everyMinute());
 $lock(Schedule::command('communication:wake-snoozed')->everyMinute());
 $lock(Schedule::command('communication:reconcile-flow-runs')->everyMinute());
+$lock(Schedule::command('communication:dispatch-profile-picture-refreshes')->everyFifteenMinutes(), 14);
+$lock(Schedule::command('communication:dispatch-media-deletions')->everyFiveMinutes(), 4);
+$lock(Schedule::command('communication:dispatch-media-deletions --sweep')->hourly(), 55);
 $lock(Schedule::command('work:dispatch-due-recurrence')->everyMinute());
 
 $lock(Schedule::command('outbound:deadline-plan')->hourly(), 55);
 $lock(Schedule::command('exports:purge-expired')->hourly(), 55);
 $lock(Schedule::command('import:purge-expired-spools')->hourly(), 55);
+$lock(Schedule::command('communication:purge-expired-bulk-operations')->dailyAt('03:45'), 120);
 $lock(Schedule::command('credentials:refresh-expiry')->hourly(), 55);
 // SERPRO lifecycle: alertas de PFX/certificado/Termo/token/procurações — sem assinar/mutar
 $lock(Schedule::command('serpro:lifecycle-scan')->dailyAt('04:00'), 120);

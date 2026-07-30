@@ -20,12 +20,14 @@ final class CommunicationConversationMessageQuery
         int $limit = 50,
         ?string $cursor = null,
         string $anchor = 'latest',
+        ?int $messageId = null,
     ): array {
         $limit = max(1, min(100, $limit));
         $snapshotThrough = (int) (CommunicationMessage::query()
             ->withoutGlobalScopes()
             ->where('tenant_id', $conversation->tenant_id)
             ->where('conversation_id', $conversation->id)
+            ->visibleToWorkspace()
             ->max('id') ?? 0);
         $direction = null;
         $cursorTuple = null;
@@ -54,6 +56,17 @@ final class CommunicationConversationMessageQuery
                 ->limit($limit)
                 ->get()
                 ->values();
+        } elseif ($anchor === 'message') {
+            $message = $messageId === null ? null : $this->baseQuery($conversation, $snapshotThrough)
+                ->whereNull('purged_at')
+                ->whereNull('revoked_at')
+                ->whereKey($messageId)
+                ->first();
+            if ($message === null) {
+                throw new InvalidArgumentException('Mensagem âncora indisponível.');
+            }
+            $this->atOrAfter($query, $message);
+            $messages = $query->orderBy('occurred_at')->orderBy('id')->limit($limit)->get()->values();
         } elseif ($anchor === 'first_unread') {
             $firstUnread = $this->firstUnreadMessage($conversation, $snapshotThrough);
             if ($firstUnread === null) {
@@ -83,6 +96,7 @@ final class CommunicationConversationMessageQuery
             ->withoutGlobalScopes()
             ->where('tenant_id', $conversation->tenant_id)
             ->where('conversation_id', $conversation->id)
+            ->visibleToWorkspace()
             ->when(
                 $snapshotThrough > 0,
                 fn (Builder $query) => $query->where('id', '<=', $snapshotThrough),
@@ -126,7 +140,7 @@ final class CommunicationConversationMessageQuery
     }
 
     /**
-     * @param Builder<CommunicationMessage> $query
+     * @param  Builder<CommunicationMessage>  $query
      * @return Collection<int, CommunicationMessage>
      */
     private function latest(Builder $query, int $limit): Collection
@@ -159,6 +173,7 @@ final class CommunicationConversationMessageQuery
             ->where('communication_conversation_unread_messages.tenant_id', $conversation->tenant_id)
             ->where('communication_conversation_unread_messages.conversation_id', $conversation->id)
             ->where('communication_messages.id', '<=', $snapshotThrough)
+            ->whereNull('communication_messages.quarantined_at')
             ->select('communication_messages.*')
             ->orderBy('communication_messages.occurred_at')
             ->orderBy('communication_messages.id')
@@ -166,7 +181,7 @@ final class CommunicationConversationMessageQuery
     }
 
     /**
-     * @param Collection<int, CommunicationMessage> $messages
+     * @param  Collection<int, CommunicationMessage>  $messages
      * @return array{data: Collection<int, CommunicationMessage>, meta: array<string, mixed>}
      */
     private function result(
@@ -180,6 +195,7 @@ final class CommunicationConversationMessageQuery
         $firstUnread = $this->firstUnreadMessage($conversation, $snapshotThrough);
         $unreadCount = CommunicationConversationUnreadMessage::query()
             ->withoutGlobalScopes()
+            ->whereHas('message')
             ->where('tenant_id', $conversation->tenant_id)
             ->where('conversation_id', $conversation->id)
             ->when(

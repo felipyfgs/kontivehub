@@ -165,6 +165,258 @@ function applyKnownContract(array &$operation, string $method, string $path): vo
         return;
     }
 
+    if ($path === '/api/v1/communication/contacts') {
+        if ($method === 'get') {
+            $operation['responses'] = jsonResponse(
+                '#/components/schemas/CommunicationContactCollection',
+            );
+        } elseif ($method === 'post') {
+            $operation['responses'] = jsonResponse(
+                '#/components/schemas/CommunicationContactResponse',
+                '201',
+            );
+        }
+
+        return;
+    }
+
+    if ($path === '/api/v1/communication/contacts/search' && $method === 'post') {
+        $operation['requestBody'] = [
+            'required' => true,
+            'content' => [
+                'application/json' => [
+                    'schema' => ['$ref' => '#/components/schemas/CommunicationContactSearchBody'],
+                ],
+            ],
+        ];
+        $operation['responses'] = jsonResponse(
+            '#/components/schemas/CommunicationContactCollection',
+        );
+
+        return;
+    }
+
+    if ($path === '/api/v1/communication/contacts/{contact}'
+        && in_array($method, ['get', 'patch'], true)) {
+        $operation['responses'] = jsonResponse(
+            '#/components/schemas/CommunicationContactResponse',
+        );
+
+        return;
+    }
+
+    if ($path === '/api/v1/communication/profile-pictures/{profile}/{version}'
+        && $method === 'get') {
+        $operation['parameters'] = [
+            [
+                'name' => 'profile',
+                'in' => 'path',
+                'required' => true,
+                'schema' => ['type' => 'integer', 'minimum' => 1],
+            ],
+            [
+                'name' => 'version',
+                'in' => 'path',
+                'required' => true,
+                'schema' => ['type' => 'integer', 'minimum' => 1],
+            ],
+            [
+                'name' => 'If-None-Match',
+                'in' => 'header',
+                'required' => false,
+                'schema' => ['type' => 'string'],
+                'description' => 'ETag previamente recebido para revalidação privada.',
+            ],
+        ];
+        $image = ['schema' => ['type' => 'string', 'format' => 'binary']];
+        $operation['responses'] = [
+            '200' => [
+                'description' => 'Foto de perfil privada e autorizada.',
+                'headers' => [
+                    'ETag' => ['schema' => ['type' => 'string']],
+                    'Cache-Control' => [
+                        'schema' => [
+                            'type' => 'string',
+                            'const' => 'private, no-cache, must-revalidate',
+                        ],
+                    ],
+                    'X-Content-Type-Options' => [
+                        'schema' => ['type' => 'string', 'const' => 'nosniff'],
+                    ],
+                ],
+                'content' => [
+                    'image/jpeg' => $image,
+                    'image/png' => $image,
+                    'image/webp' => $image,
+                ],
+            ],
+            '304' => ['description' => 'Asset autorizado não foi modificado.'],
+            '404' => ['description' => 'Asset ausente, obsoleto ou não autorizado.'],
+            '429' => ['description' => 'Limite de revalidações da imagem excedido.'],
+        ];
+
+        return;
+    }
+
+    if ($path === '/api/v1/communication/conversations') {
+        if ($method === 'get') {
+            $operation['parameters'][] = [
+                'name' => 'contact_id',
+                'in' => 'query',
+                'required' => false,
+                'schema' => ['type' => 'integer', 'minimum' => 1],
+            ];
+            $operation['responses'] = jsonResponse(
+                '#/components/schemas/CommunicationConversationCollection',
+            );
+        } elseif ($method === 'post') {
+            $operation['parameters'][] = [
+                'name' => 'Idempotency-Key',
+                'in' => 'header',
+                'required' => true,
+                'schema' => [
+                    'type' => 'string',
+                    'minLength' => 8,
+                    'maxLength' => 128,
+                    'pattern' => '^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$',
+                ],
+            ];
+            $operation['requestBody'] = [
+                'required' => true,
+                'content' => [
+                    'multipart/form-data' => [
+                        'schema' => ['$ref' => '#/components/schemas/StartCommunicationConversationBody'],
+                    ],
+                ],
+            ];
+            $operation['responses'] = jsonResponse('#/components/schemas/StartCommunicationConversationResponse', '200')
+                + jsonResponse('#/components/schemas/StartCommunicationConversationResponse', '202')
+                + jsonResponse('#/components/schemas/JsonResponse', '409')
+                + jsonResponse('#/components/schemas/JsonResponse', '422');
+        }
+
+        return;
+    }
+
+    if ($path === '/api/v1/communication/outbound-capabilities' && $method === 'get') {
+        $operation['responses'] = jsonResponse(
+            '#/components/schemas/CommunicationOutboundCapabilitiesResponse',
+        );
+
+        return;
+    }
+
+    if ($method === 'get' && in_array($path, [
+        '/api/v1/communication/contacts/{contact}/shared-content',
+        '/api/v1/communication/conversations/{conversation}/shared-content',
+    ], true)) {
+        $operation['parameters'] = [
+            ...($operation['parameters'] ?? []),
+            [
+                'name' => 'category',
+                'in' => 'query',
+                'required' => true,
+                'schema' => ['$ref' => '#/components/schemas/CommunicationSharedContentCategory'],
+            ],
+            [
+                'name' => 'limit',
+                'in' => 'query',
+                'required' => false,
+                'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 100, 'default' => 30],
+            ],
+            [
+                'name' => 'cursor',
+                'in' => 'query',
+                'required' => false,
+                'schema' => ['type' => 'string', 'maxLength' => 1024],
+            ],
+        ];
+        if ($path === '/api/v1/communication/contacts/{contact}/shared-content') {
+            $operation['parameters'][] = [
+                'name' => 'inbox_id',
+                'in' => 'query',
+                'required' => false,
+                'schema' => ['type' => 'integer', 'minimum' => 1],
+            ];
+        }
+        $operation['responses'] = jsonResponseWithPrivateHeaders(
+            '#/components/schemas/CommunicationSharedContentCollection',
+        );
+
+        return;
+    }
+
+    if ($path === '/api/v1/communication/conversation-bulk-operations' && $method === 'post') {
+        $operation['parameters'] = [[
+            'name' => 'Idempotency-Key', 'in' => 'header', 'required' => true,
+            'schema' => ['type' => 'string', 'minLength' => 8, 'maxLength' => 128, 'pattern' => '^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$'],
+        ]];
+        $operation['requestBody'] = ['required' => true, 'content' => ['application/json' => ['schema' => ['$ref' => '#/components/schemas/ConversationBulkOperationBody']]]];
+        $operation['responses'] = jsonResponse('#/components/schemas/ConversationBulkOperationResponse', '202')
+            + jsonResponse('#/components/schemas/JsonResponse', '409')
+            + jsonResponse('#/components/schemas/JsonResponse', '422');
+
+        return;
+    }
+    if ($path === '/api/v1/communication/conversation-bulk-operations/{operation}' && $method === 'get') {
+        $operation['responses'] = jsonResponse('#/components/schemas/ConversationBulkOperationResponse');
+
+        return;
+    }
+    if ($path === '/api/v1/communication/conversation-bulk-operations/{operation}/items' && $method === 'get') {
+        $operation['parameters'] = [...($operation['parameters'] ?? []),
+            ['name' => 'status', 'in' => 'query', 'required' => false, 'schema' => ['type' => 'string']],
+            ['name' => 'page', 'in' => 'query', 'required' => false, 'schema' => ['type' => 'integer', 'minimum' => 1]],
+            ['name' => 'per_page', 'in' => 'query', 'required' => false, 'schema' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 100]],
+        ];
+        $operation['responses'] = jsonResponse('#/components/schemas/ConversationBulkOperationItemCollection');
+
+        return;
+    }
+    if ($path === '/api/v1/communication/conversation-list-preferences') {
+        if ($method === 'put') {
+            $operation['requestBody'] = ['required' => true, 'content' => ['application/json' => ['schema' => ['$ref' => '#/components/schemas/ConversationListPreferenceBody']]]];
+            $operation['responses'] = jsonResponse('#/components/schemas/ConversationListPreferenceResponse') + jsonResponse('#/components/schemas/JsonResponse', '422');
+        } elseif ($method === 'get') {
+            $operation['responses'] = jsonResponse('#/components/schemas/ConversationListPreferenceResponse');
+        }
+
+        return;
+    }
+
+    if ($path === '/api/v1/communication/conversations/{conversation}'
+        && in_array($method, ['get', 'patch'], true)) {
+        $operation['responses'] = jsonResponse(
+            '#/components/schemas/CommunicationConversationResponse',
+        );
+
+        return;
+    }
+
+    if ($path === '/api/v1/communication/conversations/{conversation}/messages'
+        && $method === 'get') {
+        $operation['parameters'] = [
+            ...($operation['parameters'] ?? []),
+            [
+                'name' => 'anchor',
+                'in' => 'query',
+                'required' => false,
+                'schema' => ['type' => 'string', 'enum' => ['latest', 'first_unread', 'message']],
+            ],
+            [
+                'name' => 'message_id',
+                'in' => 'query',
+                'required' => false,
+                'schema' => ['type' => 'integer', 'minimum' => 1],
+            ],
+        ];
+        $operation['responses'] = jsonResponse(
+            '#/components/schemas/CommunicationMessageCollection',
+        );
+
+        return;
+    }
+
     if ($path !== '/api/v1/list-filters' && $path !== '/api/v1/list-filters/{listFilter}') {
         return;
     }
@@ -220,10 +472,35 @@ function jsonResponse(string $schema, string $status = '200'): array
 /**
  * @return array<string, array<string, mixed>>
  */
+function jsonResponseWithPrivateHeaders(string $schema): array
+{
+    $response = jsonResponse($schema);
+    $response['200']['headers'] = [
+        'Cache-Control' => [
+            'description' => 'Resposta privada e não armazenável.',
+            'schema' => ['type' => 'string', 'const' => 'private, no-store, max-age=0'],
+        ],
+        'Pragma' => [
+            'description' => 'Compatibilidade com caches HTTP legados.',
+            'schema' => ['type' => 'string', 'const' => 'no-cache'],
+        ],
+    ];
+
+    return $response;
+}
+
+/**
+ * @return array<string, array<string, mixed>>
+ */
 function schemas(): array
 {
     return [
         'JsonResponse' => ['type' => 'object', 'additionalProperties' => true],
+        'ConversationBulkOperationBody' => ['type' => 'object', 'required' => ['action', 'items'], 'properties' => ['action' => ['type' => 'string'], 'params' => ['type' => 'object'], 'items' => ['type' => 'array']], 'additionalProperties' => false],
+        'ConversationBulkOperationResponse' => ['type' => 'object', 'required' => ['data'], 'properties' => ['data' => ['type' => 'object', 'additionalProperties' => true]], 'additionalProperties' => false],
+        'ConversationBulkOperationItemCollection' => ['type' => 'object', 'required' => ['data'], 'properties' => ['data' => ['type' => 'array', 'items' => ['type' => 'object', 'additionalProperties' => true]], 'meta' => ['type' => 'object', 'additionalProperties' => true]], 'additionalProperties' => false],
+        'ConversationListPreferenceBody' => ['type' => 'object', 'properties' => ['status' => ['type' => 'string'], 'sort_by' => ['type' => 'string']], 'additionalProperties' => false],
+        'ConversationListPreferenceResponse' => ['type' => 'object', 'required' => ['data'], 'properties' => ['data' => ['type' => 'object', 'additionalProperties' => true]], 'additionalProperties' => false],
         'TenantRole' => ['type' => 'string', 'enum' => ['tenant_admin', 'tenant_user']],
         'PlatformRole' => ['type' => 'string', 'enum' => ['platform_admin']],
         'TenantAccessMode' => ['type' => 'string', 'enum' => ['membership', 'platform_privileged']],
@@ -291,6 +568,326 @@ function schemas(): array
         'MeResponse' => closedObject(
             ['data'],
             ['data' => ['$ref' => '#/components/schemas/MeUser']],
+        ),
+        'CommunicationIdentityLink' => closedObject(
+            [
+                'id', 'client_id', 'client_name', 'client_contact_id',
+                'client_contact_name', 'is_primary', 'receives_automatic',
+            ],
+            [
+                'id' => ['type' => 'integer'],
+                'client_id' => ['type' => 'integer'],
+                'client_name' => nullableString(),
+                'client_contact_id' => ['type' => ['integer', 'null']],
+                'client_contact_name' => nullableString(),
+                'is_primary' => ['type' => 'boolean'],
+                'receives_automatic' => ['type' => 'boolean'],
+            ],
+        ),
+        'CommunicationContactIdentity' => closedObject(
+            ['id', 'channel', 'address_masked', 'phone', 'is_active', 'links'],
+            [
+                'id' => ['type' => 'integer'],
+                'channel' => ['type' => 'string'],
+                'address_masked' => ['type' => 'string'],
+                'phone' => [
+                    'type' => ['string', 'null'],
+                    'pattern' => '^\\+[1-9]\\d{7,14}$',
+                    'description' => 'E.164 autorizado por communication.view; null quando não apresentável.',
+                ],
+                'is_active' => ['type' => 'boolean'],
+                'links' => [
+                    'type' => 'array',
+                    'items' => ['$ref' => '#/components/schemas/CommunicationIdentityLink'],
+                ],
+            ],
+        ),
+        'CommunicationContact' => closedObject(
+            ['id', 'name', 'is_provisional', 'is_active', 'profile_picture_url', 'profile_picture_state', 'identities', 'purged_at'],
+            [
+                'id' => ['type' => 'integer'],
+                'name' => nullableString(),
+                'is_provisional' => ['type' => 'boolean'],
+                'is_active' => ['type' => 'boolean'],
+                'profile_picture_url' => [
+                    'type' => ['string', 'null'],
+                    'format' => 'uri-reference',
+                    'description' => 'URL Laravel same-origin; null enquanto o asset privado não estiver pronto.',
+                ],
+                'profile_picture_state' => ['type' => 'string', 'enum' => ['UNKNOWN', 'PENDING', 'READY', 'UNAVAILABLE', 'FAILED']],
+                'identities' => [
+                    'type' => 'array',
+                    'items' => ['$ref' => '#/components/schemas/CommunicationContactIdentity'],
+                ],
+                'purged_at' => nullableString('date-time'),
+            ],
+        ),
+        'CommunicationPaginationMeta' => closedObject(
+            ['current_page', 'last_page', 'total'],
+            [
+                'current_page' => ['type' => 'integer', 'minimum' => 1],
+                'last_page' => ['type' => 'integer', 'minimum' => 1],
+                'total' => ['type' => 'integer', 'minimum' => 0],
+            ],
+        ),
+        'CommunicationContactResponse' => closedObject(
+            ['data'],
+            ['data' => ['$ref' => '#/components/schemas/CommunicationContact']],
+        ),
+        'CommunicationContactCollection' => closedObject(
+            ['data', 'meta'],
+            [
+                'data' => [
+                    'type' => 'array',
+                    'items' => ['$ref' => '#/components/schemas/CommunicationContact'],
+                ],
+                'meta' => ['$ref' => '#/components/schemas/CommunicationPaginationMeta'],
+            ],
+        ),
+        'CommunicationContactSearchBody' => closedObject(
+            ['q'],
+            [
+                'q' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 200],
+                'is_active' => ['type' => 'boolean'],
+                'include_inactive' => ['type' => 'boolean'],
+                'is_provisional' => ['type' => 'boolean'],
+                'linked' => ['type' => 'boolean'],
+                'sort' => ['type' => 'string', 'enum' => ['name', 'id', 'created_at']],
+                'sort_direction' => ['type' => 'string', 'enum' => ['asc', 'desc']],
+                'per_page' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 100],
+                'page' => ['type' => 'integer', 'minimum' => 1],
+            ],
+        ),
+        'CommunicationConversationContact' => closedObject(
+            ['id', 'name', 'is_provisional', 'address_masked', 'profile_picture_url', 'profile_picture_state', 'phone', 'address'],
+            [
+                'id' => ['type' => 'integer'],
+                'name' => nullableString(),
+                'is_provisional' => ['type' => ['boolean', 'null']],
+                'address_masked' => ['type' => 'string'],
+                'profile_picture_url' => [
+                    'type' => ['string', 'null'],
+                    'format' => 'uri-reference',
+                    'description' => 'URL Laravel same-origin; nunca contém a URL do provider.',
+                ],
+                'profile_picture_state' => ['type' => 'string', 'enum' => ['UNKNOWN', 'PENDING', 'READY', 'UNAVAILABLE', 'FAILED']],
+                'phone' => [
+                    'type' => ['string', 'null'],
+                    'pattern' => '^\\+[1-9]\\d{7,14}$',
+                ],
+                'address' => [
+                    'type' => ['string', 'null'],
+                    'pattern' => '^\\+[1-9]\\d{7,14}$',
+                    'x-kontivehub-lifecycle' => 'legacy-alias',
+                    'description' => 'Alias legado de phone; nunca contém endereço técnico.',
+                ],
+            ],
+        ),
+        'CommunicationMessageAvailabilityState' => [
+            'type' => 'string',
+            'enum' => [
+                'AVAILABLE',
+                'UNSUPPORTED',
+                'MEDIA_RETRY_AVAILABLE',
+                'MEDIA_REQUESTED',
+                'MEDIA_FAILED',
+                'UNAVAILABLE',
+            ],
+        ],
+        'CommunicationMessageAvailability' => closedObject(
+            ['state', 'recoverable'],
+            [
+                'state' => ['$ref' => '#/components/schemas/CommunicationMessageAvailabilityState'],
+                'recoverable' => ['type' => 'boolean'],
+            ],
+        ),
+        'CommunicationMessageContent' => [
+            'type' => ['object', 'null'],
+            'additionalProperties' => true,
+            'properties' => [
+                'text' => nullableString(),
+                'caption' => nullableString(),
+            ],
+        ],
+        'CommunicationMessage' => [
+            'type' => 'object',
+            'additionalProperties' => true,
+            'required' => ['id', 'conversation_id', 'direction', 'kind', 'source', 'status', 'availability'],
+            'properties' => [
+                'id' => ['type' => 'integer'],
+                'conversation_id' => ['type' => 'integer'],
+                'direction' => ['type' => 'string', 'enum' => ['INBOUND', 'OUTBOUND', 'INTERNAL']],
+                'kind' => ['type' => 'string'],
+                'source' => ['type' => 'string'],
+                'status' => ['type' => 'string'],
+                'body' => nullableString(),
+                'content' => ['$ref' => '#/components/schemas/CommunicationMessageContent'],
+                'availability' => ['$ref' => '#/components/schemas/CommunicationMessageAvailability'],
+            ],
+        ],
+        'CommunicationMessageCollection' => closedObject(
+            ['data', 'meta'],
+            [
+                'data' => [
+                    'type' => 'array',
+                    'items' => ['$ref' => '#/components/schemas/CommunicationMessage'],
+                ],
+                'meta' => ['type' => 'object', 'additionalProperties' => true],
+            ],
+        ),
+        'CommunicationConversation' => [
+            'type' => 'object',
+            'additionalProperties' => true,
+            'properties' => [
+                'contact' => nullableRef('#/components/schemas/CommunicationConversationContact'),
+                'last_message' => nullableRef('#/components/schemas/CommunicationMessage'),
+                'messages' => [
+                    'type' => 'array',
+                    'items' => ['$ref' => '#/components/schemas/CommunicationMessage'],
+                ],
+            ],
+        ],
+        'CommunicationConversationResponse' => closedObject(
+            ['data'],
+            ['data' => ['$ref' => '#/components/schemas/CommunicationConversation']],
+        ),
+        'CommunicationConversationCollection' => closedObject(
+            ['data', 'meta'],
+            [
+                'data' => [
+                    'type' => 'array',
+                    'items' => ['$ref' => '#/components/schemas/CommunicationConversation'],
+                ],
+                'meta' => ['$ref' => '#/components/schemas/CommunicationPaginationMeta'],
+            ],
+        ),
+        'StartCommunicationConversationBody' => [
+            'type' => 'object',
+            'additionalProperties' => false,
+            'required' => ['contact_id', 'identity_id', 'inbox_id'],
+            'anyOf' => [
+                ['required' => ['body']],
+                ['required' => ['file']],
+            ],
+            'properties' => [
+                'contact_id' => ['type' => 'integer', 'minimum' => 1],
+                'identity_id' => ['type' => 'integer', 'minimum' => 1],
+                'inbox_id' => ['type' => 'integer', 'minimum' => 1],
+                'body' => ['type' => 'string', 'maxLength' => 4096],
+                'kind' => [
+                    'type' => 'string',
+                    'enum' => ['TEXT', 'IMAGE', 'AUDIO', 'VIDEO', 'DOCUMENT', 'STICKER'],
+                ],
+                'file' => ['type' => 'string', 'format' => 'binary'],
+                'ptt' => ['type' => 'boolean'],
+            ],
+        ],
+        'StartCommunicationConversationData' => closedObject(
+            ['conversation', 'message', 'reused_conversation'],
+            [
+                'conversation' => ['$ref' => '#/components/schemas/CommunicationConversation'],
+                'message' => ['$ref' => '#/components/schemas/CommunicationMessage'],
+                'reused_conversation' => ['type' => 'boolean'],
+            ],
+        ),
+        'StartCommunicationConversationResponse' => closedObject(
+            ['data'],
+            ['data' => ['$ref' => '#/components/schemas/StartCommunicationConversationData']],
+        ),
+        'CommunicationSharedContentCategory' => [
+            'type' => 'string',
+            'enum' => ['media', 'links', 'documents'],
+        ],
+        'CommunicationSharedContentAttachment' => closedObject(
+            ['id', 'filename', 'mime_type', 'size_bytes', 'preview_url', 'download_url'],
+            [
+                'id' => ['type' => 'integer', 'minimum' => 1],
+                'filename' => ['type' => 'string'],
+                'mime_type' => ['type' => 'string'],
+                'size_bytes' => ['type' => 'integer', 'minimum' => 0],
+                'preview_url' => nullableString(),
+                'download_url' => nullableString(),
+            ],
+        ),
+        'CommunicationSharedContentLink' => closedObject(
+            ['url', 'title', 'description'],
+            [
+                'url' => ['type' => 'string', 'format' => 'uri', 'pattern' => '^https?://'],
+                'title' => nullableString(),
+                'description' => nullableString(),
+            ],
+        ),
+        'CommunicationSharedContentItem' => closedObject(
+            [
+                'id', 'type', 'category', 'conversation_id', 'message_id',
+                'occurred_at', 'attachment', 'link',
+            ],
+            [
+                'id' => ['type' => 'string'],
+                'type' => ['type' => 'string', 'enum' => ['attachment', 'link']],
+                'category' => ['$ref' => '#/components/schemas/CommunicationSharedContentCategory'],
+                'conversation_id' => ['type' => 'integer', 'minimum' => 1],
+                'message_id' => ['type' => 'integer', 'minimum' => 1],
+                'occurred_at' => nullableString('date-time'),
+                'attachment' => nullableRef('#/components/schemas/CommunicationSharedContentAttachment'),
+                'link' => nullableRef('#/components/schemas/CommunicationSharedContentLink'),
+            ],
+        ),
+        'CommunicationSharedContentMeta' => closedObject(
+            [
+                'next_cursor', 'snapshot_through_message_id',
+                'snapshot_through_attachment_id', 'limit',
+            ],
+            [
+                'next_cursor' => nullableString(),
+                'snapshot_through_message_id' => ['type' => ['integer', 'null'], 'minimum' => 1],
+                'snapshot_through_attachment_id' => ['type' => ['integer', 'null'], 'minimum' => 1],
+                'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 100],
+            ],
+        ),
+        'CommunicationSharedContentCollection' => closedObject(
+            ['data', 'meta'],
+            [
+                'data' => [
+                    'type' => 'array',
+                    'items' => ['$ref' => '#/components/schemas/CommunicationSharedContentItem'],
+                ],
+                'meta' => ['$ref' => '#/components/schemas/CommunicationSharedContentMeta'],
+            ],
+        ),
+        'CommunicationConversationInitiationCapability' => closedObject(
+            ['enabled', 'reason', 'requires_permission'],
+            [
+                'enabled' => ['type' => 'boolean'],
+                'reason' => [
+                    'type' => ['string', 'null'],
+                    'enum' => [
+                        'rollout_disabled', 'kill_switch_active', 'tenant_not_allowlisted',
+                        'gateway_unavailable', 'tenant_disabled', 'permission_denied',
+                        'inbox_unavailable', null,
+                    ],
+                ],
+                'requires_permission' => ['type' => 'string', 'const' => 'communication.reply'],
+            ],
+        ),
+        'CommunicationOutboundCapabilities' => [
+            'type' => 'object',
+            'additionalProperties' => true,
+            'required' => [
+                'enabled', 'requires_permission', 'kinds', 'max_media_bytes',
+                'conversation_initiation',
+            ],
+            'properties' => [
+                'enabled' => ['type' => 'boolean'],
+                'requires_permission' => ['type' => 'string', 'const' => 'communication.reply'],
+                'kinds' => ['type' => 'object', 'additionalProperties' => true],
+                'max_media_bytes' => ['type' => 'integer', 'minimum' => 1],
+                'conversation_initiation' => ['$ref' => '#/components/schemas/CommunicationConversationInitiationCapability'],
+            ],
+        ],
+        'CommunicationOutboundCapabilitiesResponse' => closedObject(
+            ['data'],
+            ['data' => ['$ref' => '#/components/schemas/CommunicationOutboundCapabilities']],
         ),
         'SavedListSurface' => ['type' => 'string', 'enum' => SavedListFilter::SURFACES],
         'SavedFilterVisibility' => ['type' => 'string', 'enum' => ['personal', 'tenant']],

@@ -8,6 +8,7 @@ use App\DTO\Communication\GatewayCommandReceipt;
 use App\DTO\Communication\GatewayQueryData;
 use App\Enums\Communication\ConversationStatus;
 use App\Enums\Communication\GatewayCommandType;
+use App\Enums\Communication\GatewayQueryType;
 use App\Enums\Communication\InboxStatus;
 use App\Enums\Communication\MessageDirection;
 use App\Enums\Communication\MessageKind;
@@ -16,6 +17,7 @@ use App\Enums\Communication\MessageStatus;
 use App\Enums\TenantPermission;
 use App\Enums\TenantRole;
 use App\Exceptions\CommunicationTransportException;
+use App\Jobs\Communication\RefreshCommunicationProfilePictureJob;
 use App\Models\CommunicationContact;
 use App\Models\CommunicationConversation;
 use App\Models\CommunicationIdentity;
@@ -116,19 +118,60 @@ final class CommunicationGatewayActionApiTest extends TestCase
         $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
         $inbox = $this->inbox($tenant);
         $this->member($inbox, $operator);
-        [$conversation, $inbound] = $this->conversation($tenant, $inbox);
+        [$conversation, $inbound, $outbound] = $this->conversation($tenant, $inbox);
+        foreach ([$inbound, $outbound] as $recoverable) {
+            $recoverable->forceFill([
+                'kind' => MessageKind::Image,
+                'metadata' => [
+                    'history' => true,
+                    'media_state' => 'RETRY_AVAILABLE',
+                ],
+            ])->save();
+        }
         $base = '/api/v1/communication/conversations/'.$conversation->id.'/messages/'.$inbound->id;
 
         $this->authenticate($operator);
         $this->postJson($base.'/recovery', ['operation' => 'UNAVAILABLE'])
             ->assertStatus(202)
             ->assertJsonPath('data.type', GatewayCommandType::RequestUnavailableMessage->value);
+        $inboundRetry = $this->postJson($base.'/recovery', ['operation' => 'MEDIA_RETRY'])
+            ->assertStatus(202)
+            ->assertJsonPath('data.type', GatewayCommandType::RequestMediaRetry->value);
         $this->postJson($base.'/recovery', ['operation' => 'MEDIA_RETRY'])
             ->assertStatus(202)
+            ->assertJsonPath('data.command_id', $inboundRetry->json('data.command_id'));
+        $firstInboundRetry = CommunicationOutboxEntry::query()->withoutGlobalScopes()
+            ->where('command_id', $inboundRetry->json('data.command_id'))
+            ->firstOrFail();
+        $this->assertStringEndsWith(':1', (string) $firstInboundRetry->effect_key);
+        $firstInboundRetry->delete();
+        $secondInboundRetry = $this->postJson($base.'/recovery', ['operation' => 'MEDIA_RETRY'])
+            ->assertStatus(202)
+            ->assertJsonPath('data.type', GatewayCommandType::RequestMediaRetry->value);
+        $this->assertNotSame($inboundRetry->json('data.command_id'), $secondInboundRetry->json('data.command_id'));
+        $this->assertStringEndsWith(
+            ':2',
+            (string) CommunicationOutboxEntry::query()->withoutGlobalScopes()
+                ->where('command_id', $secondInboundRetry->json('data.command_id'))
+                ->value('effect_key'),
+        );
+        $this->assertSame(2, $inbound->refresh()->metadata['media_request_generation']);
+        $this->postJson(
+            '/api/v1/communication/conversations/'.$conversation->id.'/messages/'.$outbound->id.'/recovery',
+            ['operation' => 'MEDIA_RETRY'],
+        )->assertStatus(202)
             ->assertJsonPath('data.type', GatewayCommandType::RequestMediaRetry->value);
         $this->postJson($base.'/history', ['count' => 20])->assertForbidden();
         $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/app-state/sync')->assertForbidden();
-        $this->assertDatabaseCount('communication_outbox_entries', 2);
+        $this->assertDatabaseCount('communication_outbox_entries', 3);
+        $retries = CommunicationOutboxEntry::query()->withoutGlobalScopes()
+            ->where('type', GatewayCommandType::RequestMediaRetry->value)
+            ->orderBy('id')
+            ->get();
+        $this->assertSame(['INBOUND', 'OUTBOUND'], $retries->pluck('payload_encrypted.expected_direction')->all());
+        $this->assertSame([$inbound->id, $outbound->id], $retries->pluck('message_id')->all());
+        $this->assertFalse($retries->contains(fn (CommunicationOutboxEntry $entry): bool => array_key_exists('sender', $entry->payload_encrypted)));
+        $this->assertFalse($retries->contains(fn (CommunicationOutboxEntry $entry): bool => array_key_exists('from_me', $entry->payload_encrypted)));
 
         $this->authenticate($admin);
         $this->postJson($base.'/history', ['count' => 20])
@@ -399,7 +442,12 @@ final class CommunicationGatewayActionApiTest extends TestCase
         ])->assertOk()->assertJsonPath('data.type', 'BUSINESS_PROFILE');
         $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/contacts/profile-picture', [
             'identity_id' => $identity->id, 'preview' => true,
-        ])->assertOk()->assertJsonPath('data.type', 'PROFILE_PICTURE');
+        ])->assertOk()
+            ->assertJsonPath('data.type', 'PROFILE_PICTURE')
+            ->assertJsonMissingPath('data.url')
+            ->assertJsonMissingPath('data.user')
+            ->assertJsonMissingPath('data.id');
+        Queue::assertPushed(RefreshCommunicationProfilePictureJob::class);
         $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/contacts/qr-link', [
             'revoke' => false,
         ])->assertOk()->assertJsonPath('data.type', 'CONTACT_QR_LINK');
@@ -417,9 +465,10 @@ final class CommunicationGatewayActionApiTest extends TestCase
             ->assertStatus(202)->assertJsonPath('data.type', GatewayCommandType::DisconnectSession->value);
         $this->assertSame(InboxStatus::Disconnected, $inbox->refresh()->status);
 
-        $this->assertCount(9, $this->transport->queries);
+        $this->assertCount(8, $this->transport->queries);
         foreach ($this->transport->queries as $query) {
             $this->assertSame('session-admin-actions-0001', $query->sessionId);
+            $this->assertNotSame(GatewayQueryType::ProfilePicture, $query->type);
         }
         $block = CommunicationOutboxEntry::query()->withoutGlobalScopes()
             ->where('type', GatewayCommandType::UpdateBlocklist->value)->firstOrFail();

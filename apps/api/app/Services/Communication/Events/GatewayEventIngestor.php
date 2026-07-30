@@ -30,6 +30,7 @@ use App\Services\Communication\Conversation\CommunicationConversationReadStateSe
 use App\Services\Communication\Flows\CommunicationFlowAvailability;
 use App\Services\Communication\Media\CommunicationMediaStore;
 use App\Services\Communication\Pairing\CommunicationPairingStateStore;
+use App\Services\Communication\ProfilePicture\CommunicationProfilePictureRefreshScheduler;
 use App\Services\Communication\WhatsappAddressNormalizer;
 use App\Services\Communication\WhatsappPeerCorrelationService;
 use App\Services\Communication\WhatsappPeerResolver;
@@ -53,6 +54,7 @@ final readonly class GatewayEventIngestor
         private CommunicationConversationCanonicalizer $peerCanonicalizer,
         private CommunicationInboxIdentityProfileMerger $identityProfiles,
         private CommunicationConversationReadStateService $readState,
+        private CommunicationProfilePictureRefreshScheduler $profilePictures,
     ) {}
 
     /** @return 'processed'|'duplicate' */
@@ -234,23 +236,6 @@ final readonly class GatewayEventIngestor
             ->where('provider_message_id', $providerId)
             ->lockForUpdate()
             ->first();
-        if ($existing !== null) {
-            if ((int) $existing->conversation_id !== (int) $conversation->id) {
-                throw new GatewayEventConflictException(
-                    'Provider message ID reutilizado para outro peer.',
-                );
-            }
-
-            return [(int) $conversation->id, (int) $existing->id, [
-                'provider_message_id' => $providerId,
-                'history' => $history,
-                'direction' => $existing->direction instanceof MessageDirection
-                    ? $existing->direction->value
-                    : (string) $existing->direction,
-                'created' => false,
-            ]];
-        }
-
         $payload = $incoming->payload;
         $kind = MessageKind::from(strtoupper((string) ($payload['kind'] ?? '')));
         $providerType = (string) $payload['provider_type'];
@@ -283,6 +268,42 @@ final readonly class GatewayEventIngestor
                 ? $incoming->payload['media_error_code']
                 : null,
         ], static fn (mixed $value): bool => $value !== null);
+        if ($storedMedia !== null) {
+            $metadata['media_state'] = 'READY';
+            unset($metadata['media_error_code']);
+        }
+
+        if ($existing !== null) {
+            if ((int) $existing->conversation_id !== (int) $conversation->id) {
+                throw new GatewayEventConflictException(
+                    'Provider message ID reutilizado para outro peer.',
+                );
+            }
+
+            $enriched = $this->enrichExistingMessage(
+                $existing,
+                $conversation,
+                $direction,
+                $kind,
+                $providerType,
+                $body,
+                $content,
+                $replyTo !== null ? (int) $replyTo : null,
+                $metadata,
+                $storedMedia,
+                $incoming,
+                $inbox,
+                $occurredAt,
+            );
+
+            return [(int) $conversation->id, (int) $existing->id, [
+                'history' => $history,
+                'direction' => $direction->value,
+                'created' => false,
+                'enriched' => $enriched,
+            ]];
+        }
+
         $message = CommunicationMessage::query()->withoutGlobalScopes()->create([
             'tenant_id' => $inbox->tenant_id,
             'inbox_id' => $inbox->id,
@@ -312,24 +333,7 @@ final readonly class GatewayEventIngestor
         ]);
 
         if ($storedMedia !== null) {
-            CommunicationAttachment::query()->withoutGlobalScopes()->create([
-                'tenant_id' => $inbox->tenant_id,
-                'message_id' => $message->id,
-                'object_id' => $storedMedia['object_id'],
-                'original_name_encrypted' => $this->safeFilename(
-                    (string) ($incoming->payload['filename'] ?? ''),
-                    $kind,
-                ),
-                'mime_type' => $this->safeMime((string) ($incoming->payload['mime_type'] ?? 'application/octet-stream')),
-                'size_bytes' => $storedMedia['size_bytes'],
-                'sha256' => $storedMedia['sha256'],
-                'storage_context' => [
-                    'tenant_id' => (int) $inbox->tenant_id,
-                    'inbox_id' => (int) $inbox->id,
-                    'gateway_event_id' => $incoming->gatewayEventId,
-                    'sha256' => $storedMedia['sha256'],
-                ],
-            ]);
+            $this->upsertAttachment($message, $inbox, $incoming, $storedMedia, false);
         }
         if (! $history) {
             $conversation->forceFill([
@@ -349,7 +353,6 @@ final readonly class GatewayEventIngestor
         }
 
         return [(int) $conversation->id, (int) $message->id, [
-            'provider_message_id' => $providerId,
             'kind' => $kind->value,
             'provider_type' => $providerType,
             'has_media' => $storedMedia !== null,
@@ -518,6 +521,9 @@ final readonly class GatewayEventIngestor
     {
         $providerId = (string) ($incoming->payload['provider_message_id'] ?? '');
         $status = strtoupper((string) ($incoming->payload['status'] ?? ''));
+        if (! in_array($status, ['REQUESTED', 'READY', 'FAILED'], true)) {
+            throw new RuntimeException('Estado de media retry inválido.');
+        }
         $message = CommunicationMessage::query()->withoutGlobalScopes()
             ->where('tenant_id', $inbox->tenant_id)
             ->where('inbox_id', $inbox->id)
@@ -529,12 +535,31 @@ final readonly class GatewayEventIngestor
                 throw new RuntimeException('Media retry não pertence a mensagem desta inbox.');
             }
 
-            return [null, null, ['provider_message_id' => $providerId, 'status' => $status, 'orphan' => true]];
+            return [null, null, ['status' => $status, 'orphan' => true]];
         }
         $metadata = is_array($message->metadata) ? $message->metadata : [];
+        $currentStatus = strtoupper((string) ($metadata['media_state'] ?? ''));
+        $currentGeneration = max(0, (int) ($metadata['media_generation'] ?? 0));
+        $incomingGeneration = max(0, (int) ($incoming->payload['generation'] ?? 0));
+        $currentAttempt = max(0, (int) ($metadata['media_attempt'] ?? 0));
+        $incomingAttempt = max(0, (int) ($incoming->payload['attempt'] ?? 0));
+        if ($incomingGeneration < $currentGeneration
+            || ($incomingGeneration === $currentGeneration && $incomingAttempt < $currentAttempt)
+            || ($currentStatus === 'READY' && $status !== 'READY')) {
+            if ($storedMedia !== null) {
+                DeleteCommunicationMediaObjectJob::dispatch($storedMedia['object_id'])->afterCommit();
+            }
+
+            return [(int) $message->conversation_id, (int) $message->id, [
+                'status' => $currentStatus,
+                'generation' => $currentGeneration,
+                'attempt' => max(0, (int) ($metadata['media_attempt'] ?? 0)),
+                'stale' => true,
+            ]];
+        }
         $metadata['media_state'] = $status;
-        $metadata['media_generation'] = max(0, (int) ($incoming->payload['generation'] ?? 0));
-        $metadata['media_attempt'] = max(0, (int) ($incoming->payload['attempt'] ?? 0));
+        $metadata['media_generation'] = $incomingGeneration;
+        $metadata['media_attempt'] = $incomingAttempt;
         if ($status === 'FAILED') {
             $metadata['media_error_code'] = (string) $incoming->payload['error_code'];
         } elseif ($status === 'READY') {
@@ -542,48 +567,20 @@ final readonly class GatewayEventIngestor
                 throw new RuntimeException('Media retry READY sem stream confirmado.');
             }
             unset($metadata['media_error_code']);
-            $attachment = CommunicationAttachment::query()->withoutGlobalScopes()
-                ->where('tenant_id', $inbox->tenant_id)
-                ->where('message_id', $message->id)
-                ->orderBy('id')
-                ->first();
-            $attributes = [
-                'tenant_id' => $inbox->tenant_id,
-                'message_id' => $message->id,
-                'object_id' => $storedMedia['object_id'],
-                'original_name_encrypted' => $this->safeFilename(
-                    (string) ($incoming->payload['filename'] ?? ''),
-                    $message->kind,
-                ),
-                'mime_type' => $this->safeMime((string) $incoming->payload['mime_type']),
-                'size_bytes' => $storedMedia['size_bytes'],
-                'sha256' => $storedMedia['sha256'],
-                'storage_context' => [
-                    'tenant_id' => (int) $inbox->tenant_id,
-                    'inbox_id' => (int) $inbox->id,
-                    'gateway_event_id' => $incoming->gatewayEventId,
-                    'sha256' => $storedMedia['sha256'],
-                ],
-                'purged_at' => null,
-            ];
-            if ($attachment === null) {
-                CommunicationAttachment::query()->withoutGlobalScopes()->create($attributes);
-            } else {
-                $previousObjectId = (string) $attachment->object_id;
-                $attachment->forceFill($attributes)->save();
-                if ($previousObjectId !== '' && $previousObjectId !== $storedMedia['object_id']) {
-                    DeleteCommunicationMediaObjectJob::dispatch($previousObjectId);
-                }
-            }
+            $this->upsertAttachment(
+                $message,
+                $inbox,
+                $incoming,
+                $storedMedia,
+                $incomingGeneration > $currentGeneration,
+            );
         }
         $message->forceFill(['metadata' => $metadata])->save();
 
         return [(int) $message->conversation_id, (int) $message->id, array_filter([
-            'provider_message_id' => $providerId,
             'status' => $status,
             'generation' => $metadata['media_generation'],
             'attempt' => $metadata['media_attempt'],
-            'sha256' => $storedMedia['sha256'] ?? null,
             'error_code' => $metadata['media_error_code'] ?? null,
         ], static fn (mixed $value): bool => $value !== null)];
     }
@@ -622,35 +619,14 @@ final readonly class GatewayEventIngestor
         $user = (string) ($incoming->payload['user'] ?? '');
         [$identity, $conversation] = $this->knownContext($inbox, $user);
         $source = strtoupper(trim((string) ($incoming->payload['source'] ?? '')));
-        $safe = array_filter([
-            'user' => $user,
-            'display_name' => $incoming->payload['display_name'] ?? null,
-            'business_name' => $incoming->payload['business_name'] ?? null,
-            'picture_id' => $incoming->payload['picture_id'] ?? null,
-            'about' => $incoming->payload['about'] ?? null,
-            'source' => $source !== '' ? $source : null,
-            'verified_name' => $incoming->payload['verified_name'] ?? null,
-            'address_book_name' => $incoming->payload['address_book_name'] ?? null,
-            'address_book_full_name' => $incoming->payload['address_book_full_name'] ?? null,
-            'address_book_first_name' => $incoming->payload['address_book_first_name'] ?? null,
-            'push_name' => $incoming->payload['push_name'] ?? null,
-            'from_full_sync' => $incoming->payload['from_full_sync'] ?? null,
-            'cleared_fields' => $incoming->payload['cleared_fields'] ?? null,
-            'source_identity' => $incoming->payload['source_identity'] ?? null,
-        ], static fn (mixed $value): bool => is_bool($value) || (is_scalar($value) && (string) $value !== ''));
-        foreach (['cleared_fields', 'source_identity'] as $structuredField) {
-            if (is_array($incoming->payload[$structuredField] ?? null)) {
-                $safe[$structuredField] = $incoming->payload[$structuredField];
-            }
-        }
+        $fields = $this->profileFields($incoming->payload, $source);
+        $clearedFields = array_values(array_filter(
+            is_array($incoming->payload['cleared_fields'] ?? null)
+                ? $incoming->payload['cleared_fields']
+                : [],
+            'is_string',
+        ));
         if ($identity !== null) {
-            $fields = $this->profileFields($incoming->payload, $source);
-            $clearedFields = array_values(array_filter(
-                is_array($incoming->payload['cleared_fields'] ?? null)
-                    ? $incoming->payload['cleared_fields']
-                    : [],
-                'is_string',
-            ));
             $this->identityProfiles->merge(
                 $inbox,
                 $identity,
@@ -659,7 +635,18 @@ final readonly class GatewayEventIngestor
                 $incoming->gatewayEventId,
                 $clearedFields,
             );
+            $this->profilePictures->schedule($inbox, $identity);
         }
+
+        // The stored event is also broadcast after commit. Keep provider profile data
+        // (JIDs, names, about and picture identifiers) inside the profile projection only.
+        $safe = array_filter([
+            'identity_id' => $identity?->id,
+            'source' => $source !== '' ? $source : null,
+            'changed_fields' => array_values(array_keys($fields)),
+            'cleared_fields' => $clearedFields,
+            'from_full_sync' => $incoming->payload['from_full_sync'] ?? null,
+        ], static fn (mixed $value): bool => $value !== null);
 
         return [$conversation?->id, null, $safe];
     }
@@ -879,6 +866,290 @@ final readonly class GatewayEventIngestor
             'expires_at' => $incoming->payload['expires_at'] ?? null,
             'error_code' => $incoming->payload['error_code'] ?? null,
         ]];
+    }
+
+    /**
+     * @param  array<string,mixed>  $content
+     * @param  array<string,mixed>  $incomingMetadata
+     * @param  array{object_id:string,size_bytes:int,sha256:string}|null  $storedMedia
+     */
+    private function enrichExistingMessage(
+        CommunicationMessage $message,
+        CommunicationConversation $conversation,
+        MessageDirection $direction,
+        MessageKind $kind,
+        string $providerType,
+        string $body,
+        array $content,
+        ?int $replyToMessageId,
+        array $incomingMetadata,
+        ?array $storedMedia,
+        GatewayEventData $incoming,
+        CommunicationInbox $inbox,
+        \DateTimeInterface $occurredAt,
+    ): bool {
+        $existingDirection = $message->direction instanceof MessageDirection
+            ? $message->direction
+            : MessageDirection::from((string) $message->direction);
+        if ($existingDirection !== $direction) {
+            throw new GatewayEventConflictException('Provider message ID reutilizado com outra direção.');
+        }
+
+        if ($message->purged_at !== null || $message->revoked_at !== null || $message->quarantined_at !== null) {
+            if ($storedMedia !== null) {
+                DeleteCommunicationMediaObjectJob::dispatch($storedMedia['object_id'])->afterCommit();
+            }
+
+            return false;
+        }
+
+        $existingKind = $message->kind instanceof MessageKind
+            ? $message->kind
+            : MessageKind::from((string) $message->kind);
+        $promotingUnsupported = $existingKind === MessageKind::Unsupported
+            && $kind !== MessageKind::Unsupported;
+        if ($existingKind !== $kind && ! $promotingUnsupported) {
+            throw new GatewayEventConflictException('Provider message ID reutilizado com outro kind.');
+        }
+        $existingProviderType = trim((string) $message->provider_type);
+        if ($existingProviderType !== ''
+            && ! hash_equals($existingProviderType, $providerType)
+            && ! $promotingUnsupported) {
+            throw new GatewayEventConflictException('Provider message ID reutilizado com outro tipo semântico.');
+        }
+
+        $attributes = [];
+        if ($promotingUnsupported) {
+            $attributes['kind'] = $kind;
+            $attributes['provider_type'] = $providerType;
+        } elseif ($existingProviderType === '') {
+            $attributes['provider_type'] = $providerType;
+        }
+
+        $existingMetadata = is_array($message->metadata) ? $message->metadata : [];
+        $wasEdited = trim((string) ($existingMetadata['edited_at'] ?? '')) !== '';
+        $existingBody = trim((string) $message->body_encrypted);
+        if (! $wasEdited && $existingBody !== '' && $body !== '' && ! hash_equals($existingBody, $body)) {
+            throw new GatewayEventConflictException('Provider message ID reutilizado com outro corpo.');
+        }
+        if (! $wasEdited && $existingBody === '' && $body !== '') {
+            $attributes['body_encrypted'] = $body;
+        }
+
+        $existingContent = is_array($message->content_encrypted) ? $message->content_encrypted : [];
+        $mergedContent = $this->mergeSemanticContent($existingContent, $content, $wasEdited);
+        if ($mergedContent !== $existingContent) {
+            $attributes['content_encrypted'] = $mergedContent;
+        }
+
+        if ($message->reply_to_message_id !== null
+            && $replyToMessageId !== null
+            && (int) $message->reply_to_message_id !== $replyToMessageId) {
+            throw new GatewayEventConflictException('Provider message ID reutilizado com outra resposta.');
+        }
+        if ($message->reply_to_message_id === null && $replyToMessageId !== null) {
+            $attributes['reply_to_message_id'] = $replyToMessageId;
+        }
+
+        if ($storedMedia !== null && $this->hasPurgedAttachment($message)) {
+            DeleteCommunicationMediaObjectJob::dispatch($storedMedia['object_id'])->afterCommit();
+            $storedMedia = null;
+            unset($incomingMetadata['media_error_code']);
+            $incomingMetadata['media_state'] = 'UNAVAILABLE';
+        }
+
+        $hasExistingMedia = CommunicationAttachment::query()
+            ->withoutGlobalScopes()
+            ->where('tenant_id', $message->tenant_id)
+            ->where('message_id', $message->id)
+            ->whereNull('purged_at')
+            ->exists();
+        $metadata = $this->mergeAvailabilityMetadata(
+            $existingMetadata,
+            $incomingMetadata,
+            $storedMedia !== null,
+            $hasExistingMedia,
+        );
+        if ($metadata !== (is_array($message->metadata) ? $message->metadata : [])) {
+            $attributes['metadata'] = $metadata;
+        }
+
+        $attachmentChanged = $storedMedia !== null
+            ? $this->upsertAttachment($message, $inbox, $incoming, $storedMedia, false)
+            : false;
+        $changed = $attributes !== [] || $attachmentChanged;
+        if ($changed) {
+            $effectiveKind = $promotingUnsupported ? $kind : $existingKind;
+            $effectiveProviderType = (string) ($attributes['provider_type'] ?? $message->provider_type);
+            $effectiveBody = (string) ($attributes['body_encrypted'] ?? $message->body_encrypted ?? '');
+            $effectiveContent = $attributes['content_encrypted'] ?? $existingContent;
+            $attachmentSha = $storedMedia['sha256'] ?? CommunicationAttachment::query()
+                ->withoutGlobalScopes()
+                ->where('tenant_id', $message->tenant_id)
+                ->where('message_id', $message->id)
+                ->whereNull('purged_at')
+                ->orderBy('id')
+                ->value('sha256') ?? '';
+            $attributes['content_digest'] = hash('sha256', implode('|', [
+                $effectiveKind->value,
+                $effectiveProviderType,
+                $effectiveBody,
+                CommunicationPayloadDigest::make($effectiveContent),
+                $attachmentSha,
+            ]));
+            $message->forceFill($attributes)->save();
+        }
+
+        $lockedConversation = CommunicationConversation::query()
+            ->withoutGlobalScopes()
+            ->where('tenant_id', $conversation->tenant_id)
+            ->whereKey($conversation->id)
+            ->lockForUpdate()
+            ->firstOrFail();
+        if ($lockedConversation->last_message_at === null
+            || $lockedConversation->last_message_at->isBefore($message->occurred_at)) {
+            $lockedConversation->forceFill(['last_message_at' => $message->occurred_at])->save();
+        }
+
+        return $changed;
+    }
+
+    /** @param array<string,mixed> $existing @param array<string,mixed> $incoming */
+    private function mergeSemanticContent(array $existing, array $incoming, bool $preserveDivergent = false): array
+    {
+        $merged = $existing;
+        foreach ($incoming as $key => $value) {
+            if ($value === null || $value === '' || $value === []) {
+                continue;
+            }
+            $current = $merged[$key] ?? null;
+            if ($current === null || $current === '' || $current === []) {
+                $merged[$key] = $value;
+
+                continue;
+            }
+            if (CommunicationPayloadDigest::make(['value' => $current])
+                !== CommunicationPayloadDigest::make(['value' => $value])) {
+                if ($preserveDivergent) {
+                    continue;
+                }
+                throw new GatewayEventConflictException('Provider message ID reutilizado com conteúdo divergente.');
+            }
+        }
+
+        return $merged;
+    }
+
+    /** @param array<string,mixed> $existing @param array<string,mixed> $incoming */
+    private function mergeAvailabilityMetadata(
+        array $existing,
+        array $incoming,
+        bool $hasIncomingMedia,
+        bool $hasExistingMedia,
+    ): array {
+        $merged = $existing;
+        foreach (['history', 'ephemeral', 'view_once'] as $flag) {
+            if (($incoming[$flag] ?? false) === true) {
+                $merged[$flag] = true;
+            }
+        }
+
+        $currentState = strtoupper((string) ($merged['media_state'] ?? ''));
+        $incomingState = $hasIncomingMedia ? 'READY' : strtoupper((string) ($incoming['media_state'] ?? ''));
+        if ($incomingState !== '') {
+            $merged['media_state'] = match (true) {
+                $hasIncomingMedia => 'READY',
+                $currentState === 'READY' && $hasExistingMedia => 'READY',
+                $incomingState === 'UNAVAILABLE' => 'UNAVAILABLE',
+                $currentState === 'REQUESTED' && $incomingState === 'RETRY_AVAILABLE' => 'REQUESTED',
+                default => $incomingState,
+            };
+        }
+        if (($merged['media_state'] ?? null) === 'READY') {
+            if (! $hasIncomingMedia && ! $hasExistingMedia) {
+                $merged['media_state'] = 'UNAVAILABLE';
+            }
+            unset($merged['media_error_code']);
+        } elseif (is_string($incoming['media_error_code'] ?? null)) {
+            $merged['media_error_code'] = $incoming['media_error_code'];
+        }
+
+        return $merged;
+    }
+
+    /**
+     * @param  array{object_id:string,size_bytes:int,sha256:string}  $storedMedia
+     */
+    private function upsertAttachment(
+        CommunicationMessage $message,
+        CommunicationInbox $inbox,
+        GatewayEventData $incoming,
+        array $storedMedia,
+        bool $allowReplacement,
+    ): bool {
+        $attachment = CommunicationAttachment::query()->withoutGlobalScopes()
+            ->where('tenant_id', $inbox->tenant_id)
+            ->where('message_id', $message->id)
+            ->whereNull('purged_at')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->first();
+        $attributes = [
+            'tenant_id' => $inbox->tenant_id,
+            'message_id' => $message->id,
+            'object_id' => $storedMedia['object_id'],
+            'original_name_encrypted' => $this->safeFilename(
+                (string) ($incoming->payload['filename'] ?? ''),
+                $message->kind instanceof MessageKind
+                    ? $message->kind
+                    : MessageKind::from((string) $message->kind),
+            ),
+            'mime_type' => $this->safeMime((string) ($incoming->payload['mime_type'] ?? 'application/octet-stream')),
+            'size_bytes' => $storedMedia['size_bytes'],
+            'sha256' => $storedMedia['sha256'],
+            'storage_context' => [
+                'tenant_id' => (int) $inbox->tenant_id,
+                'inbox_id' => (int) $inbox->id,
+                'gateway_event_id' => $incoming->gatewayEventId,
+                'sha256' => $storedMedia['sha256'],
+            ],
+            'purged_at' => null,
+        ];
+        if ($attachment === null) {
+            CommunicationAttachment::query()->withoutGlobalScopes()->create($attributes);
+
+            return true;
+        }
+        if (hash_equals((string) $attachment->sha256, $storedMedia['sha256'])
+            && (int) $attachment->size_bytes === $storedMedia['size_bytes']) {
+            if (! hash_equals((string) $attachment->object_id, $storedMedia['object_id'])) {
+                DeleteCommunicationMediaObjectJob::dispatch($storedMedia['object_id'])->afterCommit();
+            }
+
+            return false;
+        }
+        if (! $allowReplacement) {
+            throw new GatewayEventConflictException('Provider message ID reutilizado com mídia divergente.');
+        }
+
+        $previousObjectId = (string) $attachment->object_id;
+        $attachment->forceFill($attributes)->save();
+        if ($previousObjectId !== '' && ! hash_equals($previousObjectId, $storedMedia['object_id'])) {
+            DeleteCommunicationMediaObjectJob::dispatch($previousObjectId)->afterCommit();
+        }
+
+        return true;
+    }
+
+    private function hasPurgedAttachment(CommunicationMessage $message): bool
+    {
+        return CommunicationAttachment::query()
+            ->withoutGlobalScopes()
+            ->where('tenant_id', $message->tenant_id)
+            ->where('message_id', $message->id)
+            ->whereNotNull('purged_at')
+            ->lockForUpdate()
+            ->first(['id']) !== null;
     }
 
     private function safeMime(string $mime): string

@@ -2,6 +2,7 @@
 
 namespace App\Actions\Communication;
 
+use App\Exceptions\CommunicationConversationApiException;
 use App\Models\CommunicationConversation;
 use App\Services\Communication\CommunicationConversationCanonicalizer;
 use App\Services\Communication\Conversation\CommunicationConversationReadStateService;
@@ -23,7 +24,7 @@ final readonly class MarkCommunicationConversationUnreadAction
         return DB::transaction(function () use ($conversation, $expectedVersion): CommunicationConversation {
             $fresh = $this->canonicalizer->lockConversation($conversation);
             if ($fresh->purged_at !== null) {
-                throw \App\Exceptions\CommunicationConversationApiException::purged();
+                throw CommunicationConversationApiException::purged();
             }
 
             $this->readState->markUnread(

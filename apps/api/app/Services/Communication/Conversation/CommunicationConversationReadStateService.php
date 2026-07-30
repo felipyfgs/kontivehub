@@ -9,6 +9,7 @@ use App\Models\CommunicationConversationReadState;
 use App\Models\CommunicationConversationUnreadMessage;
 use App\Models\CommunicationMessage;
 use App\Services\Communication\Events\CommunicationEventRecorder;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
 
@@ -58,6 +59,7 @@ final readonly class CommunicationConversationReadStateService
             ->withoutGlobalScopes()
             ->where('tenant_id', $conversation->tenant_id)
             ->where('conversation_id', $conversation->id)
+            ->visibleToWorkspace()
             ->whereKey($throughMessageId)
             ->first();
         if ($message === null) {
@@ -103,6 +105,10 @@ final readonly class CommunicationConversationReadStateService
 
         $hasUnread = CommunicationConversationUnreadMessage::query()
             ->withoutGlobalScopes()
+            ->whereHas(
+                'message',
+                fn (Builder $messages): Builder => $messages->visibleToWorkspace(),
+            )
             ->where('tenant_id', $conversation->tenant_id)
             ->where('conversation_id', $conversation->id)
             ->exists();
@@ -114,6 +120,7 @@ final readonly class CommunicationConversationReadStateService
             ->withoutGlobalScopes()
             ->where('tenant_id', $conversation->tenant_id)
             ->where('conversation_id', $conversation->id)
+            ->visibleToWorkspace()
             ->where('direction', MessageDirection::Inbound)
             ->whereNull('purged_at')
             ->whereNull('revoked_at')
@@ -316,10 +323,11 @@ final readonly class CommunicationConversationReadStateService
     {
         $base = CommunicationConversationUnreadMessage::query()
             ->withoutGlobalScopes()
+            ->join('communication_messages', 'communication_messages.id', '=', 'communication_conversation_unread_messages.message_id')
             ->where('communication_conversation_unread_messages.tenant_id', $conversation->tenant_id)
             ->where('communication_conversation_unread_messages.conversation_id', $conversation->id);
+        CommunicationMessage::constrainWorkspaceVisibility($base, 'communication_messages');
         $first = (clone $base)
-            ->join('communication_messages', 'communication_messages.id', '=', 'communication_conversation_unread_messages.message_id')
             ->orderBy('communication_messages.occurred_at')
             ->orderBy('communication_messages.id')
             ->value('communication_conversation_unread_messages.message_id');

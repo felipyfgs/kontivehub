@@ -2,12 +2,15 @@
 
 namespace App\Providers;
 
+use App\Actions\Communication\CreateCommunicationMessageAction;
 use App\Contracts\AdnContributorClient;
 use App\Contracts\AssistantLlmGateway;
 use App\Contracts\AutenticarProcuradorClient;
 use App\Contracts\CaixaPostalClient;
 use App\Contracts\CaixaPostalIndicatorClient;
 use App\Contracts\CnpjRegistrationLookup;
+use App\Contracts\CommunicationOutboundMessageWriter;
+use App\Contracts\CommunicationProfilePictureDownloader;
 use App\Contracts\CommunicationTransport;
 use App\Contracts\CteXmlSignatureValidator;
 use App\Contracts\DteIndicatorClient;
@@ -86,6 +89,7 @@ use App\Services\Clients\RegistrationLookupMerger;
 use App\Services\Clients\RegistrationLookupOrchestrator;
 use App\Services\Clients\SerproConsultaCnpjLookup;
 use App\Services\Communication\Media\CommunicationMediaStore;
+use App\Services\Communication\ProfilePicture\CurlCommunicationProfilePictureDownloader;
 use App\Services\Communication\Transport\HttpCommunicationTransport;
 use App\Services\Esocial\CurlEsocialBxSoapTransport;
 use App\Services\Esocial\DisabledEsocialEventClient;
@@ -244,6 +248,8 @@ class AppServiceProvider extends ServiceProvider
                 (string) config('communication.media.disk_root'),
             );
         });
+        $this->app->bind(CommunicationProfilePictureDownloader::class, CurlCommunicationProfilePictureDownloader::class);
+        $this->app->bind(CommunicationOutboundMessageWriter::class, CreateCommunicationMessageAction::class);
         $this->app->bind(CommunicationTransport::class, HttpCommunicationTransport::class);
         $this->app->bind(AssistantLlmGateway::class, OpenAiAssistantLlmGateway::class);
 

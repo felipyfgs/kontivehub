@@ -1510,12 +1510,12 @@
                 ],
                 "summary": "CommunicationContactController index",
                 "responses": {
-                    "default": {
-                        "description": "Resposta definida pela operação Laravel.",
+                    "200": {
+                        "description": "Resposta canônica.",
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/JsonResponse"
+                                    "$ref": "#/components/schemas/CommunicationContactCollection"
                                 }
                             }
                         }
@@ -1534,12 +1534,12 @@
                 ],
                 "summary": "CommunicationContactController store",
                 "responses": {
-                    "default": {
-                        "description": "Resposta definida pela operação Laravel.",
+                    "201": {
+                        "description": "Resposta canônica.",
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/JsonResponse"
+                                    "$ref": "#/components/schemas/CommunicationContactResponse"
                                 }
                             }
                         }
@@ -1552,6 +1552,42 @@
                 ]
             }
         },
+        "/api/v1/communication/contacts/search": {
+            "post": {
+                "operationId": "postCommunicationContactsSearch",
+                "tags": [
+                    "communication"
+                ],
+                "summary": "CommunicationContactController search",
+                "responses": {
+                    "200": {
+                        "description": "Resposta canônica.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CommunicationContactCollection"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "sanctumCookie": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CommunicationContactSearchBody"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/communication/contacts/{contact}": {
             "get": {
                 "operationId": "getCommunicationContactsContact",
@@ -1560,12 +1596,12 @@
                 ],
                 "summary": "CommunicationContactController show",
                 "responses": {
-                    "default": {
-                        "description": "Resposta definida pela operação Laravel.",
+                    "200": {
+                        "description": "Resposta canônica.",
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/JsonResponse"
+                                    "$ref": "#/components/schemas/CommunicationContactResponse"
                                 }
                             }
                         }
@@ -1595,12 +1631,12 @@
                 ],
                 "summary": "CommunicationContactController update",
                 "responses": {
-                    "default": {
-                        "description": "Resposta definida pela operação Laravel.",
+                    "200": {
+                        "description": "Resposta canônica.",
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/JsonResponse"
+                                    "$ref": "#/components/schemas/CommunicationContactResponse"
                                 }
                             }
                         }
@@ -1735,16 +1771,126 @@
                 ]
             }
         },
-        "/api/v1/communication/conversations": {
+        "/api/v1/communication/contacts/{contact}/shared-content": {
             "get": {
-                "operationId": "getCommunicationConversations",
+                "operationId": "getCommunicationContactsContactSharedContent",
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationConversationController index",
+                "summary": "CommunicationContactController sharedContent",
                 "responses": {
-                    "default": {
-                        "description": "Resposta definida pela operação Laravel.",
+                    "200": {
+                        "description": "Resposta canônica.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CommunicationSharedContentCollection"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "Cache-Control": {
+                                "description": "Resposta privada e não armazenável.",
+                                "schema": {
+                                    "type": "string",
+                                    "const": "private, no-store, max-age=0"
+                                }
+                            },
+                            "Pragma": {
+                                "description": "Compatibilidade com caches HTTP legados.",
+                                "schema": {
+                                    "type": "string",
+                                    "const": "no-cache"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "contact",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    },
+                    {
+                        "name": "category",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/components/schemas/CommunicationSharedContentCategory"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100,
+                            "default": 30
+                        }
+                    },
+                    {
+                        "name": "cursor",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 1024
+                        }
+                    },
+                    {
+                        "name": "inbox_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "sanctumCookie": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/communication/conversation-bulk-operations": {
+            "post": {
+                "operationId": "postCommunicationConversationBulkOperations",
+                "tags": [
+                    "communication"
+                ],
+                "summary": "ConversationBulkOperationController store",
+                "responses": {
+                    "202": {
+                        "description": "Resposta canônica.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ConversationBulkOperationResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Resposta canônica.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/JsonResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Resposta canônica.",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -1758,7 +1904,315 @@
                     {
                         "sanctumCookie": []
                     }
+                ],
+                "parameters": [
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "minLength": 8,
+                            "maxLength": 128,
+                            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ConversationBulkOperationBody"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/communication/conversation-bulk-operations/{operation}": {
+            "get": {
+                "operationId": "getCommunicationConversationBulkOperationsOperation",
+                "tags": [
+                    "communication"
+                ],
+                "summary": "ConversationBulkOperationController show",
+                "responses": {
+                    "200": {
+                        "description": "Resposta canônica.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ConversationBulkOperationResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "operation",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "sanctumCookie": []
+                    }
                 ]
+            }
+        },
+        "/api/v1/communication/conversation-bulk-operations/{operation}/items": {
+            "get": {
+                "operationId": "getCommunicationConversationBulkOperationsOperationItems",
+                "tags": [
+                    "communication"
+                ],
+                "summary": "ConversationBulkOperationController items",
+                "responses": {
+                    "200": {
+                        "description": "Resposta canônica.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ConversationBulkOperationItemCollection"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "operation",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    },
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "sanctumCookie": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/communication/conversation-list-preferences": {
+            "get": {
+                "operationId": "getCommunicationConversationListPreferences",
+                "tags": [
+                    "communication"
+                ],
+                "summary": "ConversationListPreferenceController show",
+                "responses": {
+                    "200": {
+                        "description": "Resposta canônica.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ConversationListPreferenceResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "sanctumCookie": []
+                    }
+                ]
+            },
+            "put": {
+                "operationId": "putCommunicationConversationListPreferences",
+                "tags": [
+                    "communication"
+                ],
+                "summary": "ConversationListPreferenceController update",
+                "responses": {
+                    "200": {
+                        "description": "Resposta canônica.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ConversationListPreferenceResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Resposta canônica.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/JsonResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "sanctumCookie": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ConversationListPreferenceBody"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/communication/conversations": {
+            "get": {
+                "operationId": "getCommunicationConversations",
+                "tags": [
+                    "communication"
+                ],
+                "summary": "CommunicationConversationController index",
+                "responses": {
+                    "200": {
+                        "description": "Resposta canônica.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CommunicationConversationCollection"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "sanctumCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "contact_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        }
+                    }
+                ]
+            },
+            "post": {
+                "operationId": "postCommunicationConversations",
+                "tags": [
+                    "communication"
+                ],
+                "summary": "CommunicationConversationController store",
+                "responses": {
+                    "200": {
+                        "description": "Resposta canônica.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StartCommunicationConversationResponse"
+                                }
+                            }
+                        }
+                    },
+                    "202": {
+                        "description": "Resposta canônica.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StartCommunicationConversationResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Resposta canônica.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/JsonResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Resposta canônica.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/JsonResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "sanctumCookie": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "minLength": 8,
+                            "maxLength": 128,
+                            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/StartCommunicationConversationBody"
+                            }
+                        }
+                    }
+                }
             }
         },
         "/api/v1/communication/conversations/{conversation}": {
@@ -1769,12 +2223,12 @@
                 ],
                 "summary": "CommunicationConversationController show",
                 "responses": {
-                    "default": {
-                        "description": "Resposta definida pela operação Laravel.",
+                    "200": {
+                        "description": "Resposta canônica.",
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/JsonResponse"
+                                    "$ref": "#/components/schemas/CommunicationConversationResponse"
                                 }
                             }
                         }
@@ -1804,12 +2258,12 @@
                 ],
                 "summary": "CommunicationConversationController update",
                 "responses": {
-                    "default": {
-                        "description": "Resposta definida pela operação Laravel.",
+                    "200": {
+                        "description": "Resposta canônica.",
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/JsonResponse"
+                                    "$ref": "#/components/schemas/CommunicationConversationResponse"
                                 }
                             }
                         }
@@ -1961,6 +2415,63 @@
             }
         },
         "/api/v1/communication/conversations/{conversation}/messages": {
+            "get": {
+                "operationId": "getCommunicationConversationsConversationMessages",
+                "tags": [
+                    "communication"
+                ],
+                "summary": "CommunicationConversationController messages",
+                "responses": {
+                    "200": {
+                        "description": "Resposta canônica.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CommunicationMessageCollection"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "conversation",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    },
+                    {
+                        "name": "anchor",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "latest",
+                                "first_unread",
+                                "message"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "message_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "sanctumCookie": []
+                    }
+                ]
+            },
             "post": {
                 "operationId": "postCommunicationConversationsConversationMessages",
                 "tags": [
@@ -2383,6 +2894,124 @@
                         "schema": {
                             "type": "string",
                             "minLength": 1
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "sanctumCookie": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/communication/conversations/{conversation}/read-state": {
+            "put": {
+                "operationId": "putCommunicationConversationsConversationReadState",
+                "tags": [
+                    "communication"
+                ],
+                "summary": "CommunicationConversationController updateReadState",
+                "responses": {
+                    "default": {
+                        "description": "Resposta definida pela operação Laravel.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/JsonResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "conversation",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "sanctumCookie": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/communication/conversations/{conversation}/shared-content": {
+            "get": {
+                "operationId": "getCommunicationConversationsConversationSharedContent",
+                "tags": [
+                    "communication"
+                ],
+                "summary": "CommunicationConversationController sharedContent",
+                "responses": {
+                    "200": {
+                        "description": "Resposta canônica.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CommunicationSharedContentCollection"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "Cache-Control": {
+                                "description": "Resposta privada e não armazenável.",
+                                "schema": {
+                                    "type": "string",
+                                    "const": "private, no-store, max-age=0"
+                                }
+                            },
+                            "Pragma": {
+                                "description": "Compatibilidade com caches HTTP legados.",
+                                "schema": {
+                                    "type": "string",
+                                    "const": "no-cache"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "conversation",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    },
+                    {
+                        "name": "category",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/components/schemas/CommunicationSharedContentCategory"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100,
+                            "default": 30
+                        }
+                    },
+                    {
+                        "name": "cursor",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 1024
                         }
                     }
                 ],
@@ -4566,17 +5195,113 @@
                 ],
                 "summary": "CommunicationCatalogController outboundCapabilities",
                 "responses": {
-                    "default": {
-                        "description": "Resposta definida pela operação Laravel.",
+                    "200": {
+                        "description": "Resposta canônica.",
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/JsonResponse"
+                                    "$ref": "#/components/schemas/CommunicationOutboundCapabilitiesResponse"
                                 }
                             }
                         }
                     }
                 },
+                "security": [
+                    {
+                        "sanctumCookie": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/communication/profile-pictures/{profile}/{version}": {
+            "get": {
+                "operationId": "getCommunicationProfilePicturesProfileVersion",
+                "tags": [
+                    "communication"
+                ],
+                "summary": "CommunicationProfilePictureController show",
+                "responses": {
+                    "200": {
+                        "description": "Foto de perfil privada e autorizada.",
+                        "headers": {
+                            "ETag": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            },
+                            "Cache-Control": {
+                                "schema": {
+                                    "type": "string",
+                                    "const": "private, no-cache, must-revalidate"
+                                }
+                            },
+                            "X-Content-Type-Options": {
+                                "schema": {
+                                    "type": "string",
+                                    "const": "nosniff"
+                                }
+                            }
+                        },
+                        "content": {
+                            "image/jpeg": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            },
+                            "image/png": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            },
+                            "image/webp": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            }
+                        }
+                    },
+                    "304": {
+                        "description": "Asset autorizado não foi modificado."
+                    },
+                    "404": {
+                        "description": "Asset ausente, obsoleto ou não autorizado."
+                    },
+                    "429": {
+                        "description": "Limite de revalidações da imagem excedido."
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "profile",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        }
+                    },
+                    {
+                        "name": "version",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        }
+                    },
+                    {
+                        "name": "If-None-Match",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "ETag previamente recebido para revalidação privada."
+                    }
+                ],
                 "security": [
                     {
                         "sanctumCookie": []
@@ -13808,7 +14533,7 @@
                 "tags": [
                     "platform"
                 ],
-                "summary": "TenantAdminController show",
+                "summary": "PlatformTenantController show",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -17326,6 +18051,83 @@
                 "type": "object",
                 "additionalProperties": true
             },
+            "ConversationBulkOperationBody": {
+                "type": "object",
+                "required": [
+                    "action",
+                    "items"
+                ],
+                "properties": {
+                    "action": {
+                        "type": "string"
+                    },
+                    "params": {
+                        "type": "object"
+                    },
+                    "items": {
+                        "type": "array"
+                    }
+                },
+                "additionalProperties": false
+            },
+            "ConversationBulkOperationResponse": {
+                "type": "object",
+                "required": [
+                    "data"
+                ],
+                "properties": {
+                    "data": {
+                        "type": "object",
+                        "additionalProperties": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "ConversationBulkOperationItemCollection": {
+                "type": "object",
+                "required": [
+                    "data"
+                ],
+                "properties": {
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "meta": {
+                        "type": "object",
+                        "additionalProperties": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "ConversationListPreferenceBody": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string"
+                    },
+                    "sort_by": {
+                        "type": "string"
+                    }
+                },
+                "additionalProperties": false
+            },
+            "ConversationListPreferenceResponse": {
+                "type": "object",
+                "required": [
+                    "data"
+                ],
+                "properties": {
+                    "data": {
+                        "type": "object",
+                        "additionalProperties": true
+                    }
+                },
+                "additionalProperties": false
+            },
             "TenantRole": {
                 "type": "string",
                 "enum": [
@@ -17580,6 +18382,868 @@
                 "properties": {
                     "data": {
                         "$ref": "#/components/schemas/MeUser"
+                    }
+                }
+            },
+            "CommunicationIdentityLink": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "id",
+                    "client_id",
+                    "client_name",
+                    "client_contact_id",
+                    "client_contact_name",
+                    "is_primary",
+                    "receives_automatic"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "client_id": {
+                        "type": "integer"
+                    },
+                    "client_name": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "client_contact_id": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ]
+                    },
+                    "client_contact_name": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "is_primary": {
+                        "type": "boolean"
+                    },
+                    "receives_automatic": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "CommunicationContactIdentity": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "id",
+                    "channel",
+                    "address_masked",
+                    "phone",
+                    "is_active",
+                    "links"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "channel": {
+                        "type": "string"
+                    },
+                    "address_masked": {
+                        "type": "string"
+                    },
+                    "phone": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "pattern": "^\\+[1-9]\\d{7,14}$",
+                        "description": "E.164 autorizado por communication.view; null quando não apresentável."
+                    },
+                    "is_active": {
+                        "type": "boolean"
+                    },
+                    "links": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/CommunicationIdentityLink"
+                        }
+                    }
+                }
+            },
+            "CommunicationContact": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "id",
+                    "name",
+                    "is_provisional",
+                    "is_active",
+                    "profile_picture_url",
+                    "profile_picture_state",
+                    "identities",
+                    "purged_at"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "name": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "is_provisional": {
+                        "type": "boolean"
+                    },
+                    "is_active": {
+                        "type": "boolean"
+                    },
+                    "profile_picture_url": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "uri-reference",
+                        "description": "URL Laravel same-origin; null enquanto o asset privado não estiver pronto."
+                    },
+                    "profile_picture_state": {
+                        "type": "string",
+                        "enum": [
+                            "UNKNOWN",
+                            "PENDING",
+                            "READY",
+                            "UNAVAILABLE",
+                            "FAILED"
+                        ]
+                    },
+                    "identities": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/CommunicationContactIdentity"
+                        }
+                    },
+                    "purged_at": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date-time"
+                    }
+                }
+            },
+            "CommunicationPaginationMeta": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "current_page",
+                    "last_page",
+                    "total"
+                ],
+                "properties": {
+                    "current_page": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "last_page": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "total": {
+                        "type": "integer",
+                        "minimum": 0
+                    }
+                }
+            },
+            "CommunicationContactResponse": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "data"
+                ],
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/CommunicationContact"
+                    }
+                }
+            },
+            "CommunicationContactCollection": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "data",
+                    "meta"
+                ],
+                "properties": {
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/CommunicationContact"
+                        }
+                    },
+                    "meta": {
+                        "$ref": "#/components/schemas/CommunicationPaginationMeta"
+                    }
+                }
+            },
+            "CommunicationContactSearchBody": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "q"
+                ],
+                "properties": {
+                    "q": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                    },
+                    "is_active": {
+                        "type": "boolean"
+                    },
+                    "include_inactive": {
+                        "type": "boolean"
+                    },
+                    "is_provisional": {
+                        "type": "boolean"
+                    },
+                    "linked": {
+                        "type": "boolean"
+                    },
+                    "sort": {
+                        "type": "string",
+                        "enum": [
+                            "name",
+                            "id",
+                            "created_at"
+                        ]
+                    },
+                    "sort_direction": {
+                        "type": "string",
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ]
+                    },
+                    "per_page": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100
+                    },
+                    "page": {
+                        "type": "integer",
+                        "minimum": 1
+                    }
+                }
+            },
+            "CommunicationConversationContact": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "id",
+                    "name",
+                    "is_provisional",
+                    "address_masked",
+                    "profile_picture_url",
+                    "profile_picture_state",
+                    "phone",
+                    "address"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "name": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "is_provisional": {
+                        "type": [
+                            "boolean",
+                            "null"
+                        ]
+                    },
+                    "address_masked": {
+                        "type": "string"
+                    },
+                    "profile_picture_url": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "uri-reference",
+                        "description": "URL Laravel same-origin; nunca contém a URL do provider."
+                    },
+                    "profile_picture_state": {
+                        "type": "string",
+                        "enum": [
+                            "UNKNOWN",
+                            "PENDING",
+                            "READY",
+                            "UNAVAILABLE",
+                            "FAILED"
+                        ]
+                    },
+                    "phone": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "pattern": "^\\+[1-9]\\d{7,14}$"
+                    },
+                    "address": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "pattern": "^\\+[1-9]\\d{7,14}$",
+                        "x-kontivehub-lifecycle": "legacy-alias",
+                        "description": "Alias legado de phone; nunca contém endereço técnico."
+                    }
+                }
+            },
+            "CommunicationMessageAvailabilityState": {
+                "type": "string",
+                "enum": [
+                    "AVAILABLE",
+                    "UNSUPPORTED",
+                    "MEDIA_RETRY_AVAILABLE",
+                    "MEDIA_REQUESTED",
+                    "MEDIA_FAILED",
+                    "UNAVAILABLE"
+                ]
+            },
+            "CommunicationMessageAvailability": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "state",
+                    "recoverable"
+                ],
+                "properties": {
+                    "state": {
+                        "$ref": "#/components/schemas/CommunicationMessageAvailabilityState"
+                    },
+                    "recoverable": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "CommunicationMessageContent": {
+                "type": [
+                    "object",
+                    "null"
+                ],
+                "additionalProperties": true,
+                "properties": {
+                    "text": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "caption": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    }
+                }
+            },
+            "CommunicationMessage": {
+                "type": "object",
+                "additionalProperties": true,
+                "required": [
+                    "id",
+                    "conversation_id",
+                    "direction",
+                    "kind",
+                    "source",
+                    "status",
+                    "availability"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "conversation_id": {
+                        "type": "integer"
+                    },
+                    "direction": {
+                        "type": "string",
+                        "enum": [
+                            "INBOUND",
+                            "OUTBOUND",
+                            "INTERNAL"
+                        ]
+                    },
+                    "kind": {
+                        "type": "string"
+                    },
+                    "source": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "body": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "content": {
+                        "$ref": "#/components/schemas/CommunicationMessageContent"
+                    },
+                    "availability": {
+                        "$ref": "#/components/schemas/CommunicationMessageAvailability"
+                    }
+                }
+            },
+            "CommunicationMessageCollection": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "data",
+                    "meta"
+                ],
+                "properties": {
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/CommunicationMessage"
+                        }
+                    },
+                    "meta": {
+                        "type": "object",
+                        "additionalProperties": true
+                    }
+                }
+            },
+            "CommunicationConversation": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                    "contact": {
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/CommunicationConversationContact"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "last_message": {
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/CommunicationMessage"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "messages": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/CommunicationMessage"
+                        }
+                    }
+                }
+            },
+            "CommunicationConversationResponse": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "data"
+                ],
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/CommunicationConversation"
+                    }
+                }
+            },
+            "CommunicationConversationCollection": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "data",
+                    "meta"
+                ],
+                "properties": {
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/CommunicationConversation"
+                        }
+                    },
+                    "meta": {
+                        "$ref": "#/components/schemas/CommunicationPaginationMeta"
+                    }
+                }
+            },
+            "StartCommunicationConversationBody": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "contact_id",
+                    "identity_id",
+                    "inbox_id"
+                ],
+                "anyOf": [
+                    {
+                        "required": [
+                            "body"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "file"
+                        ]
+                    }
+                ],
+                "properties": {
+                    "contact_id": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "identity_id": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "inbox_id": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "body": {
+                        "type": "string",
+                        "maxLength": 4096
+                    },
+                    "kind": {
+                        "type": "string",
+                        "enum": [
+                            "TEXT",
+                            "IMAGE",
+                            "AUDIO",
+                            "VIDEO",
+                            "DOCUMENT",
+                            "STICKER"
+                        ]
+                    },
+                    "file": {
+                        "type": "string",
+                        "format": "binary"
+                    },
+                    "ptt": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "StartCommunicationConversationData": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "conversation",
+                    "message",
+                    "reused_conversation"
+                ],
+                "properties": {
+                    "conversation": {
+                        "$ref": "#/components/schemas/CommunicationConversation"
+                    },
+                    "message": {
+                        "$ref": "#/components/schemas/CommunicationMessage"
+                    },
+                    "reused_conversation": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "StartCommunicationConversationResponse": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "data"
+                ],
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/StartCommunicationConversationData"
+                    }
+                }
+            },
+            "CommunicationSharedContentCategory": {
+                "type": "string",
+                "enum": [
+                    "media",
+                    "links",
+                    "documents"
+                ]
+            },
+            "CommunicationSharedContentAttachment": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "id",
+                    "filename",
+                    "mime_type",
+                    "size_bytes",
+                    "preview_url",
+                    "download_url"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "filename": {
+                        "type": "string"
+                    },
+                    "mime_type": {
+                        "type": "string"
+                    },
+                    "size_bytes": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "preview_url": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "download_url": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    }
+                }
+            },
+            "CommunicationSharedContentLink": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "url",
+                    "title",
+                    "description"
+                ],
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "format": "uri",
+                        "pattern": "^https?://"
+                    },
+                    "title": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "description": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    }
+                }
+            },
+            "CommunicationSharedContentItem": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "id",
+                    "type",
+                    "category",
+                    "conversation_id",
+                    "message_id",
+                    "occurred_at",
+                    "attachment",
+                    "link"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "attachment",
+                            "link"
+                        ]
+                    },
+                    "category": {
+                        "$ref": "#/components/schemas/CommunicationSharedContentCategory"
+                    },
+                    "conversation_id": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "message_id": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "occurred_at": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date-time"
+                    },
+                    "attachment": {
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/CommunicationSharedContentAttachment"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "link": {
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/CommunicationSharedContentLink"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    }
+                }
+            },
+            "CommunicationSharedContentMeta": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "next_cursor",
+                    "snapshot_through_message_id",
+                    "snapshot_through_attachment_id",
+                    "limit"
+                ],
+                "properties": {
+                    "next_cursor": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "snapshot_through_message_id": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ],
+                        "minimum": 1
+                    },
+                    "snapshot_through_attachment_id": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ],
+                        "minimum": 1
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100
+                    }
+                }
+            },
+            "CommunicationSharedContentCollection": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "data",
+                    "meta"
+                ],
+                "properties": {
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/CommunicationSharedContentItem"
+                        }
+                    },
+                    "meta": {
+                        "$ref": "#/components/schemas/CommunicationSharedContentMeta"
+                    }
+                }
+            },
+            "CommunicationConversationInitiationCapability": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "enabled",
+                    "reason",
+                    "requires_permission"
+                ],
+                "properties": {
+                    "enabled": {
+                        "type": "boolean"
+                    },
+                    "reason": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "enum": [
+                            "rollout_disabled",
+                            "kill_switch_active",
+                            "tenant_not_allowlisted",
+                            "gateway_unavailable",
+                            "tenant_disabled",
+                            "permission_denied",
+                            "inbox_unavailable",
+                            null
+                        ]
+                    },
+                    "requires_permission": {
+                        "type": "string",
+                        "const": "communication.reply"
+                    }
+                }
+            },
+            "CommunicationOutboundCapabilities": {
+                "type": "object",
+                "additionalProperties": true,
+                "required": [
+                    "enabled",
+                    "requires_permission",
+                    "kinds",
+                    "max_media_bytes",
+                    "conversation_initiation"
+                ],
+                "properties": {
+                    "enabled": {
+                        "type": "boolean"
+                    },
+                    "requires_permission": {
+                        "type": "string",
+                        "const": "communication.reply"
+                    },
+                    "kinds": {
+                        "type": "object",
+                        "additionalProperties": true
+                    },
+                    "max_media_bytes": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "conversation_initiation": {
+                        "$ref": "#/components/schemas/CommunicationConversationInitiationCapability"
+                    }
+                }
+            },
+            "CommunicationOutboundCapabilitiesResponse": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "data"
+                ],
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/CommunicationOutboundCapabilities"
                     }
                 }
             },

@@ -12,6 +12,7 @@ use App\Models\CommunicationFlowRun;
 use App\Models\CommunicationIdentity;
 use App\Models\CommunicationInbox;
 use App\Models\CommunicationMessage;
+use App\Services\Communication\ProfilePicture\CommunicationProfilePictureRefreshScheduler;
 use DateTimeInterface;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +29,7 @@ final readonly class WhatsappPeerCorrelationService
         private WhatsappAddressNormalizer $normalizer,
         private Contact\CommunicationInboxIdentityProfileMerger $identityProfiles,
         private Conversation\CommunicationConversationReadStateService $readState,
+        private CommunicationProfilePictureRefreshScheduler $profilePictures,
     ) {}
 
     /**
@@ -61,6 +63,7 @@ final readonly class WhatsappPeerCorrelationService
             $occurredAt,
             $existingMessage,
         );
+        $this->profilePictures->schedule($inbox, $identity);
 
         return [$identity, $conversation];
     }
@@ -205,6 +208,11 @@ final readonly class WhatsappPeerCorrelationService
         if (! $identity instanceof CommunicationIdentity) {
             throw new LogicException('Identity canônica fora do conjunto correlacionado.');
         }
+        $formerCanonicalIdentities = collect($byHash)
+            ->filter(static fn (CommunicationIdentity $candidate): bool => (
+                (int) $candidate->id !== (int) $identity->id
+                && $candidate->canonical_identity_id === null
+            ));
 
         foreach ($byHash as $match) {
             $match->forceFill([
@@ -216,6 +224,9 @@ final readonly class WhatsappPeerCorrelationService
                     ? $this->latestDate($match->last_seen_at, $seenAt)
                     : $match->last_seen_at,
             ])->save();
+        }
+        foreach ($formerCanonicalIdentities as $formerCanonicalIdentity) {
+            $this->identityProfiles->mergeFromDonor($identity, $formerCanonicalIdentity);
         }
         foreach ($contactIdentities as $ownedIdentity) {
             if ((int) $ownedIdentity->contact_id === (int) $contact->id) {

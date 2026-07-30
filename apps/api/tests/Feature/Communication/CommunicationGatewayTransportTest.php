@@ -159,6 +159,41 @@ final class CommunicationGatewayTransportTest extends TestCase
         $transport->query($query);
     }
 
+    public function test_gateway_errors_are_reduced_to_allowlisted_codes_before_rethrowing(): void
+    {
+        $unsafe = "https://cdn.example.test/private/avatar\n5511999991234@s.whatsapp.net";
+        Http::fakeSequence()
+            ->push(['error' => 'PROFILE_PICTURE_PRIVACY'], 403)
+            ->push(['error' => 'PROFILE_PICTURE_NOT_FOUND'], 404)
+            ->push(['error' => $unsafe], 502);
+        $transport = app(HttpCommunicationTransport::class);
+        $query = new GatewayQueryData(
+            queryId: 'query-profile-picture-errors',
+            sessionId: 'session-query-0001',
+            type: GatewayQueryType::ProfilePicture,
+            payload: ['user' => '+5511999991234', 'preview' => true],
+        );
+
+        foreach ([
+            ['PROFILE_PICTURE_PRIVACY', false, 403],
+            ['PROFILE_PICTURE_NOT_FOUND', false, 404],
+            ['GATEWAY_HTTP_502', true, 502],
+        ] as [$expectedCode, $retryable, $status]) {
+            try {
+                $transport->query($query);
+                self::fail('Resposta de erro do gateway deveria lançar exceção segura.');
+            } catch (CommunicationTransportException $error) {
+                self::assertSame($expectedCode, $error->errorCode);
+                self::assertSame($retryable, $error->retryable);
+                self::assertSame($status, $error->httpStatus);
+                self::assertSame($expectedCode, $error->getMessage());
+                self::assertStringNotContainsString($unsafe, $error->getMessage());
+                self::assertStringNotContainsString('cdn.example.test', $error->getMessage());
+                self::assertStringNotContainsString('@s.whatsapp.net', $error->getMessage());
+            }
+        }
+    }
+
     public function test_session_status_requires_the_enriched_three_state_contract(): void
     {
         Http::fakeSequence()

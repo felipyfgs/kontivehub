@@ -42,6 +42,8 @@ final class StreamCommunicationAttachmentAction
         if ($attachment->purged_at !== null
             || $attachment->message?->purged_at !== null
             || $attachment->message?->revoked_at !== null
+            || $attachment->message?->quarantined_at !== null
+            || (bool) data_get($attachment->message?->metadata, 'view_once')
             || ! $this->media->exists($attachment->object_id)) {
             throw new NotFoundHttpException;
         }

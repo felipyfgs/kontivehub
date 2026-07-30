@@ -14,6 +14,8 @@ final class ReconcileCommunicationInboxIdentityProfilesJob implements ShouldQueu
 
     public int $tries = 5;
 
+    public int $timeout = 120;
+
     /** @var list<int> */
     public array $backoff = [30, 120, 300, 900];
 

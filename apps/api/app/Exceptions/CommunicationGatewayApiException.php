@@ -60,6 +60,15 @@ final class CommunicationGatewayApiException extends ApiDomainException implemen
         );
     }
 
+    public static function mediaNotRecoverable(): self
+    {
+        return new self(
+            'media_not_recoverable',
+            'A mídia não está disponível para recuperação.',
+            422,
+        );
+    }
+
     private function __construct(string $code, string $message, int $status)
     {
         parent::__construct($code, $message, $status);

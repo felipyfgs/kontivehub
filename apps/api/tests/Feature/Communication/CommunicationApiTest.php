@@ -11,7 +11,6 @@ use App\Enums\Communication\MessageStatus;
 use App\Enums\CommunicationChannel;
 use App\Enums\TenantRole;
 use App\Events\CommunicationEventCommitted;
-use App\Jobs\Communication\DeleteCommunicationMediaObjectJob;
 use App\Models\Client;
 use App\Models\CommunicationAttachment;
 use App\Models\CommunicationContact;
@@ -867,10 +866,10 @@ final class CommunicationApiTest extends TestCase
             'state' => 'READ',
             'through_message_id' => $message->id,
         ])->assertStatus(410)->assertJsonPath('code', 'conversation_purged');
-        Queue::assertPushed(
-            DeleteCommunicationMediaObjectJob::class,
-            fn (DeleteCommunicationMediaObjectJob $job): bool => $job->objectId === $invalidObjectId,
-        );
+        $this->assertDatabaseMissing('communication_media_deletion_intents', [
+            'object_id' => $invalidObjectId,
+            'tenant_id' => $tenant->id,
+        ]);
 
         $this->postJson(
             '/api/v1/communication/contacts/'.$contact->id.'/identities',

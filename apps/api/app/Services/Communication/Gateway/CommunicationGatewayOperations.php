@@ -41,10 +41,11 @@ final readonly class CommunicationGatewayOperations
         array $payload,
         ?CommunicationMessage $message = null,
         ?string $commandId = null,
+        ?string $effectKey = null,
     ): CommunicationOutboxEntry {
         $this->authorizeCommand($actor, $inbox, $type, $payload);
 
-        return $this->outbox->enqueue($inbox, $type, $payload, $message, $commandId);
+        return $this->outbox->enqueue($inbox, $type, $payload, $message, $commandId, $effectKey);
     }
 
     /**
@@ -93,7 +94,7 @@ final readonly class CommunicationGatewayOperations
     }
 
     /** @param array<string, mixed> $payload */
-    private function authorizeCommand(
+    public function authorizeCommand(
         User $actor,
         CommunicationInbox $inbox,
         GatewayCommandType $type,

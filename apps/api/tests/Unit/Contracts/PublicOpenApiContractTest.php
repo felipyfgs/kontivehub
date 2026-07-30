@@ -72,6 +72,178 @@ class PublicOpenApiContractTest extends TestCase
         $this->assertSame(1, $schemas['SavedListFilter']['properties']['schema_version']['const']);
     }
 
+    public function test_communication_contact_phone_contract_is_machine_readable(): void
+    {
+        $document = $this->document();
+        $schemas = $document['components']['schemas'];
+
+        $this->assertSame(
+            '^\\+[1-9]\\d{7,14}$',
+            $schemas['CommunicationContactIdentity']['properties']['phone']['pattern'],
+        );
+        $this->assertSame(
+            'legacy-alias',
+            $schemas['CommunicationConversationContact']['properties']['address']['x-kontivehub-lifecycle'],
+        );
+        $this->assertSame(
+            '#/components/schemas/CommunicationContactSearchBody',
+            $document['paths']['/api/v1/communication/contacts/search']['post']['requestBody']['content']['application/json']['schema']['$ref'],
+        );
+        $this->assertSame(
+            '#/components/schemas/CommunicationContactCollection',
+            $document['paths']['/api/v1/communication/contacts']['get']['responses']['200']['content']['application/json']['schema']['$ref'],
+        );
+        $this->assertContains(
+            'contact_id',
+            array_column(
+                $document['paths']['/api/v1/communication/conversations']['get']['parameters'],
+                'name',
+            ),
+        );
+    }
+
+    public function test_communication_profile_picture_contract_is_additive_and_private(): void
+    {
+        $document = $this->document();
+        $schemas = $document['components']['schemas'];
+
+        foreach (['CommunicationContact', 'CommunicationConversationContact'] as $schema) {
+            $this->assertSame(
+                ['string', 'null'],
+                $schemas[$schema]['properties']['profile_picture_url']['type'],
+            );
+            $this->assertContains('profile_picture_url', $schemas[$schema]['required']);
+            $this->assertContains('profile_picture_state', $schemas[$schema]['required']);
+            $this->assertSame(
+                ['UNKNOWN', 'PENDING', 'READY', 'UNAVAILABLE', 'FAILED'],
+                $schemas[$schema]['properties']['profile_picture_state']['enum'],
+            );
+        }
+
+        $path = '/api/v1/communication/profile-pictures/{profile}/{version}';
+        $this->assertArrayHasKey($path, $document['paths']);
+        $operation = $document['paths'][$path]['get'];
+        $this->assertSame([['sanctumCookie' => []]], $operation['security']);
+        $this->assertContains('If-None-Match', array_column($operation['parameters'], 'name'));
+        $this->assertSame(
+            'private, no-cache, must-revalidate',
+            $operation['responses']['200']['headers']['Cache-Control']['schema']['const'],
+        );
+        $this->assertSame(
+            'binary',
+            $operation['responses']['200']['content']['image/jpeg']['schema']['format'],
+        );
+
+        $json = json_encode($operation, JSON_THROW_ON_ERROR);
+        $this->assertStringNotContainsString('picture_id', $json);
+        $this->assertStringNotContainsString('profile_picture_object_id', $json);
+    }
+
+    public function test_communication_message_availability_is_additive_and_allowlisted(): void
+    {
+        $document = $this->document();
+        $schemas = $document['components']['schemas'];
+
+        $this->assertSame([
+            'AVAILABLE',
+            'UNSUPPORTED',
+            'MEDIA_RETRY_AVAILABLE',
+            'MEDIA_REQUESTED',
+            'MEDIA_FAILED',
+            'UNAVAILABLE',
+        ], $schemas['CommunicationMessageAvailabilityState']['enum']);
+        $this->assertSame(
+            '#/components/schemas/CommunicationMessageAvailability',
+            $schemas['CommunicationMessage']['properties']['availability']['$ref'],
+        );
+        $this->assertContains('availability', $schemas['CommunicationMessage']['required']);
+        $this->assertSame(
+            '#/components/schemas/CommunicationMessageCollection',
+            $document['paths']['/api/v1/communication/conversations/{conversation}/messages']['get']['responses']['200']['content']['application/json']['schema']['$ref'],
+        );
+    }
+
+    public function test_communication_initiation_shared_content_and_message_anchor_are_explicit(): void
+    {
+        $document = $this->document();
+        $schemas = $document['components']['schemas'];
+        $start = $document['paths']['/api/v1/communication/conversations']['post'];
+
+        $idempotency = collect($start['parameters'])->firstWhere('name', 'Idempotency-Key');
+        $this->assertTrue($idempotency['required']);
+        $this->assertSame(
+            '#/components/schemas/StartCommunicationConversationBody',
+            $start['requestBody']['content']['multipart/form-data']['schema']['$ref'],
+        );
+        $this->assertSame(
+            '#/components/schemas/StartCommunicationConversationResponse',
+            $start['responses']['202']['content']['application/json']['schema']['$ref'],
+        );
+        $this->assertArrayHasKey('200', $start['responses']);
+        $this->assertArrayHasKey('409', $start['responses']);
+
+        foreach ([
+            '/api/v1/communication/contacts/{contact}/shared-content',
+            '/api/v1/communication/conversations/{conversation}/shared-content',
+        ] as $path) {
+            $operation = $document['paths'][$path]['get'];
+            $this->assertContains('category', array_column($operation['parameters'], 'name'));
+            $this->assertContains('cursor', array_column($operation['parameters'], 'name'));
+            $this->assertSame(
+                '#/components/schemas/CommunicationSharedContentCollection',
+                $operation['responses']['200']['content']['application/json']['schema']['$ref'],
+            );
+            $this->assertSame(
+                'no-cache',
+                $operation['responses']['200']['headers']['Pragma']['schema']['const'],
+            );
+        }
+        $this->assertContains(
+            'inbox_id',
+            array_column(
+                $document['paths']['/api/v1/communication/contacts/{contact}/shared-content']['get']['parameters'],
+                'name',
+            ),
+        );
+        $this->assertNotContains(
+            'inbox_id',
+            array_column(
+                $document['paths']['/api/v1/communication/conversations/{conversation}/shared-content']['get']['parameters'],
+                'name',
+            ),
+        );
+
+        $messageParameters = $document['paths']['/api/v1/communication/conversations/{conversation}/messages']['get']['parameters'];
+        $this->assertContains('message', collect($messageParameters)->firstWhere('name', 'anchor')['schema']['enum']);
+        $this->assertNotNull(collect($messageParameters)->firstWhere('name', 'message_id'));
+        $this->assertSame(
+            '#/components/schemas/CommunicationConversationInitiationCapability',
+            $schemas['CommunicationOutboundCapabilities']['properties']['conversation_initiation']['$ref'],
+        );
+        $this->assertFalse($schemas['CommunicationSharedContentItem']['additionalProperties']);
+    }
+
+    public function test_bulk_operations_preferences_and_shared_content_cache_contracts_are_explicit(): void
+    {
+        $document = $this->document();
+        foreach ([
+            '/api/v1/communication/conversation-bulk-operations' => 'post',
+            '/api/v1/communication/conversation-bulk-operations/{operation}' => 'get',
+            '/api/v1/communication/conversation-bulk-operations/{operation}/items' => 'get',
+            '/api/v1/communication/conversation-list-preferences' => 'get',
+        ] as $path => $method) {
+            $responses = $document['paths'][$path][$method]['responses'] ?? [];
+            $this->assertTrue(isset($responses['200']) || isset($responses['202']));
+        }
+        $post = $document['paths']['/api/v1/communication/conversation-bulk-operations']['post'];
+        $this->assertContains('Idempotency-Key', array_column($post['parameters'], 'name'));
+        $this->assertArrayHasKey('409', $post['responses']);
+        $this->assertArrayHasKey('422', $post['responses']);
+        $items = $document['paths']['/api/v1/communication/conversation-bulk-operations/{operation}/items']['get'];
+        $this->assertEqualsCanonicalizing(['status', 'page', 'per_page'], array_slice(array_column($items['parameters'], 'name'), -3));
+        $this->assertSame('private, no-store, max-age=0', $document['paths']['/api/v1/communication/conversations/{conversation}/shared-content']['get']['responses']['200']['headers']['Cache-Control']['schema']['const']);
+    }
+
     /**
      * @return array<string, mixed>
      */

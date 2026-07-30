@@ -40,6 +40,14 @@ final class CommunicationContactCanonicalizer
         throw new LogicException('Cadeia de redirecionamento de contact excede o limite.');
     }
 
+    /** @return list<int> */
+    public function contactIds(CommunicationContact $contact): array
+    {
+        $canonical = $this->contact($contact);
+
+        return $this->expandIds((int) $canonical->tenant_id, [(int) $canonical->id]);
+    }
+
     /**
      * Bloqueia toda a classe em ordem determinística e devolve o único destino final.
      *

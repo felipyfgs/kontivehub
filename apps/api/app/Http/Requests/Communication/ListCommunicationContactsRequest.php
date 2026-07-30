@@ -16,7 +16,7 @@ final class ListCommunicationContactsRequest extends CommunicationRequest
             'is_provisional',
             'linked',
         ] as $field) {
-            if ($this->query->has($field)) {
+            if ($this->has($field)) {
                 $this->merge([$field => $this->boolean($field)]);
             }
         }
@@ -34,7 +34,9 @@ final class ListCommunicationContactsRequest extends CommunicationRequest
     public function rules(): array
     {
         return [
-            'q' => ['sometimes', 'nullable', 'string', 'max:200'],
+            'q' => $this->isMethod('POST')
+                ? ['required', 'string', 'min:1', 'max:200']
+                : ['sometimes', 'nullable', 'string', 'max:200'],
             'is_active' => ['sometimes', 'boolean'],
             'include_inactive' => ['sometimes', 'boolean'],
             'is_provisional' => ['sometimes', 'boolean'],
@@ -52,6 +54,7 @@ final class ListCommunicationContactsRequest extends CommunicationRequest
 
         return new CommunicationContactFiltersData(
             search: isset($validated['q']) ? trim((string) $validated['q']) : null,
+            phoneSearch: $this->isMethod('POST'),
             isActive: array_key_exists('is_active', $validated)
                 ? $this->boolean('is_active')
                 : null,

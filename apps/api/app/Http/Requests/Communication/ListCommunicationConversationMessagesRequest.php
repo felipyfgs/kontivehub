@@ -28,7 +28,8 @@ final class ListCommunicationConversationMessagesRequest extends CommunicationRe
         return [
             'limit' => ['sometimes', 'integer', 'between:1,100'],
             'cursor' => ['sometimes', 'nullable', 'string', 'max:1024'],
-            'anchor' => ['sometimes', 'nullable', 'string', 'in:latest,first_unread'],
+            'anchor' => ['sometimes', 'nullable', 'string', 'in:latest,first_unread,message'],
+            'message_id' => ['required_if:anchor,message', 'nullable', 'integer', 'min:1'],
         ];
     }
 
@@ -47,5 +48,10 @@ final class ListCommunicationConversationMessagesRequest extends CommunicationRe
     public function anchor(): string
     {
         return (string) ($this->validated()['anchor'] ?? 'latest');
+    }
+
+    public function messageId(): ?int
+    {
+        return isset($this->validated()['message_id']) ? (int) $this->validated()['message_id'] : null;
     }
 }

@@ -11,18 +11,18 @@ use App\Enums\Communication\MessageStatus;
 use App\Enums\CommunicationChannel;
 use App\Enums\TenantRole;
 use App\Events\CommunicationEventCommitted;
+use App\Models\Client;
+use App\Models\ClientContact;
 use App\Models\CommunicationContact;
 use App\Models\CommunicationConversation;
 use App\Models\CommunicationConversationReadState;
 use App\Models\CommunicationConversationUnreadMessage;
 use App\Models\CommunicationIdentity;
+use App\Models\CommunicationIdentityLink;
 use App\Models\CommunicationInbox;
 use App\Models\CommunicationInboxIdentityProfile;
 use App\Models\CommunicationInboxMember;
-use App\Models\CommunicationIdentityLink;
 use App\Models\CommunicationMessage;
-use App\Models\Client;
-use App\Models\ClientContact;
 use App\Models\Tenant;
 use App\Models\TenantMembership;
 use App\Models\User;
@@ -129,6 +129,37 @@ final class CommunicationConversationWorkspaceTest extends TestCase
         $this->assertNull($message->fresh()->read_at);
     }
 
+    public function test_mark_unread_ignores_stale_quarantined_ledger_entry(): void
+    {
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $operator = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $inbox = $this->inbox($tenant, 'Atendimento');
+        $this->member($inbox, $operator);
+        $conversation = $this->conversation($tenant, $inbox, '+5511999992088');
+        $visible = $this->message($tenant, $inbox, $conversation, 'Inbound visível');
+        $quarantined = $this->message($tenant, $inbox, $conversation, 'Controle técnico');
+        $quarantined->forceFill([
+            'quarantined_at' => now(),
+            'quarantine_reason' => 'WHATSAPP_PROTOCOL_CONTROL',
+        ])->save();
+        $this->seedUnread($conversation, $quarantined);
+
+        $this->authenticate($operator);
+        $this->putJson('/api/v1/communication/conversations/'.$conversation->id.'/read-state', [
+            'state' => 'UNREAD',
+            'expected_version' => 0,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.unread_count', 1)
+            ->assertJsonPath('data.first_unread_message_id', $visible->id)
+            ->assertJsonPath('data.read_state.version', 1);
+
+        $this->getJson('/api/v1/communication/conversations?unread=1')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $conversation->id)
+            ->assertJsonPath('data.0.unread_count', 1);
+    }
+
     public function test_timeline_cursor_supports_first_unread_anchor(): void
     {
         $tenant = Tenant::factory()->create(['communication_enabled' => true]);
@@ -178,6 +209,107 @@ final class CommunicationConversationWorkspaceTest extends TestCase
             ->where('identity_id', $conversation->identity_id)
             ->first();
         $this->assertSame('Push Novo', $observation?->push_name);
+    }
+
+    public function test_contact_filter_resolves_merge_history_and_preserves_inbox_visibility(): void
+    {
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $operator = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $visible = $this->inbox($tenant, 'Visível');
+        $hidden = $this->inbox($tenant, 'Oculta');
+        $this->member($visible, $operator);
+        $canonical = $this->conversation($tenant, $visible, '+5511999992090');
+        $donorContact = CommunicationContact::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'merged_into_contact_id' => $canonical->identity->contact_id,
+            'name' => 'Doador',
+            'is_provisional' => false,
+            'is_active' => false,
+        ]);
+        $donorIdentity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'contact_id' => $donorContact->id,
+            'channel' => CommunicationChannel::Whatsapp,
+            'address_encrypted' => '+5511999992091',
+            'address_hash' => hash('sha256', '+5511999992091'),
+            'address_masked' => '***2091',
+            'is_active' => true,
+        ]);
+        $donorConversation = CommunicationConversation::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'inbox_id' => $visible->id,
+            'identity_id' => $donorIdentity->id,
+            'status' => ConversationStatus::Open,
+            'last_message_at' => now(),
+        ]);
+        $earlierDonor = CommunicationContact::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'merged_into_contact_id' => $donorContact->id,
+            'name' => 'Doador anterior',
+            'is_provisional' => false,
+            'is_active' => false,
+        ]);
+        $earlierIdentity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'contact_id' => $earlierDonor->id,
+            'channel' => CommunicationChannel::Whatsapp,
+            'address_encrypted' => '+5511999992094',
+            'address_hash' => hash('sha256', '+5511999992094'),
+            'address_masked' => '***2094',
+            'is_active' => true,
+        ]);
+        $earlierConversation = CommunicationConversation::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'inbox_id' => $visible->id,
+            'identity_id' => $earlierIdentity->id,
+            'status' => ConversationStatus::Open,
+            'last_message_at' => now(),
+        ]);
+        $hiddenConversation = $this->conversation($tenant, $hidden, '+5511999992092');
+        $hiddenConversation->identity->contact->update([
+            'merged_into_contact_id' => $canonical->identity->contact_id,
+            'is_active' => false,
+        ]);
+
+        $this->authenticate($operator);
+        $ids = $this->getJson('/api/v1/communication/conversations?contact_id='.$earlierDonor->id)
+            ->assertOk()
+            ->json('data.*.id');
+        $this->assertEqualsCanonicalizing([
+            $canonical->id,
+            $donorConversation->id,
+            $earlierConversation->id,
+        ], $ids);
+        $this->getJson('/api/v1/communication/conversations?contact_id=0')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('contact_id');
+    }
+
+    public function test_contact_filter_returns_empty_for_foreign_or_missing_contact_and_hides_technical_identity(): void
+    {
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $foreignTenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $operator = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $inbox = $this->inbox($tenant, 'Atendimento');
+        $this->member($inbox, $operator);
+        $conversation = $this->conversation($tenant, $inbox, '+5511999992093');
+        $foreignContact = CommunicationContact::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $foreignTenant->id,
+            'name' => 'Externo',
+            'is_provisional' => false,
+            'is_active' => true,
+        ]);
+
+        $this->authenticate($operator);
+        $this->getJson('/api/v1/communication/conversations?contact_id='.$foreignContact->id)
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+        $item = $this->getJson('/api/v1/communication/conversations?contact_id='.$conversation->identity->contact_id)
+            ->assertOk()
+            ->json('data.0.contact');
+        $this->assertSame('+5511999992093', $item['phone']);
+        $this->assertSame($item['phone'], $item['address']);
+        $this->assertArrayNotHasKey('address_encrypted', $item);
     }
 
     public function test_display_name_precedence_is_inbox_scoped_and_skips_ambiguous_client_contacts(): void
@@ -421,6 +553,40 @@ final class CommunicationConversationWorkspaceTest extends TestCase
         $this->assertSame([$second->id], collect($older->json('data'))->pluck('id')->all());
         $this->getJson('/api/v1/communication/conversations/'.$other->id.'/messages?limit=1&cursor='.urlencode($olderCursor))
             ->assertUnprocessable();
+    }
+
+    public function test_timeline_cursor_with_equal_timestamps_pages_older_and_newer_without_gaps(): void
+    {
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $operator = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $inbox = $this->inbox($tenant, 'Atendimento');
+        $this->member($inbox, $operator);
+        $conversation = $this->conversation($tenant, $inbox, '+5511999992010');
+        $first = $this->message($tenant, $inbox, $conversation, 'primeira');
+        $second = $this->message($tenant, $inbox, $conversation, 'segunda');
+        $third = $this->message($tenant, $inbox, $conversation, 'terceira');
+        $occurredAt = now()->startOfSecond();
+        foreach ([$first, $second, $third] as $message) {
+            $message->forceFill(['occurred_at' => $occurredAt])->save();
+        }
+        $this->seedUnread($conversation, $second);
+        $this->authenticate($operator);
+
+        $middle = $this->getJson('/api/v1/communication/conversations/'.$conversation->id.'/messages?anchor=first_unread&limit=1')
+            ->assertOk();
+        $this->assertSame([$second->id], collect($middle->json('data'))->pluck('id')->all());
+
+        $older = $this->getJson('/api/v1/communication/conversations/'.$conversation->id.'/messages?limit=1&cursor='.urlencode((string) $middle->json('meta.older_cursor')))
+            ->assertOk();
+        $newer = $this->getJson('/api/v1/communication/conversations/'.$conversation->id.'/messages?limit=1&cursor='.urlencode((string) $middle->json('meta.newer_cursor')))
+            ->assertOk();
+
+        $this->assertSame([$first->id], collect($older->json('data'))->pluck('id')->all());
+        $this->assertSame([$third->id], collect($newer->json('data'))->pluck('id')->all());
+        $this->assertSame(
+            [$first->id, $second->id, $third->id],
+            [$older->json('data.0.id'), $middle->json('data.0.id'), $newer->json('data.0.id')],
+        );
     }
 
     private function authenticate(User $user): void

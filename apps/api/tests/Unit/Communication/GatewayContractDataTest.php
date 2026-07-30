@@ -173,6 +173,178 @@ class GatewayContractDataTest extends TestCase
         );
     }
 
+    public function test_media_retry_accepts_legacy_inbound_and_v2_directions_but_rejects_hybrid_shapes(): void
+    {
+        foreach ([
+            ['to' => '+5511999991234', 'target_message_id' => 'message-target-0001', 'sender' => '+5511999991234', 'from_me' => false],
+            ['to' => '+5511999991234', 'target_message_id' => 'message-target-0001', 'expected_direction' => 'INBOUND'],
+            ['to' => '+5511999991234', 'target_message_id' => 'message-target-0001', 'expected_direction' => 'OUTBOUND'],
+        ] as $index => $payload) {
+            $command = new GatewayCommandData(
+                commandId: 'command-media-retry-000'.$index,
+                sessionId: 'session-0001',
+                type: GatewayCommandType::RequestMediaRetry,
+                payload: $payload,
+            );
+            $this->assertSame($payload, $command->payload);
+        }
+
+        foreach ([
+            ['to' => '+5511999991234', 'target_message_id' => 'message-target-0001'],
+            ['to' => '+5511999991234', 'target_message_id' => 'message-target-0001', 'sender' => '+5511999991234', 'from_me' => true],
+            ['to' => '+5511999991234', 'target_message_id' => 'message-target-0001', 'sender' => '+5511999991234', 'from_me' => false, 'expected_direction' => 'INBOUND'],
+        ] as $index => $payload) {
+            try {
+                new GatewayCommandData(
+                    commandId: 'command-media-invalid-000'.$index,
+                    sessionId: 'session-0001',
+                    type: GatewayCommandType::RequestMediaRetry,
+                    payload: $payload,
+                );
+                $this->fail("Shape de media retry inválido {$index} foi aceito.");
+            } catch (InvalidArgumentException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+    }
+
+    public function test_message_received_rejects_protocol_and_requires_semantic_or_media_state(): void
+    {
+        foreach ([
+            ['kind' => 'TEXT', 'provider_type' => 'conversation', 'family' => 'TEXT'],
+            ['kind' => 'UNSUPPORTED', 'provider_type' => 'protocolMessage', 'family' => 'ACTION', 'content_present' => true],
+            ['kind' => 'UNSUPPORTED', 'provider_type' => 'reactionMessage', 'family' => 'UNSUPPORTED', 'content_present' => true],
+            ['kind' => 'TEXT', 'provider_type' => 'conversation', 'family' => 'TEXT', 'text' => 'x', 'direction' => 'INTERNAL'],
+            ['kind' => 'IMAGE', 'provider_type' => 'imageMessage', 'family' => 'IMAGE'],
+        ] as $index => $content) {
+            try {
+                new GatewayEventData(
+                    gatewayEventId: 'gateway-semantic-invalid-'.$index,
+                    sessionId: 'session-0001',
+                    type: GatewayEventType::MessageReceived,
+                    occurredAt: new DateTimeImmutable('2026-07-29T12:00:00Z'),
+                    payload: [
+                        'provider_message_id' => 'message-semantic-invalid-'.$index,
+                        'from' => '+5511999991234',
+                        ...$content,
+                    ],
+                );
+                $this->fail("Mensagem semântica inválida {$index} foi aceita.");
+            } catch (InvalidArgumentException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+
+        $event = new GatewayEventData(
+            gatewayEventId: 'gateway-media-retryable-0001',
+            sessionId: 'session-0001',
+            type: GatewayEventType::MessageReceived,
+            occurredAt: new DateTimeImmutable('2026-07-29T12:00:00Z'),
+            payload: [
+                'provider_message_id' => 'message-media-retryable-0001',
+                'from' => '+5511999991234',
+                'kind' => 'IMAGE',
+                'provider_type' => 'imageMessage',
+                'family' => 'IMAGE',
+                'history' => true,
+                'media_state' => 'RETRY_AVAILABLE',
+            ],
+        );
+        $this->assertSame('RETRY_AVAILABLE', $event->payload['media_state']);
+
+        $requested = new GatewayEventData(
+            gatewayEventId: 'gateway-media-requested-0001',
+            sessionId: 'session-0001',
+            type: GatewayEventType::MessageReceived,
+            occurredAt: new DateTimeImmutable('2026-07-29T12:00:00Z'),
+            payload: [
+                'provider_message_id' => 'message-media-requested-0001',
+                'from' => '+5511999991234',
+                'kind' => 'IMAGE',
+                'provider_type' => 'imageMessage',
+                'family' => 'IMAGE',
+                'history' => true,
+                'media_state' => 'REQUESTED',
+            ],
+        );
+        $this->assertSame('REQUESTED', $requested->payload['media_state']);
+
+        foreach ([
+            [
+                'spool_id' => 'spool-media-0001',
+                'media_size_bytes' => 12,
+                'media_sha256' => str_repeat('a', 64),
+                'mime_type' => 'image/jpeg',
+                'media_state' => 'FAILED',
+            ],
+            [
+                'spool_id' => 'spool-media-0002',
+                'media_size_bytes' => 12,
+                'media_sha256' => str_repeat('b', 64),
+                'mime_type' => 'image/jpeg',
+                'media_state' => 'RETRY_AVAILABLE',
+            ],
+        ] as $index => $availability) {
+            try {
+                new GatewayEventData(
+                    gatewayEventId: 'gateway-media-ambiguous-'.$index,
+                    sessionId: 'session-0001',
+                    type: GatewayEventType::MessageReceived,
+                    occurredAt: new DateTimeImmutable('2026-07-29T12:00:00Z'),
+                    payload: [
+                        'provider_message_id' => 'message-media-ambiguous-'.$index,
+                        'from' => '+5511999991234',
+                        'kind' => 'IMAGE',
+                        'provider_type' => 'imageMessage',
+                        'family' => 'IMAGE',
+                        ...$availability,
+                    ],
+                );
+                $this->fail("Disponibilidade de mídia ambígua {$index} foi aceita.");
+            } catch (InvalidArgumentException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+    }
+
+    public function test_media_retry_failure_codes_are_allowlisted_and_require_provider_message(): void
+    {
+        $valid = new GatewayEventData(
+            gatewayEventId: 'gateway-media-failed-0001',
+            sessionId: 'session-0001',
+            type: GatewayEventType::MediaRetryUpdated,
+            occurredAt: new DateTimeImmutable('2026-07-29T12:00:00Z'),
+            payload: [
+                'provider_message_id' => 'message-media-failed-0001',
+                'status' => 'FAILED',
+                'generation' => 1,
+                'attempt' => 1,
+                'error_code' => 'MEDIA_RETRY_PROVIDER_ERROR',
+            ],
+        );
+        $this->assertSame('MEDIA_RETRY_PROVIDER_ERROR', $valid->payload['error_code']);
+
+        foreach ([
+            ['provider_message_id' => 'message-media-failed-invalid-0001', 'status' => 'FAILED', 'error_code' => 'MEDIA_RETRY_499'],
+            ['provider_message_id' => 'message-media-requested-invalid-0001', 'status' => 'REQUESTED', 'spool_id' => 'spool-0001'],
+            ['provider_message_id' => 'short', 'status' => 'REQUESTED'],
+            ['status' => 'REQUESTED'],
+        ] as $index => $payload) {
+            try {
+                new GatewayEventData(
+                    gatewayEventId: 'gateway-media-failed-invalid-'.$index,
+                    sessionId: 'session-0001',
+                    type: GatewayEventType::MediaRetryUpdated,
+                    occurredAt: new DateTimeImmutable('2026-07-29T12:00:00Z'),
+                    payload: $payload,
+                );
+                $this->fail("Media retry inválido {$index} foi aceito.");
+            } catch (InvalidArgumentException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+    }
+
     public function test_message_received_accepts_source_identity_without_from(): void
     {
         $event = new GatewayEventData(

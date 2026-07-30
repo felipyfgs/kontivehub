@@ -145,6 +145,21 @@ class GatewayContractOpenApiTest extends TestCase
         foreach (['generation:', 'attempt:', 'size_bytes:', 'sha256:', 'mime_type:', 'filename:'] as $field) {
             $this->assertStringContainsString($field, $this->schemaBlock('MediaRetryEventPayload'));
         }
+        $this->assertStringContainsString('media_state:', $message);
+        foreach (['protocolMessage', 'const: TEXT', 'const: UNSUPPORTED', 'content_present: {const: true}'] as $constraint) {
+            $this->assertStringContainsString($constraint, $message);
+        }
+        $mediaInvariant = $this->schemaBlock('MessageReceivedMediaInvariant');
+        $this->assertStringContainsString('oneOf:', $mediaInvariant);
+        $this->assertStringContainsString('required: [spool_id, media_size_bytes, media_sha256, mime_type]', $mediaInvariant);
+        $this->assertStringContainsString('media_state: {enum: [RETRY_AVAILABLE, REQUESTED, FAILED, UNAVAILABLE]}', $mediaInvariant);
+        $mediaRetry = $this->schemaBlock('MediaRetryPayload');
+        $this->assertStringContainsString('expected_direction:', $mediaRetry);
+        $this->assertStringContainsString('oneOf:', $mediaRetry);
+        $mediaRetryEvent = $this->schemaBlock('MediaRetryEventPayload');
+        foreach (['MEDIA_RETRY_PROVIDER_ERROR', 'MEDIA_RETRY_DESCRIPTOR_EXPIRED', 'required: [error_code]'] as $constraint) {
+            $this->assertStringContainsString($constraint, $mediaRetryEvent);
+        }
         $this->assertStringContainsString('provider_message_id', $this->schemaBlock('InboundMessageReference'));
         $this->assertStringContainsString('source_identity:', $message);
         $sourceIdentity = $this->schemaBlock('SourceIdentity');

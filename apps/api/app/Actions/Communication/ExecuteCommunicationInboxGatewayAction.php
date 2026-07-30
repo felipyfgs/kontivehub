@@ -12,11 +12,15 @@ use App\Enums\CommunicationChannel;
 use App\Exceptions\CommunicationGatewayApiException;
 use App\Models\CommunicationIdentity;
 use App\Models\CommunicationInbox;
+use App\Models\CommunicationInboxIdentityProfile;
 use App\Models\User;
-use App\Services\Communication\Gateway\CommunicationGatewayOperations;
 use App\Services\Communication\Contact\CommunicationInboxIdentityProfileMerger;
+use App\Services\Communication\Gateway\CommunicationGatewayOperations;
 use App\Services\Communication\Pairing\CommunicationPairingStateStore;
+use App\Services\Communication\ProfilePicture\CommunicationProfilePictureRefreshScheduler;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
+use LogicException;
 
 final readonly class ExecuteCommunicationInboxGatewayAction
 {
@@ -24,6 +28,7 @@ final readonly class ExecuteCommunicationInboxGatewayAction
         private CommunicationGatewayOperations $operations,
         private CommunicationPairingStateStore $pairing,
         private CommunicationInboxIdentityProfileMerger $identityProfiles,
+        private CommunicationProfilePictureRefreshScheduler $profilePictures,
     ) {}
 
     public function command(
@@ -52,6 +57,9 @@ final readonly class ExecuteCommunicationInboxGatewayAction
         GatewayQueryType $type,
         CommunicationGatewayOperationData $data,
     ): CommunicationGatewayQueryResult {
+        if ($type === GatewayQueryType::ProfilePicture) {
+            throw new LogicException('PROFILE_PICTURE must be scheduled asynchronously.');
+        }
         $result = $this->operations->query(
             $actor,
             $inbox,
@@ -72,6 +80,43 @@ final readonly class ExecuteCommunicationInboxGatewayAction
         return new CommunicationGatewayQueryResult(
             $this->operations->sessionStatus($actor, $inbox),
         );
+    }
+
+    public function scheduleProfilePicture(
+        CommunicationInbox $inbox,
+        CommunicationGatewayOperationData $data,
+    ): CommunicationGatewayQueryResult {
+        $identity = CommunicationIdentity::query()->withoutGlobalScopes()
+            ->where('tenant_id', $inbox->tenant_id)
+            ->where('channel', CommunicationChannel::Whatsapp->value)
+            ->where('is_active', true)
+            ->whereNull('purged_at')
+            ->findOrFail((int) $data->parameters['identity_id']);
+        $canonicalIdentityId = (int) ($identity->canonical_identity_id ?: $identity->id);
+        $knownInInbox = CommunicationInboxIdentityProfile::query()->withoutGlobalScopes()
+            ->where('tenant_id', $inbox->tenant_id)
+            ->where('inbox_id', $inbox->id)
+            ->where('identity_id', $canonicalIdentityId)
+            ->exists()
+            || DB::table('communication_conversations as conversations')
+                ->join('communication_identities as identities', function ($join): void {
+                    $join->on('identities.id', '=', 'conversations.identity_id')
+                        ->on('identities.tenant_id', '=', 'conversations.tenant_id');
+                })
+                ->where('conversations.tenant_id', $inbox->tenant_id)
+                ->where('conversations.inbox_id', $inbox->id)
+                ->whereRaw('COALESCE(identities.canonical_identity_id, identities.id) = ?', [$canonicalIdentityId])
+                ->whereNull('conversations.purged_at')
+                ->whereNull('conversations.merged_into_conversation_id')
+                ->exists();
+        if (! $knownInInbox) {
+            throw (new ModelNotFoundException)->setModel(CommunicationIdentity::class, [(int) $identity->id]);
+        }
+
+        $this->profilePictures->schedule($inbox, $identity);
+
+        // Preserve the legacy envelope without exposing the upstream URL/JID.
+        return new CommunicationGatewayQueryResult(['type' => GatewayQueryType::ProfilePicture->value]);
     }
 
     private function disconnect(
@@ -126,18 +171,7 @@ final readonly class ExecuteCommunicationInboxGatewayAction
         GatewayQueryType $type,
         CommunicationGatewayOperationData $data,
     ): array {
-        if ($type !== GatewayQueryType::ProfilePicture) {
-            return $data->parameters;
-        }
-
-        $identity = CommunicationIdentity::query()->findOrFail(
-            (int) $data->parameters['identity_id'],
-        );
-
-        return [
-            'user' => $this->identityAddress($identity),
-            'preview' => (bool) $data->parameters['preview'],
-        ];
+        return $data->parameters;
     }
 
     private function identityAddress(CommunicationIdentity $identity): string

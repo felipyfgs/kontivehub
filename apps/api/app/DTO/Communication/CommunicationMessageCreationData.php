@@ -20,5 +20,6 @@ final readonly class CommunicationMessageCreationData
         public ?string $idempotencyKey,
         public ?CommunicationMessageUploadData $upload,
         public ?int $receiptMessageId = null,
+        public bool $outboundInitiation = false,
     ) {}
 }
