@@ -25,7 +25,14 @@ func (s testMediaStore) Reader(context.Context, string) (io.ReadCloser, error) {
 }
 
 type testQueryExecutor struct {
-	calls int
+	calls    int
+	err      error
+	inFlight int64
+}
+
+type testScopeMetrics struct {
+	rejectedScope   uint64
+	rejectedControl uint64
 }
 
 type testSessionInspector struct {
@@ -38,8 +45,16 @@ func (s testSessionInspector) HasCredentials(string) bool                  { ret
 
 func (e *testQueryExecutor) Execute(_ context.Context, query domain.Query) (any, error) {
 	e.calls++
+	if e.err != nil {
+		return nil, e.err
+	}
 	return map[string]any{"available": query.Type == domain.QueryIsOnWhatsApp}, nil
 }
+
+func (e *testQueryExecutor) ProfilePictureQueriesInFlight() int64 { return e.inFlight }
+
+func (m testScopeMetrics) RejectedScopeCount() uint64           { return m.rejectedScope }
+func (m testScopeMetrics) ProtocolControlRejectedCount() uint64 { return m.rejectedControl }
 
 const testSecret = "gateway-test-secret"
 
@@ -121,6 +136,31 @@ func TestQueryEndpointIsStrictSignedAndReplayProtected(t *testing.T) {
 	}
 }
 
+func TestProfilePictureQueryMapsPrivacyAndAbsenceToStableSanitizedErrors(t *testing.T) {
+	t.Parallel()
+	body := []byte(`{"contract_version":"v1","query_id":"query-profile-picture-0001","session_id":"session-query-0001","type":"PROFILE_PICTURE","payload":{"user":"+5511999991234","preview":true}}`)
+	testCases := []struct {
+		name       string
+		err        error
+		statusCode int
+		safeCode   string
+	}{
+		{name: "privacy", err: domain.ErrProfilePictureHidden, statusCode: http.StatusForbidden, safeCode: "PROFILE_PICTURE_PRIVACY"},
+		{name: "not set", err: domain.ErrProfilePictureNotSet, statusCode: http.StatusNotFound, safeCode: "PROFILE_PICTURE_NOT_FOUND"},
+	}
+
+	for index, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			executor := &testQueryExecutor{err: testCase.err}
+			server := newTestServer(store.NewMemory()).WithQueryExecutor(executor)
+			response := performQuery(t, server, body, "nonce-profile-picture-"+strconv.Itoa(index))
+			if response.Code != testCase.statusCode || response.Body.String() != `{"error":"`+testCase.safeCode+`"}`+"\n" {
+				t.Fatalf("unexpected sanitized response: %d %s", response.Code, response.Body.String())
+			}
+		})
+	}
+}
+
 func TestHealthAndMetricsNeverExposePayloadOrIdentifiers(t *testing.T) {
 	t.Parallel()
 	persistence := store.NewMemory()
@@ -147,7 +187,10 @@ func TestHealthAndMetricsNeverExposePayloadOrIdentifiers(t *testing.T) {
 
 func TestMetricsUseOnlyWazyncPrefix(t *testing.T) {
 	t.Parallel()
-	server := newTestServer(store.NewMemory())
+	executor := &testQueryExecutor{inFlight: 2}
+	server := newTestServer(store.NewMemory()).
+		WithQueryExecutor(executor).
+		WithRecipientScopeMetrics(testScopeMetrics{rejectedScope: 3, rejectedControl: 4})
 	request := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 	response := httptest.NewRecorder()
 	server.Handler().ServeHTTP(response, request)
@@ -163,6 +206,15 @@ func TestMetricsUseOnlyWazyncPrefix(t *testing.T) {
 		if !strings.HasPrefix(line, "wazync_") {
 			t.Fatalf("metric does not use Wazync prefix: %q", line)
 		}
+	}
+	if !strings.Contains(response.Body.String(), "wazync_profile_picture_queries_in_flight 2") {
+		t.Fatalf("profile picture query gauge missing: %s", response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), "wazync_recipient_scope_rejections_total 3") {
+		t.Fatalf("recipient scope counter missing: %s", response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), "wazync_protocol_control_rejections_total 4") {
+		t.Fatalf("protocol control counter missing: %s", response.Body.String())
 	}
 }
 

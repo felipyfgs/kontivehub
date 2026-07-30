@@ -8,9 +8,11 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/domain"
+	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/protocol"
 	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/session"
 	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/store"
 )
@@ -112,15 +114,58 @@ func (w *Worker) ProcessOnce(ctx context.Context) error {
 	}
 	for _, pending := range commands {
 		err := w.process(ctx, pending.Command)
+		if errors.Is(err, protocol.ErrMediaRetryClaimLost) {
+			// The receipt generation was claimed by another execution. Acknowledge
+			// this duplicate only if this worker still owns the command attempt;
+			// otherwise the newer owner decides its terminal state.
+			if finalizeErr := w.store.FinalizeMediaRetryCommandProcessed(
+				ctx, pending.Command.CommandID, pending.Attempts, now,
+			); finalizeErr != nil && !errors.Is(finalizeErr, domain.ErrStateConflict) {
+				return finalizeErr
+			}
+			continue
+		}
 		if err == nil {
-			if err := w.store.MarkCommandProcessed(ctx, pending.Command.CommandID, now); err != nil {
+			if pending.Command.Type == domain.CommandRetryMedia {
+				err = w.store.FinalizeMediaRetryCommandProcessed(ctx, pending.Command.CommandID, pending.Attempts, now)
+			} else {
+				err = w.store.MarkCommandProcessed(ctx, pending.Command.CommandID, now)
+			}
+			if err != nil && !(pending.Command.Type == domain.CommandRetryMedia && errors.Is(err, domain.ErrStateConflict)) {
 				return err
 			}
 			continue
 		}
-		terminal := errors.Is(err, session.ErrPairingTerminal) || pending.Attempts >= w.maxAttempts
+		terminal := errors.Is(err, session.ErrPairingTerminal)
+		if pending.Command.Type == domain.CommandRetryMedia {
+			terminal = terminal || errors.Is(err, protocol.ErrMediaRetryStateMissing) ||
+				errors.Is(err, protocol.ErrHistoryRecoveryInvalid)
+		}
+		terminal = terminal || pending.Attempts >= w.maxAttempts
 		if terminal && pending.Command.Type == domain.CommandSendMessage {
-			_ = w.appendStatusEvent(ctx, pending.Command, "UNKNOWN", now)
+			if eventErr := w.appendStatusEvent(ctx, pending.Command, "UNKNOWN", now); eventErr != nil {
+				return eventErr
+			}
+		}
+		if terminal && pending.Command.Type == domain.CommandRetryMedia {
+			code := mediaRetryTerminalCode(err)
+			event, eventErr := w.mediaRetryFailureEvent(ctx, pending.Command, code, now, mediaRetryClaim(err))
+			if eventErr != nil {
+				return eventErr
+			}
+			if finalizeErr := w.store.FinalizeCommandFailureWithEvent(
+				ctx, pending.Command.CommandID, pending.Attempts, now, commandErrorCode(err), event,
+			); finalizeErr != nil && !errors.Is(finalizeErr, domain.ErrStateConflict) {
+				return finalizeErr
+			}
+			slog.Warn("command execution failed",
+				"command_id", pending.Command.CommandID,
+				"type", pending.Command.Type,
+				"session_id", pending.Command.SessionID,
+				"attempt", pending.Attempts,
+				"error_class", commandErrorCode(err),
+			)
+			continue
 		}
 		slog.Warn("command execution failed",
 			"command_id", pending.Command.CommandID,
@@ -129,13 +174,18 @@ func (w *Worker) ProcessOnce(ctx context.Context) error {
 			"attempt", pending.Attempts,
 			"error_class", commandErrorCode(err),
 		)
-		if err := w.store.MarkCommandFailed(
-			ctx,
-			pending.Command.CommandID,
-			now.Add(retryDelay(pending.Attempts)),
-			commandErrorCode(err),
-			terminal,
-		); err != nil {
+		if pending.Command.Type == domain.CommandRetryMedia {
+			err = w.store.FinalizeMediaRetryCommandFailed(
+				ctx, pending.Command.CommandID, pending.Attempts,
+				now.Add(retryDelay(pending.Attempts)), commandErrorCode(err),
+			)
+		} else {
+			err = w.store.MarkCommandFailed(
+				ctx, pending.Command.CommandID, now.Add(retryDelay(pending.Attempts)),
+				commandErrorCode(err), terminal,
+			)
+		}
+		if err != nil && !(pending.Command.Type == domain.CommandRetryMedia && errors.Is(err, domain.ErrStateConflict)) {
 			return err
 		}
 	}
@@ -492,6 +542,81 @@ func (w *Worker) appendSessionEvent(ctx context.Context, sessionID, status strin
 	return w.appendEvent(ctx, sessionID, domain.EventSessionStatusChanged, payload, at)
 }
 
+func (w *Worker) appendMediaRetryFailure(ctx context.Context, command domain.Command, code string, at time.Time) error {
+	event, err := w.mediaRetryFailureEvent(ctx, command, code, at, nil)
+	if err != nil {
+		return err
+	}
+	_, err = w.store.AppendEvent(ctx, event)
+	return err
+}
+
+func (w *Worker) mediaRetryFailureEvent(
+	ctx context.Context,
+	command domain.Command,
+	code string,
+	at time.Time,
+	claim *protocol.MediaRetryClaim,
+) (domain.Event, error) {
+	var payload domain.MediaRetryPayload
+	if err := json.Unmarshal(command.Payload, &payload); err != nil {
+		return domain.Event{}, err
+	}
+	generation, attempt := 0, 0
+	if claim != nil {
+		generation, attempt = claim.Generation, claim.Attempt
+	} else {
+		state, err := w.store.GetMediaRetryState(ctx, command.SessionID, payload.TargetMessageID)
+		if err != nil && !errors.Is(err, domain.ErrNotFound) {
+			return domain.Event{}, err
+		}
+		// A missing descriptor is itself a terminal, fail-closed condition. In
+		// that case zero is authoritative because no generation was claimed.
+		generation, attempt = state.Generation, state.Attempts
+	}
+	encoded, err := json.Marshal(map[string]any{
+		"provider_message_id": payload.TargetMessageID,
+		"status":              "FAILED",
+		"error_code":          code,
+		"generation":          generation,
+		"attempt":             attempt,
+	})
+	if err != nil {
+		return domain.Event{}, err
+	}
+	digest := sha256.Sum256(encoded)
+	return domain.Event{
+		ContractVersion: "v1",
+		EventID:         "media-retry-terminal-" + stableCommandEventID(command.CommandID, payload.TargetMessageID, code, strconv.Itoa(generation), strconv.Itoa(attempt)),
+		SessionID:       command.SessionID,
+		Type:            domain.EventMediaRetryUpdated,
+		OccurredAt:      at,
+		Payload:         encoded,
+		Digest:          hex.EncodeToString(digest[:]),
+	}, nil
+}
+
+func mediaRetryClaim(err error) *protocol.MediaRetryClaim {
+	var receiptErr *protocol.MediaRetryReceiptError
+	if !errors.As(err, &receiptErr) {
+		return nil
+	}
+	claim := receiptErr.Claim
+	return &claim
+}
+
+func mediaRetryTerminalCode(err error) string {
+	// Keep the receiver-facing vocabulary bounded and independent of provider
+	// errors. This is also the only code emitted by terminal command handling.
+	if errors.Is(err, protocol.ErrMediaRetryStateMissing) {
+		return "MEDIA_RETRY_STATE_MISSING"
+	}
+	if errors.Is(err, protocol.ErrHistoryRecoveryInvalid) {
+		return "MEDIA_RETRY_INVALID_REQUEST"
+	}
+	return "MEDIA_RETRY_REQUEST_FAILED"
+}
+
 func (w *Worker) appendEvent(
 	ctx context.Context,
 	sessionID string,
@@ -499,13 +624,32 @@ func (w *Worker) appendEvent(
 	payload []byte,
 	at time.Time,
 ) error {
+	return w.appendEventWithID(ctx, eventID(), sessionID, eventType, payload, at)
+}
+
+func (w *Worker) appendEventWithID(
+	ctx context.Context,
+	id, sessionID string,
+	eventType domain.EventType,
+	payload []byte,
+	at time.Time,
+) error {
 	digest := sha256.Sum256(payload)
 	event := domain.Event{
-		ContractVersion: "v1", EventID: eventID(), SessionID: sessionID,
+		ContractVersion: "v1", EventID: id, SessionID: sessionID,
 		Type: eventType, OccurredAt: at, Payload: payload, Digest: hex.EncodeToString(digest[:]),
 	}
 	_, err := w.store.AppendEvent(ctx, event)
 	return err
+}
+
+func stableCommandEventID(parts ...string) string {
+	hash := sha256.New()
+	for _, part := range parts {
+		_, _ = hash.Write([]byte(part))
+		_, _ = hash.Write([]byte{0})
+	}
+	return hex.EncodeToString(hash.Sum(nil))[:24]
 }
 
 func eventID() string {

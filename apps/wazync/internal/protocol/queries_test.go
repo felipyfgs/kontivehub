@@ -3,9 +3,11 @@ package protocol
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/domain"
 	"go.mau.fi/whatsmeow"
@@ -14,15 +16,40 @@ import (
 
 type fakeQueryClient struct {
 	fakeClient
-	sawDeadline   bool
-	deviceQueries int
-	privacyFetch  int
+	sawDeadline          bool
+	deviceQueries        int
+	privacyFetch         int
+	profilePictureParams *whatsmeow.GetProfilePictureParams
+	profilePictureNil    bool
+	profilePictureErr    error
+	profilePictureWait   bool
+}
+
+type blockingProfilePictureClient struct {
+	*fakeQueryClient
+	started chan<- struct{}
+	release <-chan struct{}
+}
+
+func (c *blockingProfilePictureClient) GetProfilePictureInfo(
+	ctx context.Context,
+	_ types.JID,
+	_ *whatsmeow.GetProfilePictureParams,
+) (*types.ProfilePictureInfo, error) {
+	c.started <- struct{}{}
+	select {
+	case <-c.release:
+		return nil, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 type contactProfileQueryResolver struct {
 	actionResolver
 	contacts map[string]types.ContactInfo
 	calls    int
+	err      error
 }
 
 func (r *contactProfileQueryResolver) LookupContact(
@@ -31,6 +58,9 @@ func (r *contactProfileQueryResolver) LookupContact(
 	jid types.JID,
 ) (types.ContactInfo, error) {
 	r.calls++
+	if r.err != nil {
+		return types.ContactInfo{}, r.err
+	}
 	return r.contacts[jid.String()], nil
 }
 
@@ -70,14 +100,196 @@ func (c *fakeQueryClient) GetBusinessProfile(
 }
 
 func (c *fakeQueryClient) GetProfilePictureInfo(
-	_ context.Context,
+	ctx context.Context,
 	_ types.JID,
-	_ *whatsmeow.GetProfilePictureParams,
+	params *whatsmeow.GetProfilePictureParams,
 ) (*types.ProfilePictureInfo, error) {
+	_, c.sawDeadline = ctx.Deadline()
+	if params != nil {
+		copyParams := *params
+		c.profilePictureParams = &copyParams
+	}
+	if c.profilePictureErr != nil {
+		return nil, c.profilePictureErr
+	}
+	if c.profilePictureWait {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	if c.profilePictureNil {
+		return nil, nil
+	}
 	return &types.ProfilePictureInfo{
 		ID: "picture-safe-0001", URL: "https://pps.whatsapp.invalid/avatar", Type: "preview",
 		DirectPath: "/sensitive/direct/path", Hash: []byte("sensitive-hash"),
 	}, nil
+}
+
+func TestQueryTimeoutKeepsProfilePicturesSeparate(t *testing.T) {
+	t.Parallel()
+
+	if got := queryTimeout(domain.QueryProfilePicture); got != 80*time.Second {
+		t.Fatalf("profile picture timeout = %s, want 80s", got)
+	}
+	for _, queryType := range []domain.QueryType{
+		domain.QueryIsOnWhatsApp,
+		domain.QueryUserInfo,
+		domain.QueryContactProfiles,
+		domain.QueryBusinessProfile,
+		domain.QueryContactQRLink,
+		domain.QueryResolveContactQR,
+		domain.QueryResolveBusinessURL,
+		domain.QueryBlocklist,
+		domain.QueryPrivacySettings,
+	} {
+		if got := queryTimeout(queryType); got != 15*time.Second {
+			t.Fatalf("%s timeout = %s, want 15s", queryType, got)
+		}
+	}
+}
+
+func TestProfilePictureQueryInFlightMetricTracksConcurrency(t *testing.T) {
+	t.Parallel()
+
+	started := make(chan struct{}, 2)
+	release := make(chan struct{})
+	client := &blockingProfilePictureClient{
+		fakeQueryClient: &fakeQueryClient{fakeClient: fakeClient{connected: true}},
+		started:         started,
+		release:         release,
+	}
+	adapter := NewWhatsMeowAdapter(actionResolver{client: client})
+	payload, _ := json.Marshal(domain.ProfilePictureQueryPayload{User: "+5511999991234", Preview: true})
+	errors := make(chan error, 2)
+	for index := range 2 {
+		go func() {
+			_, err := adapter.Execute(t.Context(), domain.Query{
+				ContractVersion: "v1",
+				QueryID:         "query-picture-concurrent-" + fmt.Sprint(index),
+				SessionID:       "session-query-concurrent",
+				Type:            domain.QueryProfilePicture,
+				Payload:         payload,
+			})
+			errors <- err
+		}()
+	}
+	<-started
+	<-started
+	if got := adapter.ProfilePictureQueriesInFlight(); got != 2 {
+		t.Fatalf("profile picture queries in flight = %d, want 2", got)
+	}
+	close(release)
+	for range 2 {
+		if err := <-errors; err != nil {
+			t.Fatalf("execute concurrent profile picture query: %v", err)
+		}
+	}
+	if got := adapter.ProfilePictureQueriesInFlight(); got != 0 {
+		t.Fatalf("profile picture queries in flight after completion = %d, want 0", got)
+	}
+}
+
+func TestQueryExecutorProfilePictureUsesPreviewAndPreservesNilOrError(t *testing.T) {
+	t.Parallel()
+
+	t.Run("preview result", func(t *testing.T) {
+		client := &fakeQueryClient{fakeClient: fakeClient{connected: true}}
+		payload, _ := json.Marshal(domain.ProfilePictureQueryPayload{
+			User: "+5511999991234", Preview: true,
+		})
+		result, err := NewWhatsMeowAdapter(actionResolver{client: client}).Execute(t.Context(), domain.Query{
+			ContractVersion: "v1", QueryID: "query-picture-preview", SessionID: "session-query-0001",
+			Type: domain.QueryProfilePicture, Payload: payload,
+		})
+		if err != nil {
+			t.Fatalf("execute picture query: %v", err)
+		}
+		if !client.sawDeadline || client.profilePictureParams == nil || !client.profilePictureParams.Preview {
+			t.Fatalf("profile picture query lost deadline/preview: deadline=%v params=%+v", client.sawDeadline, client.profilePictureParams)
+		}
+		encoded, _ := json.Marshal(result)
+		for _, forbidden := range []string{"direct", "hash", "@s.whatsapp.net", "@lid"} {
+			if strings.Contains(strings.ToLower(string(encoded)), forbidden) {
+				t.Fatalf("profile picture result leaked %q: %s", forbidden, encoded)
+			}
+		}
+	})
+
+	t.Run("nil is an explicit unavailable result", func(t *testing.T) {
+		client := &fakeQueryClient{fakeClient: fakeClient{connected: true}, profilePictureNil: true}
+		payload, _ := json.Marshal(domain.ProfilePictureQueryPayload{User: "+5511999991234", Preview: true})
+		result, err := NewWhatsMeowAdapter(actionResolver{client: client}).Execute(t.Context(), domain.Query{
+			ContractVersion: "v1", QueryID: "query-picture-nil", SessionID: "session-query-0001",
+			Type: domain.QueryProfilePicture, Payload: payload,
+		})
+		if err != nil {
+			t.Fatalf("execute nil picture query: %v", err)
+		}
+		object, ok := result.(map[string]any)
+		if !ok || object["profile_picture"] != nil {
+			t.Fatalf("nil profile picture changed contract: %#v", result)
+		}
+	})
+
+	t.Run("provider error remains an error", func(t *testing.T) {
+		client := &fakeQueryClient{
+			fakeClient: fakeClient{connected: true}, profilePictureErr: errors.New("privacy unavailable"),
+		}
+		payload, _ := json.Marshal(domain.ProfilePictureQueryPayload{User: "+5511999991234", Preview: true})
+		if _, err := NewWhatsMeowAdapter(actionResolver{client: client}).Execute(t.Context(), domain.Query{
+			ContractVersion: "v1", QueryID: "query-picture-error", SessionID: "session-query-0001",
+			Type: domain.QueryProfilePicture, Payload: payload,
+		}); err == nil {
+			t.Fatal("profile picture provider error was converted into permissive fallback")
+		}
+	})
+
+	for _, testCase := range []struct {
+		name     string
+		provider error
+		expected error
+	}{
+		{
+			name:     "privacy restriction is classified without provider detail",
+			provider: fmt.Errorf("provider wrapper: %w", whatsmeow.ErrProfilePictureUnauthorized),
+			expected: domain.ErrProfilePictureHidden,
+		},
+		{
+			name:     "missing picture is classified without provider detail",
+			provider: fmt.Errorf("provider wrapper: %w", whatsmeow.ErrProfilePictureNotSet),
+			expected: domain.ErrProfilePictureNotSet,
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := &fakeQueryClient{
+				fakeClient: fakeClient{connected: true}, profilePictureErr: testCase.provider,
+			}
+			payload, _ := json.Marshal(domain.ProfilePictureQueryPayload{User: "+5511999991234", Preview: true})
+			_, err := NewWhatsMeowAdapter(actionResolver{client: client}).Execute(t.Context(), domain.Query{
+				ContractVersion: "v1", QueryID: "query-picture-unavailable", SessionID: "session-query-0001",
+				Type: domain.QueryProfilePicture, Payload: payload,
+			})
+			if !errors.Is(err, testCase.expected) {
+				t.Fatalf("unexpected classified error: %v", err)
+			}
+		})
+	}
+
+	t.Run("caller deadline cancels a blocked provider", func(t *testing.T) {
+		client := &fakeQueryClient{
+			fakeClient: fakeClient{connected: true}, profilePictureWait: true,
+		}
+		payload, _ := json.Marshal(domain.ProfilePictureQueryPayload{User: "+5511999991234", Preview: true})
+		ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
+		defer cancel()
+		_, err := NewWhatsMeowAdapter(actionResolver{client: client}).Execute(ctx, domain.Query{
+			ContractVersion: "v1", QueryID: "query-picture-timeout", SessionID: "session-query-0001",
+			Type: domain.QueryProfilePicture, Payload: payload,
+		})
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("blocked profile query did not preserve deadline: %v", err)
+		}
+	})
 }
 
 func (c *fakeQueryClient) GetContactQRLink(context.Context, bool) (string, error) {
@@ -272,6 +484,103 @@ func TestQueryExecutorReadsOnlyRequestedLocalContactProfiles(t *testing.T) {
 			t.Fatalf("contact profile query leaked protocol field %q: %s", forbidden, encoded)
 		}
 	}
+}
+
+func TestQueryExecutorContactProfilesAcceptsExactlyOneHundredLocalLookups(t *testing.T) {
+	t.Parallel()
+	client := &fakeQueryClient{fakeClient: fakeClient{connected: true}}
+	resolver := &contactProfileQueryResolver{
+		actionResolver: actionResolver{client: client}, contacts: map[string]types.ContactInfo{},
+	}
+	adapter := NewWhatsMeowAdapter(resolver)
+	users := make([]string, maxQueryUsers)
+	for index := range users {
+		users[index] = fmt.Sprintf("+55119999%04d", index)
+	}
+	payload, _ := json.Marshal(domain.UsersQueryPayload{Users: users})
+
+	result, err := adapter.Execute(t.Context(), domain.Query{
+		ContractVersion: "v1", QueryID: "query-contact-profiles-100", SessionID: "session-query-0001",
+		Type: domain.QueryContactProfiles, Payload: payload,
+	})
+	if err != nil {
+		t.Fatalf("execute exact-limit contact profiles query: %v", err)
+	}
+	if resolver.calls != maxQueryUsers {
+		t.Fatalf("must consult every requested local contact exactly once: got=%d want=%d", resolver.calls, maxQueryUsers)
+	}
+	encoded, _ := json.Marshal(result)
+	var decoded struct {
+		Profiles []contactProfileResult `json:"profiles"`
+	}
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("decode profiles: %v", err)
+	}
+	if len(decoded.Profiles) != maxQueryUsers {
+		t.Fatalf("exact-limit query returned %d profiles, want %d", len(decoded.Profiles), maxQueryUsers)
+	}
+}
+
+func TestQueryExecutorContactProfilesRejectsOversizedBatchBeforeLocalStore(t *testing.T) {
+	t.Parallel()
+	client := &fakeQueryClient{fakeClient: fakeClient{connected: true}}
+	resolver := &contactProfileQueryResolver{
+		actionResolver: actionResolver{client: client}, contacts: map[string]types.ContactInfo{},
+	}
+	adapter := NewWhatsMeowAdapter(resolver)
+	users := make([]string, maxQueryUsers+1)
+	for index := range users {
+		users[index] = fmt.Sprintf("+55119888%04d", index)
+	}
+	payload, _ := json.Marshal(domain.UsersQueryPayload{Users: users})
+
+	if _, err := adapter.Execute(t.Context(), domain.Query{
+		ContractVersion: "v1", QueryID: "query-contact-profiles-101", SessionID: "session-query-0001",
+		Type: domain.QueryContactProfiles, Payload: payload,
+	}); err == nil {
+		t.Fatal("oversized contact profile batch was accepted")
+	}
+	if resolver.calls != 0 {
+		t.Fatalf("oversized batch must fail before local store access, calls=%d", resolver.calls)
+	}
+}
+
+func TestQueryExecutorContactProfilesTreatsMissingAndStoreErrorsAsNoEgress(t *testing.T) {
+	t.Parallel()
+	client := &fakeQueryClient{fakeClient: fakeClient{connected: true}}
+	payload, _ := json.Marshal(domain.UsersQueryPayload{Users: []string{"+5511999991234"}})
+
+	t.Run("not found", func(t *testing.T) {
+		resolver := &contactProfileQueryResolver{
+			actionResolver: actionResolver{client: client}, contacts: map[string]types.ContactInfo{},
+		}
+		result, err := NewWhatsMeowAdapter(resolver).Execute(t.Context(), domain.Query{
+			ContractVersion: "v1", QueryID: "query-contact-profiles-missing", SessionID: "session-query-0001",
+			Type: domain.QueryContactProfiles, Payload: payload,
+		})
+		if err != nil {
+			t.Fatalf("missing local contact must be represented, not fetched: %v", err)
+		}
+		encoded, _ := json.Marshal(result)
+		if strings.Contains(string(encoded), "address_book_") || strings.Contains(string(encoded), "push_name") {
+			t.Fatalf("missing local contact must not synthesize profile fields: %s", encoded)
+		}
+	})
+
+	t.Run("store error", func(t *testing.T) {
+		resolver := &contactProfileQueryResolver{
+			actionResolver: actionResolver{client: client}, contacts: map[string]types.ContactInfo{}, err: errors.New("store unavailable"),
+		}
+		if _, err := NewWhatsMeowAdapter(resolver).Execute(t.Context(), domain.Query{
+			ContractVersion: "v1", QueryID: "query-contact-profiles-error", SessionID: "session-query-0001",
+			Type: domain.QueryContactProfiles, Payload: payload,
+		}); err == nil {
+			t.Fatal("local store error must reach the caller without fallback egress")
+		}
+		if resolver.calls != 1 {
+			t.Fatalf("unexpected local store attempts: %d", resolver.calls)
+		}
+	})
 }
 
 func TestQueryExecutorMatchesStrictContractResultKeys(t *testing.T) {

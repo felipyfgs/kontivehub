@@ -12,6 +12,9 @@ var identifierPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$`
 var (
 	ErrDigestConflict       = errors.New("identifier already exists with another digest")
 	ErrNotFound             = errors.New("record not found")
+	ErrProfilePictureHidden = errors.New("profile picture unavailable due to privacy")
+	ErrProfilePictureNotSet = errors.New("profile picture not set")
+	ErrStateConflict        = errors.New("record state conflict")
 	ErrFeatureOff           = errors.New("gateway is disabled")
 	ErrSessionAlreadyPaired = errors.New("WhatsApp session already paired")
 )

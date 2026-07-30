@@ -46,12 +46,13 @@ type eventBridgeClient interface {
 var _ eventBridgeClient = (*whatsmeow.Client)(nil)
 
 type EventBridge struct {
-	store          store.Store
-	spool          *spool.Store
-	maxMediaBytes  int64
-	rejectedScope  atomic.Uint64
-	lifecycle      atomic.Pointer[lifecycleObserver]
-	deviceRecorder pairedDeviceRecorder
+	store                   store.Store
+	spool                   *spool.Store
+	maxMediaBytes           int64
+	rejectedScope           atomic.Uint64
+	protocolControlRejected atomic.Uint64
+	lifecycle               atomic.Pointer[lifecycleObserver]
+	deviceRecorder          pairedDeviceRecorder
 }
 
 type pairedDeviceRecorder interface {
@@ -357,10 +358,12 @@ func (b *EventBridge) handleMessage(
 		}
 		if !history && (client == nil || b.spool == nil) {
 			payload["media_error_code"] = "MEDIA_SPOOL_UNAVAILABLE"
+			payload["media_state"] = "UNAVAILABLE"
 		} else if !history {
 			record, downloadErr := b.downloadToSpool(ctx, client, stableID("media", sessionID, event.Info.ID), media)
 			if downloadErr != nil {
 				payload["media_error_code"] = "MEDIA_DOWNLOAD_FAILED"
+				payload["media_state"] = "UNAVAILABLE"
 			} else {
 				payload["spool_id"] = record.ID
 				payload["media_size_bytes"] = record.SizeBytes
@@ -414,6 +417,13 @@ func (b *EventBridge) prepareMessage(
 		case waE2E.ProtocolMessage_MESSAGE_EDIT:
 			targetID = protocolMessage.GetKey().GetID()
 			message = protocolMessage.GetEditedMessage()
+		default:
+			// Protocol frames are transport controls, never conversational
+			// content. Consume every unrecognised subtype before normalization
+			// in both live and history flows. The aggregate counter deliberately
+			// has no subtype, JID, provider ID or payload labels.
+			b.protocolControlRejected.Add(1)
+			return nil, true
 		}
 	}
 	if reaction := message.GetReactionMessage(); reaction != nil {
@@ -622,6 +632,7 @@ func (b *EventBridge) handleHistorySync(
 			}
 			parsedCopy := *parsed
 			parsedCopy.Message = normalizedMessage
+			mediaRetryAvailable := false
 			if downloadableMessage(normalizedMessage) != nil {
 				if err := b.rememberMediaRetry(
 					ctx, sessionID, string(parsed.Info.ID), normalizedMessage, parsed.Info,
@@ -630,12 +641,16 @@ func (b *EventBridge) handleHistorySync(
 					rejected++
 					continue
 				}
+				mediaRetryAvailable = true
 			}
 			payload := normalizedHistoryMessage(&parsedCopy, peer)
 			if payload == nil {
 				b.rejectedScope.Add(1)
 				rejected++
 				continue
+			}
+			if mediaRetryAvailable {
+				payload["media_state"] = "RETRY_AVAILABLE"
 			}
 			messages = append(messages, payload)
 		}
@@ -737,7 +752,10 @@ func (b *EventBridge) handleMediaRetry(
 	if decryptErr != nil || notification == nil {
 		code := "MEDIA_RETRY_DECRYPT_FAILED"
 		if event.Error != nil {
-			code = fmt.Sprintf("MEDIA_RETRY_%d", event.Error.Code)
+			// Provider numeric codes are not a stable public vocabulary and can
+			// create unbounded metric/event cardinality. Keep the receiver-facing
+			// result allowlisted and free of raw provider details.
+			code = "MEDIA_RETRY_PROVIDER_ERROR"
 		}
 		b.appendMediaRetryFailure(ctx, sessionID, event, code, state.Generation, state.Attempts)
 		return
@@ -1089,6 +1107,12 @@ func (b *EventBridge) handleGatewayAlert(
 // is used as a label, so rejected group/channel identifiers cannot leak.
 func (b *EventBridge) RejectedScopeCount() uint64 {
 	return b.rejectedScope.Load()
+}
+
+// ProtocolControlRejectedCount exposes a low-cardinality aggregate only. It
+// intentionally cannot be used to recover protobuf, provider or peer data.
+func (b *EventBridge) ProtocolControlRejectedCount() uint64 {
+	return b.protocolControlRejected.Load()
 }
 
 func (b *EventBridge) rejectScope(err error) {

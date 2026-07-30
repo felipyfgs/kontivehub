@@ -417,6 +417,89 @@ func TestEventBridgeIgnoresSelfReadAndPlayedReceipts(t *testing.T) {
 	}
 }
 
+func TestEventBridgeProjectsPartialAndFullSyncContactClears(t *testing.T) {
+	t.Parallel()
+	persistence := store.NewMemory()
+	bridge := NewEventBridge(persistence, nil, 20<<20)
+	contact := types.NewJID("5511999991234", types.DefaultUserServer)
+	now := time.Now().UTC()
+
+	bridge.handle(t.Context(), "session-contact-clears", nil, &events.Contact{
+		JID: contact, Timestamp: now,
+		Action: &waSyncAction.ContactAction{FullName: proto.String(""), FirstName: proto.String("Maria")},
+	})
+	bridge.handle(t.Context(), "session-contact-clears", nil, &events.Contact{
+		JID: contact, Timestamp: now.Add(time.Second), FromFullSync: true,
+		Action: &waSyncAction.ContactAction{FullName: proto.String("Maria da Silva"), FirstName: proto.String("")},
+	})
+
+	profiles := contactProfilePayloads(t, pendingEvents(t, persistence))
+	if len(profiles) != 2 {
+		t.Fatalf("expected two contact profile events, got=%d", len(profiles))
+	}
+	var partial, fullSync map[string]any
+	for _, profile := range profiles {
+		if profile["from_full_sync"] == true {
+			fullSync = profile
+		} else {
+			partial = profile
+		}
+	}
+	if partial == nil || fullSync == nil {
+		t.Fatalf("contact events lost partial/full-sync provenance: %+v", profiles)
+	}
+	if partial["address_book_first_name"] != "Maria" || !containsString(partial["cleared_fields"], "address_book_full_name") {
+		t.Fatalf("partial contact clear lost independent fields: %+v", partial)
+	}
+	if partial["from_full_sync"] != false {
+		t.Fatalf("partial contact must preserve its non-full-sync origin: %+v", partial)
+	}
+	if fullSync["address_book_full_name"] != "Maria da Silva" || fullSync["from_full_sync"] != true ||
+		!containsString(fullSync["cleared_fields"], "address_book_first_name") {
+		t.Fatalf("full-sync contact clear lost source or fields: %+v", fullSync)
+	}
+}
+
+func TestEventBridgePushNameLIDUsesOnlyValidPNAlternateEvidence(t *testing.T) {
+	t.Parallel()
+	persistence := store.NewMemory()
+	bridge := NewEventBridge(persistence, nil, 20<<20)
+	lid := types.NewJID("987654321", types.HiddenUserServer)
+
+	bridge.handle(t.Context(), "session-push-lid", nil, &events.PushName{
+		JID: lid, JIDAlt: types.NewJID("5511999991234", types.DefaultUserServer), NewPushName: "Maria LID",
+	})
+	bridge.handle(t.Context(), "session-push-lid", nil, &events.PushName{
+		JID: lid, JIDAlt: types.NewJID("120363000000000000", types.GroupServer), NewPushName: "Maria sem PN",
+	})
+
+	profiles := contactProfilePayloads(t, pendingEvents(t, persistence))
+	if len(profiles) != 2 {
+		t.Fatalf("expected two LID push-name events, got=%d", len(profiles))
+	}
+	var valid, invalid map[string]any
+	for _, profile := range profiles {
+		if profile["push_name"] == "Maria LID" {
+			valid = profile
+		} else if profile["push_name"] == "Maria sem PN" {
+			invalid = profile
+		}
+	}
+	if valid == nil || invalid == nil {
+		t.Fatalf("push-name events lost their independent payloads: %+v", profiles)
+	}
+	if valid["user"] != "lid:987654321" || valid["push_name"] != "Maria LID" {
+		t.Fatalf("LID push-name identity changed: %+v", valid)
+	}
+	evidence, ok := valid["source_identity"].(map[string]any)
+	if !ok || evidence["alternate"] != "+5511999991234" || evidence["alternate_kind"] != "PN" {
+		t.Fatalf("valid PN alternate evidence missing: %+v", valid)
+	}
+	if _, ok := invalid["source_identity"]; ok {
+		t.Fatalf("invalid alternate must not infer a PN: %+v", invalid)
+	}
+}
+
 func TestEventBridgeKeepsPlayedDistinctAndReceiptsIdempotentOutOfOrder(t *testing.T) {
 	t.Parallel()
 	persistence := store.NewMemory()
@@ -1009,11 +1092,15 @@ func TestMediaRetryRehydratesOriginalMessageIntoEncryptedSpoolAndRedelivers(t *t
 	); err != nil {
 		t.Fatalf("remember media retry: %v", err)
 	}
-	state, err := persistence.BeginMediaRetry(
-		t.Context(), "session-media-retry", "provider-media-retry", time.Now(),
+	expected, err := persistence.GetMediaRetryState(
+		t.Context(), "session-media-retry", "provider-media-retry",
 	)
-	if err != nil || state.Generation != 1 || state.Attempts != 1 {
-		t.Fatalf("begin media retry: state=%+v err=%v", state, err)
+	if err != nil {
+		t.Fatalf("get media retry state: %v", err)
+	}
+	state, claimed, err := persistence.CompareAndBeginMediaRetry(t.Context(), expected, time.Now())
+	if err != nil || !claimed || state.Generation != 1 || state.Attempts != 1 {
+		t.Fatalf("begin media retry: state=%+v claimed=%t err=%v", state, claimed, err)
 	}
 	notification := &waMmsRetry.MediaRetryNotification{
 		StanzaID:   proto.String("provider-media-retry"),
@@ -1075,7 +1162,13 @@ func TestMediaRetryRejectsDigestMismatchWithoutExposingDescriptor(t *testing.T) 
 	}); err != nil {
 		t.Fatalf("remember retry descriptor: %v", err)
 	}
-	_, _ = persistence.BeginMediaRetry(t.Context(), "session-retry-digest", "provider-retry-digest", time.Now())
+	expected, err := persistence.GetMediaRetryState(t.Context(), "session-retry-digest", "provider-retry-digest")
+	if err != nil {
+		t.Fatalf("get digest retry state: %v", err)
+	}
+	if _, claimed, claimErr := persistence.CompareAndBeginMediaRetry(t.Context(), expected, time.Now()); claimErr != nil || !claimed {
+		t.Fatalf("claim digest retry state: claimed=%t err=%v", claimed, claimErr)
+	}
 	notification := &waMmsRetry.MediaRetryNotification{
 		DirectPath: proto.String("/retry/private"), Result: waMmsRetry.MediaRetryNotification_SUCCESS.Enum(),
 	}
@@ -1115,7 +1208,13 @@ func TestMediaRetryRejectsDigestMismatchWithoutExposingDescriptor(t *testing.T) 
 	); err != nil {
 		t.Fatalf("remember oversized descriptor: %v", err)
 	}
-	_, _ = persistence.BeginMediaRetry(t.Context(), "session-retry-digest", oversizedID, time.Now())
+	expected, err = persistence.GetMediaRetryState(t.Context(), "session-retry-digest", oversizedID)
+	if err != nil {
+		t.Fatalf("get oversized retry state: %v", err)
+	}
+	if _, claimed, claimErr := persistence.CompareAndBeginMediaRetry(t.Context(), expected, time.Now()); claimErr != nil || !claimed {
+		t.Fatalf("claim oversized retry state: claimed=%t err=%v", claimed, claimErr)
+	}
 	oversizedNotification := &waMmsRetry.MediaRetryNotification{
 		DirectPath: proto.String("/retry/oversized"),
 		Result:     waMmsRetry.MediaRetryNotification_SUCCESS.Enum(),
@@ -1201,7 +1300,7 @@ func assertEventPayloadAllowlist(t *testing.T, event domain.Event) {
 			"occurred_at", "reply_to", "spool_id",
 			"media_size_bytes", "media_sha256", "mime_type", "filename", "media_error_code", "location",
 			"contacts", "poll", "interactive", "ptt", "gif", "animated", "duration_seconds",
-			"content_present", "variants", "direction", "history",
+			"content_present", "variants", "direction", "history", "media_state",
 		},
 		domain.EventMessageStatusChanged: {"provider_message_id", "status", "error_code"},
 		domain.EventMessageActionReceived: {
@@ -1341,6 +1440,30 @@ func profilePayloadContains(t *testing.T, pending []domain.PendingEvent, key, ex
 		}
 		payload := decodeEventPayload(t, item.Event.Payload)
 		if payload[key] == expected {
+			return true
+		}
+	}
+	return false
+}
+
+func contactProfilePayloads(t *testing.T, pending []domain.PendingEvent) []map[string]any {
+	t.Helper()
+	profiles := make([]map[string]any, 0)
+	for _, item := range pending {
+		if item.Event.Type == domain.EventContactProfileChanged {
+			profiles = append(profiles, decodeEventPayload(t, item.Event.Payload))
+		}
+	}
+	return profiles
+}
+
+func containsString(value any, expected string) bool {
+	items, ok := value.([]any)
+	if !ok {
+		return false
+	}
+	for _, item := range items {
+		if item == expected {
 			return true
 		}
 	}

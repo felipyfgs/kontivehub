@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"sort"
@@ -84,28 +85,32 @@ func (s *Memory) GetMediaRetryState(
 	return state, nil
 }
 
-func (s *Memory) BeginMediaRetry(
+func (s *Memory) CompareAndBeginMediaRetry(
 	_ context.Context,
-	sessionID, messageID string,
+	expected domain.MediaRetryState,
 	now time.Time,
-) (domain.MediaRetryState, error) {
+) (domain.MediaRetryState, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	key := sessionID + "\x00" + messageID
+	key := expected.SessionID + "\x00" + expected.MessageID
 	state, ok := s.mediaRetries[key]
 	if !ok {
-		return domain.MediaRetryState{}, domain.ErrNotFound
+		return domain.MediaRetryState{}, false, domain.ErrNotFound
 	}
 	if !state.ExpiresAt.IsZero() && !state.ExpiresAt.After(now) {
 		delete(s.mediaRetries, key)
-		return domain.MediaRetryState{}, domain.ErrNotFound
+		return domain.MediaRetryState{}, false, domain.ErrNotFound
+	}
+	if state.Generation != expected.Generation || !bytes.Equal(state.Descriptor, expected.Descriptor) {
+		state.Descriptor = append([]byte(nil), state.Descriptor...)
+		return state, false, nil
 	}
 	state.Generation++
 	state.Attempts++
 	state.UpdatedAt = now
 	s.mediaRetries[key] = state
 	state.Descriptor = append([]byte(nil), state.Descriptor...)
-	return state, nil
+	return state, true, nil
 }
 
 func (s *Memory) DeleteMediaRetryState(_ context.Context, sessionID, messageID string) error {
@@ -191,6 +196,85 @@ func (s *Memory) MarkCommandFailed(_ context.Context, commandID string, availabl
 	} else {
 		command.status = "RETRY"
 	}
+	command.availableAt = availableAt
+	return nil
+}
+
+func (s *Memory) FinalizeMediaRetryCommandProcessed(
+	_ context.Context,
+	commandID string,
+	expectedAttempts int,
+	_ time.Time,
+) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	command, ok := s.commands[commandID]
+	if !ok {
+		return domain.ErrStateConflict
+	}
+	if command.command.Type != domain.CommandRetryMedia || command.status != "PROCESSING" || command.attempts != expectedAttempts {
+		return domain.ErrStateConflict
+	}
+	command.status = "PROCESSED"
+	return nil
+}
+
+func (s *Memory) FinalizeMediaRetryCommandFailed(
+	_ context.Context,
+	commandID string,
+	expectedAttempts int,
+	availableAt time.Time,
+	_ string,
+) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	command, ok := s.commands[commandID]
+	if !ok {
+		return domain.ErrStateConflict
+	}
+	if command.command.Type != domain.CommandRetryMedia || command.status != "PROCESSING" || command.attempts != expectedAttempts {
+		return domain.ErrStateConflict
+	}
+	command.status = "RETRY"
+	command.availableAt = availableAt
+	return nil
+}
+
+func (s *Memory) FinalizeCommandFailureWithEvent(
+	_ context.Context,
+	commandID string,
+	expectedAttempts int,
+	availableAt time.Time,
+	_ string,
+	event domain.Event,
+) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	command, ok := s.commands[commandID]
+	if !ok {
+		return domain.ErrStateConflict
+	}
+	if command.status == "ERROR" {
+		existing, exists := s.events[event.EventID]
+		if !exists {
+			return domain.ErrStateConflict
+		}
+		if existing.event.Digest != event.Digest {
+			return domain.ErrDigestConflict
+		}
+		return nil
+	}
+	if command.status != "PROCESSING" || command.attempts != expectedAttempts {
+		return domain.ErrStateConflict
+	}
+	if existing, exists := s.events[event.EventID]; exists {
+		if existing.event.Digest != event.Digest {
+			return domain.ErrDigestConflict
+		}
+	} else {
+		s.events[event.EventID] = &memoryEvent{event: event, status: "PENDING", availableAt: time.Now()}
+	}
+	command.status = "ERROR"
 	command.availableAt = availableAt
 	return nil
 }

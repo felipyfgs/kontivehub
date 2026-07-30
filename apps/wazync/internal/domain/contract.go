@@ -208,10 +208,36 @@ type HistorySyncPayload struct {
 }
 
 type MediaRetryPayload struct {
-	To              string `json:"to"`
-	TargetMessageID string `json:"target_message_id"`
-	Sender          string `json:"sender"`
-	FromMe          bool   `json:"from_me"`
+	To                string `json:"to"`
+	TargetMessageID   string `json:"target_message_id"`
+	ExpectedDirection string `json:"expected_direction,omitempty"`
+	// Sender and FromMe are retained only for the inbound legacy rollout
+	// shape. New callers must use expected_direction and never learn the
+	// session identity kept in the encrypted descriptor.
+	Sender string `json:"sender,omitempty"`
+	FromMe bool   `json:"from_me,omitempty"`
+}
+
+func (p MediaRetryPayload) MarshalJSON() ([]byte, error) {
+	type wirePayload struct {
+		To                string `json:"to"`
+		TargetMessageID   string `json:"target_message_id"`
+		ExpectedDirection string `json:"expected_direction,omitempty"`
+		Sender            string `json:"sender,omitempty"`
+		FromMe            *bool  `json:"from_me,omitempty"`
+	}
+	var fromMe *bool
+	if strings.TrimSpace(p.Sender) != "" {
+		value := p.FromMe
+		fromMe = &value
+	}
+	return json.Marshal(wirePayload{
+		To:                p.To,
+		TargetMessageID:   p.TargetMessageID,
+		ExpectedDirection: p.ExpectedDirection,
+		Sender:            p.Sender,
+		FromMe:            fromMe,
+	})
 }
 
 type UsersQueryPayload struct {
@@ -271,11 +297,7 @@ func (c Command) ValidatePayload() error {
 		if err := decodePayload(c.Payload, &payload); err != nil {
 			return err
 		}
-		if strings.TrimSpace(payload.To) == "" || strings.TrimSpace(payload.TargetMessageID) == "" ||
-			strings.TrimSpace(payload.Sender) == "" {
-			return errors.New("media retry recipient, target and sender are required")
-		}
-		return nil
+		return validateMediaRetryPayload(c.Payload, payload)
 	case CommandSetPresence:
 		return decodePayload(c.Payload, &PresencePayload{})
 	case CommandSubscribePresence:
@@ -325,6 +347,36 @@ func (c Command) ValidatePayload() error {
 	default:
 		return errors.New("unsupported command payload")
 	}
+}
+
+func validateMediaRetryPayload(raw json.RawMessage, payload MediaRetryPayload) error {
+	if strings.TrimSpace(payload.To) == "" || strings.TrimSpace(payload.TargetMessageID) == "" {
+		return errors.New("media retry recipient and target are required")
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return errors.New("invalid media retry payload")
+	}
+	_, hasSender := fields["sender"]
+	_, hasFromMe := fields["from_me"]
+	_, hasExpectedDirection := fields["expected_direction"]
+	expected := strings.ToUpper(strings.TrimSpace(payload.ExpectedDirection))
+	if hasExpectedDirection {
+		if expected != "INBOUND" && expected != "OUTBOUND" || hasSender || hasFromMe {
+			return errors.New("invalid media retry v2 payload")
+		}
+		return nil
+	}
+	// The compatibility shape is deliberately inbound-only. Requiring both
+	// fields prevents a missing bool from silently becoming false.
+	if !hasSender || !hasFromMe || strings.TrimSpace(payload.Sender) == "" || payload.FromMe {
+		return errors.New("invalid legacy inbound media retry payload")
+	}
+	var fromMe *bool
+	if err := json.Unmarshal(fields["from_me"], &fromMe); err != nil || fromMe == nil || *fromMe {
+		return errors.New("invalid legacy inbound media retry payload")
+	}
+	return nil
 }
 
 func (p MessageSendPayload) Validate() error {

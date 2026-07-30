@@ -234,6 +234,14 @@ func (s *Server) executeQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := s.queries.Execute(r.Context(), query)
+	if errors.Is(err, domain.ErrProfilePictureHidden) {
+		writeError(w, http.StatusForbidden, "PROFILE_PICTURE_PRIVACY")
+		return
+	}
+	if errors.Is(err, domain.ErrProfilePictureNotSet) {
+		writeError(w, http.StatusNotFound, "PROFILE_PICTURE_NOT_FOUND")
+		return
+	}
 	if errors.Is(err, domain.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "QUERY_TARGET_NOT_FOUND")
 		return
@@ -299,12 +307,26 @@ func (s *Server) metrics(w http.ResponseWriter, r *http.Request) {
 	_, _ = fmt.Fprintf(w, "wazync_sessions_active %d\n", metrics.ActiveSessions)
 	_, _ = fmt.Fprintf(w, "wazync_leases_active %d\n", metrics.ActiveLeases)
 	_, _ = fmt.Fprintf(w, "wazync_spool_files %d\n", metrics.SpoolFiles)
+	if queryMetrics, ok := s.queries.(interface{ ProfilePictureQueriesInFlight() int64 }); ok {
+		_, _ = fmt.Fprintf(
+			w,
+			"wazync_profile_picture_queries_in_flight %d\n",
+			queryMetrics.ProfilePictureQueriesInFlight(),
+		)
+	}
 	if s.scopeMetrics != nil {
 		_, _ = fmt.Fprintf(
 			w,
 			"wazync_recipient_scope_rejections_total %d\n",
 			s.scopeMetrics.RejectedScopeCount(),
 		)
+		if protocolMetrics, ok := s.scopeMetrics.(interface{ ProtocolControlRejectedCount() uint64 }); ok {
+			_, _ = fmt.Fprintf(
+				w,
+				"wazync_protocol_control_rejections_total %d\n",
+				protocolMetrics.ProtocolControlRejectedCount(),
+			)
+		}
 	}
 }
 

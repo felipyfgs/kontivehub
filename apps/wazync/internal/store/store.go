@@ -12,6 +12,12 @@ type Store interface {
 	NextCommands(context.Context, string, int, time.Time) ([]domain.PendingCommand, error)
 	MarkCommandProcessed(context.Context, string, time.Time) error
 	MarkCommandFailed(context.Context, string, time.Time, string, bool) error
+	// Media retry receipts are fenced by the command attempt that acquired the
+	// durable command lock. A delayed worker must not acknowledge an attempt
+	// that has already been reclaimed by another worker.
+	FinalizeMediaRetryCommandProcessed(ctx context.Context, commandID string, expectedAttempts int, processedAt time.Time) error
+	FinalizeMediaRetryCommandFailed(ctx context.Context, commandID string, expectedAttempts int, availableAt time.Time, errorCode string) error
+	FinalizeCommandFailureWithEvent(ctx context.Context, commandID string, expectedAttempts int, availableAt time.Time, errorCode string, event domain.Event) error
 	AppendEvent(context.Context, domain.Event) (duplicate bool, err error)
 	NextEvents(context.Context, int, time.Time) ([]domain.PendingEvent, error)
 	MarkEventDelivered(context.Context, string, time.Time) error
@@ -19,7 +25,7 @@ type Store interface {
 	ClaimNonce(context.Context, string, time.Time) (bool, error)
 	PutMediaRetryState(context.Context, domain.MediaRetryState) error
 	GetMediaRetryState(context.Context, string, string) (domain.MediaRetryState, error)
-	BeginMediaRetry(context.Context, string, string, time.Time) (domain.MediaRetryState, error)
+	CompareAndBeginMediaRetry(context.Context, domain.MediaRetryState, time.Time) (domain.MediaRetryState, bool, error)
 	DeleteMediaRetryState(context.Context, string, string) error
 	UpsertSession(context.Context, domain.Session) error
 	GetSession(context.Context, string) (domain.Session, error)

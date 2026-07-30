@@ -39,10 +39,32 @@ type mediaRetryEnvelope struct {
 
 var (
 	ErrHistoryRecoveryInvalid = errors.New("invalid history recovery request")
+	ErrMediaRetryClaimLost    = errors.New("media retry receipt claim is owned by another execution")
 	ErrMediaRetryStateMissing = errors.New("media retry state is unavailable")
 	ErrRecoveryLimitExceeded  = errors.New("recovery limit exceeded")
 	stickerPackIDPattern      = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
 )
+
+// MediaRetryClaim identifies the durable receipt generation that an execution
+// acquired. It is internal metadata and must never be serialized into a
+// provider request or exposed through a gateway payload.
+type MediaRetryClaim struct {
+	Generation int
+	Attempt    int
+}
+
+// MediaRetryReceiptError retains the durable claim when the provider receipt
+// fails after CompareAndBeginMediaRetry has committed. Consumers use it to
+// publish a FAILED event for that exact generation rather than racing a later
+// claim while reading current state.
+type MediaRetryReceiptError struct {
+	Claim MediaRetryClaim
+	Err   error
+}
+
+func (e *MediaRetryReceiptError) Error() string { return "media retry receipt failed" }
+
+func (e *MediaRetryReceiptError) Unwrap() error { return e.Err }
 
 type historyRequestClient interface {
 	BuildHistorySyncRequest(*types.MessageInfo, int) *waE2E.Message
@@ -341,63 +363,122 @@ func (a *WhatsMeowAdapter) RetryMedia(
 	if !ok {
 		return errors.New("WhatsApp client does not support media retry")
 	}
-	if strings.TrimSpace(payload.TargetMessageID) == "" || strings.TrimSpace(payload.Sender) == "" {
+	if strings.TrimSpace(payload.TargetMessageID) == "" {
 		return ErrHistoryRecoveryInvalid
 	}
-	sender, err := NormalizeOneToOneAddress(payload.Sender)
-	if err != nil {
-		return err
+	expectedDirection := strings.ToUpper(strings.TrimSpace(payload.ExpectedDirection))
+	legacyInbound := expectedDirection == ""
+	if (legacyInbound && strings.TrimSpace(payload.Sender) == "") ||
+		(!legacyInbound && expectedDirection != "INBOUND" && expectedDirection != "OUTBOUND") {
+		return ErrHistoryRecoveryInvalid
+	}
+	var sender OneToOneAddress
+	if legacyInbound {
+		sender, err = NormalizeOneToOneAddress(payload.Sender)
+		if err != nil {
+			return err
+		}
 	}
 	var info types.MessageInfo
 	var mediaKey []byte
 	if a.recoveryStore != nil {
-		state, stateErr := a.recoveryStore.BeginMediaRetry(
-			ctx, sessionID, payload.TargetMessageID, time.Now().UTC(),
-		)
+		// Validate the encrypted descriptor first. CompareAndBeginMediaRetry increments the
+		// durable generation/attempt, so malformed, cross-chat or wrong-direction
+		// requests must never consume the recovery budget.
+		state, stateErr := a.recoveryStore.GetMediaRetryState(ctx, sessionID, payload.TargetMessageID)
 		if stateErr != nil {
 			if errors.Is(stateErr, domain.ErrNotFound) {
 				return ErrMediaRetryStateMissing
 			}
 			return stateErr
 		}
-		var envelope mediaRetryEnvelope
-		if json.Unmarshal(state.Descriptor, &envelope) != nil || len(envelope.Message) == 0 {
-			return ErrMediaRetryStateMissing
+		for claimAttempt := 0; claimAttempt < 2; claimAttempt++ {
+			var envelope mediaRetryEnvelope
+			if json.Unmarshal(state.Descriptor, &envelope) != nil || len(envelope.Message) == 0 {
+				return ErrMediaRetryStateMissing
+			}
+			if envelope.Chat != chat.ToNonAD().String() {
+				return ErrMediaRetryStateMissing
+			}
+			if legacyInbound && (payload.FromMe || envelope.IsFromMe || envelope.Sender != sender.JID.ToNonAD().String()) {
+				return ErrMediaRetryStateMissing
+			}
+			if !legacyInbound && ((expectedDirection == "INBOUND" && envelope.IsFromMe) ||
+				(expectedDirection == "OUTBOUND" && !envelope.IsFromMe)) {
+				return ErrMediaRetryStateMissing
+			}
+			var message waE2E.Message
+			if proto.Unmarshal(envelope.Message, &message) != nil {
+				return ErrMediaRetryStateMissing
+			}
+			media := downloadableMessage(&message)
+			keyed, ok := media.(interface{ GetMediaKey() []byte })
+			if !ok || len(keyed.GetMediaKey()) != 32 {
+				return ErrMediaRetryStateMissing
+			}
+			mediaKey = append([]byte(nil), keyed.GetMediaKey()...)
+			descriptorSender, senderErr := parseDescriptorSender(envelope.Sender)
+			if senderErr != nil {
+				return ErrMediaRetryStateMissing
+			}
+			info = types.MessageInfo{
+				MessageSource: types.MessageSource{
+					Chat: chat, Sender: descriptorSender, IsFromMe: envelope.IsFromMe,
+				},
+				ID: types.MessageID(payload.TargetMessageID),
+			}
+			current, claimed, claimErr := a.recoveryStore.CompareAndBeginMediaRetry(
+				ctx, state, time.Now().UTC(),
+			)
+			if claimErr != nil {
+				if errors.Is(claimErr, domain.ErrNotFound) {
+					return ErrMediaRetryStateMissing
+				}
+				return claimErr
+			}
+			if claimed {
+				if receiptErr := retryClient.SendMediaRetryReceipt(ctx, &info, mediaKey); receiptErr != nil {
+					return &MediaRetryReceiptError{
+						Claim: MediaRetryClaim{Generation: current.Generation, Attempt: current.Attempts},
+						Err:   receiptErr,
+					}
+				}
+				return nil
+			}
+			if current.Generation != state.Generation {
+				return ErrMediaRetryClaimLost
+			}
+			state = current
 		}
-		if envelope.Chat != chat.ToNonAD().String() || envelope.IsFromMe != payload.FromMe {
-			return ErrMediaRetryStateMissing
-		}
-		if envelope.Sender != sender.JID.ToNonAD().String() {
-			return ErrMediaRetryStateMissing
-		}
-		var message waE2E.Message
-		if proto.Unmarshal(envelope.Message, &message) != nil {
-			return ErrMediaRetryStateMissing
-		}
-		media := downloadableMessage(&message)
-		keyed, ok := media.(interface{ GetMediaKey() []byte })
-		if !ok || len(keyed.GetMediaKey()) != 32 {
-			return ErrMediaRetryStateMissing
-		}
-		mediaKey = append([]byte(nil), keyed.GetMediaKey()...)
-		info = types.MessageInfo{
-			MessageSource: types.MessageSource{
-				Chat: chat, Sender: sender.JID, IsFromMe: envelope.IsFromMe,
-			},
-			ID: types.MessageID(payload.TargetMessageID),
-		}
+		return ErrMediaRetryClaimLost
 	} else {
 		secret, ok := a.mediaRetrySecret(sessionID, types.MessageID(payload.TargetMessageID))
-		if !ok || secret.info.Chat.ToNonAD() != chat || secret.info.IsFromMe != payload.FromMe {
+		if !ok || secret.info.Chat.ToNonAD() != chat {
 			return ErrMediaRetryStateMissing
 		}
-		if secret.info.Sender.ToNonAD() != sender.JID {
+		if legacyInbound && (payload.FromMe || secret.info.IsFromMe || secret.info.Sender.ToNonAD() != sender.JID) {
+			return ErrMediaRetryStateMissing
+		}
+		if !legacyInbound && ((expectedDirection == "INBOUND" && secret.info.IsFromMe) ||
+			(expectedDirection == "OUTBOUND" && !secret.info.IsFromMe)) {
 			return ErrMediaRetryStateMissing
 		}
 		info = secret.info
 		mediaKey = secret.mediaKey
 	}
 	return retryClient.SendMediaRetryReceipt(ctx, &info, mediaKey)
+}
+
+func parseDescriptorSender(value string) (types.JID, error) {
+	jid, err := types.ParseJID(value)
+	if err != nil {
+		return types.JID{}, err
+	}
+	normalized, err := NormalizeOneToOneJID(jid.ToNonAD())
+	if err != nil {
+		return types.JID{}, err
+	}
+	return normalized.JID, nil
 }
 
 // MediaRetrySecret is intentionally package-internal data surfaced through an

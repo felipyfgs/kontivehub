@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/store"
 	"go.mau.fi/whatsmeow"
@@ -105,13 +106,14 @@ type ClientResolver interface {
 }
 
 type WhatsMeowAdapter struct {
-	clients       ClientResolver
-	settings      ClientSettings
-	stateMu       sync.RWMutex
-	passive       map[string]bool
-	recoveryMu    sync.Mutex
-	mediaRetries  map[string]mediaRetrySecret
-	recoveryStore store.Store
+	clients                       ClientResolver
+	settings                      ClientSettings
+	stateMu                       sync.RWMutex
+	passive                       map[string]bool
+	recoveryMu                    sync.Mutex
+	mediaRetries                  map[string]mediaRetrySecret
+	recoveryStore                 store.Store
+	profilePictureQueriesInFlight atomic.Int64
 }
 
 func (a *WhatsMeowAdapter) WithRecoveryStore(persistence store.Store) *WhatsMeowAdapter {

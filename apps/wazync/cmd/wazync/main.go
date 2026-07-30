@@ -96,14 +96,7 @@ func main() {
 		go worker.Run(ctx, 250*time.Millisecond)
 		go eventDispatcher.Run(ctx, time.Second)
 	}
-	server := &http.Server{
-		Addr:              cfg.HTTPAddress,
-		Handler:           api.Handler(),
-		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       60 * time.Second,
-	}
+	server := newHTTPServer(cfg.HTTPAddress, api.Handler())
 
 	go func() {
 		slog.Info("Wazync listening", "enabled", cfg.Enabled)
@@ -118,6 +111,21 @@ func main() {
 	defer shutdownCancel()
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		slog.Error("Wazync HTTP shutdown failed", "error", err.Error())
+	}
+}
+
+func newHTTPServer(address string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              address,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		// net/http applies WriteTimeout from request handling through response writes.
+		// Leave room for the 15s request-read budget, the longest synchronous query
+		// (80s), and response serialization. Query-specific contexts still cap ordinary
+		// queries at 15s.
+		WriteTimeout: 100 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 }
 

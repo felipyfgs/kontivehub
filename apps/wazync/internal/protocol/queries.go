@@ -14,9 +14,10 @@ import (
 )
 
 const (
-	queryDeadline = 15 * time.Second
-	maxQueryUsers = 100
-	maxLinkLength = 512
+	queryDeadline               = 15 * time.Second
+	profilePictureQueryDeadline = 80 * time.Second
+	maxQueryUsers               = 100
+	maxLinkLength               = 512
 )
 
 type queryClient interface {
@@ -77,7 +78,11 @@ func (a *WhatsMeowAdapter) Execute(ctx context.Context, query domain.Query) (any
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, queryDeadline)
+	if query.Type == domain.QueryProfilePicture {
+		a.profilePictureQueriesInFlight.Add(1)
+		defer a.profilePictureQueriesInFlight.Add(-1)
+	}
+	ctx, cancel := context.WithTimeout(ctx, queryTimeout(query.Type))
 	defer cancel()
 
 	switch query.Type {
@@ -208,6 +213,12 @@ func (a *WhatsMeowAdapter) Execute(ctx context.Context, query domain.Query) (any
 		picture, err := client.GetProfilePictureInfo(ctx, address.JID, &whatsmeow.GetProfilePictureParams{
 			Preview: payload.Preview,
 		})
+		if errors.Is(err, whatsmeow.ErrProfilePictureUnauthorized) {
+			return nil, domain.ErrProfilePictureHidden
+		}
+		if errors.Is(err, whatsmeow.ErrProfilePictureNotSet) {
+			return nil, domain.ErrProfilePictureNotSet
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -288,6 +299,19 @@ func (a *WhatsMeowAdapter) Execute(ctx context.Context, query domain.Query) (any
 		return sanitizePrivacySettings(settings), nil
 	}
 	return nil, errors.New("unsupported query type")
+}
+
+// ProfilePictureQueriesInFlight exposes only an aggregate gauge. Query, session,
+// recipient and provider identifiers are intentionally absent.
+func (a *WhatsMeowAdapter) ProfilePictureQueriesInFlight() int64 {
+	return a.profilePictureQueriesInFlight.Load()
+}
+
+func queryTimeout(queryType domain.QueryType) time.Duration {
+	if queryType == domain.QueryProfilePicture {
+		return profilePictureQueryDeadline
+	}
+	return queryDeadline
 }
 
 func (a *WhatsMeowAdapter) readyQueryClient(sessionID string) (queryClient, error) {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -35,8 +36,69 @@ type fakeRecoveryClient struct {
 	parseCalls          int
 	retryInfo           *types.MessageInfo
 	retryKey            []byte
+	retryErr            error
 	thumbnail           []byte
 	stickerPack         *types.StickerPack
+}
+
+type countingMediaRetryClient struct {
+	*fakeRecoveryClient
+	mu       sync.Mutex
+	receipts int
+}
+
+func (c *countingMediaRetryClient) SendMediaRetryReceipt(
+	_ context.Context,
+	_ *types.MessageInfo,
+	_ []byte,
+) error {
+	c.mu.Lock()
+	c.receipts++
+	c.mu.Unlock()
+	return nil
+}
+
+func (c *countingMediaRetryClient) receiptCount() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.receipts
+}
+
+type barrierMediaRetryStore struct {
+	store.Store
+	reached chan<- struct{}
+	release <-chan struct{}
+}
+
+type rejectingMediaRetryClaimStore struct {
+	store.Store
+	claimAttempts int
+}
+
+func (s *rejectingMediaRetryClaimStore) CompareAndBeginMediaRetry(
+	_ context.Context,
+	expected domain.MediaRetryState,
+	_ time.Time,
+) (domain.MediaRetryState, bool, error) {
+	s.claimAttempts++
+	return expected, false, nil
+}
+
+func (s barrierMediaRetryStore) GetMediaRetryState(
+	ctx context.Context,
+	sessionID, messageID string,
+) (domain.MediaRetryState, error) {
+	state, err := s.Store.GetMediaRetryState(ctx, sessionID, messageID)
+	if err != nil {
+		return state, err
+	}
+	s.reached <- struct{}{}
+	select {
+	case <-s.release:
+		return state, nil
+	case <-ctx.Done():
+		return domain.MediaRetryState{}, ctx.Err()
+	}
 }
 
 func newFakeRecoveryClient() *fakeRecoveryClient {
@@ -115,7 +177,7 @@ func (c *fakeRecoveryClient) SendMediaRetryReceipt(
 	copyInfo := *info
 	c.retryInfo = &copyInfo
 	c.retryKey = append([]byte(nil), mediaKey...)
-	return nil
+	return c.retryErr
 }
 
 func (c *fakeRecoveryClient) DownloadThumbnail(
@@ -287,6 +349,183 @@ func TestMediaRetryCommandLoadsDurableDescriptorAfterAdapterRestart(t *testing.T
 	)
 	if err != nil || state.Generation != 1 || state.Attempts != 1 {
 		t.Fatalf("retry generation/attempt not advanced: state=%+v err=%v", state, err)
+	}
+	providerErr := errors.New("provider receipt failed")
+	client.retryErr = providerErr
+	err = adapter.RetryMedia(t.Context(), "session-retry-durable", domain.MediaRetryPayload{
+		To: "+5511999991234", TargetMessageID: "provider-retry-durable",
+		Sender: "+5511999991234", FromMe: false,
+	})
+	var receiptErr *MediaRetryReceiptError
+	if !errors.As(err, &receiptErr) || receiptErr.Claim.Generation != 2 || receiptErr.Claim.Attempt != 2 {
+		t.Fatalf("receipt failure lost durable claim: err=%v claim=%+v", err, receiptErr)
+	}
+	if !errors.Is(err, providerErr) {
+		t.Fatalf("receipt failure did not preserve provider cause: %v", err)
+	}
+}
+
+func TestConcurrentMediaRetryCommandsClaimOneGenerationAndSendOneReceipt(t *testing.T) {
+	t.Parallel()
+	persistence := store.NewMemory()
+	message := &waE2E.Message{ImageMessage: &waE2E.ImageMessage{
+		MediaKey: bytesOf(32, 0x79), FileSHA256: bytesOf(32, 0x7a),
+	}}
+	descriptor, _ := proto.Marshal(message)
+	envelope, _ := json.Marshal(mediaRetryEnvelope{
+		Message: descriptor, Chat: "5511999991234@s.whatsapp.net",
+		Sender: "5511999991234@s.whatsapp.net", IsFromMe: false,
+	})
+	if err := persistence.PutMediaRetryState(t.Context(), domain.MediaRetryState{
+		SessionID: "session-retry-concurrent", MessageID: "provider-retry-concurrent",
+		Descriptor: envelope,
+	}); err != nil {
+		t.Fatalf("persist concurrent retry descriptor: %v", err)
+	}
+
+	reached := make(chan struct{}, 2)
+	release := make(chan struct{})
+	guardedStore := barrierMediaRetryStore{
+		Store: persistence, reached: reached, release: release,
+	}
+	client := &countingMediaRetryClient{fakeRecoveryClient: newFakeRecoveryClient()}
+	adapter := NewWhatsMeowAdapter(recoveryResolver{client: client}).WithRecoveryStore(guardedStore)
+	payload := domain.MediaRetryPayload{
+		To: "+5511999991234", TargetMessageID: "provider-retry-concurrent",
+		ExpectedDirection: "INBOUND",
+	}
+	errs := make(chan error, 2)
+	for range 2 {
+		go func() {
+			errs <- adapter.RetryMedia(t.Context(), "session-retry-concurrent", payload)
+		}()
+	}
+	for range 2 {
+		select {
+		case <-reached:
+		case <-time.After(time.Second):
+			t.Fatal("concurrent retries did not reach the durable-state barrier")
+		}
+	}
+	close(release)
+	succeeded := 0
+	claimLost := 0
+	for range 2 {
+		select {
+		case err := <-errs:
+			switch {
+			case err == nil:
+				succeeded++
+			case errors.Is(err, ErrMediaRetryClaimLost):
+				claimLost++
+			default:
+				t.Fatalf("concurrent media retry failed: %v", err)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("concurrent media retry did not complete after barrier release")
+		}
+	}
+	if succeeded != 1 || claimLost != 1 {
+		t.Fatalf("concurrent retry outcomes: success=%d claim_lost=%d; want 1/1", succeeded, claimLost)
+	}
+
+	if got := client.receiptCount(); got != 1 {
+		t.Fatalf("concurrent retries sent %d receipts; want 1", got)
+	}
+	state, err := persistence.GetMediaRetryState(
+		t.Context(), "session-retry-concurrent", "provider-retry-concurrent",
+	)
+	if err != nil || state.Generation != 1 || state.Attempts != 1 {
+		t.Fatalf("concurrent retry state=%+v err=%v; want generation/attempt 1", state, err)
+	}
+}
+
+func TestMediaRetryReportsLostClaimAfterBoundedUnchangedRejections(t *testing.T) {
+	t.Parallel()
+	persistence := store.NewMemory()
+	message := &waE2E.Message{ImageMessage: &waE2E.ImageMessage{
+		MediaKey: bytesOf(32, 0x7b), FileSHA256: bytesOf(32, 0x7c),
+	}}
+	descriptor, _ := proto.Marshal(message)
+	envelope, _ := json.Marshal(mediaRetryEnvelope{
+		Message: descriptor, Chat: "5511999991234@s.whatsapp.net",
+		Sender: "5511999991234@s.whatsapp.net", IsFromMe: false,
+	})
+	if err := persistence.PutMediaRetryState(t.Context(), domain.MediaRetryState{
+		SessionID: "session-retry-rejected", MessageID: "provider-retry-rejected",
+		Descriptor: envelope,
+	}); err != nil {
+		t.Fatalf("persist rejected retry descriptor: %v", err)
+	}
+	rejectingStore := &rejectingMediaRetryClaimStore{Store: persistence}
+	adapter := NewWhatsMeowAdapter(recoveryResolver{client: newFakeRecoveryClient()}).WithRecoveryStore(rejectingStore)
+	err := adapter.RetryMedia(t.Context(), "session-retry-rejected", domain.MediaRetryPayload{
+		To: "+5511999991234", TargetMessageID: "provider-retry-rejected",
+		ExpectedDirection: "INBOUND",
+	})
+	if !errors.Is(err, ErrMediaRetryClaimLost) {
+		t.Fatalf("bounded claim rejection error=%v; want %v", err, ErrMediaRetryClaimLost)
+	}
+	if rejectingStore.claimAttempts != 2 {
+		t.Fatalf("claim attempts=%d; want 2", rejectingStore.claimAttempts)
+	}
+}
+
+func TestMediaRetryV2DerivesIdentityAndRejectsDirectionMismatch(t *testing.T) {
+	t.Parallel()
+	client := newFakeRecoveryClient()
+	persistence := store.NewMemory()
+	message := &waE2E.Message{ImageMessage: &waE2E.ImageMessage{MediaKey: bytesOf(32, 0x73)}}
+	descriptor, _ := proto.Marshal(message)
+	envelope, _ := json.Marshal(mediaRetryEnvelope{
+		Message: descriptor, Chat: "5511999991234@s.whatsapp.net",
+		Sender: "5511988887777@s.whatsapp.net", IsFromMe: true,
+	})
+	if err := persistence.PutMediaRetryState(t.Context(), domain.MediaRetryState{
+		SessionID: "session-retry-v2", MessageID: "provider-retry-v2", Descriptor: envelope,
+	}); err != nil {
+		t.Fatalf("persist descriptor: %v", err)
+	}
+	adapter := NewWhatsMeowAdapter(recoveryResolver{client: client}).WithRecoveryStore(persistence)
+	if err := adapter.RetryMedia(t.Context(), "session-retry-v2", domain.MediaRetryPayload{
+		To: "+5511888887777", TargetMessageID: "provider-retry-v2", ExpectedDirection: "OUTBOUND",
+	}); !errors.Is(err, ErrMediaRetryStateMissing) {
+		t.Fatalf("chat mismatch did not fail closed: %v", err)
+	}
+	state, err := persistence.GetMediaRetryState(t.Context(), "session-retry-v2", "provider-retry-v2")
+	if err != nil || state.Generation != 0 || state.Attempts != 0 {
+		t.Fatalf("invalid chat consumed recovery generation: %+v err=%v", state, err)
+	}
+	if err := adapter.RetryMedia(t.Context(), "session-retry-v2", domain.MediaRetryPayload{
+		To: "+5511999991234", TargetMessageID: "provider-retry-v2", ExpectedDirection: "SIDEWAYS",
+	}); !errors.Is(err, ErrHistoryRecoveryInvalid) {
+		t.Fatalf("unknown direction did not fail closed: %v", err)
+	}
+	state, err = persistence.GetMediaRetryState(t.Context(), "session-retry-v2", "provider-retry-v2")
+	if err != nil || state.Generation != 0 || state.Attempts != 0 {
+		t.Fatalf("unknown direction consumed recovery generation: %+v err=%v", state, err)
+	}
+	if err := adapter.RetryMedia(t.Context(), "session-retry-v2", domain.MediaRetryPayload{
+		To: "+5511999991234", TargetMessageID: "provider-retry-v2", ExpectedDirection: "OUTBOUND",
+	}); err != nil {
+		t.Fatalf("v2 outbound retry: %v", err)
+	}
+	if client.retryInfo == nil || !client.retryInfo.IsFromMe || client.retryInfo.Sender.User != "5511988887777" {
+		t.Fatalf("v2 did not derive descriptor identity: %+v", client.retryInfo)
+	}
+	if err := adapter.RetryMedia(t.Context(), "session-retry-v2", domain.MediaRetryPayload{
+		To: "+5511999991234", TargetMessageID: "provider-retry-v2", ExpectedDirection: " outbound ",
+	}); err != nil {
+		t.Fatalf("normalized v2 outbound retry: %v", err)
+	}
+	if err := adapter.RetryMedia(t.Context(), "session-retry-v2", domain.MediaRetryPayload{
+		To: "+5511999991234", TargetMessageID: "provider-retry-v2", ExpectedDirection: "INBOUND",
+	}); !errors.Is(err, ErrMediaRetryStateMissing) {
+		t.Fatalf("direction mismatch did not fail closed: %v", err)
+	}
+	state, err = persistence.GetMediaRetryState(t.Context(), "session-retry-v2", "provider-retry-v2")
+	if err != nil || state.Generation != 2 || state.Attempts != 2 {
+		t.Fatalf("invalid direction consumed recovery generation: %+v err=%v", state, err)
 	}
 }
 

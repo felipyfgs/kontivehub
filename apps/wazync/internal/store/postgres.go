@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -9,8 +10,13 @@ import (
 	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/cryptobox"
 	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/domain"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+type commandFinalizer interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+}
 
 type Postgres struct {
 	pool *pgxpool.Pool
@@ -207,34 +213,65 @@ WHERE session_id = $1 AND provider_message_id = $2 AND expires_at > now()`,
 	return state, nil
 }
 
-func (s *Postgres) BeginMediaRetry(
+func (s *Postgres) CompareAndBeginMediaRetry(
 	ctx context.Context,
-	sessionID, messageID string,
+	expected domain.MediaRetryState,
 	now time.Time,
-) (domain.MediaRetryState, error) {
+) (domain.MediaRetryState, bool, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return domain.MediaRetryState{}, false, fmt.Errorf("begin media retry transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
 	var state domain.MediaRetryState
 	var ciphertext, nonce []byte
-	err := s.pool.QueryRow(ctx, `
-UPDATE wazync.media_retry_states
-SET generation = generation + 1, attempt_count = attempt_count + 1, updated_at = $3
-WHERE session_id = $1 AND provider_message_id = $2 AND expires_at > $3
-RETURNING session_id, provider_message_id, descriptor_cipher, descriptor_nonce,
-          generation, attempt_count, updated_at, expires_at`, sessionID, messageID, now,
+	err = tx.QueryRow(ctx, `
+SELECT session_id, provider_message_id, descriptor_cipher, descriptor_nonce,
+       generation, attempt_count, updated_at, expires_at
+FROM wazync.media_retry_states
+WHERE session_id = $1 AND provider_message_id = $2
+FOR UPDATE`, expected.SessionID, expected.MessageID,
 	).Scan(
 		&state.SessionID, &state.MessageID, &ciphertext, &nonce,
 		&state.Generation, &state.Attempts, &state.UpdatedAt, &state.ExpiresAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.MediaRetryState{}, domain.ErrNotFound
+		return domain.MediaRetryState{}, false, domain.ErrNotFound
 	}
 	if err != nil {
-		return domain.MediaRetryState{}, fmt.Errorf("begin media retry: %w", err)
+		return domain.MediaRetryState{}, false, fmt.Errorf("lock media retry state: %w", err)
 	}
-	state.Descriptor, err = s.box.Open(ciphertext, nonce, []byte(sessionID+"\x00"+messageID))
+	if !state.ExpiresAt.IsZero() && !state.ExpiresAt.After(now) {
+		return domain.MediaRetryState{}, false, domain.ErrNotFound
+	}
+	state.Descriptor, err = s.box.Open(
+		ciphertext,
+		nonce,
+		[]byte(expected.SessionID+"\x00"+expected.MessageID),
+	)
 	if err != nil {
-		return domain.MediaRetryState{}, fmt.Errorf("decrypt media retry descriptor: %w", err)
+		return domain.MediaRetryState{}, false, fmt.Errorf("decrypt media retry descriptor: %w", err)
 	}
-	return state, nil
+	if state.Generation != expected.Generation || !bytes.Equal(state.Descriptor, expected.Descriptor) {
+		if err := tx.Commit(ctx); err != nil {
+			return domain.MediaRetryState{}, false, fmt.Errorf("finish media retry comparison: %w", err)
+		}
+		return state, false, nil
+	}
+	err = tx.QueryRow(ctx, `
+UPDATE wazync.media_retry_states
+SET generation = generation + 1, attempt_count = attempt_count + 1, updated_at = $3
+WHERE session_id = $1 AND provider_message_id = $2
+RETURNING generation, attempt_count, updated_at`, expected.SessionID, expected.MessageID, now,
+	).Scan(&state.Generation, &state.Attempts, &state.UpdatedAt)
+	if err != nil {
+		return domain.MediaRetryState{}, false, fmt.Errorf("begin media retry: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return domain.MediaRetryState{}, false, fmt.Errorf("commit media retry: %w", err)
+	}
+	return state, true, nil
 }
 
 func (s *Postgres) DeleteMediaRetryState(ctx context.Context, sessionID, messageID string) error {
@@ -407,6 +444,164 @@ WHERE command_id = $1`, commandID, status, availableAt, errorCode)
 	}
 	if result.RowsAffected() != 1 {
 		return domain.ErrNotFound
+	}
+	return nil
+}
+
+func (s *Postgres) FinalizeMediaRetryCommandProcessed(
+	ctx context.Context,
+	commandID string,
+	expectedAttempts int,
+	processedAt time.Time,
+) error {
+	return finalizeMediaRetryCommandProcessed(ctx, s.pool, commandID, expectedAttempts, processedAt)
+}
+
+func finalizeMediaRetryCommandProcessed(
+	ctx context.Context,
+	executor commandFinalizer,
+	commandID string,
+	expectedAttempts int,
+	processedAt time.Time,
+) error {
+	result, err := executor.Exec(ctx, `
+UPDATE wazync.commands
+SET status = 'PROCESSED', processed_at = $3, locked_at = NULL, updated_at = $3
+WHERE command_id = $1 AND command_type = $4
+  AND status = 'PROCESSING' AND attempt_count = $2`,
+		commandID, expectedAttempts, processedAt, string(domain.CommandRetryMedia),
+	)
+	if err != nil {
+		return fmt.Errorf("finalize media retry command processed: %w", err)
+	}
+	if result.RowsAffected() != 1 {
+		return domain.ErrStateConflict
+	}
+	return nil
+}
+
+func (s *Postgres) FinalizeMediaRetryCommandFailed(
+	ctx context.Context,
+	commandID string,
+	expectedAttempts int,
+	availableAt time.Time,
+	errorCode string,
+) error {
+	return finalizeMediaRetryCommandFailed(ctx, s.pool, commandID, expectedAttempts, availableAt, errorCode)
+}
+
+func finalizeMediaRetryCommandFailed(
+	ctx context.Context,
+	executor commandFinalizer,
+	commandID string,
+	expectedAttempts int,
+	availableAt time.Time,
+	errorCode string,
+) error {
+	result, err := executor.Exec(ctx, `
+UPDATE wazync.commands
+SET status = 'RETRY', available_at = $3, error_code = $4, locked_at = NULL, updated_at = now()
+WHERE command_id = $1 AND command_type = $5
+  AND status = 'PROCESSING' AND attempt_count = $2`,
+		commandID, expectedAttempts, availableAt, errorCode, string(domain.CommandRetryMedia),
+	)
+	if err != nil {
+		return fmt.Errorf("finalize media retry command failed: %w", err)
+	}
+	if result.RowsAffected() != 1 {
+		return domain.ErrStateConflict
+	}
+	return nil
+}
+
+func (s *Postgres) FinalizeCommandFailureWithEvent(
+	ctx context.Context,
+	commandID string,
+	expectedAttempts int,
+	availableAt time.Time,
+	errorCode string,
+	event domain.Event,
+) error {
+	ciphertext, nonce, err := s.box.Seal(event.Payload, []byte(event.EventID))
+	if err != nil {
+		return fmt.Errorf("encrypt terminal event payload: %w", err)
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin terminal command failure: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var status string
+	var attempts int
+	if err := tx.QueryRow(ctx, `
+SELECT status, attempt_count
+FROM wazync.commands
+WHERE command_id = $1
+FOR UPDATE`, commandID).Scan(&status, &attempts); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.ErrStateConflict
+		}
+		return fmt.Errorf("lock terminal command: %w", err)
+	}
+	if status == "ERROR" {
+		var digest string
+		if err := tx.QueryRow(ctx,
+			`SELECT payload_digest FROM wazync.events WHERE event_id = $1`, event.EventID,
+		).Scan(&digest); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return domain.ErrStateConflict
+			}
+			return fmt.Errorf("read idempotent terminal event: %w", err)
+		}
+		if digest != event.Digest {
+			return domain.ErrDigestConflict
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return fmt.Errorf("commit idempotent terminal command failure: %w", err)
+		}
+		return nil
+	}
+	if status != "PROCESSING" || attempts != expectedAttempts {
+		return domain.ErrStateConflict
+	}
+
+	result, err := tx.Exec(ctx, `
+INSERT INTO wazync.events (
+    event_id, session_id, event_type, occurred_at,
+    payload_cipher, payload_nonce, payload_digest
+) VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (event_id) DO NOTHING`,
+		event.EventID, event.SessionID, event.Type, event.OccurredAt,
+		ciphertext, nonce, event.Digest,
+	)
+	if err != nil {
+		return fmt.Errorf("persist terminal event: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		var digest string
+		if err := tx.QueryRow(ctx,
+			`SELECT payload_digest FROM wazync.events WHERE event_id = $1`, event.EventID,
+		).Scan(&digest); err != nil {
+			return fmt.Errorf("read terminal event: %w", err)
+		}
+		if digest != event.Digest {
+			return domain.ErrDigestConflict
+		}
+	}
+
+	result, err = tx.Exec(ctx, `
+UPDATE wazync.commands
+SET status = 'ERROR', available_at = $2, error_code = $3, locked_at = NULL, updated_at = now()
+WHERE command_id = $1 AND status = 'PROCESSING' AND attempt_count = $4`,
+		commandID, availableAt, errorCode, expectedAttempts)
+	if err != nil {
+		return fmt.Errorf("mark terminal command failed: %w", err)
+	}
+	if result.RowsAffected() != 1 {
+		return domain.ErrStateConflict
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit terminal command failure: %w", err)
 	}
 	return nil
 }

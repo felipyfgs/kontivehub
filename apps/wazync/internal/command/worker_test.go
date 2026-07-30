@@ -3,6 +3,7 @@ package command
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -18,6 +19,7 @@ type fakeTransport struct {
 	media             []byte
 	filename          string
 	mimeType          string
+	sendErr           error
 }
 
 func (f *fakeTransport) ConnectContext(context.Context, string) error {
@@ -42,13 +44,33 @@ func (f *fakeTransport) SendTypedMessage(
 	}
 	f.media = append([]byte(nil), content...)
 	f.providerMessageID = providerMessageID
-	return nil
+	return f.sendErr
 }
 func (f *fakeTransport) Logout(context.Context, string) error { f.connected = false; return nil }
 
 type fakeMediaFetcher struct{ content []byte }
 
 type terminalPairer struct{ calls int }
+
+type failingStatusEventStore struct {
+	*store.Memory
+	markFailedCalls int
+}
+
+func (s *failingStatusEventStore) AppendEvent(context.Context, domain.Event) (bool, error) {
+	return false, errors.New("status event persistence failed")
+}
+
+func (s *failingStatusEventStore) MarkCommandFailed(
+	ctx context.Context,
+	commandID string,
+	availableAt time.Time,
+	code string,
+	terminal bool,
+) error {
+	s.markFailedCalls++
+	return s.Memory.MarkCommandFailed(ctx, commandID, availableAt, code, terminal)
+}
 
 func (p *terminalPairer) StartPairing(context.Context, string) (<-chan domain.PairingUpdate, error) {
 	p.calls++
@@ -285,6 +307,42 @@ func TestWorkerDoesNotRetryDeterministicPairingFailure(t *testing.T) {
 	}
 	if !transport.connected {
 		t.Fatal("stored device was not routed to fenced reconnect")
+	}
+}
+
+func TestWorkerDoesNotFinalizeTerminalSendWhenUnknownStatusEventFails(t *testing.T) {
+	t.Parallel()
+	persistence := &failingStatusEventStore{Memory: store.NewMemory()}
+	transport := &fakeTransport{sendErr: errors.New("provider send failed")}
+	manager := session.NewManager(persistence, transport, "replica-send-terminal", 10, time.Minute, 10*time.Second)
+	worker := New(persistence, manager, nil, transport, "replica-send-terminal")
+	worker.maxAttempts = 1
+	now := time.Now().UTC()
+	worker.now = func() time.Time { return now }
+	if err := persistence.UpsertSession(t.Context(), domain.Session{
+		SessionID: "session-send-terminal-0001", Status: domain.SessionConnecting, DesiredConnected: true,
+	}); err != nil {
+		t.Fatalf("provision terminal send session: %v", err)
+	}
+	if err := manager.Reconcile(t.Context()); err != nil {
+		t.Fatalf("claim terminal send session: %v", err)
+	}
+	payload, _ := json.Marshal(map[string]string{
+		"to": "+5511999991234", "kind": "TEXT", "text": "Olá",
+	})
+	if _, err := persistence.AcceptCommand(t.Context(), domain.Command{
+		ContractVersion: "v1", CommandID: "command-send-terminal-0001",
+		SessionID: "session-send-terminal-0001", Type: domain.CommandSendMessage,
+		ProviderMessageID: "provider-send-terminal-0001", Payload: payload,
+		Digest: "send-terminal-digest", AcceptedAt: now,
+	}); err != nil {
+		t.Fatalf("accept terminal send: %v", err)
+	}
+	if err := worker.ProcessOnce(t.Context()); err == nil {
+		t.Fatal("terminal send succeeded despite failed UNKNOWN status event")
+	}
+	if persistence.markFailedCalls != 0 {
+		t.Fatalf("terminal send was finalized before UNKNOWN status persisted: calls=%d", persistence.markFailedCalls)
 	}
 }
 
