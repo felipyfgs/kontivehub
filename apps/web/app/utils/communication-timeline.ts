@@ -34,6 +34,55 @@ export function shouldFollowCommunicationTimeline(input: {
     || input.appended.some(message => message.direction !== 'INBOUND')
 }
 
+export function shouldMarkCommunicationTimelineRead(input: {
+  rendered: boolean
+  visible: boolean
+  atEnd: boolean
+  initialReadPending: boolean
+  manualUnread: boolean
+  unreadCount: number
+  snapshotThroughMessageId: number | null
+}): boolean {
+  if (
+    !input.rendered
+    || !input.visible
+    || input.manualUnread
+    || input.unreadCount < 1
+    || input.snapshotThroughMessageId === null
+  ) {
+    return false
+  }
+
+  return input.initialReadPending || input.atEnd
+}
+
+export function isCommunicationReadStateVersionNewer(
+  incomingVersion: number,
+  knownVersion: number
+): boolean {
+  return Number.isInteger(incomingVersion)
+    && incomingVersion >= 0
+    && incomingVersion > knownVersion
+}
+
+export function mergeCommunicationReadThroughMessageId(
+  known: number | null | undefined,
+  incoming: unknown
+): number | null {
+  const current = typeof known === 'number' && Number.isInteger(known) ? known : null
+  const next = typeof incoming === 'number' && Number.isInteger(incoming) ? incoming : null
+  if (current === null) return next
+  if (next === null) return current
+  return Math.max(current, next)
+}
+
+export function canRetryCommunicationReadAcknowledgement(
+  failedSnapshotMessageId: number | undefined,
+  snapshotMessageId: number | null
+): boolean {
+  return snapshotMessageId !== null && failedSnapshotMessageId !== snapshotMessageId
+}
+
 export function communicationNewMessagesLabel(count: number): string {
   return count === 1 ? '1 nova mensagem' : `${count} novas mensagens`
 }

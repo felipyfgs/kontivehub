@@ -288,6 +288,12 @@
     "action": "CommunicationContactController@store"
   },
   {
+    "method": "POST",
+    "uri": "api/v1/communication/contacts/search",
+    "group": "communication",
+    "action": "CommunicationContactController@search"
+  },
+  {
     "method": "GET",
     "uri": "api/v1/communication/contacts/{contact}",
     "group": "communication",
@@ -319,9 +325,51 @@
   },
   {
     "method": "GET",
+    "uri": "api/v1/communication/contacts/{contact}/shared-content",
+    "group": "communication",
+    "action": "CommunicationContactController@sharedContent"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/conversation-bulk-operations",
+    "group": "communication",
+    "action": "ConversationBulkOperationController@store"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/conversation-bulk-operations/{operation}",
+    "group": "communication",
+    "action": "ConversationBulkOperationController@show"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/conversation-bulk-operations/{operation}/items",
+    "group": "communication",
+    "action": "ConversationBulkOperationController@items"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/conversation-list-preferences",
+    "group": "communication",
+    "action": "ConversationListPreferenceController@show"
+  },
+  {
+    "method": "PUT",
+    "uri": "api/v1/communication/conversation-list-preferences",
+    "group": "communication",
+    "action": "ConversationListPreferenceController@update"
+  },
+  {
+    "method": "GET",
     "uri": "api/v1/communication/conversations",
     "group": "communication",
     "action": "CommunicationConversationController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/conversations",
+    "group": "communication",
+    "action": "CommunicationConversationController@store"
   },
   {
     "method": "GET",
@@ -352,6 +400,12 @@
     "uri": "api/v1/communication/conversations/{conversation}/labels/{label}",
     "group": "communication",
     "action": "CommunicationConversationController@removeLabel"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/conversations/{conversation}/messages",
+    "group": "communication",
+    "action": "CommunicationConversationController@messages"
   },
   {
     "method": "POST",
@@ -412,6 +466,18 @@
     "uri": "api/v1/communication/conversations/{conversation}/presence/subscribe",
     "group": "communication",
     "action": "CommunicationConversationGatewayController@subscribePresence"
+  },
+  {
+    "method": "PUT",
+    "uri": "api/v1/communication/conversations/{conversation}/read-state",
+    "group": "communication",
+    "action": "CommunicationConversationController@updateReadState"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/conversations/{conversation}/shared-content",
+    "group": "communication",
+    "action": "CommunicationConversationController@sharedContent"
   },
   {
     "method": "PUT",
@@ -784,6 +850,12 @@
     "uri": "api/v1/communication/outbound-capabilities",
     "group": "communication",
     "action": "CommunicationCatalogController@outboundCapabilities"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/profile-pictures/{profile}/{version}",
+    "group": "communication",
+    "action": "CommunicationProfilePictureController@show"
   },
   {
     "method": "PATCH",
@@ -2508,16 +2580,16 @@
     "action": "SerproPlatformConfigurationController@updateUsageLimits"
   },
   {
-    "method": "GET",
-    "uri": "api/v1/platform/tenants",
-    "group": "platform",
-    "action": "TenantAdminController@index"
-  },
-  {
     "method": "POST",
     "uri": "api/v1/platform/tenants",
     "group": "platform",
     "action": "PlatformTenantController@store"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/platform/tenants",
+    "group": "platform",
+    "action": "TenantAdminController@index"
   },
   {
     "method": "GET",
@@ -2553,7 +2625,7 @@
     "method": "GET",
     "uri": "api/v1/platform/tenants/{tenant}",
     "group": "platform",
-    "action": "TenantAdminController@show"
+    "action": "PlatformTenantController@show"
   },
   {
     "method": "POST",

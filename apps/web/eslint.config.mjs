@@ -5,7 +5,11 @@ export default withNuxt(
   {
     ignores: [
       '.nuxt-*/**',
-      'app/types/generated/**'
+      '.tmp-*',
+      'app/types/generated/**',
+      '.playwright-cli/**',
+      'playwright-report/**',
+      'test-results/**'
     ]
   },
   {

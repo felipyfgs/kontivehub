@@ -1,6 +1,13 @@
 import type {
   CommunicationAutomationMeta,
   CommunicationAutomationPolicy,
+  CommunicationBulkAction,
+  CommunicationBulkItemStatus,
+  CommunicationBulkOperation,
+  CommunicationBulkOperationItemsMeta,
+  CommunicationBulkOperationParams,
+  CommunicationBulkOperationResultItem,
+  CommunicationBulkOperationSubmitItem,
   CommunicationCannedRenderResult,
   CommunicationCannedResponse,
   CommunicationCannedResponseListParams,
@@ -9,6 +16,9 @@ import type {
   CommunicationContactListParams,
   CommunicationConversation,
   CommunicationConversationListMeta,
+  CommunicationConversationListPreferences,
+  CommunicationConversationTimelineMeta,
+  CommunicationConversationSortBy,
   CommunicationConversationStatus,
   CommunicationEvent,
   CommunicationFeatureMeta,
@@ -26,6 +36,7 @@ import type {
   CommunicationFlowValidateResult,
   CommunicationInbox,
   CommunicationLabel,
+  CommunicationListPreferenceStatus,
   CommunicationMessage,
   CommunicationPairingState,
   CommunicationQueuedCommand,
@@ -33,8 +44,14 @@ import type {
   CommunicationRecipientMode,
   CommunicationSessionStatus,
   CommunicationSendKind,
+  CommunicationSharedContentCategory,
+  CommunicationSharedContentItem,
+  CommunicationSharedContentMeta,
+  CommunicationConversationInitiation,
+  CommunicationOutboundCapabilities,
   CommunicationSyncMeta
 } from '~/types/communication'
+import { isSensitiveCommunicationContactSearch } from '~/utils/communication-contacts'
 import type { ApiClient, ApiUrl } from './types'
 
 export interface CommunicationConversationFilters {
@@ -45,8 +62,18 @@ export interface CommunicationConversationFilters {
   work_department_id?: number
   unassigned?: boolean
   unread?: boolean
+  /** OR entre rótulos válidos do tenant. */
+  label_ids?: number[]
+  contact_id?: number
+  sort_by?: CommunicationConversationSortBy
   page?: number
   per_page?: number
+}
+
+export interface CommunicationBulkOperationCreateBody {
+  action: CommunicationBulkAction
+  params?: CommunicationBulkOperationParams
+  items: CommunicationBulkOperationSubmitItem[]
 }
 
 export interface CommunicationPolicyBody {
@@ -109,11 +136,15 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
           })
       },
       contacts: {
-        list: (params?: CommunicationContactListParams) =>
-          client<{ data: CommunicationContact[], meta: { current_page: number, last_page: number, total: number } }>(
-            `${base}/contacts`,
-            { query: params }
-          ),
+        list: (params?: CommunicationContactListParams) => {
+          const sensitiveSearch = isSensitiveCommunicationContactSearch(params?.q)
+          return client<{ data: CommunicationContact[], meta: { current_page: number, last_page: number, total: number } }>(
+            sensitiveSearch ? `${base}/contacts/search` : `${base}/contacts`,
+            sensitiveSearch
+              ? { method: 'POST', body: params }
+              : { query: params }
+          )
+        },
         get: (id: number) => client<{ data: CommunicationContact }>(`${base}/contacts/${id}`),
         create: (body: {
           name?: string | null
@@ -151,9 +182,87 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
           purged_at: string
           deleted_blobs: number
           tombstone_digest: string
-        } }>(`${base}/contacts/${contactId}/personal-data`, { method: 'DELETE' })
+        } }>(`${base}/contacts/${contactId}/personal-data`, { method: 'DELETE' }),
+        sharedContent: (contactId: number, params: {
+          category: CommunicationSharedContentCategory
+          cursor?: string
+          limit?: number
+          inbox_id?: number
+        }) => client<{ data: CommunicationSharedContentItem[], meta: CommunicationSharedContentMeta }>(
+          `${base}/contacts/${contactId}/shared-content`, { query: params }
+        )
+      },
+      conversationListPreferences: {
+        get: () =>
+          client<{ data: CommunicationConversationListPreferences }>(
+            `${base}/conversation-list-preferences`
+          ),
+        update: (body: {
+          status: CommunicationListPreferenceStatus
+          sort_by: CommunicationConversationSortBy
+        }) =>
+          client<{ data: CommunicationConversationListPreferences }>(
+            `${base}/conversation-list-preferences`,
+            {
+              method: 'PUT',
+              body
+            }
+          )
+      },
+      conversationBulkOperations: {
+        create: (
+          body: CommunicationBulkOperationCreateBody,
+          idempotencyKey: string
+        ) =>
+          client<{ data: CommunicationBulkOperation }>(
+            `${base}/conversation-bulk-operations`,
+            {
+              method: 'POST',
+              body,
+              headers: { 'Idempotency-Key': idempotencyKey }
+            }
+          ),
+        get: (operationId: string) =>
+          client<{ data: CommunicationBulkOperation }>(
+            `${base}/conversation-bulk-operations/${operationId}`
+          ),
+        items: (
+          operationId: string,
+          params?: {
+            status?: CommunicationBulkItemStatus
+            page?: number
+            per_page?: number
+          }
+        ) =>
+          client<{
+            data: CommunicationBulkOperationResultItem[]
+            meta: CommunicationBulkOperationItemsMeta
+          }>(`${base}/conversation-bulk-operations/${operationId}/items`, {
+            query: params
+          })
       },
       conversations: {
+        create: (body: {
+          contact_id: number
+          identity_id: number
+          inbox_id: number
+          body?: string
+          file?: File | null
+          kind?: CommunicationSendKind
+          ptt?: boolean
+        }, idempotencyKey: string) => {
+          const payload = new FormData()
+          payload.set('contact_id', String(body.contact_id))
+          payload.set('identity_id', String(body.identity_id))
+          payload.set('inbox_id', String(body.inbox_id))
+          if (body.body?.trim()) payload.set('body', body.body.trim())
+          if (body.kind) payload.set('kind', body.kind)
+          if (body.ptt) payload.set('ptt', '1')
+          if (body.file) payload.set('file', body.file, body.file.name)
+          return client<{ data: CommunicationConversationInitiation }>(`${base}/conversations`, {
+            method: 'POST', body: payload, headers: { 'Idempotency-Key': idempotencyKey }
+          })
+        },
         list: (
           params?: CommunicationConversationFilters,
           options?: { signal?: AbortSignal }
@@ -162,20 +271,29 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
             `${base}/conversations`,
             { query: params, signal: options?.signal }
           ),
-        get: (id: number) => client<{ data: CommunicationConversation }>(`${base}/conversations/${id}`),
+        get: (id: number, params?: { include_messages?: boolean }) =>
+          client<{ data: CommunicationConversation }>(`${base}/conversations/${id}`, {
+            query: params?.include_messages === undefined
+              ? undefined
+              : { include_messages: params.include_messages ? 1 : 0 }
+          }),
         messages: (id: number, params?: {
           limit?: number
-          before?: string
-          after?: string
-          anchor?: 'first_unread'
+          cursor?: string
+          anchor?: 'latest' | 'first_unread' | 'message'
+          message_id?: number
         }) =>
-          client<{ data: CommunicationMessage[], meta: {
-            next_before?: string | null
-            next_after?: string | null
-            first_unread_message_id?: number | null
-            unread_count?: number
-            limit?: number
-          } }>(`${base}/conversations/${id}/messages`, { query: params }),
+          client<{
+            data: CommunicationMessage[]
+            meta: CommunicationConversationTimelineMeta
+          }>(`${base}/conversations/${id}/messages`, { query: params }),
+        sharedContent: (id: number, params: {
+          category: CommunicationSharedContentCategory
+          cursor?: string
+          limit?: number
+        }) => client<{ data: CommunicationSharedContentItem[], meta: CommunicationSharedContentMeta }>(
+          `${base}/conversations/${id}/shared-content`, { query: params }
+        ),
         updateReadState: (id: number, body:
           | { state: 'READ', through_message_id: number }
           | { state: 'UNREAD', expected_version: number }
@@ -213,6 +331,7 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
           file?: File | null
           kind?: CommunicationSendKind
           ptt?: boolean
+          receipt_message_id?: number
         }) => {
           const payload = new FormData()
           payload.set('body', body.body)
@@ -221,6 +340,9 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
           if (body.idempotency_key) payload.set('idempotency_key', body.idempotency_key)
           if (body.kind) payload.set('kind', body.kind)
           if (body.ptt) payload.set('ptt', '1')
+          if (body.receipt_message_id) {
+            payload.set('receipt_message_id', String(body.receipt_message_id))
+          }
           if (body.file) payload.set('file', body.file, body.file.name)
           return client<{ data: CommunicationMessage }>(`${base}/conversations/${id}/messages`, {
             method: 'POST',
@@ -288,6 +410,9 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
           client<unknown>(`${base}/conversations/${conversationId}/labels/${labelId}`, { method: 'DELETE' })
       },
       catalog: {
+        outboundCapabilities: () => client<{ data: CommunicationOutboundCapabilities }>(
+          `${base}/outbound-capabilities`
+        ),
         labels: () => client<{ data: CommunicationLabel[] }>(`${base}/labels`),
         createLabel: (body: { name: string, color?: string }) =>
           client<{ data: CommunicationLabel }>(`${base}/labels`, { method: 'POST', body }),

@@ -94,7 +94,8 @@ try {
     '-e', 'WORK_DEMO_SENTINEL_SLUG=plataforma',
     '-e', 'FISCAL_MONITORING_MUTATING_ENABLED=false',
     'php',
-    'php', 'artisan', 'migrate:fresh', '--force', '--seed', '--seeder=FiscalMonitoringE2ESeeder'
+    'php', 'artisan', 'migrate:fresh', '--force', '--seed',
+    '--seeder=Database\\Seeders\\Testing\\WebE2ESeeder'
   ])
   await waitFor(`http://127.0.0.1:${env.E2E_API_PORT}/up`)
   nuxtProcess = start('corepack', ['pnpm', 'exec', 'nuxt', 'dev', '--host', '127.0.0.1', '--port', env.E2E_WEB_PORT], {

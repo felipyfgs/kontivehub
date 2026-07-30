@@ -6,10 +6,37 @@ import type {
   CommunicationEvent,
   CommunicationInboxStatus,
   CommunicationMessage,
+  CommunicationMessageAvailability,
   CommunicationMessagePollVote,
   CommunicationMessageStatus,
+  CommunicationProfilePictureState,
   CommunicationRealtimeState
 } from '~/types/communication'
+import { resolveApiUrl } from '~/utils/api-url'
+
+export function communicationProfilePictureUrl(
+  subject?: {
+    profile_picture_url?: string | null
+    profile_picture_state?: CommunicationProfilePictureState
+  } | null
+): string | null {
+  const url = subject?.profile_picture_url?.trim()
+  if (!url) return null
+
+  // Compatibilidade aditiva: APIs anteriores não informavam state, mas uma URL
+  // não nula já representava um asset READY autorizado.
+  return subject?.profile_picture_state && subject.profile_picture_state !== 'READY'
+    ? null
+    : url
+}
+
+export function communicationProfilePictureSrc(
+  subject: Parameters<typeof communicationProfilePictureUrl>[0],
+  apiBase: string
+): string | undefined {
+  const url = communicationProfilePictureUrl(subject)
+  return url ? resolveApiUrl(url, apiBase) : undefined
+}
 
 export type CommunicationBadgeColor
   = 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
@@ -125,7 +152,10 @@ export function mergeCommunicationMessages(
           ...previous,
           ...message,
           status: mergeCommunicationMessageStatus(previous.status, message.status),
-          attachments: message.attachments ?? previous.attachments
+          body: message.body?.trim() ? message.body : previous.body,
+          content: mergeCommunicationMessageContent(previous.content, message.content),
+          attachments: message.attachments !== undefined ? message.attachments : previous.attachments,
+          availability: communicationMessageAvailability(message.availability) ?? previous.availability
         }
       : message)
   }
@@ -133,6 +163,45 @@ export function mergeCommunicationMessages(
     const time = String(a.occurred_at || '').localeCompare(String(b.occurred_at || ''))
     return time || a.id - b.id
   })
+}
+
+function communicationMessageAvailability(
+  availability?: CommunicationMessageAvailability | null
+): CommunicationMessageAvailability | null {
+  return availability?.state ? availability : null
+}
+
+function mergeCommunicationMessageContent(
+  current: CommunicationMessage['content'],
+  incoming: CommunicationMessage['content']
+): CommunicationMessage['content'] {
+  if (!incoming) return current
+  const text = incoming.text?.trim() || current?.text?.trim() || null
+  const caption = incoming.caption?.trim() || current?.caption?.trim() || null
+  return text || caption ? { ...current, ...incoming, text, caption } : current
+}
+
+/** Texto compatível para recursos antigos e a projeção pública aditiva. */
+export function communicationMessageBody(message: CommunicationMessage): string | null {
+  return message.body?.trim()
+    || message.content?.text?.trim()
+    || message.content?.caption?.trim()
+    || null
+}
+
+export function communicationAvailabilityPlaceholder(message: CommunicationMessage): string | null {
+  switch (message.availability?.state) {
+    case 'UNSUPPORTED': return 'Este tipo de mensagem ainda não é compatível.'
+    case 'MEDIA_RETRY_AVAILABLE': return 'Esta mídia histórica pode ser recuperada.'
+    case 'MEDIA_REQUESTED': return 'A recuperação desta mídia foi solicitada.'
+    case 'MEDIA_FAILED': return 'Não foi possível recuperar esta mídia.'
+    case 'UNAVAILABLE': return 'Conteúdo indisponível.'
+    default: {
+      const hasContent = Boolean(communicationMessageBody(message))
+        || Boolean(message.attachments?.length)
+      return hasContent ? null : 'Conteúdo indisponível.'
+    }
+  }
 }
 
 /** Merge idempotente que não apaga a timeline já carregada ao atualizar a lista. */
@@ -243,7 +312,7 @@ export function isCommunicationSignalActive(
 export function communicationMessageSummary(message?: CommunicationMessage | null): string {
   if (!message) return 'Mensagem indisponível'
   if (message.metadata?.revoked) return 'Mensagem apagada'
-  const body = message.body?.trim()
+  const body = communicationMessageBody(message)
   if (body) return body
   if (message.kind === 'LOCATION') return message.metadata?.location?.name || 'Localização compartilhada'
   if (message.kind === 'CONTACT') return message.metadata?.contact?.display_name || 'Contato compartilhado'
@@ -285,30 +354,24 @@ export function communicationPollVoteCount(message: CommunicationMessage, option
     total + (vote.option_names?.includes(option) ? 1 : 0), 0)
 }
 
-/** Preferência explícita pelo E.164 completo; máscara só como fallback. */
+/** Retorna somente o E.164 seguro apresentado pela API. */
 export function communicationPeerAddress(conversation: CommunicationConversation | null): string | null {
   if (!conversation?.contact) return null
-  const full = conversation.contact.address?.trim()
-  if (full) return full
-  const masked = conversation.contact.address_masked?.trim()
-  return masked || null
+  return conversation.contact.phone?.trim() || null
 }
 
 function looksMaskedAddress(value: string, conversation: CommunicationConversation): boolean {
-  const full = conversation.contact?.address?.trim()
   const masked = conversation.contact?.address_masked?.trim()
-  if (full && value === masked) return true
-  return value.includes('***') || value.includes('*****')
+  if (masked && value === masked) return true
+  return /[*•●·]{2,}/u.test(value)
 }
 
 export function communicationDisplayName(conversation: CommunicationConversation | null): string {
   if (!conversation) return 'Conversa'
   const address = communicationPeerAddress(conversation)
   const resolved = conversation.display_title?.trim()
-  if (resolved) {
-    if (address && looksMaskedAddress(resolved, conversation)) return address
-    return resolved
-  }
+  if (resolved && !looksMaskedAddress(resolved, conversation)) return resolved
+  if (resolved && address) return address
 
   const clientNames = [...new Set(
     (conversation.clients ?? []).map(client => client.name.trim()).filter(Boolean)
@@ -326,7 +389,7 @@ export function communicationSecondaryTitle(conversation: CommunicationConversat
   const secondary = conversation.secondary_title?.trim()
   if (secondary) {
     const address = communicationPeerAddress(conversation)
-    if (address && looksMaskedAddress(secondary, conversation)) return address
+    if (looksMaskedAddress(secondary, conversation)) return address
     return secondary
   }
   return communicationContactLabel(conversation)
@@ -347,9 +410,24 @@ export function communicationPreviewText(conversation: CommunicationConversation
   const preview = conversation.preview
   if (preview?.text?.trim()) return preview.text.trim()
   const last = conversation.last_message
-  if (!last || last.revoked_at) return last?.revoked_at ? 'Mensagem apagada' : null
-  if (last.body?.trim()) return last.body.trim().slice(0, 160)
-  return null
+  if (!last) return null
+  if (last.metadata?.revoked_at || last.metadata?.revoked) return 'Mensagem apagada'
+  const body = communicationMessageBody(last)
+  if (body) return body.slice(0, 160)
+  return communicationAvailabilityPlaceholder(last)
+}
+
+/** ISO de adiamento relativo (horas a partir de agora). */
+export function communicationSnoozeUntil(hours: number): string {
+  return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString()
+}
+
+/** ISO de adiamento até amanhã às 09:00 local. */
+export function communicationSnoozeTomorrowMorning(): string {
+  const date = new Date()
+  date.setDate(date.getDate() + 1)
+  date.setHours(9, 0, 0, 0)
+  return date.toISOString()
 }
 
 export function communicationContactLabel(conversation: CommunicationConversation | null): string | null {
@@ -357,7 +435,7 @@ export function communicationContactLabel(conversation: CommunicationConversatio
   const address = communicationPeerAddress(conversation)
   if (conversation.secondary_title?.trim()) {
     const secondary = conversation.secondary_title.trim()
-    if (address && looksMaskedAddress(secondary, conversation)) return address
+    if (looksMaskedAddress(secondary, conversation)) return address
     return secondary
   }
   const contact = conversation.contact?.name?.trim()

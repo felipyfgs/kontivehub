@@ -17,7 +17,7 @@ useSeoMeta({
 })
 
 const route = useRoute()
-const { login, refreshIdentity, user } = useSanctumAuth()
+const { loginWithFreshCsrf, refreshIdentity, user } = useFreshSanctumAuth<MeIdentity>()
 const error = ref('')
 const loading = ref(false)
 
@@ -49,10 +49,10 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
   error.value = ''
   loading.value = true
   try {
-    await login({
+    await loginWithFreshCsrf({
       email: event.data.email,
       password: event.data.password
-    }, false)
+    })
 
     await refreshIdentity()
     const identity = unwrapMeUser(user.value as MeIdentity)

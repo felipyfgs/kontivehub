@@ -6,6 +6,7 @@ import {
   watch,
   type Ref
 } from 'vue'
+import type { LocationQueryRaw } from 'vue-router'
 import type {
   CommunicationContact,
   CommunicationContactListParams,
@@ -16,6 +17,7 @@ import { apiErrorMessage } from '~/utils/api-error'
 import {
   buildCommunicationContactListQuery,
   communicationContactEmptyKind,
+  isSensitiveCommunicationContactSearch,
   isCommunicationContactSortField
 } from '~/utils/communication-contacts'
 import { COMMUNICATION_CONTACTS_PATH, communicationContactPath } from '~/utils/communication-routes'
@@ -35,13 +37,24 @@ type ContactCreateBody = {
   name?: string | null
   phone: string
   client_id?: number
+  client_contact_id?: number
+  is_primary?: boolean
+  receives_automatic?: boolean
 }
+
+type ContactUpdateBody = {
+  name?: string | null
+  is_active?: boolean
+}
+
+const DEFAULT_PER_PAGE = 20
 
 export type CommunicationContactsCatalogDependencies = {
   list: (query: CommunicationContactListParams) => Promise<ContactListResponse>
   create: (body: ContactCreateBody) => Promise<{ data: CommunicationContact }>
-  replaceRoute: (location: { path: string, query: Record<string, string | undefined> }) => unknown
-  pushRoute: (path: string) => Promise<unknown> | unknown
+  update: (id: number, body: ContactUpdateBody) => Promise<{ data: CommunicationContact }>
+  replaceRoute: (location: { path: string, query: LocationQueryRaw }) => unknown
+  pushRoute: (location: { path: string, query?: LocationQueryRaw }) => Promise<unknown> | unknown
   notify: (title: string, color: 'success' | 'error') => void
   sessionEpoch: Ref<number>
   canManage: Ref<boolean>
@@ -88,6 +101,11 @@ function triState(
   return value === 'all' || value === 'true' || value === 'false' ? value : fallback
 }
 
+function contactPageSize(value: unknown): number {
+  const parsed = Number(value)
+  return [10, DEFAULT_PER_PAGE, 50].includes(parsed) ? parsed : DEFAULT_PER_PAGE
+}
+
 export function createCommunicationContactsCatalog(
   dependencies: CommunicationContactsCatalogDependencies
 ) {
@@ -97,7 +115,7 @@ export function createCommunicationContactsCatalog(
   const hasLoaded = ref(false)
   const loadError = ref<string | null>(null)
   const page = ref(Math.max(1, Number(initialQuery.page) || 1))
-  const perPage = ref(20)
+  const perPage = ref(contactPageSize(initialQuery.per_page))
   const total = ref(0)
   const currentPage = ref(1)
   const lastPage = ref(1)
@@ -114,6 +132,8 @@ export function createCommunicationContactsCatalog(
   const createOpen = ref(false)
   const creating = ref(false)
   const createError = ref<string | null>(null)
+  const updatingId = ref<number | null>(null)
+  const updateError = ref<string | null>(null)
 
   let loadSequence = 0
 
@@ -142,6 +162,16 @@ export function createCommunicationContactsCatalog(
   const sortingState = computed(() =>
     sort.value ? [{ id: sort.value, desc: sortDirection.value === 'desc' }] : []
   )
+  const routeQuery = computed(() => ({
+    page: page.value > 1 ? String(page.value) : undefined,
+    q: q.value && !isSensitiveCommunicationContactSearch(q.value) ? q.value : undefined,
+    is_active: isActive.value !== 'true' ? isActive.value : undefined,
+    is_provisional: isProvisional.value !== 'all' ? isProvisional.value : undefined,
+    linked: linked.value !== 'all' ? linked.value : undefined,
+    sort: sort.value && sort.value !== 'name' ? sort.value : undefined,
+    sort_direction: sort.value && sortDirection.value === 'desc' ? 'desc' : undefined,
+    per_page: perPage.value !== DEFAULT_PER_PAGE ? String(perPage.value) : undefined
+  }))
   const initialLoading = computed(() => loading.value && !hasLoaded.value && !items.value.length)
   const stale = computed(() => loading.value && hasLoaded.value && items.value.length > 0)
   const empty = computed(() =>
@@ -161,20 +191,29 @@ export function createCommunicationContactsCatalog(
     })
   }
 
-  function syncUrl() {
-    void dependencies.replaceRoute({
+  function replaceRoute() {
+    return dependencies.replaceRoute({
       path: COMMUNICATION_CONTACTS_PATH,
-      query: {
-        page: page.value > 1 ? String(page.value) : undefined,
-        q: q.value || undefined,
-        is_active: isActive.value !== 'true' ? isActive.value : undefined,
-        is_provisional: isProvisional.value !== 'all' ? isProvisional.value : undefined,
-        linked: linked.value !== 'all' ? linked.value : undefined,
-        sort: sort.value && sort.value !== 'name' ? sort.value : undefined,
-        sort_direction: sort.value && sortDirection.value === 'desc' ? 'desc' : undefined,
-        per_page: perPage.value !== 20 ? String(perPage.value) : undefined
-      }
+      query: routeQuery.value
     })
+  }
+
+  function syncUrl() {
+    void Promise.resolve(replaceRoute()).catch(() => {
+      dependencies.notify('Não foi possível atualizar a URL do catálogo.', 'error')
+    })
+  }
+
+  async function sanitizeSensitiveSearchUrl(): Promise<boolean> {
+    if (!isSensitiveCommunicationContactSearch(q.value)) return true
+
+    try {
+      await replaceRoute()
+      return true
+    } catch {
+      dependencies.notify('Não foi possível remover o telefone da URL.', 'error')
+      return false
+    }
   }
 
   async function load() {
@@ -225,7 +264,7 @@ export function createCommunicationContactsCatalog(
   }
 
   function setPerPage(next: number) {
-    const target = [10, 20, 50].includes(Number(next)) ? Number(next) : 20
+    const target = contactPageSize(next)
     if (perPage.value === target) return
     perPage.value = target
     page.value = 1
@@ -244,7 +283,7 @@ export function createCommunicationContactsCatalog(
   }
 
   function openContact(contact: CommunicationContact) {
-    return dependencies.pushRoute(communicationContactPath(contact.id))
+    return dependencies.pushRoute({ path: communicationContactPath(contact.id), query: routeQuery.value })
   }
 
   async function createContact(body: ContactCreateBody) {
@@ -255,7 +294,10 @@ export function createCommunicationContactsCatalog(
       const created = await dependencies.create(body)
       dependencies.notify('Contato criado.', 'success')
       createOpen.value = false
-      await dependencies.pushRoute(communicationContactPath(created.data.id))
+      await dependencies.pushRoute({
+        path: communicationContactPath(created.data.id),
+        query: routeQuery.value
+      })
       return true
     } catch (caught) {
       createError.value = apiErrorMessage(caught, 'Falha ao criar contato.')
@@ -266,11 +308,34 @@ export function createCommunicationContactsCatalog(
     }
   }
 
+  async function updateContact(contact: CommunicationContact, body: ContactUpdateBody) {
+    if (!dependencies.canManage.value || contact.purged_at || updatingId.value !== null) return false
+    const epoch = dependencies.sessionEpoch.value
+    updatingId.value = contact.id
+    updateError.value = null
+    try {
+      const updated = await dependencies.update(contact.id, body)
+      if (epoch !== dependencies.sessionEpoch.value) return false
+      items.value = items.value.map(item => item.id === contact.id ? updated.data : item)
+      await load()
+      if (epoch !== dependencies.sessionEpoch.value) return false
+      dependencies.notify('Contato atualizado.', 'success')
+      return true
+    } catch (caught) {
+      if (epoch !== dependencies.sessionEpoch.value) return false
+      updateError.value = apiErrorMessage(caught, 'Falha ao atualizar contato.')
+      dependencies.notify(updateError.value, 'error')
+      return false
+    } finally {
+      if (epoch === dependencies.sessionEpoch.value) updatingId.value = null
+    }
+  }
+
   function resetForSession() {
     ++loadSequence
     items.value = []
     page.value = 1
-    perPage.value = 20
+    perPage.value = DEFAULT_PER_PAGE
     q.value = ''
     isActive.value = 'true'
     isProvisional.value = 'all'
@@ -284,6 +349,8 @@ export function createCommunicationContactsCatalog(
     loadError.value = null
     createOpen.value = false
     createError.value = null
+    updatingId.value = null
+    updateError.value = null
     void load()
   }
 
@@ -325,9 +392,13 @@ export function createCommunicationContactsCatalog(
     chipModels,
     emptyKind,
     sortingState,
+    routeQuery,
+    sanitizeSensitiveSearchUrl,
     createOpen,
     creating,
     createError,
+    updatingId,
+    updateError,
     load,
     listQuery,
     onSearch,
@@ -337,6 +408,7 @@ export function createCommunicationContactsCatalog(
     onSortingUpdate,
     openContact,
     createContact,
+    updateContact,
     dispose
   }
 }
@@ -351,16 +423,22 @@ export function useCommunicationContactsCatalog() {
   const catalog = createCommunicationContactsCatalog({
     list: query => api.communication.contacts.list(query),
     create: body => api.communication.contacts.create(body),
+    update: (id, body) => api.communication.contacts.update(id, body),
     replaceRoute: location => router.replace(location),
-    pushRoute: path => router.push(path),
+    pushRoute: location => router.push(location),
     notify: (title, color) => toast.add({ title, color }),
     sessionEpoch,
     canManage,
     initialQuery: route.query
   })
 
+  useCommunicationProfilePictureRealtime(catalog.load)
+
   onMounted(() => {
-    void catalog.load()
+    void (async () => {
+      if (!await catalog.sanitizeSensitiveSearchUrl()) return
+      await catalog.load()
+    })()
   })
   onScopeDispose(catalog.dispose)
 

@@ -2,8 +2,10 @@
 /**
  * Voltar responsive — label no desktop, square no mobile.
  */
+import type { RouteLocationRaw } from 'vue-router'
+
 withDefaults(defineProps<{
-  to: string
+  to: RouteLocationRaw
   label?: string
   ariaLabel?: string
   testId?: string

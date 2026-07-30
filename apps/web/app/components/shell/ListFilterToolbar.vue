@@ -38,6 +38,7 @@ const props = withDefaults(defineProps<{
   getPayload?: () => SavedListFilterPayload
   canSave?: () => boolean
   testIdPrefix?: string
+  searchDebounce?: number
 }>(), {
   q: '',
   searchPlaceholder: 'Buscar…',
@@ -53,7 +54,8 @@ const props = withDefaults(defineProps<{
   resetKey: 0,
   surface: null,
   canShareFilters: undefined,
-  testIdPrefix: 'list-filter'
+  testIdPrefix: 'list-filter',
+  searchDebounce: 320
 })
 
 const emit = defineEmits<{
@@ -76,7 +78,7 @@ function onQInput(value: string | number) {
   const next = String(value ?? '')
   qDraft.value = next
   if (qDebounce) clearTimeout(qDebounce)
-  qDebounce = setTimeout(() => emit('update:q', next), 320)
+  qDebounce = setTimeout(() => emit('update:q', next), props.searchDebounce)
 }
 
 function submitQ() {

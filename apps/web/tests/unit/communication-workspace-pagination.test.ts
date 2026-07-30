@@ -31,7 +31,8 @@ describe('paginação do workspace de comunicação', () => {
       [conversation(3), conversation(2, 4)],
       true
     )
-    expect(secondPage.map(item => item.id)).toEqual([2, 3, 1])
+    // Ordem autoritativa da API: preserva página atual e anexa novos IDs.
+    expect(secondPage.map(item => item.id)).toEqual([2, 1, 3])
     expect(secondPage.filter(item => item.id === 2)).toHaveLength(1)
     expect(secondPage.find(item => item.id === 2)?.priority).toBe(4)
   })

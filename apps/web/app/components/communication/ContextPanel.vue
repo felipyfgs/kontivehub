@@ -9,8 +9,12 @@ import type {
 import {
   COMMUNICATION_CONVERSATION_STATUS,
   communicationDisplayName,
+  communicationProfilePictureSrc,
   formatCommunicationDate
 } from '~/utils/communication'
+import { communicationContactPath } from '~/utils/communication-routes'
+
+const apiBase = String(useRuntimeConfig().public.apiBase || '')
 
 const props = defineProps<{
   conversation: CommunicationConversation
@@ -18,7 +22,7 @@ const props = defineProps<{
   labels: CommunicationLabel[]
   departments: WorkDepartment[]
   canReply: boolean
-  canManage: boolean
+  canManageContacts: boolean
   outboundOperational?: boolean
   signals?: CommunicationConversationSignals
   mobile?: boolean
@@ -31,6 +35,7 @@ const emit = defineEmits<{
   exportContact: [contactId: number]
   purgeContact: [contactId: number]
   setDisappearing: [seconds: 0 | 86400 | 604800 | 7776000]
+  jumpToMessage: [input: { conversationId: number, messageId: number }]
 }>()
 
 const priority = ref(props.conversation.priority)
@@ -157,15 +162,17 @@ const disappearingItems = [[
     <div class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
       <div class="flex items-start gap-3">
         <UAvatar
+          :src="communicationProfilePictureSrc(conversation.contact, apiBase)"
           :alt="communicationDisplayName(conversation)"
           size="xl"
+          data-testid="communication-context-avatar"
         />
         <div class="min-w-0 flex-1">
           <p class="truncate font-semibold text-highlighted">
             {{ communicationDisplayName(conversation) }}
           </p>
           <p class="text-sm text-muted">
-            {{ conversation.contact?.address || conversation.contact?.address_masked || 'Telefone não disponível' }}
+            {{ conversation.contact?.phone || 'Número indisponível' }}
           </p>
           <p
             v-if="signals?.contact?.available"
@@ -185,6 +192,17 @@ const disappearingItems = [[
             color="warning"
             variant="soft"
             class="mt-2"
+          />
+          <UButton
+            v-if="conversation.contact?.id"
+            :to="communicationContactPath(conversation.contact.id)"
+            label="Detalhes"
+            icon="i-lucide-contact-round"
+            color="neutral"
+            variant="link"
+            size="xs"
+            class="mt-2 w-fit px-0"
+            data-testid="communication-context-open-contact"
           />
         </div>
       </div>
@@ -256,6 +274,14 @@ const disappearingItems = [[
           Retorna à fila em {{ formatCommunicationDate(conversation.snoozed_until) }}.
         </p>
       </section>
+
+      <USeparator class="my-5" />
+
+      <CommunicationSharedContent
+        compact
+        :conversation-id="conversation.id"
+        @jump="emit('jumpToMessage', $event)"
+      />
 
       <USeparator class="my-5" />
 
@@ -335,7 +361,7 @@ const disappearingItems = [[
         </p>
       </section>
 
-      <template v-if="canManage && conversation.contact?.id">
+      <template v-if="canManageContacts && conversation.contact?.id">
         <USeparator class="my-5" />
         <section>
           <h3 class="mb-2 text-sm font-semibold text-highlighted">

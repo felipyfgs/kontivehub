@@ -16,6 +16,7 @@ withDefaults(defineProps<{
   contentClass?: string
   testId?: string
   confirmTestId?: string
+  confirmClass?: string
 }>(), {
   description: undefined,
   tone: 'neutral',
@@ -25,7 +26,8 @@ withDefaults(defineProps<{
   loading: false,
   contentClass: 'sm:max-w-md',
   testId: 'shell-confirm-modal',
-  confirmTestId: 'shell-modal-submit'
+  confirmTestId: 'shell-modal-submit',
+  confirmClass: undefined
 })
 
 const emit = defineEmits<{
@@ -61,6 +63,7 @@ function onCancel() {
         :submit-icon="confirmIcon"
         :loading="loading"
         :submit-test-id="confirmTestId"
+        :submit-class="confirmClass"
         @cancel="onCancel"
         @submit="emit('confirm')"
       />

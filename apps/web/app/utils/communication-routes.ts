@@ -15,7 +15,7 @@ export function communicationConversationPath(id: number): string {
   return `${COMMUNICATION_INDEX_PATH}/conversations/${id}`
 }
 
-/** Deep-link da ficha de contato. */
+/** Deep-link dos detalhes do contato. */
 export function communicationContactPath(id: number): string {
   return `${COMMUNICATION_CONTACTS_PATH}/${id}`
 }

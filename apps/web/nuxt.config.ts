@@ -134,6 +134,13 @@ export default defineNuxtConfig({
     }
   },
 
+  icon: {
+    clientBundle: {
+      // A SPA estática não deve depender da API pública do Iconify para ações essenciais.
+      scan: true
+    }
+  },
+
   /**
    * PWA — app instalável no navegador (Chrome/Edge/Android “Instalar app”).
    * Requisito: contexto seguro (HTTPS ou localhost). HTTP em IP público NÃO

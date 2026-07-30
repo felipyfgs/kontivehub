@@ -10,6 +10,7 @@ withDefaults(defineProps<{
   description?: string
   /** Classes do content (ex.: sm:max-w-md). */
   contentClass?: string
+  submitClass?: string
   cancelLabel?: string
   submitLabel?: string
   submitColor?: 'primary' | 'error' | 'neutral' | 'success' | 'warning' | 'info' | 'secondary'
@@ -22,6 +23,7 @@ withDefaults(defineProps<{
 }>(), {
   description: undefined,
   contentClass: 'sm:max-w-md',
+  submitClass: undefined,
   cancelLabel: 'Cancelar',
   submitLabel: 'Salvar',
   submitColor: 'primary',
@@ -67,6 +69,7 @@ function onCancel() {
           :submit-icon="submitIcon"
           :loading="loading"
           :disabled="disabled"
+          :submit-class="submitClass"
           @cancel="onCancel"
           @submit="emit('submit')"
         />

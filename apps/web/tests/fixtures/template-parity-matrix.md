@@ -14,8 +14,8 @@ chrome próprio ou casca de produto; `CHILD` herda a casca do pai; `AUTH` e
 | `pages/onboarding.vue` | `/onboarding` | `AUTH` | onboarding |
 | `pages/communication/index.vue` | `/communication` | `SHELL` | atendimento master-detail via CommunicationWorkspacePage |
 | `pages/communication/conversations/[id].vue` | `/communication/conversations/:id` | `SHELL` | deep-link do atendimento via CommunicationWorkspacePage |
-| `pages/communication/contacts/index.vue` | `/communication/contacts` | `SHELL` | catálogo de contatos (ShellDataTable) |
-| `pages/communication/contacts/[id].vue` | `/communication/contacts/:id` | `SHELL` | ficha do contato (edit/identity/link/export/purge) |
+| `pages/communication/contacts/index.vue` | `/communication/contacts` | `SHELL` | catálogo Chatwoot-like: cards expansíveis full-width/full-height |
+| `pages/communication/contacts/[id].vue` | `/communication/contacts/:id` | `SHELL` | detalhes full-width/full-height com contexto lateral/slideover |
 | `pages/communication/quick-responses/index.vue` | `/communication/quick-responses` | `SHELL` | gestão de respostas rápidas (ShellDataTable) |
 | `pages/communication/flows/index.vue` | `/communication/flows` | `SHELL` | gestão de fluxos (ShellDataTable) |
 | `pages/communication/flows/[id]/index.vue` | `/communication/flows/:id` | `SHELL` | detalhe: metadados, versões, bindings, runs |

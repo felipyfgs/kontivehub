@@ -1,18 +1,20 @@
 <script setup lang="ts">
-import type { TableColumn } from '@nuxt/ui'
 import type { CommunicationContact } from '~/types/communication'
+import { communicationProfilePictureSrc } from '~/utils/communication'
 import {
   communicationContactDisplayName,
+  communicationContactIdentityCount,
+  communicationContactInitials,
   communicationContactLinkedClientNames,
-  communicationContactPrimaryMasked,
+  communicationContactPrimaryPhone,
   communicationContactStatusColor,
+  communicationContactStatusContrastClass,
   communicationContactStatusLabel
 } from '~/utils/communication-contacts'
-import { communicationContactPath } from '~/utils/communication-routes'
-import { sortHeader } from '~/utils/table-sort'
-import { TABLE_CELL_BADGE_CLASS, TABLE_CELL_BADGE_UI } from '~/utils/table-ui'
 
-defineProps<{
+const apiBase = String(useRuntimeConfig().public.apiBase || '')
+
+const props = defineProps<{
   items: CommunicationContact[]
   loading: boolean
   stale: boolean
@@ -21,169 +23,387 @@ defineProps<{
   page: number
   total: number
   perPage: number
-  sorting: { id: string, desc: boolean }[]
   canManage: boolean
+  canReply: boolean
+  updatingId: number | null
+  updateError: string | null
 }>()
 
 const emit = defineEmits<{
   'update:page': [page: number]
   'update:perPage': [perPage: number]
-  'update:sorting': [sorting: { id: string, desc: boolean }[]]
   'open': [contact: CommunicationContact]
   'retry': []
   'clear': []
   'create': []
+  'newConversation': [contact: CommunicationContact]
+  'save': [contact: CommunicationContact, body: { name: string | null, is_active: boolean }, done: (ok: boolean) => void]
 }>()
 
-const columns = computed<TableColumn<CommunicationContact>[]>(() => [
-  {
-    accessorKey: 'name',
-    header: ({ column }) => sortHeader('Nome', column),
-    enableSorting: true
-  },
-  { id: 'phone', header: 'WhatsApp', enableSorting: false },
-  { id: 'clients', header: 'Clientes', enableSorting: false },
-  { id: 'status', header: 'Situação', enableSorting: false },
-  {
-    accessorKey: 'id',
-    header: ({ column }) => sortHeader('ID', column),
-    enableSorting: true,
-    meta: { class: { th: 'hidden lg:table-cell', td: 'hidden lg:table-cell' } }
-  },
-  { id: 'actions', header: '', enableSorting: false }
-])
+const expandedId = ref<number | null>(null)
+const editName = ref('')
+const editActive = ref(true)
+const discardOpen = ref(false)
+const pendingExpansion = ref<{ id: number | null } | null>(null)
+const lastPage = computed(() => Math.max(1, Math.ceil(props.total / props.perPage)))
+const expandedContact = computed(() => props.items.find(item => item.id === expandedId.value) ?? null)
+const dirty = computed(() => {
+  const contact = expandedContact.value
+  if (!contact) return false
+  return editName.value.trim() !== (contact.name?.trim() ?? '')
+    || editActive.value !== contact.is_active
+})
+
+function applyExpansion(id: number | null) {
+  expandedId.value = id
+  const contact = props.items.find(item => item.id === id)
+  editName.value = contact?.name ?? ''
+  editActive.value = contact?.is_active ?? true
+}
+
+function requestExpansion(contact: CommunicationContact) {
+  const target = expandedId.value === contact.id ? null : contact.id
+  if (dirty.value) {
+    pendingExpansion.value = { id: target }
+    discardOpen.value = true
+    return
+  }
+  applyExpansion(target)
+}
+
+function confirmDiscard() {
+  const target = pendingExpansion.value?.id ?? null
+  discardOpen.value = false
+  pendingExpansion.value = null
+  applyExpansion(target)
+}
+
+function cancelDiscard() {
+  discardOpen.value = false
+  pendingExpansion.value = null
+}
+
+function cancelEdit() {
+  if (dirty.value) {
+    pendingExpansion.value = { id: null }
+    discardOpen.value = true
+    return
+  }
+  applyExpansion(null)
+}
+
+function save(contact: CommunicationContact) {
+  emit('save', contact, {
+    name: editName.value.trim() || null,
+    is_active: editActive.value
+  }, (ok) => {
+    if (ok) applyExpansion(null)
+  })
+}
+
+watch(() => props.items, (next, previous) => {
+  const id = expandedId.value
+  if (id === null || next.some(contact => contact.id === id)) return
+  const previousContact = previous.find(contact => contact.id === id)
+  const hasUnsavedDraft = previousContact !== undefined && (
+    editName.value.trim() !== (previousContact.name?.trim() ?? '')
+    || editActive.value !== previousContact.is_active
+  )
+  if (hasUnsavedDraft) {
+    pendingExpansion.value = { id: null }
+    discardOpen.value = true
+    return
+  }
+  applyExpansion(null)
+})
+
+watch(discardOpen, (open) => {
+  if (!open) pendingExpansion.value = null
+})
 </script>
 
 <template>
-  <UAlert
-    v-if="stale"
-    color="info"
-    variant="subtle"
-    icon="i-lucide-refresh-cw"
-    title="Atualizando contatos"
-    description="A última leitura válida permanece disponível."
-    data-testid="communication-contacts-stale"
-  />
-
-  <ShellLoadError
-    v-else-if="error && items.length"
-    color="warning"
-    :title="error"
-    data-testid="communication-contacts-stale-error"
-    @retry="emit('retry')"
-  />
-
-  <ShellDataTable
-    :sorting="sorting"
-    :get-row-id="row => String(row.id)"
-    test-id="communication-contacts-table"
-    ui-preset="monitoring-compact"
-    primary-column-id="name"
-    status-column-id="status"
-    :summary-column-ids="['phone', 'clients']"
-    :columns="columns"
-    :data="items"
-    :loading="loading"
-    :error="items.length ? null : error"
-    :empty-kind="error ? 'error' : emptyKind"
-    :page="page"
-    :total="total"
-    :items-per-page="perPage"
-    :manual-sorting="true"
-    empty-title="Nenhum contato cadastrado"
-    empty-description="Crie o primeiro contato ou ajuste a busca."
-    per-page-aria-label="Contatos por página"
-    footer-test-id="communication-contacts-footer"
-    @update:page="emit('update:page', $event)"
-    @update:items-per-page="emit('update:perPage', $event)"
-    @update:sorting="emit('update:sorting', $event)"
-    @retry="emit('retry')"
-  >
-    <template #name-cell="{ row }">
-      <button
-        type="button"
-        class="min-w-0 text-left"
-        data-testid="communication-contact-row-open"
-        @click="emit('open', row.original)"
-      >
-        <p class="truncate font-medium text-highlighted hover:text-primary">
-          {{ communicationContactDisplayName(row.original) }}
-        </p>
-        <p
-          v-if="row.original.is_provisional"
-          class="truncate text-xs text-muted"
-        >
-          Sem nome definitivo
-        </p>
-      </button>
-    </template>
-    <template #phone-cell="{ row }">
-      <span class="font-mono text-sm tabular-nums">
-        {{ communicationContactPrimaryMasked(row.original) || '—' }}
-      </span>
-    </template>
-    <template #clients-cell="{ row }">
-      <span class="block truncate text-sm">
-        {{ communicationContactLinkedClientNames(row.original).join(', ') || 'Sem vínculo' }}
-      </span>
-    </template>
-    <template #status-cell="{ row }">
-      <UBadge
-        size="md"
+  <div class="flex min-h-0 flex-1 flex-col" data-testid="communication-contacts-list">
+    <div class="w-full px-4 pt-4 sm:px-6">
+      <UAlert
+        v-if="stale"
+        color="info"
         variant="subtle"
-        :color="communicationContactStatusColor(row.original)"
-        :label="communicationContactStatusLabel(row.original)"
-        :class="TABLE_CELL_BADGE_CLASS"
-        :ui="TABLE_CELL_BADGE_UI"
+        icon="i-lucide-refresh-cw"
+        title="Atualizando contatos"
+        description="A última leitura válida permanece disponível."
       />
-    </template>
-    <template #id-cell="{ row }">
-      <span class="tabular-nums text-muted">{{ row.original.id }}</span>
-    </template>
-    <template #actions-cell="{ row }">
-      <div class="flex justify-end">
+      <ShellLoadError
+        v-else-if="error && items.length"
+        :title="error"
+        description="A última leitura válida permanece disponível."
+        color="warning"
+        test-id="communication-contacts-stale-error"
+        @retry="emit('retry')"
+      />
+    </div>
+
+    <div
+      v-if="loading && !items.length"
+      class="min-h-0 w-full flex-1 space-y-4 overflow-y-auto p-4 sm:px-6"
+      role="status"
+      aria-label="Carregando contatos"
+    >
+      <div v-for="row in 6" :key="row" class="flex items-center gap-3 rounded-xl border border-default p-4">
+        <USkeleton class="size-[42px] shrink-0 rounded-lg" />
+        <div class="min-w-0 flex-1 space-y-2">
+          <USkeleton class="h-4 w-2/5" />
+          <USkeleton class="h-3 w-3/5" />
+        </div>
+        <USkeleton class="h-8 w-8 rounded-md" />
+      </div>
+    </div>
+
+    <ShellLoadError
+      v-else-if="error && !items.length"
+      :title="error"
+      class="w-full px-4 sm:px-6"
+      test-id="communication-contacts-load-error"
+      @retry="emit('retry')"
+    />
+
+    <ShellListEmpty
+      v-else-if="!items.length"
+      :kind="emptyKind"
+      :title="emptyKind === 'filtered' ? 'Nenhum contato encontrado' : 'Nenhum contato cadastrado'"
+      :description="emptyKind === 'filtered' ? 'Ajuste a busca ou limpe os filtros para ver outros contatos.' : 'Crie o primeiro contato para começar o atendimento.'"
+      class="min-h-0 w-full flex-1 px-4 sm:px-6"
+      test-id="communication-contacts-empty"
+      @retry="emit('retry')"
+    >
+      <template #actions>
         <UButton
-          :to="communicationContactPath(row.original.id)"
-          icon="i-lucide-arrow-up-right"
+          v-if="emptyKind === 'empty' && canManage"
+          icon="i-lucide-plus"
+          label="Novo contato"
+          @click="emit('create')"
+        />
+        <UButton
+          v-else
           color="neutral"
-          variant="ghost"
-          size="xs"
-          aria-label="Abrir ficha do contato"
-          @click.stop
+          variant="outline"
+          icon="i-lucide-filter-x"
+          label="Limpar filtros"
+          @click="emit('clear')"
+        />
+      </template>
+    </ShellListEmpty>
+
+    <ul v-else class="min-h-0 w-full flex-1 space-y-4 overflow-y-auto p-4 sm:px-6" aria-label="Contatos de comunicação">
+      <li
+        v-for="contact in items"
+        :id="`communication-contact-card-${contact.id}`"
+        :key="contact.id"
+        class="group overflow-hidden rounded-xl border border-default bg-default transition-colors hover:border-accented"
+        :class="expandedId === contact.id ? 'border-primary/50 ring-1 ring-primary/20' : ''"
+        data-testid="communication-contact-card"
+      >
+        <div class="flex min-w-0 items-center gap-3 p-4 sm:px-5">
+          <UAvatar
+            :src="communicationProfilePictureSrc(contact, apiBase)"
+            :alt="communicationContactDisplayName(contact)"
+            :text="communicationContactInitials(contact)"
+            class="size-[42px] shrink-0 rounded-lg"
+            :ui="{ root: 'rounded-lg' }"
+            :data-testid="`communication-contact-avatar-${contact.id}`"
+          />
+
+          <div class="grid min-w-0 flex-1 grid-cols-1 gap-x-5 gap-y-1 md:grid-cols-[minmax(11rem,1fr)_minmax(10rem,1fr)] md:items-center xl:grid-cols-[minmax(13rem,1.1fr)_minmax(10rem,0.75fr)_minmax(12rem,0.9fr)_auto]">
+            <div class="min-w-0">
+              <div class="flex min-w-0 flex-wrap items-center gap-2">
+                <span class="truncate font-medium text-highlighted">{{ communicationContactDisplayName(contact) }}</span>
+                <UBadge
+                  v-if="communicationContactIdentityCount(contact) > 1"
+                  size="sm"
+                  color="neutral"
+                  variant="subtle"
+                  :label="`${communicationContactIdentityCount(contact)} IDs`"
+                />
+                <UBadge
+                  class="shrink-0"
+                  size="sm"
+                  variant="subtle"
+                  :color="communicationContactStatusColor(contact)"
+                  :label="communicationContactStatusLabel(contact)"
+                  :class="communicationContactStatusContrastClass(contact)"
+                />
+              </div>
+              <p v-if="contact.is_provisional" class="text-xs text-muted">
+                Sem nome definitivo
+              </p>
+            </div>
+            <span class="flex min-w-0 items-center gap-1 font-mono text-sm tabular-nums text-toned">
+              <span class="truncate">{{ communicationContactPrimaryPhone(contact) || 'Número indisponível' }}</span>
+              <CommunicationContactsPhoneCopy
+                v-if="communicationContactPrimaryPhone(contact)"
+                :phone="communicationContactPrimaryPhone(contact)!"
+                :contact-name="communicationContactDisplayName(contact)"
+              />
+            </span>
+            <span class="truncate text-sm text-muted">{{ communicationContactLinkedClientNames(contact).join(', ') || 'Sem vínculo' }}</span>
+            <UButton
+              color="primary"
+              variant="link"
+              size="xs"
+              label="Detalhes"
+              class="justify-self-start px-0 md:justify-self-end"
+              :aria-label="`Ver detalhes de ${communicationContactDisplayName(contact)}`"
+              @click="emit('open', contact)"
+            />
+          </div>
+
+          <div class="flex shrink-0 items-center gap-1">
+            <UButton
+              v-if="canReply"
+              icon="i-lucide-message-circle-plus"
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              :aria-label="`Nova conversa com ${communicationContactDisplayName(contact)}`"
+              @click="emit('newConversation', contact)"
+            />
+            <UButton
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              icon="i-lucide-chevron-down"
+              square
+              class="transition-transform"
+              :class="expandedId === contact.id ? 'rotate-180' : ''"
+              :aria-expanded="expandedId === contact.id"
+              :aria-controls="expandedId === contact.id
+                ? `communication-contact-summary-${contact.id}`
+                : undefined"
+              :aria-label="`${expandedId === contact.id
+                ? 'Recolher'
+                : (canManage && !contact.purged_at ? 'Editar' : 'Ver resumo de')} ${communicationContactDisplayName(contact)}`"
+              @click="requestExpansion(contact)"
+            />
+          </div>
+        </div>
+
+        <div
+          v-if="expandedId === contact.id"
+          :id="`communication-contact-summary-${contact.id}`"
+          class="border-t border-default bg-elevated/40 p-4 sm:p-5"
+          data-testid="communication-contact-card-expanded"
+        >
+          <UAlert
+            v-if="updateError"
+            class="mb-4"
+            color="error"
+            variant="subtle"
+            :title="updateError"
+          />
+
+          <div class="grid gap-4 sm:grid-cols-2">
+            <UFormField label="Nome" name="contact_name">
+              <UInput
+                v-model="editName"
+                class="w-full"
+                placeholder="Sem nome (provisório)"
+                :disabled="!canManage || Boolean(contact.purged_at)"
+              />
+            </UFormField>
+            <UFormField label="Situação" name="contact_active">
+              <div class="flex min-h-8 items-center">
+                <USwitch
+                  v-model="editActive"
+                  label="Contato ativo para atendimento"
+                  :disabled="!canManage || Boolean(contact.purged_at)"
+                />
+              </div>
+            </UFormField>
+          </div>
+
+          <div class="mt-4 grid gap-4 border-y border-default py-4 sm:grid-cols-2">
+            <div>
+              <p class="text-xs font-medium text-muted">
+                WhatsApp principal
+              </p>
+              <p class="mt-1 font-mono text-sm tabular-nums text-highlighted">
+                {{ communicationContactPrimaryPhone(contact) || 'Número indisponível' }}
+              </p>
+            </div>
+            <div>
+              <p class="text-xs font-medium text-muted">
+                Identidades e vínculos
+              </p>
+              <p class="mt-1 text-sm text-highlighted">
+                {{ communicationContactIdentityCount(contact) }} identidade{{ communicationContactIdentityCount(contact) === 1 ? '' : 's' }} ·
+                {{ communicationContactLinkedClientNames(contact).length }} vínculo{{ communicationContactLinkedClientNames(contact).length === 1 ? '' : 's' }}
+              </p>
+            </div>
+          </div>
+
+          <div class="mt-4 flex flex-wrap items-center justify-end gap-2">
+            <UButton
+              color="neutral"
+              variant="ghost"
+              label="Cancelar"
+              :disabled="updatingId === contact.id"
+              @click="cancelEdit"
+            />
+            <UButton
+              v-if="canManage && !contact.purged_at"
+              icon="i-lucide-save"
+              label="Salvar"
+              :loading="updatingId === contact.id"
+              :disabled="!dirty || updatingId !== null"
+              @click="save(contact)"
+            />
+          </div>
+        </div>
+      </li>
+    </ul>
+
+    <div
+      v-if="items.length"
+      class="flex w-full shrink-0 flex-wrap items-center justify-between gap-3 border-t border-default px-4 py-4 sm:px-6"
+      data-testid="communication-contacts-footer"
+    >
+      <span class="text-sm text-muted">{{ total }} contato{{ total === 1 ? '' : 's' }}</span>
+      <div class="flex items-center gap-2">
+        <USelect
+          :model-value="perPage"
+          :items="[10, 20, 50]"
+          class="w-20"
+          aria-label="Contatos por página"
+          @update:model-value="emit('update:perPage', Number($event))"
+        />
+        <UButton
+          color="neutral"
+          variant="outline"
+          icon="i-lucide-chevron-left"
+          aria-label="Página anterior"
+          :disabled="page <= 1"
+          @click="emit('update:page', page - 1)"
+        />
+        <span class="text-sm tabular-nums">{{ page }} / {{ lastPage }}</span>
+        <UButton
+          color="neutral"
+          variant="outline"
+          icon="i-lucide-chevron-right"
+          aria-label="Próxima página"
+          :disabled="page >= lastPage"
+          @click="emit('update:page', page + 1)"
         />
       </div>
-    </template>
+    </div>
 
-    <template #empty>
-      <ShellListEmpty
-        :kind="error ? 'error' : emptyKind"
-        :error="error"
-        :title="error
-          ? 'Falha ao carregar contatos'
-          : emptyKind === 'filtered' ? 'Nenhum contato encontrado' : 'Nenhum contato cadastrado'"
-        :description="emptyKind === 'filtered'
-          ? 'Ajuste a busca ou limpe os filtros.'
-          : 'Cadastre um contato WhatsApp para vincular a clientes.'"
-        test-id="communication-contacts-empty"
-        @retry="emit('retry')"
-      >
-        <template #actions>
-          <UButton
-            v-if="!error && emptyKind === 'empty' && canManage"
-            icon="i-lucide-plus"
-            label="Novo contato"
-            @click="emit('create')"
-          />
-          <UButton
-            v-else-if="!error && emptyKind === 'filtered'"
-            color="neutral"
-            variant="outline"
-            icon="i-lucide-filter-x"
-            label="Limpar filtros"
-            @click="emit('clear')"
-          />
-        </template>
-      </ShellListEmpty>
-    </template>
-  </ShellDataTable>
+    <ShellConfirmModal
+      v-model:open="discardOpen"
+      title="Descartar alterações?"
+      description="O nome ou a situação deste contato foi alterado e ainda não foi salvo."
+      confirm-label="Descartar"
+      confirm-icon="i-lucide-undo-2"
+      @confirm="confirmDiscard"
+      @cancel="cancelDiscard"
+    />
+  </div>
 </template>

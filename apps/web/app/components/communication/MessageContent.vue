@@ -2,6 +2,8 @@
 import type { CommunicationAttachment, CommunicationMessage } from '~/types/communication'
 import {
   communicationAttachmentFilename,
+  communicationAvailabilityPlaceholder,
+  communicationMessageBody,
   communicationPollVoteCount
 } from '~/utils/communication'
 
@@ -15,11 +17,18 @@ const emit = defineEmits<{
   download: [message: CommunicationMessage, attachmentId: number, filename: string]
   vote: [message: CommunicationMessage, optionNames: string[]]
   receipt: [message: CommunicationMessage, receipt: 'READ' | 'PLAYED']
-  recover: [message: CommunicationMessage, operation: 'UNAVAILABLE' | 'MEDIA_RETRY']
+  recover: [message: CommunicationMessage, operation: 'MEDIA_RETRY']
 }>()
 
 const pollSelection = ref<string[]>([])
 const playedReceiptSent = ref(false)
+const body = computed(() => communicationMessageBody(props.message))
+const availabilityPlaceholder = computed(() => communicationAvailabilityPlaceholder(props.message))
+const canRecoverMedia = computed(() => Boolean(
+  props.canReply
+  && props.message.availability?.recoverable
+  && props.message.availability.state !== 'MEDIA_REQUESTED'
+))
 const pollOptions = computed(() => props.message.metadata?.poll?.options ?? [])
 const stickerAttachment = computed(() => props.message.kind === 'STICKER'
   ? props.message.attachments?.find(attachment => !attachment.purged_at) ?? null
@@ -139,7 +148,7 @@ function submitPollVote(): void {
           <UIcon name="i-lucide-list-checks" class="mt-0.5 size-4 shrink-0" />
           <div>
             <p class="font-medium">
-              {{ message.metadata.poll.name || message.body || 'Enquete' }}
+              {{ message.metadata.poll.name || body || 'Enquete' }}
             </p>
             <p v-if="selectableOptions > 1" class="text-[11px] opacity-70">
               Selecione até {{ selectableOptions }} opções
@@ -235,10 +244,10 @@ function submitPollVote(): void {
       </div>
 
       <p
-        v-if="message.body && message.kind !== 'POLL'"
+        v-if="body && message.kind !== 'POLL'"
         class="whitespace-pre-wrap break-words text-sm"
       >
-        {{ message.body }}
+        {{ body }}
       </p>
 
       <div
@@ -290,6 +299,15 @@ function submitPollVote(): void {
         </div>
       </div>
 
+      <div
+        v-if="availabilityPlaceholder"
+        class="mt-2 flex items-start gap-2 rounded-lg border border-current/20 bg-elevated/30 px-2.5 py-2 text-sm opacity-85"
+        :data-testid="`communication-message-availability-${message.availability?.state || 'UNAVAILABLE'}`"
+      >
+        <UIcon name="i-lucide-circle-alert" class="mt-0.5 size-4 shrink-0" />
+        <span>{{ availabilityPlaceholder }}</span>
+      </div>
+
       <div v-if="message.metadata?.media_state || message.metadata?.view_once || message.metadata?.history" class="mt-2 flex flex-wrap gap-1">
         <UBadge
           v-if="message.metadata.view_once"
@@ -312,28 +330,17 @@ function submitPollVote(): void {
       </div>
 
       <div
-        v-if="message.direction === 'INBOUND' && canReply"
+        v-if="canRecoverMedia"
         class="mt-2 flex flex-wrap gap-1"
       >
         <UButton
-          v-if="message.metadata?.media_state === 'FAILED'"
-          label="Tentar recuperar mídia"
+          label="Recuperar mídia"
           icon="i-lucide-refresh-cw"
           color="warning"
           variant="ghost"
           size="xs"
           :loading="actionLoading"
           @click="emit('recover', message, 'MEDIA_RETRY')"
-        />
-        <UButton
-          v-if="!message.body && !message.attachments?.length && !message.metadata?.revoked"
-          label="Solicitar mensagem"
-          icon="i-lucide-message-square-more"
-          color="neutral"
-          variant="ghost"
-          size="xs"
-          :loading="actionLoading"
-          @click="emit('recover', message, 'UNAVAILABLE')"
         />
       </div>
     </template>

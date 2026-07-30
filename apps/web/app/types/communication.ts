@@ -29,6 +29,13 @@ export type CommunicationMessageStatus
     | 'FAILED'
     | 'UNKNOWN'
     | 'CANCELED'
+export type CommunicationMessageAvailabilityState
+  = | 'AVAILABLE'
+    | 'UNSUPPORTED'
+    | 'MEDIA_RETRY_AVAILABLE'
+    | 'MEDIA_REQUESTED'
+    | 'MEDIA_FAILED'
+    | 'UNAVAILABLE'
 export type CommunicationRecipientMode = 'PRIMARY' | 'ALL_ELIGIBLE' | 'SELECTED'
 
 export interface CommunicationInbox {
@@ -74,8 +81,12 @@ export interface CommunicationClientReference {
 export interface CommunicationContactSummary {
   id: number
   name?: string | null
+  profile_picture_url?: string | null
+  profile_picture_state?: CommunicationProfilePictureState
   is_provisional?: boolean | null
   address_masked?: string | null
+  phone?: string | null
+  /** @deprecated Compatibilidade de leitura; use `phone`. */
   address?: string | null
 }
 
@@ -88,6 +99,58 @@ export interface CommunicationAttachment {
   download_url: string
   preview_url?: string | null
   purged_at?: string | null
+}
+
+export type CommunicationSharedContentCategory = 'media' | 'links' | 'documents'
+
+/** Item allowlisted da galeria de conteúdo compartilhado. Não inclui corpo ou paths internos. */
+export interface CommunicationSharedContentItem {
+  id: string
+  type: 'attachment' | 'link'
+  category: CommunicationSharedContentCategory
+  conversation_id: number
+  message_id: number
+  occurred_at?: string | null
+  attachment?: {
+    id: number
+    filename: string
+    mime_type: string
+    size_bytes: number
+    preview_url?: string | null
+    download_url?: string | null
+  } | null
+  link?: {
+    url: string
+    title?: string | null
+    description?: string | null
+  } | null
+}
+
+export interface CommunicationSharedContentMeta {
+  next_cursor: string | null
+  snapshot_through_message_id: number | null
+  snapshot_through_attachment_id: number | null
+  limit: number
+}
+
+export interface CommunicationConversationInitiation {
+  conversation: CommunicationConversation
+  message: CommunicationMessage
+  reused_conversation: boolean
+}
+
+export interface CommunicationConversationInitiationCapability {
+  enabled: boolean
+  reason: string | null
+  requires_permission: string
+}
+
+export interface CommunicationOutboundCapabilities {
+  enabled: boolean
+  requires_permission: string
+  kinds: Record<string, Record<string, unknown>>
+  max_media_bytes: number
+  conversation_initiation: CommunicationConversationInitiationCapability
 }
 
 export interface CommunicationMessageLocation {
@@ -125,6 +188,18 @@ export interface CommunicationMessageInteractiveResponse {
   selected_id?: string | null
 }
 
+/** Conteúdo textual aditivo da API; `body` segue como apresentação canônica. */
+export interface CommunicationMessageContent {
+  text?: string | null
+  caption?: string | null
+}
+
+/** Estado público allowlisted de conteúdo/mídia, sem detalhes do gateway. */
+export interface CommunicationMessageAvailability {
+  state: CommunicationMessageAvailabilityState
+  recoverable: boolean
+}
+
 /**
  * Projeção allowlisted de CommunicationMessageResource. IDs remotos, chaves,
  * direct paths e protobufs deliberadamente não fazem parte deste contrato.
@@ -155,6 +230,8 @@ export interface CommunicationMessage {
   source: CommunicationMessageSource
   status: CommunicationMessageStatus
   body?: string | null
+  content?: CommunicationMessageContent | null
+  availability?: CommunicationMessageAvailability | null
   reply_to_message_id?: number | null
   author_membership_id?: number | null
   occurred_at?: string | null
@@ -181,6 +258,33 @@ export interface CommunicationConversationPreview {
   direction?: CommunicationMessageDirection | null
 }
 
+export interface CommunicationConversationReadState {
+  version: number
+  last_read_through_message_id: number | null
+}
+
+export interface CommunicationConversationTimelineMeta {
+  older_cursor: string | null
+  newer_cursor: string | null
+  first_unread_message_id: number | null
+  snapshot_through_message_id: number | null
+  read_state_version: number
+  unread_count: number
+  limit: number
+}
+
+export interface CommunicationConversationTimelineState {
+  meta: CommunicationConversationTimelineMeta
+  divider_message_id: number | null
+  initialized: boolean
+  initial_read_pending: boolean
+  manual_unread: boolean
+  loading: boolean
+  loading_older: boolean
+  loading_newer: boolean
+  error: string | null
+}
+
 export interface CommunicationConversation {
   id: number
   inbox_id: number
@@ -196,10 +300,9 @@ export interface CommunicationConversation {
   first_unread_message_id?: number | null
   last_read_message_id?: number | null
   last_read_at?: string | null
-  read_state?: {
-    version?: number
-    last_read_through_message_id?: number | null
-  } | null
+  read_state?: CommunicationConversationReadState | null
+  display_name?: string | null
+  display_name_source?: string | null
   display_title?: string | null
   display_title_source?: string | null
   secondary_title?: string | null
@@ -218,6 +321,104 @@ export interface CommunicationConversationListMeta {
   total: number
 }
 
+/** Ordenação allowlisted de GET /communication/conversations. */
+export type CommunicationConversationSortBy
+  = | 'last_activity_desc'
+    | 'last_activity_asc'
+    | 'created_desc'
+    | 'created_asc'
+    | 'unread_desc'
+    | 'priority_desc'
+    | 'priority_asc'
+
+/** Preferência de status: ALL ou um status canônico da conversa. */
+export type CommunicationListPreferenceStatus = CommunicationConversationStatus | 'ALL'
+
+export interface CommunicationConversationListPreferences {
+  status: CommunicationListPreferenceStatus
+  sort_by: CommunicationConversationSortBy
+  is_default?: boolean
+}
+
+export type CommunicationBulkAction
+  = | 'SET_STATUS'
+    | 'SET_ASSIGNEE'
+    | 'SET_DEPARTMENT'
+    | 'ADD_LABELS'
+    | 'REMOVE_LABELS'
+    | 'MARK_READ'
+    | 'MARK_UNREAD'
+
+export type CommunicationBulkOperationStatus
+  = | 'QUEUED'
+    | 'RUNNING'
+    | 'COMPLETED'
+    | 'COMPLETED_WITH_ERRORS'
+    | 'FAILED'
+
+export type CommunicationBulkItemStatus
+  = | 'QUEUED'
+    | 'PROCESSING'
+    | 'SUCCEEDED'
+    | 'SKIPPED'
+    | 'FAILED'
+
+/** Item de submissão bulk com snapshots de concorrência. */
+export interface CommunicationBulkOperationSubmitItem {
+  conversation_id: number
+  lock_version?: number
+  through_message_id?: number
+  read_state_version?: number
+}
+
+export interface CommunicationBulkOperationParams {
+  status?: CommunicationConversationStatus
+  snoozed_until?: string | null
+  assignee_membership_id?: number | null
+  work_department_id?: number | null
+  label_ids?: number[]
+}
+
+export interface CommunicationBulkOperation {
+  id: string
+  public_id?: string
+  action: CommunicationBulkAction
+  params?: CommunicationBulkOperationParams & Record<string, unknown>
+  status: CommunicationBulkOperationStatus
+  is_terminal: boolean
+  item_count: number
+  processed_count: number
+  succeeded_count: number
+  skipped_count: number
+  failed_count: number
+  error_code?: string | null
+  error_message?: string | null
+  queued_at?: string | null
+  started_at?: string | null
+  completed_at?: string | null
+  created_at?: string | null
+}
+
+export interface CommunicationBulkOperationResultItem {
+  id: number
+  item_index: number
+  conversation_id: number
+  resolved_conversation_id?: number | null
+  inbox_id: number
+  status: CommunicationBulkItemStatus
+  result_code?: string | null
+  result_message?: string | null
+  attempts: number
+  processed_at?: string | null
+}
+
+export interface CommunicationBulkOperationItemsMeta {
+  current_page: number
+  last_page: number
+  per_page: number
+  total: number
+}
+
 export interface CommunicationIdentityLink {
   id: number
   client_id: number
@@ -226,6 +427,11 @@ export interface CommunicationIdentityLink {
   client_contact_name?: string | null
   is_primary: boolean
   receives_automatic: boolean
+}
+
+export interface CommunicationIdentityLinkEntry {
+  identity: CommunicationIdentity
+  link: CommunicationIdentityLink
 }
 
 /** Params de listagem do catálogo (GET /communication/contacts). */
@@ -247,7 +453,8 @@ export interface CommunicationIdentity {
   id: number
   channel: 'WHATSAPP' | string
   address_masked: string
-  address?: string | null
+  /** Telefone E.164 seguro já apresentado pela API; nunca reconstruir pela máscara. */
+  phone?: string | null
   is_active: boolean
   links: CommunicationIdentityLink[]
 }
@@ -255,11 +462,16 @@ export interface CommunicationIdentity {
 export interface CommunicationContact {
   id: number
   name?: string | null
+  profile_picture_url?: string | null
+  profile_picture_state?: CommunicationProfilePictureState
   is_provisional: boolean
   is_active: boolean
   identities?: CommunicationIdentity[]
   purged_at?: string | null
 }
+
+export type CommunicationProfilePictureState
+  = 'UNKNOWN' | 'PENDING' | 'READY' | 'UNAVAILABLE' | 'FAILED'
 
 export interface CommunicationCannedResponse {
   id: number

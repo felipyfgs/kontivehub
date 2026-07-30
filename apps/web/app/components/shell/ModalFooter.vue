@@ -15,6 +15,7 @@ withDefaults(defineProps<{
   showCancel?: boolean
   cancelTestId?: string
   submitTestId?: string
+  submitClass?: string
 }>(), {
   cancelLabel: 'Cancelar',
   submitLabel: 'Salvar',
@@ -26,7 +27,8 @@ withDefaults(defineProps<{
   showSubmit: true,
   showCancel: true,
   cancelTestId: 'shell-modal-cancel',
-  submitTestId: 'shell-modal-submit'
+  submitTestId: 'shell-modal-submit',
+  submitClass: undefined
 })
 
 const emit = defineEmits<{
@@ -57,6 +59,7 @@ const emit = defineEmits<{
         :icon="submitIcon"
         :loading="loading"
         :disabled="disabled"
+        :class="submitClass"
         :data-testid="submitTestId"
         @click="emit('submit')"
       />

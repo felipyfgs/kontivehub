@@ -577,6 +577,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/communication/contacts/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** CommunicationContactController search */
+        post: operations["postCommunicationContactsSearch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/communication/contacts/{contact}": {
         parameters: {
             query?: never;
@@ -646,6 +663,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/communication/contacts/{contact}/shared-content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** CommunicationContactController sharedContent */
+        get: operations["getCommunicationContactsContactSharedContent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/communication/conversation-bulk-operations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** ConversationBulkOperationController store */
+        post: operations["postCommunicationConversationBulkOperations"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/communication/conversation-bulk-operations/{operation}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** ConversationBulkOperationController show */
+        get: operations["getCommunicationConversationBulkOperationsOperation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/communication/conversation-bulk-operations/{operation}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** ConversationBulkOperationController items */
+        get: operations["getCommunicationConversationBulkOperationsOperationItems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/communication/conversation-list-preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** ConversationListPreferenceController show */
+        get: operations["getCommunicationConversationListPreferences"];
+        /** ConversationListPreferenceController update */
+        put: operations["putCommunicationConversationListPreferences"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/communication/conversations": {
         parameters: {
             query?: never;
@@ -656,7 +759,8 @@ export interface paths {
         /** CommunicationConversationController index */
         get: operations["getCommunicationConversations"];
         put?: never;
-        post?: never;
+        /** CommunicationConversationController store */
+        post: operations["postCommunicationConversations"];
         delete?: never;
         options?: never;
         head?: never;
@@ -723,7 +827,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** CommunicationConversationController messages */
+        get: operations["getCommunicationConversationsConversationMessages"];
         put?: never;
         /** CommunicationConversationController send */
         post: operations["postCommunicationConversationsConversationMessages"];
@@ -880,6 +985,40 @@ export interface paths {
         put?: never;
         /** CommunicationConversationGatewayController subscribePresence */
         post: operations["postCommunicationConversationsConversationPresenceSubscribe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/communication/conversations/{conversation}/read-state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** CommunicationConversationController updateReadState */
+        put: operations["putCommunicationConversationsConversationReadState"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/communication/conversations/{conversation}/shared-content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** CommunicationConversationController sharedContent */
+        get: operations["getCommunicationConversationsConversationSharedContent"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1756,6 +1895,23 @@ export interface paths {
         };
         /** CommunicationCatalogController outboundCapabilities */
         get: operations["getCommunicationOutboundCapabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/communication/profile-pictures/{profile}/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** CommunicationProfilePictureController show */
+        get: operations["getCommunicationProfilePicturesProfileVersion"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6401,7 +6557,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** TenantAdminController show */
+        /** PlatformTenantController show */
         get: operations["getPlatformTenantsTenant"];
         put?: never;
         post?: never;
@@ -8149,6 +8305,206 @@ export interface components {
         MeResponse: {
             data: components["schemas"]["MeUser"];
         };
+        CommunicationIdentityLink: {
+            id: number;
+            client_id: number;
+            client_name: string | null;
+            client_contact_id: number | null;
+            client_contact_name: string | null;
+            is_primary: boolean;
+            receives_automatic: boolean;
+        };
+        CommunicationContactIdentity: {
+            id: number;
+            channel: string;
+            address_masked: string;
+            /** @description E.164 autorizado por communication.view; null quando não apresentável. */
+            phone: string | null;
+            is_active: boolean;
+            links: components["schemas"]["CommunicationIdentityLink"][];
+        };
+        CommunicationContact: {
+            id: number;
+            name: string | null;
+            is_provisional: boolean;
+            is_active: boolean;
+            /**
+             * Format: uri-reference
+             * @description URL Laravel same-origin; null enquanto o asset privado não estiver pronto.
+             */
+            profile_picture_url: string | null;
+            /** @enum {string} */
+            profile_picture_state: "UNKNOWN" | "PENDING" | "READY" | "UNAVAILABLE" | "FAILED";
+            identities: components["schemas"]["CommunicationContactIdentity"][];
+            /** Format: date-time */
+            purged_at: string | null;
+        };
+        CommunicationPaginationMeta: {
+            current_page: number;
+            last_page: number;
+            total: number;
+        };
+        CommunicationContactResponse: {
+            data: components["schemas"]["CommunicationContact"];
+        };
+        CommunicationContactCollection: {
+            data: components["schemas"]["CommunicationContact"][];
+            meta: components["schemas"]["CommunicationPaginationMeta"];
+        };
+        CommunicationContactSearchBody: {
+            q: string;
+            is_active?: boolean;
+            include_inactive?: boolean;
+            is_provisional?: boolean;
+            linked?: boolean;
+            /** @enum {string} */
+            sort?: "name" | "id" | "created_at";
+            /** @enum {string} */
+            sort_direction?: "asc" | "desc";
+            per_page?: number;
+            page?: number;
+        };
+        CommunicationConversationContact: {
+            id: number;
+            name: string | null;
+            is_provisional: boolean | null;
+            address_masked: string;
+            /**
+             * Format: uri-reference
+             * @description URL Laravel same-origin; nunca contém a URL do provider.
+             */
+            profile_picture_url: string | null;
+            /** @enum {string} */
+            profile_picture_state: "UNKNOWN" | "PENDING" | "READY" | "UNAVAILABLE" | "FAILED";
+            phone: string | null;
+            /** @description Alias legado de phone; nunca contém endereço técnico. */
+            address: string | null;
+        };
+        /** @enum {string} */
+        CommunicationMessageAvailabilityState: "AVAILABLE" | "UNSUPPORTED" | "MEDIA_RETRY_AVAILABLE" | "MEDIA_REQUESTED" | "MEDIA_FAILED" | "UNAVAILABLE";
+        CommunicationMessageAvailability: {
+            state: components["schemas"]["CommunicationMessageAvailabilityState"];
+            recoverable: boolean;
+        };
+        CommunicationMessageContent: ({
+            text?: string | null;
+            caption?: string | null;
+        } & {
+            [key: string]: unknown;
+        }) | null;
+        CommunicationMessage: {
+            id: number;
+            conversation_id: number;
+            /** @enum {string} */
+            direction: "INBOUND" | "OUTBOUND" | "INTERNAL";
+            kind: string;
+            source: string;
+            status: string;
+            body?: string | null;
+            content?: components["schemas"]["CommunicationMessageContent"];
+            availability: components["schemas"]["CommunicationMessageAvailability"];
+        } & {
+            [key: string]: unknown;
+        };
+        CommunicationMessageCollection: {
+            data: components["schemas"]["CommunicationMessage"][];
+            meta: {
+                [key: string]: unknown;
+            };
+        };
+        CommunicationConversation: {
+            contact?: components["schemas"]["CommunicationConversationContact"] | null;
+            last_message?: components["schemas"]["CommunicationMessage"] | null;
+            messages?: components["schemas"]["CommunicationMessage"][];
+        } & {
+            [key: string]: unknown;
+        };
+        CommunicationConversationResponse: {
+            data: components["schemas"]["CommunicationConversation"];
+        };
+        CommunicationConversationCollection: {
+            data: components["schemas"]["CommunicationConversation"][];
+            meta: components["schemas"]["CommunicationPaginationMeta"];
+        };
+        StartCommunicationConversationBody: {
+            contact_id: number;
+            identity_id: number;
+            inbox_id: number;
+            body?: string;
+            /** @enum {string} */
+            kind?: "TEXT" | "IMAGE" | "AUDIO" | "VIDEO" | "DOCUMENT" | "STICKER";
+            /** Format: binary */
+            file?: string;
+            ptt?: boolean;
+        } | unknown | unknown;
+        StartCommunicationConversationData: {
+            conversation: components["schemas"]["CommunicationConversation"];
+            message: components["schemas"]["CommunicationMessage"];
+            reused_conversation: boolean;
+        };
+        StartCommunicationConversationResponse: {
+            data: components["schemas"]["StartCommunicationConversationData"];
+        };
+        /** @enum {string} */
+        CommunicationSharedContentCategory: "media" | "links" | "documents";
+        CommunicationSharedContentAttachment: {
+            id: number;
+            filename: string;
+            mime_type: string;
+            size_bytes: number;
+            preview_url: string | null;
+            download_url: string | null;
+        };
+        CommunicationSharedContentLink: {
+            /** Format: uri */
+            url: string;
+            title: string | null;
+            description: string | null;
+        };
+        CommunicationSharedContentItem: {
+            id: string;
+            /** @enum {string} */
+            type: "attachment" | "link";
+            category: components["schemas"]["CommunicationSharedContentCategory"];
+            conversation_id: number;
+            message_id: number;
+            /** Format: date-time */
+            occurred_at: string | null;
+            attachment: components["schemas"]["CommunicationSharedContentAttachment"] | null;
+            link: components["schemas"]["CommunicationSharedContentLink"] | null;
+        };
+        CommunicationSharedContentMeta: {
+            next_cursor: string | null;
+            snapshot_through_message_id: number | null;
+            snapshot_through_attachment_id: number | null;
+            limit: number;
+        };
+        CommunicationSharedContentCollection: {
+            data: components["schemas"]["CommunicationSharedContentItem"][];
+            meta: components["schemas"]["CommunicationSharedContentMeta"];
+        };
+        CommunicationConversationInitiationCapability: {
+            enabled: boolean;
+            /** @enum {string|null} */
+            reason: "rollout_disabled" | "kill_switch_active" | "tenant_not_allowlisted" | "gateway_unavailable" | "tenant_disabled" | "permission_denied" | "inbox_unavailable" | null;
+            /** @constant */
+            requires_permission: "communication.reply";
+        };
+        CommunicationOutboundCapabilities: {
+            enabled: boolean;
+            /** @constant */
+            requires_permission: "communication.reply";
+            kinds: {
+                [key: string]: unknown;
+            };
+            max_media_bytes: number;
+            conversation_initiation: components["schemas"]["CommunicationConversationInitiationCapability"];
+        } & {
+            [key: string]: unknown;
+        };
+        CommunicationOutboundCapabilitiesResponse: {
+            data: components["schemas"]["CommunicationOutboundCapabilities"];
+        };
         /** @enum {string} */
         SavedListSurface: "monitoring.simples_mei" | "monitoring.dctfweb" | "monitoring.installments" | "monitoring.sitfis" | "monitoring.declarations" | "monitoring.fgts" | "monitoring.guides" | "monitoring.registrations" | "monitoring.tax_processes" | "monitoring.mailbox" | "clients.index" | "docs.catalog" | "work.queue" | "work.processes" | "closing.list";
         /** @enum {string} */
@@ -9193,13 +9549,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Resposta definida pela operação Laravel. */
-            default: {
+            /** @description Resposta canônica. */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JsonResponse"];
+                    "application/json": components["schemas"]["CommunicationContactCollection"];
                 };
             };
         };
@@ -9213,13 +9569,37 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Resposta definida pela operação Laravel. */
-            default: {
+            /** @description Resposta canônica. */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JsonResponse"];
+                    "application/json": components["schemas"]["CommunicationContactResponse"];
+                };
+            };
+        };
+    };
+    postCommunicationContactsSearch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommunicationContactSearchBody"];
+            };
+        };
+        responses: {
+            /** @description Resposta canônica. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunicationContactCollection"];
                 };
             };
         };
@@ -9235,13 +9615,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Resposta definida pela operação Laravel. */
-            default: {
+            /** @description Resposta canônica. */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JsonResponse"];
+                    "application/json": components["schemas"]["CommunicationContactResponse"];
                 };
             };
         };
@@ -9257,13 +9637,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Resposta definida pela operação Laravel. */
-            default: {
+            /** @description Resposta canônica. */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JsonResponse"];
+                    "application/json": components["schemas"]["CommunicationContactResponse"];
                 };
             };
         };
@@ -9334,7 +9714,38 @@ export interface operations {
             };
         };
     };
-    getCommunicationConversations: {
+    getCommunicationContactsContactSharedContent: {
+        parameters: {
+            query: {
+                category: components["schemas"]["CommunicationSharedContentCategory"];
+                limit?: number;
+                cursor?: string;
+                inbox_id?: number;
+            };
+            header?: never;
+            path: {
+                contact: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resposta canônica. */
+            200: {
+                headers: {
+                    /** @description Resposta privada e não armazenável. */
+                    "Cache-Control"?: "max-age=0, no-store, private";
+                    /** @description Compatibilidade com caches HTTP legados. */
+                    Pragma?: "no-cache";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunicationSharedContentCollection"];
+                };
+            };
+        };
+    };
+    postCommunicationConversationBulkOperations: {
         parameters: {
             query?: never;
             header?: never;
@@ -9345,6 +9756,165 @@ export interface operations {
         responses: {
             /** @description Resposta definida pela operação Laravel. */
             default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JsonResponse"];
+                };
+            };
+        };
+    };
+    getCommunicationConversationBulkOperationsOperation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                operation: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resposta definida pela operação Laravel. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JsonResponse"];
+                };
+            };
+        };
+    };
+    getCommunicationConversationBulkOperationsOperationItems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                operation: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resposta definida pela operação Laravel. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JsonResponse"];
+                };
+            };
+        };
+    };
+    getCommunicationConversationListPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resposta definida pela operação Laravel. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JsonResponse"];
+                };
+            };
+        };
+    };
+    putCommunicationConversationListPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resposta definida pela operação Laravel. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JsonResponse"];
+                };
+            };
+        };
+    };
+    getCommunicationConversations: {
+        parameters: {
+            query?: {
+                contact_id?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resposta canônica. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunicationConversationCollection"];
+                };
+            };
+        };
+    };
+    postCommunicationConversations: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["StartCommunicationConversationBody"];
+            };
+        };
+        responses: {
+            /** @description Resposta canônica. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartCommunicationConversationResponse"];
+                };
+            };
+            /** @description Resposta canônica. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartCommunicationConversationResponse"];
+                };
+            };
+            /** @description Resposta canônica. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JsonResponse"];
+                };
+            };
+            /** @description Resposta canônica. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9365,13 +9935,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Resposta definida pela operação Laravel. */
-            default: {
+            /** @description Resposta canônica. */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JsonResponse"];
+                    "application/json": components["schemas"]["CommunicationConversationResponse"];
                 };
             };
         };
@@ -9387,13 +9957,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Resposta definida pela operação Laravel. */
-            default: {
+            /** @description Resposta canônica. */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JsonResponse"];
+                    "application/json": components["schemas"]["CommunicationConversationResponse"];
                 };
             };
         };
@@ -9462,6 +10032,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JsonResponse"];
+                };
+            };
+        };
+    };
+    getCommunicationConversationsConversationMessages: {
+        parameters: {
+            query?: {
+                anchor?: "latest" | "first_unread" | "message";
+                message_id?: number;
+            };
+            header?: never;
+            path: {
+                conversation: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resposta canônica. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunicationMessageCollection"];
                 };
             };
         };
@@ -9689,6 +10284,58 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JsonResponse"];
+                };
+            };
+        };
+    };
+    putCommunicationConversationsConversationReadState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resposta definida pela operação Laravel. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JsonResponse"];
+                };
+            };
+        };
+    };
+    getCommunicationConversationsConversationSharedContent: {
+        parameters: {
+            query: {
+                category: components["schemas"]["CommunicationSharedContentCategory"];
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                conversation: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resposta canônica. */
+            200: {
+                headers: {
+                    /** @description Resposta privada e não armazenável. */
+                    "Cache-Control"?: "max-age=0, no-store, private";
+                    /** @description Compatibilidade com caches HTTP legados. */
+                    Pragma?: "no-cache";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunicationSharedContentCollection"];
                 };
             };
         };
@@ -11030,14 +11677,66 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Resposta definida pela operação Laravel. */
-            default: {
+            /** @description Resposta canônica. */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JsonResponse"];
+                    "application/json": components["schemas"]["CommunicationOutboundCapabilitiesResponse"];
                 };
+            };
+        };
+    };
+    getCommunicationProfilePicturesProfileVersion: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag previamente recebido para revalidação privada. */
+                "If-None-Match"?: string;
+            };
+            path: {
+                profile: number;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Foto de perfil privada e autorizada. */
+            200: {
+                headers: {
+                    ETag?: string;
+                    "Cache-Control"?: "private, no-cache, must-revalidate";
+                    "X-Content-Type-Options"?: "nosniff";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                    "image/png": string;
+                    "image/webp": string;
+                };
+            };
+            /** @description Asset autorizado não foi modificado. */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Asset ausente, obsoleto ou não autorizado. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Limite de revalidações da imagem excedido. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

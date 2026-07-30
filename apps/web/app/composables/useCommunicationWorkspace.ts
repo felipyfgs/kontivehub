@@ -3,6 +3,9 @@ import type { TenantMember } from '~/types/api'
 import type {
   CommunicationAutomationMeta,
   CommunicationAutomationPolicy,
+  CommunicationBulkAction,
+  CommunicationBulkOperation,
+  CommunicationBulkOperationParams,
   CommunicationCannedResponse,
   CommunicationChatPresence,
   CommunicationChatPresenceSignal,
@@ -10,12 +13,18 @@ import type {
   CommunicationComposerPayload,
   CommunicationConversation,
   CommunicationConversationListMeta,
+  CommunicationConversationListPreferences,
   CommunicationConversationSignals,
+  CommunicationConversationSortBy,
   CommunicationConversationStatus,
+  CommunicationConversationTimelineMeta,
+  CommunicationConversationTimelineState,
   CommunicationEvent,
   CommunicationFeatureMeta,
   CommunicationInbox,
   CommunicationLabel,
+  CommunicationListPreferenceStatus,
+  CommunicationMessage,
   CommunicationPairingState,
   CommunicationRecipientConfiguration,
   CommunicationRecipientMode,
@@ -23,7 +32,20 @@ import type {
   CommunicationSessionStatus
 } from '~/types/communication'
 import type { WorkDepartment } from '~/types/work'
-import { apiErrorMessage } from '~/utils/api-error'
+import { apiErrorCode, apiErrorMessage } from '~/utils/api-error'
+import {
+  buildConversationBulkItems,
+  communicationSelectionQueryKey,
+  conversationSelectionState,
+  mergeConversationListInApiOrder,
+  pruneConversationSelection,
+  selectLoadedConversationIds,
+  toggleConversationSelection
+} from '~/utils/communication-conversation-selection'
+import {
+  COMMUNICATION_DEFAULT_SORT_BY,
+  normalizeCommunicationConversationSortBy
+} from '~/utils/communication-conversation-sort'
 import {
   communicationSignalFromEvent,
   isCommunicationEphemeralEvent,
@@ -34,7 +56,14 @@ import {
   normalizeCommunicationCursor
 } from '~/utils/communication'
 import {
+  canRetryCommunicationReadAcknowledgement,
+  isCommunicationReadStateVersionNewer,
+  mergeCommunicationReadThroughMessageId,
+  shouldMarkCommunicationTimelineRead
+} from '~/utils/communication-timeline'
+import {
   canManageCommunication as userCanManageCommunication,
+  canManageCommunicationContacts as userCanManageCommunicationContacts,
   canReplyCommunication as userCanReplyCommunication,
   canViewCommunication as userCanViewCommunication
 } from '~/utils/permissions'
@@ -57,13 +86,39 @@ const EMPTY_AUTOMATION_META: CommunicationAutomationMeta = {
 }
 
 export const COMMUNICATION_CONVERSATION_PAGE_SIZE = 50
+export const COMMUNICATION_TIMELINE_PAGE_SIZE = 50
+
+const EMPTY_TIMELINE_META: CommunicationConversationTimelineMeta = {
+  older_cursor: null,
+  newer_cursor: null,
+  first_unread_message_id: null,
+  snapshot_through_message_id: null,
+  read_state_version: 0,
+  unread_count: 0,
+  limit: COMMUNICATION_TIMELINE_PAGE_SIZE
+}
+
+function emptyTimelineState(): CommunicationConversationTimelineState {
+  return {
+    meta: { ...EMPTY_TIMELINE_META },
+    divider_message_id: null,
+    initialized: false,
+    initial_read_pending: false,
+    manual_unread: false,
+    loading: false,
+    loading_older: false,
+    loading_newer: false,
+    error: null
+  }
+}
 
 export function mergeCommunicationConversationPage(
   current: CommunicationConversation[],
   incoming: CommunicationConversation[],
   append: boolean
 ): CommunicationConversation[] {
-  return mergeCommunicationConversations(append ? current : [], incoming)
+  // Mantém a ordenação autoritativa da API (sort_by), sem reordenar no cliente.
+  return mergeConversationListInApiOrder(current, incoming, append)
 }
 
 export function isCommunicationConversationRequestCurrent(
@@ -84,8 +139,11 @@ const _useCommunicationWorkspace = () => {
   const featureMeta = ref<CommunicationFeatureMeta>({ ...EMPTY_FEATURE_META })
   const conversations = ref<CommunicationConversation[]>([])
   const conversationDetails = ref<Record<number, CommunicationConversation>>({})
+  const conversationTimelines = ref<Record<number, CommunicationConversationTimelineState>>({})
   const selectedConversationId = ref<number | null>(null)
   const openingConversationId = ref<number | null>(null)
+  /** Seleção operacional (bulk) — independente do detalhe aberto. */
+  const selectedConversationIds = ref<Set<number>>(new Set())
   const labels = ref<CommunicationLabel[]>([])
   const cannedResponses = ref<CommunicationCannedResponse[]>([])
   const events = ref<CommunicationEvent[]>([])
@@ -96,6 +154,10 @@ const _useCommunicationWorkspace = () => {
   const departments = ref<WorkDepartment[]>([])
   const chatPresenceByConversation = ref<Record<number, CommunicationChatPresenceSignal>>({})
   const contactPresenceByConversation = ref<Record<number, CommunicationContactPresenceSignal>>({})
+  const pendingBulkOperation = ref<CommunicationBulkOperation | null>(null)
+  const bulkSubmitting = ref(false)
+  const preferencesLoaded = ref(false)
+  const preferencesUnavailable = ref(false)
 
   const loading = ref(false)
   const conversationsLoading = ref(false)
@@ -121,22 +183,40 @@ const _useCommunicationWorkspace = () => {
   const departmentFilter = ref<number | null>(null)
   const unassignedOnly = ref(false)
   const unreadOnly = ref(false)
+  const labelIdsFilter = ref<number[]>([])
+  const contactIdFilter = ref<number | null>(null)
+  const sortBy = ref<CommunicationConversationSortBy>(COMMUNICATION_DEFAULT_SORT_BY)
+  let preferencesSaveGeneration = 0
+  let bulkPollTimer: ReturnType<typeof setTimeout> | null = null
+  let lastSelectionQueryKey = ''
+  let bulkIdempotency: { fingerprint: string, key: string } | null = null
+  let suppressPreferenceSave = false
   const conversationsHasMore = computed(() =>
     conversationsPage.value > 0 && conversationsPage.value < conversationsLastPage.value)
   const conversationsInitialLoading = computed(() =>
     conversationsLoading.value && !conversationsLoaded.value && conversations.value.length === 0)
   const conversationsEmpty = computed(() =>
     conversationsLoaded.value && !conversationsLoading.value && conversations.value.length === 0)
+  const selectionMeta = computed(() =>
+    conversationSelectionState(selectedConversationIds.value, conversations.value))
+  const selectedConversationCount = computed(() => selectionMeta.value.selectedCount)
+  const allLoadedSelected = computed(() => selectionMeta.value.allLoadedSelected)
+  const selectionIndeterminate = computed(() => selectionMeta.value.indeterminate)
 
   const canView = computed(() => userCanViewCommunication(me.value))
   const canReply = computed(() => userCanReplyCommunication(me.value))
   const canManage = computed(() => userCanManageCommunication(me.value))
+  const canManageContacts = computed(() => userCanManageCommunicationContacts(me.value))
   const selectedConversation = computed(() => {
     const id = selectedConversationId.value
     if (id === null) return null
     return conversationDetails.value[id]
       ?? conversations.value.find(item => item.id === id)
       ?? null
+  })
+  const selectedTimeline = computed<CommunicationConversationTimelineState | null>(() => {
+    const id = selectedConversationId.value
+    return id === null ? null : conversationTimelines.value[id] ?? null
   })
   const selectedInbox = computed(() =>
     inboxes.value.find(item => item.id === selectedConversation.value?.inbox_id) ?? null)
@@ -183,6 +263,7 @@ const _useCommunicationWorkspace = () => {
   const signalTimers = new Map<string, ReturnType<typeof setTimeout>>()
   const presenceSubscriptions = new Set<number>()
   const detailRequests = new Map<number, Promise<boolean>>()
+  const conversationTimelineGenerations = new Map<number, number>()
   let tenantSubscription: (() => void) | null = null
   let synchronizeAgain = false
   let selectionEpoch = 0
@@ -190,6 +271,20 @@ const _useCommunicationWorkspace = () => {
   let conversationQueryController: AbortController | null = null
   let lastPresenceState: CommunicationChatPresence | null = null
   let lastPresenceSentAt = 0
+
+  function beginConversationTimelineRequest(id: number) {
+    const generation = (conversationTimelineGenerations.get(id) ?? 0) + 1
+    conversationTimelineGenerations.set(id, generation)
+    return { generation, sessionEpoch: sessionEpoch.value }
+  }
+
+  function isConversationTimelineRequestCurrent(
+    id: number,
+    request: { generation: number, sessionEpoch: number }
+  ): boolean {
+    return request.sessionEpoch === sessionEpoch.value
+      && request.generation === conversationTimelineGenerations.get(id)
+  }
 
   function listFilters(page = 1): CommunicationConversationFilters {
     return {
@@ -200,13 +295,270 @@ const _useCommunicationWorkspace = () => {
       work_department_id: departmentFilter.value || undefined,
       unassigned: unassignedOnly.value || undefined,
       unread: unreadOnly.value || undefined,
+      label_ids: labelIdsFilter.value.length ? labelIdsFilter.value : undefined,
+      contact_id: contactIdFilter.value || undefined,
+      sort_by: normalizeCommunicationConversationSortBy(sortBy.value),
       page,
       per_page: COMMUNICATION_CONVERSATION_PAGE_SIZE
     }
   }
 
+  function preferenceStatusValue(): CommunicationListPreferenceStatus {
+    return statusFilter.value ?? 'ALL'
+  }
+
+  function clearOperationalSelection(): void {
+    if (selectedConversationIds.value.size === 0) return
+    selectedConversationIds.value = new Set()
+    bulkIdempotency = null
+  }
+
+  function setConversationSelected(conversationId: number, selected: boolean): void {
+    const next = toggleConversationSelection(
+      selectedConversationIds.value,
+      conversationId,
+      selected
+    )
+    if (next.size !== selectedConversationIds.value.size || next.has(conversationId) !== selectedConversationIds.value.has(conversationId)) {
+      bulkIdempotency = null
+    }
+    selectedConversationIds.value = next
+  }
+
+  function selectAllLoadedConversations(): void {
+    const next = selectLoadedConversationIds(conversations.value)
+    const current = selectedConversationIds.value
+    const selectionChanged = next.size !== current.size
+      || [...next].some(id => !current.has(id))
+    if (selectionChanged) {
+      bulkIdempotency = null
+    }
+    selectedConversationIds.value = next
+  }
+
+  function toggleSelectAllLoaded(selected: boolean): void {
+    if (selected) selectAllLoadedConversations()
+    else clearOperationalSelection()
+  }
+
+  function isConversationSelected(conversationId: number): boolean {
+    return selectedConversationIds.value.has(conversationId)
+  }
+
+  function selectionQueryContext() {
+    return {
+      q: search.value,
+      inboxId: inboxFilter.value,
+      status: statusFilter.value,
+      assigneeMembershipId: assigneeFilter.value,
+      workDepartmentId: departmentFilter.value,
+      unassignedOnly: unassignedOnly.value,
+      unreadOnly: unreadOnly.value,
+      labelIds: labelIdsFilter.value,
+      contactId: contactIdFilter.value,
+      sortBy: sortBy.value
+    }
+  }
+
+  function stopBulkPoll(): void {
+    if (bulkPollTimer === null) return
+    clearTimeout(bulkPollTimer)
+    bulkPollTimer = null
+  }
+
+  function toastBulkTerminal(operation: CommunicationBulkOperation): void {
+    const succeeded = operation.succeeded_count
+    const failed = operation.failed_count
+    const skipped = operation.skipped_count
+    if (operation.status === 'COMPLETED' && failed === 0) {
+      toast.add({
+        title: 'Ação em lote concluída',
+        description: `${succeeded} conversa(s) atualizada(s).`,
+        color: 'success'
+      })
+      return
+    }
+    if (operation.status === 'COMPLETED_WITH_ERRORS' || (succeeded > 0 && failed > 0)) {
+      toast.add({
+        title: 'Ação em lote parcial',
+        description: `${succeeded} ok · ${failed} falha(s)${skipped ? ` · ${skipped} ignorada(s)` : ''}.`,
+        color: 'warning'
+      })
+      return
+    }
+    toast.add({
+      title: 'Ação em lote falhou',
+      description: operation.error_message
+        || `${failed || operation.item_count} item(ns) sem sucesso.`,
+      color: 'error'
+    })
+  }
+
+  async function pollBulkOperation(
+    operationId: string,
+    attempt = 0,
+    transientFailures = 0
+  ): Promise<void> {
+    stopBulkPoll()
+    const epoch = sessionEpoch.value
+    try {
+      const response = await api.communication.conversationBulkOperations.get(operationId)
+      if (epoch !== sessionEpoch.value) return
+      const operation = response.data
+      pendingBulkOperation.value = operation
+      if (!operation.is_terminal) {
+        if (attempt >= 40) {
+          toast.add({
+            title: 'Não foi possível confirmar a conclusão da ação em lote.',
+            color: 'warning'
+          })
+          await reloadConversations().catch(() => undefined)
+          if (epoch !== sessionEpoch.value) return
+          pendingBulkOperation.value = null
+          return
+        }
+        bulkPollTimer = setTimeout(() => {
+          if (epoch !== sessionEpoch.value) return
+          void pollBulkOperation(operationId, attempt + 1, 0)
+        }, 1_500)
+        return
+      }
+      toastBulkTerminal(operation)
+      pendingBulkOperation.value = null
+      await reloadConversations().catch(() => undefined)
+    } catch (caught) {
+      if (epoch !== sessionEpoch.value) return
+      if (transientFailures < 3) {
+        bulkPollTimer = setTimeout(() => {
+          if (epoch !== sessionEpoch.value) return
+          void pollBulkOperation(operationId, attempt, transientFailures + 1)
+        }, 3_000)
+        return
+      }
+      toast.add({
+        title: apiErrorMessage(caught, 'Não foi possível acompanhar a ação em lote.'),
+        color: 'error'
+      })
+      await reloadConversations().catch(() => undefined)
+      if (epoch !== sessionEpoch.value) return
+      pendingBulkOperation.value = null
+    }
+  }
+
+  async function submitBulkOperation(
+    action: CommunicationBulkAction,
+    params?: CommunicationBulkOperationParams
+  ): Promise<boolean> {
+    if (
+      bulkSubmitting.value
+      || pendingBulkOperation.value !== null
+      || selectedConversationIds.value.size === 0
+    ) {
+      return false
+    }
+    const items = buildConversationBulkItems(
+      conversations.value,
+      selectedConversationIds.value,
+      action
+    )
+    if (!items.length) {
+      toast.add({
+        title: 'Nenhuma conversa elegível',
+        description: 'As conversas selecionadas não possuem snapshot válido para esta ação.',
+        color: 'warning'
+      })
+      return false
+    }
+    bulkSubmitting.value = true
+    const epoch = sessionEpoch.value
+    try {
+      const fingerprint = JSON.stringify({ action, params: params ?? null, items })
+      if (bulkIdempotency?.fingerprint !== fingerprint) {
+        bulkIdempotency = { fingerprint, key: crypto.randomUUID() }
+      }
+      const response = await api.communication.conversationBulkOperations.create(
+        { action, params, items },
+        bulkIdempotency.key
+      )
+      if (epoch !== sessionEpoch.value) return false
+      clearOperationalSelection()
+      pendingBulkOperation.value = response.data
+      toast.add({
+        title: 'Ação agendada',
+        description: `${items.length} conversa(s) enfileirada(s).`,
+        color: 'success'
+      })
+      void pollBulkOperation(response.data.id)
+      return true
+    } catch (caught) {
+      if (epoch !== sessionEpoch.value) return false
+      // Mantém seleção em erro de submissão.
+      toast.add({
+        title: apiErrorMessage(caught, 'Falha ao agendar a ação em lote.'),
+        color: 'error'
+      })
+      return false
+    } finally {
+      bulkSubmitting.value = false
+    }
+  }
+
+  async function loadListPreferences(): Promise<void> {
+    try {
+      const response = await api.communication.conversationListPreferences.get()
+      preferencesUnavailable.value = false
+      applyListPreferences(response.data)
+    } catch {
+      preferencesUnavailable.value = true
+      // Defaults locais já estão aplicados (OPEN / last_activity_desc).
+      // Não tenta regravar preferência até o endpoint voltar.
+    } finally {
+      preferencesLoaded.value = true
+    }
+  }
+
+  function applyListPreferences(prefs: CommunicationConversationListPreferences): void {
+    suppressPreferenceSave = true
+    if (prefs.status === 'ALL') statusFilter.value = null
+    else statusFilter.value = prefs.status
+    sortBy.value = normalizeCommunicationConversationSortBy(prefs.sort_by)
+    nextTick(() => {
+      suppressPreferenceSave = false
+    })
+  }
+
+  const persistListPreferences = useDebounceFn(async () => {
+    if (
+      !initialized.value
+      || !preferencesLoaded.value
+      || preferencesUnavailable.value
+      || suppressPreferenceSave
+    ) return
+    const generation = ++preferencesSaveGeneration
+    const payload = {
+      status: preferenceStatusValue(),
+      sort_by: normalizeCommunicationConversationSortBy(sortBy.value)
+    }
+    // Garante que o estado local espelha o valor allowlisted enviado.
+    if (sortBy.value !== payload.sort_by) {
+      sortBy.value = payload.sort_by
+    }
+    try {
+      await api.communication.conversationListPreferences.update(payload)
+    } catch (caught) {
+      if (generation !== preferencesSaveGeneration) return
+      toast.add({
+        title: apiErrorMessage(caught, 'Não foi possível salvar preferências da lista.'),
+        description: 'Os filtros da sessão permanecem; a preferência não foi persistida.',
+        color: 'error'
+      })
+    }
+  }, 400)
+
   function resolveThroughMessageId(conversationId: number, preferred?: number | null): number | null {
     if (preferred != null && preferred > 0) return preferred
+    const snapshot = conversationTimelines.value[conversationId]?.meta.snapshot_through_message_id
+    if (snapshot != null && snapshot > 0) return snapshot
     const detail = conversationDetails.value[conversationId]
       ?? conversations.value.find(item => item.id === conversationId)
     if (!detail) return null
@@ -220,30 +572,93 @@ const _useCommunicationWorkspace = () => {
   async function markConversationRead(
     conversationId: number,
     upToMessageId?: number | null
-  ): Promise<void> {
+  ): Promise<boolean> {
     const throughMessageId = resolveThroughMessageId(conversationId, upToMessageId)
-    if (throughMessageId == null) return
+    if (throughMessageId == null) return false
     try {
       const response = await api.communication.conversations.markRead(conversationId, {
         through_message_id: throughMessageId
       })
       patchConversationReadState(response.data)
+      const timeline = conversationTimelines.value[conversationId]
+      if (timeline) {
+        conversationTimelines.value = {
+          ...conversationTimelines.value,
+          [conversationId]: {
+            ...timeline,
+            meta: {
+              ...timeline.meta,
+              unread_count: response.data.unread_count ?? 0,
+              first_unread_message_id: response.data.first_unread_message_id ?? null,
+              read_state_version: response.data.read_state?.version ?? timeline.meta.read_state_version
+            },
+            initial_read_pending: false,
+            manual_unread: false
+          }
+        }
+      }
+      return true
     } catch {
       // Fail closed: keep last known unread without inventing local counts.
+      return false
     }
   }
 
-  async function markConversationUnread(conversationId: number): Promise<void> {
+  async function markConversationUnread(conversationId: number): Promise<boolean> {
     const detail = conversationDetails.value[conversationId]
       ?? conversations.value.find(item => item.id === conversationId)
     const expectedVersion = detail?.read_state?.version ?? 0
+    const timeline = conversationTimelines.value[conversationId]
+    const previousManualUnread = timeline?.manual_unread ?? false
+    if (timeline) {
+      conversationTimelines.value = {
+        ...conversationTimelines.value,
+        [conversationId]: {
+          ...timeline,
+          manual_unread: true
+        }
+      }
+    }
     try {
       const response = await api.communication.conversations.markUnread(conversationId, {
         expected_version: expectedVersion
       })
       patchConversationReadState(response.data)
-    } catch {
+      const current = conversationTimelines.value[conversationId]
+      if (current) {
+        conversationTimelines.value = {
+          ...conversationTimelines.value,
+          [conversationId]: {
+            ...current,
+            divider_message_id: current.divider_message_id
+              ?? response.data.first_unread_message_id
+              ?? null,
+            meta: {
+              ...current.meta,
+              unread_count: response.data.unread_count ?? current.meta.unread_count,
+              first_unread_message_id: response.data.first_unread_message_id ?? null,
+              read_state_version: response.data.read_state?.version ?? current.meta.read_state_version
+            },
+            manual_unread: true
+          }
+        }
+      }
+      return true
+    } catch (caught) {
+      if (apiErrorCode(caught) === 'READ_STATE_VERSION_CONFLICT') {
+        await Promise.all([
+          refreshConversationDetail(conversationId, { reportError: false }),
+          loadConversations({ silent: true }).catch(() => undefined)
+        ])
+      }
+      const current = conversationTimelines.value[conversationId]
+      if (current) {
+        updateConversationTimeline(conversationId, {
+          manual_unread: previousManualUnread
+        })
+      }
       // Fail closed: keep last known unread without inventing local counts.
+      return false
     }
   }
 
@@ -339,12 +754,26 @@ const _useCommunicationWorkspace = () => {
         nextDetails[summary.id] = merged
         return merged
       })
+      const pinnedId = !append && unreadOnly.value ? selectedConversationId.value : null
+      const pinned = pinnedId !== null ? nextDetails[pinnedId] : null
+      if (pinned && !visible.some(item => item.id === pinned.id)) {
+        visible.unshift(pinned)
+      }
       conversationDetails.value = nextDetails
       conversations.value = mergeCommunicationConversationPage(
         conversations.value,
         visible,
         append
       )
+      // Load more / refresh: preserva IDs ainda presentes; não auto-seleciona novos.
+      const prunedSelection = pruneConversationSelection(
+        selectedConversationIds.value,
+        conversations.value
+      )
+      if (prunedSelection.size !== selectedConversationIds.value.size) {
+        bulkIdempotency = null
+      }
+      selectedConversationIds.value = prunedSelection
       applyConversationMeta(response.meta)
       conversationsLoaded.value = true
     } catch (caught) {
@@ -397,7 +826,7 @@ const _useCommunicationWorkspace = () => {
   }
 
   function hasConversationDetail(id: number): boolean {
-    return Array.isArray(conversationDetails.value[id]?.messages)
+    return conversationDetails.value[id] !== undefined
   }
 
   function storeConversationDetail(incoming: CommunicationConversation): void {
@@ -407,9 +836,81 @@ const _useCommunicationWorkspace = () => {
       ...conversationDetails.value,
       [incoming.id]: detail
     }
+    // Atualiza a linha in-place sem reordenar a fila (ordem vem do sort_by da API).
     if (selectedConversationId.value === incoming.id
       || conversations.value.some(item => item.id === incoming.id)) {
-      conversations.value = mergeCommunicationConversations(conversations.value, [detail])
+      conversations.value = conversations.value.map(item =>
+        item.id === detail.id ? detail : item
+      )
+    }
+  }
+
+  function storeConversationMessages(
+    conversationId: number,
+    incoming: CommunicationMessage[],
+    replace: boolean
+  ): void {
+    const base = conversationDetails.value[conversationId]
+      ?? conversations.value.find(item => item.id === conversationId)
+    if (!base) return
+    const detail: CommunicationConversation = {
+      ...base,
+      messages: replace
+        ? [...incoming]
+        : mergeCommunicationMessages(base.messages ?? [], incoming)
+    }
+    conversationDetails.value = {
+      ...conversationDetails.value,
+      [conversationId]: detail
+    }
+    conversations.value = conversations.value.map(item =>
+      item.id === conversationId ? detail : item
+    )
+  }
+
+  function patchConversationTimelineProjection(
+    conversationId: number,
+    meta: CommunicationConversationTimelineMeta
+  ): void {
+    const known = conversationDetails.value[conversationId]
+      ?? conversations.value.find(item => item.id === conversationId)
+    const knownVersion = known?.read_state?.version
+    if (knownVersion !== undefined
+      && !isCommunicationReadStateVersionNewer(meta.read_state_version, knownVersion)) {
+      return
+    }
+    const apply = (item: CommunicationConversation): CommunicationConversation => ({
+      ...item,
+      unread_count: meta.unread_count,
+      first_unread_message_id: meta.first_unread_message_id,
+      read_state: {
+        version: meta.read_state_version,
+        last_read_through_message_id: item.read_state?.last_read_through_message_id ?? null
+      }
+    })
+    conversations.value = conversations.value.map(item =>
+      item.id === conversationId ? apply(item) : item
+    )
+    const detail = conversationDetails.value[conversationId]
+    if (detail) {
+      conversationDetails.value = {
+        ...conversationDetails.value,
+        [conversationId]: apply(detail)
+      }
+    }
+  }
+
+  function updateConversationTimeline(
+    conversationId: number,
+    patch: Partial<CommunicationConversationTimelineState>
+  ): void {
+    const current = conversationTimelines.value[conversationId] ?? emptyTimelineState()
+    conversationTimelines.value = {
+      ...conversationTimelines.value,
+      [conversationId]: {
+        ...current,
+        ...patch
+      }
     }
   }
 
@@ -418,7 +919,9 @@ const _useCommunicationWorkspace = () => {
     if (active) return active
     const epoch = sessionEpoch.value
     const request = (async () => {
-      const response = await api.communication.conversations.get(id)
+      const response = await api.communication.conversations.get(id, {
+        include_messages: false
+      })
       if (epoch !== sessionEpoch.value) return false
       storeConversationDetail(response.data)
       void ensurePresenceSubscription(id)
@@ -451,28 +954,243 @@ const _useCommunicationWorkspace = () => {
     return refreshConversationDetail(id, { reportError: false })
   }
 
+  async function loadInitialConversationTimeline(id: number, messageId?: number | null): Promise<boolean> {
+    const request = beginConversationTimelineRequest(id)
+    const summary = conversationDetails.value[id]
+      ?? conversations.value.find(item => item.id === id)
+    const anchor = messageId ? 'message' : ((summary?.unread_count ?? 0) > 0 ? 'first_unread' : 'latest')
+    timelineReadAcknowledgementFailures.delete(id)
+    updateConversationTimeline(id, {
+      loading: true,
+      error: null,
+      initialized: false,
+      initial_read_pending: false,
+      manual_unread: false,
+      loading_older: false,
+      loading_newer: false,
+      divider_message_id: null
+    })
+    try {
+      const response = await api.communication.conversations.messages(id, {
+        limit: COMMUNICATION_TIMELINE_PAGE_SIZE,
+        anchor,
+        ...(messageId ? { message_id: messageId } : {})
+      })
+      if (!isConversationTimelineRequestCurrent(id, request)) return false
+      storeConversationMessages(id, response.data, true)
+      conversationTimelines.value = {
+        ...conversationTimelines.value,
+        [id]: {
+          ...emptyTimelineState(),
+          meta: response.meta,
+          divider_message_id: response.meta.first_unread_message_id,
+          initialized: true,
+          initial_read_pending: response.meta.unread_count > 0,
+          loading: false
+        }
+      }
+      patchConversationTimelineProjection(id, response.meta)
+      return true
+    } catch (caught) {
+      if (!isConversationTimelineRequestCurrent(id, request)) return false
+      updateConversationTimeline(id, {
+        loading: false,
+        initialized: false,
+        error: apiErrorMessage(caught, 'Falha ao carregar a timeline.')
+      })
+      return false
+    }
+  }
+
+  async function loadConversationTimelinePage(
+    id: number,
+    direction: 'older' | 'newer'
+  ): Promise<boolean> {
+    const timeline = conversationTimelines.value[id]
+    if (!timeline?.initialized) return false
+    if (direction === 'older' ? timeline.loading_older : timeline.loading_newer) return false
+    const cursor = direction === 'older'
+      ? timeline.meta.older_cursor
+      : timeline.meta.newer_cursor
+    if (!cursor) return true
+    const request = beginConversationTimelineRequest(id)
+    const loadingKey = direction === 'older' ? 'loading_older' : 'loading_newer'
+    updateConversationTimeline(id, {
+      loading: false,
+      loading_older: false,
+      loading_newer: false,
+      [loadingKey]: true,
+      error: null
+    })
+    try {
+      const response = await api.communication.conversations.messages(id, {
+        limit: COMMUNICATION_TIMELINE_PAGE_SIZE,
+        cursor
+      })
+      if (!isConversationTimelineRequestCurrent(id, request)) return false
+      storeConversationMessages(id, response.data, false)
+      const current = conversationTimelines.value[id] ?? timeline
+      updateConversationTimeline(id, {
+        meta: {
+          ...current.meta,
+          ...response.meta,
+          older_cursor: direction === 'older'
+            ? response.meta.older_cursor
+            : current.meta.older_cursor,
+          newer_cursor: direction === 'newer'
+            ? response.meta.newer_cursor
+            : current.meta.newer_cursor
+        }
+      })
+      patchConversationTimelineProjection(id, response.meta)
+      return true
+    } catch (caught) {
+      if (!isConversationTimelineRequestCurrent(id, request)) return false
+      updateConversationTimeline(id, {
+        error: apiErrorMessage(caught, 'Falha ao carregar mais mensagens.')
+      })
+      return false
+    } finally {
+      if (isConversationTimelineRequestCurrent(id, request)) {
+        updateConversationTimeline(id, {
+          [loadingKey]: false
+        })
+      }
+    }
+  }
+
+  async function loadOlderConversationMessages(id: number): Promise<boolean> {
+    return loadConversationTimelinePage(id, 'older')
+  }
+
+  async function loadNewerConversationMessages(id: number): Promise<boolean> {
+    return loadConversationTimelinePage(id, 'newer')
+  }
+
+  async function refreshConversationTimeline(id: number): Promise<boolean> {
+    const timeline = conversationTimelines.value[id]
+    if (!timeline?.initialized) return loadInitialConversationTimeline(id)
+    if (timeline.meta.newer_cursor) {
+      return loadConversationTimelinePage(id, 'newer')
+    }
+    const request = beginConversationTimelineRequest(id)
+    try {
+      const response = await api.communication.conversations.messages(id, {
+        limit: COMMUNICATION_TIMELINE_PAGE_SIZE,
+        anchor: 'latest'
+      })
+      if (!isConversationTimelineRequestCurrent(id, request)) return false
+      storeConversationMessages(id, response.data, false)
+      const current = conversationTimelines.value[id] ?? timeline
+      updateConversationTimeline(id, {
+        meta: {
+          ...response.meta,
+          older_cursor: current.meta.older_cursor ?? response.meta.older_cursor,
+          newer_cursor: response.meta.newer_cursor
+        },
+        error: null
+      })
+      patchConversationTimelineProjection(id, response.meta)
+      return true
+    } catch (caught) {
+      if (!isConversationTimelineRequestCurrent(id, request)) return false
+      updateConversationTimeline(id, {
+        error: apiErrorMessage(caught, 'Falha ao atualizar a timeline.')
+      })
+      return false
+    }
+  }
+
+  const timelineReadAcknowledgements = new Set<number>()
+  const timelineReadAcknowledgementFailures = new Map<number, number>()
+
+  async function acknowledgeConversationTimeline(input: {
+    conversationId: number
+    rendered: boolean
+    visible: boolean
+    atEnd: boolean
+  }): Promise<boolean> {
+    const timeline = conversationTimelines.value[input.conversationId]
+    if (
+      !timeline
+      || timelineReadAcknowledgements.has(input.conversationId)
+    ) return false
+    const snapshotMessageId = timeline.meta.snapshot_through_message_id
+    if (!canRetryCommunicationReadAcknowledgement(
+      timelineReadAcknowledgementFailures.get(input.conversationId),
+      snapshotMessageId
+    )) return false
+    if (!shouldMarkCommunicationTimelineRead({
+      rendered: input.rendered,
+      visible: input.visible,
+      atEnd: input.atEnd,
+      initialReadPending: timeline.initial_read_pending,
+      manualUnread: timeline.manual_unread,
+      unreadCount: timeline.meta.unread_count,
+      snapshotThroughMessageId: timeline.meta.snapshot_through_message_id
+    })) {
+      return false
+    }
+
+    timelineReadAcknowledgements.add(input.conversationId)
+    try {
+      const acknowledged = await markConversationRead(
+        input.conversationId,
+        timeline.meta.snapshot_through_message_id
+      )
+      if (acknowledged) timelineReadAcknowledgementFailures.delete(input.conversationId)
+      else if (snapshotMessageId !== null) {
+        timelineReadAcknowledgementFailures.set(input.conversationId, snapshotMessageId)
+      }
+      return acknowledged
+    } finally {
+      timelineReadAcknowledgements.delete(input.conversationId)
+    }
+  }
+
   async function selectConversation(id: number | null): Promise<boolean> {
     const epoch = ++selectionEpoch
     if (id === null) {
       openingConversationId.value = null
       selectedConversationId.value = null
-      return true
-    }
-    if (hasConversationDetail(id)) {
-      openingConversationId.value = null
-      selectedConversationId.value = id
-      void refreshConversationDetail(id, { reportError: false })
-      void markConversationRead(id)
+      if (unreadOnly.value) {
+        void loadConversations({ silent: true }).catch(() => undefined)
+      }
       return true
     }
     openingConversationId.value = id
-    const ok = await refreshConversationDetail(id)
+    const cached = hasConversationDetail(id)
+    const detailReady = cached
+      || await refreshConversationDetail(id)
+    if (epoch !== selectionEpoch) return false
+    if (!detailReady) {
+      openingConversationId.value = null
+      return false
+    }
+    if (cached) void refreshConversationDetail(id, { reportError: false })
+    selectedConversationId.value = id
+    const timelineReady = await loadInitialConversationTimeline(id)
     if (epoch !== selectionEpoch) return false
     openingConversationId.value = null
-    if (!ok) return false
+    if (unreadOnly.value) {
+      void loadConversations({ silent: true }).catch(() => undefined)
+    }
+    return timelineReady || selectedConversationId.value === id
+  }
+
+  async function selectConversationAtMessage(id: number, messageId: number): Promise<boolean> {
+    const epoch = ++selectionEpoch
+    openingConversationId.value = id
+    const detailReady = hasConversationDetail(id) || await refreshConversationDetail(id)
+    if (epoch !== selectionEpoch || !detailReady) {
+      openingConversationId.value = null
+      return false
+    }
     selectedConversationId.value = id
-    void markConversationRead(id)
-    return true
+    const timelineReady = await loadInitialConversationTimeline(id, messageId)
+    if (epoch !== selectionEpoch) return false
+    openingConversationId.value = null
+    return timelineReady
   }
 
   function clearSignal(kind: 'chat' | 'contact', conversationId: number): void {
@@ -523,10 +1241,72 @@ const _useCommunicationWorkspace = () => {
     }
   }
 
+  function applyReadStateEvent(event: CommunicationEvent): void {
+    if (event.type !== 'conversation.read_state.updated') return
+    const conversationId = event.conversation_id
+    const version = event.payload.version
+    const unreadCount = event.payload.unread_count
+    if (
+      conversationId == null
+      || typeof version !== 'number'
+      || !Number.isInteger(version)
+      || typeof unreadCount !== 'number'
+      || !Number.isInteger(unreadCount)
+    ) {
+      return
+    }
+    const incomingFirstUnread = typeof event.payload.first_unread_message_id === 'number'
+      ? event.payload.first_unread_message_id
+      : undefined
+    const known = conversationDetails.value[conversationId]
+      ?? conversations.value.find(item => item.id === conversationId)
+    const knownVersion = Math.max(
+      known?.read_state?.version ?? 0,
+      conversationTimelines.value[conversationId]?.meta.read_state_version ?? 0
+    )
+    if (!isCommunicationReadStateVersionNewer(version, knownVersion)) return
+    const apply = (item: CommunicationConversation): CommunicationConversation => ({
+      ...item,
+      unread_count: unreadCount,
+      first_unread_message_id: incomingFirstUnread
+        ?? (unreadCount === 0 ? null : item.first_unread_message_id ?? null),
+      read_state: {
+        version,
+        last_read_through_message_id: mergeCommunicationReadThroughMessageId(
+          item.read_state?.last_read_through_message_id,
+          event.payload.last_read_through_message_id
+        )
+      }
+    })
+    conversations.value = conversations.value.map(item =>
+      item.id === conversationId ? apply(item) : item
+    )
+    const detail = conversationDetails.value[conversationId]
+    if (detail) {
+      conversationDetails.value = {
+        ...conversationDetails.value,
+        [conversationId]: apply(detail)
+      }
+    }
+    const timeline = conversationTimelines.value[conversationId]
+    if (timeline) {
+      updateConversationTimeline(conversationId, {
+        meta: {
+          ...timeline.meta,
+          unread_count: unreadCount,
+          first_unread_message_id: incomingFirstUnread
+            ?? (unreadCount === 0 ? null : timeline.meta.first_unread_message_id),
+          read_state_version: version
+        }
+      })
+    }
+  }
+
   async function hydrateFromEvents(incoming: CommunicationEvent[]): Promise<void> {
     applyEphemeralSignals(incoming)
     const durable = incoming.filter(event => !isCommunicationEphemeralEvent(event))
     if (!durable.length) return
+    for (const event of durable) applyReadStateEvent(event)
     const selectedId = selectedConversationId.value
     const selected = selectedConversation.value
     const selectedInboxId = selected?.inbox_id ?? null
@@ -540,6 +1320,12 @@ const _useCommunicationWorkspace = () => {
     // mesmo quando o filtro (ex.: OPEN) excluiria a conversa.
     if (touchesSelected && selectedId !== null) {
       await refreshConversationDetail(selectedId, { reportError: false })
+      const touchesTimeline = durable.some(event =>
+        event.conversation_id === selectedId && event.message_id != null
+      )
+      if (touchesTimeline) {
+        await refreshConversationTimeline(selectedId)
+      }
     }
     await loadConversations({ silent: true }).catch(() => undefined)
     if (selectedId !== null && !conversations.value.some(item => item.id === selectedId)) {
@@ -588,6 +1374,7 @@ const _useCommunicationWorkspace = () => {
     const nextCursor = normalizeCommunicationCursor(event.cursor)
     if (nextCursor === null || nextCursor <= cursor.value) return
     const normalized: CommunicationRealtimeEvent = { ...event, cursor: nextCursor }
+    applyReadStateEvent(normalized)
     events.value = mergeCommunicationEvents(events.value, [normalized]).slice(-500)
     // Não avança o cursor aqui: o sync usa `after` exclusivo e precisa buscar o evento.
     void synchronize()
@@ -621,7 +1408,15 @@ const _useCommunicationWorkspace = () => {
     loading.value = true
     error.value = null
     try {
-      await Promise.all([loadInboxes(), loadCatalog()])
+      await Promise.all([loadInboxes(), loadCatalog(), loadListPreferences()])
+      // Membros para filtro/bulk de responsável (soft-fail se sem permissão).
+      try {
+        const members = await api.tenant.members.list()
+        tenantMembers.value = members.data.filter(member => member.is_active)
+      } catch {
+        // Filtro de responsável fica sem nomes se a listagem for negada.
+      }
+      lastSelectionQueryKey = communicationSelectionQueryKey(selectionQueryContext())
       await loadConversations({ silent: true })
       await synchronize()
       initialized.value = true
@@ -635,11 +1430,15 @@ const _useCommunicationWorkspace = () => {
 
   async function sendMessage(input: CommunicationComposerPayload): Promise<boolean> {
     const conversation = selectedConversation.value
-    console.log('[Workspace] sendMessage called', { hasConv: !!conversation, canReply: canReply.value, sending: sending.value, body: input.body })
     if (!conversation || !canReply.value || sending.value) return false
     sending.value = true
     try {
-      console.log('[Workspace] calling API...')
+      const receiptMessageId = input.internalNote
+        ? undefined
+        : [...(conversation.messages ?? [])]
+            .reverse()
+            .find(message => message.direction === 'INBOUND' && !message.metadata?.revoked)
+            ?.id
       const response = await api.communication.conversations.send(conversation.id, {
         body: input.body,
         internal_note: input.internalNote,
@@ -649,9 +1448,10 @@ const _useCommunicationWorkspace = () => {
           : `web-${Date.now()}-${crypto.randomUUID()}`,
         file: input.file,
         kind: input.internalNote ? undefined : input.kind,
-        ptt: input.internalNote ? undefined : input.ptt
+        ptt: input.internalNote ? undefined : input.ptt,
+        receipt_message_id: receiptMessageId
       })
-      conversation.messages = mergeCommunicationMessages(conversation.messages ?? [], [response.data])
+      storeConversationMessages(conversation.id, [response.data], false)
       await Promise.all([
         refreshConversationDetail(conversation.id, { reportError: false }),
         loadConversations({ silent: true })
@@ -802,9 +1602,10 @@ const _useCommunicationWorkspace = () => {
 
   async function updateConversation(
     patch: Partial<Pick<CommunicationConversation,
-      'status' | 'assignee_membership_id' | 'work_department_id' | 'priority' | 'snoozed_until'>>
+      'status' | 'assignee_membership_id' | 'work_department_id' | 'priority' | 'snoozed_until'>>,
+    target: CommunicationConversation | null = selectedConversation.value
   ): Promise<boolean> {
-    const conversation = selectedConversation.value
+    const conversation = target
     if (!conversation || !canReply.value) return false
     try {
       const response = await api.communication.conversations.update(conversation.id, {
@@ -1054,7 +1855,34 @@ const _useCommunicationWorkspace = () => {
     }, 5_000)
   }
 
-  watch([search, inboxFilter, statusFilter, assigneeFilter, departmentFilter, unassignedOnly, unreadOnly], reloadForFilters)
+  watch(
+    [
+      search,
+      inboxFilter,
+      statusFilter,
+      assigneeFilter,
+      departmentFilter,
+      unassignedOnly,
+      unreadOnly,
+      labelIdsFilter,
+      contactIdFilter,
+      sortBy
+    ],
+    () => {
+      if (!initialized.value) return
+      const nextKey = communicationSelectionQueryKey(selectionQueryContext())
+      if (nextKey !== lastSelectionQueryKey) {
+        lastSelectionQueryKey = nextKey
+        clearOperationalSelection()
+      }
+      reloadForFilters()
+    },
+    { deep: true }
+  )
+  watch([statusFilter, sortBy], () => {
+    if (!initialized.value || !preferencesLoaded.value || suppressPreferenceSave) return
+    void persistListPreferences()
+  })
   watch(realtime.state, (next, previous) => {
     // Transporte voltou: re-assina canais (subscriptions Map podia estar stale).
     if (previous === 'unavailable' && (next === 'connecting' || next === 'connected')) {
@@ -1086,8 +1914,15 @@ const _useCommunicationWorkspace = () => {
     conversations.value = []
     resetConversationPagination()
     conversationDetails.value = {}
+    conversationTimelines.value = {}
     selectedConversationId.value = null
     openingConversationId.value = null
+    selectedConversationIds.value = new Set()
+    bulkIdempotency = null
+    pendingBulkOperation.value = null
+    preferencesLoaded.value = false
+    preferencesUnavailable.value = false
+    conversationTimelineGenerations.clear()
     labels.value = []
     cannedResponses.value = []
     events.value = []
@@ -1096,6 +1931,17 @@ const _useCommunicationWorkspace = () => {
     cursor.value = 0
     policies.value = []
     featureMeta.value = { ...EMPTY_FEATURE_META }
+    labelIdsFilter.value = []
+    contactIdFilter.value = null
+    inboxFilter.value = null
+    assigneeFilter.value = null
+    departmentFilter.value = null
+    search.value = ''
+    unassignedOnly.value = false
+    unreadOnly.value = false
+    lastSelectionQueryKey = ''
+    sortBy.value = COMMUNICATION_DEFAULT_SORT_BY
+    statusFilter.value = 'OPEN'
     initialized.value = false
     if (canView.value) void initialize()
   })
@@ -1105,11 +1951,15 @@ const _useCommunicationWorkspace = () => {
     conversationQueryController?.abort()
     conversationQueryController = null
     stopCursorPoll()
+    stopBulkPoll()
     for (const unsubscribe of subscriptions.values()) unsubscribe()
     subscriptions.clear()
     for (const timer of signalTimers.values()) clearTimeout(timer)
     signalTimers.clear()
     presenceSubscriptions.clear()
+    timelineReadAcknowledgements.clear()
+    timelineReadAcknowledgementFailures.clear()
+    conversationTimelineGenerations.clear()
     chatPresenceByConversation.value = {}
     contactPresenceByConversation.value = {}
     tenantSubscription?.()
@@ -1119,12 +1969,17 @@ const _useCommunicationWorkspace = () => {
 
   return {
     adminLoading: readonly(adminLoading),
+    acknowledgeConversationTimeline,
+    allLoadedSelected,
     assigneeFilter,
     automationMeta,
+    bulkSubmitting: readonly(bulkSubmitting),
     cannedResponses,
     canManage,
+    canManageContacts,
     canReply,
     canView,
+    clearOperationalSelection,
     communicationBlockReason,
     communicationOperational,
     connectInbox,
@@ -1157,10 +2012,15 @@ const _useCommunicationWorkspace = () => {
     inboxFilter,
     initialize,
     initialized: readonly(initialized),
+    isConversationSelected,
+    labelIdsFilter,
+    contactIdFilter,
     labels,
     loadAdministration,
     loadCatalog,
     loadMoreConversations,
+    loadNewerConversationMessages,
+    loadOlderConversationMessages,
     loadInboxes,
     loadRecipients,
     loading: readonly(loading),
@@ -1168,8 +2028,10 @@ const _useCommunicationWorkspace = () => {
     tenantMembers,
     openingConversationId: readonly(openingConversationId),
     outboundOperational,
+    pendingBulkOperation: readonly(pendingBulkOperation),
     policies,
     prefetchConversation,
+    preferencesLoaded: readonly(preferencesLoaded),
     realtimeState: realtime.state,
     reloadConversations,
     reactMessage,
@@ -1179,21 +2041,31 @@ const _useCommunicationWorkspace = () => {
     savePolicy,
     saveRecipients,
     search,
+    selectAllLoadedConversations,
     selectedConversation,
+    selectedConversationCount,
     selectedConversationId: readonly(selectedConversationId),
+    selectedConversationIds: readonly(selectedConversationIds),
     selectedInbox,
     selectedSignals,
+    selectedTimeline,
+    selectionIndeterminate,
     selectConversation,
+    selectConversationAtMessage,
     sendReceipt,
     sendMessage,
     sending: readonly(sending),
+    setConversationSelected,
+    sortBy,
     statusFilter,
     setChatPresence,
     setDisappearingTimer,
+    submitBulkOperation,
     syncError: readonly(syncError),
     syncing: readonly(syncing),
     synchronize,
     toggleLabel,
+    toggleSelectAllLoaded,
     unassignedOnly,
     unreadOnly,
     markConversationRead,

@@ -9,9 +9,12 @@ import type {
 } from '~/types/communication'
 import {
   communicationContactLabel,
+  communicationAvailabilityPlaceholder,
   communicationConversationImageEvidence,
   communicationDisplayName,
+  communicationMessageBody,
   communicationMessageSummary,
+  communicationProfilePictureUrl,
   communicationPollVoteCount,
   communicationSignalFromEvent,
   isCommunicationEphemeralEvent,
@@ -69,6 +72,24 @@ function conversation(id: number, priority: number, messages?: CommunicationMess
 }
 
 describe('projeção local da comunicação', () => {
+  it('usa foto somente quando READY e preserva compatibilidade com URL legada', () => {
+    expect(communicationProfilePictureUrl({
+      profile_picture_url: '/api/v1/communication/profile-pictures/1/2',
+      profile_picture_state: 'READY'
+    })).toBe('/api/v1/communication/profile-pictures/1/2')
+    expect(communicationProfilePictureUrl({
+      profile_picture_url: '/api/v1/communication/profile-pictures/1/2',
+      profile_picture_state: 'PENDING'
+    })).toBeNull()
+    expect(communicationProfilePictureUrl({
+      profile_picture_url: '/api/v1/communication/profile-pictures/1/2'
+    })).toBe('/api/v1/communication/profile-pictures/1/2')
+    expect(communicationProfilePictureUrl({
+      profile_picture_url: null,
+      profile_picture_state: 'READY'
+    })).toBeNull()
+  })
+
   it('mantém receipts monotônicos inclusive diante de falha e ordem invertida', () => {
     expect(mergeCommunicationMessageStatus('READ', 'SENT')).toBe('READ')
     expect(mergeCommunicationMessageStatus('DELIVERED', 'FAILED')).toBe('DELIVERED')
@@ -98,6 +119,61 @@ describe('projeção local da comunicação', () => {
     expect(merged[0]?.status).toBe('DELIVERED')
     expect(merged[0]?.attachments).toHaveLength(1)
     expect(mergeCommunicationMessages(merged, merged)).toEqual(merged)
+  })
+
+  it('mantém conteúdo e disponibilidade, mas respeita anexos explicitamente vazios', () => {
+    const initial: CommunicationMessage = {
+      ...message(1, 'DELIVERED', '2026-07-22T10:00:00Z'),
+      body: 'Mensagem preservada',
+      content: { text: 'Mensagem preservada' },
+      availability: { state: 'MEDIA_RETRY_AVAILABLE', recoverable: true },
+      attachments: [{
+        id: 5,
+        filename: 'documento.pdf',
+        mime_type: 'application/pdf',
+        size_bytes: 50,
+        sha256: 'a'.repeat(64),
+        download_url: '/private'
+      }]
+    }
+
+    const merged = mergeCommunicationMessages([initial], [{
+      ...message(1, 'SENT', '2026-07-22T10:00:00Z'),
+      body: null,
+      content: { text: null, caption: null },
+      availability: null,
+      attachments: []
+    }])[0]
+
+    expect(merged?.body).toBe('Mensagem preservada')
+    expect(merged?.content).toEqual({ text: 'Mensagem preservada', caption: null })
+    expect(merged?.attachments).toEqual([])
+    expect(merged?.availability).toEqual({ state: 'MEDIA_RETRY_AVAILABLE', recoverable: true })
+  })
+
+  it('normaliza texto e legenda aditivos e expõe placeholders de disponibilidade', () => {
+    const caption: CommunicationMessage = {
+      ...message(3, 'SENT', '2026-07-22T10:00:00Z'),
+      body: null,
+      content: { caption: 'Legenda da imagem' },
+      availability: { state: 'AVAILABLE', recoverable: false }
+    }
+    expect(communicationMessageBody(caption)).toBe('Legenda da imagem')
+    expect(communicationAvailabilityPlaceholder(caption)).toBeNull()
+
+    for (const [state, placeholder] of [
+      ['UNSUPPORTED', 'Este tipo de mensagem ainda não é compatível.'],
+      ['MEDIA_RETRY_AVAILABLE', 'Esta mídia histórica pode ser recuperada.'],
+      ['MEDIA_REQUESTED', 'A recuperação desta mídia foi solicitada.'],
+      ['MEDIA_FAILED', 'Não foi possível recuperar esta mídia.'],
+      ['UNAVAILABLE', 'Conteúdo indisponível.']
+    ] as const) {
+      expect(communicationAvailabilityPlaceholder({
+        ...caption,
+        content: null,
+        availability: { state, recoverable: state === 'MEDIA_RETRY_AVAILABLE' }
+      })).toBe(placeholder)
+    }
   })
 
   it('preserva timeline detalhada ao atualizar a lista e ordena prioridade', () => {
@@ -212,14 +288,36 @@ describe('projeção local da comunicação', () => {
     const linked = {
       ...conversation(12, 0),
       clients: [{ id: 1, name: 'Alfa Comércio' }, { id: 2, name: 'Beta Serviços' }],
-      contact: { id: 3, name: 'Maria Financeiro', address_masked: '+55••••1234' }
+      contact: {
+        id: 3,
+        name: 'Maria Financeiro',
+        address_masked: '+55••••1234',
+        phone: '+5511999991234'
+      }
     }
     expect(communicationDisplayName(linked)).toBe('Alfa Comércio +1')
-    expect(communicationContactLabel(linked)).toBe('Maria Financeiro · +55••••1234')
+    expect(communicationContactLabel(linked)).toBe('Maria Financeiro · +5511999991234')
     expect(communicationDisplayName({
       ...conversation(13, 0),
       contact: { id: 4, name: 'Contato provisório', address_masked: '+55••••5678' }
     })).toBe('Contato provisório')
+  })
+
+  it('nunca usa endereço mascarado como telefone ou título da conversa', () => {
+    const masked = {
+      ...conversation(14, 0),
+      display_title: '+55••••5678',
+      secondary_title: '+55••••5678',
+      contact: {
+        id: 5,
+        name: null,
+        address_masked: '+55••••5678',
+        phone: null
+      }
+    }
+
+    expect(communicationDisplayName(masked)).toBe('Contato #5')
+    expect(communicationContactLabel(masked)).toBeNull()
   })
 
   it('projeta evidência somente para a última imagem inbound não revogada', () => {
@@ -313,22 +411,22 @@ describe('Reverb fail-closed e recuperável', () => {
       resolve(process.cwd(), 'app/composables/api/createCommunicationApi.ts'),
       'utf8'
     )
-    const listFilters = workspace.match(
-      /function listFilters[\s\S]*?\n {2}}\n\n {2}async function loadInboxes/
-    )?.[0] ?? ''
-
-    expect(listFilters).not.toContain('per_page: 100')
-    expect(listFilters).toContain('page,')
-    expect(listFilters).toContain('per_page: COMMUNICATION_CONVERSATION_PAGE_SIZE')
+    expect(workspace).toContain('function listFilters(page = 1)')
+    expect(workspace).toContain('per_page: COMMUNICATION_CONVERSATION_PAGE_SIZE')
+    expect(workspace).toContain('COMMUNICATION_CONVERSATION_PAGE_SIZE = 50')
+    expect(workspace).toContain('label_ids: labelIdsFilter.value.length ? labelIdsFilter.value : undefined')
+    expect(workspace).toContain('sort_by: normalizeCommunicationConversationSortBy(sortBy.value)')
     expect(workspace).toContain('applyConversationMeta(response.meta)')
     expect(workspace).toContain('loadMoreConversations')
     expect(workspace).toContain('conversationDetails.value[id]')
-    expect(workspace).toContain('mergeCommunicationConversations(conversations.value, [detail])')
+    expect(workspace).toContain('item.id === detail.id ? detail : item')
     expect(workspace).toContain('sessionEpoch: sessionEpoch.value')
     expect(workspace).toContain('conversationQueryGeneration')
     expect(workspace).toContain('conversationQueryController?.abort()')
     expect(api).toContain('CommunicationConversationListMeta')
     expect(api).toContain('options?: { signal?: AbortSignal }')
+    expect(api).toContain('conversationListPreferences')
+    expect(api).toContain('conversationBulkOperations')
   })
 
   it('só habilita websocket quando flag e configuração estão completas', () => {
@@ -392,7 +490,8 @@ describe('Reverb fail-closed e recuperável', () => {
     expect(composer).toContain('acknowledge')
     expect(composer).toContain('if (ok) clearDraft()')
     expect(page).toContain('acknowledge?.(ok)')
-    expect(page).toContain('onMounted(() => void workspace.initialize())')
+    expect(page).toContain('void workspace.initialize()')
+    expect(page).toContain('applyScopeQueryFromRoute')
     expect(page).toContain('communicationConversationPath')
     expect(page).toContain('routeConversationId')
   })

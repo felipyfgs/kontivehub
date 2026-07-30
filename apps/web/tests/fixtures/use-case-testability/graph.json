@@ -1,5 +1,5 @@
 {
-  "digest": "64353885c6f26f97ee75451be9267e276e149c457cb1e9fca790077c58b44060",
+  "digest": "2d8a9ea98ca2fd94d3e21f67903711e703253cba4cc88daf73f6249c9d05fcc8",
   "schemaVersion": 1,
   "source": {
     "catalog": "apps/web/tests/fixtures/use-case-testability/catalog.json",
@@ -9,9 +9,9 @@
   "summary": {
     "journeys": 11,
     "criticalJourneys": 4,
-    "apiRoutes": 572,
+    "apiRoutes": 584,
     "pages": 74,
-    "handlers": 570,
+    "handlers": 582,
     "apiClients": 15,
     "tests": 12,
     "unmatchedApiClientEndpoints": 0
@@ -123,7 +123,7 @@
       "journeyId": "communication-inbox",
       "title": "Atendimento WhatsApp compartilhado",
       "critical": false,
-      "apiRoutes": 102,
+      "apiRoutes": 114,
       "pages": 8,
       "apiClients": 1,
       "levels": {
@@ -617,7 +617,7 @@
       "section": "communication",
       "file": "app/pages/communication/contacts/[id].vue",
       "route": "/communication/contacts/:id",
-      "notes": "Ficha do contato: edit, identities, links, export e purge"
+      "notes": "Detalhes do contato: edit, identities, links, export e purge"
     },
     {
       "id": "page:app/pages/communication/quick-responses/index.vue",
@@ -1311,6 +1311,12 @@
         "api/v1/communication/contacts/:param/export",
         "api/v1/communication/contacts/:param/identities",
         "api/v1/communication/contacts/:param/personal-data",
+        "api/v1/communication/contacts/:param/shared-content",
+        "api/v1/communication/contacts/search",
+        "api/v1/communication/conversation-bulk-operations",
+        "api/v1/communication/conversation-bulk-operations/:param",
+        "api/v1/communication/conversation-bulk-operations/:param/items",
+        "api/v1/communication/conversation-list-preferences",
         "api/v1/communication/conversations",
         "api/v1/communication/conversations/:param",
         "api/v1/communication/conversations/:param/disappearing",
@@ -1324,6 +1330,8 @@
         "api/v1/communication/conversations/:param/messages/:param/recovery",
         "api/v1/communication/conversations/:param/presence",
         "api/v1/communication/conversations/:param/presence/subscribe",
+        "api/v1/communication/conversations/:param/read-state",
+        "api/v1/communication/conversations/:param/shared-content",
         "api/v1/communication/events",
         "api/v1/communication/flow-bindings/:param",
         "api/v1/communication/flow-bindings/:param/disable",
@@ -1356,6 +1364,7 @@
         "api/v1/communication/inboxes/:param/session/status",
         "api/v1/communication/labels",
         "api/v1/communication/labels/:param",
+        "api/v1/communication/outbound-capabilities",
         "api/v1/communication/settings"
       ]
     },
@@ -2205,6 +2214,15 @@
       "action": "CommunicationContactController@store"
     },
     {
+      "id": "api:POST:api/v1/communication/contacts/search",
+      "type": "api-route",
+      "journeyId": "communication-inbox",
+      "method": "POST",
+      "uri": "api/v1/communication/contacts/search",
+      "group": "communication",
+      "action": "CommunicationContactController@search"
+    },
+    {
       "id": "api:GET:api/v1/communication/contacts/{contact}",
       "type": "api-route",
       "journeyId": "communication-inbox",
@@ -2250,6 +2268,60 @@
       "action": "CommunicationDataController@purgeContact"
     },
     {
+      "id": "api:GET:api/v1/communication/contacts/{contact}/shared-content",
+      "type": "api-route",
+      "journeyId": "communication-inbox",
+      "method": "GET",
+      "uri": "api/v1/communication/contacts/{contact}/shared-content",
+      "group": "communication",
+      "action": "CommunicationContactController@sharedContent"
+    },
+    {
+      "id": "api:POST:api/v1/communication/conversation-bulk-operations",
+      "type": "api-route",
+      "journeyId": "communication-inbox",
+      "method": "POST",
+      "uri": "api/v1/communication/conversation-bulk-operations",
+      "group": "communication",
+      "action": "ConversationBulkOperationController@store"
+    },
+    {
+      "id": "api:GET:api/v1/communication/conversation-bulk-operations/{operation}",
+      "type": "api-route",
+      "journeyId": "communication-inbox",
+      "method": "GET",
+      "uri": "api/v1/communication/conversation-bulk-operations/{operation}",
+      "group": "communication",
+      "action": "ConversationBulkOperationController@show"
+    },
+    {
+      "id": "api:GET:api/v1/communication/conversation-bulk-operations/{operation}/items",
+      "type": "api-route",
+      "journeyId": "communication-inbox",
+      "method": "GET",
+      "uri": "api/v1/communication/conversation-bulk-operations/{operation}/items",
+      "group": "communication",
+      "action": "ConversationBulkOperationController@items"
+    },
+    {
+      "id": "api:GET:api/v1/communication/conversation-list-preferences",
+      "type": "api-route",
+      "journeyId": "communication-inbox",
+      "method": "GET",
+      "uri": "api/v1/communication/conversation-list-preferences",
+      "group": "communication",
+      "action": "ConversationListPreferenceController@show"
+    },
+    {
+      "id": "api:PUT:api/v1/communication/conversation-list-preferences",
+      "type": "api-route",
+      "journeyId": "communication-inbox",
+      "method": "PUT",
+      "uri": "api/v1/communication/conversation-list-preferences",
+      "group": "communication",
+      "action": "ConversationListPreferenceController@update"
+    },
+    {
       "id": "api:GET:api/v1/communication/conversations",
       "type": "api-route",
       "journeyId": "communication-inbox",
@@ -2257,6 +2329,15 @@
       "uri": "api/v1/communication/conversations",
       "group": "communication",
       "action": "CommunicationConversationController@index"
+    },
+    {
+      "id": "api:POST:api/v1/communication/conversations",
+      "type": "api-route",
+      "journeyId": "communication-inbox",
+      "method": "POST",
+      "uri": "api/v1/communication/conversations",
+      "group": "communication",
+      "action": "CommunicationConversationController@store"
     },
     {
       "id": "api:GET:api/v1/communication/conversations/{conversation}",
@@ -2302,6 +2383,15 @@
       "uri": "api/v1/communication/conversations/{conversation}/labels/{label}",
       "group": "communication",
       "action": "CommunicationConversationController@removeLabel"
+    },
+    {
+      "id": "api:GET:api/v1/communication/conversations/{conversation}/messages",
+      "type": "api-route",
+      "journeyId": "communication-inbox",
+      "method": "GET",
+      "uri": "api/v1/communication/conversations/{conversation}/messages",
+      "group": "communication",
+      "action": "CommunicationConversationController@messages"
     },
     {
       "id": "api:POST:api/v1/communication/conversations/{conversation}/messages",
@@ -2392,6 +2482,24 @@
       "uri": "api/v1/communication/conversations/{conversation}/presence/subscribe",
       "group": "communication",
       "action": "CommunicationConversationGatewayController@subscribePresence"
+    },
+    {
+      "id": "api:PUT:api/v1/communication/conversations/{conversation}/read-state",
+      "type": "api-route",
+      "journeyId": "communication-inbox",
+      "method": "PUT",
+      "uri": "api/v1/communication/conversations/{conversation}/read-state",
+      "group": "communication",
+      "action": "CommunicationConversationController@updateReadState"
+    },
+    {
+      "id": "api:GET:api/v1/communication/conversations/{conversation}/shared-content",
+      "type": "api-route",
+      "journeyId": "communication-inbox",
+      "method": "GET",
+      "uri": "api/v1/communication/conversations/{conversation}/shared-content",
+      "group": "communication",
+      "action": "CommunicationConversationController@sharedContent"
     },
     {
       "id": "api:PUT:api/v1/communication/conversations/{conversation}/state",
@@ -2950,6 +3058,15 @@
       "uri": "api/v1/communication/outbound-capabilities",
       "group": "communication",
       "action": "CommunicationCatalogController@outboundCapabilities"
+    },
+    {
+      "id": "api:GET:api/v1/communication/profile-pictures/{profile}/{version}",
+      "type": "api-route",
+      "journeyId": "communication-inbox",
+      "method": "GET",
+      "uri": "api/v1/communication/profile-pictures/{profile}/{version}",
+      "group": "communication",
+      "action": "CommunicationProfilePictureController@show"
     },
     {
       "id": "api:PATCH:api/v1/communication/settings",
@@ -5535,15 +5652,6 @@
       "action": "SerproPlatformConfigurationController@updateUsageLimits"
     },
     {
-      "id": "api:GET:api/v1/platform/tenants",
-      "type": "api-route",
-      "journeyId": "platform-governance",
-      "method": "GET",
-      "uri": "api/v1/platform/tenants",
-      "group": "platform",
-      "action": "TenantAdminController@index"
-    },
-    {
       "id": "api:POST:api/v1/platform/tenants",
       "type": "api-route",
       "journeyId": "platform-governance",
@@ -5551,6 +5659,15 @@
       "uri": "api/v1/platform/tenants",
       "group": "platform",
       "action": "PlatformTenantController@store"
+    },
+    {
+      "id": "api:GET:api/v1/platform/tenants",
+      "type": "api-route",
+      "journeyId": "platform-governance",
+      "method": "GET",
+      "uri": "api/v1/platform/tenants",
+      "group": "platform",
+      "action": "TenantAdminController@index"
     },
     {
       "id": "api:GET:api/v1/platform/tenants/admin",
@@ -5604,7 +5721,7 @@
       "method": "GET",
       "uri": "api/v1/platform/tenants/{tenant}",
       "group": "platform",
-      "action": "TenantAdminController@show"
+      "action": "PlatformTenantController@show"
     },
     {
       "id": "api:POST:api/v1/platform/tenants/{tenant}/activation/regenerate",
@@ -7206,6 +7323,16 @@
       "action": "CommunicationContactController@linkIdentity"
     },
     {
+      "id": "handler:CommunicationContactController@search",
+      "type": "handler",
+      "action": "CommunicationContactController@search"
+    },
+    {
+      "id": "handler:CommunicationContactController@sharedContent",
+      "type": "handler",
+      "action": "CommunicationContactController@sharedContent"
+    },
+    {
       "id": "handler:CommunicationContactController@show",
       "type": "handler",
       "action": "CommunicationContactController@show"
@@ -7236,6 +7363,11 @@
       "action": "CommunicationConversationController@index"
     },
     {
+      "id": "handler:CommunicationConversationController@messages",
+      "type": "handler",
+      "action": "CommunicationConversationController@messages"
+    },
+    {
       "id": "handler:CommunicationConversationController@removeLabel",
       "type": "handler",
       "action": "CommunicationConversationController@removeLabel"
@@ -7246,14 +7378,29 @@
       "action": "CommunicationConversationController@send"
     },
     {
+      "id": "handler:CommunicationConversationController@sharedContent",
+      "type": "handler",
+      "action": "CommunicationConversationController@sharedContent"
+    },
+    {
       "id": "handler:CommunicationConversationController@show",
       "type": "handler",
       "action": "CommunicationConversationController@show"
     },
     {
+      "id": "handler:CommunicationConversationController@store",
+      "type": "handler",
+      "action": "CommunicationConversationController@store"
+    },
+    {
       "id": "handler:CommunicationConversationController@update",
       "type": "handler",
       "action": "CommunicationConversationController@update"
+    },
+    {
+      "id": "handler:CommunicationConversationController@updateReadState",
+      "type": "handler",
+      "action": "CommunicationConversationController@updateReadState"
     },
     {
       "id": "handler:CommunicationConversationGatewayController@chatPresence",
@@ -7621,6 +7768,11 @@
       "action": "CommunicationInboxGatewayController@userInfo"
     },
     {
+      "id": "handler:CommunicationProfilePictureController@show",
+      "type": "handler",
+      "action": "CommunicationProfilePictureController@show"
+    },
+    {
       "id": "handler:CompletedJobsController@index",
       "type": "handler",
       "action": "CompletedJobsController@index"
@@ -7639,6 +7791,31 @@
       "id": "handler:ConfirmedPasswordStatusController@show",
       "type": "handler",
       "action": "ConfirmedPasswordStatusController@show"
+    },
+    {
+      "id": "handler:ConversationBulkOperationController@items",
+      "type": "handler",
+      "action": "ConversationBulkOperationController@items"
+    },
+    {
+      "id": "handler:ConversationBulkOperationController@show",
+      "type": "handler",
+      "action": "ConversationBulkOperationController@show"
+    },
+    {
+      "id": "handler:ConversationBulkOperationController@store",
+      "type": "handler",
+      "action": "ConversationBulkOperationController@store"
+    },
+    {
+      "id": "handler:ConversationListPreferenceController@show",
+      "type": "handler",
+      "action": "ConversationListPreferenceController@show"
+    },
+    {
+      "id": "handler:ConversationListPreferenceController@update",
+      "type": "handler",
+      "action": "ConversationListPreferenceController@update"
     },
     {
       "id": "handler:CsrfCookieController@show",
@@ -8691,6 +8868,11 @@
       "action": "PlatformTenantController@regenerateActivation"
     },
     {
+      "id": "handler:PlatformTenantController@show",
+      "type": "handler",
+      "action": "PlatformTenantController@show"
+    },
+    {
       "id": "handler:PlatformTenantController@store",
       "type": "handler",
       "action": "PlatformTenantController@store"
@@ -9279,11 +9461,6 @@
       "id": "handler:TenantAdminController@index",
       "type": "handler",
       "action": "TenantAdminController@index"
-    },
-    {
-      "id": "handler:TenantAdminController@show",
-      "type": "handler",
-      "action": "TenantAdminController@show"
     },
     {
       "id": "handler:TenantAdminController@updateSubscription",
@@ -10338,6 +10515,16 @@
     },
     {
       "from": "journey:communication-inbox",
+      "to": "api:POST:api/v1/communication/contacts/search",
+      "type": "exposes"
+    },
+    {
+      "from": "api:POST:api/v1/communication/contacts/search",
+      "to": "handler:CommunicationContactController@search",
+      "type": "handled-by"
+    },
+    {
+      "from": "journey:communication-inbox",
       "to": "api:GET:api/v1/communication/contacts/{contact}",
       "type": "exposes"
     },
@@ -10388,12 +10575,82 @@
     },
     {
       "from": "journey:communication-inbox",
+      "to": "api:GET:api/v1/communication/contacts/{contact}/shared-content",
+      "type": "exposes"
+    },
+    {
+      "from": "api:GET:api/v1/communication/contacts/{contact}/shared-content",
+      "to": "handler:CommunicationContactController@sharedContent",
+      "type": "handled-by"
+    },
+    {
+      "from": "journey:communication-inbox",
+      "to": "api:POST:api/v1/communication/conversation-bulk-operations",
+      "type": "exposes"
+    },
+    {
+      "from": "api:POST:api/v1/communication/conversation-bulk-operations",
+      "to": "handler:ConversationBulkOperationController@store",
+      "type": "handled-by"
+    },
+    {
+      "from": "journey:communication-inbox",
+      "to": "api:GET:api/v1/communication/conversation-bulk-operations/{operation}",
+      "type": "exposes"
+    },
+    {
+      "from": "api:GET:api/v1/communication/conversation-bulk-operations/{operation}",
+      "to": "handler:ConversationBulkOperationController@show",
+      "type": "handled-by"
+    },
+    {
+      "from": "journey:communication-inbox",
+      "to": "api:GET:api/v1/communication/conversation-bulk-operations/{operation}/items",
+      "type": "exposes"
+    },
+    {
+      "from": "api:GET:api/v1/communication/conversation-bulk-operations/{operation}/items",
+      "to": "handler:ConversationBulkOperationController@items",
+      "type": "handled-by"
+    },
+    {
+      "from": "journey:communication-inbox",
+      "to": "api:GET:api/v1/communication/conversation-list-preferences",
+      "type": "exposes"
+    },
+    {
+      "from": "api:GET:api/v1/communication/conversation-list-preferences",
+      "to": "handler:ConversationListPreferenceController@show",
+      "type": "handled-by"
+    },
+    {
+      "from": "journey:communication-inbox",
+      "to": "api:PUT:api/v1/communication/conversation-list-preferences",
+      "type": "exposes"
+    },
+    {
+      "from": "api:PUT:api/v1/communication/conversation-list-preferences",
+      "to": "handler:ConversationListPreferenceController@update",
+      "type": "handled-by"
+    },
+    {
+      "from": "journey:communication-inbox",
       "to": "api:GET:api/v1/communication/conversations",
       "type": "exposes"
     },
     {
       "from": "api:GET:api/v1/communication/conversations",
       "to": "handler:CommunicationConversationController@index",
+      "type": "handled-by"
+    },
+    {
+      "from": "journey:communication-inbox",
+      "to": "api:POST:api/v1/communication/conversations",
+      "type": "exposes"
+    },
+    {
+      "from": "api:POST:api/v1/communication/conversations",
+      "to": "handler:CommunicationConversationController@store",
       "type": "handled-by"
     },
     {
@@ -10444,6 +10701,16 @@
     {
       "from": "api:DELETE:api/v1/communication/conversations/{conversation}/labels/{label}",
       "to": "handler:CommunicationConversationController@removeLabel",
+      "type": "handled-by"
+    },
+    {
+      "from": "journey:communication-inbox",
+      "to": "api:GET:api/v1/communication/conversations/{conversation}/messages",
+      "type": "exposes"
+    },
+    {
+      "from": "api:GET:api/v1/communication/conversations/{conversation}/messages",
+      "to": "handler:CommunicationConversationController@messages",
       "type": "handled-by"
     },
     {
@@ -10544,6 +10811,26 @@
     {
       "from": "api:POST:api/v1/communication/conversations/{conversation}/presence/subscribe",
       "to": "handler:CommunicationConversationGatewayController@subscribePresence",
+      "type": "handled-by"
+    },
+    {
+      "from": "journey:communication-inbox",
+      "to": "api:PUT:api/v1/communication/conversations/{conversation}/read-state",
+      "type": "exposes"
+    },
+    {
+      "from": "api:PUT:api/v1/communication/conversations/{conversation}/read-state",
+      "to": "handler:CommunicationConversationController@updateReadState",
+      "type": "handled-by"
+    },
+    {
+      "from": "journey:communication-inbox",
+      "to": "api:GET:api/v1/communication/conversations/{conversation}/shared-content",
+      "type": "exposes"
+    },
+    {
+      "from": "api:GET:api/v1/communication/conversations/{conversation}/shared-content",
+      "to": "handler:CommunicationConversationController@sharedContent",
       "type": "handled-by"
     },
     {
@@ -11164,6 +11451,16 @@
     {
       "from": "api:GET:api/v1/communication/outbound-capabilities",
       "to": "handler:CommunicationCatalogController@outboundCapabilities",
+      "type": "handled-by"
+    },
+    {
+      "from": "journey:communication-inbox",
+      "to": "api:GET:api/v1/communication/profile-pictures/{profile}/{version}",
+      "type": "exposes"
+    },
+    {
+      "from": "api:GET:api/v1/communication/profile-pictures/{profile}/{version}",
+      "to": "handler:CommunicationProfilePictureController@show",
       "type": "handled-by"
     },
     {
@@ -14038,22 +14335,22 @@
     },
     {
       "from": "journey:platform-governance",
-      "to": "api:GET:api/v1/platform/tenants",
-      "type": "exposes"
-    },
-    {
-      "from": "api:GET:api/v1/platform/tenants",
-      "to": "handler:TenantAdminController@index",
-      "type": "handled-by"
-    },
-    {
-      "from": "journey:platform-governance",
       "to": "api:POST:api/v1/platform/tenants",
       "type": "exposes"
     },
     {
       "from": "api:POST:api/v1/platform/tenants",
       "to": "handler:PlatformTenantController@store",
+      "type": "handled-by"
+    },
+    {
+      "from": "journey:platform-governance",
+      "to": "api:GET:api/v1/platform/tenants",
+      "type": "exposes"
+    },
+    {
+      "from": "api:GET:api/v1/platform/tenants",
+      "to": "handler:TenantAdminController@index",
       "type": "handled-by"
     },
     {
@@ -14113,7 +14410,7 @@
     },
     {
       "from": "api:GET:api/v1/platform/tenants/{tenant}",
-      "to": "handler:TenantAdminController@show",
+      "to": "handler:PlatformTenantController@show",
       "type": "handled-by"
     },
     {
@@ -17043,6 +17340,11 @@
     },
     {
       "from": "api-client:app/composables/api/createCommunicationApi.ts",
+      "to": "api:POST:api/v1/communication/contacts/search",
+      "type": "calls"
+    },
+    {
+      "from": "api-client:app/composables/api/createCommunicationApi.ts",
       "to": "api:GET:api/v1/communication/contacts/{contact}",
       "type": "calls"
     },
@@ -17068,7 +17370,57 @@
     },
     {
       "from": "api-client:app/composables/api/createCommunicationApi.ts",
+      "to": "api:GET:api/v1/communication/contacts/{contact}/shared-content",
+      "type": "calls"
+    },
+    {
+      "from": "api-client:app/composables/api/createCommunicationApi.ts",
+      "to": "api:POST:api/v1/communication/contacts/search",
+      "type": "calls"
+    },
+    {
+      "from": "api-client:app/composables/api/createCommunicationApi.ts",
+      "to": "api:GET:api/v1/communication/contacts/{contact}",
+      "type": "calls"
+    },
+    {
+      "from": "api-client:app/composables/api/createCommunicationApi.ts",
+      "to": "api:PATCH:api/v1/communication/contacts/{contact}",
+      "type": "calls"
+    },
+    {
+      "from": "api-client:app/composables/api/createCommunicationApi.ts",
+      "to": "api:POST:api/v1/communication/conversation-bulk-operations",
+      "type": "calls"
+    },
+    {
+      "from": "api-client:app/composables/api/createCommunicationApi.ts",
+      "to": "api:GET:api/v1/communication/conversation-bulk-operations/{operation}",
+      "type": "calls"
+    },
+    {
+      "from": "api-client:app/composables/api/createCommunicationApi.ts",
+      "to": "api:GET:api/v1/communication/conversation-bulk-operations/{operation}/items",
+      "type": "calls"
+    },
+    {
+      "from": "api-client:app/composables/api/createCommunicationApi.ts",
+      "to": "api:GET:api/v1/communication/conversation-list-preferences",
+      "type": "calls"
+    },
+    {
+      "from": "api-client:app/composables/api/createCommunicationApi.ts",
+      "to": "api:PUT:api/v1/communication/conversation-list-preferences",
+      "type": "calls"
+    },
+    {
+      "from": "api-client:app/composables/api/createCommunicationApi.ts",
       "to": "api:GET:api/v1/communication/conversations",
+      "type": "calls"
+    },
+    {
+      "from": "api-client:app/composables/api/createCommunicationApi.ts",
+      "to": "api:POST:api/v1/communication/conversations",
       "type": "calls"
     },
     {
@@ -17094,6 +17446,11 @@
     {
       "from": "api-client:app/composables/api/createCommunicationApi.ts",
       "to": "api:DELETE:api/v1/communication/conversations/{conversation}/labels/{label}",
+      "type": "calls"
+    },
+    {
+      "from": "api-client:app/composables/api/createCommunicationApi.ts",
+      "to": "api:GET:api/v1/communication/conversations/{conversation}/messages",
       "type": "calls"
     },
     {
@@ -17139,6 +17496,16 @@
     {
       "from": "api-client:app/composables/api/createCommunicationApi.ts",
       "to": "api:POST:api/v1/communication/conversations/{conversation}/presence/subscribe",
+      "type": "calls"
+    },
+    {
+      "from": "api-client:app/composables/api/createCommunicationApi.ts",
+      "to": "api:PUT:api/v1/communication/conversations/{conversation}/read-state",
+      "type": "calls"
+    },
+    {
+      "from": "api-client:app/composables/api/createCommunicationApi.ts",
+      "to": "api:GET:api/v1/communication/conversations/{conversation}/shared-content",
       "type": "calls"
     },
     {
@@ -17344,6 +17711,11 @@
     {
       "from": "api-client:app/composables/api/createCommunicationApi.ts",
       "to": "api:DELETE:api/v1/communication/labels/{label}",
+      "type": "calls"
+    },
+    {
+      "from": "api-client:app/composables/api/createCommunicationApi.ts",
+      "to": "api:GET:api/v1/communication/outbound-capabilities",
       "type": "calls"
     },
     {
@@ -18953,12 +19325,12 @@
     },
     {
       "from": "api-client:app/composables/api/createPlatformApi.ts",
-      "to": "api:GET:api/v1/platform/tenants",
+      "to": "api:POST:api/v1/platform/tenants",
       "type": "calls"
     },
     {
       "from": "api-client:app/composables/api/createPlatformApi.ts",
-      "to": "api:POST:api/v1/platform/tenants",
+      "to": "api:GET:api/v1/platform/tenants",
       "type": "calls"
     },
     {

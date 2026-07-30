@@ -63,7 +63,7 @@
     "section": "communication",
     "file": "app/pages/communication/contacts/[id].vue",
     "route": "/communication/contacts/:id",
-    "notes": "Ficha do contato: edit, identities, links, export e purge"
+    "notes": "Detalhes do contato: edit, identities, links, export e purge"
   },
   {
     "section": "communication",
