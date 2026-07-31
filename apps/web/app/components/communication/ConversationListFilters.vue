@@ -187,8 +187,11 @@ const hiddenFilterSummaryCount = computed(() => Math.max(
   0,
   activeFilterSummaries.value.length - visibleFilterSummaries.value.length
 ))
-const advancedActiveCount = computed(() => activeAdvancedFields().length)
+const advancedActiveCount = computed(() => activeFilterSummaries.value.length)
 const hasAdvancedFilters = computed(() => advancedActiveCount.value > 0)
+const advancedActiveLabel = computed(() =>
+  `${advancedActiveCount.value} ${advancedActiveCount.value === 1 ? 'ativo' : 'ativos'}`
+)
 
 const searchModel = computed({
   get: () => props.search,
@@ -425,11 +428,14 @@ resetAdvancedDraft()
 
 <template>
   <div
-    class="flex w-full min-w-0 max-w-full flex-col gap-1.5 overflow-x-hidden py-2"
+    class="flex w-full min-w-0 max-w-full flex-col gap-1.5 overflow-x-hidden px-2 py-2"
     data-testid="communication-list-filters"
   >
     <div
-      class="w-full min-w-0"
+      class="flex w-full min-w-0 items-center"
+      :class="selectionActive
+        ? null
+        : 'pe-[4.5rem] [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:pe-24'"
       data-testid="communication-search-row"
     >
       <UInput
@@ -437,7 +443,7 @@ resetAdvancedDraft()
         icon="i-lucide-search"
         placeholder="Buscar contato, telefone ou mensagem"
         size="sm"
-        class="w-full min-w-0"
+        class="min-w-0 flex-1"
         data-testid="communication-search"
         aria-label="Buscar conversas"
       >
@@ -480,45 +486,9 @@ resetAdvancedDraft()
         class="flex min-w-0 flex-col gap-1.5"
       >
         <div
-          class="flex h-10 min-w-0 items-stretch gap-0.5 overflow-hidden [@media(pointer:coarse)]:h-12"
+          class="relative h-7 w-full min-w-0 [@media(pointer:coarse)]:h-11"
           data-testid="communication-filter-views"
         >
-          <UTabs
-            :items="quickViewTabs"
-            :model-value="activeQuickView || '__none__'"
-            :content="false"
-            activation-mode="manual"
-            variant="link"
-            size="sm"
-            class="min-w-0 flex-1"
-            :ui="{
-              list: 'h-10 w-full min-w-0 gap-0 overflow-hidden rounded-none bg-transparent p-0 [@media(pointer:coarse)]:h-12',
-              indicator: 'bottom-0 h-0.5 rounded-none bg-primary',
-              trigger: 'h-10 min-w-0 flex-1 rounded-none px-1 text-[11px] font-medium text-muted data-[state=active]:text-primary min-[360px]:px-1.5 min-[390px]:text-xs [@media(pointer:coarse)]:h-12',
-              label: 'min-w-0 truncate'
-            }"
-            aria-label="Visões rápidas das conversas"
-            @update:model-value="onQuickViewChange"
-          >
-            <template #default="{ item }">
-              <span
-                :data-testid="item.testId"
-                class="min-w-0 truncate"
-              >
-                <template v-if="item.compactLabel">
-                  <span class="sr-only">{{ item.ariaLabel }}</span>
-                  <span aria-hidden="true" class="hidden min-[360px]:inline">
-                    {{ item.label }}
-                  </span>
-                  <span aria-hidden="true" class="min-[360px]:hidden">
-                    {{ item.compactLabel }}
-                  </span>
-                </template>
-                <span v-else>{{ item.label }}</span>
-              </span>
-            </template>
-          </UTabs>
-
           <UPopover
             :open="statusOptionsOpen"
             :portal="true"
@@ -538,7 +508,7 @@ resetAdvancedDraft()
                 :variant="statusOptionsOpen || hasCustomStatus ? 'soft' : 'ghost'"
                 size="sm"
                 square
-                class="my-1 size-8 shrink-0 [@media(pointer:coarse)]:my-0.5 [@media(pointer:coarse)]:size-11"
+                class="absolute end-9 -top-[2.375rem] size-8 shrink-0 [@media(pointer:coarse)]:end-12 [@media(pointer:coarse)]:-top-[3.125rem] [@media(pointer:coarse)]:size-11"
                 :aria-expanded="statusOptionsOpen"
                 aria-controls="communication-filter-status-panel"
                 :aria-label="hasCustomStatus
@@ -562,8 +532,11 @@ resetAdvancedDraft()
                   Exibição da lista
                 </h2>
                 <div class="space-y-3">
-                  <label class="block min-w-0 space-y-1.5">
-                    <span class="text-xs font-medium text-toned">Status</span>
+                  <UFormField
+                    label="Status"
+                    size="sm"
+                    class="min-w-0"
+                  >
                     <USelectMenu
                       :model-value="status"
                       :items="statusItems"
@@ -574,9 +547,12 @@ resetAdvancedDraft()
                       data-testid="communication-filter-status"
                       @update:model-value="updateStatus"
                     />
-                  </label>
-                  <label class="block min-w-0 space-y-1.5">
-                    <span class="text-xs font-medium text-toned">Ordenar</span>
+                  </UFormField>
+                  <UFormField
+                    label="Ordenar"
+                    size="sm"
+                    class="min-w-0"
+                  >
                     <USelectMenu
                       :model-value="normalizedSort"
                       :items="COMMUNICATION_SORT_BY_OPTIONS"
@@ -587,7 +563,7 @@ resetAdvancedDraft()
                       data-testid="communication-filter-sort"
                       @update:model-value="updateSort"
                     />
-                  </label>
+                  </UFormField>
                 </div>
               </section>
             </template>
@@ -606,28 +582,28 @@ resetAdvancedDraft()
             @update:open="onAdvancedOpenChange"
           >
             <UTooltip text="Filtros avançados">
-              <UButton
-                color="neutral"
-                :variant="hasAdvancedFilters || advancedOpen ? 'soft' : 'ghost'"
-                size="sm"
-                square
-                class="relative my-1 size-8 shrink-0 [@media(pointer:coarse)]:my-0.5 [@media(pointer:coarse)]:size-11"
-                :aria-expanded="advancedOpen"
-                aria-controls="communication-filter-advanced-panel"
-                :aria-label="hasAdvancedFilters
-                  ? `Filtros avançados: ${advancedActiveCount} ativos`
-                  : 'Filtros avançados'"
-                data-testid="communication-filter-advanced-trigger"
+              <UChip
+                :show="hasAdvancedFilters"
+                :text="Math.min(advancedActiveCount, 9)"
+                size="3xl"
+                inset
+                class="absolute end-0 -top-[2.375rem] [@media(pointer:coarse)]:-top-[3.125rem]"
               >
-                <UIcon name="i-lucide-list-filter" class="size-4" />
-                <span
-                  v-if="hasAdvancedFilters"
-                  class="absolute end-0.5 top-0.5 flex size-3 items-center justify-center rounded-full bg-primary text-[8px] font-bold leading-none text-inverted"
-                  aria-hidden="true"
-                >
-                  {{ Math.min(advancedActiveCount, 9) }}
-                </span>
-              </UButton>
+                <UButton
+                  icon="i-lucide-list-filter"
+                  color="neutral"
+                  :variant="hasAdvancedFilters || advancedOpen ? 'soft' : 'ghost'"
+                  size="sm"
+                  square
+                  class="size-8 shrink-0 [@media(pointer:coarse)]:size-11"
+                  :aria-expanded="advancedOpen"
+                  aria-controls="communication-filter-advanced-panel"
+                  :aria-label="hasAdvancedFilters
+                    ? `Filtros avançados: ${advancedActiveLabel}`
+                    : 'Filtros avançados'"
+                  data-testid="communication-filter-advanced-trigger"
+                />
+              </UChip>
             </UTooltip>
 
             <template #content>
@@ -657,14 +633,16 @@ resetAdvancedDraft()
                     aria-label="Regras de filtro"
                   >
                     <template v-for="(rule, index) in advancedRules" :key="rule.id">
-                      <span
+                      <UBadge
                         v-if="index > 0"
-                        class="ms-2 self-start rounded-md bg-elevated px-2 py-0.5 text-[10px] font-semibold text-muted"
+                        label="E"
+                        color="neutral"
+                        variant="soft"
+                        size="xs"
+                        class="ms-2 self-start text-[10px]"
                         role="presentation"
                         aria-hidden="true"
-                      >
-                        E
-                      </span>
+                      />
 
                       <div
                         class="relative grid min-w-0 grid-cols-1 gap-2 rounded-md bg-elevated/60 p-2 pe-12 [@media(pointer:coarse)]:pe-14 sm:grid-cols-[minmax(8rem,1fr)_auto_minmax(7rem,0.75fr)_minmax(9rem,1fr)] sm:items-center"
@@ -688,12 +666,14 @@ resetAdvancedDraft()
                           aria-hidden="true"
                         />
 
-                        <div
-                          class="flex min-h-8 min-w-0 items-center rounded-md px-2 text-xs font-medium text-toned ring ring-inset ring-default"
+                        <UBadge
+                          :label="advancedOperatorLabel(rule.field)"
+                          color="neutral"
+                          variant="outline"
+                          size="md"
+                          class="min-h-8 min-w-0 justify-start"
                           :data-testid="`communication-filter-rule-operator-${rule.id}`"
-                        >
-                          {{ advancedOperatorLabel(rule.field) }}
-                        </div>
+                        />
 
                         <USelectMenu
                           v-if="rule.field === 'inbox'"
@@ -748,30 +728,37 @@ resetAdvancedDraft()
                           @update:model-value="setDraftLabels"
                         />
 
-                        <div
+                        <UBadge
                           v-else-if="rule.field === 'unread'"
-                          class="flex min-h-8 min-w-0 items-center rounded-md bg-default px-2.5 text-xs text-highlighted ring ring-inset ring-default"
+                          label="Sim"
+                          color="neutral"
+                          variant="outline"
+                          size="md"
+                          class="min-h-8 min-w-0 justify-start"
                           data-testid="communication-filter-unread"
-                        >
-                          Sim
-                        </div>
+                        />
 
-                        <div
+                        <UBadge
                           v-else-if="rule.field === 'unassigned'"
-                          class="flex min-h-8 min-w-0 items-center rounded-md bg-default px-2.5 text-xs text-highlighted ring ring-inset ring-default"
+                          label="Sim"
+                          color="neutral"
+                          variant="outline"
+                          size="md"
+                          class="min-h-8 min-w-0 justify-start"
                           data-testid="communication-filter-unassigned"
-                        >
-                          Sim
-                        </div>
+                        />
 
-                        <div
+                        <UBadge
                           v-else
-                          class="flex min-h-8 min-w-0 items-center truncate rounded-md bg-default px-2.5 text-xs text-highlighted ring ring-inset ring-default"
+                          :label="contactFilterLabel || ''"
+                          color="neutral"
+                          variant="outline"
+                          size="md"
+                          class="min-h-8 min-w-0 justify-start"
+                          :ui="{ label: 'truncate' }"
                           data-testid="communication-filter-contact-draft"
                           :title="contactFilterLabel || undefined"
-                        >
-                          {{ contactFilterLabel }}
-                        </div>
+                        />
 
                         <UButton
                           icon="i-lucide-trash-2"
@@ -847,6 +834,41 @@ resetAdvancedDraft()
               </section>
             </template>
           </UPopover>
+
+          <UTabs
+            :items="quickViewTabs"
+            :model-value="activeQuickView || '__none__'"
+            :content="false"
+            activation-mode="manual"
+            variant="pill"
+            size="xs"
+            class="w-full min-w-0"
+            :ui="{
+              list: 'w-full max-w-full min-w-0 overflow-hidden [@media(pointer:coarse)]:h-11',
+              trigger: 'min-w-0 flex-1 [@media(pointer:coarse)]:min-h-9',
+              label: 'min-w-0 truncate'
+            }"
+            aria-label="Visões rápidas das conversas"
+            @update:model-value="onQuickViewChange"
+          >
+            <template #default="{ item }">
+              <span
+                :data-testid="item.testId"
+                class="min-w-0 truncate"
+              >
+                <template v-if="item.compactLabel">
+                  <span class="sr-only">{{ item.ariaLabel }}</span>
+                  <span aria-hidden="true" class="hidden min-[360px]:inline">
+                    {{ item.label }}
+                  </span>
+                  <span aria-hidden="true" class="min-[360px]:hidden">
+                    {{ item.compactLabel }}
+                  </span>
+                </template>
+                <span v-else>{{ item.label }}</span>
+              </span>
+            </template>
+          </UTabs>
         </div>
 
         <div

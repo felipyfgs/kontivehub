@@ -154,6 +154,43 @@ const PassThroughStub = defineComponent({
   }
 })
 
+const BadgeStub = defineComponent({
+  inheritAttrs: false,
+  props: {
+    label: { type: [String, Number], default: '' }
+  },
+  setup(props, { attrs, slots }) {
+    return () => h('span', attrs, slots.default?.() ?? String(props.label))
+  }
+})
+
+const ChipStub = defineComponent({
+  inheritAttrs: false,
+  props: {
+    show: { type: Boolean, default: true },
+    text: { type: [String, Number], default: '' }
+  },
+  setup(props, { attrs, slots }) {
+    return () => h('span', attrs, [
+      slots.default?.(),
+      props.show ? h('span', String(props.text)) : null
+    ])
+  }
+})
+
+const FormFieldStub = defineComponent({
+  inheritAttrs: false,
+  props: {
+    label: { type: String, default: '' }
+  },
+  setup(props, { attrs, slots }) {
+    return () => h('label', attrs, [
+      h('span', props.label),
+      slots.default?.()
+    ])
+  }
+})
+
 const baseProps = {
   selectionActive: false,
   search: '',
@@ -192,8 +229,11 @@ async function mountFilters(props: Partial<typeof baseProps> = {}) {
     },
     global: {
       stubs: {
+        UBadge: BadgeStub,
         UButton: ButtonStub,
+        UChip: ChipStub,
         UDropdownMenu: DropdownMenuStub,
+        UFormField: FormFieldStub,
         UIcon: PassThroughStub,
         UInput: InputStub,
         UPopover: PopoverStub,
@@ -226,11 +266,12 @@ afterEach(() => {
 })
 
 describe('ConversationListFilters — hierarquia compacta', () => {
-  it('mantém busca exclusiva, três tabs fixas e status/ordenação no primeiro popover', async () => {
+  it('mantém busca, três tabs pill fixas e status/ordenação no primeiro popover', async () => {
     const view = await mountFilters()
 
-    expect(view.get('[data-testid="communication-search-row"]')
-      .find('[data-testid="communication-filter-status-options"]').exists()).toBe(false)
+    expect(view.get('[data-testid="communication-search-row"]').exists()).toBe(true)
+    expect(view.get('[role="tablist"]').attributes('variant')).toBe('pill')
+    expect(view.get('[role="tablist"]').attributes('size')).toBe('xs')
     const tabs = view.findAll('[role="tab"]')
     expect(tabs[0]?.attributes('aria-selected')).toBe('true')
     expect(tabs[1]?.attributes('aria-selected')).toBe('false')
@@ -267,13 +308,26 @@ describe('ConversationListFilters — hierarquia compacta', () => {
       .attributes('aria-label')).toContain('filtro de status ativo')
   })
 
-  it('contabiliza no badge a regra avançada já expressa pela visão rápida', async () => {
+  it('não contabiliza no badge a condição já expressa pela visão rápida', async () => {
     const view = await mountFilters({ status: 'OPEN', unreadOnly: true })
 
     expect(view.findAll('[role="tab"]')[1]?.attributes('aria-selected')).toBe('true')
     expect(view.get('[data-testid="communication-filter-advanced-trigger"]')
-      .attributes('aria-label')).toBe('Filtros avançados: 1 ativos')
-    expect(view.get('[data-testid="communication-filter-advanced-trigger"]').text()).toContain('1')
+      .attributes('aria-label')).toBe('Filtros avançados')
+    expect(view.findComponent(ChipStub).props('show')).toBe(false)
+    expect(view.findComponent(ChipStub).props('text')).toBe(0)
+    expect(view.find('[data-testid="communication-filter-active-summary"]').exists()).toBe(false)
+  })
+
+  it('contabiliza somente o filtro avançado adicional à visão rápida', async () => {
+    const view = await mountFilters({ status: 'OPEN', unreadOnly: true, inboxId: 7 })
+
+    expect(view.findAll('[role="tab"]')[1]?.attributes('aria-selected')).toBe('true')
+    expect(view.get('[data-testid="communication-filter-advanced-trigger"]')
+      .attributes('aria-label')).toBe('Filtros avançados: 1 ativo')
+    expect(view.findComponent(ChipStub).props('show')).toBe(true)
+    expect(view.findComponent(ChipStub).props('text')).toBe(1)
+    expect(view.findAll('[data-testid="communication-filter-active-chip"]')).toHaveLength(1)
   })
 
   it('substitui tabs e resumo pela seleção sem retirar a busca', async () => {

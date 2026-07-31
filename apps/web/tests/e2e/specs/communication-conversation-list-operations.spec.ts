@@ -152,7 +152,7 @@ test('mobile: abre a timeline real e preserva o fallback', async ({ page }) => {
   await expectNoHorizontalOverflow(page)
 })
 
-test('filtros usam tabs fixas e dois popovers sem margem ou overflow', async ({ page }) => {
+test('filtros usam tabs pill compactas em largura total e dois popovers ao lado da busca', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await login(page)
   const listPanel = await openWorkspace(page)
@@ -186,6 +186,29 @@ test('filtros usam tabs fixas e dois popovers sem margem ou overflow', async ({ 
     const advanced = page.getByTestId('communication-filter-advanced-trigger')
     await expectSquareControl(statusOptions)
     await expectSquareControl(advanced)
+
+    await tabs.getByRole('tab').nth(1).click()
+    await expect(advanced).toHaveAttribute('aria-label', 'Filtros avançados')
+    await expect(page.getByTestId('communication-filter-active-summary')).toHaveCount(0)
+    await tabs.getByRole('tab').nth(0).click()
+
+    const searchBox = await page.getByTestId('communication-search').boundingBox()
+    const tabsBox = await page.getByTestId('communication-filter-views').boundingBox()
+    const tabsListBox = await tabs.boundingBox()
+    const statusBox = await statusOptions.boundingBox()
+    const advancedBox = await advanced.boundingBox()
+    expect(searchBox).not.toBeNull()
+    expect(tabsBox).not.toBeNull()
+    expect(tabsListBox).not.toBeNull()
+    expect(statusBox).not.toBeNull()
+    expect(advancedBox).not.toBeNull()
+    expect(searchBox!.x).toBeGreaterThan(filtersBox!.x)
+    expect(tabsBox!.x).toBeGreaterThan(filtersBox!.x)
+    expect(tabsBox!.width).toBeGreaterThan(searchBox!.width)
+    expect(Math.abs(tabsListBox!.width - tabsBox!.width)).toBeLessThanOrEqual(1)
+    expect(Math.abs(statusBox!.y - searchBox!.y)).toBeLessThanOrEqual(6)
+    expect(Math.abs(advancedBox!.y - searchBox!.y)).toBeLessThanOrEqual(6)
+    expect(tabsBox!.y).toBeGreaterThan(searchBox!.y + searchBox!.height)
 
     await statusOptions.click()
     const statusPanel = page.getByTestId('communication-filter-status-panel')
