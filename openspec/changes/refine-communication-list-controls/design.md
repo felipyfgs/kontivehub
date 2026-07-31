@@ -24,16 +24,16 @@ O workspace de Communication mantém busca, status, ordenação, inbox, respons�
 
 ### Recompor o cabeçalho da lista como uma superfície de chat
 
-O navbar mantém título, total autoritativo e “Nova conversa” como ação primária. Estado/sincronização e administração continuam autorizados, mas ações secundárias podem ser agrupadas em reticências sem remover o indicador de realtime. A busca passa a ocupar sozinha a primeira faixa abaixo do navbar, evitando compressão por ícones e deixando claro que atua sobre contato, telefone e mensagem.
+O navbar mantém título, total autoritativo e “Nova conversa” como ação primária. Estado/sincronização e administração continuam autorizados, mas ações secundárias podem ser agrupadas em reticências sem remover o indicador de realtime. A primeira faixa abaixo do navbar reúne a busca e somente os dois gatilhos de filtro, preservando largura flexível para contato, telefone ou mensagem. Busca e tabs recebem 8 px de respiro lateral em relação à borda do painel.
 
-A faixa seguinte adota a estrutura estável observada no `ChatTypeTabs` do Chatwoot: três tabs fixas, sem fundo de pill, com tipografia compacta e indicador inferior de 2 px. `Em aberto` aplica `status=OPEN`, `Não lidas` aplica `status=OPEN&unread=true` e `Não atribuídas` aplica `status=OPEN&unassigned=true`. Cada preset substitui atomicamente somente status, não lidas e sem responsável. A ordem nunca muda; em 320 px apenas o texto visual da última tab compacta para `Não atrib.`, mantendo o nome acessível completo. Quando o estado não corresponde exatamente a um preset, nenhuma tab é falsamente marcada.
+A faixa seguinte adota o mesmo `UTabs` em variante `pill` usado no inbox do dashboard: três tabs fixas, com tipografia compacta e cápsula ativa fornecida pelo Nuxt UI. `Em aberto` aplica `status=OPEN`, `Não lidas` aplica `status=OPEN&unread=true` e `Não atribuídas` aplica `status=OPEN&unassigned=true`. Cada preset substitui atomicamente somente status, não lidas e sem responsável. A ordem nunca muda; em 320 px apenas o texto visual da última tab compacta para `Não atrib.`, mantendo o nome acessível completo. Quando o estado não corresponde exatamente a um preset, nenhuma tab é falsamente marcada.
 
-Após as tabs ficam dois controles quadrados. `Status e ordenação` (`sliders-horizontal`) abre um `UPopover` com dois `USelectMenu`, preservando essas preferências sem criar selects largos permanentes. `Filtros avançados` (`list-filter`) abre outro `UPopover` com o construtor de regras e recebe badge quando há escopos aplicados. Os dois gatilhos têm tooltip/nome acessível e não compartilham um chevron ambíguo; o primeiro ancora por `end` e o editor avançado por `start`, ambos com ajuste de colisão. O estado aplicado aparece em até dois resumos e `+N`; o total autoritativo permanece no navbar, sem contagens inventadas por tab.
+Ao lado da busca ficam dois controles quadrados. `Status e ordenação` (`sliders-horizontal`) abre um `UPopover` com dois `USelectMenu`, preservando essas preferências sem criar selects largos permanentes. `Filtros avançados` (`list-filter`) abre outro `UPopover` com o construtor de regras e recebe badge quando há escopos aplicados. A faixa seguinte fica dedicada às tabs: o grupo `pill` preserva a altura e o padding compactos de `size="xs"` observados no inbox do dashboard, enquanto as três opções se distribuem pela largura útil para não deixar uma área morta. Os dois gatilhos têm tooltip/nome acessível e não compartilham um chevron ambíguo; o primeiro ancora por `end` e o editor avançado por `start`, ambos com ajuste de colisão. O estado aplicado aparece em até dois resumos e `+N`; o total autoritativo permanece no navbar, sem contagens inventadas por tab.
 
 ```text
 [ Atendimento  26 • ]                            [ nova ] [ ⋮ ]
-[ Buscar contato, telefone ou mensagem                         ]
-[ Em aberto | Não lidas | Não atribuídas ]       [ ajustes ] [ filtro• ]
+[ Buscar contato, telefone ou mensagem       ] [ ajustes ] [ filtro• ]
+[ Em aberto | Não lidas | Não atribuídas                         ]
 [ Contato: Maria ] [ Marcador: Fiscal ] [ +2 ]        (se ativos)
 ────────────────────────────────────────────────────────────────
  (avatar)  Contato                         horário      [ ⋮ ]
@@ -50,7 +50,7 @@ Alternativas descartadas: recolocar ícones dentro da busca volta a comprimi-la;
 
 ### Resumir estado aplicado sem autoabrir o editor
 
-Filtros de escopo ativos aparecem em no máximo dois chips truncáveis e `+N`, priorizando contato, responsável, inbox, fila e marcadores. Não lidas ou sem responsável deixam de ser repetidos no resumo quando já estão representados pela tab ativa. O editor não abre automaticamente ao restaurar uma intenção ou retornar do detalhe; o resumo mantém estado adicional visível sem bloquear a lista.
+Filtros de escopo ativos aparecem no badge do gatilho e em no máximo dois chips truncáveis mais `+N`, priorizando contato, responsável, inbox, fila e marcadores. Não lidas ou sem responsável deixam de ser contados no badge e repetidos no resumo quando já estão representados pela tab ativa. O editor não abre automaticamente ao restaurar uma intenção ou retornar do detalhe; o resumo mantém apenas estado adicional visível sem bloquear a lista.
 
 ### Sobrepor seleção no centro do avatar
 

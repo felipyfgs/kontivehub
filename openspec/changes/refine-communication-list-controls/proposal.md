@@ -6,9 +6,9 @@ Depois da primeira compactação, busca, visões rápidas e ações da conversa 
 
 ## What Changes
 
-- Colocar a busca em uma faixa própria imediatamente abaixo do navbar e alternar a faixa seguinte entre visões rápidas e ações de seleção.
-- Usar três tabs fixas no padrão visual observado no Chatwoot — `Em aberto`, `Não lidas` e `Não atribuídas` — com sublinhado ativo, ordem estável e rótulo compacto somente na largura mínima.
-- Expor somente dois controles iconográficos após as tabs: `Status e ordenação` em um popover com selects e `Filtros avançados` em um popover próprio com badge.
+- Colocar busca, status/ordenação e filtros avançados na primeira faixa abaixo do navbar, com respiro lateral, e alternar a faixa seguinte de tabs compactas em largura total entre visões rápidas e ações de seleção.
+- Usar três tabs fixas no padrão `pill` do inbox do dashboard — `Em aberto`, `Não lidas` e `Não atribuídas` — com cápsula ativa, ordem estável e rótulo compacto somente na largura mínima.
+- Expor somente dois controles iconográficos ao lado da busca: `Status e ordenação` em um popover com selects e `Filtros avançados` em um popover próprio com badge.
 - Editar filtros de escopo no popover avançado com regras explícitas de campo, operador e valor, rascunho descartável, aplicação conjunta e resumo compacto do estado aplicado.
 - Remover a faixa permanente “Selecionar carregadas” e centralizar o checkbox de cada conversa sobre o avatar, preservando mouse, teclado e touch.
 - Quando houver seleção, substituir tabs e resumo por uma faixa contextual com tri-state, contagem, leitura, status, mais ações e limpeza.

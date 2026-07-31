@@ -2,17 +2,17 @@
 
 ### Requirement: Filtros da lista possuem hierarquia compacta e aplicação previsível
 
-A SPA SHALL manter busca diretamente acessível em uma faixa própria, oferecer três presets fixos em tabs e expor somente dois controles iconográficos após elas: um popover de status/ordenação e um popover de filtros avançados. Filtros avançados SHALL usar regras de campo, operador e valor com rascunho explícito. Filtros aplicados SHALL permanecer identificáveis por badge e resumo truncável, e a composição SHALL NOT criar rolagem horizontal no painel mestre suportado.
+A SPA SHALL manter busca diretamente acessível ao lado de dois controles iconográficos — um popover de status/ordenação e um popover de filtros avançados —, oferecer três presets fixos na faixa seguinte em tabs `pill` nativas do Nuxt UI e aplicar respiro lateral compacto às duas faixas. Filtros avançados SHALL usar regras de campo, operador e valor com rascunho explícito. Filtros aplicados SHALL permanecer identificáveis por badge e resumo truncável, e a composição SHALL NOT criar rolagem horizontal no painel mestre suportado.
 
 #### Scenario: Painel mestre estreito
 - **WHEN** o painel de conversas é exibido ou redimensionado em uma largura suportada
-- **THEN** busca ocupa a primeira faixa abaixo do navbar e tabs, dois ícones e resumo cabem ou compactam sem select largo, padding lateral geral, scrollbar horizontal, quebra de linha, controles cortados ou conteúdo inacessível
+- **THEN** busca e os dois ícones ocupam a primeira faixa, as tabs `pill` formam um grupo verticalmente compacto distribuído por toda a largura útil da faixa seguinte e o conjunto preserva 8 px de respiro lateral, sem select largo, scrollbar horizontal, quebra de linha, controles cortados ou conteúdo inacessível
 
 #### Scenario: Operador escolhe uma visão rápida
 - **WHEN** o usuário aciona `Em aberto`, `Não lidas` ou `Não atribuídas`
 - **THEN** a tab aplica atomicamente o preset correspondente sobre status/unread/unassigned, limpa a seleção operacional e não altera filtros avançados fora dessas dimensões
 
-#### Scenario: Tabs mantêm memória espacial
+#### Scenario: Tabs em cápsula mantêm memória espacial
 - **WHEN** o painel muda de largura ou uma visão fora dos três presets fica ativa
 - **THEN** a ordem das tabs não muda, `Não atribuídas` compacta visualmente para `Não atrib.` somente na largura mínima e seu nome acessível permanece completo
 
@@ -54,7 +54,7 @@ A SPA SHALL manter busca diretamente acessível em uma faixa própria, oferecer 
 
 #### Scenario: Estado da superfície possui filtros ativos
 - **WHEN** o workspace restaura filtros válidos da sessão ou consome uma intenção one-shot
-- **THEN** o editor permanece fechado e até dois resumos mais `+N` comunicam o escopo ativo sem duplicar busca, status, ordenação ou a condição já expressa pela tab ativa
+- **THEN** o editor permanece fechado e o badge mais até dois resumos e `+N` comunicam somente o escopo adicional, sem duplicar busca, status, ordenação ou contabilizar a condição já expressa pela tab ativa
 
 ### Requirement: Seleção de conversas é contextual e centralizada
 
