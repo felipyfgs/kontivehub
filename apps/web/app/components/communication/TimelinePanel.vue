@@ -535,9 +535,10 @@ watch(
       <div
         ref="messagesContainer"
         class="h-full overflow-y-auto bg-elevated/20 p-4 sm:p-6"
+        data-testid="communication-messages-viewport"
         @scroll.passive="handleMessagesScroll"
       >
-        <div ref="messagesContent" class="min-h-full">
+        <div ref="messagesContent" class="flex min-h-full flex-col">
           <UAlert
             v-if="timeline?.error"
             :title="timeline.error"
@@ -560,7 +561,11 @@ watch(
             <USkeleton class="ms-auto h-14 w-1/2 rounded-2xl" />
           </div>
 
-          <template v-else>
+          <div
+            v-else
+            class="flex flex-1 flex-col"
+            data-testid="communication-timeline-content"
+          >
             <div
               v-if="timeline?.meta.older_cursor"
               class="mb-4 flex justify-center"
@@ -588,7 +593,11 @@ watch(
               </p>
             </div>
 
-            <div v-else class="space-y-3.5 sm:space-y-4">
+            <div
+              v-else
+              class="mt-auto space-y-3.5 sm:space-y-4"
+              data-testid="communication-message-stack"
+            >
               <template
                 v-for="message in conversation.messages"
                 :key="message.id"
@@ -772,7 +781,7 @@ watch(
                 @click="requestTimelinePage('newer')"
               />
             </div>
-          </template>
+          </div>
         </div>
       </div>
 
