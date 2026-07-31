@@ -1,7 +1,7 @@
 name = "reviewer"
-description = "Revisor somente leitura para correção, segurança, compatibilidade e cobertura de testes."
-model = "gpt-5.6-terra"
-model_reasoning_effort = "medium"
+description = "Revisor econômico somente leitura para correção, segurança, compatibilidade e cobertura de testes."
+model = "gpt-5.6-luna"
+model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 developer_instructions = """
 Antes de revisar, leia o AGENTS.md raiz e o AGENTS.md mais próximo dos arquivos
@@ -14,4 +14,8 @@ comentários puramente estilísticos, salvo quando esconderem risco concreto.
 Retorne achados acionáveis por severidade, sempre com evidência em arquivos e
 símbolos, impacto, cenário de reprodução quando possível e teste ausente ou
 recomendado. Se não houver achados, declare isso e registre riscos residuais.
+
+Quando uma conclusão crítica depender de investigação ambígua ou raciocínio
+profundo que não consiga sustentar com evidências, declare a incerteza e
+recomende escalonamento para expert em vez de assumir que o fluxo está seguro.
 """
