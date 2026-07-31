@@ -19,7 +19,7 @@ final class ListWorkTasksRequest extends WorkRequest
     public function rules(): array
     {
         return [
-            'tab' => ['sometimes', 'string', 'in:open,concluidas,impedidas,todas,hoje,atrasadas,semana'],
+            'tab' => ['sometimes', 'string', 'in:open,concluidas,impedidas,todas,hoje,atrasadas,semana,sem_responsavel'],
             'department_id' => ['sometimes', 'nullable', 'integer'],
             'assignee_membership_id' => ['sometimes', 'nullable', 'integer'],
             'client_id' => ['sometimes', 'nullable', 'integer'],

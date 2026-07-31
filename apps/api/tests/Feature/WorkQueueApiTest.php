@@ -176,6 +176,67 @@ class WorkQueueApiTest extends TestCase
         $this->assertNotContains($aFazer->id, $ids);
     }
 
+    public function test_tab_sem_responsavel_defaults_to_tenant_scope_for_operator(): void
+    {
+        [$operator, $tenant] = $this->actor(TenantRole::TenantUser);
+        $otherTenant = Tenant::factory()->create();
+        $client = Client::factory()->forTenant($tenant)->create();
+        $otherClient = Client::factory()->forTenant($otherTenant)->create();
+        $process = WorkProcess::factory()->create([
+            'tenant_id' => $tenant->id,
+            'client_id' => $client->id,
+            'status' => ProcessStatus::EmProgresso,
+        ]);
+        $otherProcess = WorkProcess::factory()->create([
+            'tenant_id' => $otherTenant->id,
+            'client_id' => $otherClient->id,
+            'status' => ProcessStatus::EmProgresso,
+        ]);
+        $unassigned = WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $process->id,
+            'sort_order' => 1,
+            'status' => TaskStatus::AFazer,
+            'assignee_membership_id' => null,
+        ]);
+        $assigned = WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $process->id,
+            'sort_order' => 2,
+            'status' => TaskStatus::AFazer,
+            'assignee_membership_id' => $operator->memberships()
+                ->where('tenant_id', $tenant->id)
+                ->value('id'),
+        ]);
+        $completed = WorkTask::factory()->create([
+            'tenant_id' => $tenant->id,
+            'work_process_id' => $process->id,
+            'sort_order' => 3,
+            'status' => TaskStatus::Concluida,
+            'assignee_membership_id' => null,
+        ]);
+        $foreign = WorkTask::factory()->create([
+            'tenant_id' => $otherTenant->id,
+            'work_process_id' => $otherProcess->id,
+            'sort_order' => 1,
+            'status' => TaskStatus::AFazer,
+            'assignee_membership_id' => null,
+        ]);
+
+        Sanctum::actingAs($operator);
+
+        $ids = collect($this->getJson('/api/v1/work/queue?tab=sem_responsavel')
+            ->assertOk()
+            ->json('data'))
+            ->pluck('id')
+            ->all();
+
+        $this->assertSame([$unassigned->id], $ids);
+        $this->assertNotContains($assigned->id, $ids);
+        $this->assertNotContains($completed->id, $ids);
+        $this->assertNotContains($foreign->id, $ids);
+    }
+
     /** @return array{User, Tenant} */
     private function actor(TenantRole $role): array
     {

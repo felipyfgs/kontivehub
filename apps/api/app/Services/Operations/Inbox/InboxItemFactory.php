@@ -7,6 +7,7 @@ use App\Models\Establishment;
 use App\Models\SyncCursor;
 use App\Services\Clients\CaptureEligibilityService;
 use App\Support\LogSanitizer;
+use InvalidArgumentException;
 
 /**
  * Helpers compartilhados da projeção da inbox operacional (item, labels, cursor, sanitização).
@@ -162,7 +163,7 @@ final class InboxItemFactory
         ?int $clientId,
         ?int $establishmentId,
         string $occurredAt,
-        InboxCapabilities|TenantRole|null $role,
+        ?InboxCapabilities $role,
         bool $retryAllowed,
         ?int $cursorId,
         ?int $quarantineId = null,
@@ -194,7 +195,7 @@ final class InboxItemFactory
             ];
         }
 
-        $links = ['health' => '/health?type='.$type];
+        $links = ['health' => $this->cteHealthPath($type)];
         if ($clientId !== null) {
             $links['client'] = '/clients/'.$clientId;
             $links['sync'] = '/clients/'.$clientId.'/sincronizacao';
@@ -213,6 +214,18 @@ final class InboxItemFactory
             'links' => $links,
             'actions' => $actions,
         ];
+    }
+
+    private function cteHealthPath(string $type): string
+    {
+        $supported = array_key_exists($type, self::TYPE_SEVERITY)
+            && (str_starts_with($type, 'cte_') || $type === 'quarantine_orphan_event');
+
+        if (! $supported) {
+            throw new InvalidArgumentException('Tipo de item CT-e não suportado.');
+        }
+
+        return '/health/type/'.$type;
     }
 
     public function clientLabel(Client $client): string

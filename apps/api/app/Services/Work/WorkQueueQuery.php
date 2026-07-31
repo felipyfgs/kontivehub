@@ -93,10 +93,18 @@ final class WorkQueueQuery
         }
 
         $scope = is_string($filters['scope'] ?? null) ? $filters['scope'] : 'mine';
+        // A aba é, por definição, incompatível com "mine": tarefas sem
+        // responsável nunca pertencem à fila pessoal do operador.
+        if ($tab === 'sem_responsavel' && $scope === 'mine') {
+            $scope = 'tenant';
+        }
         if ($role === TenantRole::TenantUser && $membership !== null) {
             $this->applyOperatorScope($query, $scope, $membership);
         }
 
+        if ($tab === 'sem_responsavel') {
+            $query->whereNull('assignee_membership_id');
+        }
         if (! empty($filters['department_id'])) {
             $query->where('work_department_id', (int) $filters['department_id']);
         }

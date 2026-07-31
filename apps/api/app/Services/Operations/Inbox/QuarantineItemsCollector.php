@@ -75,7 +75,7 @@ final class QuarantineItemsCollector
                 'establishment_id' => null,
                 'occurred_at' => $q->created_at?->toIso8601String() ?? now()->toIso8601String(),
                 'links' => [
-                    'quarantine' => '/health?type='.$type,
+                    'quarantine' => '/health/type/'.$type,
                 ],
                 'actions' => $actions,
             ];
