@@ -162,6 +162,7 @@ services:
     environment:
       LOCAL_UID: ${LOCAL_UID:-1000}
       LOCAL_GID: ${LOCAL_GID:-1000}
+      PNPM_CONFIG_STORE_DIR: ${PNPM_CONFIG_STORE_DIR:-}
       NUXT_SANCTUM_PROXY: "true"
       NUXT_SANCTUM_PROXY_BASE: http://nginx
       NUXT_DEVTOOLS: ${NUXT_DEVTOOLS:-true}
