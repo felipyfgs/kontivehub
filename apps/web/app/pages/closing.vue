@@ -25,14 +25,11 @@ import {
 import ShellListFilterToolbar from '~/components/shell/ListFilterToolbar.vue'
 
 const api = useApi()
-const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 const { canCreateExport, canAccessAdministration, canImportDocuments, me, sessionEpoch } = useDashboard()
 
 const FILTER_ALL = 'all'
-const pendingPage = ref(1)
-const pendingPerPage = ref(20)
 const pendingTotal = ref(0)
 const pendingLastPage = ref(1)
 
@@ -41,21 +38,104 @@ function defaultCompetence(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
-const initialCompetence = String(route.query.competence || '')
-const competence = ref(/^\d{4}-\d{2}$/.test(initialCompetence) ? initialCompetence : defaultCompetence())
-const initialBand = String(route.query.band || FILTER_ALL).toUpperCase()
-const bandFilter = ref(
-  ['PLANNED', 'ATTENTION', 'CONTINGENCY', 'OVERDUE', FILTER_ALL].includes(initialBand)
-    ? initialBand
-    : FILTER_ALL
-)
-const initialModel = String(route.query.model || FILTER_ALL)
-const modelFilter = ref(
-  ['55', '65', 'NFE', 'NFCE', FILTER_ALL].includes(initialModel) ? initialModel : FILTER_ALL
-)
-const rootFilter = ref(String(route.query.root || ''))
-const sourceFilter = ref(String(route.query.source || FILTER_ALL))
-const clientFilter = ref(String(route.query.client_id || ''))
+type ClosingNavigationState = {
+  competence: string
+  band: string
+  model: string
+  root: string
+  source: string
+  clientId: string
+  page: number
+  perPage: number
+}
+
+function closingNavigationDefaults(): ClosingNavigationState {
+  return {
+    competence: defaultCompetence(),
+    band: FILTER_ALL,
+    model: FILTER_ALL,
+    root: '',
+    source: FILTER_ALL,
+    clientId: '',
+    page: 1,
+    perPage: 20
+  }
+}
+
+function normalizeClosingNavigation(value: ClosingNavigationState): ClosingNavigationState {
+  const defaults = closingNavigationDefaults()
+  const band = String(value.band || FILTER_ALL).toUpperCase()
+  const model = String(value.model || FILTER_ALL).toUpperCase()
+  const source = String(value.source || FILTER_ALL).toUpperCase()
+  const page = Math.max(1, Math.floor(Number(value.page) || 1))
+  const perPage = [10, 20, 50].includes(Number(value.perPage)) ? Number(value.perPage) : 20
+
+  return {
+    competence: /^\d{4}-\d{2}$/.test(String(value.competence || ''))
+      ? String(value.competence)
+      : defaults.competence,
+    band: ['PLANNED', 'ATTENTION', 'CONTINGENCY', 'OVERDUE'].includes(band)
+      ? band
+      : FILTER_ALL,
+    model: ['55', '65', 'NFE', 'NFCE'].includes(model) ? model : FILTER_ALL,
+    root: String(value.root || ''),
+    source: ['SVRS', 'AUTXML', 'MANUAL', 'PACKAGE', 'VAULT'].includes(source)
+      ? source
+      : FILTER_ALL,
+    clientId: /^\d+$/.test(String(value.clientId || '')) ? String(value.clientId) : '',
+    page,
+    perPage
+  }
+}
+
+const navigationContext = computed(() => [
+  me.value?.id ?? 'guest',
+  me.value?.current_tenant?.id ?? 'none',
+  sessionEpoch.value
+].join(':'))
+const {
+  state: closingNavigation,
+  patch: patchClosingNavigation,
+  reset: resetClosingNavigation
+} = useSurfaceNavigationState(SURFACE_NAVIGATION.closing, closingNavigationDefaults, {
+  normalize: normalizeClosingNavigation,
+  resetKey: navigationContext
+})
+const legacyClosingIntent = consumeSurfaceNavigationIntent<Partial<ClosingNavigationState>>(SURFACE_NAVIGATION.closing)
+if (legacyClosingIntent) patchClosingNavigation(legacyClosingIntent)
+
+const competence = computed({
+  get: () => closingNavigation.value.competence,
+  set: value => patchClosingNavigation({ competence: value })
+})
+const bandFilter = computed({
+  get: () => closingNavigation.value.band,
+  set: value => patchClosingNavigation({ band: value })
+})
+const modelFilter = computed({
+  get: () => closingNavigation.value.model,
+  set: value => patchClosingNavigation({ model: value })
+})
+const rootFilter = computed({
+  get: () => closingNavigation.value.root,
+  set: value => patchClosingNavigation({ root: value })
+})
+const sourceFilter = computed({
+  get: () => closingNavigation.value.source,
+  set: value => patchClosingNavigation({ source: value })
+})
+const clientFilter = computed({
+  get: () => closingNavigation.value.clientId,
+  set: value => patchClosingNavigation({ clientId: value })
+})
+const pendingPage = computed({
+  get: () => closingNavigation.value.page,
+  set: value => patchClosingNavigation({ page: value })
+})
+const pendingPerPage = computed({
+  get: () => closingNavigation.value.perPage,
+  set: value => patchClosingNavigation({ perPage: value })
+})
 
 const summary = ref<OutboundCompetenceSummary | null>(null)
 const capacity = ref<OutboundCapacityForecast | null>(null)
@@ -510,35 +590,13 @@ watch(sessionEpoch, () => {
   capacity.value = null
   metrics.value = null
   items.value = []
-  pendingPage.value = 1
   pendingTotal.value = 0
   loadError.value = null
-  bandFilter.value = FILTER_ALL
-  modelFilter.value = FILTER_ALL
-  sourceFilter.value = FILTER_ALL
-  rootFilter.value = ''
-  clientFilter.value = ''
+  resetClosingNavigation()
   chipModels.value = []
   // ShellListFilterToolbar limpa presets via reset-key=sessionEpoch
   void load()
 })
-
-async function syncClosingUrl() {
-  const query: Record<string, string> = {}
-  if (competence.value) query.competence = competence.value
-  if (bandFilter.value && bandFilter.value !== FILTER_ALL) query.band = bandFilter.value
-  if (modelFilter.value && modelFilter.value !== FILTER_ALL) query.model = modelFilter.value
-  if (rootFilter.value.trim()) query.root = rootFilter.value.trim()
-  if (sourceFilter.value && sourceFilter.value !== FILTER_ALL) query.source = sourceFilter.value
-  if (clientFilter.value.trim()) query.client_id = clientFilter.value.trim()
-  if (pendingPage.value > 1) query.page = String(pendingPage.value)
-  await router.replace({ path: route.path, query })
-}
-
-watch(
-  [competence, bandFilter, modelFilter, rootFilter, sourceFilter, clientFilter, pendingPage],
-  () => { void syncClosingUrl() }
-)
 </script>
 
 <template>

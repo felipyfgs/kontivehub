@@ -32,6 +32,23 @@ export function apiErrorCode(error: unknown): string | null {
   return typeof payload?.code === 'string' ? payload.code : null
 }
 
+export function apiErrorStatus(error: unknown): number | null {
+  if (!error || typeof error !== 'object') return null
+  const candidate = error as {
+    status?: unknown
+    statusCode?: unknown
+    response?: { status?: unknown }
+  }
+  const value = candidate.statusCode ?? candidate.status ?? candidate.response?.status
+  let status: number
+  try {
+    status = Number(value)
+  } catch {
+    return null
+  }
+  return Number.isInteger(status) && status >= 100 && status <= 599 ? status : null
+}
+
 export function apiFieldErrors(error: unknown): Record<string, string[]> {
   const errors = payloadFrom(error)?.errors
   if (!errors || Array.isArray(errors)) {

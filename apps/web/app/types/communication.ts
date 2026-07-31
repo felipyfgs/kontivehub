@@ -334,6 +334,34 @@ export type CommunicationConversationSortBy
 /** Preferência de status: ALL ou um status canônico da conversa. */
 export type CommunicationListPreferenceStatus = CommunicationConversationStatus | 'ALL'
 
+/** Presets visuais da lista; não altera o contrato HTTP. */
+export type CommunicationConversationQuickView
+  = | 'OPEN'
+    | 'UNREAD'
+    | 'UNASSIGNED'
+    | 'PENDING'
+    | 'SNOOZED'
+    | 'RESOLVED'
+    | 'ALL'
+
+/** Mutação unitária discriminada e sempre associada a uma conversa-alvo. */
+export type CommunicationConversationAction
+  = | { type: 'MARK_READ' }
+    | { type: 'MARK_UNREAD' }
+    | {
+      type: 'SET_STATUS'
+      status: CommunicationConversationStatus
+      snoozed_until?: string | null
+    }
+    | { type: 'SET_ASSIGNEE', assignee_membership_id: number | null }
+    | { type: 'SET_DEPARTMENT', work_department_id: number | null }
+    | { type: 'SET_LABEL', label_id: number, assigned: boolean }
+
+export interface CommunicationConversationActionPayload {
+  conversation: CommunicationConversation
+  action: CommunicationConversationAction
+}
+
 export interface CommunicationConversationListPreferences {
   status: CommunicationListPreferenceStatus
   sort_by: CommunicationConversationSortBy

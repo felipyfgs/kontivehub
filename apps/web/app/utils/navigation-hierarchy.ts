@@ -16,8 +16,8 @@ export interface NavLeafDestination {
   exact?: boolean
   /**
    * Override de ativo quando prefix/exact não bastam
-   * (detalhe dinâmico, query `section`, exclusões de irmãos, etc.).
-   * `path` é normalizado sem query; `location` preserva a URL completa.
+   * (detalhe dinâmico, exclusões de irmãos, etc.).
+   * `path` é normalizado sem fragmento; `location` preserva o path recebido.
    */
   isActive?: (path: string, location?: string) => boolean
   /** Capacidade opaca — filtragem via predicate externo. */
@@ -51,9 +51,9 @@ export function isNavLeaf(item: NavLayerItem): item is NavLeafDestination {
   return typeof (item as NavLeafDestination).to === 'string' && !isNavTabGroup(item)
 }
 
-/** Normaliza path para comparação (sem query/hash; sem barra final exceto `/`). */
+/** Normaliza path para comparação (sem hash; sem barra final exceto `/`). */
 export function normalizeNavPath(path: string): string {
-  const bare = (path.split('?')[0] || path).split('#')[0] || path
+  const bare = path.split('#')[0] || path
   if (bare.length > 1 && bare.endsWith('/')) return bare.slice(0, -1)
   return bare || '/'
 }
@@ -61,23 +61,6 @@ export function normalizeNavPath(path: string): string {
 export function pathMatchesLeaf(location: string, leaf: NavLeafDestination): boolean {
   const p = normalizeNavPath(location)
   if (leaf.isActive) return leaf.isActive(p, location)
-
-  if (leaf.to.includes('?')) {
-    const [leafPath = '', leafQuery = ''] = leaf.to.split('?')
-    const [locPath = '', locQuery = ''] = location.split('?')
-    if (normalizeNavPath(locPath) !== normalizeNavPath(leafPath)) return false
-    const wanted = new URLSearchParams(leafQuery)
-    const actual = new URLSearchParams(locQuery)
-    for (const [key, value] of wanted.entries()) {
-      const current = actual.get(key)
-      if (key === 'section' && value === 'resumo') {
-        if (current && current !== 'resumo') return false
-        continue
-      }
-      if (current !== value) return false
-    }
-    return true
-  }
 
   const target = normalizeNavPath(leaf.to)
   if (leaf.exact) return p === target

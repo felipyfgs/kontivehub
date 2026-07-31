@@ -7,6 +7,7 @@ import type { WorkDepartment, WorkKpis } from '~/types/work'
 import type { DashboardKpiItem } from '~/utils/kpi-ui'
 import { apiErrorMessage } from '~/utils/api-error'
 import { formatDueDate, workRiskLabel } from '~/utils/work-labels'
+import { workQueueIntentForKpi } from '~/utils/work-strategic-dashboard'
 
 const api = useApi()
 const toast = useToast()
@@ -75,9 +76,9 @@ const cards = computed((): DashboardKpiItem[] => {
   if (!k) return []
   return [
     { key: 'open', title: 'Abertas', value: k.total_open, to: '/work/tasks', icon: 'i-lucide-inbox' },
-    { key: 'atrasadas', title: 'Atrasadas', value: k.atrasadas, to: '/work/tasks?tab=atrasadas', icon: 'i-lucide-clock-alert', tone: 'warning' },
-    { key: 'em_multa', title: 'Em multa', value: k.em_multa, to: '/work/tasks?tab=atrasadas', icon: 'i-lucide-siren', tone: 'error' },
-    { key: 'vence_hoje', title: 'Vencem hoje', value: k.vence_hoje, to: '/work/tasks?tab=hoje', icon: 'i-lucide-calendar-days' },
+    { key: 'atrasadas', title: 'Atrasadas', value: k.atrasadas, to: '/work/tasks', icon: 'i-lucide-clock-alert', tone: 'warning' },
+    { key: 'em_multa', title: 'Em multa', value: k.em_multa, to: '/work/tasks', icon: 'i-lucide-siren', tone: 'error' },
+    { key: 'vence_hoje', title: 'Vencem hoje', value: k.vence_hoje, to: '/work/tasks', icon: 'i-lucide-calendar-days' },
     { key: 'em_progresso', title: 'Em progresso', value: k.em_progresso, to: '/work/tasks', icon: 'i-lucide-loader', tone: 'info' },
     { key: 'sem_responsavel', title: 'Sem responsável', value: k.sem_responsavel, to: '/work/tasks', icon: 'i-lucide-user-x' }
   ]
@@ -102,12 +103,9 @@ const departmentRows = computed(() => {
         fine: row.fine ?? 0,
         unassigned: row.unassigned ?? 0,
         completedPercent: row.completed_percent ?? 0,
-        to: row.work_department_id != null
-          ? `/work/tasks?department_id=${row.work_department_id}`
-          : '/work/tasks',
-        overdueTo: row.work_department_id != null
-          ? `/work/tasks?tab=atrasadas&department_id=${row.work_department_id}`
-          : '/work/tasks?tab=atrasadas'
+        to: '/work/tasks',
+        overdueTo: '/work/tasks',
+        filters: { department_id: row.work_department_id }
       }
     })
     .sort((a, b) => b.open - a.open)
@@ -133,6 +131,11 @@ const lastUpdated = computed(() => {
     return null
   }
 })
+
+function openQueue(filters: Record<string, unknown> = {}) {
+  publishSurfaceNavigationIntent('work-queue', filters)
+  void navigateTo('/work/tasks')
+}
 </script>
 
 <template>
@@ -206,6 +209,7 @@ const lastUpdated = computed(() => {
       test-id="home-work-kpi-cards"
       :items="cards"
       :columns="6"
+      @select="(key) => openQueue(workQueueIntentForKpi(key))"
     />
 
     <ShellPanelAccordion
@@ -226,12 +230,13 @@ const lastUpdated = computed(() => {
             class="rounded-lg border border-default px-3 py-2"
           >
             <div class="mb-1 flex items-center justify-between gap-2 text-sm">
-              <NuxtLink
-                :to="row.to"
+              <a
                 class="truncate font-medium text-highlighted hover:underline"
+                :href="row.to"
+                @click.prevent="openQueue(row.filters)"
               >
                 {{ row.name }}
-              </NuxtLink>
+              </a>
               <span class="shrink-0 text-xs text-muted">
                 {{ row.completedPercent }}%
               </span>
@@ -243,18 +248,20 @@ const lastUpdated = computed(() => {
               :aria-label="`${row.name}: ${row.completedPercent}%`"
             />
             <div class="mt-2 flex flex-wrap gap-2 text-xs text-muted">
-              <NuxtLink
-                :to="row.to"
+              <a
+                :href="row.to"
                 class="hover:underline"
+                @click.prevent="openQueue(row.filters)"
               >
                 {{ row.open }} abertas
-              </NuxtLink>
-              <NuxtLink
-                :to="row.overdueTo"
+              </a>
+              <a
+                :href="row.overdueTo"
                 class="text-warning hover:underline"
+                @click.prevent="openQueue({ ...row.filters, tab: 'atrasadas' })"
               >
                 {{ row.overdue }} atrasadas
-              </NuxtLink>
+              </a>
               <span class="text-error">{{ row.fine }} multa</span>
               <span>{{ row.unassigned }} s/ resp.</span>
             </div>

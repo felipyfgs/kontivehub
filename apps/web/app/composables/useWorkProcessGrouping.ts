@@ -1,10 +1,10 @@
 /**
- * Estado de URL e helpers da visão de processos
+ * Estado de sessão e helpers da visão de processos
  * (`/work/processes` + seletor Cliente|Processo|Tarefa).
  *
- * - `group=client` → grupos por cliente (`GET /work/process-groups?group_by=client`)
- * - `group` omitido → grupos por rotina (`GET /work/process-groups?group_by=routine`)
- * - Tarefa → navega para `/work/tasks?view=lista` (não renderiza Lista em Processos)
+ * - modo `client` → grupos por cliente na consulta HTTP;
+ * - modo `process` → grupos por rotina na consulta HTTP;
+ * - Tarefa → navega para `/work/tasks` com intenção de visualização Lista.
  *
  * `GET /work/processes` é usado somente para carregar os filhos dos grupos.
  */
@@ -87,7 +87,7 @@ export function parseWorkProcessGroupSort(value: unknown): WorkProcessGroupSort 
 }
 
 export function parseWorkProcessGroupingQuery(
-  query: Record<string, unknown>
+  query: Partial<WorkProcessGroupingFilters> | Record<string, unknown>
 ): WorkProcessGroupingFilters {
   const directionRaw = queryScalar(query.direction).toLowerCase()
   const direction = directionRaw === 'asc' || directionRaw === 'desc'
@@ -148,30 +148,16 @@ export function entityNavigationFilters(
   }
 }
 
-export function processesPathForEntityLevel(
-  level: Exclude<WorkEntityLevel, 'task'>,
-  filters: Pick<WorkProcessGroupingFilters, 'q' | 'client_id' | 'department_id'>
-): { path: string, query: Record<string, string | undefined> } {
-  const sharedFilters = entityNavigationFilters(filters)
-  return {
-    path: '/work/processes',
-    query: {
-      ...sharedFilters,
-      group: level === 'client' ? 'client' : undefined
-    }
-  }
+export function processesPathForEntityLevel(): string {
+  return '/work/processes'
 }
 
-export function tasksListaPathForEntityLevel(
-  filters: Pick<WorkProcessGroupingFilters, 'q' | 'client_id' | 'department_id'>
-): { path: string, query: Record<string, string | undefined> } {
-  return {
-    path: '/work/tasks',
-    query: {
-      view: 'lista',
-      ...entityNavigationFilters(filters)
-    }
-  }
+export function tasksListaPathForEntityLevel(): string {
+  return '/work/tasks'
+}
+
+export function shouldApplyProcessGroupInPlace(path: string): boolean {
+  return path === processesPathForEntityLevel()
 }
 
 /** Params de `GET /work/process-groups` conforme modo (`client` | `routine`). */
@@ -254,11 +240,16 @@ export function emptyWorkProcessGroupingFilters(): WorkProcessGroupingFilters {
 
 export function useWorkProcessGrouping() {
   const route = useRoute()
-  const router = useRouter()
-
-  const filters = computed(() =>
-    parseWorkProcessGroupingQuery(route.query as Record<string, unknown>)
+  const { me, sessionEpoch } = useDashboard()
+  const resetKey = computed(() => `${me.value?.id ?? 'guest'}:${me.value?.current_tenant?.id ?? 'none'}:${sessionEpoch.value}`)
+  const { state, replace, patch: patchState } = useSurfaceNavigationState(
+    'work-process-grouping',
+    EMPTY,
+    { normalize: value => parseWorkProcessGroupingQuery(value), resetKey }
   )
+  const intent = consumeSurfaceNavigationIntent<Partial<WorkProcessGroupingFilters>>('work-process-grouping')
+  if (intent) patchState(intent)
+  const filters = computed(() => state.value)
 
   const entityLevel = computed<WorkEntityLevel>(() =>
     entityLevelForProcesses(filters.value.group)
@@ -295,10 +286,7 @@ export function useWorkProcessGrouping() {
         next.direction = null
       }
     }
-    await router.replace({
-      path: '/work/processes',
-      query: serializeWorkProcessGroupingQuery(next)
-    })
+    replace(next)
   }
 
   async function navigateEntityLevel(level: WorkEntityLevel) {
@@ -309,14 +297,22 @@ export function useWorkProcessGrouping() {
       department_id: current.department_id
     }
     if (level === 'task') {
-      const target = tasksListaPathForEntityLevel(sharedFilters)
-      await navigateTo(target)
+      publishSurfaceNavigationIntent('work-queue', { ...sharedFilters, view: 'lista' })
+      await navigateTo(tasksListaPathForEntityLevel())
       return
     }
     if (level === 'client' && current.group === 'client') return
     if (level === 'process' && current.group === 'process') return
-    const target = processesPathForEntityLevel(level, sharedFilters)
-    await navigateTo(target)
+    const group = level === 'client' ? 'client' : 'process'
+    if (shouldApplyProcessGroupInPlace(route.path)) {
+      await replaceFilters({ group })
+      return
+    }
+    publishSurfaceNavigationIntent('work-process-grouping', {
+      ...sharedFilters,
+      group
+    })
+    await navigateTo(processesPathForEntityLevel())
   }
 
   return {

@@ -3,6 +3,7 @@
  * Atalhos rápidos para hubs do produto relacionados ao cliente.
  */
 import { clientFiscalHref } from '~/utils/client-cross-links'
+import { documentCatalogClientPath } from '~/utils/document-routes'
 
 const props = defineProps<{
   clientId: number
@@ -27,7 +28,7 @@ const items = computed((): FolderItem[] => [
     id: 'docs',
     label: 'Documentos',
     icon: 'i-lucide-folder-open',
-    to: `/docs?client_id=${props.clientId}`
+    to: documentCatalogClientPath(props.clientId)
   },
   {
     id: 'connect',

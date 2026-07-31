@@ -4,6 +4,7 @@ import { apiErrorMessage } from '~/utils/api-error'
 import {
   buildWorkDashboardKpis,
   buildWorkDepartmentRows,
+  workQueueIntentForKpi,
   workCompletionPercent,
   workOperationalLevel
 } from '~/utils/work-strategic-dashboard'
@@ -82,6 +83,11 @@ watch(sessionEpoch, () => {
 })
 
 const kpiCards = computed(() => data.value ? buildWorkDashboardKpis(data.value) : [])
+function openQueue(filters: Record<string, unknown> = {}) {
+  publishSurfaceNavigationIntent(WORK_SURFACES.queue, filters)
+  void navigateTo('/work/tasks')
+}
+
 const completionPercent = computed(() => data.value ? workCompletionPercent(data.value) : 0)
 const departmentRows = computed(() => data.value
   ? buildWorkDepartmentRows(data.value, departments.value)
@@ -98,7 +104,7 @@ const performanceKpis = computed<DashboardKpiItem[]>(() => {
     key: 'completed',
     title: 'Concluídas',
     value: data.value.kpis.concluidas,
-    to: '/work/tasks?tab=concluidas',
+    to: '/work/tasks',
     icon: 'i-lucide-circle-check-big',
     tone: 'success'
   }
@@ -134,7 +140,7 @@ const operationalSummary = computed(() => {
       key: 'completed',
       label: 'Concluídas',
       value: data.value.kpis.concluidas,
-      to: '/work/tasks?tab=concluidas',
+      to: '/work/tasks',
       color: 'success' as const
     },
     {
@@ -290,6 +296,7 @@ function departmentProgressColor(row: { fine: number, overdue: number }): Semant
             :columns="6"
             legend="Situação das tarefas"
             test-id="work-dashboard-kpis"
+            @select="(key) => openQueue(workQueueIntentForKpi(key))"
           />
         </section>
 
@@ -371,7 +378,11 @@ function departmentProgressColor(row: { fine: number, overdue: number }): Semant
                   <tbody class="divide-y divide-default">
                     <tr v-for="row in departmentRows" :key="String(row.id)">
                       <th scope="row" class="min-w-0 px-3 py-2.5 font-normal">
-                        <NuxtLink :to="row.to" class="block truncate font-medium text-highlighted hover:text-primary hover:underline">
+                        <NuxtLink
+                          :to="row.to"
+                          class="block truncate font-medium text-highlighted hover:text-primary hover:underline"
+                          @click.prevent="openQueue(row.filters)"
+                        >
                           {{ row.name }}
                         </NuxtLink>
                         <span class="mt-0.5 block text-xs text-muted">{{ row.open }} abertas · {{ row.completed }} concluídas</span>
@@ -421,6 +432,7 @@ function departmentProgressColor(row: { fine: number, overdue: number }): Semant
                           icon="i-lucide-arrow-up-right"
                           square
                           :aria-label="`Abrir fila de ${row.name}`"
+                          @click.prevent="openQueue(row.filters)"
                         />
                       </td>
                     </tr>
@@ -436,7 +448,11 @@ function departmentProgressColor(row: { fine: number, overdue: number }): Semant
                 <li v-for="row in departmentRows" :key="String(row.id)" class="min-w-0 py-3">
                   <div class="flex min-w-0 items-start justify-between gap-3">
                     <div class="min-w-0">
-                      <NuxtLink :to="row.to" class="block truncate font-medium text-highlighted hover:text-primary hover:underline">
+                      <NuxtLink
+                        :to="row.to"
+                        class="block truncate font-medium text-highlighted hover:text-primary hover:underline"
+                        @click.prevent="openQueue(row.filters)"
+                      >
                         {{ row.name }}
                       </NuxtLink>
                       <p class="mt-0.5 text-xs text-muted">
@@ -482,6 +498,7 @@ function departmentProgressColor(row: { fine: number, overdue: number }): Semant
                       label="Abrir fila"
                       trailing-icon="i-lucide-arrow-right"
                       class="ms-auto"
+                      @click.prevent="openQueue(row.filters)"
                     />
                   </div>
                 </li>
@@ -510,6 +527,7 @@ function departmentProgressColor(row: { fine: number, overdue: number }): Semant
                 <NuxtLink
                   :to="item.to"
                   class="flex min-w-0 items-center justify-between gap-3 py-2.5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  @click.prevent="openQueue(workQueueIntentForKpi(item.key))"
                 >
                   <span class="text-sm font-medium text-highlighted">{{ item.label }}</span>
                   <UBadge :color="item.color" variant="subtle" :label="String(item.value)" />
@@ -531,12 +549,13 @@ function departmentProgressColor(row: { fine: number, overdue: number }): Semant
                 </p>
               </div>
               <UButton
-                to="/work/tasks?tab=atrasadas"
+                to="/work/tasks"
                 color="neutral"
                 variant="ghost"
                 size="xs"
                 label="Ver fila"
                 trailing-icon="i-lucide-arrow-right"
+                @click.prevent="openQueue({ tab: 'atrasadas' })"
               />
             </div>
 

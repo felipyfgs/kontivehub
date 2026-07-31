@@ -12,6 +12,7 @@ import {
   LIST_FILTER_ACTIONS_ROW,
   LIST_FILTER_TOOLBAR_STACK
 } from '~/utils/list-filter-layout'
+import { healthTypePath, normalizeHealthTypePathParam } from '~/utils/health-navigation'
 
 const api = useApi()
 const route = useRoute()
@@ -26,14 +27,6 @@ const loadError = ref<string | null>(null)
 const generatedAt = ref<string | null>(null)
 
 const FILTER_ALL = 'all'
-
-const initialSeverity = String(route.query.severity || FILTER_ALL)
-const severityFilter = ref(
-  ['critical', 'high', 'medium', 'low', FILTER_ALL].includes(initialSeverity)
-    ? initialSeverity
-    : FILTER_ALL
-)
-const typeFilter = ref(String(route.query.type || FILTER_ALL) || FILTER_ALL)
 
 const severityItems = [
   { label: 'Todas as severidades', value: FILTER_ALL },
@@ -69,6 +62,19 @@ const typeItems = [
   ...SERPRO_INBOX_TYPE_FILTERS
 ]
 
+type HealthNavigationState = {
+  severity: string
+}
+
+function normalizeHealthNavigation(value: HealthNavigationState): HealthNavigationState {
+  const severity = String(value.severity || FILTER_ALL).toLowerCase()
+  return {
+    severity: severityItems.some(item => item.value === severity)
+      ? severity
+      : FILTER_ALL
+  }
+}
+
 const killSwitch = ref<{
   global_active: boolean
   m2m_status: string
@@ -82,7 +88,28 @@ const killSwitch = ref<{
 })
 const killReason = ref('')
 const killLoading = ref(false)
-const { canManageCredentials, sessionEpoch } = useDashboard()
+const { canManageCredentials, me, sessionEpoch } = useDashboard()
+const navigationContext = computed(() => [
+  me.value?.id ?? 'guest',
+  me.value?.current_tenant?.id ?? 'none',
+  sessionEpoch.value
+].join(':'))
+const {
+  state: healthNavigation,
+  patch: patchHealthNavigation,
+  reset: resetHealthNavigation
+} = useSurfaceNavigationState<HealthNavigationState>(SURFACE_NAVIGATION.health, { severity: FILTER_ALL }, {
+  normalize: normalizeHealthNavigation,
+  resetKey: navigationContext
+})
+const legacyHealthIntent = consumeSurfaceNavigationIntent<Partial<HealthNavigationState>>(SURFACE_NAVIGATION.health)
+if (legacyHealthIntent) patchHealthNavigation(legacyHealthIntent)
+
+const severityFilter = computed({
+  get: () => healthNavigation.value.severity,
+  set: (value) => { healthNavigation.value.severity = value }
+})
+const typeFilter = ref(FILTER_ALL)
 
 async function loadKillSwitch() {
   try {
@@ -183,6 +210,20 @@ function selectRow(_event: Event, row: TableRow<InboxItem>) {
 }
 
 watch(
+  () => route.params.type,
+  (rawType) => {
+    const normalized = normalizeHealthTypePathParam(rawType)
+    if (rawType && !normalized) {
+      void router.replace('/health')
+      typeFilter.value = FILTER_ALL
+      return
+    }
+    typeFilter.value = normalized ?? FILTER_ALL
+  },
+  { immediate: true }
+)
+
+watch(
   [severityFilter, typeFilter],
   () => {
     void load(true)
@@ -191,25 +232,19 @@ watch(
 )
 
 watch(sessionEpoch, () => {
+  const filtersWillReset = severityFilter.value !== FILTER_ALL || typeFilter.value !== FILTER_ALL
   items.value = []
   cursor.value = null
   loadError.value = null
-  void load(true)
+  resetHealthNavigation()
+  typeFilter.value = FILTER_ALL
+  if (route.path !== '/health') void router.replace('/health')
+  if (!filtersWillReset) void load(true)
 })
 
-async function syncHealthUrl() {
-  const query: Record<string, string> = {}
-  if (severityFilter.value && severityFilter.value !== FILTER_ALL) {
-    query.severity = severityFilter.value
-  }
-  if (typeFilter.value && typeFilter.value !== FILTER_ALL) {
-    query.type = typeFilter.value
-  }
-  await router.replace({ path: route.path, query })
-}
-
-watch([severityFilter, typeFilter], () => {
-  void syncHealthUrl()
+watch(typeFilter, (value) => {
+  const target = value === FILTER_ALL ? '/health' : healthTypePath(value)
+  if (route.path !== target) void router.replace(target)
 })
 </script>
 

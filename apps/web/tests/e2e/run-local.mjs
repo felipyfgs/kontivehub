@@ -14,6 +14,7 @@ const env = {
   COMPOSE_PROJECT_NAME: project,
   LOCAL_UID: String(process.getuid?.() || 1000),
   LOCAL_GID: String(process.getgid?.() || 1000),
+  PNPM_CONFIG_STORE_DIR: '/tmp/frontend-home/.local/share/pnpm/store',
   APP_ENV: 'testing',
   DB_DATABASE: 'nfse_e2e',
   E2E_API_PORT: process.env.E2E_API_PORT || '18080',
@@ -25,6 +26,8 @@ const env = {
   REDIS_PORT: process.env.E2E_REDIS_PORT || '16379',
   APP_PORT: process.env.E2E_API_PORT || '18080',
   FRONTEND_DEV_PORT: e2eWebPort,
+  NUXT_DEVTOOLS: 'false',
+  NUXT_PWA_DEV: 'false',
   SANCTUM_STATEFUL_DOMAINS: process.env.SANCTUM_STATEFUL_DOMAINS || `127.0.0.1:${e2eWebPort},localhost:${e2eWebPort},127.0.0.1,localhost`,
   FISCAL_DEMO_TENANT_SLUG: 'contador',
   FISCAL_DEMO_SENTINEL_SLUG: 'plataforma',
@@ -49,24 +52,6 @@ function run(command, args, options = {}) {
   })
 }
 
-function start(command, args, options = {}) {
-  return spawn(command, args, {
-    cwd: options.cwd || repoRoot,
-    env: { ...env, ...(options.env || {}) },
-    stdio: 'inherit'
-  })
-}
-
-async function stop(child) {
-  if (!child || child.exitCode !== null) return
-  child.kill('SIGTERM')
-  await Promise.race([
-    new Promise(resolvePromise => child.once('exit', resolvePromise)),
-    new Promise(resolvePromise => setTimeout(resolvePromise, 5_000))
-  ])
-  if (child.exitCode === null) child.kill('SIGKILL')
-}
-
 async function waitFor(url, timeoutMs = 120_000) {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
@@ -81,13 +66,18 @@ async function waitFor(url, timeoutMs = 120_000) {
   throw new Error(`Timeout aguardando ${url}`)
 }
 
-let nuxtProcess
 try {
-  await run('docker', [...composeArgs, 'up', '-d', '--build', 'postgres', 'redis', 'php', 'nginx'])
+  await run('docker', [
+    ...composeArgs,
+    '--profile', 'dev',
+    'up', '-d', '--build',
+    'postgres', 'redis', 'php', 'nginx', 'frontend-dev'
+  ])
   await run('docker', [
     ...composeArgs,
     'exec',
     '-T',
+    '--user', 'www-data',
     '-e', 'FISCAL_DEMO_TENANT_SLUG=contador',
     '-e', 'FISCAL_DEMO_SENTINEL_SLUG=plataforma',
     '-e', 'WORK_DEMO_TENANT_SLUG=contador',
@@ -98,22 +88,20 @@ try {
     '--seeder=Database\\Seeders\\Testing\\WebE2ESeeder'
   ])
   await waitFor(`http://127.0.0.1:${env.E2E_API_PORT}/up`)
-  nuxtProcess = start('corepack', ['pnpm', 'exec', 'nuxt', 'dev', '--host', '127.0.0.1', '--port', env.E2E_WEB_PORT], {
-    cwd: webRoot,
-    env: {
-      NUXT_SANCTUM_PROXY: 'true',
-      NUXT_SANCTUM_PROXY_BASE: `http://127.0.0.1:${env.E2E_API_PORT}`,
-      NUXT_DEVTOOLS: 'false',
-      NUXT_PWA_DEV: 'false',
-      FRONTEND_DEV_PORT: env.E2E_WEB_PORT
-    }
-  })
   await waitFor(`http://127.0.0.1:${env.E2E_WEB_PORT}/login`)
-  await run('corepack', ['pnpm', 'exec', 'playwright', 'test', ...playwrightArgs], { cwd: webRoot })
+  await run('docker', [
+    ...composeArgs,
+    'exec', '-T', 'frontend-dev',
+    'app-entrypoint', 'prepare'
+  ])
+  await run(resolve(webRoot, 'node_modules/.bin/playwright'), ['test', ...playwrightArgs], { cwd: webRoot })
 } finally {
-  await stop(nuxtProcess)
   if (process.env.E2E_KEEP_STACK !== 'true') {
-    await run('docker', [...composeArgs, 'down', '--volumes', '--remove-orphans'])
+    await run('docker', [
+      ...composeArgs,
+      '--profile', 'dev',
+      'down', '--volumes', '--remove-orphans'
+    ])
       .catch(error => console.error(`Falha na limpeza E2E: ${error.message}`))
   }
 }

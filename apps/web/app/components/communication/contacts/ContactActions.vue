@@ -15,16 +15,15 @@ const props = withDefaults(defineProps<{
   compact?: boolean
   includeOpen?: boolean
   includeConversations?: boolean
-  detailQuery?: Record<string, string | undefined>
   onExport?: () => void
   onPurge?: () => void
-}>(), { label: 'Ações', compact: true, includeOpen: true, includeConversations: true, detailQuery: () => ({}) })
+}>(), { label: 'Ações', compact: true, includeOpen: true, includeConversations: true })
 
 const items = computed(() => communicationContactActions(props.contact, props.canManage, {
   onExport: props.onExport,
   onPurge: props.onPurge
 }).map(group => group.map(item => item.label === COMMUNICATION_CONTACT_ACTION_LABELS.openDetail
-  ? { ...item, to: { path: communicationContactPath(props.contact.id), query: props.detailQuery } }
+  ? { ...item, to: communicationContactPath(props.contact.id) }
   : item).filter(item =>
   (props.includeOpen || item.label !== COMMUNICATION_CONTACT_ACTION_LABELS.openDetail)
   && (props.includeConversations || item.label !== COMMUNICATION_CONTACT_ACTION_LABELS.goToConversations)

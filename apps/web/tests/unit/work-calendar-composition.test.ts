@@ -1,6 +1,11 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import {
+  isValidWorkCalendarDate,
+  normalizeWorkCalendarDate,
+  workCalendarPath
+} from '~/composables/useWorkCalendarRange'
 
 const source = (...parts: string[]) => readFileSync(resolve(process.cwd(), ...parts), 'utf8')
 const calendar = source('app/pages/work/calendar.vue')
@@ -71,9 +76,15 @@ describe('work calendar composition', () => {
   it('preserva URL, filtros e navegação canônica para tarefas', () => {
     const range = source('app/composables/useWorkCalendarRange.ts')
 
-    expect(range).toContain('const v = String(route.query.view || \'month\')')
-    expect(range).toContain('const raw = String(route.query.date || \'\')')
-    expect(range).toContain('...route.query')
+    expect(isValidWorkCalendarDate('2024-02-29')).toBe(true)
+    expect(isValidWorkCalendarDate('2026-02-29')).toBe(false)
+    expect(normalizeWorkCalendarDate('../2026-07-30', '2026-07-30')).toBe('2026-07-30')
+    expect(workCalendarPath('week', '2026-07-30')).toBe('/work/calendar/week/2026-07-30')
+    expect(range).toContain('const v = String(route.params.view || \'month\')')
+    expect(range).toContain('const raw = String(route.params.date || \'\')')
+    expect(range).toContain('workCalendarPath(v, date.value)')
+    expect(calendar).toContain('normalizeCalendarFilters')
+    expect(calendar).toContain('patchCalendarFilters(calendarIntent)')
     expect(calendar).toContain('department_id')
     expect(calendar).toContain('assignee_membership_id')
     expect(calendar).toContain('client_id')

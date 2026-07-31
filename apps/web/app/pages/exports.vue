@@ -8,16 +8,19 @@ import type { FormSubmitEvent, TableColumn } from '@nuxt/ui'
 import NavbarMoreActions from '~/components/navigation/NavbarMoreActions.vue'
 import type { ExportFilters, ExportJob } from '~/types/api'
 import ShellDataTable from '~/components/shell/DataTable.vue'
+import { EXPORT_CREATE_PATH, EXPORTS_INDEX_PATH } from '~/utils/export-routes'
+
+definePageMeta({
+  alias: [EXPORT_CREATE_PATH]
+})
 
 const api = useApi()
 const route = useRoute()
 const router = useRouter()
-const { canCreateExport, isExportFormOpen, sessionEpoch } = useDashboard()
+const { canCreateExport, isExportFormOpen, me, sessionEpoch } = useDashboard()
 const toast = useToast()
 
 const items = ref<ExportJob[]>([])
-const page = ref(Math.max(1, Number(route.query.page) || 1))
-const perPage = ref(20)
 const total = ref(0)
 const lastPage = ref(1)
 const loading = ref(false)
@@ -25,6 +28,43 @@ const loadError = ref<string | null>(null)
 const creating = ref(false)
 const createOpen = isExportFormOpen
 const showAdvanced = ref(false)
+
+type ExportsNavigationState = {
+  page: number
+  perPage: number
+}
+
+function normalizeExportsNavigation(value: ExportsNavigationState): ExportsNavigationState {
+  return {
+    page: Math.max(1, Math.floor(Number(value.page) || 1)),
+    perPage: [10, 20, 50].includes(Number(value.perPage)) ? Number(value.perPage) : 20
+  }
+}
+
+const navigationContext = computed(() => [
+  me.value?.id ?? 'guest',
+  me.value?.current_tenant?.id ?? 'none',
+  sessionEpoch.value
+].join(':'))
+const {
+  state: exportsNavigation,
+  patch: patchExportsNavigation,
+  reset: resetExportsNavigation
+} = useSurfaceNavigationState<ExportsNavigationState>(SURFACE_NAVIGATION.exports, { page: 1, perPage: 20 }, {
+  normalize: normalizeExportsNavigation,
+  resetKey: navigationContext
+})
+const legacyExportsIntent = consumeSurfaceNavigationIntent<Partial<ExportsNavigationState>>(SURFACE_NAVIGATION.exports)
+if (legacyExportsIntent) patchExportsNavigation(legacyExportsIntent)
+
+const page = computed({
+  get: () => exportsNavigation.value.page,
+  set: (value) => { exportsNavigation.value.page = value }
+})
+const perPage = computed({
+  get: () => exportsNavigation.value.perPage,
+  set: (value) => { exportsNavigation.value.perPage = value }
+})
 
 const FILTER_ALL = 'all'
 
@@ -434,7 +474,8 @@ async function onSubmit(_event: FormSubmitEvent<Schema>) {
 }
 
 function openCreate() {
-  createOpen.value = true
+  if (!canCreateExport.value) return
+  void router.push(EXPORT_CREATE_PATH)
 }
 
 function submitCreateForm() {
@@ -461,23 +502,37 @@ function setPerPage(next: number) {
 watch(hasPending, pending => (pending ? resume() : pause()), { immediate: true })
 watch(page, () => void load())
 watch(createOpen, (open) => {
-  if (!open) resetForm()
+  if (open) return
+  resetForm()
+  if (route.path === EXPORT_CREATE_PATH) void router.replace(EXPORTS_INDEX_PATH)
 })
 watch(sessionEpoch, () => {
+  const pageWillReset = page.value !== 1
   items.value = []
-  page.value = 1
+  resetExportsNavigation()
   total.value = 0
   loadError.value = null
   createOpen.value = false
-  void load()
+  if (!pageWillReset) void load()
 })
 
+watch(
+  () => route.path,
+  (path) => {
+    if (path === EXPORT_CREATE_PATH) {
+      if (canCreateExport.value) {
+        createOpen.value = true
+      } else {
+        void router.replace(EXPORTS_INDEX_PATH)
+      }
+      return
+    }
+    if (path === EXPORTS_INDEX_PATH) createOpen.value = false
+  },
+  { immediate: true }
+)
+
 onMounted(async () => {
-  const shouldOpenCreate = canCreateExport.value && route.query.new === '1'
-  if (Object.keys(route.query).length) {
-    await router.replace({ path: route.path })
-  }
-  if (shouldOpenCreate) createOpen.value = true
   await load()
 })
 onBeforeUnmount(pause)

@@ -3,6 +3,7 @@ import * as z from 'zod'
 import type { FormSubmitEvent } from '@nuxt/ui'
 import type { ApiClient } from '~/composables/api/types'
 import { apiErrorMessage } from '~/utils/api-error'
+import { consumeResetPasswordCredentials } from '~/utils/reset-password'
 
 definePageMeta({ layout: 'auth' })
 
@@ -11,15 +12,10 @@ useSeoMeta({
   description: 'Defina uma nova senha para sua conta KontiveHub'
 })
 
-const route = useRoute()
 const client = useSanctumClient() as ApiClient
-
-function queryString(value: unknown): string {
-  return typeof value === 'string' ? value : ''
-}
-
-const token = ref(queryString(route.query.token))
-const email = ref(queryString(route.query.email))
+const credentials = import.meta.client ? consumeResetPasswordCredentials() : null
+const token = ref(credentials?.token || '')
+const email = ref(credentials?.email || '')
 const error = ref('')
 const loading = ref(false)
 const completed = ref(false)
@@ -38,12 +34,6 @@ type Schema = z.output<typeof schema>
 const state = reactive<Partial<Schema>>({
   password: '',
   password_confirmation: ''
-})
-
-onMounted(() => {
-  if (token.value || email.value) {
-    window.history.replaceState(null, '', '/reset-password')
-  }
 })
 
 async function onSubmit(_event: FormSubmitEvent<Schema>) {

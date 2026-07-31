@@ -17,6 +17,8 @@ import {
 } from '~/utils/permissions'
 import type { MeIdentity } from '~/utils/permissions'
 import { canUseAssistant } from '~/utils/assistant'
+import { clearSurfaceNavigationState } from '~/composables/useSurfaceNavigationState'
+import { EXPORT_CREATE_PATH } from '~/utils/export-routes'
 
 const _useDashboard = () => {
   const route = useRoute()
@@ -69,8 +71,8 @@ const _useDashboard = () => {
 
   async function openExportCreate() {
     if (!canCreateExport.value) return
-    if (route.path !== '/exports') {
-      await router.push('/exports')
+    if (route.path !== EXPORT_CREATE_PATH) {
+      await router.push(EXPORT_CREATE_PATH)
     }
     isExportFormOpen.value = true
   }
@@ -132,7 +134,7 @@ const _useDashboard = () => {
     if (route.path !== '/clients') {
       isClientFormOpen.value = false
     }
-    if (route.path !== '/exports') {
+    if (route.path !== '/exports' && !route.path.startsWith('/exports/')) {
       isExportFormOpen.value = false
     }
   })
@@ -141,7 +143,9 @@ const _useDashboard = () => {
   watch(
     () => [me.value?.id ?? null, isAuthenticated.value] as const,
     ([nextId, authenticated], [prevId, wasAuthenticated]) => {
-      const identityChanged = prevId !== undefined && nextId !== prevId
+      // O primeiro login pode carregar uma intenção legada allowlisted criada
+      // ainda como guest; mudanças entre identidades autenticadas não podem.
+      const identityChanged = wasAuthenticated && authenticated && nextId !== prevId
       const loggedOut = wasAuthenticated && !authenticated
 
       if (identityChanged || loggedOut) {
@@ -150,6 +154,7 @@ const _useDashboard = () => {
         isClientFormOpen.value = false
         isExportFormOpen.value = false
         sessionEpoch.value += 1
+        clearSurfaceNavigationState()
       }
     }
   )

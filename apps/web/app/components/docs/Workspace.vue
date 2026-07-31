@@ -6,6 +6,11 @@
  * Fonte: .local/reference/nuxt-dashboard-template/app/pages/customers.vue
  */
 import { documentKindLabel, isDocumentKindCaptureAvailable } from '~/utils/document-kinds'
+import {
+  documentCatalogClientPath,
+  documentCatalogTypePath,
+  normalizeDocumentContextKind
+} from '~/utils/document-routes'
 import type { Client, Establishment, ExportFilters, FiscalDocument, FiscalDocumentInsights } from '~/types/api'
 import type { DocumentListParams } from '~/composables/useApi'
 import {
@@ -24,47 +29,40 @@ import {
 /** Teto alinhado a BuildExportZipJob::MAX_ACCESS_KEYS */
 const MAX_EXPORT_KEYS = 100
 
+type DocumentsCatalogNavigationState = {
+  filters: DocumentFilterState
+  pageSize: number
+}
+
+const documentsCatalogNavigationDefaults = (): DocumentsCatalogNavigationState => ({
+  filters: emptyDocsFilters(),
+  pageSize: 25
+})
+
 const api = useApi()
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 const props = withDefaults(defineProps<{
   initialView?: NotesViewMode
+  initialKind?: string
+  initialClientId?: string | number
+  openImport?: boolean
 }>(), {
-  initialView: 'client'
+  initialView: 'client',
+  initialKind: '',
+  initialClientId: '',
+  openImport: false
 })
-const { canCreateExport, canImportDocuments, sessionEpoch } = useDashboard()
-
-/** Query params canônicos aceitos no catálogo. */
-const CATALOG_QUERY_KEYS = new Set([
-  'kind',
-  'direction',
-  'q',
-  'client_id',
-  'establishment_id',
-  'fiscal_role',
-  'acquisition_source',
-  'artifact_quality',
-  'coverage_status',
-  'status',
-  'competence',
-  'issued_from',
-  'issued_to',
-  'missing_party_name',
-  'issuer_cnpj',
-  'taker_cnpj'
-])
+const { canCreateExport, canImportDocuments, me, sessionEpoch } = useDashboard()
+const documentsNavigationResetKey = computed(() =>
+  `${me.value?.id ?? 'guest'}:${me.value?.current_tenant?.id ?? 'none'}:${sessionEpoch.value}`
+)
 
 const notes = ref<FiscalDocument[]>([])
-/** Lista de clientes (API de cadastro) na visão Por cliente — com captura/sync. */
-const byClientRows = ref<Client[]>([])
-const byClientPage = ref(1)
-const byClientPerPage = ref(20)
 const byClientTotal = ref(0)
-const byClientLastPage = ref(1)
-/** Filtro operacional server-side da lista de clientes em Documentos. */
-const clientOperationalFilter = ref('total')
-const byClientSorting = ref<{ id: string, desc: boolean }[]>([{ id: 'legal_name', desc: false }])
+const byClientRef = ref<{ reload: () => Promise<void> } | null>(null)
+const byClientLoading = ref(false)
 const clients = ref<Client[]>([])
 const establishments = ref<Establishment[]>([])
 const insights = ref<FiscalDocumentInsights | null>(null)
@@ -72,8 +70,6 @@ const insightsLoading = ref(false)
 const nextCursor = ref<string | null>(null)
 /** Total no escopo dos filtros (meta.total da API). */
 const listTotal = ref(0)
-/** Tamanho do lote incremental (enviado como `limit`; API 1–100). */
-const pageSize = ref(25)
 const loading = ref(false)
 const loadError = ref<string | null>(null)
 const loadingFilters = ref(false)
@@ -84,54 +80,79 @@ const importFiles = ref<File[]>([])
 const importClientId = ref<string>(FILTER_ALL)
 const selectedKeys = ref<string[]>([])
 
+const documentsNavigation = useSurfaceNavigationState<DocumentsCatalogNavigationState>(
+  SURFACE_NAVIGATION.documents.catalog,
+  documentsCatalogNavigationDefaults,
+  {
+    resetKey: documentsNavigationResetKey,
+    normalize: value => ({
+      filters: { ...emptyDocsFilters(), ...value.filters },
+      pageSize: Math.min(100, Math.max(1, Math.floor(Number(value.pageSize) || 25)))
+    })
+  }
+)
+const documentsIntent = consumeSurfaceNavigationIntent<Partial<DocumentFilterState>>(
+  SURFACE_NAVIGATION.documents.catalog
+)
+if (documentsIntent) {
+  documentsNavigation.patch({
+    filters: { ...documentsNavigation.state.value.filters, ...documentsIntent }
+  })
+}
+const filters = reactive<DocumentFilterState>({ ...documentsNavigation.state.value.filters })
 const triageQueue = computed(() => activeTriageQueue(filters))
-
-const persistedFilters = useState<DocumentFilterState>('notes-workspace-filters', emptyDocsFilters)
-const filters = reactive<DocumentFilterState>({ ...persistedFilters.value })
+/** Tamanho do lote incremental (enviado como `limit`; API 1–100). */
+const pageSize = computed({
+  get: () => documentsNavigation.state.value.pageSize,
+  set: (value: number) => documentsNavigation.patch({ pageSize: value })
+})
 const view = ref<NotesViewMode>(props.initialView)
 
-const activeRowCount = computed(() => view.value === 'client'
-  ? byClientRows.value.length
-  : notes.value.length)
 const initialLoadError = computed(() =>
-  !loading.value && loadError.value && activeRowCount.value === 0
+  view.value === 'document' && !loading.value && loadError.value && notes.value.length === 0
     ? loadError.value
     : null
 )
+const activeLoading = computed(() => view.value === 'client' ? byClientLoading.value : loading.value)
 
 /** Contexto CT-e (autXML, pendências) só no catálogo com filtro kind=CTE. */
 const showCteContext = computed(() => view.value === 'document' && filters.kind === 'CTE')
 
 watch(filters, (value) => {
-  persistedFilters.value = { ...value }
+  documentsNavigation.patch({ filters: { ...value } })
 }, { deep: true })
 
-// Entrada profunda: /docs?import=1 ou /docs/catalog?import=1
+function applyDocumentPathContext(target: DocumentFilterState): void {
+  if (props.initialKind) {
+    const kind = normalizeDocumentContextKind(props.initialKind)
+    if (kind) target.kind = kind
+  }
+  if (props.initialClientId !== '' && props.initialClientId !== undefined) {
+    const clientId = String(props.initialClientId)
+    if (/^[1-9]\d*$/.test(clientId)) target.client_id = clientId
+  }
+}
+
 watch(
-  () => route.query.import,
-  (value) => {
-    if (value === '1' && canImportDocuments.value) {
+  () => props.openImport,
+  (open) => {
+    if (open && canImportDocuments.value) {
       importOpen.value = true
-      const { import: _drop, ...rest } = route.query
-      void router.replace({ path: route.path, query: rest })
     }
   },
   { immediate: true }
 )
 
-watch(sessionEpoch, () => {
-  // Mantém kind documental (ex. CTE) como preferência de visão; limpa o resto
-  // tenant-scoped para não repopular CNPJ/cliente/pendências do tenant anterior.
-  const preserveKind = filters.kind === 'CTE' ? 'CTE' : FILTER_ALL
-  const empty = emptyDocsFilters()
-  empty.kind = preserveKind
+watch(sessionEpoch, async () => {
+  const epoch = sessionEpoch.value
+  const defaults = documentsCatalogNavigationDefaults()
+  const empty = defaults.filters
+  applyDocumentPathContext(empty)
   Object.assign(filters, empty)
-  persistedFilters.value = empty
+  documentsNavigation.replace({ ...defaults, filters: empty })
   notes.value = []
-  byClientRows.value = []
   byClientTotal.value = 0
-  byClientLastPage.value = 1
-  byClientPage.value = 1
+  byClientLoading.value = false
   clients.value = []
   establishments.value = []
   insights.value = null
@@ -139,10 +160,13 @@ watch(sessionEpoch, () => {
   nextCursor.value = null
   listTotal.value = 0
   loadError.value = null
-  if (view.value === 'document' && !selectedAccessKey.value) {
-    void syncCatalogQuery(true)
+  if (isActiveFilterValue(filters.client_id)) {
+    const clientState = await onClientChange()
+    if (epoch !== sessionEpoch.value) return
+    if (clientState === 'missing') await clearMissingClientContext()
+    else if (clientState === 'unavailable') notifyClientContextUnavailable()
   }
-  void reloadActive()
+  if (view.value === 'document') void reloadActive()
   void loadClients()
 })
 
@@ -220,7 +244,7 @@ function insightsParams(): DocumentListParams {
 
 async function reloadActive() {
   if (view.value === 'client') {
-    await loadByClient()
+    await byClientRef.value?.reload()
     return
   }
   await Promise.all([load(true), loadInsights()])
@@ -246,8 +270,8 @@ async function onTriageSelect(queue: NotesTriageQueue) {
   selectedKeys.value = []
   // Fila de documento força view catálogo (exceto "all" em por cliente)
   if (nextQueue !== 'all' && view.value !== 'document') {
-    persistedFilters.value = { ...filters }
-    await router.push('/docs/catalog')
+    documentsNavigation.patch({ filters: { ...filters } })
+    await router.push(catalogContextPath())
     return
   }
   await reloadActive()
@@ -255,7 +279,6 @@ async function onTriageSelect(queue: NotesTriageQueue) {
 
 /** Seq de geração para descartar respostas stale mid-request (troca de tenant). */
 let notesLoadSeq = 0
-let byClientLoadSeq = 0
 
 /** Carrega o próximo lote usando exatamente o cursor entregue pela API. */
 async function load(reset = false): Promise<void> {
@@ -296,41 +319,6 @@ async function onPageSizeChange(size: number) {
   await load(true)
 }
 
-async function loadByClient() {
-  const seq = ++byClientLoadSeq
-  const epoch = sessionEpoch.value
-  loading.value = true
-  loadError.value = null
-  try {
-    const operational = clientOperationalFilter.value
-    const sort = byClientSorting.value[0]
-    const sortId = sort?.id === 'cnpj' ? 'cnpj' : 'legal_name'
-    const response = await api.clients.list({
-      page: byClientPage.value,
-      per_page: byClientPerPage.value,
-      q: filters.q.trim() || undefined,
-      operational_filter: operational === 'total'
-        ? undefined
-        : operational as 'capture_problem',
-      sort: sortId,
-      sort_direction: sort?.desc ? 'desc' : 'asc'
-    })
-    if (seq !== byClientLoadSeq || epoch !== sessionEpoch.value) return
-    byClientRows.value = response.data
-    byClientTotal.value = response.meta.total
-    byClientLastPage.value = response.meta.last_page
-  } catch (caught) {
-    if (seq !== byClientLoadSeq || epoch !== sessionEpoch.value) return
-    loadError.value = apiErrorMessage(caught, 'Erro ao listar clientes.')
-    toast.add({ title: loadError.value, color: 'error' })
-    byClientRows.value = []
-  } finally {
-    if (seq === byClientLoadSeq && epoch === sessionEpoch.value) {
-      loading.value = false
-    }
-  }
-}
-
 async function loadClients() {
   loadingFilters.value = true
   try {
@@ -342,107 +330,66 @@ async function loadClients() {
   }
 }
 
-async function onClientChange() {
+async function onClientChange(): Promise<'ready' | 'missing' | 'unavailable'> {
   filters.establishment_id = FILTER_ALL
   establishments.value = []
-  if (!isActiveFilterValue(filters.client_id)) return
+  if (!isActiveFilterValue(filters.client_id)) return 'ready'
   try {
     establishments.value = (await api.clients.get(Number(filters.client_id))).data.establishments || []
-  } catch {
+    return 'ready'
+  } catch (caught) {
     establishments.value = []
+    return apiErrorStatus(caught) === 404 ? 'missing' : 'unavailable'
   }
 }
 
-/** Query reproduzível do catálogo a partir dos filtros ativos. */
-function catalogQueryFromFilters(): Record<string, string> {
-  const query: Record<string, string> = {}
-  for (const key of CATALOG_QUERY_KEYS) {
-    const value = filters[key as keyof DocumentFilterState]
-    if (typeof value === 'string' && isActiveFilterValue(value)) {
-      query[key] = value
-    }
-  }
-  return query
-}
-
-/** Aplica a query canônica da URL aos filtros. */
-function hydrateFiltersFromQuery() {
-  const query = route.query
-  let changed = false
-  for (const key of CATALOG_QUERY_KEYS) {
-    const raw = query[key]
-    const value = Array.isArray(raw) ? raw[0] : raw
-    if (typeof value !== 'string' || !value) continue
-    if (key === 'kind' && !['NFSE', 'NFE', 'NFCE', 'CTE'].includes(value.toUpperCase())) continue
-    const normalized = key === 'kind' ? value.toUpperCase() : value
-    if (filters[key as keyof DocumentFilterState] !== normalized) {
-      ;(filters as Record<string, string>)[key] = normalized
-      changed = true
-    }
-  }
-  if (changed) {
-    persistedFilters.value = { ...filters }
+async function clearMissingClientContext(): Promise<void> {
+  filters.client_id = FILTER_ALL
+  filters.establishment_id = FILTER_ALL
+  if (route.path.startsWith('/docs/catalog/client/')) {
+    await router.replace('/docs/catalog')
   }
 }
 
-/** Sincroniza filtros ativos na URL do catálogo (sem poluir detalhe por accessKey). */
-async function syncCatalogQuery(replace = true) {
-  if (view.value !== 'document' || selectedAccessKey.value) return
-  const nextQuery = catalogQueryFromFilters()
-  const current: Record<string, string> = {}
-  for (const [key, raw] of Object.entries(route.query)) {
-    if (!CATALOG_QUERY_KEYS.has(key)) continue
-    const value = Array.isArray(raw) ? raw[0] : raw
-    if (typeof value === 'string' && value) current[key] = value
+function notifyClientContextUnavailable(): void {
+  toast.add({
+    title: 'Estabelecimentos do cliente indisponíveis',
+    description: 'O cliente selecionado foi preservado. Tente novamente em instantes.',
+    color: 'warning'
+  })
+}
+
+function notifyMissingClientContext(): void {
+  toast.add({
+    title: 'Cliente não encontrado',
+    description: 'O recorte foi removido porque o cliente não está mais disponível.',
+    color: 'warning'
+  })
+}
+
+function catalogContextPath(): string {
+  if (isActiveFilterValue(filters.client_id)) {
+    return documentCatalogClientPath(filters.client_id)
   }
-  const same
-    = Object.keys(nextQuery).length === Object.keys(current).length
-      && Object.entries(nextQuery).every(([k, v]) => current[k] === v)
-  if (same && !Object.keys(route.query).some(key => !CATALOG_QUERY_KEYS.has(key))) return
-  const nav = replace ? router.replace : router.push
-  await nav({ path: '/docs/catalog', query: nextQuery })
+  if (normalizeDocumentContextKind(filters.kind)) return documentCatalogTypePath(filters.kind)
+  return '/docs/catalog'
 }
 
 function resetFilters() {
   Object.assign(filters, emptyDocsFilters())
   establishments.value = []
   selectedKeys.value = []
-  clientOperationalFilter.value = 'total'
-  byClientPage.value = 1
-  void syncCatalogQuery()
   reloadActive()
 }
 
 async function applyFilters() {
   selectedKeys.value = []
-  byClientPage.value = 1
-  await syncCatalogQuery()
   await reloadActive()
 }
 
 async function onCtePendingResolved() {
   await Promise.all([load(true), loadInsights()])
 }
-
-async function onByClientApply() {
-  if (byClientPage.value !== 1) {
-    byClientPage.value = 1
-    return
-  }
-  await loadByClient()
-}
-
-watch(byClientPage, () => {
-  void loadByClient()
-})
-
-watch(byClientSorting, () => {
-  if (byClientPage.value !== 1) {
-    byClientPage.value = 1
-    return
-  }
-  void loadByClient()
-}, { deep: true })
 
 async function selectNote(note: FiscalDocument) {
   await router.push(`/docs/${note.access_key}`)
@@ -499,16 +446,22 @@ onMounted(() => window.addEventListener('keydown', onCatalogNavigationKeydown, t
 onBeforeUnmount(() => window.removeEventListener('keydown', onCatalogNavigationKeydown, true))
 
 async function closeDetail() {
-  await router.replace({ path: '/docs/catalog', query: catalogQueryFromFilters() })
+  await router.replace(catalogContextPath())
 }
 
 async function openClientNotes(client: Client) {
   filters.client_id = String(client.id)
   filters.establishment_id = FILTER_ALL
   selectedKeys.value = []
-  await onClientChange()
-  persistedFilters.value = { ...filters }
-  await router.push('/docs/catalog')
+  const clientState = await onClientChange()
+  if (clientState === 'missing') {
+    await clearMissingClientContext()
+    notifyMissingClientContext()
+    return
+  }
+  if (clientState === 'unavailable') notifyClientContextUnavailable()
+  documentsNavigation.patch({ filters: { ...filters } })
+  await router.push(catalogContextPath())
 }
 
 function buildExportFiltersFromCatalog(): ExportFilters {
@@ -666,21 +619,16 @@ async function exportSelection() {
 }
 
 onMounted(async () => {
-  // Deep-links documentais (ex. kind=CTE) hidratam somente filtros canônicos.
-  if (view.value === 'document' && !selectedAccessKey.value) {
-    hydrateFiltersFromQuery()
-    if (Object.keys(route.query).length) {
-      await syncCatalogQuery(true)
-    }
-  } else if (Object.keys(route.query).length && selectedAccessKey.value) {
-    await router.replace(`/docs/${selectedAccessKey.value}`)
-  }
+  // Contextos compartilháveis usam path; os demais filtros permanecem na sessão.
+  applyDocumentPathContext(filters)
   // Deep link de detalhe: o chrome do modal hidrata via GET da nota.
   if (isActiveFilterValue(filters.client_id)) {
-    await onClientChange()
+    const clientState = await onClientChange()
+    if (clientState === 'missing') await clearMissingClientContext()
+    else if (clientState === 'unavailable') notifyClientContextUnavailable()
   }
   await loadClients()
-  await reloadActive()
+  if (view.value === 'document') await reloadActive()
 })
 </script>
 
@@ -698,7 +646,7 @@ onMounted(async () => {
       >
         <template #right>
           <ShellNavbarRefresh
-            :loading="loading"
+            :loading="activeLoading"
             aria-label="Atualizar catálogo de documentos"
             @click="reloadActive"
           />
@@ -875,19 +823,10 @@ onMounted(async () => {
 
         <DocsByClient
           v-if="view === 'client'"
-          v-model:search="filters.q"
-          v-model:operational-filter="clientOperationalFilter"
-          v-model:page="byClientPage"
-          v-model:per-page="byClientPerPage"
-          v-model:sorting="byClientSorting"
-          :rows="byClientRows"
-          :loading="loading"
-          :error="loadError"
-          :total="byClientTotal"
-          :last-page="byClientLastPage"
+          ref="byClientRef"
           @open-client="openClientNotes"
-          @apply="onByClientApply"
-          @retry="loadByClient"
+          @total-change="byClientTotal = $event"
+          @loading-change="byClientLoading = $event"
         />
 
         <template v-else>

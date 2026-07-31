@@ -15,8 +15,12 @@ describe('master-detail shell navbar gate', () => {
     expect(master).toMatch(
       /<template #trailing>[\s\S]*?<UBadge[\s\S]*?:label="String\(workspace\.conversationsTotal\.value\)"[\s\S]*?<\/template>/
     )
-    expect(master).toContain('Estado da atualização em tempo real')
-    expect(master).toContain('Administrar comunicação')
+    expect(master).toContain('communication-realtime-status')
+    expect(master).toContain('role="status"')
+    expect(master).toContain('Atualização em tempo real')
+    expect(master).toContain('communication-navbar-more')
+    expect(page).toContain('label: \'Sincronizar conversas\'')
+    expect(page).toContain('label: \'Administrar comunicação\'')
     expect(master).toContain(':default-size="24"')
     expect(master).toContain(':min-size="20"')
     expect(master).toContain(':max-size="32"')

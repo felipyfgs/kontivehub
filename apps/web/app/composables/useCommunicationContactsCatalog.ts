@@ -6,7 +6,6 @@ import {
   watch,
   type Ref
 } from 'vue'
-import type { LocationQueryRaw } from 'vue-router'
 import type {
   CommunicationContact,
   CommunicationContactListParams,
@@ -17,12 +16,12 @@ import { apiErrorMessage } from '~/utils/api-error'
 import {
   buildCommunicationContactListQuery,
   communicationContactEmptyKind,
-  isSensitiveCommunicationContactSearch,
   isCommunicationContactSortField
 } from '~/utils/communication-contacts'
-import { COMMUNICATION_CONTACTS_PATH, communicationContactPath } from '~/utils/communication-routes'
+import { communicationContactPath } from '~/utils/communication-routes'
 import { createFilterModel, findDefinition } from '~/utils/data-table-filters'
 import { canManageCommunicationContacts } from '~/utils/permissions'
+import { COMMUNICATION_SURFACES, consumeSurfaceNavigationIntent, useSurfaceNavigationState } from './useSurfaceNavigationState'
 
 type ContactListResponse = {
   data: CommunicationContact[]
@@ -53,8 +52,7 @@ export type CommunicationContactsCatalogDependencies = {
   list: (query: CommunicationContactListParams) => Promise<ContactListResponse>
   create: (body: ContactCreateBody) => Promise<{ data: CommunicationContact }>
   update: (id: number, body: ContactUpdateBody) => Promise<{ data: CommunicationContact }>
-  replaceRoute: (location: { path: string, query: LocationQueryRaw }) => unknown
-  pushRoute: (location: { path: string, query?: LocationQueryRaw }) => Promise<unknown> | unknown
+  pushRoute: (location: { path: string }) => Promise<unknown> | unknown
   notify: (title: string, color: 'success' | 'error') => void
   sessionEpoch: Ref<number>
   canManage: Ref<boolean>
@@ -162,16 +160,6 @@ export function createCommunicationContactsCatalog(
   const sortingState = computed(() =>
     sort.value ? [{ id: sort.value, desc: sortDirection.value === 'desc' }] : []
   )
-  const routeQuery = computed(() => ({
-    page: page.value > 1 ? String(page.value) : undefined,
-    q: q.value && !isSensitiveCommunicationContactSearch(q.value) ? q.value : undefined,
-    is_active: isActive.value !== 'true' ? isActive.value : undefined,
-    is_provisional: isProvisional.value !== 'all' ? isProvisional.value : undefined,
-    linked: linked.value !== 'all' ? linked.value : undefined,
-    sort: sort.value && sort.value !== 'name' ? sort.value : undefined,
-    sort_direction: sort.value && sortDirection.value === 'desc' ? 'desc' : undefined,
-    per_page: perPage.value !== DEFAULT_PER_PAGE ? String(perPage.value) : undefined
-  }))
   const initialLoading = computed(() => loading.value && !hasLoaded.value && !items.value.length)
   const stale = computed(() => loading.value && hasLoaded.value && items.value.length > 0)
   const empty = computed(() =>
@@ -189,31 +177,6 @@ export function createCommunicationContactsCatalog(
       page: page.value,
       perPage: perPage.value
     })
-  }
-
-  function replaceRoute() {
-    return dependencies.replaceRoute({
-      path: COMMUNICATION_CONTACTS_PATH,
-      query: routeQuery.value
-    })
-  }
-
-  function syncUrl() {
-    void Promise.resolve(replaceRoute()).catch(() => {
-      dependencies.notify('Não foi possível atualizar a URL do catálogo.', 'error')
-    })
-  }
-
-  async function sanitizeSensitiveSearchUrl(): Promise<boolean> {
-    if (!isSensitiveCommunicationContactSearch(q.value)) return true
-
-    try {
-      await replaceRoute()
-      return true
-    } catch {
-      dependencies.notify('Não foi possível remover o telefone da URL.', 'error')
-      return false
-    }
   }
 
   async function load() {
@@ -283,7 +246,7 @@ export function createCommunicationContactsCatalog(
   }
 
   function openContact(contact: CommunicationContact) {
-    return dependencies.pushRoute({ path: communicationContactPath(contact.id), query: routeQuery.value })
+    return dependencies.pushRoute({ path: communicationContactPath(contact.id) })
   }
 
   async function createContact(body: ContactCreateBody) {
@@ -295,8 +258,7 @@ export function createCommunicationContactsCatalog(
       dependencies.notify('Contato criado.', 'success')
       createOpen.value = false
       await dependencies.pushRoute({
-        path: communicationContactPath(created.data.id),
-        query: routeQuery.value
+        path: communicationContactPath(created.data.id)
       })
       return true
     } catch (caught) {
@@ -356,10 +318,7 @@ export function createCommunicationContactsCatalog(
 
   const stopQueryWatch = watch(
     [page, q, isActive, isProvisional, linked, sort, sortDirection, perPage],
-    () => {
-      syncUrl()
-      void load()
-    }
+    () => { void load() }
   )
   const stopSessionWatch = watch(dependencies.sessionEpoch, resetForSession)
 
@@ -392,8 +351,6 @@ export function createCommunicationContactsCatalog(
     chipModels,
     emptyKind,
     sortingState,
-    routeQuery,
-    sanitizeSensitiveSearchUrl,
     createOpen,
     creating,
     createError,
@@ -416,29 +373,39 @@ export function createCommunicationContactsCatalog(
 export function useCommunicationContactsCatalog() {
   const api = useApi()
   const router = useRouter()
-  const route = useRoute()
   const toast = useToast()
   const { me, sessionEpoch } = useDashboard()
   const canManage = computed(() => canManageCommunicationContacts(me.value))
+  const surface = useSurfaceNavigationState(COMMUNICATION_SURFACES.contacts, {
+    page: 1, per_page: DEFAULT_PER_PAGE, q: '', is_active: 'true', is_provisional: 'all',
+    linked: 'all', sort: 'name', sort_direction: 'asc'
+  }, { resetKey: () => `${me.value?.id ?? 'guest'}:${me.value?.current_tenant?.id ?? 'none'}:${sessionEpoch.value}` })
+  const legacyIntent = consumeSurfaceNavigationIntent<Record<string, unknown>>(COMMUNICATION_SURFACES.contacts)
+  if (legacyIntent) surface.patch(legacyIntent)
   const catalog = createCommunicationContactsCatalog({
     list: query => api.communication.contacts.list(query),
     create: body => api.communication.contacts.create(body),
     update: (id, body) => api.communication.contacts.update(id, body),
-    replaceRoute: location => router.replace(location),
     pushRoute: location => router.push(location),
     notify: (title, color) => toast.add({ title, color }),
     sessionEpoch,
     canManage,
-    initialQuery: route.query
+    initialQuery: surface.state.value
+  })
+
+  watch([catalog.page, catalog.perPage, catalog.q, catalog.isActive, catalog.isProvisional, catalog.linked, catalog.sort, catalog.sortDirection], () => {
+    surface.patch({
+      page: catalog.page.value, per_page: catalog.perPage.value, q: catalog.q.value,
+      is_active: catalog.isActive.value, is_provisional: catalog.isProvisional.value,
+      linked: catalog.linked.value, sort: catalog.sort.value ?? 'name',
+      sort_direction: catalog.sortDirection.value ?? 'asc'
+    })
   })
 
   useCommunicationProfilePictureRealtime(catalog.load)
 
   onMounted(() => {
-    void (async () => {
-      if (!await catalog.sanitizeSensitiveSearchUrl()) return
-      await catalog.load()
-    })()
+    void catalog.load()
   })
   onScopeDispose(catalog.dispose)
 

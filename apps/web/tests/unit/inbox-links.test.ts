@@ -16,4 +16,12 @@ describe('resolveInboxItemLink', () => {
       reasons: ['USAGE_ALERT']
     })).toBe('/conta/consumo')
   })
+
+  it('preserva deep-link de Saúde por path emitido pela API', () => {
+    expect(resolveInboxItemLink({
+      type: 'cte_656',
+      links: { health: '/health/type/cte_656' },
+      reasons: ['CTE_656']
+    })).toBe('/health/type/cte_656')
+  })
 })

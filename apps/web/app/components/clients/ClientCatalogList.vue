@@ -20,7 +20,6 @@ import {
 import type { DashboardKpiItem } from '~/utils/kpi-ui'
 import {
   CLIENTS_LIST_QUERY_SCHEMA,
-  serializeListFilterQuery,
   useListFilterQuery
 } from '~/composables/useListFilterQuery'
 import ShellKpiStrip from '~/components/shell/KpiStrip.vue'
@@ -49,8 +48,6 @@ const isNarrow = breakpoints.smaller('sm')
 const paginationSiblingCount = computed(() => (isNarrow.value ? 0 : 1))
 
 const api = useApi()
-const route = useRoute()
-const router = useRouter()
 const {
   canManageClients,
   canManageClientCategoryCatalog,
@@ -58,10 +55,17 @@ const {
   canManageCredentials,
   isClientFormOpen,
   clientFormCreateNonce,
+  me,
   sessionEpoch
 } = useDashboard()
 const toast = useToast()
-const clientsListQuery = useListFilterQuery(CLIENTS_LIST_QUERY_SCHEMA)
+const clientsNavigationResetKey = computed(() =>
+  `${me.value?.id ?? 'guest'}:${me.value?.current_tenant?.id ?? 'none'}:${sessionEpoch.value}`
+)
+const clientsListQuery = useListFilterQuery(CLIENTS_LIST_QUERY_SCHEMA, {
+  surface: SURFACE_NAVIGATION.clients,
+  resetKey: clientsNavigationResetKey
+})
 
 const table = useTemplateRef<{ tableApi?: {
   getAllColumns: () => Array<{
@@ -254,7 +258,7 @@ const CLIENT_KPI_KEYS = new Set<string>([
   'capture_problem'
 ])
 
-function hydrateClientsFromQuery() {
+function hydrateClientsFromState() {
   const state = clientsListQuery.read()
   search.value = String(state.q ?? '')
   statusFilter.value = String(state.status ?? 'all')
@@ -272,9 +276,9 @@ function hydrateClientsFromQuery() {
   syncClientChips()
 }
 
-async function syncClientsUrl() {
+function syncClientsState() {
   const sort = sorting.value[0]
-  const query = serializeListFilterQuery({
+  clientsListQuery.write({
     q: search.value,
     status: statusFilter.value,
     operational_filter: kpiFilter.value,
@@ -287,11 +291,10 @@ async function syncClientsUrl() {
       ? sort.id
       : 'legal_name',
     sort_direction: sort?.desc ? 'desc' : 'asc'
-  }, CLIENTS_LIST_QUERY_SCHEMA)
-  await router.replace({ path: route.path, query })
+  })
 }
 
-hydrateClientsFromQuery()
+hydrateClientsFromState()
 
 /** Evita double-fetch quando preset hidrata vários refs de uma vez. */
 let applyingClientsPreset = false
@@ -673,7 +676,7 @@ async function load() {
   loading.value = true
   loadError.value = null
   try {
-    await syncClientsUrl()
+    syncClientsState()
     const sort = sorting.value[0]
     const sortId = sort?.id === 'is_active' || sort?.id === 'tax_regime'
       ? sort.id
@@ -713,6 +716,8 @@ function resetTenantScopedList() {
   total.value = 0
   lastPage.value = 1
   page.value = 1
+  perPage.value = 20
+  sorting.value = [{ id: 'legal_name', desc: false }]
   search.value = ''
   kpiFilter.value = 'total'
   statusFilter.value = 'all'

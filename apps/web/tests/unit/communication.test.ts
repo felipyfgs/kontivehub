@@ -491,9 +491,10 @@ describe('Reverb fail-closed e recuperável', () => {
     expect(composer).toContain('if (ok) clearDraft()')
     expect(page).toContain('acknowledge?.(ok)')
     expect(page).toContain('void workspace.initialize()')
-    expect(page).toContain('applyScopeQueryFromRoute')
+    expect(page).toContain('applyRouteConversation')
     expect(page).toContain('communicationConversationPath')
     expect(page).toContain('routeConversationId')
+    expect(page).not.toContain('route.query')
   })
 })
 
@@ -501,18 +502,34 @@ describe('deep-link de conversas', () => {
   it('monta path canônico e parseia id de rota', async () => {
     const {
       COMMUNICATION_INDEX_PATH,
+      communicationContactConversationsPath,
+      communicationConversationMessagePath,
       communicationConversationPath,
       parseCommunicationConversationId,
+      parseCommunicationMessageId,
       isCommunicationNavActive
     } = await import('~/utils/communication-routes')
     expect(COMMUNICATION_INDEX_PATH).toBe('/communication')
     expect(communicationConversationPath(1)).toBe('/communication/conversations/1')
+    expect(communicationConversationMessagePath(1, 9)).toBe('/communication/conversations/1/messages/9')
+    expect(communicationContactConversationsPath(4)).toBe('/communication/contacts/4/conversations')
+    expect(communicationContactConversationsPath(4, 1)).toBe('/communication/contacts/4/conversations/1')
     expect(parseCommunicationConversationId('42')).toBe(42)
     expect(parseCommunicationConversationId(['7'])).toBe(7)
     expect(parseCommunicationConversationId('abc')).toBeNull()
+    expect(parseCommunicationMessageId('99')).toBe(99)
+    expect(parseCommunicationMessageId('../99')).toBeNull()
     expect(isCommunicationNavActive('/communication')).toBe(true)
     expect(isCommunicationNavActive('/communication/conversations/9')).toBe(true)
     expect(isCommunicationNavActive('/clients')).toBe(false)
+
+    const conversationPage = readFileSync(
+      resolve(process.cwd(), 'app/pages/communication/conversations/[id].vue'),
+      'utf8'
+    )
+    expect(conversationPage).toContain('definePageMeta')
+    expect(conversationPage).toContain('parsePositiveRouteId(to.params.id)')
+    expect(conversationPage).not.toContain('const conversationId =')
   })
 })
 

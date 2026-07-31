@@ -55,6 +55,12 @@
   },
   {
     "section": "communication",
+    "file": "app/pages/communication/conversations/[id]/messages/[messageId].vue",
+    "route": "/communication/conversations/:id/messages/:messageId",
+    "notes": "Deep-link canônico de uma mensagem na timeline da conversa"
+  },
+  {
+    "section": "communication",
     "file": "app/pages/communication/contacts/index.vue",
     "route": "/communication/contacts",
     "notes": "Catálogo de contatos de comunicação (ShellDataTable + filtros)"
@@ -64,6 +70,18 @@
     "file": "app/pages/communication/contacts/[id].vue",
     "route": "/communication/contacts/:id",
     "notes": "Detalhes do contato: edit, identities, links, export e purge"
+  },
+  {
+    "section": "communication",
+    "file": "app/pages/communication/contacts/[contactId]/conversations/index.vue",
+    "route": "/communication/contacts/:contactId/conversations",
+    "notes": "Workspace de conversas filtrado pelo contexto estável do contato"
+  },
+  {
+    "section": "communication",
+    "file": "app/pages/communication/contacts/[contactId]/conversations/[id].vue",
+    "route": "/communication/contacts/:contactId/conversations/:id",
+    "notes": "Conversa selecionada dentro do contexto estável do contato"
   },
   {
     "section": "communication",
@@ -385,6 +403,18 @@
   },
   {
     "section": "docs",
+    "file": "app/pages/docs/catalog/type/[kind].vue",
+    "route": "/docs/catalog/type/:kind",
+    "notes": "Catálogo com contexto compartilhável de tipo documental"
+  },
+  {
+    "section": "docs",
+    "file": "app/pages/docs/catalog/client/[clientId].vue",
+    "route": "/docs/catalog/client/:clientId",
+    "notes": "Catálogo com contexto compartilhável de cliente"
+  },
+  {
+    "section": "docs",
     "file": "app/pages/docs/[accessKey].vue",
     "route": "/docs/:accessKey",
     "notes": "Single document by access key"
@@ -394,6 +424,12 @@
     "file": "app/pages/docs/imports/index.vue",
     "route": "/docs/imports",
     "notes": "Import history"
+  },
+  {
+    "section": "docs",
+    "file": "app/pages/docs/imports/new.vue",
+    "route": "/docs/imports/new",
+    "notes": "Criação canônica de uma importação documental"
   },
   {
     "section": "docs",
@@ -415,6 +451,12 @@
   },
   {
     "section": "work",
+    "file": "app/pages/work/calendar/[view]/[date].vue",
+    "route": "/work/calendar/:view/:date",
+    "notes": "Visão e data compartilháveis do calendário operacional"
+  },
+  {
+    "section": "work",
     "file": "app/pages/work/processes/index.vue",
     "route": "/work/processes",
     "notes": "Processes list"
@@ -424,6 +466,12 @@
     "file": "app/pages/work/processes/[id].vue",
     "route": "/work/processes/:id",
     "notes": "Process detail"
+  },
+  {
+    "section": "work",
+    "file": "app/pages/work/processes/[id]/[section].vue",
+    "route": "/work/processes/:id/:section",
+    "notes": "Seção canônica allowlisted do detalhe de processo"
   },
   {
     "section": "work",

@@ -4,6 +4,10 @@
  */
 export type WorkCalendarView = 'month' | 'week' | 'day'
 
+export function workCalendarPath(view: WorkCalendarView, date: string): string {
+  return `/work/calendar/${view}/${normalizeWorkCalendarDate(date)}`
+}
+
 function pad(n: number) {
   return String(n).padStart(2, '0')
 }
@@ -28,6 +32,16 @@ export function addDays(date: string, delta: number): string {
 
 export function todayYmd(now = new Date()): string {
   return formatYmd(now.getFullYear(), now.getMonth() + 1, now.getDate())
+}
+
+export function isValidWorkCalendarDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const parsed = new Date(`${value}T00:00:00Z`)
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value
+}
+
+export function normalizeWorkCalendarDate(value: string, fallback = todayYmd()): string {
+  return isValidWorkCalendarDate(value) ? value : fallback
 }
 
 /** Segunda → domingo da semana da data âncora. */
@@ -105,34 +119,21 @@ export function useWorkCalendarRange() {
   const router = useRouter()
 
   const view = computed<WorkCalendarView>(() => {
-    const v = String(route.query.view || 'month')
+    const v = String(route.params.view || 'month')
     return (['month', 'week', 'day'].includes(v) ? v : 'month') as WorkCalendarView
   })
 
   const date = computed(() => {
-    const raw = String(route.query.date || '')
-    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw
-    return todayYmd()
+    const raw = String(route.params.date || '')
+    return normalizeWorkCalendarDate(raw)
   })
 
   async function setView(v: WorkCalendarView) {
-    await router.replace({
-      query: {
-        ...route.query,
-        view: v === 'month' ? undefined : v,
-        date: date.value
-      }
-    })
+    await router.replace(workCalendarPath(v, date.value))
   }
 
   async function setDate(d: string) {
-    await router.replace({
-      query: {
-        ...route.query,
-        view: view.value === 'month' ? undefined : view.value,
-        date: d
-      }
-    })
+    await router.replace(workCalendarPath(view.value, d))
   }
 
   async function navigate(direction: -1 | 0 | 1) {

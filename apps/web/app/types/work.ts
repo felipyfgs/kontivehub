@@ -348,9 +348,9 @@ export interface WorkExportJob {
 export type WorkEntityLevel = 'client' | 'process' | 'task'
 
 /**
- * Modo de listagem na URL de `/work/processes`.
- * `client` → `?group=client` (API `process-groups` / `group_by=client`);
- * `process` → `group` omitido (API `process-groups` / `group_by=routine`).
+ * Modo de listagem mantido na sessão de `/work/processes`.
+ * `client` usa `group_by=client` na consulta HTTP;
+ * `process` usa `group_by=routine` na consulta HTTP.
  */
 export type WorkProcessGroupMode = 'client' | 'process'
 

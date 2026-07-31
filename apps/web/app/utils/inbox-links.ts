@@ -41,6 +41,8 @@ export function validateTenantPath(path?: string | null): string | null {
 function firstValidLink(links?: InboxItemLinks | null): string | null {
   if (!links) return null
   const candidates = [
+    links.health,
+    links.quarantine,
     links.serpro_authorization,
     links.usage,
     links.monitoring,

@@ -47,42 +47,49 @@ export const WORK_NAV_ITEMS: NavLayerItem[] = [
 
 validateNavCatalog(WORK_NAV_ITEMS)
 
+export type WorkProcessSection = 'summary' | 'tasks' | 'comments' | 'history'
+
+export function workProcessSectionPath(
+  processId: string | number,
+  section: WorkProcessSection = 'summary'
+): string {
+  const base = `/work/processes/${processId}`
+  return section === 'summary' ? base : `${base}/${section}`
+}
+
 /** Contexto do detalhe de processo (substitui tabs da área). */
 export function workProcessContextNav(processId: string | number): NavLayerItem[] {
-  const base = `/work/processes/${processId}`
-  const querySectionActive = (expected: string) => (path: string, location?: string) => {
-    if (path !== base) return false
-    const params = new URLSearchParams((location?.split('?')[1] || '').split('#')[0] || '')
-    return (params.get('section') || 'resumo') === expected
-  }
+  const base = workProcessSectionPath(processId)
+  const pathSectionActive = (expected: string) => (path: string) =>
+    path === (expected === 'resumo' ? base : `${base}/${expected}`)
   return [
     {
       id: 'process-resumo',
       label: 'Resumo',
       icon: 'i-lucide-layout-dashboard',
-      to: `${base}?section=resumo`,
-      isActive: querySectionActive('resumo')
+      to: base,
+      isActive: pathSectionActive('resumo')
     },
     {
       id: 'process-tarefas',
       label: 'Tarefas',
       icon: 'i-lucide-list-checks',
-      to: `${base}?section=tarefas`,
-      isActive: querySectionActive('tarefas')
+      to: workProcessSectionPath(processId, 'tasks'),
+      isActive: pathSectionActive('tasks')
     },
     {
       id: 'process-comentarios',
       label: 'Comentários',
       icon: 'i-lucide-message-square',
-      to: `${base}?section=comentarios`,
-      isActive: querySectionActive('comentarios')
+      to: workProcessSectionPath(processId, 'comments'),
+      isActive: pathSectionActive('comments')
     },
     {
       id: 'process-historico',
       label: 'Histórico',
       icon: 'i-lucide-history',
-      to: `${base}?section=historico`,
-      isActive: querySectionActive('historico')
+      to: workProcessSectionPath(processId, 'history'),
+      isActive: pathSectionActive('history')
     }
   ]
 }

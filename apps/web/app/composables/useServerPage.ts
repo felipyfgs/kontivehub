@@ -19,9 +19,6 @@ function asPositiveInt(value: unknown, fallback: number): number {
 }
 
 export function useServerPage(defaults?: Partial<ServerPageState>) {
-  const route = useRoute()
-  const router = useRouter()
-
   const page = ref(asPositiveInt(defaults?.page, 1))
   const perPage = ref(defaults?.perPage ?? 20)
   const total = ref(0)
@@ -59,10 +56,10 @@ export function useServerPage(defaults?: Partial<ServerPageState>) {
     })
   }
 
-  async function syncUrl() {
-    if (Object.keys(route.query).length > 0) {
-      await router.replace({ path: route.path })
-    }
+  // Compatibilidade interna: consumidores antigos ainda aguardam este hook,
+  // mas paginação/filtros nunca são projetados na URL do navegador.
+  function syncUrl(): Promise<void> {
+    return Promise.resolve()
   }
 
   function resetPage() {

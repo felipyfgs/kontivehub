@@ -2,10 +2,11 @@
 import { breakpointsTailwind, useBreakpoints } from '@vueuse/core'
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type {
-  CommunicationBulkAction,
   CommunicationComposerPayload,
   CommunicationContact,
   CommunicationConversation,
+  CommunicationConversationActionPayload,
+  CommunicationConversationQuickView,
   CommunicationConversationStatus,
   CommunicationMessage
 } from '~/types/communication'
@@ -17,13 +18,18 @@ import {
 } from '~/utils/communication'
 import {
   COMMUNICATION_INDEX_PATH,
+  communicationContactConversationsPath,
+  communicationConversationMessagePath,
   communicationConversationPath,
-  parseCommunicationConversationId
+  parseCommunicationContactId,
+  parseCommunicationConversationId,
+  parseCommunicationMessageId
 } from '~/utils/communication-routes'
 import { normalizeCommunicationConversationSortBy } from '~/utils/communication-conversation-sort'
+import { communicationQuickViewState } from '~/utils/communication-conversation-quick-views'
 
 type BulkActionMenu = {
-  key: 'assignee' | 'organization' | 'read' | 'status'
+  key: 'more' | 'read' | 'status'
   align: 'end' | 'start'
   label: string
   icon: string
@@ -53,17 +59,15 @@ const newConversationOpen = ref(false)
 const newConversationContact = ref<CommunicationContact | null>(null)
 const newConversationContacts = ref<CommunicationContact[]>([])
 const newConversationLoading = ref(false)
-const filtersHydrated = ref(false)
+const conversationActionPending = ref(false)
 const contactFilterName = ref<string | null>(null)
 const pendingConversationFocusId = ref<number | null>(null)
 let mobileFocusRestoreTimer: ReturnType<typeof setTimeout> | null = null
 let contactFilterRequestSequence = 0
 
 const routeConversationId = computed(() => parseCommunicationConversationId(route.params.id))
-const routeMessageId = computed(() => {
-  const id = Number(route.query.message_id)
-  return Number.isInteger(id) && id > 0 ? id : null
-})
+const routeMessageId = computed(() => parseCommunicationMessageId(route.params.messageId))
+const routeContactId = computed(() => parseCommunicationContactId(route.params.contactId))
 
 const mobileConversationOpen = computed({
   get: () => isMobile.value && workspace.selectedConversation.value !== null,
@@ -111,8 +115,8 @@ const labelItems = computed(() =>
 const assigneeSelection = computed({
   get: () => workspace.assigneeFilter.value || 0,
   set: (value: number) => {
-    workspace.assigneeFilter.value = value || null
     if (value) workspace.unassignedOnly.value = false
+    workspace.assigneeFilter.value = value || null
   }
 })
 const unassignedOnlySelection = computed({
@@ -139,64 +143,13 @@ const sortSelection = computed({
   }
 })
 
-function scopeQueryFromWorkspace(): Record<string, string> {
-  const query: Record<string, string> = {}
-  if (workspace.inboxFilter.value) query.inbox_id = String(workspace.inboxFilter.value)
-  if (workspace.assigneeFilter.value) {
-    query.assignee_membership_id = String(workspace.assigneeFilter.value)
-  }
-  if (workspace.departmentFilter.value) {
-    query.work_department_id = String(workspace.departmentFilter.value)
-  }
-  if (workspace.unassignedOnly.value) query.unassigned = '1'
-  if (workspace.unreadOnly.value) query.unread = '1'
-  if (workspace.labelIdsFilter.value.length) {
-    query.label_ids = workspace.labelIdsFilter.value.join(',')
-  }
-  if (workspace.contactIdFilter.value) query.contact_id = String(workspace.contactIdFilter.value)
-  // status/sort ficam na preferência do servidor; q só em memória.
-  return query
-}
-
-function scopeQueryForCurrentRoute(conversationId: number | null): Record<string, string> {
-  const query = scopeQueryFromWorkspace()
-  if (conversationId !== null
-    && routeConversationId.value === conversationId
-    && routeMessageId.value !== null) {
-    query.message_id = String(routeMessageId.value)
-  }
-  return query
-}
-
-function sameRouteQuery(current: Record<string, unknown>, next: Record<string, string>): boolean {
-  const normalize = (query: Record<string, unknown>) => Object.entries(query)
-    .filter(([, value]) => value !== undefined)
-    .map(([key, value]) => [key, Array.isArray(value) ? value.map(String).sort() : String(value)] as const)
-    .sort(([left], [right]) => left.localeCompare(right))
-  return JSON.stringify(normalize(current)) === JSON.stringify(normalize(next))
-}
-
-function applyScopeQueryFromRoute(): void {
-  const q = route.query
-  const inbox = Number(q.inbox_id)
-  workspace.inboxFilter.value = Number.isInteger(inbox) && inbox > 0 ? inbox : null
-  const assignee = Number(q.assignee_membership_id)
-  workspace.assigneeFilter.value = Number.isInteger(assignee) && assignee > 0 ? assignee : null
-  const department = Number(q.work_department_id)
-  workspace.departmentFilter.value = Number.isInteger(department) && department > 0
-    ? department
-    : null
-  workspace.unassignedOnly.value = q.unassigned === '1' || q.unassigned === 'true'
-  workspace.unreadOnly.value = q.unread === '1' || q.unread === 'true'
-  workspace.labelIdsFilter.value = typeof q.label_ids === 'string' && q.label_ids.trim()
-    ? q.label_ids
-        .split(',')
-        .map(part => Number(part))
-        .filter(id => Number.isInteger(id) && id > 0)
-    : []
-  const contactId = Number(q.contact_id)
-  workspace.contactIdFilter.value = Number.isInteger(contactId) && contactId > 0 ? contactId : null
-  filtersHydrated.value = true
+function applyQuickView(view: CommunicationConversationQuickView): void {
+  const next = communicationQuickViewState(view)
+  workspace.clearOperationalSelection()
+  workspace.statusFilter.value = next.status
+  workspace.unreadOnly.value = next.unreadOnly
+  workspace.unassignedOnly.value = next.unassignedOnly
+  if (next.unassignedOnly) workspace.assigneeFilter.value = null
 }
 
 async function loadContactFilterName(): Promise<void> {
@@ -220,6 +173,7 @@ function clearContactFilter(): void {
   ++contactFilterRequestSequence
   workspace.contactIdFilter.value = null
   contactFilterName.value = null
+  void router.replace(COMMUNICATION_INDEX_PATH)
 }
 
 function openAdministration() {
@@ -260,12 +214,14 @@ function closePurge() {
 }
 
 async function syncRouteToSelection(id: number | null): Promise<void> {
-  const target = id === null ? COMMUNICATION_INDEX_PATH : communicationConversationPath(id)
-  const query = scopeQueryForCurrentRoute(id)
-  const samePath = route.path === target
-  const sameQuery = sameRouteQuery(route.query, query)
-  if (samePath && sameQuery) return
-  await router.push({ path: target, query })
+  const contactId = routeContactId.value
+  const target = contactId
+    ? communicationContactConversationsPath(contactId, id ?? undefined)
+    : id === null
+      ? COMMUNICATION_INDEX_PATH
+      : communicationConversationPath(id)
+  if (route.path === target) return
+  await router.push(target)
 }
 
 async function openConversation(id: number): Promise<void> {
@@ -375,6 +331,29 @@ const conversationTotalLabel = computed(() => {
     : `${count} conversas no filtro atual`
 })
 
+const realtimeStatusClass = computed(() => {
+  const color = COMMUNICATION_REALTIME_META[workspace.realtimeState.value].color
+  if (color === 'success') return 'text-success'
+  if (color === 'warning') return 'text-warning'
+  return 'text-muted'
+})
+
+const navbarMenuItems = computed<DropdownMenuItem[][]>(() => [[
+  {
+    label: 'Sincronizar conversas',
+    icon: 'i-lucide-refresh-cw',
+    disabled: workspace.syncing.value,
+    onSelect: () => void workspace.synchronize()
+  },
+  ...(workspace.canManage.value
+    ? [{
+        label: 'Administrar comunicação',
+        icon: 'i-lucide-settings-2',
+        onSelect: openAdministration
+      }]
+    : [])
+]])
+
 const bulkSelectionAnnouncement = computed(() => {
   const count = workspace.selectedConversationCount.value
   if (count === 0) return ''
@@ -402,183 +381,212 @@ function onBulkSelectAllChange(value: boolean | 'indeterminate'): void {
   void clearBulkSelection()
 }
 
-async function onRowAction(payload: {
-  conversation: CommunicationConversation
-  action: CommunicationBulkAction | 'OPEN'
-  params?: {
-    status?: CommunicationConversationStatus
-    snoozed_until?: string | null
-  }
-}): Promise<void> {
-  const { conversation, action, params } = payload
-  if (action === 'OPEN') {
-    await openConversation(conversation.id)
-    return
-  }
-  // Menu da linha: endpoints unitários (não limpam a seleção operacional).
+function unsupportedConversationAction(_action: never): never {
+  throw new Error('Ação de conversa não suportada.')
+}
+
+async function onConversationAction(
+  payload: CommunicationConversationActionPayload
+): Promise<void> {
+  if (conversationActionPending.value) return
+  const { conversation, action } = payload
+  conversationActionPending.value = true
   try {
-    if (action === 'MARK_READ') {
-      await workspace.markConversationRead(conversation.id)
-      return
-    }
-    if (action === 'MARK_UNREAD') {
-      await workspace.markConversationUnread(conversation.id)
-      return
-    }
-    if (action === 'SET_STATUS' && params?.status) {
-      await workspace.updateConversation({
-        status: params.status,
-        snoozed_until: params.status === 'SNOOZED'
-          ? params.snoozed_until ?? null
+    let updated = false
+    if (action.type === 'MARK_READ') {
+      updated = await workspace.markConversationRead(conversation.id)
+    } else if (action.type === 'MARK_UNREAD') {
+      updated = await workspace.markConversationUnread(conversation.id)
+    } else if (action.type === 'SET_STATUS') {
+      updated = await workspace.updateConversation({
+        status: action.status,
+        snoozed_until: action.status === 'SNOOZED'
+          ? action.snoozed_until ?? null
           : null
       }, conversation)
-      await workspace.reloadConversations()
-      return
+    } else if (action.type === 'SET_ASSIGNEE') {
+      updated = await workspace.updateConversation({
+        assignee_membership_id: action.assignee_membership_id
+      }, conversation)
+    } else if (action.type === 'SET_DEPARTMENT') {
+      updated = await workspace.updateConversation({
+        work_department_id: action.work_department_id
+      }, conversation)
+    } else if (action.type === 'SET_LABEL') {
+      updated = await workspace.setConversationLabel(
+        conversation,
+        action.label_id,
+        action.assigned
+      )
+    } else {
+      unsupportedConversationAction(action)
     }
-    toast.add({
-      title: 'Ação de linha não suportada.',
-      color: 'warning'
-    })
+    if (updated) await workspace.reloadConversations()
   } catch (caught) {
     toast.add({
       title: apiErrorMessage(caught, 'Falha ao aplicar a ação na conversa.'),
       color: 'error'
     })
+  } finally {
+    conversationActionPending.value = false
   }
 }
 
 const bulkActionMenus = computed<BulkActionMenu[]>(() => {
   const menus: BulkActionMenu[] = []
+  const selected = workspace.conversations.value.filter(conversation =>
+    workspace.selectedConversationIds.value.has(conversation.id))
+  if (!selected.length) return menus
 
   if (workspace.canView.value) {
-    menus.push({
-      key: 'read',
-      align: 'start',
-      label: 'Alterar leitura',
-      icon: 'i-lucide-mail-open',
-      items: [{
+    const readItems: DropdownMenuItem[] = []
+    if (selected.some(conversation => (conversation.unread_count ?? 0) > 0)) {
+      readItems.push({
         label: 'Marcar como lidas',
-        icon: 'i-lucide-mail-open',
+        icon: 'i-lucide-mail-check',
         onSelect: () => void workspace.submitBulkOperation('MARK_READ')
-      },
-      {
+      })
+    }
+    if (selected.some(conversation => (conversation.unread_count ?? 0) === 0)) {
+      readItems.push({
         label: 'Marcar como não lidas',
         icon: 'i-lucide-mail',
         onSelect: () => void workspace.submitBulkOperation('MARK_UNREAD')
-      }]
-    })
+      })
+    }
+    if (readItems.length) {
+      menus.push({
+        key: 'read',
+        align: 'start',
+        label: 'Alterar leitura',
+        icon: 'i-lucide-mail-check',
+        items: readItems
+      })
+    }
   }
 
   if (workspace.canReply.value) {
+    const statusItems: DropdownMenuItem[] = []
+    const addStatus = (
+      status: CommunicationConversationStatus,
+      label: string,
+      icon: string
+    ) => {
+      if (selected.every(conversation => conversation.status === status)) return
+      statusItems.push({
+        label,
+        icon,
+        onSelect: () => void workspace.submitBulkOperation('SET_STATUS', { status })
+      })
+    }
+    addStatus('RESOLVED', 'Resolver', 'i-lucide-circle-check')
+    addStatus('PENDING', 'Pendente', 'i-lucide-clock-3')
+    addStatus('OPEN', 'Reabrir', 'i-lucide-rotate-ccw')
+    statusItems.push({
+      label: 'Adiar 1 hora',
+      icon: 'i-lucide-alarm-clock',
+      onSelect: () => void workspace.submitBulkOperation('SET_STATUS', {
+        status: 'SNOOZED',
+        snoozed_until: communicationSnoozeUntil(1)
+      })
+    }, {
+      label: 'Adiar até amanhã 9h',
+      icon: 'i-lucide-sunrise',
+      onSelect: () => void workspace.submitBulkOperation('SET_STATUS', {
+        status: 'SNOOZED',
+        snoozed_until: communicationSnoozeTomorrowMorning()
+      })
+    })
     menus.push({
       key: 'status',
       align: 'start',
       label: 'Alterar status',
-      icon: 'i-lucide-list-checks',
-      items: [{
-        label: 'Resolver',
-        icon: 'i-lucide-circle-check',
-        onSelect: () => void workspace.submitBulkOperation('SET_STATUS', { status: 'RESOLVED' })
-      }, {
-        label: 'Pendente',
-        icon: 'i-lucide-clock-3',
-        onSelect: () => void workspace.submitBulkOperation('SET_STATUS', { status: 'PENDING' })
-      }, {
-        label: 'Reabrir',
-        icon: 'i-lucide-rotate-ccw',
-        onSelect: () => void workspace.submitBulkOperation('SET_STATUS', { status: 'OPEN' })
-      }, {
-        label: 'Adiar 1 hora',
-        icon: 'i-lucide-alarm-clock',
-        onSelect: () => void workspace.submitBulkOperation('SET_STATUS', {
-          status: 'SNOOZED',
-          snoozed_until: communicationSnoozeUntil(1)
-        })
-      }, {
-        label: 'Adiar até amanhã 9h',
-        icon: 'i-lucide-sunrise',
-        onSelect: () => void workspace.submitBulkOperation('SET_STATUS', {
-          status: 'SNOOZED',
-          snoozed_until: communicationSnoozeTomorrowMorning()
-        })
-      }]
+      icon: 'i-lucide-circle-fading-arrow-up',
+      items: statusItems
     })
 
-    menus.push({
-      key: 'assignee',
-      align: 'end',
-      label: 'Atribuir responsável',
-      icon: 'i-lucide-user-check',
-      items: [{
-        label: 'Sem responsável',
-        icon: 'i-lucide-user-x',
-        onSelect: () => void workspace.submitBulkOperation('SET_ASSIGNEE', {
-          assignee_membership_id: null
-        })
-      }, ...workspace.tenantMembers.value.map(member => ({
-        label: member.name || member.email || `Membro #${member.id}`,
-        icon: 'i-lucide-user-check',
-        onSelect: () => void workspace.submitBulkOperation('SET_ASSIGNEE', {
-          assignee_membership_id: member.id
-        })
-      }))]
-    })
+    const moreItems: DropdownMenuItem[] = []
+    const assigneeItems: DropdownMenuItem[] = [{
+      label: 'Sem responsável',
+      icon: 'i-lucide-user-round-x',
+      disabled: selected.every(conversation => conversation.assignee_membership_id == null),
+      onSelect: () => void workspace.submitBulkOperation('SET_ASSIGNEE', {
+        assignee_membership_id: null
+      })
+    }, ...workspace.tenantMembers.value.map(member => ({
+      label: member.name || member.email || `Membro #${member.id}`,
+      icon: 'i-lucide-user-round-check',
+      disabled: selected.every(conversation =>
+        conversation.assignee_membership_id === member.id),
+      onSelect: () => void workspace.submitBulkOperation('SET_ASSIGNEE', {
+        assignee_membership_id: member.id
+      })
+    }))].filter(item => !item.disabled)
+    if (assigneeItems.length) {
+      moreItems.push({
+        label: 'Responsável',
+        icon: 'i-lucide-user-round-check',
+        children: assigneeItems,
+        content: { collisionPadding: 8 }
+      })
+    }
 
-    const organizationItems: DropdownMenuItem[] = []
-    if (workspace.departments.value.length) {
-      organizationItems.push({
-        label: 'Mover para fila',
-        icon: 'i-lucide-folders',
-        children: [{
-          label: 'Sem fila',
-          icon: 'i-lucide-folder-x',
-          onSelect: () => void workspace.submitBulkOperation('SET_DEPARTMENT', {
-            work_department_id: null
-          })
-        }, ...workspace.departments.value.map(department => ({
-          label: department.name,
-          icon: 'i-lucide-folders',
-          onSelect: () => void workspace.submitBulkOperation('SET_DEPARTMENT', {
-            work_department_id: department.id
-          })
-        }))]
+    const departmentItems: DropdownMenuItem[] = [{
+      label: 'Sem fila',
+      icon: 'i-lucide-list-x',
+      disabled: selected.every(conversation => conversation.work_department_id == null),
+      onSelect: () => void workspace.submitBulkOperation('SET_DEPARTMENT', {
+        work_department_id: null
+      })
+    }, ...workspace.departments.value.map(department => ({
+      label: department.name,
+      icon: 'i-lucide-list-tree',
+      disabled: selected.every(conversation =>
+        conversation.work_department_id === department.id),
+      onSelect: () => void workspace.submitBulkOperation('SET_DEPARTMENT', {
+        work_department_id: department.id
+      })
+    }))].filter(item => !item.disabled)
+    if (departmentItems.length) {
+      moreItems.push({
+        label: 'Fila',
+        icon: 'i-lucide-list-tree',
+        children: departmentItems,
+        content: { collisionPadding: 8 }
       })
     }
 
     if (workspace.labels.value.length) {
-      organizationItems.push(
-        {
-          label: 'Adicionar marcador',
-          icon: 'i-lucide-tag',
-          children: workspace.labels.value.map(label => ({
+      moreItems.push({
+        label: 'Marcadores',
+        icon: 'i-lucide-tags',
+        children: workspace.labels.value.map((label) => {
+          const assignedToAll = selected.every(conversation =>
+            conversation.labels?.some(item => item.id === label.id))
+          return {
             label: label.name,
-            icon: 'i-lucide-tag',
-            onSelect: () => void workspace.submitBulkOperation('ADD_LABELS', {
-              label_ids: [label.id]
-            })
-          }))
-        },
-        {
-          label: 'Remover marcador',
-          icon: 'i-lucide-tag',
-          children: workspace.labels.value.map(label => ({
-            label: label.name,
-            icon: 'i-lucide-tag',
-            onSelect: () => void workspace.submitBulkOperation('REMOVE_LABELS', {
-              label_ids: [label.id]
-            })
-          }))
-        }
-      )
+            type: 'checkbox' as const,
+            checked: assignedToAll,
+            onSelect: (event: Event) => {
+              event.preventDefault()
+              void workspace.submitBulkOperation(
+                assignedToAll ? 'REMOVE_LABELS' : 'ADD_LABELS',
+                { label_ids: [label.id] }
+              )
+            }
+          }
+        }),
+        content: { collisionPadding: 8 }
+      })
     }
 
-    if (organizationItems.length) {
+    if (moreItems.length) {
       menus.push({
-        key: 'organization',
+        key: 'more',
         align: 'end',
-        label: 'Organizar conversas',
-        icon: 'i-lucide-folders',
-        items: organizationItems
+        label: 'Mais ações',
+        icon: 'i-lucide-ellipsis-vertical',
+        items: moreItems
       })
     }
   }
@@ -611,8 +619,7 @@ async function applyRouteConversation(id: number | null): Promise<void> {
         color: 'warning'
       })
       await router.replace({
-        path: communicationConversationPath(id),
-        query: scopeQueryFromWorkspace()
+        path: communicationConversationPath(id)
       })
       return
     }
@@ -624,13 +631,7 @@ async function applyRouteConversation(id: number | null): Promise<void> {
 
 async function jumpToMessage(input: { conversationId: number, messageId: number }) {
   contextOpen.value = false
-  await router.push({
-    path: communicationConversationPath(input.conversationId),
-    query: {
-      ...scopeQueryFromWorkspace(),
-      message_id: String(input.messageId)
-    }
-  })
+  await router.push(communicationConversationMessagePath(input.conversationId, input.messageId))
 }
 
 function toggleContext() {
@@ -818,30 +819,11 @@ watch(
   { immediate: true }
 )
 
-// Sincroniza filtros de escopo não sensíveis na query (sem q).
-watch(
-  () => [
-    workspace.inboxFilter.value,
-    workspace.assigneeFilter.value,
-    workspace.departmentFilter.value,
-    workspace.unassignedOnly.value,
-    workspace.unreadOnly.value,
-    workspace.labelIdsFilter.value.join(','),
-    workspace.contactIdFilter.value,
-    filtersHydrated.value,
-    workspace.initialized.value
-  ] as const,
-  () => {
-    if (!filtersHydrated.value || !workspace.initialized.value) return
-    const query = scopeQueryForCurrentRoute(routeConversationId.value)
-    if (sameRouteQuery(route.query, query)) return
-    void router.replace({ path: route.path, query })
-  }
-)
+watch(routeContactId, (contactId) => {
+  workspace.contactIdFilter.value = contactId
+}, { immediate: true })
 
 onMounted(() => {
-  applyScopeQueryFromRoute()
-  void loadContactFilterName()
   void workspace.initialize()
 })
 
@@ -849,7 +831,8 @@ watch(
   () => workspace.contactIdFilter.value,
   () => {
     void loadContactFilterName()
-  }
+  },
+  { immediate: true }
 )
 onBeforeUnmount(() => {
   if (mobileFocusRestoreTimer !== null) clearTimeout(mobileFocusRestoreTimer)
@@ -875,6 +858,24 @@ onBeforeUnmount(() => {
               variant="subtle"
             />
           </UTooltip>
+          <UTooltip :text="COMMUNICATION_REALTIME_META[workspace.realtimeState.value].label">
+            <span
+              class="inline-flex size-6 items-center justify-center rounded-full"
+              role="status"
+              :aria-label="`Atualização em tempo real: ${COMMUNICATION_REALTIME_META[workspace.realtimeState.value].label}`"
+              data-testid="communication-realtime-status"
+            >
+              <UIcon
+                :name="COMMUNICATION_REALTIME_META[workspace.realtimeState.value].icon"
+                class="size-3.5"
+                :class="realtimeStatusClass"
+                aria-hidden="true"
+              />
+              <span class="sr-only">
+                Atualização em tempo real: {{ COMMUNICATION_REALTIME_META[workspace.realtimeState.value].label }}
+              </span>
+            </span>
+          </UTooltip>
         </template>
         <template #right>
           <UTooltip text="Nova conversa">
@@ -888,24 +889,23 @@ onBeforeUnmount(() => {
               @click="openNewConversation"
             />
           </UTooltip>
-          <UTooltip :text="COMMUNICATION_REALTIME_META[workspace.realtimeState.value].label">
+          <UDropdownMenu
+            :items="navbarMenuItems"
+            :content="{
+              align: 'end',
+              side: 'bottom',
+              sideOffset: 6,
+              collisionPadding: 8
+            }"
+          >
             <UButton
-              :icon="COMMUNICATION_REALTIME_META[workspace.realtimeState.value].icon"
-              :color="COMMUNICATION_REALTIME_META[workspace.realtimeState.value].color"
+              icon="i-lucide-ellipsis-vertical"
+              color="neutral"
               variant="ghost"
-              aria-label="Estado da atualização em tempo real"
-              :loading="workspace.syncing.value"
-              @click="workspace.synchronize"
+              aria-label="Mais ações do Atendimento"
+              data-testid="communication-navbar-more"
             />
-          </UTooltip>
-          <UButton
-            v-if="workspace.canManage.value"
-            icon="i-lucide-settings-2"
-            color="neutral"
-            variant="ghost"
-            aria-label="Administrar comunicação"
-            @click="openAdministration"
-          />
+          </UDropdownMenu>
         </template>
       </ShellPageNavbar>
 
@@ -929,96 +929,98 @@ onBeforeUnmount(() => {
           :assignee-items="assigneeItems"
           :department-items="departmentItems"
           :label-items="labelItems"
+          :selection-active="workspace.selectedConversationCount.value > 0"
+          @apply-quick-view="applyQuickView"
           @clear-contact="clearContactFilter"
-        />
+        >
+          <template #selection>
+            <div
+              class="flex h-10 w-full min-w-0 items-center gap-1 bg-elevated/30 px-2 [@media(pointer:coarse)]:h-12"
+              role="group"
+              aria-label="Ações em massa das conversas selecionadas"
+              data-testid="communication-bulk-bar"
+            >
+              <UCheckbox
+                :model-value="workspace.allLoadedSelected.value
+                  ? true
+                  : (workspace.selectionIndeterminate.value ? 'indeterminate' : false)"
+                :aria-label="bulkSelectionToggleLabel"
+                :title="bulkSelectionToggleLabel"
+                data-testid="communication-bulk-select-all"
+                @update:model-value="onBulkSelectAllChange"
+              />
+
+              <UKbd
+                class="shrink-0 tabular-nums"
+                data-testid="communication-bulk-count"
+              >
+                {{ workspace.selectedConversationCount.value }}
+              </UKbd>
+              <span
+                class="min-w-0 truncate text-xs font-medium text-toned"
+                data-testid="communication-bulk-selection-label"
+              >
+                {{ workspace.selectedConversationCount.value === 1 ? 'selecionada' : 'selecionadas' }}
+              </span>
+
+              <div class="ms-auto flex shrink-0 items-center justify-end gap-0.5">
+                <UDropdownMenu
+                  v-for="menu in bulkActionMenus"
+                  :key="menu.key"
+                  :items="menu.items"
+                  :content="{
+                    align: menu.align,
+                    side: 'bottom',
+                    sideOffset: 6,
+                    collisionPadding: 8
+                  }"
+                >
+                  <UTooltip :text="menu.label">
+                    <UButton
+                      :icon="menu.icon"
+                      color="neutral"
+                      variant="ghost"
+                      size="xs"
+                      square
+                      class="[@media(pointer:coarse)]:size-11"
+                      :loading="workspace.bulkSubmitting.value"
+                      :disabled="workspace.bulkSubmitting.value"
+                      :aria-label="menu.label"
+                      :title="menu.label"
+                      :data-testid="`communication-bulk-menu-${menu.key}`"
+                    />
+                  </UTooltip>
+                </UDropdownMenu>
+
+                <UTooltip text="Limpar seleção">
+                  <UButton
+                    icon="i-lucide-x"
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    square
+                    class="[@media(pointer:coarse)]:size-11"
+                    :disabled="workspace.bulkSubmitting.value"
+                    aria-label="Limpar seleção"
+                    title="Limpar seleção"
+                    data-testid="communication-bulk-clear"
+                    @click="clearBulkSelection"
+                  />
+                </UTooltip>
+              </div>
+            </div>
+          </template>
+        </CommunicationConversationListFilters>
 
         <span
           class="sr-only"
+          role="status"
           aria-live="polite"
           aria-atomic="true"
           data-testid="communication-bulk-announcement"
         >
           {{ bulkSelectionAnnouncement }}
         </span>
-
-        <Transition
-          enter-active-class="transition-all duration-150 ease-out motion-reduce:transition-none"
-          enter-from-class="-translate-y-1 opacity-0 motion-reduce:translate-y-0"
-          enter-to-class="translate-y-0 opacity-100"
-          leave-active-class="transition-all duration-100 ease-in motion-reduce:transition-none"
-          leave-from-class="translate-y-0 opacity-100"
-          leave-to-class="-translate-y-1 opacity-0 motion-reduce:translate-y-0"
-        >
-          <div
-            v-if="workspace.selectedConversationCount.value > 0"
-            class="flex w-full min-w-0 flex-wrap items-center gap-1 border-t border-default bg-elevated/30 px-2 py-1.5"
-            role="group"
-            aria-label="Ações em massa das conversas selecionadas"
-            data-testid="communication-bulk-bar"
-          >
-            <UCheckbox
-              :model-value="workspace.allLoadedSelected.value
-                ? true
-                : (workspace.selectionIndeterminate.value ? 'indeterminate' : false)"
-              :aria-label="bulkSelectionToggleLabel"
-              :title="bulkSelectionToggleLabel"
-              data-testid="communication-bulk-select-all"
-              @update:model-value="onBulkSelectAllChange"
-            />
-
-            <UKbd
-              class="shrink-0 tabular-nums"
-              data-testid="communication-bulk-count"
-            >
-              {{ workspace.selectedConversationCount.value }}
-            </UKbd>
-            <span class="hidden min-w-0 truncate text-xs font-medium text-toned min-[380px]:inline">
-              {{ workspace.selectedConversationCount.value === 1 ? 'selecionada' : 'selecionadas' }}
-            </span>
-
-            <div class="ms-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-0.5 [@media(pointer:coarse)]:basis-full">
-              <UDropdownMenu
-                v-for="menu in bulkActionMenus"
-                :key="menu.key"
-                :items="menu.items"
-                :content="{
-                  align: menu.align,
-                  side: 'bottom',
-                  sideOffset: 6,
-                  collisionPadding: 8
-                }"
-              >
-                <UButton
-                  :icon="menu.icon"
-                  color="neutral"
-                  variant="ghost"
-                  size="xs"
-                  square
-                  class="[@media(pointer:coarse)]:size-11"
-                  :loading="workspace.bulkSubmitting.value"
-                  :disabled="workspace.bulkSubmitting.value"
-                  :aria-label="menu.label"
-                  :title="menu.label"
-                  :data-testid="`communication-bulk-menu-${menu.key}`"
-                />
-              </UDropdownMenu>
-
-              <UButton
-                icon="i-lucide-x"
-                color="neutral"
-                variant="ghost"
-                size="xs"
-                square
-                class="[@media(pointer:coarse)]:size-11"
-                :disabled="workspace.bulkSubmitting.value"
-                aria-label="Limpar seleção"
-                title="Limpar seleção"
-                data-testid="communication-bulk-clear"
-                @click="clearBulkSelection"
-              />
-            </div>
-          </div>
-        </Transition>
       </UDashboardToolbar>
 
       <UAlert
@@ -1053,6 +1055,8 @@ onBeforeUnmount(() => {
         ref="conversationListRef"
         :conversations="workspace.conversations.value"
         :inboxes="workspace.inboxes.value"
+        :departments="workspace.departments.value"
+        :labels="workspace.labels.value"
         :selected-id="workspace.selectedConversationId.value"
         :opening-id="workspace.openingConversationId.value"
         :selected-ids="workspace.selectedConversationIds.value"
@@ -1064,11 +1068,12 @@ onBeforeUnmount(() => {
         :total="workspace.conversationsTotal.value"
         :can-view="workspace.canView.value"
         :can-reply="workspace.canReply.value"
+        :action-disabled="conversationActionPending"
         @select="selectConversation"
         @prefetch="prefetchConversation"
         @load-more="workspace.loadMoreConversations"
         @toggle-select="onToggleSelect"
-        @row-action="onRowAction"
+        @action="onConversationAction"
       />
     </UDashboardPanel>
 
@@ -1079,6 +1084,9 @@ onBeforeUnmount(() => {
       :inbox="workspace.selectedInbox.value"
       :signals="workspace.selectedSignals.value"
       :canned-responses="workspace.cannedResponses.value"
+      :departments="workspace.departments.value"
+      :labels="workspace.labels.value"
+      :can-view="workspace.canView.value"
       :can-reply="workspace.canReply.value"
       :operational="workspace.communicationOperational.value"
       :outbound-operational="workspace.outboundOperational.value"
@@ -1089,8 +1097,9 @@ onBeforeUnmount(() => {
       :timeline="workspace.selectedTimeline.value"
       :viewport-active="!isMobile"
       :highlighted-message-id="routeMessageId"
+      :action-disabled="conversationActionPending"
+      @action="onConversationAction"
       @send="send"
-      @update="updateConversation"
       @toggle-context="toggleContext"
       @download="downloadAttachment"
       @edit="editMessage"
@@ -1166,6 +1175,9 @@ onBeforeUnmount(() => {
             :inbox="workspace.selectedInbox.value"
             :signals="workspace.selectedSignals.value"
             :canned-responses="workspace.cannedResponses.value"
+            :departments="workspace.departments.value"
+            :labels="workspace.labels.value"
+            :can-view="workspace.canView.value"
             :can-reply="workspace.canReply.value"
             :operational="workspace.communicationOperational.value"
             :outbound-operational="workspace.outboundOperational.value"
@@ -1176,9 +1188,10 @@ onBeforeUnmount(() => {
             :timeline="workspace.selectedTimeline.value"
             :viewport-active="mobileConversationOpen"
             :highlighted-message-id="routeMessageId"
+            :action-disabled="conversationActionPending"
+            @action="onConversationAction"
             @close="closeMobileConversation"
             @send="send"
-            @update="updateConversation"
             @toggle-context="toggleContext"
             @download="downloadAttachment"
             @edit="editMessage"

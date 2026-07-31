@@ -185,8 +185,8 @@ describe('work-queue-filters tab×kanban', () => {
     expect(coerceWorkQueueTabForView('todas', 'lista')).toBe('open')
   })
 
-  it('coerção: hoje|atrasadas|semana preservados na troca', () => {
-    for (const tab of ['hoje', 'atrasadas', 'semana'] as const) {
+  it('coerção: recortes transversais são preservados na troca', () => {
+    for (const tab of ['hoje', 'atrasadas', 'semana', 'sem_responsavel'] as const) {
       expect(coerceWorkQueueTabForView(tab, 'kanban')).toBe(tab)
       expect(coerceWorkQueueTabForView(tab, 'fila')).toBe(tab)
       expect(coerceWorkQueueTabForView(tab, 'lista')).toBe(tab)

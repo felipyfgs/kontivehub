@@ -1,11 +1,6 @@
 /**
- * Filtros da fila `/work/tasks` na query string.
- *
- * Padrão do painel:
- * - **Recurso (tarefa selecionada)** → path: `/work/tasks/{id}`
- * - **Filtros de lista** (tab, q, page, view, …) → query string
- *
- * Nunca colocar `task` / `tenant_id` na query.
+ * Filtros efêmeros da fila `/work/tasks`.
+ * A seleção é um recurso no path; filtros permanecem no estado de sessão.
  */
 
 export type WorkQueueView = 'fila' | 'lista' | 'kanban'
@@ -69,7 +64,7 @@ export function defaultWorkQueueTab(view: WorkQueueView): string {
  * Coerção de `tab` ao trocar (ou interpretar) visão:
  * - entrar em kanban com open|impedidas|concluidas → todas
  * - sair de kanban com todas → open
- * - hoje|atrasadas|semana preservados
+ * - hoje|atrasadas|semana|sem_responsavel preservados
  */
 export function coerceWorkQueueTabForView(tab: string, view: WorkQueueView): string {
   if (view === 'kanban') {
@@ -84,7 +79,9 @@ function shouldOmitTabInQuery(tab: string, view: WorkQueueView): boolean {
   return tab === defaultWorkQueueTab(view)
 }
 
-export function parseWorkQueueQuery(query: Record<string, unknown>): WorkQueueFilters {
+export function parseWorkQueueQuery(
+  query: Partial<WorkQueueFilters> | Record<string, unknown>
+): WorkQueueFilters {
   const view = parseWorkQueueView(query.view)
   const tabRaw = queryScalar(query.tab).trim()
   const tab = coerceWorkQueueTabForView(tabRaw || defaultWorkQueueTab(view), view)
@@ -155,9 +152,16 @@ export function workQueuePath(): string {
 
 export function useWorkQueueFilters() {
   const route = useRoute()
-  const router = useRouter()
-
-  const filters = computed(() => parseWorkQueueQuery(route.query as Record<string, unknown>))
+  const { me, sessionEpoch } = useDashboard()
+  const resetKey = computed(() => `${me.value?.id ?? 'guest'}:${me.value?.current_tenant?.id ?? 'none'}:${sessionEpoch.value}`)
+  const { state, patch: patchState, reset: resetState } = useSurfaceNavigationState(
+    'work-queue',
+    EMPTY,
+    { normalize: value => parseWorkQueueQuery(value), resetKey }
+  )
+  const intent = consumeSurfaceNavigationIntent<Partial<WorkQueueFilters>>('work-queue')
+  if (intent) patchState(intent)
+  const filters = computed(() => state.value)
 
   /** ID da tarefa no path (`/work/tasks/:id`), nunca na query. */
   const selectedTaskId = computed((): number | null => {
@@ -189,23 +193,15 @@ export function useWorkQueueFilters() {
     ) && partial.page === undefined) {
       next.page = 1
     }
-    const query = serializeWorkQueueQuery(next)
-    // Mantém o path atual (fila ou tarefa); só atualiza filtros.
-    await router.replace({ path: route.path, query })
+    patchState(next)
   }
 
   async function selectTask(taskId: number) {
-    await router.replace({
-      path: workTaskPath(taskId),
-      query: serializeWorkQueueQuery(filters.value)
-    })
+    await navigateTo(workTaskPath(taskId))
   }
 
   async function clearTask() {
-    await router.replace({
-      path: workQueuePath(),
-      query: serializeWorkQueueQuery(filters.value)
-    })
+    await navigateTo(workQueuePath())
   }
 
   function apiParams(): Record<string, string | number> {
@@ -213,7 +209,8 @@ export function useWorkQueueFilters() {
   }
 
   function reset() {
-    return router.replace({ path: workQueuePath(), query: serializeWorkQueueQuery({ ...EMPTY }) })
+    resetState()
+    return navigateTo(workQueuePath())
   }
 
   return {

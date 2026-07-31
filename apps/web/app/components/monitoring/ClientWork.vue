@@ -20,6 +20,11 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   retry: []
 }>()
+
+function openClientProcesses() {
+  publishSurfaceNavigationIntent('work-process-grouping', { client_id: props.clientId })
+  void navigateTo('/work/processes')
+}
 </script>
 
 <template>
@@ -38,12 +43,12 @@ const emit = defineEmits<{
         </p>
       </div>
       <UButton
-        :to="`/work/processes?client_id=${props.clientId}`"
         color="neutral"
         variant="outline"
         size="xs"
         icon="i-lucide-folder-kanban"
         label="Ver todos"
+        @click="openClientProcesses"
       />
     </div>
 

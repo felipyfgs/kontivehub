@@ -100,6 +100,15 @@ export default defineNuxtConfig({
   // Watcher do Vite (HMR de .vue/.ts/.css) + WebSocket no host.
   // Hook garante merge: só `vite.server.watch` às vezes é sobrescrito pelo Nuxt.
   hooks: {
+    'pages:extend'(pages) {
+      const healthPage = pages.find(page => page.path === '/health')
+      if (!healthPage) return
+      pages.push({
+        name: 'health-type',
+        path: '/health/type/:type',
+        file: healthPage.file
+      })
+    },
     'vite:extendConfig'(config) {
       const server = (config.server ?? {}) as NonNullable<typeof config.server> & {
         watch?: Record<string, unknown>
@@ -137,7 +146,34 @@ export default defineNuxtConfig({
   icon: {
     clientBundle: {
       // A SPA estática não deve depender da API pública do Iconify para ações essenciais.
-      scan: true
+      scan: true,
+      icons: [
+        'lucide:alarm-clock',
+        'lucide:check',
+        'lucide:circle-check',
+        'lucide:circle-fading-arrow-up',
+        'lucide:clock-3',
+        'lucide:ellipsis-vertical',
+        'lucide:list-filter',
+        'lucide:list-tree',
+        'lucide:list-x',
+        'lucide:loader-circle',
+        'lucide:mail',
+        'lucide:mail-check',
+        'lucide:message-circle-plus',
+        'lucide:panel-right-close',
+        'lucide:panel-right-open',
+        'lucide:radio',
+        'lucide:refresh-cw',
+        'lucide:rotate-ccw',
+        'lucide:settings-2',
+        'lucide:sliders-horizontal',
+        'lucide:sunrise',
+        'lucide:tags',
+        'lucide:user-round-check',
+        'lucide:user-round-x',
+        'lucide:wifi-off'
+      ]
     }
   },
 

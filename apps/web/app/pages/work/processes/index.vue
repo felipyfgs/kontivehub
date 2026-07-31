@@ -48,6 +48,7 @@ import {
 import {
   WORK_TABLE_COL
 } from '~/utils/work-table-columns'
+import { workProcessSectionPath } from '~/utils/work-navigation'
 import {
   cascadeProcessTaskSelection,
   cascadeSelectAllProcessesOnPage,
@@ -83,7 +84,6 @@ import {
 } from '~/utils/work-bulk-actions'
 
 const api = useApi()
-const route = useRoute()
 const toast = useToast()
 const { me, sessionEpoch } = useDashboard()
 const {
@@ -525,14 +525,7 @@ function openBulkActions() {
 }
 
 function openProcess(process: WorkProcess) {
-  const query = { ...route.query }
-  void navigateTo({
-    path: `/work/processes/${process.id}`,
-    query: {
-      ...query,
-      from: route.fullPath
-    }
-  })
+  void navigateTo(workProcessSectionPath(process.id))
 }
 
 function processTasks(process: WorkProcess): WorkProcessTask[] {
@@ -708,6 +701,7 @@ watch(sessionEpoch, async () => {
     client_id: null,
     department_id: null,
     page: 1,
+    per_page: 20,
     sort: null,
     direction: null,
     group: 'process'

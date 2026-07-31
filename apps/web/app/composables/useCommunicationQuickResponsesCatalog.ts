@@ -19,8 +19,8 @@ import {
   isValidCannedShortcut,
   normalizeCannedShortcut
 } from '~/utils/communication-quick-responses'
-import { COMMUNICATION_QUICK_RESPONSES_PATH } from '~/utils/communication-routes'
 import { createFilterModel, findDefinition } from '~/utils/data-table-filters'
+import { COMMUNICATION_SURFACES, consumeSurfaceNavigationIntent, useSurfaceNavigationState } from './useSurfaceNavigationState'
 
 type ActiveFilter = 'all' | 'true' | 'false'
 type EditorMode = 'create' | 'edit'
@@ -44,7 +44,6 @@ interface QuickResponsesCatalogDependencies {
   api: QuickResponsesCatalogApi
   canManage: ComputedRef<boolean> | Ref<boolean>
   initialQuery: Record<string, unknown>
-  replaceRoute: (query: Record<string, string | undefined>) => void | Promise<void>
   sessionEpoch: Ref<number>
   toast: (title: string, color: 'success' | 'error' | 'warning') => void
 }
@@ -61,7 +60,7 @@ function initialActiveFilter(value: unknown): ActiveFilter {
 export function createCommunicationQuickResponsesCatalog(
   dependencies: QuickResponsesCatalogDependencies
 ) {
-  const { api, canManage, initialQuery, replaceRoute, sessionEpoch, toast } = dependencies
+  const { api, canManage, initialQuery, sessionEpoch, toast } = dependencies
   const items = ref<CommunicationCannedResponse[]>([])
   const loading = ref(false)
   const loadError = ref<string | null>(null)
@@ -149,15 +148,6 @@ export function createCommunicationQuickResponsesCatalog(
     } finally {
       if (epoch === sessionEpoch.value && generation === loadGeneration) loading.value = false
     }
-  }
-
-  function syncUrl() {
-    void replaceRoute({
-      page: page.value > 1 ? String(page.value) : undefined,
-      q: q.value || undefined,
-      is_active: isActive.value !== 'all' ? isActive.value : undefined,
-      per_page: perPage.value !== 20 ? String(perPage.value) : undefined
-    })
   }
 
   function onSearch(value: string) {
@@ -316,7 +306,6 @@ export function createCommunicationQuickResponsesCatalog(
   }
 
   watch([page, q, isActive, perPage], () => {
-    syncUrl()
     void load()
   })
 
@@ -327,6 +316,7 @@ export function createCommunicationQuickResponsesCatalog(
     hasLoaded.value = false
     loadError.value = null
     page.value = 1
+    perPage.value = 20
     q.value = ''
     isActive.value = 'all'
     total.value = 0
@@ -388,23 +378,24 @@ export type CommunicationQuickResponsesCatalog = ReturnType<
 
 export function useCommunicationQuickResponsesCatalog() {
   const api = useApi()
-  const router = useRouter()
-  const route = useRoute()
   const toast = useToast()
   const { me, sessionEpoch } = useDashboard()
   const canManage = computed(() => canManageCommunicationQuickReplies(me.value))
+  const surface = useSurfaceNavigationState(COMMUNICATION_SURFACES.quickResponses, {
+    page: 1, per_page: 20, q: '', is_active: 'all'
+  }, { resetKey: () => `${me.value?.id ?? 'guest'}:${me.value?.current_tenant?.id ?? 'none'}:${sessionEpoch.value}` })
+  const legacyIntent = consumeSurfaceNavigationIntent<Record<string, unknown>>(COMMUNICATION_SURFACES.quickResponses)
+  if (legacyIntent) surface.patch(legacyIntent)
   const catalog = createCommunicationQuickResponsesCatalog({
     api: api.communication.catalog,
     canManage,
-    initialQuery: route.query,
-    replaceRoute: async (query) => {
-      await router.replace({
-        path: COMMUNICATION_QUICK_RESPONSES_PATH,
-        query
-      })
-    },
+    initialQuery: surface.state.value,
     sessionEpoch,
     toast: (title, color) => toast.add({ title, color })
+  })
+
+  watch([catalog.page, catalog.perPage, catalog.q, catalog.isActive], () => {
+    surface.patch({ page: catalog.page.value, per_page: catalog.perPage.value, q: catalog.q.value, is_active: catalog.isActive.value })
   })
 
   onMounted(() => void catalog.load())

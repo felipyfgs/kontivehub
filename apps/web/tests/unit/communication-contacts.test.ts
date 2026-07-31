@@ -213,6 +213,10 @@ describe('communication contacts — rotas e helpers', () => {
     const allowed = communicationContactActions(sampleContact, true, { onExport, onPurge })
     expect(allowed).toHaveLength(2)
     expect(allowed[0]?.map(item => item.label)).toEqual(['Detalhes', 'Ir para conversas'])
+    expect(allowed[0]?.map(item => item.to)).toEqual([
+      `/communication/contacts/${sampleContact.id}`,
+      `/communication/contacts/${sampleContact.id}/conversations`
+    ])
     expect(allowed[1]?.map(item => item.label)).toEqual(['Exportar', 'Expurgar'])
 
     expect(communicationContactActions(sampleContact, false, { onExport, onPurge })).toHaveLength(1)
@@ -393,7 +397,7 @@ describe('communication contacts — superfícies e contrato Shell', () => {
     expect(page).toContain('definePageMeta')
     expect(page).not.toContain('if (!canView.value)')
     expect(page).not.toMatch(/<\/template>\s*<CommunicationNewConversationModal/)
-    expect(page).toContain('message_id: input.messageId')
+    expect(page).toContain('communicationConversationMessagePath(input.conversationId, input.messageId)')
     expect(page).toContain('communicationContactStatusContrastClass')
     expect(page).toContain('COMMUNICATION_CONTACT_SOLID_ACTION_CLASS')
     expect(page).not.toContain('COMMUNICATION_INDEX_PATH')
@@ -434,7 +438,6 @@ describe('communication contacts — composable de catálogo', () => {
     update?: ReturnType<typeof vi.fn>
     canManage?: boolean
   } = {}) {
-    const replaceRoute = vi.fn()
     const pushRoute = vi.fn()
     const notify = vi.fn()
     const list = options.list ?? vi.fn().mockResolvedValue({
@@ -447,7 +450,6 @@ describe('communication contacts — composable de catálogo', () => {
       list,
       create,
       update,
-      replaceRoute,
       pushRoute,
       notify,
       sessionEpoch: ref(3),
@@ -463,7 +465,7 @@ describe('communication contacts — composable de catálogo', () => {
         sort_direction: 'desc'
       }
     })
-    return { catalog, list, create, update, replaceRoute, pushRoute, notify }
+    return { catalog, list, create, update, pushRoute, notify }
   }
 
   it('hidrata query, consome meta completa e expõe loading/empty honestos', async () => {
@@ -517,8 +519,8 @@ describe('communication contacts — composable de catálogo', () => {
     catalog.dispose()
   })
 
-  it('mantém telefone no body da busca e fora da query restaurável da rota', async () => {
-    const { catalog, list, replaceRoute } = makeCatalog()
+  it('mantém telefone somente no body da busca', async () => {
+    const { catalog, list } = makeCatalog()
     await catalog.load()
 
     catalog.onSearch('(11) 99999-8888')
@@ -526,40 +528,6 @@ describe('communication contacts — composable de catálogo', () => {
       expect(list).toHaveBeenLastCalledWith(expect.objectContaining({
         q: '(11) 99999-8888'
       }))
-    })
-    expect(replaceRoute).toHaveBeenLastCalledWith({
-      path: '/communication/contacts',
-      query: {
-        page: undefined,
-        q: undefined,
-        is_active: 'all',
-        is_provisional: 'true',
-        linked: 'false',
-        sort: 'created_at',
-        sort_direction: 'desc',
-        per_page: '50'
-      }
-    })
-    catalog.dispose()
-  })
-
-  it('remove telefone herdado de bookmark legado antes de permitir a leitura', async () => {
-    const { catalog, replaceRoute } = makeCatalog()
-    catalog.q.value = '+5511999998888'
-    await catalog.sanitizeSensitiveSearchUrl()
-
-    expect(replaceRoute).toHaveBeenLastCalledWith({
-      path: '/communication/contacts',
-      query: {
-        page: '2',
-        q: undefined,
-        is_active: 'all',
-        is_provisional: 'true',
-        linked: 'false',
-        sort: 'created_at',
-        sort_direction: 'desc',
-        per_page: '50'
-      }
     })
     catalog.dispose()
   })
@@ -591,17 +559,7 @@ describe('communication contacts — composable de catálogo', () => {
       receives_automatic: false
     })
     expect(allowed.pushRoute).toHaveBeenCalledWith({
-      path: '/communication/contacts/42',
-      query: {
-        page: '2',
-        q: ' ana ',
-        is_active: 'all',
-        is_provisional: 'true',
-        linked: 'false',
-        sort: 'created_at',
-        sort_direction: 'desc',
-        per_page: '50'
-      }
+      path: '/communication/contacts/42'
     })
     allowed.catalog.dispose()
   })

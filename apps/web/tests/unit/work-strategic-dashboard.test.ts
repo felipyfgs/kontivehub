@@ -6,6 +6,7 @@ import { workQueuePath } from '../../app/composables/useWorkQueueFilters'
 import {
   buildWorkDashboardKpis,
   buildWorkDepartmentRows,
+  workQueueIntentForKpi,
   workCompletionPercent,
   workOperationalLevel
 } from '../../app/utils/work-strategic-dashboard'
@@ -68,9 +69,9 @@ describe('work strategic dashboard', () => {
     expect(cards).toHaveLength(6)
     expect(cards.map(card => card.value)).toEqual([30, 7, 2, 4, 11, 5])
     expect(cards[0]).toMatchObject({ title: 'Tarefas abertas', to: '/work/tasks' })
-    expect(cards[1]).toMatchObject({ to: '/work/tasks?tab=atrasadas', tone: 'warning', critical: true })
-    expect(cards[2]).toMatchObject({ tone: 'error', critical: true })
-    expect(cards[3]).toMatchObject({ to: '/work/tasks?tab=hoje' })
+    expect(cards[1]).toMatchObject({ to: '/work/tasks', tone: 'warning', critical: true })
+    expect(cards[2]).toMatchObject({ to: '/work/tasks', tone: 'error', critical: true })
+    expect(cards[3]).toMatchObject({ to: '/work/tasks' })
   })
 
   it('calcula conclusão consolidada sem dividir por zero', () => {
@@ -127,12 +128,25 @@ describe('work strategic dashboard', () => {
     expect(rows[0]).toMatchObject({
       open: 12,
       to: '/work/tasks',
-      overdueTo: '/work/tasks?tab=atrasadas'
+      overdueTo: '/work/tasks',
+      filters: { department_id: null }
     })
     expect(rows[1]).toMatchObject({
       completedPercent: 20,
-      to: '/work/tasks?department_id=20',
-      overdueTo: '/work/tasks?tab=atrasadas&department_id=20'
+      to: '/work/tasks',
+      overdueTo: '/work/tasks',
+      filters: { department_id: 20 }
+    })
+  })
+
+  it('mapeia KPIs para intenções observáveis da fila', () => {
+    expect(workQueueIntentForKpi('completed')).toEqual({ tab: 'concluidas' })
+    expect(workQueueIntentForKpi('overdue')).toEqual({ tab: 'atrasadas' })
+    expect(workQueueIntentForKpi('vence_hoje')).toEqual({ tab: 'hoje' })
+    expect(workQueueIntentForKpi('sem_responsavel')).toEqual({
+      tab: 'sem_responsavel',
+      view: 'lista',
+      scope: 'tenant'
     })
   })
 
@@ -215,7 +229,13 @@ describe('work strategic dashboard', () => {
     expect(navigation).toContain('to: \'/work/tasks\'')
     expect(taskIndex).toContain('WorkQueueWorkspace')
     expect(homeBlock).toContain('label="Visão estratégica"')
-    expect(homeBlock).toContain('/work/tasks?tab=atrasadas')
     expect(homeBlock).not.toContain('/work?tab=')
+  })
+
+  it('publica intenção de filtro ao acionar KPIs da visão estratégica', () => {
+    const page = readFileSync(resolve(process.cwd(), 'app/pages/work/index.vue'), 'utf8')
+
+    expect(page).toContain('@select="(key) => openQueue(workQueueIntentForKpi(key))"')
+    expect(page).toContain('@click.prevent="openQueue(row.filters)"')
   })
 })

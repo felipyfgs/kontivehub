@@ -74,6 +74,7 @@ describe('ConversationList — foco acessível', () => {
           UCheckbox: true,
           UButton: true,
           UDropdownMenu: true,
+          UTooltip: true,
           USkeleton: true,
           ShellInfiniteTableLoader: true
         }
@@ -108,6 +109,7 @@ describe('ConversationList — foco acessível', () => {
           UCheckbox: true,
           UButton: true,
           UDropdownMenu: true,
+          UTooltip: true,
           USkeleton: true,
           ShellInfiniteTableLoader: true
         }
@@ -135,6 +137,7 @@ describe('ConversationList — foco acessível', () => {
           UCheckbox: true,
           UButton: true,
           UDropdownMenu: true,
+          UTooltip: true,
           USkeleton: true,
           ShellInfiniteTableLoader: true
         }
@@ -187,6 +190,7 @@ describe('ConversationList — foco acessível', () => {
           UCheckbox: true,
           UButton: true,
           UDropdownMenu: true,
+          UTooltip: true,
           USkeleton: true,
           ShellInfiniteTableLoader: true
         }
@@ -247,6 +251,7 @@ describe('ConversationList — foco acessível', () => {
           UCheckbox: InteractiveCheckboxStub,
           UButton: true,
           UDropdownMenu: true,
+          UTooltip: true,
           USkeleton: true,
           ShellInfiniteTableLoader: true
         }

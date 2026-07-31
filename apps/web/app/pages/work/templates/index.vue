@@ -78,23 +78,78 @@ interface TemplateFormState {
 
 const api = useApi()
 const toast = useToast()
-const route = useRoute()
-const router = useRouter()
 const { me, sessionEpoch } = useDashboard()
+const surfaceResetKey = computed(() => `${me.value?.id ?? 'guest'}:${me.value?.current_tenant?.id ?? 'none'}:${sessionEpoch.value}`)
 
-const view = ref<ViewMode>(String(route.query.view) === 'tenant' ? 'tenant' : 'library')
-const query = ref(String(route.query.q || ''))
-const page = ref(Math.max(1, Number(route.query.page) || 1))
-const perPage = ref(20)
-const initialSort = String(route.query.sort || '')
-const tenantSort = ref<TenantTemplateSort | null>(
-  TENANT_TEMPLATE_SORTS.has(initialSort as TenantTemplateSort)
-    ? initialSort as TenantTemplateSort
+type TemplateNavigationState = {
+  view: ViewMode
+  query: string
+  page: number
+  perPage: number
+  tenantSort: TenantTemplateSort | null
+  tenantSortDirection: 'asc' | 'desc'
+}
+
+const templateNavigationDefaults = (): TemplateNavigationState => ({
+  view: 'library',
+  query: '',
+  page: 1,
+  perPage: 20,
+  tenantSort: null,
+  tenantSortDirection: 'asc'
+})
+
+function normalizeTemplateNavigation(value: TemplateNavigationState): TemplateNavigationState {
+  const tenantSort = TENANT_TEMPLATE_SORTS.has(value.tenantSort as TenantTemplateSort)
+    ? value.tenantSort as TenantTemplateSort
     : null
+  return {
+    view: value.view === 'tenant' ? 'tenant' : 'library',
+    query: typeof value.query === 'string' ? value.query : '',
+    page: Math.max(1, Math.floor(Number(value.page) || 1)),
+    perPage: [10, 20, 50].includes(Number(value.perPage)) ? Number(value.perPage) : 20,
+    tenantSort,
+    tenantSortDirection: value.tenantSortDirection === 'desc' ? 'desc' : 'asc'
+  }
+}
+
+const {
+  state: templateState,
+  patch: patchTemplateState,
+  reset: resetTemplateState
+} = useSurfaceNavigationState(
+  WORK_SURFACES.templates,
+  templateNavigationDefaults,
+  { normalize: normalizeTemplateNavigation, resetKey: surfaceResetKey }
 )
-const tenantSortDirection = ref<'asc' | 'desc'>(
-  String(route.query.direction) === 'desc' ? 'desc' : 'asc'
+const templateIntent = consumeSurfaceNavigationIntent<Partial<TemplateNavigationState>>(
+  WORK_SURFACES.templates
 )
+if (templateIntent) patchTemplateState(templateIntent)
+const view = computed({
+  get: () => templateState.value.view,
+  set: (value) => { templateState.value.view = value }
+})
+const query = computed({
+  get: () => templateState.value.query,
+  set: (value) => { templateState.value.query = value }
+})
+const page = computed({
+  get: () => templateState.value.page,
+  set: (value) => { templateState.value.page = value }
+})
+const perPage = computed({
+  get: () => templateState.value.perPage,
+  set: (value) => { templateState.value.perPage = value }
+})
+const tenantSort = computed({
+  get: () => templateState.value.tenantSort,
+  set: (value) => { templateState.value.tenantSort = value }
+})
+const tenantSortDirection = computed({
+  get: () => templateState.value.tenantSortDirection,
+  set: (value) => { templateState.value.tenantSortDirection = value }
+})
 const total = ref(0)
 const loading = ref(false)
 const catalogLoading = ref(false)
@@ -733,26 +788,16 @@ function setPerPage(next: number): void {
 }
 
 watch([view, query, page, tenantSort, tenantSortDirection], ([nextView]) => {
-  void router.replace({
-    query: {
-      view: nextView === 'tenant' ? 'tenant' : undefined,
-      q: query.value || undefined,
-      page: nextView === 'tenant' && page.value > 1 ? String(page.value) : undefined,
-      sort: nextView === 'tenant' ? tenantSort.value || undefined : undefined,
-      direction: nextView === 'tenant' && tenantSort.value
-        ? tenantSortDirection.value
-        : undefined
-    }
-  })
   if (nextView === 'tenant') void loadTemplates()
 })
 
 watch(sessionEpoch, () => {
+  resetTemplateState()
+  if (!canManageCatalog.value) view.value = 'tenant'
   catalog.value = []
   templates.value = []
   catalogError.value = null
   templatesError.value = null
-  page.value = 1
   total.value = 0
   void Promise.all([loadCatalog(), loadTemplates(), loadOptions()])
 })

@@ -9,6 +9,7 @@ import {
   TABLE_CELL_BADGE_UI
 } from '~/utils/table-ui'
 import ShellDataTable from '~/components/shell/DataTable.vue'
+import { DOCUMENT_IMPORT_CREATE_PATH } from '~/utils/document-routes'
 
 const api = useApi()
 const router = useRouter()
@@ -128,7 +129,7 @@ onMounted(() => {
             v-if="canImportDocuments"
             icon="i-lucide-upload"
             label="Nova importação"
-            to="/docs?import=1"
+            :to="DOCUMENT_IMPORT_CREATE_PATH"
           />
           <ShellNavbarRefresh
             :loading="loading"

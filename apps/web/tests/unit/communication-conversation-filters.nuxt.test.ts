@@ -83,7 +83,10 @@ const PopoverStub = defineComponent({
       onClick: (event: MouseEvent) => {
         const target = event.target
         if (!(target instanceof Element)) return
-        if (target.closest('[data-testid="communication-filter-advanced-toggle"]')) {
+        if (target.closest([
+          '[data-testid="communication-filter-status-options"]',
+          '[data-testid="communication-filter-advanced-trigger"]'
+        ].join(','))) {
           emit('update:open', !props.open)
         }
       },
@@ -120,6 +123,30 @@ const DropdownMenuStub = defineComponent({
   }
 })
 
+const TabsStub = defineComponent({
+  inheritAttrs: false,
+  props: {
+    items: { type: Array, default: () => [] },
+    modelValue: { type: [String, Number], default: '' }
+  },
+  emits: ['update:modelValue'],
+  setup(props, { attrs, emit, slots }) {
+    return () => h('div', { ...attrs, role: 'tablist' }, (
+      props.items as Array<{
+        label?: string
+        value?: string | number
+        testId?: string
+        ariaLabel?: string
+      }>
+    ).map(item => h('button', {
+      'type': 'button',
+      'role': 'tab',
+      'aria-selected': props.modelValue === item.value ? 'true' : 'false',
+      'onClick': () => emit('update:modelValue', item.value)
+    }, slots.default?.({ item }) ?? item.label)))
+  }
+})
+
 const PassThroughStub = defineComponent({
   inheritAttrs: false,
   setup(_, { attrs, slots }) {
@@ -128,6 +155,7 @@ const PassThroughStub = defineComponent({
 })
 
 const baseProps = {
+  selectionActive: false,
   search: '',
   status: 'OPEN' as const,
   inboxId: 0,
@@ -159,6 +187,9 @@ const baseProps = {
 async function mountFilters(props: Partial<typeof baseProps> = {}) {
   wrapper = await mountSuspended(ConversationListFilters, {
     props: { ...baseProps, ...props },
+    slots: {
+      selection: '<div data-testid="communication-selection-slot">Seleção contextual</div>'
+    },
     global: {
       stubs: {
         UButton: ButtonStub,
@@ -167,7 +198,9 @@ async function mountFilters(props: Partial<typeof baseProps> = {}) {
         UInput: InputStub,
         UPopover: PopoverStub,
         USelect: SelectStub,
-        USelectMenu: SelectStub
+        USelectMenu: SelectStub,
+        UTabs: TabsStub,
+        UTooltip: PassThroughStub
       }
     }
   })
@@ -181,39 +214,94 @@ function firstAdvancedRuleId(view: VueWrapper): string {
   return testId.replace('communication-filter-rule-', '')
 }
 
+async function openAdvancedEditor(view: VueWrapper): Promise<void> {
+  if (!view.find('[data-testid="communication-filter-advanced-panel"]').exists()) {
+    await view.get('[data-testid="communication-filter-advanced-trigger"]').trigger('click')
+  }
+}
+
 afterEach(() => {
   wrapper?.unmount()
   wrapper = null
 })
 
 describe('ConversationListFilters — hierarquia compacta', () => {
-  it('aplica status e ordenação por dropdowns iconográficos independentes', async () => {
+  it('mantém busca exclusiva, três tabs fixas e status/ordenação no primeiro popover', async () => {
     const view = await mountFilters()
 
-    expect(view.get('[data-testid="communication-filter-status"]').text()).toBe('')
-    expect(view.get('[data-testid="communication-filter-sort"]').text()).toBe('')
-    expect(view.get('[data-testid="communication-filter-advanced-toggle"]').text()).toBe('')
+    expect(view.get('[data-testid="communication-search-row"]')
+      .find('[data-testid="communication-filter-status-options"]').exists()).toBe(false)
+    const tabs = view.findAll('[role="tab"]')
+    expect(tabs[0]?.attributes('aria-selected')).toBe('true')
+    expect(tabs[1]?.attributes('aria-selected')).toBe('false')
+    expect(tabs.map(tab => tab.find('.sr-only').exists()
+      ? tab.find('.sr-only').text()
+      : tab.text())).toEqual([
+      'Em aberto',
+      'Não lidas',
+      'Não atribuídas'
+    ])
 
-    await view.get('[data-testid="communication-filter-status-option-PENDING"]').trigger('click')
-    await view.get('[data-testid="communication-filter-sort-option-unread_desc"]').trigger('click')
+    await view.get('[data-testid="communication-filter-view-unread"]').trigger('click')
+    expect(view.emitted('apply-quick-view')?.at(-1)).toEqual(['UNREAD'])
 
+    await view.get('[data-testid="communication-filter-status-options"]').trigger('click')
+    await view.get('[data-testid="communication-filter-status"]').setValue('PENDING')
     expect(view.emitted('update:status')?.at(-1)).toEqual(['PENDING'])
+    await view.get('[data-testid="communication-filter-sort"]').setValue('unread_desc')
     expect(view.emitted('update:sortBy')?.at(-1)).toEqual(['unread_desc'])
+  })
+
+  it('mantém a identidade e a ordem das tabs sem marcar um preset falso', async () => {
+    const view = await mountFilters({ status: 'PENDING', unreadOnly: true })
+
+    expect(view.findAll('[role="tab"]').map(tab => tab.get('[data-testid]').attributes('data-testid'))).toEqual([
+      'communication-filter-view-open',
+      'communication-filter-view-unread',
+      'communication-filter-view-unassigned'
+    ])
+    expect(view.findAll('[role="tab"][aria-selected="true"]')).toHaveLength(0)
+    expect(view.get('[data-testid="communication-filter-status-options"]')
+      .attributes('variant')).toBe('soft')
+    expect(view.get('[data-testid="communication-filter-status-options"]')
+      .attributes('aria-label')).toContain('filtro de status ativo')
+  })
+
+  it('contabiliza no badge a regra avançada já expressa pela visão rápida', async () => {
+    const view = await mountFilters({ status: 'OPEN', unreadOnly: true })
+
+    expect(view.findAll('[role="tab"]')[1]?.attributes('aria-selected')).toBe('true')
+    expect(view.get('[data-testid="communication-filter-advanced-trigger"]')
+      .attributes('aria-label')).toBe('Filtros avançados: 1 ativos')
+    expect(view.get('[data-testid="communication-filter-advanced-trigger"]').text()).toContain('1')
+  })
+
+  it('substitui tabs e resumo pela seleção sem retirar a busca', async () => {
+    const view = await mountFilters({
+      selectionActive: true,
+      contactFilterLabel: 'Maria'
+    })
+
+    expect(view.find('[data-testid="communication-search"]').exists()).toBe(true)
+    expect(view.find('[data-testid="communication-filter-views"]').exists()).toBe(false)
+    expect(view.find('[data-testid="communication-filter-active-summary"]').exists()).toBe(false)
+    expect(view.get('[data-testid="communication-selection-slot"]').text())
+      .toBe('Seleção contextual')
   })
 
   it('mantém mudanças no rascunho até aplicar e descarta ao fechar o popover', async () => {
     const view = await mountFilters()
 
-    await view.get('[data-testid="communication-filter-advanced-toggle"]').trigger('click')
+    await openAdvancedEditor(view)
     await view.get('[data-testid="communication-filter-inbox"]').setValue('7')
 
     expect(view.emitted('update:inboxId')).toBeUndefined()
 
-    view.getComponent(PopoverStub).vm.$emit('update:open', false)
+    view.findAllComponents(PopoverStub)[1]?.vm.$emit('update:open', false)
     await view.vm.$nextTick()
     expect(view.find('[data-testid="communication-filter-advanced-panel"]').exists()).toBe(false)
 
-    await view.get('[data-testid="communication-filter-advanced-toggle"]').trigger('click')
+    await openAdvancedEditor(view)
     expect(view.getComponent('[data-testid="communication-filter-inbox"]')
       .props('modelValue')).toBe('')
 
@@ -226,7 +314,7 @@ describe('ConversationListFilters — hierarquia compacta', () => {
   it('ressincroniza o rascunho aberto quando o escopo aplicado muda', async () => {
     const view = await mountFilters()
 
-    await view.get('[data-testid="communication-filter-advanced-toggle"]').trigger('click')
+    await openAdvancedEditor(view)
     await view.get('[data-testid="communication-filter-inbox"]').setValue('7')
     await view.setProps({ inboxId: 7, assigneeId: 4 })
     await view.vm.$nextTick()
@@ -242,7 +330,7 @@ describe('ConversationListFilters — hierarquia compacta', () => {
   it('preserva o rascunho e bloqueia aplicação de regra sem valor', async () => {
     const view = await mountFilters()
 
-    await view.get('[data-testid="communication-filter-advanced-toggle"]').trigger('click')
+    await openAdvancedEditor(view)
     const firstRuleId = firstAdvancedRuleId(view)
     await view.get(`[data-testid="communication-filter-rule-field-${firstRuleId}"]`)
       .setValue('unread')
@@ -266,7 +354,7 @@ describe('ConversationListFilters — hierarquia compacta', () => {
   it('expõe operadores compatíveis e combina regras avançadas com E', async () => {
     const view = await mountFilters()
 
-    await view.get('[data-testid="communication-filter-advanced-toggle"]').trigger('click')
+    await openAdvancedEditor(view)
     const firstRuleId = firstAdvancedRuleId(view)
 
     expect(view.get(`[data-testid="communication-filter-rule-operator-${firstRuleId}"]`).text())
@@ -290,7 +378,7 @@ describe('ConversationListFilters — hierarquia compacta', () => {
   it('preserva exclusão mútua entre responsável e sem responsável', async () => {
     const view = await mountFilters()
 
-    await view.get('[data-testid="communication-filter-advanced-toggle"]').trigger('click')
+    await openAdvancedEditor(view)
     const field = view.get('[data-testid^="communication-filter-rule-field-"]')
     await field.setValue('assignee')
     await view.get('[data-testid="communication-filter-assignee"]').setValue('4')
@@ -304,7 +392,7 @@ describe('ConversationListFilters — hierarquia compacta', () => {
   it('normaliza responsável incompatível com sem responsável no escopo aplicado', async () => {
     const view = await mountFilters({ assigneeId: 4, unassignedOnly: true })
 
-    await view.get('[data-testid="communication-filter-advanced-toggle"]').trigger('click')
+    await openAdvancedEditor(view)
     expect(view.find('[data-testid="communication-filter-assignee"]').exists()).toBe(false)
     expect(view.get('[data-testid="communication-filter-unassigned"]').text()).toBe('Sim')
 
@@ -324,7 +412,7 @@ describe('ConversationListFilters — hierarquia compacta', () => {
     expect(view.findAll('[data-testid="communication-filter-active-chip"]')).toHaveLength(2)
     expect(view.findAll('[data-testid="communication-filter-active-chip"]')[0]
       ?.attributes('aria-label')).toBe('Editar filtro: Contato: Maria')
-    expect(view.get('[data-testid="communication-filter-active-more"]').text()).toBe('+2')
+    expect(view.get('[data-testid="communication-filter-active-more"]').text()).toBe('+1')
     expect(view.get('[data-testid="communication-filter-active-summary"]').attributes('role'))
       .toBe('group')
     expect(view.find('[data-testid="communication-filter-advanced-panel"]').exists()).toBe(false)
@@ -333,7 +421,7 @@ describe('ConversationListFilters — hierarquia compacta', () => {
   it('remove contato junto aos demais filtros em uma única confirmação', async () => {
     const view = await mountFilters({ contactFilterLabel: 'Maria' })
 
-    await view.get('[data-testid="communication-filter-advanced-toggle"]').trigger('click')
+    await openAdvancedEditor(view)
     const contactRuleId = firstAdvancedRuleId(view)
     await view.get(`[data-testid="communication-filter-rule-remove-${contactRuleId}"]`)
       .trigger('click')

@@ -1,3 +1,5 @@
+import { parsePositiveRouteId } from '~/utils/route-params'
+
 /** Path canônico da lista de atendimento. */
 export const COMMUNICATION_INDEX_PATH = '/communication'
 
@@ -13,6 +15,21 @@ export const COMMUNICATION_FLOWS_PATH = `${COMMUNICATION_INDEX_PATH}/flows`
 /** Deep-link de conversa (estilo Chatwoot: …/conversations/{id}). */
 export function communicationConversationPath(id: number): string {
   return `${COMMUNICATION_INDEX_PATH}/conversations/${id}`
+}
+
+/** Deep-link de uma mensagem dentro da conversa. */
+export function communicationConversationMessagePath(conversationId: number, messageId: number): string {
+  return `${communicationConversationPath(conversationId)}/messages/${messageId}`
+}
+
+/** Contexto estável: histórico de conversas de um contato. */
+export function communicationContactConversationsPath(contactId: number, conversationId?: number): string {
+  const base = `${communicationContactPath(contactId)}/conversations`
+  return conversationId ? `${base}/${conversationId}` : base
+}
+
+export function parseCommunicationMessageId(param: unknown): number | null {
+  return parseCommunicationConversationId(param)
 }
 
 /** Deep-link dos detalhes do contato. */
@@ -31,21 +48,15 @@ export function communicationFlowEditorPath(id: number): string {
 }
 
 export function parseCommunicationConversationId(param: unknown): number | null {
-  const raw = Array.isArray(param) ? param[0] : param
-  const id = Number(raw)
-  return Number.isInteger(id) && id > 0 ? id : null
+  return parsePositiveRouteId(param)
 }
 
 export function parseCommunicationContactId(param: unknown): number | null {
-  const raw = Array.isArray(param) ? param[0] : param
-  const id = Number(raw)
-  return Number.isInteger(id) && id > 0 ? id : null
+  return parsePositiveRouteId(param)
 }
 
 export function parseCommunicationFlowId(param: unknown): number | null {
-  const raw = Array.isArray(param) ? param[0] : param
-  const id = Number(raw)
-  return Number.isInteger(id) && id > 0 ? id : null
+  return parsePositiveRouteId(param)
 }
 
 export function isCommunicationNavActive(path: string): boolean {

@@ -1,14 +1,18 @@
 <script setup lang="ts">
 import { usePreferredReducedMotion } from '@vueuse/core'
+import CommunicationConversationActions from './ConversationActions.vue'
 import type {
   CommunicationCannedResponse,
   CommunicationComposerPayload,
   CommunicationConversation,
+  CommunicationConversationActionPayload,
   CommunicationConversationSignals,
   CommunicationConversationTimelineState,
   CommunicationInbox,
+  CommunicationLabel,
   CommunicationMessage
 } from '~/types/communication'
+import type { WorkDepartment } from '~/types/work'
 import {
   COMMUNICATION_CONVERSATION_STATUS,
   communicationMessageStatusMeta,
@@ -35,6 +39,9 @@ const props = defineProps<{
   inbox?: CommunicationInbox | null
   signals?: CommunicationConversationSignals
   cannedResponses: CommunicationCannedResponse[]
+  departments: WorkDepartment[]
+  labels: CommunicationLabel[]
+  canView: boolean
   canReply: boolean
   operational: boolean
   outboundOperational: boolean
@@ -46,16 +53,17 @@ const props = defineProps<{
   timeline?: CommunicationConversationTimelineState | null
   viewportActive?: boolean
   highlightedMessageId?: number | null
+  actionDisabled?: boolean
 }>()
 
 const emit = defineEmits<{
   close: []
   toggleContext: []
+  action: [payload: CommunicationConversationActionPayload]
   send: [
     payload: CommunicationComposerPayload,
     acknowledge: (ok: boolean) => void
   ]
-  update: [patch: Record<string, unknown>]
   download: [message: CommunicationMessage, attachmentId: number, filename: string]
   edit: [message: CommunicationMessage, text: string, acknowledge: (ok: boolean) => void]
   revoke: [message: CommunicationMessage]
@@ -95,12 +103,6 @@ let paginationScrollTop = 0
 let paginationRequestEpoch = 0
 let paginationResetTimer: ReturnType<typeof setTimeout> | null = null
 
-const statusItems = Object.entries(COMMUNICATION_CONVERSATION_STATUS).map(([value, meta]) => ({
-  label: meta.label,
-  value,
-  icon: meta.icon
-}))
-
 const chatPresenceLabel = computed(() => {
   const signal = props.signals?.chat
   if (!signal) return null
@@ -122,18 +124,6 @@ const revokeOpen = computed({
     if (!open) closeRevoke()
   }
 })
-
-function setStatus(value: string | number | undefined): void {
-  if (typeof value !== 'string' || value === props.conversation.status) return
-  if (value === 'SNOOZED') {
-    emit('update', {
-      status: value,
-      snoozed_until: new Date(Date.now() + 60 * 60 * 1000).toISOString()
-    })
-    return
-  }
-  emit('update', { status: value, snoozed_until: null })
-}
 
 function quotedMessage(message: CommunicationMessage): CommunicationMessage | undefined {
   return props.conversation.messages?.find(item => item.id === message.reply_to_message_id)
@@ -486,29 +476,9 @@ watch(
       </template>
 
       <template #right>
-        <USelectMenu
-          :model-value="conversation.status"
-          :items="statusItems"
-          value-key="value"
-          class="hidden w-36 sm:block"
-          size="sm"
-          :disabled="!canReply"
-          aria-label="Status da conversa"
-          @update:model-value="setStatus"
-        />
-        <UTooltip text="Adiar por uma hora">
-          <UButton
-            icon="i-lucide-alarm-clock"
-            color="neutral"
-            variant="ghost"
-            :disabled="!canReply"
-            aria-label="Adiar conversa"
-            @click="setStatus('SNOOZED')"
-          />
-        </UTooltip>
         <UTooltip :text="contextOpen ? 'Fechar contexto do contato' : 'Abrir contexto do contato'">
           <UButton
-            icon="i-lucide-user"
+            :icon="contextOpen ? 'i-lucide-panel-right-close' : 'i-lucide-panel-right-open'"
             :color="contextOpen ? 'primary' : 'neutral'"
             :variant="contextOpen ? 'soft' : 'ghost'"
             :aria-label="contextOpen ? 'Fechar contexto do contato' : 'Abrir contexto do contato'"
@@ -517,6 +487,17 @@ watch(
             @click="emit('toggleContext')"
           />
         </UTooltip>
+        <CommunicationConversationActions
+          :conversation="conversation"
+          :inbox="inbox"
+          :departments="departments"
+          :labels="labels"
+          :can-view="canView"
+          :can-reply="canReply"
+          :disabled="actionDisabled"
+          test-id="communication-timeline-actions"
+          @action="emit('action', $event)"
+        />
       </template>
     </UDashboardNavbar>
 

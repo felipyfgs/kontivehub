@@ -12,6 +12,7 @@ export interface WorkDepartmentDashboardRow {
   completedPercent: number
   to: string
   overdueTo: string
+  filters: { department_id: number | null }
 }
 
 export type WorkOperationalLevelTone = 'primary' | 'info' | 'success' | 'warning' | 'error'
@@ -23,6 +24,18 @@ export interface WorkOperationalLevel {
   percent: number
   remainingToNext: number
   nextLabel: string | null
+}
+
+export function workQueueIntentForKpi(key: string): Record<string, string> {
+  if (key === 'completed' || key === 'concluidas') return { tab: 'concluidas' }
+  if (key === 'overdue' || key === 'fine' || key === 'atrasadas' || key === 'em_multa') {
+    return { tab: 'atrasadas' }
+  }
+  if (key === 'today' || key === 'vence_hoje') return { tab: 'hoje' }
+  if (key === 'unassigned' || key === 'sem_responsavel') {
+    return { tab: 'sem_responsavel', view: 'lista', scope: 'tenant' }
+  }
+  return { tab: 'open' }
 }
 
 export function buildWorkDashboardKpis(data: WorkKpis): DashboardKpiItem[] {
@@ -40,7 +53,7 @@ export function buildWorkDashboardKpis(data: WorkKpis): DashboardKpiItem[] {
       key: 'overdue',
       title: 'Atrasadas',
       value: kpis.atrasadas,
-      to: '/work/tasks?tab=atrasadas',
+      to: '/work/tasks',
       icon: 'i-lucide-clock-alert',
       tone: 'warning',
       critical: kpis.atrasadas > 0
@@ -49,7 +62,7 @@ export function buildWorkDashboardKpis(data: WorkKpis): DashboardKpiItem[] {
       key: 'fine',
       title: 'Em multa',
       value: kpis.em_multa,
-      to: '/work/tasks?tab=atrasadas',
+      to: '/work/tasks',
       icon: 'i-lucide-siren',
       tone: 'error',
       critical: kpis.em_multa > 0
@@ -58,7 +71,7 @@ export function buildWorkDashboardKpis(data: WorkKpis): DashboardKpiItem[] {
       key: 'today',
       title: 'Vencem hoje',
       value: kpis.vence_hoje,
-      to: '/work/tasks?tab=hoje',
+      to: '/work/tasks',
       icon: 'i-lucide-calendar-days',
       tone: kpis.vence_hoje > 0 ? 'warning' : 'default'
     },
@@ -181,12 +194,9 @@ export function buildWorkDepartmentRows(
       fine: row.fine,
       unassigned: row.unassigned,
       completedPercent: row.completed_percent,
-      to: row.work_department_id == null
-        ? '/work/tasks'
-        : `/work/tasks?department_id=${row.work_department_id}`,
-      overdueTo: row.work_department_id == null
-        ? '/work/tasks?tab=atrasadas'
-        : `/work/tasks?tab=atrasadas&department_id=${row.work_department_id}`
+      to: '/work/tasks',
+      overdueTo: '/work/tasks',
+      filters: { department_id: row.work_department_id }
     }))
     .sort((a, b) => b.open - a.open || b.overdue - a.overdue || a.name.localeCompare(b.name, 'pt-BR'))
 }

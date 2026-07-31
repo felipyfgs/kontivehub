@@ -941,6 +941,8 @@ export interface InboxItemAction {
 export interface InboxItemLinks {
   client?: string
   sync?: string
+  health?: string
+  quarantine?: string
   credential?: string
   serpro_authorization?: string
   usage?: string

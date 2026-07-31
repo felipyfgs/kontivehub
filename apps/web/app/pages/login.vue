@@ -2,7 +2,8 @@
 import * as z from 'zod'
 import type { AuthFormField, FormSubmitEvent } from '@nuxt/ui'
 import type { MeIdentity } from '~/utils/permissions'
-import { homeForIdentity, safeRedirectForIdentity } from '~/utils/auth-redirect'
+import { homeForIdentity } from '~/utils/auth-redirect'
+import { consumeAuthReturn } from '~/utils/auth-return'
 
 /**
  * Login no padrão oficial Nuxt UI:
@@ -16,7 +17,6 @@ useSeoMeta({
   description: 'Acesso seguro à gestão fiscal do escritório'
 })
 
-const route = useRoute()
 const { loginWithFreshCsrf, refreshIdentity, user } = useFreshSanctumAuth<MeIdentity>()
 const error = ref('')
 const loading = ref(false)
@@ -56,7 +56,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
 
     await refreshIdentity()
     const identity = unwrapMeUser(user.value as MeIdentity)
-    const redirect = safeRedirectForIdentity(route.query.redirect, identity)
+    const redirect = consumeAuthReturn(identity)
     await navigateTo(redirect || homeForIdentity(identity))
   } catch (caught) {
     error.value = apiErrorMessage(caught, 'Credenciais inválidas ou sessão não iniciada.')

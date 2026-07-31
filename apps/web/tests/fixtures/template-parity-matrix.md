@@ -7,15 +7,18 @@ chrome próprio ou casca de produto; `CHILD` herda a casca do pai; `AUTH` e
 | Arquivo | Rota | Bundle | Observação |
 |---|---|---|---|
 | `pages/index.vue` | `/` | `SHELL` | dashboard inicial |
-| `pages/health.vue` | `/health` | `SHELL` | saúde operacional |
+| `pages/health.vue` | `/health` | `SHELL` | saúde operacional; rota canônica adicional `/health/type/:type` |
 | `pages/closing.vue` | `/closing` | `SHELL` | fechamento |
 | `pages/syncs.vue` | `/syncs` | `SHELL` | sincronizações |
-| `pages/exports.vue` | `/exports` | `SHELL` | exportações |
+| `pages/exports.vue` | `/exports` | `SHELL` | exportações; alias canônico `/exports/new` |
 | `pages/onboarding.vue` | `/onboarding` | `AUTH` | onboarding |
 | `pages/communication/index.vue` | `/communication` | `SHELL` | atendimento master-detail via CommunicationWorkspacePage |
 | `pages/communication/conversations/[id].vue` | `/communication/conversations/:id` | `SHELL` | deep-link do atendimento via CommunicationWorkspacePage |
+| `pages/communication/conversations/[id]/messages/[messageId].vue` | `/communication/conversations/:id/messages/:messageId` | `CHILD` | âncora de mensagem; herda o master-detail sem remontá-lo |
 | `pages/communication/contacts/index.vue` | `/communication/contacts` | `SHELL` | catálogo Chatwoot-like: cards expansíveis full-width/full-height |
 | `pages/communication/contacts/[id].vue` | `/communication/contacts/:id` | `SHELL` | detalhes full-width/full-height com contexto lateral/slideover |
+| `pages/communication/contacts/[contactId]/conversations/index.vue` | `/communication/contacts/:contactId/conversations` | `SHELL` | atendimento filtrado pelo contexto estável do contato |
+| `pages/communication/contacts/[contactId]/conversations/[id].vue` | `/communication/contacts/:contactId/conversations/:id` | `SHELL` | conversa aberta no contexto estável do contato |
 | `pages/communication/quick-responses/index.vue` | `/communication/quick-responses` | `SHELL` | gestão de respostas rápidas (ShellDataTable) |
 | `pages/communication/flows/index.vue` | `/communication/flows` | `SHELL` | gestão de fluxos (ShellDataTable) |
 | `pages/communication/flows/[id]/index.vue` | `/communication/flows/:id` | `SHELL` | detalhe: metadados, versões, bindings, runs |
@@ -70,13 +73,18 @@ chrome próprio ou casca de produto; `CHILD` herda a casca do pai; `AUTH` e
 | `pages/conta/assinatura.vue` | `/conta/assinatura` | `CHILD` | assinatura |
 | `pages/docs/index.vue` | `/docs` | `SHELL` | documentos |
 | `pages/docs/catalog.vue` | `/docs/catalog` | `SHELL` | catálogo |
+| `pages/docs/catalog/type/[kind].vue` | `/docs/catalog/type/:kind` | `CHILD` | contexto tipado; herda o catálogo |
+| `pages/docs/catalog/client/[clientId].vue` | `/docs/catalog/client/:clientId` | `CHILD` | contexto de cliente; herda o catálogo |
 | `pages/docs/[accessKey].vue` | `/docs/:accessKey` | `SHELL` | documento |
 | `pages/docs/imports/index.vue` | `/docs/imports` | `SHELL` | importações |
+| `pages/docs/imports/new.vue` | `/docs/imports/new` | `SHELL` | criação compartilhável de importação |
 | `pages/docs/imports/[id].vue` | `/docs/imports/:id` | `SHELL` | lote de importação |
 | `pages/work/index.vue` | `/work` | `SHELL` | visão Tarefas |
 | `pages/work/calendar.vue` | `/work/calendar` | `SHELL` | calendário |
+| `pages/work/calendar/[view]/[date].vue` | `/work/calendar/:view/:date` | `CHILD` | visão e data estáveis; herda o calendário |
 | `pages/work/processes/index.vue` | `/work/processes` | `SHELL` | processos em acordeão |
 | `pages/work/processes/[id].vue` | `/work/processes/:id` | `SHELL` | detalhe do processo |
+| `pages/work/processes/[id]/[section].vue` | `/work/processes/:id/:section` | `CHILD` | seção tipada tasks/comments/history; herda o detalhe |
 | `pages/work/templates/index.vue` | `/work/templates` | `SHELL` | rotinas |
 | `pages/work/tasks/index.vue` | `/work/tasks` | `SHELL` | fila de tarefas |
 | `pages/work/tasks/[id].vue` | `/work/tasks/:id` | `SHELL` | detalhe da tarefa |

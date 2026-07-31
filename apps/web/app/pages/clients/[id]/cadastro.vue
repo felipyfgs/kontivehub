@@ -12,11 +12,7 @@ definePageMeta({
     (to) => {
       if (!/\/certificado\/?$/.test(to.path)) return undefined
 
-      return navigateTo({
-        path: clientDetailHref(String(to.params.id || '')),
-        query: to.query,
-        hash: to.hash
-      }, { replace: true })
+      return navigateTo(clientDetailHref(String(to.params.id || '')), { replace: true })
     }
   ]
 })

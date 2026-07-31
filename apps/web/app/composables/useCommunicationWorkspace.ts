@@ -71,6 +71,11 @@ import type {
   CommunicationConversationFilters,
   CommunicationPolicyBody
 } from './api/createCommunicationApi'
+import {
+  COMMUNICATION_SURFACES,
+  consumeSurfaceNavigationIntent,
+  useSurfaceNavigationState
+} from './useSurfaceNavigationState'
 
 const EMPTY_FEATURE_META: CommunicationFeatureMeta = {
   global_enabled: false,
@@ -87,6 +92,62 @@ const EMPTY_AUTOMATION_META: CommunicationAutomationMeta = {
 
 export const COMMUNICATION_CONVERSATION_PAGE_SIZE = 50
 export const COMMUNICATION_TIMELINE_PAGE_SIZE = 50
+
+type CommunicationWorkspaceNavigationState = {
+  search: string
+  inboxFilter: number | null
+  statusFilter: CommunicationConversationStatus | null
+  assigneeFilter: number | null
+  departmentFilter: number | null
+  unassignedOnly: boolean
+  unreadOnly: boolean
+  labelIdsFilter: number[]
+  contactIdFilter: number | null
+  sortBy: CommunicationConversationSortBy
+}
+
+const communicationWorkspaceNavigationDefaults = (): CommunicationWorkspaceNavigationState => ({
+  search: '',
+  inboxFilter: null,
+  statusFilter: 'OPEN',
+  assigneeFilter: null,
+  departmentFilter: null,
+  unassignedOnly: false,
+  unreadOnly: false,
+  labelIdsFilter: [],
+  contactIdFilter: null,
+  sortBy: COMMUNICATION_DEFAULT_SORT_BY
+})
+
+function normalizeCommunicationWorkspaceNavigation(
+  value: CommunicationWorkspaceNavigationState
+): CommunicationWorkspaceNavigationState {
+  const positiveId = (candidate: unknown): number | null =>
+    typeof candidate === 'number' && Number.isSafeInteger(candidate) && candidate > 0
+      ? candidate
+      : null
+  const status = ['OPEN', 'PENDING', 'SNOOZED', 'RESOLVED'].includes(String(value.statusFilter))
+    ? value.statusFilter
+    : null
+  const unassignedOnly = value.unassignedOnly === true
+
+  return {
+    search: typeof value.search === 'string' ? value.search : '',
+    inboxFilter: positiveId(value.inboxFilter),
+    statusFilter: status,
+    assigneeFilter: unassignedOnly ? null : positiveId(value.assigneeFilter),
+    departmentFilter: positiveId(value.departmentFilter),
+    unassignedOnly,
+    unreadOnly: value.unreadOnly === true,
+    labelIdsFilter: Array.from(new Set(
+      Array.isArray(value.labelIdsFilter)
+        ? value.labelIdsFilter.filter(id => Number.isSafeInteger(id) && id > 0)
+        : []
+    )),
+    contactIdFilter: positiveId(value.contactIdFilter),
+    sortBy: normalizeCommunicationConversationSortBy(value.sortBy)
+  }
+}
 
 const EMPTY_TIMELINE_META: CommunicationConversationTimelineMeta = {
   older_cursor: null,
@@ -133,6 +194,15 @@ const _useCommunicationWorkspace = () => {
   const api = useApi()
   const toast = useToast()
   const { me, sessionEpoch } = useDashboard()
+  const navigationState = useSurfaceNavigationState<CommunicationWorkspaceNavigationState>(
+    COMMUNICATION_SURFACES.workspace,
+    communicationWorkspaceNavigationDefaults,
+    {
+      // A identidade, o tenant efetivo e o epoch compõem o isolamento lógico.
+      resetKey: () => `${me.value?.id ?? 'guest'}:${me.value?.current_tenant?.id ?? 'none'}:${sessionEpoch.value}`,
+      normalize: normalizeCommunicationWorkspaceNavigation
+    }
+  )
   const realtime = useNuxtApp().$communicationRealtime
 
   const inboxes = ref<CommunicationInbox[]>([])
@@ -176,16 +246,46 @@ const _useCommunicationWorkspace = () => {
   const syncError = ref<string | null>(null)
   const initialized = ref(false)
 
-  const search = ref('')
-  const inboxFilter = ref<number | null>(null)
-  const statusFilter = ref<CommunicationConversationStatus | null>('OPEN')
-  const assigneeFilter = ref<number | null>(null)
-  const departmentFilter = ref<number | null>(null)
-  const unassignedOnly = ref(false)
-  const unreadOnly = ref(false)
-  const labelIdsFilter = ref<number[]>([])
-  const contactIdFilter = ref<number | null>(null)
-  const sortBy = ref<CommunicationConversationSortBy>(COMMUNICATION_DEFAULT_SORT_BY)
+  const search = computed({
+    get: () => navigationState.state.value.search,
+    set: (value: string) => navigationState.patch({ search: value })
+  })
+  const inboxFilter = computed({
+    get: () => navigationState.state.value.inboxFilter,
+    set: (value: number | null) => navigationState.patch({ inboxFilter: value })
+  })
+  const statusFilter = computed({
+    get: () => navigationState.state.value.statusFilter,
+    set: (value: CommunicationConversationStatus | null) => navigationState.patch({ statusFilter: value })
+  })
+  const assigneeFilter = computed({
+    get: () => navigationState.state.value.assigneeFilter,
+    set: (value: number | null) => navigationState.patch({ assigneeFilter: value })
+  })
+  const departmentFilter = computed({
+    get: () => navigationState.state.value.departmentFilter,
+    set: (value: number | null) => navigationState.patch({ departmentFilter: value })
+  })
+  const unassignedOnly = computed({
+    get: () => navigationState.state.value.unassignedOnly,
+    set: (value: boolean) => navigationState.patch({ unassignedOnly: value })
+  })
+  const unreadOnly = computed({
+    get: () => navigationState.state.value.unreadOnly,
+    set: (value: boolean) => navigationState.patch({ unreadOnly: value })
+  })
+  const labelIdsFilter = computed({
+    get: () => navigationState.state.value.labelIdsFilter,
+    set: (value: number[]) => navigationState.patch({ labelIdsFilter: value })
+  })
+  const contactIdFilter = computed({
+    get: () => navigationState.state.value.contactIdFilter,
+    set: (value: number | null) => navigationState.patch({ contactIdFilter: value })
+  })
+  const sortBy = computed({
+    get: () => navigationState.state.value.sortBy,
+    set: (value: CommunicationConversationSortBy) => navigationState.patch({ sortBy: value })
+  })
   let preferencesSaveGeneration = 0
   let bulkPollTimer: ReturnType<typeof setTimeout> | null = null
   let lastSelectionQueryKey = ''
@@ -1404,6 +1504,10 @@ const _useCommunicationWorkspace = () => {
   }
 
   async function initialize(): Promise<void> {
+    const intent = consumeSurfaceNavigationIntent<Partial<CommunicationWorkspaceNavigationState>>(
+      COMMUNICATION_SURFACES.workspace
+    )
+    if (intent) navigationState.patch(intent)
     if (!canView.value || loading.value) return
     loading.value = true
     error.value = null
@@ -1623,20 +1727,31 @@ const _useCommunicationWorkspace = () => {
     }
   }
 
-  async function toggleLabel(label: CommunicationLabel): Promise<void> {
-    const conversation = selectedConversation.value
-    if (!conversation || !canReply.value) return
-    const assigned = conversation.labels?.some(item => item.id === label.id) ?? false
+  async function setConversationLabel(
+    conversation: CommunicationConversation,
+    labelId: number,
+    assigned: boolean
+  ): Promise<boolean> {
+    if (!canReply.value) return false
     try {
       if (assigned) {
-        await api.communication.conversations.removeLabel(conversation.id, label.id)
+        await api.communication.conversations.addLabel(conversation.id, labelId)
       } else {
-        await api.communication.conversations.addLabel(conversation.id, label.id)
+        await api.communication.conversations.removeLabel(conversation.id, labelId)
       }
       await refreshConversationDetail(conversation.id, { reportError: false })
+      return true
     } catch (caught) {
       toast.add({ title: apiErrorMessage(caught, 'Falha ao atualizar marcador.'), color: 'error' })
+      return false
     }
+  }
+
+  async function toggleLabel(label: CommunicationLabel): Promise<void> {
+    const conversation = selectedConversation.value
+    if (!conversation) return
+    const assigned = conversation.labels?.some(item => item.id === label.id) ?? false
+    await setConversationLabel(conversation, label.id, !assigned)
   }
 
   async function loadAdministration(): Promise<void> {
@@ -1904,6 +2019,7 @@ const _useCommunicationWorkspace = () => {
     ensureCursorPoll()
   })
   watch(sessionEpoch, () => {
+    navigationState.reset()
     selectionEpoch++
     conversationQueryGeneration++
     conversationQueryController?.abort()
@@ -1931,17 +2047,7 @@ const _useCommunicationWorkspace = () => {
     cursor.value = 0
     policies.value = []
     featureMeta.value = { ...EMPTY_FEATURE_META }
-    labelIdsFilter.value = []
-    contactIdFilter.value = null
-    inboxFilter.value = null
-    assigneeFilter.value = null
-    departmentFilter.value = null
-    search.value = ''
-    unassignedOnly.value = false
-    unreadOnly.value = false
     lastSelectionQueryKey = ''
-    sortBy.value = COMMUNICATION_DEFAULT_SORT_BY
-    statusFilter.value = 'OPEN'
     initialized.value = false
     if (canView.value) void initialize()
   })
@@ -2055,6 +2161,7 @@ const _useCommunicationWorkspace = () => {
     sendReceipt,
     sendMessage,
     sending: readonly(sending),
+    setConversationLabel,
     setConversationSelected,
     sortBy,
     statusFilter,

@@ -2,11 +2,12 @@
 /**
  * Filtros da lista de conversas:
  * - busca direta;
- * - status e ordenação em dropdowns iconográficos;
- * - escopo operacional em um popover de regras com rascunho.
+ * - três visões rápidas fixas em tabs sem rolagem;
+ * - status/ordenação e filtros avançados em popovers separados.
  */
-import type { DropdownMenuItem } from '@nuxt/ui'
+import type { TabsItem } from '@nuxt/ui'
 import type {
+  CommunicationConversationQuickView,
   CommunicationConversationSortBy,
   CommunicationConversationStatus
 } from '~/types/communication'
@@ -14,10 +15,19 @@ import {
   COMMUNICATION_SORT_BY_OPTIONS,
   normalizeCommunicationConversationSortBy
 } from '~/utils/communication-conversation-sort'
+import {
+  activeCommunicationQuickView,
+  COMMUNICATION_CONVERSATION_QUICK_VIEW_TABS
+} from '~/utils/communication-conversation-quick-views'
 
 type SelectItem = { label: string, value: number | string }
 type StatusValue = CommunicationConversationStatus | 'ALL'
 type ActiveFilterSummary = { key: string, label: string }
+type QuickViewTabItem = TabsItem & {
+  testId: string
+  ariaLabel: string
+  compactLabel?: string
+}
 type AdvancedFilterField
   = | 'inbox'
     | 'assignee'
@@ -43,6 +53,7 @@ type AdvancedFilterDraft = {
 }
 
 const props = defineProps<{
+  selectionActive?: boolean
   search: string
   status: StatusValue
   inboxId: number
@@ -69,16 +80,17 @@ const emit = defineEmits<{
   'update:sortBy': [value: CommunicationConversationSortBy]
   'update:unassignedOnly': [value: boolean]
   'update:unreadOnly': [value: boolean]
+  'apply-quick-view': [view: CommunicationConversationQuickView]
   'clear-contact': []
 }>()
 
 const statusItems = [
-  { label: 'Abertas', value: 'OPEN', icon: 'i-lucide-inbox' },
-  { label: 'Pendentes', value: 'PENDING', icon: 'i-lucide-clock-3' },
-  { label: 'Adiadas', value: 'SNOOZED', icon: 'i-lucide-alarm-clock' },
-  { label: 'Resolvidas', value: 'RESOLVED', icon: 'i-lucide-circle-check' },
-  { label: 'Todas', value: 'ALL', icon: 'i-lucide-layers-3' }
-] as const
+  { label: 'Todos os status', value: 'ALL' },
+  { label: 'Em aberto', value: 'OPEN' },
+  { label: 'Pendentes', value: 'PENDING' },
+  { label: 'Adiadas', value: 'SNOOZED' },
+  { label: 'Resolvidas', value: 'RESOLVED' }
+] satisfies Array<{ label: string, value: StatusValue }>
 
 const advancedFilterFieldItems: Array<{
   label: string
@@ -93,6 +105,7 @@ const advancedFilterFieldItems: Array<{
   { label: 'Contato', value: 'contact' }
 ]
 
+const statusOptionsOpen = ref(false)
 const advancedOpen = ref(false)
 const advancedRules = ref<AdvancedFilterRule[]>([])
 let nextAdvancedRuleId = 0
@@ -114,38 +127,26 @@ function itemLabel(items: SelectItem[], value: number): string | null {
   return items.find(item => Number(item.value) === value)?.label ?? null
 }
 
-const statusLabel = computed(() =>
-  statusItems.find(item => item.value === props.status)?.label || 'Status'
-)
-
 const sortLabel = computed(() =>
   COMMUNICATION_SORT_BY_OPTIONS.find(item => item.value === normalizedSort.value)?.label
   || 'Ordenação'
 )
 
-const statusMenuItems = computed<DropdownMenuItem[][]>(() => [[{
-  label: 'Status das conversas',
-  type: 'label'
-}], statusItems.map(item => ({
-  label: item.label,
-  icon: props.status === item.value ? 'i-lucide-check' : item.icon,
-  class: props.status === item.value ? 'font-medium text-primary' : undefined,
-  onSelect: () => emit('update:status', item.value),
-  ...{ 'data-testid': `communication-filter-status-option-${item.value}` }
-}))])
+const activeQuickView = computed<CommunicationConversationQuickView | null>(() =>
+  activeCommunicationQuickView({
+    status: props.status === 'ALL' ? null : props.status,
+    unreadOnly: props.unreadOnly,
+    unassignedOnly: props.unassignedOnly
+  }))
 
-const sortMenuItems = computed<DropdownMenuItem[][]>(() => [[{
-  label: 'Ordenar conversas',
-  type: 'label'
-}], COMMUNICATION_SORT_BY_OPTIONS.map(item => ({
-  label: item.label,
-  icon: normalizedSort.value === item.value
-    ? 'i-lucide-check'
-    : 'i-lucide-arrow-up-down',
-  class: normalizedSort.value === item.value ? 'font-medium text-primary' : undefined,
-  onSelect: () => emit('update:sortBy', item.value),
-  ...{ 'data-testid': `communication-filter-sort-option-${item.value}` }
-}))])
+const quickViewTabs: QuickViewTabItem[] = COMMUNICATION_CONVERSATION_QUICK_VIEW_TABS.map(
+  item => ({
+    ...item,
+    testId: `communication-filter-view-${item.value.toLowerCase()}`,
+    ariaLabel: item.label
+  })
+)
+const hasCustomStatus = computed(() => props.status !== 'ALL' && activeQuickView.value === null)
 
 const activeFilterSummaries = computed<ActiveFilterSummary[]>(() => {
   const summaries: ActiveFilterSummary[] = []
@@ -153,11 +154,13 @@ const activeFilterSummaries = computed<ActiveFilterSummary[]>(() => {
   if (props.contactFilterLabel) {
     summaries.push({ key: 'contact', label: `Contato: ${props.contactFilterLabel}` })
   }
-  if (props.unreadOnly) {
+  if (props.unreadOnly && activeQuickView.value !== 'UNREAD') {
     summaries.push({ key: 'unread', label: 'Não lidas' })
   }
   if (props.unassignedOnly) {
-    summaries.push({ key: 'unassigned', label: 'Sem responsável' })
+    if (activeQuickView.value !== 'UNASSIGNED') {
+      summaries.push({ key: 'unassigned', label: 'Sem responsável' })
+    }
   } else {
     const assignee = itemLabel(props.assigneeItems, props.assigneeId)
     if (assignee) summaries.push({ key: 'assignee', label: `Responsável: ${assignee}` })
@@ -184,13 +187,33 @@ const hiddenFilterSummaryCount = computed(() => Math.max(
   0,
   activeFilterSummaries.value.length - visibleFilterSummaries.value.length
 ))
-const advancedActiveCount = computed(() => activeFilterSummaries.value.length)
+const advancedActiveCount = computed(() => activeAdvancedFields().length)
 const hasAdvancedFilters = computed(() => advancedActiveCount.value > 0)
 
 const searchModel = computed({
   get: () => props.search,
   set: (value: string) => emit('update:search', value)
 })
+
+function applyQuickView(view: CommunicationConversationQuickView): void {
+  emit('apply-quick-view', view)
+}
+
+function onQuickViewChange(value: string | number): void {
+  if (typeof value !== 'string') return
+  if (!COMMUNICATION_CONVERSATION_QUICK_VIEW_TABS.some(item => item.value === value)) return
+  applyQuickView(value as CommunicationConversationQuickView)
+}
+
+function updateSort(value: unknown): void {
+  emit('update:sortBy', normalizeCommunicationConversationSortBy(value))
+}
+
+function updateStatus(value: unknown): void {
+  const status = String(value) as StatusValue
+  if (!statusItems.some(item => item.value === status)) return
+  emit('update:status', status)
+}
 
 function makeAdvancedRule(field: AdvancedFilterField): AdvancedFilterRule {
   nextAdvancedRuleId += 1
@@ -347,7 +370,7 @@ const advancedDraftHasIncompleteRule = computed(() =>
 )
 
 function onAdvancedOpenChange(open: boolean): void {
-  resetAdvancedDraft()
+  if (open) resetAdvancedDraft()
   advancedOpen.value = open
 }
 
@@ -405,13 +428,16 @@ resetAdvancedDraft()
     class="flex w-full min-w-0 max-w-full flex-col gap-1.5 overflow-x-hidden py-2"
     data-testid="communication-list-filters"
   >
-    <div class="flex w-full min-w-0 items-center gap-1">
+    <div
+      class="w-full min-w-0"
+      data-testid="communication-search-row"
+    >
       <UInput
         v-model="searchModel"
         icon="i-lucide-search"
         placeholder="Buscar contato, telefone ou mensagem"
         size="sm"
-        class="min-w-0 flex-1"
+        class="w-full min-w-0"
         data-testid="communication-search"
         aria-label="Buscar conversas"
       >
@@ -428,330 +454,435 @@ resetAdvancedDraft()
           />
         </template>
       </UInput>
+    </div>
+
+    <Transition
+      mode="out-in"
+      enter-active-class="transition-all duration-150 ease-out motion-reduce:transition-none"
+      enter-from-class="-translate-y-1 opacity-0 motion-reduce:translate-y-0"
+      enter-to-class="translate-y-0 opacity-100"
+      leave-active-class="transition-all duration-100 ease-in motion-reduce:transition-none"
+      leave-from-class="translate-y-0 opacity-100"
+      leave-to-class="-translate-y-1 opacity-0 motion-reduce:translate-y-0"
+    >
+      <div
+        v-if="selectionActive"
+        key="selection"
+        class="min-w-0"
+        data-testid="communication-filter-selection-context"
+      >
+        <slot name="selection" />
+      </div>
 
       <div
-        class="flex shrink-0 items-center gap-0.5"
-        role="group"
-        aria-label="Controles da lista de conversas"
+        v-else
+        key="views"
+        class="flex min-w-0 flex-col gap-1.5"
       >
-        <UDropdownMenu
-          :items="statusMenuItems"
-          :content="{
-            align: 'start',
-            side: 'bottom',
-            sideOffset: 6,
-            collisionPadding: 8
-          }"
+        <div
+          class="flex h-10 min-w-0 items-stretch gap-0.5 overflow-hidden [@media(pointer:coarse)]:h-12"
+          data-testid="communication-filter-views"
         >
-          <UButton
-            icon="i-lucide-inbox"
-            color="neutral"
-            :variant="status === 'OPEN' ? 'ghost' : 'soft'"
+          <UTabs
+            :items="quickViewTabs"
+            :model-value="activeQuickView || '__none__'"
+            :content="false"
+            activation-mode="manual"
+            variant="link"
             size="sm"
-            square
-            class="[@media(pointer:coarse)]:size-11"
-            :aria-label="`Status: ${statusLabel}`"
-            :title="`Status: ${statusLabel}`"
-            data-testid="communication-filter-status"
-          />
-        </UDropdownMenu>
+            class="min-w-0 flex-1"
+            :ui="{
+              list: 'h-10 w-full min-w-0 gap-0 overflow-hidden rounded-none bg-transparent p-0 [@media(pointer:coarse)]:h-12',
+              indicator: 'bottom-0 h-0.5 rounded-none bg-primary',
+              trigger: 'h-10 min-w-0 flex-1 rounded-none px-1 text-[11px] font-medium text-muted data-[state=active]:text-primary min-[360px]:px-1.5 min-[390px]:text-xs [@media(pointer:coarse)]:h-12',
+              label: 'min-w-0 truncate'
+            }"
+            aria-label="Visões rápidas das conversas"
+            @update:model-value="onQuickViewChange"
+          >
+            <template #default="{ item }">
+              <span
+                :data-testid="item.testId"
+                class="min-w-0 truncate"
+              >
+                <template v-if="item.compactLabel">
+                  <span class="sr-only">{{ item.ariaLabel }}</span>
+                  <span aria-hidden="true" class="hidden min-[360px]:inline">
+                    {{ item.label }}
+                  </span>
+                  <span aria-hidden="true" class="min-[360px]:hidden">
+                    {{ item.compactLabel }}
+                  </span>
+                </template>
+                <span v-else>{{ item.label }}</span>
+              </span>
+            </template>
+          </UTabs>
 
-        <UDropdownMenu
-          :items="sortMenuItems"
-          :content="{
-            align: 'end',
-            side: 'bottom',
-            sideOffset: 6,
-            collisionPadding: 8
-          }"
-        >
-          <UButton
-            icon="i-lucide-arrow-up-down"
-            color="neutral"
-            :variant="normalizedSort === 'last_activity_desc' ? 'ghost' : 'soft'"
-            size="sm"
-            square
-            class="[@media(pointer:coarse)]:size-11"
-            :aria-label="`Ordenação: ${sortLabel}`"
-            :title="`Ordenação: ${sortLabel}`"
-            data-testid="communication-filter-sort"
-          />
-        </UDropdownMenu>
+          <UPopover
+            :open="statusOptionsOpen"
+            :portal="true"
+            :content="{
+              align: 'end',
+              side: 'bottom',
+              sideOffset: 6,
+              collisionPadding: 8
+            }"
+            :ui="{ content: 'max-w-[calc(100vw-1rem)] overflow-hidden p-0' }"
+            @update:open="statusOptionsOpen = $event"
+          >
+            <UTooltip text="Status e ordenação">
+              <UButton
+                icon="i-lucide-sliders-horizontal"
+                color="neutral"
+                :variant="statusOptionsOpen || hasCustomStatus ? 'soft' : 'ghost'"
+                size="sm"
+                square
+                class="my-1 size-8 shrink-0 [@media(pointer:coarse)]:my-0.5 [@media(pointer:coarse)]:size-11"
+                :aria-expanded="statusOptionsOpen"
+                aria-controls="communication-filter-status-panel"
+                :aria-label="hasCustomStatus
+                  ? 'Status e ordenação: filtro de status ativo'
+                  : 'Status e ordenação'"
+                data-testid="communication-filter-status-options"
+              />
+            </UTooltip>
 
-        <UPopover
-          :open="advancedOpen"
-          :portal="true"
-          :content="{
-            align: 'end',
-            side: 'bottom',
-            sideOffset: 6,
-            collisionPadding: 8
-          }"
-          :ui="{ content: 'max-w-[calc(100vw-1rem)] overflow-hidden' }"
-          @update:open="onAdvancedOpenChange"
-        >
-          <UButton
-            icon="i-lucide-list-filter"
-            size="sm"
-            square
-            class="[@media(pointer:coarse)]:size-11"
-            :color="hasAdvancedFilters || advancedOpen ? 'primary' : 'neutral'"
-            :variant="hasAdvancedFilters || advancedOpen ? 'soft' : 'ghost'"
-            :aria-expanded="advancedOpen"
-            aria-controls="communication-filter-advanced-panel"
-            :aria-label="hasAdvancedFilters
-              ? `Editar filtros avançados: ${advancedActiveCount} ativos`
-              : 'Abrir filtros avançados'"
-            :title="hasAdvancedFilters
-              ? `${advancedActiveCount} filtros avançados ativos`
-              : 'Filtros avançados'"
-            data-testid="communication-filter-advanced-toggle"
-          />
-
-          <template #content>
-            <section
-              id="communication-filter-advanced-panel"
-              class="flex w-[calc(100vw-1rem)] max-w-[38rem] min-w-0 flex-col overflow-hidden"
-              data-testid="communication-filter-advanced-panel"
-              aria-labelledby="communication-filter-advanced-title"
-            >
-              <header class="border-b border-default px-4 py-3">
+            <template #content>
+              <section
+                id="communication-filter-status-panel"
+                class="w-[min(18rem,calc(100vw-1rem))] min-w-0 p-3"
+                data-testid="communication-filter-status-panel"
+                aria-labelledby="communication-filter-status-title"
+              >
                 <h2
-                  id="communication-filter-advanced-title"
-                  class="text-sm font-semibold text-highlighted"
+                  id="communication-filter-status-title"
+                  class="mb-3 text-sm font-semibold text-highlighted"
                 >
-                  Filtrar conversas
+                  Exibição da lista
                 </h2>
-                <p class="mt-0.5 text-xs text-muted">
-                  Todas as regras são combinadas com “E”.
-                </p>
-              </header>
+                <div class="space-y-3">
+                  <label class="block min-w-0 space-y-1.5">
+                    <span class="text-xs font-medium text-toned">Status</span>
+                    <USelectMenu
+                      :model-value="status"
+                      :items="statusItems"
+                      value-key="value"
+                      size="sm"
+                      class="w-full min-w-0"
+                      aria-label="Status das conversas"
+                      data-testid="communication-filter-status"
+                      @update:model-value="updateStatus"
+                    />
+                  </label>
+                  <label class="block min-w-0 space-y-1.5">
+                    <span class="text-xs font-medium text-toned">Ordenar</span>
+                    <USelectMenu
+                      :model-value="normalizedSort"
+                      :items="COMMUNICATION_SORT_BY_OPTIONS"
+                      value-key="value"
+                      size="sm"
+                      class="w-full min-w-0"
+                      :aria-label="`Ordenação: ${sortLabel}`"
+                      data-testid="communication-filter-sort"
+                      @update:model-value="updateSort"
+                    />
+                  </label>
+                </div>
+              </section>
+            </template>
+          </UPopover>
 
-              <div class="max-h-[calc(100vh-12rem)] min-w-0 overflow-y-auto overflow-x-hidden p-3 sm:max-h-96">
-                <div
-                  v-if="advancedRules.length"
-                  class="flex min-w-0 flex-col gap-2"
-                  role="list"
-                  aria-label="Regras de filtro"
+          <UPopover
+            :open="advancedOpen"
+            :portal="true"
+            :content="{
+              align: 'start',
+              side: 'bottom',
+              sideOffset: 6,
+              collisionPadding: 8
+            }"
+            :ui="{ content: 'max-w-[calc(100vw-1rem)] overflow-hidden' }"
+            @update:open="onAdvancedOpenChange"
+          >
+            <UTooltip text="Filtros avançados">
+              <UButton
+                color="neutral"
+                :variant="hasAdvancedFilters || advancedOpen ? 'soft' : 'ghost'"
+                size="sm"
+                square
+                class="relative my-1 size-8 shrink-0 [@media(pointer:coarse)]:my-0.5 [@media(pointer:coarse)]:size-11"
+                :aria-expanded="advancedOpen"
+                aria-controls="communication-filter-advanced-panel"
+                :aria-label="hasAdvancedFilters
+                  ? `Filtros avançados: ${advancedActiveCount} ativos`
+                  : 'Filtros avançados'"
+                data-testid="communication-filter-advanced-trigger"
+              >
+                <UIcon name="i-lucide-list-filter" class="size-4" />
+                <span
+                  v-if="hasAdvancedFilters"
+                  class="absolute end-0.5 top-0.5 flex size-3 items-center justify-center rounded-full bg-primary text-[8px] font-bold leading-none text-inverted"
+                  aria-hidden="true"
                 >
-                  <template v-for="(rule, index) in advancedRules" :key="rule.id">
-                    <span
-                      v-if="index > 0"
-                      class="ms-2 self-start rounded-md bg-elevated px-2 py-0.5 text-[10px] font-semibold text-muted"
-                      role="presentation"
-                      aria-hidden="true"
-                    >
-                      E
-                    </span>
+                  {{ Math.min(advancedActiveCount, 9) }}
+                </span>
+              </UButton>
+            </UTooltip>
 
-                    <div
-                      class="relative grid min-w-0 grid-cols-1 gap-2 rounded-md bg-elevated/60 p-2 pe-12 sm:grid-cols-[minmax(8rem,1fr)_auto_minmax(7rem,0.75fr)_minmax(9rem,1fr)] sm:items-center"
-                      role="listitem"
-                      :data-testid="`communication-filter-rule-${rule.id}`"
-                    >
-                      <USelect
-                        :model-value="rule.field"
-                        :items="availableAdvancedFieldItems(rule)"
-                        value-key="value"
-                        size="sm"
-                        class="w-full min-w-0 [@media(pointer:coarse)]:min-h-11"
-                        :aria-label="`Campo da regra ${index + 1}`"
-                        :data-testid="`communication-filter-rule-field-${rule.id}`"
-                        @update:model-value="value => updateAdvancedRuleField(rule, value)"
-                      />
+            <template #content>
+              <section
+                id="communication-filter-advanced-panel"
+                class="flex max-h-[calc(100vh-1rem)] w-[calc(100vw-1rem)] max-w-[32rem] min-w-0 flex-col overflow-hidden"
+                data-testid="communication-filter-advanced-panel"
+                aria-labelledby="communication-filter-advanced-title"
+              >
+                <header class="border-b border-default px-3 py-2.5">
+                  <h2
+                    id="communication-filter-advanced-title"
+                    class="text-sm font-semibold text-highlighted"
+                  >
+                    Filtrar conversas
+                  </h2>
+                  <p class="mt-0.5 text-[11px] text-muted">
+                    Todas as regras são combinadas com “E”.
+                  </p>
+                </header>
 
-                      <UIcon
-                        name="i-lucide-equal"
-                        class="hidden size-4 shrink-0 text-primary sm:block"
+                <div class="min-w-0 overflow-y-auto overflow-x-hidden p-2.5">
+                  <div
+                    v-if="advancedRules.length"
+                    class="flex min-w-0 flex-col gap-2"
+                    role="list"
+                    aria-label="Regras de filtro"
+                  >
+                    <template v-for="(rule, index) in advancedRules" :key="rule.id">
+                      <span
+                        v-if="index > 0"
+                        class="ms-2 self-start rounded-md bg-elevated px-2 py-0.5 text-[10px] font-semibold text-muted"
+                        role="presentation"
                         aria-hidden="true"
-                      />
+                      >
+                        E
+                      </span>
 
                       <div
-                        class="flex min-h-8 min-w-0 items-center rounded-md px-2 text-xs font-medium text-toned ring ring-inset ring-default"
-                        :data-testid="`communication-filter-rule-operator-${rule.id}`"
+                        class="relative grid min-w-0 grid-cols-1 gap-2 rounded-md bg-elevated/60 p-2 pe-12 [@media(pointer:coarse)]:pe-14 sm:grid-cols-[minmax(8rem,1fr)_auto_minmax(7rem,0.75fr)_minmax(9rem,1fr)] sm:items-center"
+                        role="listitem"
+                        :data-testid="`communication-filter-rule-${rule.id}`"
                       >
-                        {{ advancedOperatorLabel(rule.field) }}
+                        <USelect
+                          :model-value="rule.field"
+                          :items="availableAdvancedFieldItems(rule)"
+                          value-key="value"
+                          size="sm"
+                          class="w-full min-w-0 [@media(pointer:coarse)]:min-h-11"
+                          :aria-label="`Campo da regra ${index + 1}`"
+                          :data-testid="`communication-filter-rule-field-${rule.id}`"
+                          @update:model-value="value => updateAdvancedRuleField(rule, value)"
+                        />
+
+                        <UIcon
+                          name="i-lucide-equal"
+                          class="hidden size-4 shrink-0 text-primary sm:block"
+                          aria-hidden="true"
+                        />
+
+                        <div
+                          class="flex min-h-8 min-w-0 items-center rounded-md px-2 text-xs font-medium text-toned ring ring-inset ring-default"
+                          :data-testid="`communication-filter-rule-operator-${rule.id}`"
+                        >
+                          {{ advancedOperatorLabel(rule.field) }}
+                        </div>
+
+                        <USelectMenu
+                          v-if="rule.field === 'inbox'"
+                          :model-value="advancedDraft.inboxId || undefined"
+                          :items="selectableItems(inboxItems)"
+                          value-key="value"
+                          placeholder="Selecione a inbox"
+                          size="sm"
+                          class="w-full min-w-0 [@media(pointer:coarse)]:min-h-11"
+                          data-testid="communication-filter-inbox"
+                          aria-label="Valor do filtro de inbox"
+                          @update:model-value="value => setDraftNumber('inboxId', value)"
+                        />
+
+                        <USelectMenu
+                          v-else-if="rule.field === 'assignee'"
+                          :model-value="advancedDraft.assigneeId || undefined"
+                          :items="selectableItems(assigneeItems)"
+                          value-key="value"
+                          placeholder="Selecione o responsável"
+                          size="sm"
+                          class="w-full min-w-0 [@media(pointer:coarse)]:min-h-11"
+                          data-testid="communication-filter-assignee"
+                          aria-label="Valor do filtro de responsável"
+                          @update:model-value="value => setDraftNumber('assigneeId', value)"
+                        />
+
+                        <USelectMenu
+                          v-else-if="rule.field === 'department'"
+                          :model-value="advancedDraft.departmentId || undefined"
+                          :items="selectableItems(departmentItems)"
+                          value-key="value"
+                          placeholder="Selecione a fila"
+                          size="sm"
+                          class="w-full min-w-0 [@media(pointer:coarse)]:min-h-11"
+                          data-testid="communication-filter-department"
+                          aria-label="Valor do filtro de fila"
+                          @update:model-value="value => setDraftNumber('departmentId', value)"
+                        />
+
+                        <USelectMenu
+                          v-else-if="rule.field === 'labels'"
+                          :model-value="advancedDraft.labelIds"
+                          :items="labelItems"
+                          value-key="value"
+                          multiple
+                          placeholder="Selecione marcadores"
+                          size="sm"
+                          class="w-full min-w-0 [@media(pointer:coarse)]:min-h-11"
+                          data-testid="communication-filter-labels"
+                          aria-label="Valor do filtro de marcadores"
+                          @update:model-value="setDraftLabels"
+                        />
+
+                        <div
+                          v-else-if="rule.field === 'unread'"
+                          class="flex min-h-8 min-w-0 items-center rounded-md bg-default px-2.5 text-xs text-highlighted ring ring-inset ring-default"
+                          data-testid="communication-filter-unread"
+                        >
+                          Sim
+                        </div>
+
+                        <div
+                          v-else-if="rule.field === 'unassigned'"
+                          class="flex min-h-8 min-w-0 items-center rounded-md bg-default px-2.5 text-xs text-highlighted ring ring-inset ring-default"
+                          data-testid="communication-filter-unassigned"
+                        >
+                          Sim
+                        </div>
+
+                        <div
+                          v-else
+                          class="flex min-h-8 min-w-0 items-center truncate rounded-md bg-default px-2.5 text-xs text-highlighted ring ring-inset ring-default"
+                          data-testid="communication-filter-contact-draft"
+                          :title="contactFilterLabel || undefined"
+                        >
+                          {{ contactFilterLabel }}
+                        </div>
+
+                        <UButton
+                          icon="i-lucide-trash-2"
+                          color="neutral"
+                          variant="ghost"
+                          size="sm"
+                          square
+                          class="absolute end-2 top-2 [@media(pointer:coarse)]:size-11"
+                          :aria-label="`Remover regra ${index + 1}`"
+                          :data-testid="`communication-filter-rule-remove-${rule.id}`"
+                          @click="removeAdvancedRule(rule)"
+                        />
                       </div>
+                    </template>
+                  </div>
 
-                      <USelectMenu
-                        v-if="rule.field === 'inbox'"
-                        :model-value="advancedDraft.inboxId || undefined"
-                        :items="selectableItems(inboxItems)"
-                        value-key="value"
-                        placeholder="Selecione a inbox"
-                        size="sm"
-                        class="w-full min-w-0 [@media(pointer:coarse)]:min-h-11"
-                        data-testid="communication-filter-inbox"
-                        aria-label="Valor do filtro de inbox"
-                        @update:model-value="value => setDraftNumber('inboxId', value)"
-                      />
+                  <p
+                    v-else
+                    class="rounded-md bg-elevated/50 px-3 py-4 text-center text-xs text-muted"
+                    data-testid="communication-filter-advanced-empty"
+                  >
+                    Nenhum filtro avançado adicionado.
+                  </p>
 
-                      <USelectMenu
-                        v-else-if="rule.field === 'assignee'"
-                        :model-value="advancedDraft.assigneeId || undefined"
-                        :items="selectableItems(assigneeItems)"
-                        value-key="value"
-                        placeholder="Selecione o responsável"
-                        size="sm"
-                        class="w-full min-w-0 [@media(pointer:coarse)]:min-h-11"
-                        data-testid="communication-filter-assignee"
-                        aria-label="Valor do filtro de responsável"
-                        @update:model-value="value => setDraftNumber('assigneeId', value)"
-                      />
-
-                      <USelectMenu
-                        v-else-if="rule.field === 'department'"
-                        :model-value="advancedDraft.departmentId || undefined"
-                        :items="selectableItems(departmentItems)"
-                        value-key="value"
-                        placeholder="Selecione a fila"
-                        size="sm"
-                        class="w-full min-w-0 [@media(pointer:coarse)]:min-h-11"
-                        data-testid="communication-filter-department"
-                        aria-label="Valor do filtro de fila"
-                        @update:model-value="value => setDraftNumber('departmentId', value)"
-                      />
-
-                      <USelectMenu
-                        v-else-if="rule.field === 'labels'"
-                        :model-value="advancedDraft.labelIds"
-                        :items="labelItems"
-                        value-key="value"
-                        multiple
-                        placeholder="Selecione marcadores"
-                        size="sm"
-                        class="w-full min-w-0 [@media(pointer:coarse)]:min-h-11"
-                        data-testid="communication-filter-labels"
-                        aria-label="Valor do filtro de marcadores"
-                        @update:model-value="setDraftLabels"
-                      />
-
-                      <div
-                        v-else-if="rule.field === 'unread'"
-                        class="flex min-h-8 min-w-0 items-center rounded-md bg-default px-2.5 text-xs text-highlighted ring ring-inset ring-default"
-                        data-testid="communication-filter-unread"
-                      >
-                        Sim
-                      </div>
-
-                      <div
-                        v-else-if="rule.field === 'unassigned'"
-                        class="flex min-h-8 min-w-0 items-center rounded-md bg-default px-2.5 text-xs text-highlighted ring ring-inset ring-default"
-                        data-testid="communication-filter-unassigned"
-                      >
-                        Sim
-                      </div>
-
-                      <div
-                        v-else
-                        class="flex min-h-8 min-w-0 items-center truncate rounded-md bg-default px-2.5 text-xs text-highlighted ring ring-inset ring-default"
-                        data-testid="communication-filter-contact-draft"
-                        :title="contactFilterLabel || undefined"
-                      >
-                        {{ contactFilterLabel }}
-                      </div>
-
-                      <UButton
-                        icon="i-lucide-trash-2"
-                        color="neutral"
-                        variant="ghost"
-                        size="sm"
-                        square
-                        class="absolute end-2 top-2 [@media(pointer:coarse)]:size-11"
-                        :aria-label="`Remover regra ${index + 1}`"
-                        :data-testid="`communication-filter-rule-remove-${rule.id}`"
-                        @click="removeAdvancedRule(rule)"
-                      />
-                    </div>
-                  </template>
+                  <UButton
+                    v-if="canAddAdvancedRule"
+                    label="Adicionar filtro"
+                    icon="i-lucide-plus"
+                    color="primary"
+                    variant="link"
+                    size="sm"
+                    class="-ms-2 mt-2 self-start"
+                    data-testid="communication-filter-rule-add"
+                    @click="addAdvancedRule"
+                  />
                 </div>
 
-                <p
-                  v-else
-                  class="rounded-md bg-elevated/50 px-3 py-4 text-center text-xs text-muted"
-                  data-testid="communication-filter-advanced-empty"
-                >
-                  Nenhum filtro avançado adicionado.
-                </p>
+                <footer class="flex flex-wrap items-center justify-end gap-1.5 border-t border-default p-2.5">
+                  <p
+                    v-if="advancedDraftHasIncompleteRule"
+                    class="basis-full text-xs text-warning"
+                    role="status"
+                    data-testid="communication-filter-advanced-incomplete"
+                  >
+                    Selecione um valor para cada filtro antes de aplicar.
+                  </p>
+                  <UButton
+                    label="Cancelar"
+                    color="neutral"
+                    variant="ghost"
+                    size="sm"
+                    data-testid="communication-filter-advanced-cancel"
+                    @click="onAdvancedOpenChange(false)"
+                  />
+                  <UButton
+                    v-if="advancedDraftCanClear"
+                    label="Limpar"
+                    icon="i-lucide-filter-x"
+                    color="neutral"
+                    variant="ghost"
+                    size="sm"
+                    data-testid="communication-filter-advanced-clear"
+                    @click="clearAdvancedDraft"
+                  />
+                  <UButton
+                    label="Aplicar"
+                    size="sm"
+                    :disabled="!advancedDraftDirty || advancedDraftHasIncompleteRule"
+                    data-testid="communication-filter-advanced-apply"
+                    @click="applyAdvancedFilters"
+                  />
+                </footer>
+              </section>
+            </template>
+          </UPopover>
+        </div>
 
-                <UButton
-                  v-if="canAddAdvancedRule"
-                  label="Adicionar filtro"
-                  icon="i-lucide-plus"
-                  color="primary"
-                  variant="link"
-                  size="sm"
-                  class="-ms-2 mt-2 self-start"
-                  data-testid="communication-filter-rule-add"
-                  @click="addAdvancedRule"
-                />
-              </div>
-
-              <footer class="flex flex-wrap items-center justify-between gap-2 border-t border-default p-3">
-                <p
-                  v-if="advancedDraftHasIncompleteRule"
-                  class="basis-full text-xs text-warning"
-                  role="status"
-                  data-testid="communication-filter-advanced-incomplete"
-                >
-                  Selecione um valor para cada filtro antes de aplicar.
-                </p>
-                <UButton
-                  label="Limpar filtros"
-                  icon="i-lucide-filter-x"
-                  color="neutral"
-                  variant="ghost"
-                  size="sm"
-                  :disabled="!advancedDraftCanClear"
-                  data-testid="communication-filter-advanced-clear"
-                  @click="clearAdvancedDraft"
-                />
-                <UButton
-                  label="Aplicar filtros"
-                  size="sm"
-                  :disabled="!advancedDraftDirty || advancedDraftHasIncompleteRule"
-                  data-testid="communication-filter-advanced-apply"
-                  @click="applyAdvancedFilters"
-                />
-              </footer>
-            </section>
-          </template>
-        </UPopover>
+        <div
+          v-if="hasAdvancedFilters"
+          class="flex min-w-0 max-w-full items-center gap-1 overflow-hidden"
+          data-testid="communication-filter-active-summary"
+          role="group"
+          aria-label="Filtros ativos"
+        >
+          <UButton
+            v-for="summary in visibleFilterSummaries"
+            :key="summary.key"
+            class="min-w-0 flex-1 justify-start overflow-hidden"
+            color="neutral"
+            variant="soft"
+            size="xs"
+            :label="summary.label"
+            :title="summary.label"
+            :aria-label="`Editar filtro: ${summary.label}`"
+            :ui="{ label: 'truncate text-left' }"
+            data-testid="communication-filter-active-chip"
+            @click="openAdvancedFilters"
+          />
+          <UButton
+            v-if="hiddenFilterSummaryCount > 0"
+            class="shrink-0"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            :label="`+${hiddenFilterSummaryCount}`"
+            :aria-label="`Mais ${hiddenFilterSummaryCount} filtros ativos`"
+            data-testid="communication-filter-active-more"
+            @click="openAdvancedFilters"
+          />
+        </div>
       </div>
-    </div>
-
-    <div
-      v-if="hasAdvancedFilters"
-      class="flex min-w-0 max-w-full items-center gap-1 overflow-hidden"
-      data-testid="communication-filter-active-summary"
-      role="group"
-      aria-label="Filtros ativos"
-    >
-      <UButton
-        v-for="summary in visibleFilterSummaries"
-        :key="summary.key"
-        class="min-w-0 flex-1 justify-start overflow-hidden"
-        color="neutral"
-        variant="soft"
-        size="xs"
-        :label="summary.label"
-        :title="summary.label"
-        :aria-label="`Editar filtro: ${summary.label}`"
-        :ui="{ label: 'truncate text-left' }"
-        data-testid="communication-filter-active-chip"
-        @click="openAdvancedFilters"
-      />
-      <UButton
-        v-if="hiddenFilterSummaryCount > 0"
-        class="shrink-0"
-        color="neutral"
-        variant="ghost"
-        size="xs"
-        :label="`+${hiddenFilterSummaryCount}`"
-        :aria-label="`Mais ${hiddenFilterSummaryCount} filtros ativos`"
-        data-testid="communication-filter-active-more"
-        @click="openAdvancedFilters"
-      />
-    </div>
+    </Transition>
   </div>
 </template>

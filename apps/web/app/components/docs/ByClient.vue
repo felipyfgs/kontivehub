@@ -23,35 +23,79 @@ import {
   LIST_FILTER_TOOLBAR_STACK
 } from '~/utils/list-filter-layout'
 
-const search = defineModel<string>('search', { default: '' })
-const operationalFilter = defineModel<string>('operationalFilter', { default: 'total' })
+const { me, sessionEpoch } = useDashboard()
+const byClientNavigationResetKey = computed(() =>
+  `${me.value?.id ?? 'guest'}:${me.value?.current_tenant?.id ?? 'none'}:${sessionEpoch.value}`
+)
 
-const route = useRoute()
-const router = useRouter()
+type ByClientNavigationState = {
+  q: string
+  operational_filter: 'total' | 'capture_problem'
+  page: number
+  per_page: 10 | 20 | 50
+  sort: string
+  sort_direction: 'asc' | 'desc'
+}
 
-function hydrateByClientSortingFromQuery() {
-  const raw = String(route.query.sort || 'legal_name')
+const byClientNavigationDefaults = (): ByClientNavigationState => ({
+  q: '',
+  operational_filter: 'total',
+  page: 1,
+  per_page: 20,
+  sort: 'legal_name',
+  sort_direction: 'asc'
+})
+
+function normalizeByClientNavigation(value: ByClientNavigationState): ByClientNavigationState {
+  const perPage = [10, 20, 50].includes(Number(value.per_page))
+    ? Number(value.per_page) as 10 | 20 | 50
+    : 20
+  const page = Number(value.page)
+  return {
+    q: typeof value.q === 'string' ? value.q : '',
+    operational_filter: value.operational_filter === 'capture_problem' ? 'capture_problem' : 'total',
+    page: Number.isSafeInteger(page) && page > 0 ? page : 1,
+    per_page: perPage,
+    sort: value.sort === 'cnpj' ? 'cnpj' : 'legal_name',
+    sort_direction: value.sort_direction === 'desc' ? 'desc' : 'asc'
+  }
+}
+
+function normalizeByClientSorting(value: Partial<ByClientNavigationState>) {
+  const raw = String(value.sort || 'legal_name')
   const id = raw === 'cnpj' ? 'cnpj' : 'legal_name'
-  const desc = String(route.query.sort_direction ?? 'asc') === 'desc'
+  const desc = String(value.sort_direction ?? 'asc') === 'desc'
   return [{ id, desc }] as { id: string, desc: boolean }[]
 }
 
-const sorting = ref<{ id: string, desc: boolean }[]>(hydrateByClientSortingFromQuery())
+const byClientNavigation = useSurfaceNavigationState<ByClientNavigationState>(
+  SURFACE_NAVIGATION.documents.byClient,
+  byClientNavigationDefaults,
+  {
+    resetKey: byClientNavigationResetKey,
+    normalize: normalizeByClientNavigation
+  }
+)
+const byClientIntent = consumeSurfaceNavigationIntent<Partial<ByClientNavigationState>>(
+  SURFACE_NAVIGATION.documents.byClient
+)
+if (byClientIntent) byClientNavigation.patch(byClientIntent)
+const search = ref(byClientNavigation.state.value.q)
+const operationalFilter = ref(byClientNavigation.state.value.operational_filter)
+const sorting = ref<{ id: string, desc: boolean }[]>(
+  normalizeByClientSorting(byClientNavigation.state.value)
+)
 
-async function syncByClientSortUrl() {
+function syncByClientNavigationState(page: number, pageSize: number) {
   const sort = sorting.value[0]
-  const sortId = sort?.id === 'cnpj' ? 'cnpj' : 'legal_name'
-  const nextQuery: Record<string, string | string[] | null | undefined> = {
-    ...route.query,
-    sort: sortId,
+  byClientNavigation.replace({
+    q: search.value,
+    operational_filter: operationalFilter.value === 'capture_problem' ? 'capture_problem' : 'total',
+    page,
+    per_page: pageSize as 10 | 20 | 50,
+    sort: sort?.id === 'cnpj' ? 'cnpj' : 'legal_name',
     sort_direction: sort?.desc ? 'desc' : 'asc'
-  }
-  // Defaults omitidos (legal_name + asc)
-  if (sortId === 'legal_name' && !sort?.desc) {
-    delete nextQuery.sort
-    delete nextQuery.sort_direction
-  }
-  await router.replace({ path: route.path, query: nextQuery })
+  })
 }
 
 const emit = defineEmits<{
@@ -80,9 +124,9 @@ const operationalItems = [
 
 const clientsFeed = usePagedTable<Client>({
   getKey: client => client.id,
-  pageSize: 20,
+  pageSize: byClientNavigation.state.value.per_page,
   load: async ({ page, pageSize }) => {
-    await syncByClientSortUrl()
+    syncByClientNavigationState(page, pageSize)
     const sort = sorting.value[0]
     const response = await api.clients.list({
       page,
@@ -98,6 +142,7 @@ const clientsFeed = usePagedTable<Client>({
     return laravelPageBatch(response)
   }
 })
+clientsFeed.page.value = byClientNavigation.state.value.page
 
 const clientsFeedTotal = clientsFeed.total
 const clientsFeedPage = clientsFeed.page
@@ -240,26 +285,60 @@ function rowActions(client: Client): DropdownMenuItem[][] {
 }
 
 function onSearchEnter() {
-  void reload()
+  void applyFilters()
 }
 
 function onOperationalChange() {
-  void reload()
+  void applyFilters()
 }
 
 function clearSearch() {
   search.value = ''
   operationalFilter.value = 'total'
-  void reload()
+  void applyFilters()
 }
 
-async function reload() {
+async function applyFilters() {
   await clientsFeed.resetAndLoad()
 }
 
-watch(sorting, () => void reload(), { deep: true })
+async function refresh() {
+  await clientsFeed.retry()
+}
 
-defineExpose({ reload })
+async function setClientPage(page: number) {
+  await clientsFeed.setPage(page)
+}
+
+async function setClientPageSize(pageSize: number) {
+  await clientsFeed.setPageSize(pageSize)
+}
+
+let restoringForSession = false
+watch(sorting, () => {
+  if (!restoringForSession) void applyFilters()
+}, { deep: true })
+
+watch(sessionEpoch, () => {
+  restoringForSession = true
+  byClientNavigation.reset()
+  const defaults = byClientNavigation.state.value
+  search.value = defaults.q
+  operationalFilter.value = defaults.operational_filter
+  sorting.value = normalizeByClientSorting(defaults)
+  clientsFeed.reset()
+  clientsFeed.pageSize.value = defaults.per_page
+  void nextTick(() => {
+    restoringForSession = false
+    void clientsFeed.load(defaults.page)
+  })
+})
+
+onMounted(() => {
+  void clientsFeed.load(byClientNavigation.state.value.page)
+})
+
+defineExpose({ reload: refresh })
 </script>
 
 <template>
@@ -327,7 +406,7 @@ defineExpose({ reload })
             square
             aria-label="Atualizar lista"
             :loading="clientsFeed.pending.value"
-            @click="reload"
+            @click="refresh"
           />
         </div>
       </div>
@@ -362,8 +441,8 @@ defineExpose({ reload })
       empty-title="Nenhum cliente encontrado"
       empty-description="Ajuste a busca ou o filtro de captura."
       per-page-aria-label="Clientes por página"
-      @update:page="(p) => clientsFeed.setPage(p)"
-      @update:items-per-page="(n) => clientsFeed.setPageSize(n)"
+      @update:page="setClientPage"
+      @update:items-per-page="setClientPageSize"
       @retry="clientsFeed.retry"
     >
       <template #legal_name-cell="{ row }">

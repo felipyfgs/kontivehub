@@ -15,6 +15,7 @@ import {
 } from '~/utils/communication-contacts'
 import {
   COMMUNICATION_CONTACTS_PATH,
+  communicationConversationMessagePath,
   communicationConversationPath
 } from '~/utils/communication-routes'
 import { canReplyCommunication, canViewCommunication } from '~/utils/permissions'
@@ -28,7 +29,6 @@ definePageMeta({
 })
 
 const { me, sessionEpoch } = useDashboard()
-const route = useRoute()
 const breakpoints = useBreakpoints(breakpointsTailwind)
 const isCompact = breakpoints.smaller('lg')
 const contextOpen = ref(false)
@@ -39,7 +39,7 @@ const toast = useToast()
 const conversationInboxes = ref<CommunicationInbox[]>([])
 let conversationRequestSequence = 0
 const canReply = computed(() => canReplyCommunication(me.value))
-const backTo = computed(() => ({ path: COMMUNICATION_CONTACTS_PATH, query: route.query }))
+const backTo = computed(() => COMMUNICATION_CONTACTS_PATH)
 
 function openContext() {
   contextOpen.value = true
@@ -85,7 +85,7 @@ watch(sessionEpoch, () => {
 })
 
 async function jumpToMessage(input: { conversationId: number, messageId: number }) {
-  await navigateTo({ path: communicationConversationPath(input.conversationId), query: { message_id: input.messageId } })
+  await navigateTo(communicationConversationMessagePath(input.conversationId, input.messageId))
 }
 
 const {

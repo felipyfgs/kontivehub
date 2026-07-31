@@ -6,7 +6,7 @@
  */
 import { CalendarDate, type DateValue } from '@internationalized/date'
 import { breakpointsTailwind } from '@vueuse/core'
-import type { WorkTaskSummary } from '~/types/work'
+import type { TaskStatus, WorkRisk, WorkTaskSummary } from '~/types/work'
 import { apiErrorMessage } from '~/utils/api-error'
 import {
   formatDueDate,
@@ -15,7 +15,7 @@ import {
   workRiskLabel
 } from '~/utils/work-labels'
 import ShellScrollableTabs from '~/components/shell/ScrollableTabs.vue'
-import { useWorkCalendarRange } from '~/composables/useWorkCalendarRange'
+import { isValidWorkCalendarDate, useWorkCalendarRange } from '~/composables/useWorkCalendarRange'
 import {
   workCalendarLoadPlan,
   workCalendarSnapshotForKey,
@@ -34,9 +34,22 @@ interface DayAgg {
 }
 
 const api = useApi()
-const route = useRoute()
 const toast = useToast()
-const { sessionEpoch } = useDashboard()
+const route = useRoute()
+const { me, sessionEpoch } = useDashboard()
+
+const requestedCalendarView = String(route.params.view || '')
+const requestedCalendarDate = String(route.params.date || '')
+if (
+  (requestedCalendarView || requestedCalendarDate)
+  && (
+    !['month', 'week', 'day'].includes(requestedCalendarView)
+    || !isValidWorkCalendarDate(requestedCalendarDate)
+  )
+) {
+  await navigateTo('/work/calendar', { replace: true })
+}
+const surfaceResetKey = computed(() => `${me.value?.id ?? 'guest'}:${me.value?.current_tenant?.id ?? 'none'}:${sessionEpoch.value}`)
 const {
   view, date, range, label, setView, setDate, navigate, monthGrid, weekDates, parseYmd
 } = useWorkCalendarRange()
@@ -68,6 +81,62 @@ const selectedView = computed({
   set: (v: string | number) => { void setView(String(v) as 'month' | 'week' | 'day') }
 })
 
+type WorkCalendarFilters = {
+  department_id: number | null
+  assignee_membership_id: number | null
+  client_id: number | null
+  status: TaskStatus | ''
+  risk: WorkRisk | ''
+}
+
+const WORK_CALENDAR_STATUSES = new Set<TaskStatus>([
+  'A_FAZER',
+  'EM_PROGRESSO',
+  'IMPEDIDA',
+  'CONCLUIDA',
+  'DISPENSADA'
+])
+const WORK_CALENDAR_RISKS = new Set<WorkRisk>([
+  'ATRASADA',
+  'EM_MULTA',
+  'SEM_PRAZO',
+  'SEM_RESPONSAVEL'
+])
+
+function positiveCalendarFilterId(value: unknown): number | null {
+  const id = Number(value)
+  return Number.isSafeInteger(id) && id > 0 ? id : null
+}
+
+const calendarFilterDefaults = (): WorkCalendarFilters => ({
+  department_id: null as number | null,
+  assignee_membership_id: null as number | null,
+  client_id: null as number | null,
+  status: '',
+  risk: ''
+})
+
+function normalizeCalendarFilters(value: WorkCalendarFilters): WorkCalendarFilters {
+  return {
+    department_id: positiveCalendarFilterId(value.department_id),
+    assignee_membership_id: positiveCalendarFilterId(value.assignee_membership_id),
+    client_id: positiveCalendarFilterId(value.client_id),
+    status: WORK_CALENDAR_STATUSES.has(value.status as TaskStatus) ? value.status as TaskStatus : '',
+    risk: WORK_CALENDAR_RISKS.has(value.risk as WorkRisk) ? value.risk as WorkRisk : ''
+  }
+}
+
+const {
+  state: calendarFilters,
+  patch: patchCalendarFilters,
+  reset: resetCalendarFilters
+} = useSurfaceNavigationState('work-calendar', calendarFilterDefaults, {
+  normalize: normalizeCalendarFilters,
+  resetKey: surfaceResetKey
+})
+const calendarIntent = consumeSurfaceNavigationIntent<Partial<WorkCalendarFilters>>('work-calendar')
+if (calendarIntent) patchCalendarFilters(calendarIntent)
+
 const dayMap = computed(() => {
   const m = new Map<string, DayAgg>()
   for (const d of days.value) m.set(d.date, d)
@@ -86,13 +155,13 @@ const calendarModel = computed({
 })
 
 const filterParams = computed(() => {
-  const q = route.query
+  const filters = calendarFilters.value
   const out: Record<string, string | number> = {}
-  if (q.department_id) out.department_id = Number(q.department_id)
-  if (q.assignee_membership_id) out.assignee_membership_id = Number(q.assignee_membership_id)
-  if (q.client_id) out.client_id = Number(q.client_id)
-  if (q.status) out.status = String(q.status)
-  if (q.risk) out.risk = String(q.risk)
+  if (filters.department_id) out.department_id = filters.department_id
+  if (filters.assignee_membership_id) out.assignee_membership_id = filters.assignee_membership_id
+  if (filters.client_id) out.client_id = filters.client_id
+  if (filters.status) out.status = filters.status
+  if (filters.risk) out.risk = filters.risk
   return out
 })
 
@@ -253,6 +322,7 @@ watch(calendarLoadKeys, (next, previous) => {
 }, { immediate: true, flush: 'sync' })
 
 watch(sessionEpoch, () => {
+  resetCalendarFilters()
   days.value = []
   dayItems.value = []
   lastGoodInterval.value = null
@@ -628,4 +698,5 @@ watch(sessionEpoch, () => {
       </div>
     </template>
   </USlideover>
+  <NuxtPage />
 </template>

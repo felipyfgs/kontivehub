@@ -48,13 +48,15 @@ describe('shell-datatable-sort-contract', () => {
     expect(source).toMatch(/sort\?\.id === 'is_active' \|\| sort\?\.id === 'tax_regime'/)
   })
 
-  it('ByClient: sync URL de sort + empty no slot', () => {
+  it('ByClient: mantém sort no estado da superfície + empty no slot', () => {
     const source = read('app/components/docs/ByClient.vue')
-    expect(source).toContain('syncByClientSortUrl')
-    expect(source).toContain('hydrateByClientSortingFromQuery')
+    expect(source).toContain('syncByClientNavigationState')
+    expect(source).toContain('normalizeByClientSorting')
+    expect(source).toContain('SURFACE_NAVIGATION.documents.byClient')
     expect(source).toContain('sort_direction')
     expect(source).toContain(':manual-sorting="true"')
     expect(source).toContain('#empty')
+    expect(source).not.toContain('route.query')
     expect(source).not.toMatch(/ShellDataTable[\s\S]*v-if="loading \|\| rows\.length"/)
   })
 

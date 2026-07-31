@@ -24,7 +24,7 @@ import {
 
 const props = withDefaults(defineProps<{
   items: NavLayerItem[]
-  /** Localização atual, incluindo query quando ela diferencia seções. */
+  /** Path canônico atual. */
   path?: string
   ariaLabel?: string
   testId?: string
@@ -42,7 +42,7 @@ const emit = defineEmits<{
 
 const route = useRoute()
 const router = useRouter()
-const currentLocation = computed(() => props.path ?? route.fullPath ?? route.path)
+const currentLocation = computed(() => props.path ?? route.path)
 const selection = computed(() => resolveNavSelection(props.items, currentLocation.value))
 
 const tabLinks = computed(() => toDesktopTabItems(selection.value, currentLocation.value))
@@ -75,17 +75,7 @@ const selectedOption = computed(() =>
 )
 
 function sameRouteDestination(to: string): boolean {
-  if (normalizeNavPath(to) !== normalizeNavPath(currentLocation.value)) return false
-
-  const [, targetQuery = ''] = to.split('?')
-  if (!targetQuery) return !currentLocation.value.includes('?')
-
-  const [, currentQuery = ''] = currentLocation.value.split('?')
-  const target = new URLSearchParams(targetQuery)
-  const current = new URLSearchParams(currentQuery)
-  if (target.size !== current.size) return false
-
-  return [...target.entries()].every(([key, value]) => current.get(key) === value)
+  return normalizeNavPath(to) === normalizeNavPath(currentLocation.value)
 }
 
 async function navigateToOption(option: SectionNavSelectOption | undefined) {

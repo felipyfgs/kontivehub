@@ -202,10 +202,10 @@ describe('navegação contextual Tabs → Subtabs', () => {
     expect(snNav.map(item => item.id)).not.toContain('cf-ccmei')
   })
 
-  it('preserva seções identificadas por query no detalhe de processo', () => {
+  it('preserva seções identificadas por path no detalhe de processo', () => {
     const process = resolveNavSelection(
       workProcessContextNav(42),
-      '/work/processes/42?section=comentarios'
+      '/work/processes/42/comments'
     )
     expect(process.group).toBeNull()
     expect(process.leaf?.id).toBe('process-comentarios')

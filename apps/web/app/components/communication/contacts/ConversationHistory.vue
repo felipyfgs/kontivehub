@@ -5,7 +5,7 @@ import {
   communicationDisplayName,
   formatCommunicationDate
 } from '~/utils/communication'
-import { communicationConversationPath } from '~/utils/communication-routes'
+import { communicationContactConversationsPath, communicationConversationPath } from '~/utils/communication-routes'
 
 const props = defineProps<{
   contactId: number
@@ -76,7 +76,7 @@ watch(() => props.contactId, () => {
         size="sm"
         label="Ver todas"
         icon="i-lucide-arrow-up-right"
-        :to="{ path: '/communication', query: { contact_id: String(contactId) } }"
+        :to="communicationContactConversationsPath(contactId)"
       />
     </div>
     <div

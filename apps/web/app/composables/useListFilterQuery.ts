@@ -1,9 +1,10 @@
 /**
- * Sync canônico de filtros de lista com a query string.
- * Keys: q, filtros estruturados, page, per_page, sort, sort_direction.
- * Valores multi usam CSV. Defaults omitidos da URL.
+ * Normalização de filtros de lista. As funções de parse/serialize permanecem
+ * disponíveis exclusivamente para o adaptador legado; a lista em si mantém o
+ * recorte na sessão da SPA, nunca na query da rota.
  */
 import type { LocationQuery, LocationQueryRaw } from 'vue-router'
+import type { SurfaceNavigationId } from '~/composables/useSurfaceNavigationState'
 
 export type ListFilterQueryScalar = string | number | boolean | null | undefined
 
@@ -16,6 +17,13 @@ export interface ListFilterQuerySchema {
   numberKeys?: readonly string[]
   /** Keys booleanas. */
   booleanKeys?: readonly string[]
+}
+
+export interface ListFilterStateOptions {
+  /** Identificador estável da superfície, isolado pelo estado de sessão. */
+  surface: SurfaceNavigationId
+  /** Epoch de autenticação/tenant para reinicializar o recorte. */
+  resetKey?: Ref<unknown> | (() => unknown)
 }
 
 function firstQueryValue(raw: unknown): string | undefined {
@@ -100,25 +108,29 @@ export const CLIENTS_LIST_QUERY_SCHEMA: ListFilterQuerySchema = {
   numberKeys: ['page', 'per_page']
 }
 
-/**
- * Mantém estado de lista espelhado na URL (replace).
- * Hosts aplicam parse no mount e chamam `pushState` após mudanças.
- */
-export function useListFilterQuery(schema: ListFilterQuerySchema) {
-  const route = useRoute()
-  const router = useRouter()
+/** Mantém filtros de lista no estado efêmero da superfície. */
+export function useListFilterQuery(
+  schema: ListFilterQuerySchema,
+  options: ListFilterStateOptions
+) {
+  const { state, replace } = useSurfaceNavigationState<ListFilterQueryState>(
+    options.surface,
+    () => ({ ...schema.defaults }),
+    { resetKey: options.resetKey, normalize: value => parseListFilterQuery(value, schema) }
+  )
+  const intent = consumeSurfaceNavigationIntent<Partial<ListFilterQueryState>>(options.surface)
+  if (intent) replace({ ...state.value, ...intent })
 
   function read(): ListFilterQueryState {
-    const base = parseListFilterQuery(route.query, schema)
+    const base = parseListFilterQuery(state.value, schema)
     if ('sort_direction' in schema.defaults) {
-      base.sort_direction = resolveSortDirection(route.query, String(schema.defaults.sort_direction) === 'desc' ? 'desc' : 'asc')
+      base.sort_direction = resolveSortDirection(state.value, String(schema.defaults.sort_direction) === 'desc' ? 'desc' : 'asc')
     }
     return base
   }
 
-  async function write(state: ListFilterQueryState) {
-    const query = serializeListFilterQuery(state, schema)
-    await router.replace({ path: route.path, query })
+  function write(value: ListFilterQueryState) {
+    replace(value)
   }
 
   return {

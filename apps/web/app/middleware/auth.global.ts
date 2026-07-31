@@ -16,6 +16,7 @@ import {
   guestAuthPathWhenOnboardingAvailable,
   onboardingNavigateTarget
 } from '~/utils/initial-onboarding-gate'
+import { saveAuthReturn } from '~/utils/auth-return'
 
 export default defineNuxtRouteMiddleware(async (to) => {
   const { isAuthenticated, refreshIdentity, user } = useSanctumAuth()
@@ -42,10 +43,8 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
   if (!isAuthenticated.value) {
     if (guestOnly) return undefined
-    return navigateTo({
-      path: '/login',
-      query: { redirect: to.fullPath }
-    })
+    saveAuthReturn(to.fullPath)
+    return navigateTo('/login')
   }
 
   const identity = unwrapMeUser(user.value as MeIdentity)

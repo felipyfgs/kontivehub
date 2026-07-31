@@ -5,6 +5,10 @@ import type {
   CommunicationContactSortField,
   CommunicationIdentity
 } from '~/types/communication'
+import {
+  communicationContactConversationsPath,
+  communicationContactPath
+} from '~/utils/communication-routes'
 
 /** Whitelist alinhada ao contrato HTTP de sort do catálogo. */
 export const COMMUNICATION_CONTACT_SORT_FIELDS = ['name', 'id', 'created_at'] as const satisfies readonly CommunicationContactSortField[]
@@ -119,8 +123,8 @@ export function communicationContactActions(
   handlers: CommunicationContactActionHandlers = {}
 ): DropdownMenuItem[][] {
   const navigation: DropdownMenuItem[] = [
-    { label: COMMUNICATION_CONTACT_ACTION_LABELS.openDetail, icon: 'i-lucide-arrow-up-right', to: `/communication/contacts/${contact.id}` },
-    { label: COMMUNICATION_CONTACT_ACTION_LABELS.goToConversations, icon: 'i-lucide-messages-square', to: { path: '/communication', query: { contact_id: String(contact.id) } } }
+    { label: COMMUNICATION_CONTACT_ACTION_LABELS.openDetail, icon: 'i-lucide-arrow-up-right', to: communicationContactPath(contact.id) },
+    { label: COMMUNICATION_CONTACT_ACTION_LABELS.goToConversations, icon: 'i-lucide-messages-square', to: communicationContactConversationsPath(contact.id) }
   ]
   if (!canManage || contact.purged_at) return [navigation]
   const management: DropdownMenuItem[] = []

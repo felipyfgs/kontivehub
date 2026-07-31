@@ -47,6 +47,10 @@ async function expectSquareControl(locator: Locator) {
   }).toBeLessThanOrEqual(1)
 }
 
+function conversationAvatar(row: Locator) {
+  return row.getByTestId(/^communication-conversation-avatar-(?!select-).+$/)
+}
+
 async function dismissOpenMenu(page: Page) {
   await page.keyboard.press('Escape')
   if (await page.locator('[role="menu"]:visible').count()) {
@@ -59,7 +63,7 @@ async function dismissOpenMenu(page: Page) {
 async function expectDropdownAlignment(
   page: Page,
   trigger: Locator,
-  itemName: string,
+  itemName: string | RegExp,
   expectedAlign: 'end' | 'start'
 ) {
   await trigger.click()
@@ -80,7 +84,7 @@ async function expectDropdownAlignment(
 }
 
 async function expectSelectionControlCentered(row: Locator) {
-  const avatar = row.locator('[data-testid^="communication-conversation-avatar-"]')
+  const avatar = conversationAvatar(row)
   const checkbox = row.locator('[data-testid^="communication-conversation-check-"]')
   const avatarBox = await avatar.boundingBox()
   const checkboxBox = await checkbox.boundingBox()
@@ -112,11 +116,11 @@ test('desktop: lista, timeline e contexto consomem a foto real', async ({ page }
   await expect(readyRow).toBeVisible()
   await expect(unavailableRow).toBeVisible()
 
-  const readyAvatar = readyRow.locator('[data-testid^="communication-conversation-avatar-"]')
+  const readyAvatar = conversationAvatar(readyRow)
   await expect(readyAvatar).toHaveAttribute('src', /\/api\/v1\/communication\/profile-pictures\/\d+\/\d+$/)
   await expect.poll(() => readyAvatar.evaluate((image: HTMLImageElement) => image.naturalWidth))
     .toBeGreaterThan(0)
-  await expect(unavailableRow.locator('[data-testid^="communication-conversation-avatar-"]')).toContainText('CS')
+  await expect(conversationAvatar(unavailableRow)).toContainText('CE')
 
   await readyRow.locator('[id^="communication-conversation-"]').click()
   await expectSelectionControlCentered(readyRow)
@@ -139,7 +143,7 @@ test('mobile: abre a timeline real e preserva o fallback', async ({ page }) => {
 
   const readyRow = page.locator('[data-testid^="communication-conversation-row-"]').filter({ hasText: readyConversation })
   const unavailableRow = page.locator('[data-testid^="communication-conversation-row-"]').filter({ hasText: unavailableConversation })
-  await expect(unavailableRow.locator('[data-testid^="communication-conversation-avatar-"]')).toContainText('CS')
+  await expect(conversationAvatar(unavailableRow)).toContainText('CE')
   await expectSelectionControlCentered(readyRow)
   await readyRow.locator('[id^="communication-conversation-"]').click()
   await expect(page.getByRole('button', { name: 'Voltar à lista' })).toBeVisible({ timeout: 45_000 })
@@ -148,7 +152,7 @@ test('mobile: abre a timeline real e preserva o fallback', async ({ page }) => {
   await expectNoHorizontalOverflow(page)
 })
 
-test('filtros usam ícones e popover de regras sem margem ou overflow', async ({ page }) => {
+test('filtros usam tabs fixas e dois popovers sem margem ou overflow', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await login(page)
   const listPanel = await openWorkspace(page)
@@ -168,16 +172,38 @@ test('filtros usam ícones e popover de regras sem margem ou overflow', async ({
     expect(Math.abs(filtersBox!.x - rowBox!.x)).toBeLessThanOrEqual(1)
     expect(Math.abs(filtersBox!.width - rowBox!.width)).toBeLessThanOrEqual(1)
 
-    const status = page.getByTestId('communication-filter-status')
-    const sort = page.getByTestId('communication-filter-sort')
-    const advanced = page.getByTestId('communication-filter-advanced-toggle')
-    await expectSquareControl(status)
-    await expectSquareControl(sort)
+    const tabs = page.getByRole('tablist')
+    await expect(tabs.locator('..')).toHaveAttribute(
+      'aria-label',
+      'Visões rápidas das conversas'
+    )
+    await expect(tabs.getByRole('tab')).toHaveCount(3)
+    await expect(tabs.getByRole('tab').nth(0)).toHaveAccessibleName('Em aberto')
+    await expect(tabs.getByRole('tab').nth(1)).toHaveAccessibleName('Não lidas')
+    await expect(tabs.getByRole('tab').nth(2)).toHaveAccessibleName('Não atribuídas')
+
+    const statusOptions = page.getByTestId('communication-filter-status-options')
+    const advanced = page.getByTestId('communication-filter-advanced-trigger')
+    await expectSquareControl(statusOptions)
     await expectSquareControl(advanced)
+
+    await statusOptions.click()
+    const statusPanel = page.getByTestId('communication-filter-status-panel')
+    await expect(statusPanel).toBeVisible()
+    await expect(statusPanel.locator('..')).toHaveAttribute('data-align', 'end')
+    await expect(page.getByTestId('communication-filter-status')).toBeVisible()
+    await expect(page.getByTestId('communication-filter-sort')).toBeVisible()
+    const statusPopoverBox = await statusPanel.boundingBox()
+    expect(statusPopoverBox).not.toBeNull()
+    expect(statusPopoverBox!.x).toBeGreaterThanOrEqual(0)
+    expect(statusPopoverBox!.x + statusPopoverBox!.width).toBeLessThanOrEqual(width)
+    await statusOptions.click()
+    await expect(statusPanel).toHaveCount(0)
 
     await advanced.click()
     const advancedPanel = page.getByTestId('communication-filter-advanced-panel')
     await expect(advancedPanel).toBeVisible()
+    await expect(advancedPanel.locator('..')).toHaveAttribute('data-align', 'start')
     await expect(advancedPanel).toContainText('Todas as regras são combinadas com “E”.')
     const popoverBox = await advancedPanel.boundingBox()
     expect(popoverBox).not.toBeNull()
@@ -188,19 +214,6 @@ test('filtros usam ícones e popover de regras sem margem ou overflow', async ({
     await advanced.click()
     await expect(advancedPanel).toHaveCount(0)
   }
-
-  await expectDropdownAlignment(
-    page,
-    page.getByTestId('communication-filter-status'),
-    'Pendentes',
-    'start'
-  )
-  await expectDropdownAlignment(
-    page,
-    page.getByTestId('communication-filter-sort'),
-    'Não lidas primeiro',
-    'end'
-  )
 })
 
 test('seleção contextual cobre teclado, todas carregadas, conteúdo e foco', async ({ page }) => {
@@ -240,7 +253,9 @@ test('seleção contextual cobre teclado, todas carregadas, conteúdo e foco', a
       element.scrollTop = element.scrollHeight
       element.dispatchEvent(new Event('scroll'))
     })
-    await expect.poll(() => list.evaluate(element => element.scrollTop)).toBeGreaterThan(0)
+    await expect.poll(() => list.evaluate(
+      element => element.scrollTop + element.clientHeight >= element.scrollHeight - 1
+    )).toBe(true)
 
     const lastVisibleRow = rows.last()
     const lastVisibleCheckbox = lastVisibleRow.locator('[data-testid^="communication-conversation-check-"]')
@@ -266,17 +281,16 @@ test('seleção contextual cobre teclado, todas carregadas, conteúdo e foco', a
       await expectDropdownAlignment(
         page,
         page.getByTestId('communication-bulk-menu-read'),
-        'Marcar como lidas',
+        /Marcar como (?:não )?lidas/,
         'start'
       )
     }
   }
 
   const bulkMenus = [
-    ['read', 'Marcar como lidas', 'start'],
+    ['read', /Marcar como (?:não )?lidas/, 'start'],
     ['status', 'Resolver', 'start'],
-    ['assignee', 'Sem responsável', 'end'],
-    ['organization', 'Mover para fila', 'end']
+    ['more', 'Responsável', 'end']
   ] as const
   for (const [key, itemName, align] of bulkMenus) {
     const trigger = page.getByTestId(`communication-bulk-menu-${key}`)
@@ -321,11 +335,11 @@ test.describe('painel mestre com toque', () => {
 
     await listPanel.evaluate((element) => {
       const panel = element as HTMLElement
-      panel.style.setProperty('flex', '0 0 205px', 'important')
-      panel.style.setProperty('width', '205px', 'important')
-      panel.style.setProperty('max-width', '205px', 'important')
+      panel.style.setProperty('flex', '0 0 320px', 'important')
+      panel.style.setProperty('width', '320px', 'important')
+      panel.style.setProperty('max-width', '320px', 'important')
     })
-    await expect.poll(async () => (await listPanel.boundingBox())?.width ?? 0).toBeLessThanOrEqual(206)
+    await expect.poll(async () => (await listPanel.boundingBox())?.width ?? 0).toBeLessThanOrEqual(321)
 
     const firstRow = page.locator('[data-testid^="communication-conversation-row-"]').first()
     await firstRow.locator('[data-testid^="communication-conversation-check-"]').click()

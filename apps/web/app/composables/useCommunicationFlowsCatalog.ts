@@ -15,12 +15,10 @@ import {
   filterCommunicationFlows,
   paginateCommunicationFlows
 } from '~/utils/communication-flows'
-import {
-  COMMUNICATION_FLOWS_PATH,
-  communicationFlowPath
-} from '~/utils/communication-routes'
+import { communicationFlowPath } from '~/utils/communication-routes'
 import { createFilterModel, findDefinition } from '~/utils/data-table-filters'
 import { canManageCommunicationFlows } from '~/utils/permissions'
+import { COMMUNICATION_SURFACES, consumeSurfaceNavigationIntent, useSurfaceNavigationState } from './useSurfaceNavigationState'
 
 interface FlowsCatalogApi {
   list: () => Promise<{
@@ -39,7 +37,6 @@ interface FlowsCatalogDependencies {
   canManage: ComputedRef<boolean> | Ref<boolean>
   initialQuery: Record<string, unknown>
   navigate: (path: string) => void | Promise<void>
-  replaceRoute: (query: Record<string, string | undefined>) => void | Promise<void>
   sessionEpoch: Ref<number>
   toast: (title: string, color: 'success' | 'error' | 'warning') => void
 }
@@ -59,7 +56,6 @@ export function createCommunicationFlowsCatalog(dependencies: FlowsCatalogDepend
     canManage,
     initialQuery,
     navigate,
-    replaceRoute,
     sessionEpoch,
     toast
   } = dependencies
@@ -162,15 +158,6 @@ export function createCommunicationFlowsCatalog(dependencies: FlowsCatalogDepend
         loading.value = false
       }
     }
-  }
-
-  function syncUrl() {
-    void replaceRoute({
-      page: page.value > 1 ? String(page.value) : undefined,
-      q: q.value || undefined,
-      status: statusFilter.value !== 'all' ? statusFilter.value : undefined,
-      per_page: perPage.value !== 20 ? String(perPage.value) : undefined
-    })
   }
 
   function onSearch(value: string) {
@@ -290,8 +277,6 @@ export function createCommunicationFlowsCatalog(dependencies: FlowsCatalogDepend
     }
   }
 
-  watch([page, q, statusFilter, perPage], syncUrl)
-
   watch(sessionEpoch, () => {
     loadGeneration += 1
     allItems.value = []
@@ -300,6 +285,7 @@ export function createCommunicationFlowsCatalog(dependencies: FlowsCatalogDepend
     hasLoaded.value = false
     loadError.value = null
     page.value = 1
+    perPage.value = 20
     q.value = ''
     statusFilter.value = 'all'
     void load()
@@ -351,25 +337,26 @@ export type CommunicationFlowsCatalog = ReturnType<
 
 export function useCommunicationFlowsCatalog() {
   const api = useApi()
-  const router = useRouter()
-  const route = useRoute()
   const toast = useToast()
   const { me, sessionEpoch } = useDashboard()
   const canManage = computed(() => canManageCommunicationFlows(me.value))
+  const surface = useSurfaceNavigationState(COMMUNICATION_SURFACES.flows, {
+    page: 1, per_page: 20, q: '', status: 'all'
+  }, { resetKey: () => `${me.value?.id ?? 'guest'}:${me.value?.current_tenant?.id ?? 'none'}:${sessionEpoch.value}` })
+  const legacyIntent = consumeSurfaceNavigationIntent<Record<string, unknown>>(COMMUNICATION_SURFACES.flows)
+  if (legacyIntent) surface.patch(legacyIntent)
 
   const catalog = createCommunicationFlowsCatalog({
     api: api.communication.flows,
     canManage,
-    initialQuery: route.query,
+    initialQuery: surface.state.value,
     navigate: async (path) => { await navigateTo(path) },
-    replaceRoute: async (query) => {
-      await router.replace({
-        path: COMMUNICATION_FLOWS_PATH,
-        query
-      })
-    },
     sessionEpoch,
     toast: (title, color) => toast.add({ title, color })
+  })
+
+  watch([catalog.page, catalog.perPage, catalog.q, catalog.statusFilter], () => {
+    surface.patch({ page: catalog.page.value, per_page: catalog.perPage.value, q: catalog.q.value, status: catalog.statusFilter.value })
   })
 
   onMounted(() => void catalog.load())

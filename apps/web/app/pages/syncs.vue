@@ -2,6 +2,7 @@
 import type { TableColumn, TableRow } from '@nuxt/ui'
 import type { CteChannelCursor, CteHealth, SyncRun } from '~/types/api'
 import ShellDataTable from '~/components/shell/DataTable.vue'
+import { documentCatalogTypePath } from '~/utils/document-routes'
 
 const api = useApi()
 const { sessionEpoch } = useDashboard()
@@ -375,7 +376,7 @@ onMounted(refreshAll)
             </p>
             <div class="mt-3">
               <UButton
-                to="/docs/catalog?kind=CTE"
+                :to="documentCatalogTypePath('CTE')"
                 color="neutral"
                 variant="outline"
                 size="sm"

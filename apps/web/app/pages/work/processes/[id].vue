@@ -4,8 +4,9 @@
  */
 import SectionNavigation from '~/components/navigation/SectionNavigation.vue'
 import type { WorkProcess } from '~/types/work'
-import { apiErrorMessage } from '~/utils/api-error'
-import { workProcessContextNav } from '~/utils/work-navigation'
+import { apiErrorMessage, apiErrorStatus } from '~/utils/api-error'
+import { workProcessContextNav, workProcessSectionPath } from '~/utils/work-navigation'
+import { parsePositiveRouteId } from '~/utils/route-params'
 import {
   formatCompetence,
   formatDueDate,
@@ -22,49 +23,58 @@ const route = useRoute()
 const toast = useToast()
 const { sessionEpoch } = useDashboard()
 
+const requestedProcessId = parsePositiveRouteId(route.params.id)
+if (!requestedProcessId) {
+  await navigateTo('/work/processes', { replace: true })
+}
+const requestedSection = String(route.params.section || '')
+if (
+  requestedProcessId
+  && requestedSection
+  && !['tasks', 'comments', 'history'].includes(requestedSection)
+) {
+  await navigateTo(workProcessSectionPath(requestedProcessId), { replace: true })
+}
+
 const process = ref<WorkProcess | null>(null)
 const timeline = ref<Array<Record<string, unknown>>>([])
 const loading = ref(true)
 const loadError = ref<string | null>(null)
-const notFound = ref(false)
 
-const id = computed(() => Number(route.params.id))
-const section = computed(() => {
-  const s = String(route.query.section || 'resumo')
-  return ['resumo', 'tarefas', 'comentarios', 'historico'].includes(s) ? s : 'resumo'
+const id = computed(() => parsePositiveRouteId(route.params.id) ?? 0)
+const section = computed<'resumo' | 'tarefas' | 'comentarios' | 'historico'>(() => {
+  const s = String(route.params.section || 'resumo')
+  const sections = {
+    tasks: 'tarefas',
+    comments: 'comentarios',
+    history: 'historico'
+  } as const
+  return sections[s as keyof typeof sections] || 'resumo'
 })
 
 const links = computed(() => workProcessContextNav(id.value))
 
-/** Preserva query de origem quando o detalhe foi aberto a partir da lista. */
-const backToProcesses = computed(() => {
-  const from = route.query.from
-  if (typeof from === 'string' && from.startsWith('/work/processes')) {
-    return from
-  }
-  const referrerQuery = { ...route.query }
-  delete referrerQuery.section
-  const keys = Object.keys(referrerQuery)
-  if (keys.length && keys.every(k => ['q', 'competence', 'status', 'client_id', 'department_id', 'group', 'page', 'sort', 'direction'].includes(k))) {
-    return { path: '/work/processes', query: referrerQuery }
-  }
-  return '/work/processes'
-})
+const backToProcesses = '/work/processes'
 
 const timelineError = ref<string | null>(null)
 
 async function load() {
   const epoch = sessionEpoch.value
+  const processId = id.value
+  if (!processId) {
+    process.value = null
+    loading.value = false
+    return
+  }
   loading.value = true
   loadError.value = null
   timelineError.value = null
-  notFound.value = false
   try {
-    const res = await api.work.processes.get(id.value)
+    const res = await api.work.processes.get(processId)
     if (epoch !== sessionEpoch.value) return
     process.value = res.data
     try {
-      const tl = await api.work.processes.timeline(id.value)
+      const tl = await api.work.processes.timeline(processId)
       if (epoch === sessionEpoch.value) {
         timeline.value = tl.data || []
       }
@@ -76,11 +86,10 @@ async function load() {
     }
   } catch (e: unknown) {
     if (epoch !== sessionEpoch.value) return
-    const status = (e as { statusCode?: number, status?: number })?.statusCode
-      ?? (e as { status?: number })?.status
+    const status = apiErrorStatus(e)
     if (status === 404) {
-      notFound.value = true
-      loadError.value = 'Processo não encontrado neste escritório.'
+      await navigateTo('/work/processes', { replace: true })
+      return
     } else if (status === 403) {
       loadError.value = 'Sem permissão para ver este processo.'
     } else {
@@ -131,7 +140,7 @@ function formatTimelineAt(value: unknown): string {
     <template v-if="process" #toolbar>
       <SectionNavigation
         :items="links"
-        :path="route.fullPath"
+        :path="route.path"
         aria-label="Navegação do processo"
         test-id="work-process-section-navigation"
       />
@@ -153,7 +162,7 @@ function formatTimelineAt(value: unknown): string {
     <UAlert
       v-else-if="loadError"
       data-testid="work-process-error"
-      :color="notFound ? 'neutral' : 'error'"
+      color="error"
       :title="loadError"
     >
       <template #actions>
@@ -366,4 +375,5 @@ function formatTimelineAt(value: unknown): string {
       </section>
     </template>
   </ShellSettingsShell>
+  <NuxtPage />
 </template>

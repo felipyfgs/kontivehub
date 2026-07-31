@@ -172,8 +172,8 @@ export function monitoringModuleBasePath(moduleKey: RoutedMonitoringModuleKey): 
 export function monitoringSubmoduleLocation(
   moduleKey: RoutedMonitoringModuleKey,
   _raw?: unknown
-): { path: string, query: Record<string, never> } {
-  return { path: monitoringModuleBasePath(moduleKey), query: {} }
+): { path: string } {
+  return { path: monitoringModuleBasePath(moduleKey) }
 }
 
 /** Path do módulo (ignora raw — tabs não navegáveis por URL). */
@@ -192,7 +192,7 @@ export function monitoringCanonicalQuery(
 }
 
 export function monitoringNavActiveModule(path: string): MonitoringModuleKey {
-  const p = path.split('?')[0] || path
+  const p = path
   if (p === '/monitoring' || p === '/monitoring/') return 'dashboard'
   // detalhe de cliente fiscal não é item de nav — cai no dashboard
   if (p.startsWith('/monitoring/clients')) return 'dashboard'

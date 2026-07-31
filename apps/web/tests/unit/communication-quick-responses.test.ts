@@ -232,15 +232,11 @@ function createCatalog(options: {
   const scope = effectScope()
   const api = options.api ?? createApiMock()
   const sessionEpoch = ref(0)
-  const routeQueries: Array<Record<string, string | undefined>> = []
   const toasts: Array<{ title: string, color: string }> = []
   const catalog = scope.run(() => createCommunicationQuickResponsesCatalog({
     api,
     canManage: computed(() => options.manage ?? true),
     initialQuery: options.query ?? {},
-    replaceRoute: (query) => {
-      routeQueries.push(query)
-    },
     sessionEpoch,
     toast: (title, color) => {
       toasts.push({ title, color })
@@ -248,7 +244,7 @@ function createCatalog(options: {
   }))
 
   if (!catalog) throw new Error('Falha ao criar catálogo de teste.')
-  return { api, catalog, routeQueries, scope, sessionEpoch, toasts }
+  return { api, catalog, scope, sessionEpoch, toasts }
 }
 
 describe('communication quick-responses — catálogo extraído', () => {
@@ -288,27 +284,19 @@ describe('communication quick-responses — catálogo extraído', () => {
   })
 
   it('sincroniza busca, filtro e paginação 10/20/50 com a rota', async () => {
-    const { catalog, routeQueries, scope } = createCatalog()
+    const { catalog, scope } = createCatalog()
 
     catalog.page.value = 3
     catalog.setPerPage(50)
     await nextTick()
     expect(catalog.page.value).toBe(1)
     expect(catalog.perPage.value).toBe(50)
-    expect(routeQueries.at(-1)).toMatchObject({ per_page: '50' })
 
     catalog.onSearch('saudação')
     await nextTick()
-    expect(routeQueries.at(-1)).toMatchObject({ q: 'saudação', per_page: '50' })
 
     catalog.clearFilters()
     await nextTick()
-    expect(routeQueries.at(-1)).toEqual({
-      page: undefined,
-      q: undefined,
-      is_active: undefined,
-      per_page: '50'
-    })
     scope.stop()
   })
 

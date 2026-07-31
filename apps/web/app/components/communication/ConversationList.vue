@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import type { DropdownMenuItem } from '@nuxt/ui'
+import CommunicationConversationActions from './ConversationActions.vue'
 import type {
-  CommunicationBulkAction,
   CommunicationConversation,
-  CommunicationConversationStatus,
-  CommunicationInbox
+  CommunicationConversationActionPayload,
+  CommunicationInbox,
+  CommunicationLabel
 } from '~/types/communication'
+import type { WorkDepartment } from '~/types/work'
 import {
   COMMUNICATION_CONVERSATION_STATUS,
   communicationConversationImageEvidence,
@@ -13,16 +14,16 @@ import {
   communicationListPhoneLine,
   communicationPreviewText,
   communicationProfilePictureSrc,
-  communicationSnoozeTomorrowMorning,
-  communicationSnoozeUntil,
   formatCommunicationDate
 } from '~/utils/communication'
 
 const apiBase = String(useRuntimeConfig().public.apiBase || '')
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   conversations: CommunicationConversation[]
   inboxes: CommunicationInbox[]
+  departments?: WorkDepartment[]
+  labels?: CommunicationLabel[]
   selectedId?: number | null
   openingId?: number | null
   selectedIds?: ReadonlySet<number> | Set<number>
@@ -34,7 +35,11 @@ const props = defineProps<{
   total?: number
   canView?: boolean
   canReply?: boolean
-}>()
+  actionDisabled?: boolean
+}>(), {
+  departments: () => [],
+  labels: () => []
+})
 
 /** Altura base de 92 px em 16 px, ampliada junto com a preferência de fonte. */
 const ROW_HEIGHT_REM = 5.75
@@ -47,14 +52,7 @@ const emit = defineEmits<{
   'prefetch': [conversationId: number]
   'loadMore': []
   'toggle-select': [conversationId: number, selected: boolean]
-  'row-action': [payload: {
-    conversation: CommunicationConversation
-    action: CommunicationBulkAction | 'OPEN'
-    params?: {
-      status?: CommunicationConversationStatus
-      snoozed_until?: string | null
-    }
-  }]
+  'action': [payload: CommunicationConversationActionPayload]
 }>()
 
 const listRoot = ref<HTMLElement | null>(null)
@@ -165,6 +163,10 @@ function inboxName(id: number): string {
   return props.inboxes.find(inbox => inbox.id === id)?.name || `Inbox #${id}`
 }
 
+function inboxFor(id: number): CommunicationInbox | null {
+  return props.inboxes.find(inbox => inbox.id === id) ?? null
+}
+
 function previewLine(conversation: CommunicationConversation): string {
   const preview = communicationPreviewText(conversation)
   if (preview) return preview
@@ -191,81 +193,6 @@ function showStatusBadge(conversation: CommunicationConversation): boolean {
 
 function phoneLine(conversation: CommunicationConversation): string {
   return communicationListPhoneLine(conversation)
-}
-
-function rowMenuItems(conversation: CommunicationConversation): DropdownMenuItem[][] {
-  const openGroup: DropdownMenuItem[] = [{
-    label: 'Abrir conversa',
-    icon: 'i-lucide-panel-right-open',
-    onSelect: () => emit('row-action', { conversation, action: 'OPEN' })
-  }]
-  const readGroup: DropdownMenuItem[] = []
-  if (props.canView) {
-    if (isUnread(conversation)) {
-      readGroup.push({
-        label: 'Marcar como lida',
-        icon: 'i-lucide-mail-open',
-        onSelect: () => emit('row-action', { conversation, action: 'MARK_READ' })
-      })
-    } else {
-      readGroup.push({
-        label: 'Marcar como não lida',
-        icon: 'i-lucide-mail',
-        onSelect: () => emit('row-action', { conversation, action: 'MARK_UNREAD' })
-      })
-    }
-  }
-  const triageGroup: DropdownMenuItem[] = []
-  if (props.canReply) {
-    triageGroup.push(
-      {
-        label: 'Resolver',
-        icon: 'i-lucide-circle-check',
-        onSelect: () => emit('row-action', {
-          conversation,
-          action: 'SET_STATUS',
-          params: { status: 'RESOLVED' }
-        })
-      },
-      {
-        label: 'Pendente',
-        icon: 'i-lucide-clock-3',
-        onSelect: () => emit('row-action', {
-          conversation,
-          action: 'SET_STATUS',
-          params: { status: 'PENDING' }
-        })
-      },
-      {
-        label: 'Reabrir',
-        icon: 'i-lucide-rotate-ccw',
-        onSelect: () => emit('row-action', {
-          conversation,
-          action: 'SET_STATUS',
-          params: { status: 'OPEN' }
-        })
-      },
-      {
-        label: 'Adiar 1 hora',
-        icon: 'i-lucide-alarm-clock',
-        onSelect: () => emit('row-action', {
-          conversation,
-          action: 'SET_STATUS',
-          params: { status: 'SNOOZED', snoozed_until: communicationSnoozeUntil(1) }
-        })
-      },
-      {
-        label: 'Adiar até amanhã 9h',
-        icon: 'i-lucide-sunrise',
-        onSelect: () => emit('row-action', {
-          conversation,
-          action: 'SET_STATUS',
-          params: { status: 'SNOOZED', snoozed_until: communicationSnoozeTomorrowMorning() }
-        })
-      }
-    )
-  }
-  return [openGroup, readGroup, triageGroup].filter(group => group.length > 0)
 }
 
 function onCheckboxChange(conversationId: number, value: boolean | 'indeterminate'): void {
@@ -481,22 +408,17 @@ function onCheckboxChange(conversationId: number, value: boolean | 'indeterminat
               </div>
             </button>
 
-            <UDropdownMenu
-              :items="rowMenuItems(conversation)"
-              :content="{ align: 'end' }"
-            >
-              <UButton
-                icon="i-lucide-ellipsis-vertical"
-                color="neutral"
-                variant="ghost"
-                size="xs"
-                square
-                class="shrink-0"
-                :aria-label="`Ações de ${communicationDisplayName(conversation)}`"
-                :data-testid="`communication-conversation-menu-${conversation.id}`"
-                @click.stop
-              />
-            </UDropdownMenu>
+            <CommunicationConversationActions
+              :conversation="conversation"
+              :inbox="inboxFor(conversation.inbox_id)"
+              :departments="departments"
+              :labels="labels"
+              :can-view="Boolean(canView)"
+              :can-reply="Boolean(canReply)"
+              :disabled="actionDisabled"
+              :test-id="`communication-conversation-menu-${conversation.id}`"
+              @action="emit('action', $event)"
+            />
           </div>
         </div>
       </div>

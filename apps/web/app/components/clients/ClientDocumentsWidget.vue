@@ -4,6 +4,7 @@
  * Sem download de PDF inventado — navega para seções do cadastro / docs.
  */
 import { clientDetailHref } from '~/utils/client-detail-tabs'
+import { documentCatalogClientPath } from '~/utils/document-routes'
 
 const props = defineProps<{
   clientId: number
@@ -18,7 +19,7 @@ const tabItems = [
 ]
 
 const cadastroHref = computed(() => clientDetailHref(props.clientId, 'cadastro'))
-const docsHref = computed(() => `/docs?client_id=${props.clientId}`)
+const docsHref = computed(() => documentCatalogClientPath(props.clientId))
 </script>
 
 <template>

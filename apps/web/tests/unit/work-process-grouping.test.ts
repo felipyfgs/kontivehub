@@ -14,6 +14,7 @@ import {
   parseWorkProcessGroupingQuery,
   processesPathForEntityLevel,
   serializeWorkProcessGroupingQuery,
+  shouldApplyProcessGroupInPlace,
   tasksListaPathForEntityLevel,
   type WorkProcessGroupingFilters
 } from '../../app/composables/useWorkProcessGrouping'
@@ -128,32 +129,15 @@ describe('work-process-grouping toggle e navegação', () => {
     expect(entityLevelForTasksSurface()).toBe('task')
   })
 
-  it('Cliente/Processo → /work/processes com group adequado', () => {
-    const filters = { q: 'mei', client_id: 4, department_id: 2 }
-    expect(processesPathForEntityLevel('client', filters)).toEqual({
-      path: '/work/processes',
-      query: { q: 'mei', client_id: '4', department_id: '2', group: 'client' }
-    })
-    expect(processesPathForEntityLevel('process', filters)).toEqual({
-      path: '/work/processes',
-      query: { q: 'mei', client_id: '4', department_id: '2', group: undefined }
-    })
+  it('Cliente/Processo → /work/processes com intenção de sessão', () => {
+    expect(processesPathForEntityLevel()).toBe('/work/processes')
+    expect(shouldApplyProcessGroupInPlace('/work/processes')).toBe(true)
+    expect(shouldApplyProcessGroupInPlace('/work/processes/42')).toBe(false)
+    expect(shouldApplyProcessGroupInPlace('/work/processes-extra')).toBe(false)
   })
 
-  it('Tarefa → /work/tasks?view=lista preservando filtros compatíveis', () => {
-    expect(tasksListaPathForEntityLevel({
-      q: 'xml',
-      client_id: 7,
-      department_id: null
-    })).toEqual({
-      path: '/work/tasks',
-      query: {
-        view: 'lista',
-        q: 'xml',
-        client_id: '7',
-        department_id: undefined
-      }
-    })
+  it('Tarefa → /work/tasks com filtros em intenção de sessão', () => {
+    expect(tasksListaPathForEntityLevel()).toBe('/work/tasks')
   })
 
   it('componente WorkEntityLevelToggle e wiring nas superfícies', () => {

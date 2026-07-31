@@ -1,8 +1,8 @@
 # Grafo de testabilidade dos casos de uso
 
-Snapshot: `2d8a9ea98ca2fd94d3e21f67903711e703253cba4cc88daf73f6249c9d05fcc8`
+Snapshot: `ceb2679d16a54ad29118dfcee3ae5b937cb473a8b784e1068685dfa2a32033df`
 
-O levantamento classifica **584 rotas API**, **74 páginas Nuxt** e **15 clientes HTTP** em **11 jornadas**. 4 jornadas são críticas e exigem evidência L1–L3.
+O levantamento classifica **584 rotas API**, **82 páginas Nuxt** e **15 clientes HTTP** em **11 jornadas**. 4 jornadas são críticas e exigem evidência L1–L3.
 
 | Jornada | Crítica | Rotas | Páginas | Clientes HTTP | L0 | L1 | L2 | L3 | Lacunas |
 |---|:---:|---:|---:|---:|:---:|:---:|:---:|:---:|---|
@@ -11,10 +11,10 @@ O levantamento classifica **584 rotas API**, **74 páginas Nuxt** e **15 cliente
 | Governança global da plataforma (`platform-governance`) | não | 17 | 12 | 1 | ✓ | ✓ | ✓ | — | L3 |
 | Configuração e onboarding do escritório (`tenant-operations`) | não | 31 | 0 | 1 | ✓ | ✓ | ✓ | — | L3 |
 | Catálogo e ciclo de vida de clientes (`client-lifecycle`) | sim | 21 | 10 | 1 | ✓ | ✓ | ✓ | ✓ | nenhuma |
-| Documentos, notas e exportações (`documents-notes`) | não | 18 | 6 | 1 | ✓ | — | — | — | L1, L2, L3 |
-| Atendimento WhatsApp compartilhado (`communication-inbox`) | não | 114 | 8 | 1 | ✓ | ✓ | ✓ | — | L3 |
+| Documentos, notas e exportações (`documents-notes`) | não | 18 | 9 | 1 | ✓ | — | — | — | L1, L2, L3 |
+| Atendimento WhatsApp compartilhado (`communication-inbox`) | não | 114 | 11 | 1 | ✓ | ✓ | ✓ | — | L3 |
 | Monitoramento fiscal e consultas (`fiscal-monitoring`) | sim | 199 | 17 | 3 | ✓ | ✓ | ✓ | ✓ | nenhuma |
-| Fila e processos operacionais (`operational-work`) | sim | 64 | 8 | 3 | ✓ | ✓ | ✓ | ✓ | nenhuma |
+| Fila e processos operacionais (`operational-work`) | sim | 64 | 10 | 3 | ✓ | ✓ | ✓ | ✓ | nenhuma |
 | Captura, integrações e documentos de saída (`outbound-capture`) | não | 42 | 1 | 1 | ✓ | — | — | — | L1, L2, L3 |
 | Autorização e consumo SERPRO (`serpro-governance`) | não | 59 | 0 | 2 | ✓ | — | — | — | L1, L2, L3 |
 

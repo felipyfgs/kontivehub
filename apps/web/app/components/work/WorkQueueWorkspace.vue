@@ -5,7 +5,7 @@
  * URL canônica:
  * - `/work/tasks` — sem seleção
  * - `/work/tasks/{id}` — tarefa no path
- * - query: filtros + `view=lista|kanban` opcional — nunca `task` / `tenant_id`
+ * - estado de sessão: filtros + `view=fila|lista|kanban`; tarefa fica no path
  */
 import { breakpointsTailwind } from '@vueuse/core'
 import { h } from 'vue'
@@ -14,12 +14,10 @@ import UCheckbox from '@nuxt/ui/components/Checkbox.vue'
 import type { WorkTaskDetail, WorkTaskSummary, WorkDepartment, WorkEntityLevel } from '~/types/work'
 import type { DataTableFilterDefinition, DataTableFilterModel } from '~/types/data-table-filter'
 import type { SavedListFilterPayload } from '~/types/saved-list-filters'
-import { apiErrorMessage } from '~/utils/api-error'
+import { apiErrorMessage, apiErrorStatus } from '~/utils/api-error'
 import {
   coerceWorkQueueTabForView,
-  serializeWorkQueueQuery,
   useWorkQueueFilters,
-  workQueuePath,
   type WorkQueueView
 } from '~/composables/useWorkQueueFilters'
 import {
@@ -41,12 +39,10 @@ import type { WorkBulkItem } from '~/components/work/WorkBulkActionsModal.vue'
 import WorkTaskStatusSelect from '~/components/work/WorkTaskStatusSelect.vue'
 import WorkKanbanBoard from '~/components/work/WorkKanbanBoard.vue'
 import WorkQueueChrome from '~/components/work/WorkQueueChrome.vue'
-import { processesPathForEntityLevel } from '~/composables/useWorkProcessGrouping'
 import { COMPACT_BUTTON_LABEL_UI } from '~/utils/list-filter-layout'
 import { restoreWorkSelectionFocus } from '~/utils/work-focus'
 import { createWorkAssigneeFilterModel } from '~/utils/work-queue-filter-models'
 
-const router = useRouter()
 const api = useApi()
 const toast = useToast()
 const { me, sessionEpoch } = useDashboard()
@@ -250,7 +246,11 @@ async function onEntityLevel(level: WorkEntityLevel) {
     client_id: filters.value.client_id,
     department_id: filters.value.department_id
   }
-  await navigateTo(processesPathForEntityLevel(level, sharedFilters))
+  publishSurfaceNavigationIntent('work-process-grouping', {
+    ...sharedFilters,
+    group: level === 'client' ? 'client' : 'process'
+  })
+  await navigateTo('/work/processes')
 }
 
 const filaListaTabs = [
@@ -258,6 +258,7 @@ const filaListaTabs = [
   { label: 'Hoje', value: 'hoje' },
   { label: 'Atrasadas', value: 'atrasadas' },
   { label: 'Semana', value: 'semana' },
+  { label: 'Sem responsável', value: 'sem_responsavel' },
   { label: 'Impedidas', value: 'impedidas' },
   { label: 'Concluídas', value: 'concluidas' }
 ]
@@ -266,23 +267,17 @@ const kanbanTabs = [
   { label: 'Todas', value: 'todas' },
   { label: 'Hoje', value: 'hoje' },
   { label: 'Atrasadas', value: 'atrasadas' },
-  { label: 'Semana', value: 'semana' }
+  { label: 'Semana', value: 'semana' },
+  { label: 'Sem responsável', value: 'sem_responsavel' }
 ]
 
-/** Fila/Lista: 6 tabs; Kanban: só urgência/escopo transversal (todas|hoje|atrasadas|semana). */
+/** Fila/Lista: status e urgência; Kanban: recortes transversais ao board. */
 const tabs = computed(() => (isKanban.value ? kanbanTabs : filaListaTabs))
 
 const selectedTab = computed({
   get: () => filters.value.tab,
   set: (v: string) => {
-    void router.replace({
-      path: workQueuePath(),
-      query: serializeWorkQueueQuery({
-        ...filters.value,
-        tab: v,
-        page: 1
-      })
-    })
+    void patch({ tab: v, page: 1 }, { resetPage: false })
   }
 })
 
@@ -340,6 +335,10 @@ async function loadDetail(id: number) {
   } catch (e) {
     if (epoch !== sessionEpoch.value) return
     if (selectedTaskId.value !== id) return
+    if (apiErrorStatus(e) === 404) {
+      await clearSelection()
+      return
+    }
     detailError.value = apiErrorMessage(e, 'Falha ao carregar tarefa.')
     toast.add({ title: detailError.value, color: 'error' })
     detail.value = null
@@ -635,7 +634,10 @@ watch(sessionEpoch, () => {
   clearListSelection()
   void clearTask()
   void patch({
+    tab: 'open',
     page: 1,
+    per_page: 10,
+    view: 'fila',
     department_id: null,
     client_id: null,
     assignee_membership_id: null,
