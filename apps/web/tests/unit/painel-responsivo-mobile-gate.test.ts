@@ -22,7 +22,7 @@ const MOBILE_CARD_SURFACES = [
   'app/components/docs/Catalog.vue',
   'app/components/docs/ByClient.vue',
   'app/components/docs/Detail.vue',
-  'app/components/clients/ClientCatalogList.vue',
+  'app/components/clients/CatalogList.vue',
   'app/components/monitoring/ModuleDataTable.vue'
 ] as const
 
@@ -156,8 +156,8 @@ describe('painel-responsivo-mobile-gate', () => {
     expect(client).toContain('client-section-navigation')
     expect(client).not.toContain('client-hub-navigation')
     expect(client).toContain('<NuxtPage')
-    expect(client).toContain('ClientsClientIdentityHeader')
-    expect(client).toContain('ClientsClientDetailAside')
+    expect(client).toContain('ClientsIdentityHeader')
+    expect(client).toContain('ClientsDetailAside')
     expect(client).not.toContain('ClientDetailTabNav')
   })
 
@@ -203,30 +203,30 @@ describe('painel-responsivo-mobile-gate', () => {
   })
 
   it('organização Nuxt UI: abas master + accordion cadastro/adicionais/escritório', () => {
-    const registration = readFileSync(root('app/components/clients/ClientRegistration.vue'), 'utf8')
+    const registration = readFileSync(root('app/components/clients/Registration.vue'), 'utf8')
     expect(registration).toContain('ShellPanelAccordion')
     expect(registration).toContain('panel === \'all\'')
-    expect(registration).not.toContain('ClientsClientForm')
+    expect(registration).not.toContain('ClientsForm')
     expect(registration).not.toContain('startEditing')
 
     const detailShell = readFileSync(root('app/pages/clients/[id].vue'), 'utf8')
-    expect(detailShell).toContain('ClientsClientFormModal')
+    expect(detailShell).toContain('ClientsFormModal')
     expect(detailShell).toContain('openClientEdit')
     expect(detailShell).not.toContain('registrationEditRequested')
 
     const cadastro = readFileSync(root('app/pages/clients/[id]/cadastro.vue'), 'utf8')
     expect(cadastro).toContain('client-cadastro-refresh')
     expect(cadastro).toContain('startRefreshLookup')
-    expect(cadastro).toContain('ClientsClientRegistrationRefreshModal')
+    expect(cadastro).toContain('ClientsRegistrationRefreshModal')
     expect(cadastro).toContain('api.cnpj.lookup')
     expect(cadastro).not.toMatch(/refreshRegistration\(item\.value\.id\)\s*$/m)
 
-    const refreshModal = readFileSync(root('app/components/clients/ClientRegistrationRefreshModal.vue'), 'utf8')
+    const refreshModal = readFileSync(root('app/components/clients/RegistrationRefreshModal.vue'), 'utf8')
     expect(refreshModal).toContain('ShellFormModal')
     expect(refreshModal).toContain('client-refresh-diff')
     expect(refreshModal).toContain('review-mode')
 
-    const adicionais = readFileSync(root('app/components/clients/ClientAdditionalDataPanel.vue'), 'utf8')
+    const adicionais = readFileSync(root('app/components/clients/AdditionalDataPanel.vue'), 'utf8')
     expect(adicionais).toContain('ShellPanelAccordion')
     expect(adicionais).toContain('USwitch')
 

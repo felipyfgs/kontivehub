@@ -1121,7 +1121,7 @@ onMounted(() => {
     </template>
   </ShellFormModal>
 
-  <ClientsClientFormModal
+  <ClientsFormModal
     v-if="canManageClients"
     v-model:open="clientFormOpen"
     :client="formClient"
@@ -1130,7 +1130,7 @@ onMounted(() => {
     @saved="onClientFormSaved"
   />
 
-  <MonitoringPgdasdCommunicationModals
+  <MonitoringCommunicationModals
     v-model:preview-open="communicationPreviewOpen"
     v-model:tracking-open="communicationTrackingOpen"
     v-model:prefs-open="communicationPreferencesOpen"

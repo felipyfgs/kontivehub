@@ -360,7 +360,7 @@ function onKpiSelect(key: Parameters<typeof fiscalKpiSituationFilter>[0]) {
           @refresh="emit('refresh')"
         >
           <template #toolbar="{ displayColumnItems, showColumnVisibility: canDisplayColumns }">
-            <MonitoringModuleToolbar
+            <MonitoringListToolbar
               :filters="filters"
               :filter-config="filterConfig"
               :loading="loading || refreshing"
@@ -410,7 +410,7 @@ function onKpiSelect(key: Parameters<typeof fiscalKpiSituationFilter>[0]) {
                   />
                 </UDropdownMenu>
               </template>
-            </MonitoringModuleToolbar>
+            </MonitoringListToolbar>
           </template>
         </MonitoringModuleDataTable>
 

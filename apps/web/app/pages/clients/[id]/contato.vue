@@ -19,7 +19,7 @@ const {
     />
 
     <ShellSectionCard>
-      <ClientsClientContactsSection
+      <ClientsContactsSection
         :client="item"
         :can-manage-clients="canManageClients"
         @updated="load"

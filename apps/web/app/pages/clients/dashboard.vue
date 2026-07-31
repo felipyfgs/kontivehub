@@ -81,7 +81,7 @@ watch(sessionEpoch, () => {
 </script>
 
 <template>
-  <ClientsClientListDashboard
+  <ClientsListDashboard
     :clients="clients"
     :stats="stats"
     :loading="loading"

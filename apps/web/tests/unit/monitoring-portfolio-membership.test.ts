@@ -32,7 +32,7 @@ describe('monitoring-portfolio-membership', () => {
 
   it('modal e API de membership estão ligados', () => {
     const modal = readFileSync(
-      resolve(process.cwd(), 'app/components/monitoring/AssociateMonitoringClientsModal.vue'),
+      resolve(process.cwd(), 'app/components/monitoring/AssociateClientsModal.vue'),
       'utf8'
     )
     expect(modal).toContain('associate-monitoring-clients-modal')

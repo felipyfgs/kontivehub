@@ -96,7 +96,7 @@ function updatePreferences(
 const sendBusy = ref(false)
 const prefsBusy = ref(false)
 const draftEmail = ref(false)
-const draftWhatsapp = ref(false)
+const draftWhatsApp = ref(false)
 const draftAutomatic = ref(false)
 
 const displayedPreference = computed(() => preview.value?.preferences || props.preference || null)
@@ -104,7 +104,7 @@ const displayedPreference = computed(() => preview.value?.preferences || props.p
 watch(displayedPreference, (pref) => {
   if (!pref) return
   draftEmail.value = Boolean(pref.email_enabled)
-  draftWhatsapp.value = Boolean(pref.whatsapp_enabled)
+  draftWhatsApp.value = Boolean(pref.whatsapp_enabled)
   draftAutomatic.value = Boolean(pref.automatic_requested)
 }, { immediate: true })
 
@@ -137,7 +137,7 @@ async function savePreferences() {
   try {
     await updatePreferences(props.clientId, {
       email_enabled: draftEmail.value,
-      whatsapp_enabled: draftWhatsapp.value,
+      whatsapp_enabled: draftWhatsApp.value,
       automatic_requested: draftAutomatic.value,
       lock_version: Number(displayedPreference.value.lock_version || 0)
     })
@@ -444,7 +444,7 @@ function openPreferences() {
           </div>
           <div class="flex items-center justify-between gap-3 p-3">
             <span class="text-sm text-highlighted">WhatsApp</span>
-            <USwitch v-model="draftWhatsapp" size="sm" aria-label="Habilitar WhatsApp" />
+            <USwitch v-model="draftWhatsApp" size="sm" aria-label="Habilitar WhatsApp" />
           </div>
           <div class="flex items-center justify-between gap-3 p-3">
             <span class="text-sm text-highlighted">Envio automático no cutoff da política</span>

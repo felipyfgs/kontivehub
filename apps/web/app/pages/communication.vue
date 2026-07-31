@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { isCommunicationConversationWorkspacePath } from '~/utils/communication-routes'
+import { isCommunicationWorkspacePath } from '~/utils/communication-routes'
 
 /**
  * Outlet persistente da área de Communication.
@@ -8,7 +8,7 @@ import { isCommunicationConversationWorkspacePath } from '~/utils/communication-
  */
 const route = useRoute()
 const usesConversationWorkspace = computed(() =>
-  isCommunicationConversationWorkspacePath(route.path))
+  isCommunicationWorkspacePath(route.path))
 </script>
 
 <template>

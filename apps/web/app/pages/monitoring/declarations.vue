@@ -455,7 +455,7 @@ watch(submodule, (next, prev) => {
     @executed="refreshAll"
   />
 
-  <ClientsClientFormModal
+  <ClientsFormModal
     v-if="canManageClients"
     v-model:open="clientFormOpen"
     :client="formClient"

@@ -2,11 +2,11 @@
  * Estado do editor de fluxo — composable Nuxt (ref/computed), sem Pinia.
  */
 import type {
-  CommunicationFlowGraph,
-  CommunicationFlowGraphError,
-  CommunicationFlowNode,
-  CommunicationFlowNodeType
-} from '~/types/communication'
+  FlowGraph,
+  FlowGraphError,
+  FlowNode,
+  FlowNodeType
+} from '~/types/communication/flows'
 import {
   connectFlowNodes,
   insertFlowNode,
@@ -16,16 +16,16 @@ import {
   validateFlowGraphClient
 } from '~/utils/communication-flow-graph'
 
-export function useFlowEditorDraft(initial?: CommunicationFlowGraph | null) {
-  const graph = ref<CommunicationFlowGraph>(normalizeFlowGraph(initial ?? null))
+export function useFlowEditorDraft(initial?: FlowGraph | null) {
+  const graph = ref<FlowGraph>(normalizeFlowGraph(initial ?? null))
   const lockVersion = ref(1)
   const graphDigest = ref('')
   const selectedNodeId = ref<string | null>(null)
   const dirty = ref(false)
-  const clientErrors = ref<CommunicationFlowGraphError[]>([])
+  const clientErrors = ref<FlowGraphError[]>([])
   const versionConflict = ref(false)
 
-  const selectedNode = computed<CommunicationFlowNode | null>(() => {
+  const selectedNode = computed<FlowNode | null>(() => {
     if (!selectedNodeId.value) return null
     return graph.value.nodes.find(node => node.id === selectedNodeId.value) ?? null
   })
@@ -33,7 +33,7 @@ export function useFlowEditorDraft(initial?: CommunicationFlowGraph | null) {
   const clientValidation = computed(() => validateFlowGraphClient(graph.value))
 
   function hydrate(next: {
-    graph: CommunicationFlowGraph
+    graph: FlowGraph
     lock_version: number
     graph_digest?: string
   }) {
@@ -48,7 +48,7 @@ export function useFlowEditorDraft(initial?: CommunicationFlowGraph | null) {
     }
   }
 
-  function setGraph(next: CommunicationFlowGraph, markDirty = true) {
+  function setGraph(next: FlowGraph, markDirty = true) {
     graph.value = normalizeFlowGraph(next)
     if (markDirty) dirty.value = true
     clientErrors.value = validateFlowGraphClient(graph.value).errors
@@ -59,7 +59,7 @@ export function useFlowEditorDraft(initial?: CommunicationFlowGraph | null) {
   }
 
   function addNode(
-    type: CommunicationFlowNodeType,
+    type: FlowNodeType,
     options?: { connectFrom?: string | null, position?: { x: number, y: number } }
   ): string | null {
     const result = insertFlowNode(graph.value, type, {

@@ -12,7 +12,7 @@ describe('clients-table', () => {
       'utf8'
     )
     const pageSource = readFileSync(
-      resolve(process.cwd(), 'app/components/clients/ClientCatalogList.vue'),
+      resolve(process.cwd(), 'app/components/clients/CatalogList.vue'),
       'utf8'
     )
     const shellSource = readFileSync(
@@ -51,7 +51,7 @@ describe('clients-table', () => {
     expect(source).toMatch(/h\('div', \{ class: 'min-w-0 flex-1' \}/)
     // customers.vue @ 0f30c09: LIST_TABLE_* no #body
     expect(pageSource).toContain('ShellDataTable')
-    expect(shellSource).toContain('<ClientsClientCatalogList v-if="isList" />')
+    expect(shellSource).toContain('<ClientsCatalogList v-if="isList" />')
     expect(pageSource).toContain('v-model:row-selection="rowSelection"')
     expect(pageSource).toContain(':selection-enabled="canManageClients"')
     expect(pageSource).toContain('current.toggleAllPageRowsSelected(!!value)')

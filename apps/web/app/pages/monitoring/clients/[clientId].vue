@@ -1053,7 +1053,7 @@ onMounted(bootstrap)
                 />
               </div>
 
-              <ClientsClientPnrRenunciationsPanel
+              <ClientsPnrRenunciationsPanel
                 v-else-if="tab === 'renunciations'"
                 :client-id="clientId"
                 :can-consult="canTriggerSync"
@@ -1067,15 +1067,15 @@ onMounted(bootstrap)
               </section>
 
               <div v-else-if="tab === 'ccmei'" class="space-y-4">
-                <ClientsClientCcmeiPanel
+                <ClientsCcmeiPanel
                   :client-id="clientId"
                   :can-consult="canTriggerSync"
                 />
-                <ClientsClientCcmeiRegistrationStatusPanel
+                <ClientsCcmeiRegistrationStatusPanel
                   :client-id="clientId"
                   :can-consult="canTriggerSync"
                 />
-                <ClientsClientCcmeiCertificateIssuancePanel
+                <ClientsCcmeiCertificateIssuancePanel
                   :client-id="clientId"
                   :can-consult="canTriggerSync"
                 />

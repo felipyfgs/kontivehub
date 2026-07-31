@@ -57,7 +57,7 @@ const isDashboard = computed(() => {
     </template>
 
     <template #body>
-      <ClientsClientCatalogList v-if="isList" />
+      <ClientsCatalogList v-if="isList" />
       <NuxtPage v-else />
     </template>
   </ShellPagePanel>

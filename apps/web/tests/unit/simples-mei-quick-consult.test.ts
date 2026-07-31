@@ -26,7 +26,7 @@ describe('simples-mei consulta rápida', () => {
     const page = read('app/components/monitoring/simples-mei/Portfolio.vue')
     expect(page).toContain('testIdPrefix')
     expect(page).toContain('membershipOpen = true')
-    expect(page).toContain('MonitoringAssociateMonitoringClientsModal')
+    expect(page).toContain('MonitoringAssociateClientsModal')
     expect(page).toContain('requestExcludeFromMonitoring')
     expect(page).toContain('exclude-confirm')
     expect(page).toContain(':can-consult="canTriggerSync"')

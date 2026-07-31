@@ -2,7 +2,7 @@
 /**
  * Paleta de nós allowlisted do designer de fluxos.
  */
-import type { CommunicationFlowNodeType } from '~/types/communication'
+import type { FlowNodeType } from '~/types/communication/flows'
 import { FLOW_NODE_TYPES, FLOW_NODE_TYPE_META } from '~/utils/communication-flow-graph'
 
 const props = defineProps<{
@@ -10,7 +10,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  add: [type: CommunicationFlowNodeType]
+  add: [type: FlowNodeType]
 }>()
 
 const items = FLOW_NODE_TYPES.filter(type => type !== 'start').map(type => ({

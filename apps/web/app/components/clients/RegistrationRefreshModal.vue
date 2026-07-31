@@ -181,7 +181,7 @@ function onCancel() {
           description="Os campos essenciais coincidem com o cadastro atual. Você ainda pode revisar e aplicar o snapshot completo."
         />
 
-        <ClientsClientForm
+        <ClientsForm
           :key="formKey"
           ref="formRef"
           form-id="client-registration-refresh-form"

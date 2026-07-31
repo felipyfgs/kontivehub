@@ -1,18 +1,18 @@
 <script setup lang="ts">
-import type { PagtowebArrecadacaoReceipt, PagtowebArrecadacaoReceiptHistoryPayload } from '~/types/fiscal-modules'
-import { usePagtowebArrecadacaoReceipt } from '~/composables/usePagtowebArrecadacaoReceipt'
+import type { PagtoWebArrecadacaoReceipt, PagtoWebArrecadacaoReceiptHistoryPayload } from '~/types/fiscal-modules'
+import { usePagtoWebArrecadacaoReceipt } from '~/composables/usePagtoWebArrecadacaoReceipt'
 import { formatDateTime } from '~/utils/format'
 
 const props = defineProps<{ clientId: number, canConsult: boolean }>()
 const toast = useToast()
-const { fetchHistory, requestReceipt, downloadPath } = usePagtowebArrecadacaoReceipt()
+const { fetchHistory, requestReceipt, downloadPath } = usePagtoWebArrecadacaoReceipt()
 const { download: downloadAuthenticated, downloading: downloadBusy } = useAuthenticatedDownload()
 const loading = ref(true)
 const requesting = ref(false)
 const confirmOpen = ref(false)
 const numeroDocumento = ref('')
 const error = ref<string | null>(null)
-const history = ref<PagtowebArrecadacaoReceiptHistoryPayload | null>(null)
+const history = ref<PagtoWebArrecadacaoReceiptHistoryPayload | null>(null)
 let generation = 0
 
 const receipts = computed(() => history.value?.items || [])
@@ -67,7 +67,7 @@ async function confirmRequest() {
   }
 }
 
-async function download(receipt: PagtowebArrecadacaoReceipt) {
+async function download(receipt: PagtoWebArrecadacaoReceipt) {
   if (downloadBusy.value) return
   await downloadAuthenticated(
     downloadPath(props.clientId, receipt.id),

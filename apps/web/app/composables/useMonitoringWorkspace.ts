@@ -6,7 +6,7 @@ import type {
 } from '~/types/fiscal-modules'
 import {
   filterMonitoringCoverageSurfaces,
-  monitoringWorkspaceRequestIsCurrent
+  isMonitoringRequestCurrent
 } from '~/utils/monitoring-coverage'
 import type { MonitoringWorkspaceRequestToken } from '~/utils/monitoring-coverage'
 
@@ -79,7 +79,7 @@ const _useMonitoringWorkspaceProvider = () => {
   }
 
   function requestIsCurrent(token: MonitoringWorkspaceRequestToken): boolean {
-    return monitoringWorkspaceRequestIsCurrent(
+    return isMonitoringRequestCurrent(
       token,
       sessionEpoch.value,
       generation.value
@@ -213,7 +213,7 @@ export function useMonitoringWorkspace(options: UseMonitoringWorkspaceOptions = 
   }
 
   function contextRequestIsCurrent(token: MonitoringWorkspaceRequestToken): boolean {
-    return monitoringWorkspaceRequestIsCurrent(
+    return isMonitoringRequestCurrent(
       token,
       sessionEpoch.value,
       contextGeneration.value

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { MeUser } from '~/types/api'
-import type { CommunicationFlow } from '~/types/communication'
+import type { Flow } from '~/types/communication/flows'
 import {
   communicationFlowEmptyKind,
   communicationFlowStatusColor,
@@ -33,7 +33,7 @@ import {
 const root = (...parts: string[]) => resolve(process.cwd(), ...parts)
 const read = (...parts: string[]) => readFileSync(root(...parts), 'utf8')
 
-const sampleFlows: CommunicationFlow[] = [
+const sampleFlows: Flow[] = [
   {
     id: 1,
     name: 'Triagem inicial',
@@ -162,7 +162,7 @@ describe('communication flows — superfícies e contrato Shell', () => {
     const list = read('app/pages/communication/flows/index.vue')
     const detail = read('app/pages/communication/flows/[id]/index.vue')
     const api = read('app/composables/api/createCommunicationApi.ts')
-    const types = read('app/types/communication.ts')
+    const types = read('app/types/communication/flows.ts')
 
     expect(list).toContain('ShellPagePanel')
     expect(list).toContain('ShellDataTable')
@@ -197,9 +197,9 @@ describe('communication flows — superfícies e contrato Shell', () => {
     expect(api).toContain('listRuns')
     expect(api).toContain('lock_version')
 
-    expect(types).toContain('CommunicationFlow')
-    expect(types).toContain('CommunicationFlowDraft')
-    expect(types).toContain('CommunicationFlowBinding')
+    expect(types).toContain('Flow')
+    expect(types).toContain('FlowDraft')
+    expect(types).toContain('FlowBinding')
     expect(types).toContain('flows_enabled')
   })
 })

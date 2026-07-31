@@ -152,7 +152,7 @@ function onEdit() {
     class="space-y-4"
     data-testid="client-registration"
   >
-    <ClientsClientContactsSection
+    <ClientsContactsSection
       v-if="showContatos"
       :client="client"
       :can-manage-clients="canManageClients"

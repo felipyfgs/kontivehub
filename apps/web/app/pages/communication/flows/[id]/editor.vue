@@ -6,12 +6,12 @@
  * Sem Pinia.
  */
 import type {
-  CommunicationFlow,
-  CommunicationFlowDryRunResult,
-  CommunicationFlowGraphError,
-  CommunicationFlowNodeType,
-  CommunicationFlowPreviewResult
-} from '~/types/communication'
+  Flow,
+  FlowDryRunResult,
+  FlowGraphError,
+  FlowNodeType,
+  FlowPreviewResult
+} from '~/types/communication/flows'
 import FlowEditorCanvas from '~/components/communication/flows/FlowEditorCanvas.client.vue'
 import FlowEditorInspector from '~/components/communication/flows/FlowEditorInspector.vue'
 import FlowEditorListMode from '~/components/communication/flows/FlowEditorListMode.vue'
@@ -41,7 +41,7 @@ if (!canView.value) {
 }
 
 const flowId = computed(() => parseCommunicationFlowId(route.params.id))
-const flow = ref<CommunicationFlow | null>(null)
+const flow = ref<Flow | null>(null)
 const flowsEnabled = ref(true)
 const loading = ref(false)
 const loadError = ref<string | null>(null)
@@ -52,7 +52,7 @@ const validateBusy = ref(false)
 const publishBusy = ref(false)
 const dryRunBusy = ref(false)
 const previewBusy = ref(false)
-const serverErrors = ref<CommunicationFlowGraphError[]>([])
+const serverErrors = ref<FlowGraphError[]>([])
 const validateOk = ref(false)
 const validateMessage = ref<string | null>(null)
 
@@ -61,8 +61,8 @@ const connectOpen = ref(false)
 const connectTarget = ref<string | undefined>(undefined)
 const dryRunOpen = ref(false)
 const previewOpen = ref(false)
-const dryRunResult = ref<CommunicationFlowDryRunResult | null>(null)
-const previewResult = ref<CommunicationFlowPreviewResult | null>(null)
+const dryRunResult = ref<FlowDryRunResult | null>(null)
+const previewResult = ref<FlowPreviewResult | null>(null)
 const dryRunContext = reactive({
   contact_name: '',
   conversation_status: 'OPEN',
@@ -136,7 +136,7 @@ async function load() {
   }
 }
 
-function onAddNode(type: CommunicationFlowNodeType) {
+function onAddNode(type: FlowNodeType) {
   if (mutationBlocked.value) {
     toast.add({ title: mutationBlocked.value, color: 'warning' })
     return

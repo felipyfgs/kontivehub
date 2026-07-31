@@ -21,20 +21,20 @@ const emit = defineEmits<{
     class="flex min-w-0 flex-col gap-4"
     data-testid="client-detail-aside"
   >
-    <ClientsClientIntegrationProgress
+    <ClientsIntegrationProgress
       :client="client"
       :credential="credential"
     />
-    <ClientsClientCredentialWidget
+    <ClientsCredentialWidget
       :client="client"
       :credential="credential"
       :can-manage-credentials="canManageCredentials"
       @manage="emit('manageCredential')"
     />
-    <ClientsClientDocumentsWidget
+    <ClientsDocumentsWidget
       :client-id="client.id"
       :shareholders-count="shareholdersCount"
     />
-    <ClientsClientQuickFolders :client-id="client.id" />
+    <ClientsQuickFolders :client-id="client.id" />
   </aside>
 </template>

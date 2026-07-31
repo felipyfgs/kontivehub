@@ -94,7 +94,7 @@ describe('list-table-layout (customers.vue @ 0f30c09)', () => {
       'utf8'
     )
     const clientsSource = readFileSync(
-      resolve(process.cwd(), 'app/components/clients/ClientCatalogList.vue'),
+      resolve(process.cwd(), 'app/components/clients/CatalogList.vue'),
       'utf8'
     )
     const footerSource = readFileSync(shell('TableFooter'), 'utf8')

@@ -4,7 +4,7 @@
  */
 import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
 import { h } from 'vue'
-import { ClientsClientProcuracaoBadge } from '#components'
+import { ClientsProcuracaoBadge } from '#components'
 import UBadge from '@nuxt/ui/components/Badge.vue'
 import UIcon from '@nuxt/ui/components/Icon.vue'
 import type { Client } from '~/types/api'
@@ -241,7 +241,7 @@ export function buildClientsColumns(options: {
           td: 'w-32 min-w-28'
         }
       },
-      cell: ({ row }) => h(ClientsClientProcuracaoBadge, {
+      cell: ({ row }) => h(ClientsProcuracaoBadge, {
         status: row.original.procuracao_status,
         validTo: row.original.procuracao_valid_to,
         compact: true

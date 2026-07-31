@@ -1,23 +1,23 @@
 import type {
-  CommunicationFlow,
-  CommunicationFlowGraph,
-  CommunicationFlowStatus
-} from '~/types/communication'
+  Flow,
+  FlowGraph,
+  FlowStatus
+} from '~/types/communication/flows'
 
-export const EMPTY_FLOW_GRAPH: CommunicationFlowGraph = {
+export const EMPTY_FLOW_GRAPH: FlowGraph = {
   nodes: [],
   edges: []
 }
 
 export function communicationFlowStatusLabel(
-  status: CommunicationFlowStatus | Pick<CommunicationFlow, 'status'>
+  status: FlowStatus | Pick<Flow, 'status'>
 ): string {
   const value = typeof status === 'string' ? status : status.status
   return value === 'active' ? 'Ativo' : 'Pausado'
 }
 
 export function communicationFlowStatusColor(
-  status: CommunicationFlowStatus | Pick<CommunicationFlow, 'status'>
+  status: FlowStatus | Pick<Flow, 'status'>
 ): 'success' | 'neutral' {
   const value = typeof status === 'string' ? status : status.status
   return value === 'active' ? 'success' : 'neutral'
@@ -25,16 +25,16 @@ export function communicationFlowStatusColor(
 
 export function communicationFlowEmptyKind(input: {
   q: string
-  status: 'all' | CommunicationFlowStatus
+  status: 'all' | FlowStatus
 }): 'empty' | 'filtered' {
   if (input.q.trim() || input.status !== 'all') return 'filtered'
   return 'empty'
 }
 
 export function filterCommunicationFlows(
-  items: CommunicationFlow[],
-  input: { q: string, status: 'all' | CommunicationFlowStatus }
-): CommunicationFlow[] {
+  items: Flow[],
+  input: { q: string, status: 'all' | FlowStatus }
+): Flow[] {
   const needle = input.q.trim().toLowerCase()
   return items.filter((item) => {
     if (input.status !== 'all' && item.status !== input.status) return false
@@ -59,11 +59,11 @@ export function paginateCommunicationFlows<T>(
   }
 }
 
-export function formatFlowGraphJson(graph: CommunicationFlowGraph | null | undefined): string {
+export function formatFlowGraphJson(graph: FlowGraph | null | undefined): string {
   return JSON.stringify(graph ?? EMPTY_FLOW_GRAPH, null, 2)
 }
 
-export function parseFlowGraphJson(raw: string): { ok: true, graph: CommunicationFlowGraph } | { ok: false, message: string } {
+export function parseFlowGraphJson(raw: string): { ok: true, graph: FlowGraph } | { ok: false, message: string } {
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)

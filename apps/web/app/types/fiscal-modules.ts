@@ -935,7 +935,7 @@ export interface CcmeiIssuedCertificateHistoryPayload {
 }
 
 /** Descritor sanitizado de comprovante PAGTOWEB 7.2. */
-export interface PagtowebArrecadacaoReceipt {
+export interface PagtoWebArrecadacaoReceipt {
   id: number
   mime_type: 'application/pdf' | string
   byte_size: number
@@ -943,9 +943,9 @@ export interface PagtowebArrecadacaoReceipt {
   observed_at?: string | null
 }
 
-export interface PagtowebArrecadacaoReceiptHistoryPayload {
+export interface PagtoWebArrecadacaoReceiptHistoryPayload {
   client_id: number
-  items?: PagtowebArrecadacaoReceipt[]
+  items?: PagtoWebArrecadacaoReceipt[]
   provenance?: {
     source?: string | null
     serpro_called?: boolean
@@ -998,22 +998,22 @@ export interface SicalcRevenueSupportHistoryPayload {
 }
 
 /** Agregado sanitizado da consulta PAGTOWEB 7.3; sem documentos individuais. */
-export interface PagtowebPaymentCountSummary {
+export interface PagtoWebPaymentCountSummary {
   payment_count: number
   filter_summary: Record<string, unknown>
   observed_at?: string | null
   source_provenance?: 'SERPRO_REAL' | 'SIMULATED' | string | null
 }
 
-export interface PagtowebPaymentCountHistoryPayload {
+export interface PagtoWebPaymentCountHistoryPayload {
   client_id: number
-  current?: PagtowebPaymentCountSummary | null
-  history?: PagtowebPaymentCountSummary[]
+  current?: PagtoWebPaymentCountSummary | null
+  history?: PagtoWebPaymentCountSummary[]
   provenance?: { source?: string | null, serpro_called?: boolean } | null
 }
 
 /** Item sanitizado de PAGTOWEB 7.1; o identificador original nunca chega à UI. */
-export interface PagtowebPaymentListItem {
+export interface PagtoWebPaymentListItem {
   document_masked: string
   document_type?: string | null
   revenue_code?: string | null
@@ -1023,7 +1023,7 @@ export interface PagtowebPaymentListItem {
   total_amount?: string | number | null
 }
 
-export interface PagtowebPaymentListHistoryPayload {
+export interface PagtoWebPaymentListHistoryPayload {
   client_id: number
   current?: {
     filter_summary?: Record<string, unknown>
@@ -1031,7 +1031,7 @@ export interface PagtowebPaymentListHistoryPayload {
     observed_at?: string | null
     source_provenance?: 'SERPRO_REAL' | 'SIMULATED' | string | null
   } | null
-  items: PagtowebPaymentListItem[]
+  items: PagtoWebPaymentListItem[]
   meta: { page: number, per_page: number, total: number }
   provenance?: { source?: string | null, serpro_called?: boolean } | null
 }

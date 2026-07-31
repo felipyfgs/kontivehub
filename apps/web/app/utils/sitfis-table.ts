@@ -6,7 +6,7 @@ import { h } from 'vue'
  * e as células ficam vazias. @see table-sort.ts / pgdasd-table.ts
  */
 import {
-  ClientsClientProcuracaoBadge,
+  ClientsProcuracaoBadge,
   FiscalClientCell,
   FiscalCoverageBadge,
   FiscalStatusBadge,
@@ -160,7 +160,7 @@ export function buildSitfisColumns(options: {
       header: 'Procuração',
       enableSorting: false,
       meta: { class: { th: 'w-16 min-w-14', td: 'w-16 min-w-14' } },
-      cell: ({ row }) => h(ClientsClientProcuracaoBadge, {
+      cell: ({ row }) => h(ClientsProcuracaoBadge, {
         status: row.original.procuracao_status,
         showHint: false,
         compact: true

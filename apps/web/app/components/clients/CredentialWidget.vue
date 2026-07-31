@@ -152,7 +152,7 @@ const validityBadge = computed(() => {
           >
             Validade: {{ formatDate(client.procuracao_valid_to) }}
           </p>
-          <ClientsClientProcuracaoBadge
+          <ClientsProcuracaoBadge
             :status="client.procuracao_status"
             :valid-to="client.procuracao_valid_to"
             :checked-at="client.procuracao_checked_at"

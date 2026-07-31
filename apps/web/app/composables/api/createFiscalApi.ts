@@ -28,11 +28,11 @@ import type {
   CcmeiHistoryPayload,
   CcmeiIssuedCertificate,
   CcmeiIssuedCertificateHistoryPayload,
-  PagtowebArrecadacaoReceiptHistoryPayload,
+  PagtoWebArrecadacaoReceiptHistoryPayload,
   CcmeiRegistrationStatusHistoryPayload,
   SicalcRevenueSupportHistoryPayload,
-  PagtowebPaymentCountHistoryPayload,
-  PagtowebPaymentListHistoryPayload,
+  PagtoWebPaymentCountHistoryPayload,
+  PagtoWebPaymentListHistoryPayload,
   DefisDeclarationsHistoryPayload,
   DefisLatestDeclarationHistoryPayload,
   DefisSpecificDeclarationHistoryPayload,
@@ -366,9 +366,9 @@ export function createFiscalApi(client: ApiClient, apiUrl: ApiUrl) {
             { method: 'POST', body: { confirmed: true, codigo_receita: revenueCode } }
           )
       },
-      pagtowebPaymentCount: {
+      pagtoWebPaymentCount: {
         history: (clientId: number) =>
-          client<{ data: PagtowebPaymentCountHistoryPayload }>(
+          client<{ data: PagtoWebPaymentCountHistoryPayload }>(
             `/api/v1/fiscal/guides/payment-count/clients/${clientId}/history`
           ),
         consult: (clientId: number, filters: Record<string, unknown>) =>
@@ -377,9 +377,9 @@ export function createFiscalApi(client: ApiClient, apiUrl: ApiUrl) {
             { method: 'POST', body: { confirmed: true, filters } }
           )
       },
-      pagtowebPaymentList: {
+      pagtoWebPaymentList: {
         history: (clientId: number, params?: { page?: number, per_page?: number }) =>
-          client<{ data: PagtowebPaymentListHistoryPayload }>(
+          client<{ data: PagtoWebPaymentListHistoryPayload }>(
             `/api/v1/fiscal/guides/payments/clients/${clientId}/history`,
             { query: params }
           ),
@@ -389,9 +389,9 @@ export function createFiscalApi(client: ApiClient, apiUrl: ApiUrl) {
             { method: 'POST', body: { confirmed: true, filters } }
           )
       },
-      pagtowebArrecadacaoReceipt: {
+      pagtoWebArrecadacaoReceipt: {
         history: (clientId: number) =>
-          client<{ data: PagtowebArrecadacaoReceiptHistoryPayload }>(
+          client<{ data: PagtoWebArrecadacaoReceiptHistoryPayload }>(
             `/api/v1/fiscal/guides/receipts/clients/${clientId}/history`
           ),
         request: (clientId: number, numeroDocumento: string) =>

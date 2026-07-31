@@ -528,7 +528,7 @@ function onSortingUpdate(next: typeof sorting.value) {
     </template>
   </MonitoringModuleTable>
 
-  <MonitoringPgdasdCommunicationModals
+  <MonitoringCommunicationModals
     v-if="isPgdasd"
     v-model:preview-open="previewOpen"
     v-model:tracking-open="trackingOpen"
@@ -546,7 +546,7 @@ function onSortingUpdate(next: typeof sorting.value) {
     :cnpj-masked="modalCnpjMasked"
     :year="pgmeiYear"
   />
-  <MonitoringPgdasdCommunicationModals
+  <MonitoringCommunicationModals
     v-if="isPgmei"
     v-model:preview-open="previewOpen"
     v-model:tracking-open="trackingOpen"
@@ -566,7 +566,7 @@ function onSortingUpdate(next: typeof sorting.value) {
     :can-refresh="canTriggerSync"
   />
 
-  <MonitoringAssociateMonitoringClientsModal
+  <MonitoringAssociateClientsModal
     v-model:open="membershipOpen"
     module-key="simples_mei"
     :submodule="submodule"
@@ -574,7 +574,7 @@ function onSortingUpdate(next: typeof sorting.value) {
     @success="refresh"
   />
 
-  <ClientsClientFormModal
+  <ClientsFormModal
     v-if="canManageClients"
     v-model:open="clientFormOpen"
     :client="formClient"

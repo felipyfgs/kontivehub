@@ -7,15 +7,15 @@ import type {
   Node as VueFlowNode
 } from '@vue-flow/core'
 import type {
-  CommunicationFlowActionKind,
-  CommunicationFlowConditionField,
-  CommunicationFlowConditionOperator,
-  CommunicationFlowEdge,
-  CommunicationFlowGraph,
-  CommunicationFlowGraphError,
-  CommunicationFlowNode,
-  CommunicationFlowNodeType
-} from '~/types/communication'
+  FlowActionKind,
+  FlowConditionField,
+  FlowConditionOperator,
+  FlowEdge,
+  FlowGraph,
+  FlowGraphError,
+  FlowNode,
+  FlowNodeType
+} from '~/types/communication/flows'
 
 export const FLOW_NODE_TYPES = [
   'start',
@@ -27,9 +27,9 @@ export const FLOW_NODE_TYPES = [
   'action',
   'handoff',
   'end'
-] as const satisfies readonly CommunicationFlowNodeType[]
+] as const satisfies readonly FlowNodeType[]
 
-export const FLOW_NODE_TYPE_META: Record<CommunicationFlowNodeType, {
+export const FLOW_NODE_TYPE_META: Record<FlowNodeType, {
   label: string
   description: string
   icon: string
@@ -81,18 +81,18 @@ export const FLOW_NODE_TYPE_META: Record<CommunicationFlowNodeType, {
   }
 }
 
-export const FLOW_CONDITION_FIELDS: readonly CommunicationFlowConditionField[] = [
+export const FLOW_CONDITION_FIELDS: readonly FlowConditionField[] = [
   'contact.name',
   'conversation.status',
   'last_inbound_text'
 ]
 
-export const FLOW_CONDITION_OPERATORS: readonly CommunicationFlowConditionOperator[] = [
+export const FLOW_CONDITION_OPERATORS: readonly FlowConditionOperator[] = [
   'eq',
   'contains'
 ]
 
-export const FLOW_ACTION_KINDS: readonly CommunicationFlowActionKind[] = [
+export const FLOW_ACTION_KINDS: readonly FlowActionKind[] = [
   'label',
   'assignee',
   'status'
@@ -112,16 +112,16 @@ const FORBIDDEN_HINTS = [
   'callback'
 ] as const
 
-export function isFlowNodeType(value: unknown): value is CommunicationFlowNodeType {
+export function isFlowNodeType(value: unknown): value is FlowNodeType {
   return typeof value === 'string'
     && (FLOW_NODE_TYPES as readonly string[]).includes(value)
 }
 
-export function createEmptyFlowGraph(): CommunicationFlowGraph {
+export function createEmptyFlowGraph(): FlowGraph {
   return { nodes: [], edges: [] }
 }
 
-export function createDefaultNodeData(type: CommunicationFlowNodeType): Record<string, unknown> {
+export function createDefaultNodeData(type: FlowNodeType): Record<string, unknown> {
   switch (type) {
     case 'message':
       return { body: '' }
@@ -131,14 +131,14 @@ export function createDefaultNodeData(type: CommunicationFlowNodeType): Record<s
       return { prompt: '', options: ['Sim', 'Não'] }
     case 'condition':
       return {
-        field: 'last_inbound_text' satisfies CommunicationFlowConditionField,
-        operator: 'contains' satisfies CommunicationFlowConditionOperator,
+        field: 'last_inbound_text' satisfies FlowConditionField,
+        operator: 'contains' satisfies FlowConditionOperator,
         value: ''
       }
     case 'delay':
       return { duration_seconds: 60 }
     case 'action':
-      return { kind: 'status' satisfies CommunicationFlowActionKind, status: 'OPEN' }
+      return { kind: 'status' satisfies FlowActionKind, status: 'OPEN' }
     case 'handoff':
       return { assignee_membership_id: null }
     case 'start':
@@ -149,9 +149,9 @@ export function createDefaultNodeData(type: CommunicationFlowNodeType): Record<s
 }
 
 export function createFlowNode(
-  type: CommunicationFlowNodeType,
-  overrides?: Partial<CommunicationFlowNode>
-): CommunicationFlowNode {
+  type: FlowNodeType,
+  overrides?: Partial<FlowNode>
+): FlowNode {
   const id = overrides?.id?.trim() || `node_${type}_${Math.random().toString(36).slice(2, 9)}`
   return {
     id,
@@ -162,7 +162,7 @@ export function createFlowNode(
   }
 }
 
-export function normalizeFlowGraph(input: unknown): CommunicationFlowGraph {
+export function normalizeFlowGraph(input: unknown): FlowGraph {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     return createEmptyFlowGraph()
   }
@@ -170,7 +170,7 @@ export function normalizeFlowGraph(input: unknown): CommunicationFlowGraph {
   const nodesRaw = Array.isArray(record.nodes) ? record.nodes : []
   const edgesRaw = Array.isArray(record.edges) ? record.edges : []
 
-  const nodes: CommunicationFlowNode[] = []
+  const nodes: FlowNode[] = []
   for (const item of nodesRaw) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) continue
     const row = item as Record<string, unknown>
@@ -196,7 +196,7 @@ export function normalizeFlowGraph(input: unknown): CommunicationFlowGraph {
     })
   }
 
-  const edges: CommunicationFlowEdge[] = []
+  const edges: FlowEdge[] = []
   for (const [index, item] of edgesRaw.entries()) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) continue
     const row = item as Record<string, unknown>
@@ -220,7 +220,7 @@ export function normalizeFlowGraph(input: unknown): CommunicationFlowGraph {
   return { nodes, edges }
 }
 
-export function domainGraphToVueFlow(graph: CommunicationFlowGraph): {
+export function domainGraphToVueFlow(graph: FlowGraph): {
   nodes: VueFlowNode[]
   edges: VueFlowEdge[]
 } {
@@ -259,8 +259,8 @@ export function domainGraphToVueFlow(graph: CommunicationFlowGraph): {
 export function vueFlowToDomainGraph(
   nodes: VueFlowNode[],
   edges: VueFlowEdge[]
-): CommunicationFlowGraph {
-  const domainNodes: CommunicationFlowNode[] = []
+): FlowGraph {
+  const domainNodes: FlowNode[] = []
   for (const node of nodes) {
     const data = (node.data ?? {}) as Record<string, unknown>
     const typeRaw = data.domainType ?? node.type
@@ -282,7 +282,7 @@ export function vueFlowToDomainGraph(
     })
   }
 
-  const domainEdges: CommunicationFlowEdge[] = edges.map((edge, index) => {
+  const domainEdges: FlowEdge[] = edges.map((edge, index) => {
     const data = (edge.data ?? {}) as Record<string, unknown>
     return {
       id: edge.id || `e_${edge.source}_${edge.target}_${index}`,
@@ -300,7 +300,7 @@ export function vueFlowToDomainGraph(
 }
 
 function pushError(
-  errors: CommunicationFlowGraphError[],
+  errors: FlowGraphError[],
   path: string,
   code: string,
   message: string
@@ -308,7 +308,7 @@ function pushError(
   errors.push({ path, code, message })
 }
 
-function rejectForbidden(value: unknown, path: string, errors: CommunicationFlowGraphError[]) {
+function rejectForbidden(value: unknown, path: string, errors: FlowGraphError[]) {
   if (typeof value === 'string') {
     const lower = value.toLowerCase()
     for (const hint of FORBIDDEN_HINTS) {
@@ -339,11 +339,11 @@ function rejectForbidden(value: unknown, path: string, errors: CommunicationFlow
 /**
  * Validação client prévia (espelho parcial do PHP). Server continua autoritativo.
  */
-export function validateFlowGraphClient(graph: CommunicationFlowGraph): {
+export function validateFlowGraphClient(graph: FlowGraph): {
   valid: boolean
-  errors: CommunicationFlowGraphError[]
+  errors: FlowGraphError[]
 } {
-  const errors: CommunicationFlowGraphError[] = []
+  const errors: FlowGraphError[] = []
   rejectForbidden(graph, 'graph', errors)
 
   if (!Array.isArray(graph.nodes)) {
@@ -356,7 +356,7 @@ export function validateFlowGraphClient(graph: CommunicationFlowGraph): {
     return { valid: false, errors }
   }
 
-  const nodeIds = new Map<string, CommunicationFlowNodeType>()
+  const nodeIds = new Map<string, FlowNodeType>()
   const startIds: string[] = []
 
   graph.nodes.forEach((node, index) => {
@@ -490,7 +490,7 @@ function hasCycle(adjacency: Map<string, string[]>, reachable: Set<string>): boo
 
 export function canInsertFlowNodeType(
   type: string,
-  graph: CommunicationFlowGraph
+  graph: FlowGraph
 ): { ok: true } | { ok: false, message: string } {
   if (!isFlowNodeType(type)) {
     return { ok: false, message: `Tipo de nó não permitido: ${type}.` }
@@ -502,10 +502,10 @@ export function canInsertFlowNodeType(
 }
 
 export function insertFlowNode(
-  graph: CommunicationFlowGraph,
-  type: CommunicationFlowNodeType,
+  graph: FlowGraph,
+  type: FlowNodeType,
   options?: { connectFrom?: string | null, position?: { x: number, y: number } }
-): CommunicationFlowGraph | { error: string } {
+): FlowGraph | { error: string } {
   const allowed = canInsertFlowNodeType(type, graph)
   if (!allowed.ok) return { error: allowed.message }
 
@@ -531,11 +531,11 @@ export function insertFlowNode(
 }
 
 export function connectFlowNodes(
-  graph: CommunicationFlowGraph,
+  graph: FlowGraph,
   source: string,
   target: string,
   extras?: { label?: string, branch?: string }
-): CommunicationFlowGraph | { error: string } {
+): FlowGraph | { error: string } {
   if (!graph.nodes.some(node => node.id === source)) {
     return { error: 'Nó de origem não encontrado.' }
   }
@@ -563,7 +563,7 @@ export function connectFlowNodes(
   }
 }
 
-export function removeFlowNode(graph: CommunicationFlowGraph, nodeId: string): CommunicationFlowGraph {
+export function removeFlowNode(graph: FlowGraph, nodeId: string): FlowGraph {
   return {
     nodes: graph.nodes.filter(node => node.id !== nodeId),
     edges: graph.edges.filter(edge => edge.source !== nodeId && edge.target !== nodeId)
@@ -571,10 +571,10 @@ export function removeFlowNode(graph: CommunicationFlowGraph, nodeId: string): C
 }
 
 export function updateFlowNodeData(
-  graph: CommunicationFlowGraph,
+  graph: FlowGraph,
   nodeId: string,
   data: Record<string, unknown>
-): CommunicationFlowGraph {
+): FlowGraph {
   return {
     nodes: graph.nodes.map((node) => {
       if (node.id !== nodeId) return node
@@ -584,7 +584,7 @@ export function updateFlowNodeData(
   }
 }
 
-export function flowNodeSummary(node: CommunicationFlowNode): string {
+export function flowNodeSummary(node: FlowNode): string {
   const data = node.data ?? {}
   switch (node.type) {
     case 'message':

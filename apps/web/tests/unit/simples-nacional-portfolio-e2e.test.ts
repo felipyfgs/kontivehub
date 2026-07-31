@@ -83,7 +83,7 @@ describe('simples-nacional-portfolio e2e wiring', () => {
     expect(page).toContain('canManageClients')
     expect(page).toContain('canTriggerSync')
     expect(page).toContain('${testIdPrefix}-associate-clients')
-    expect(page).toContain('MonitoringAssociateMonitoringClientsModal')
+    expect(page).toContain('MonitoringAssociateClientsModal')
     expect(page).toContain(':selection-enabled="canManageClients"')
 
     const actions = read('app/components/monitoring/pgdasd/SelectionActions.vue')

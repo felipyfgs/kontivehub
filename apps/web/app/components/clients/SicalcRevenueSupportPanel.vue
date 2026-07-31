@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import type { SicalcRevenueSupportHistoryPayload, SicalcRevenueSupportSummary } from '~/types/fiscal-modules'
-import { useSicalcRevenueSupportMonitoring } from '~/composables/useSicalcRevenueSupportMonitoring'
+import { useSicalcRevenueSupport } from '~/composables/useSicalcRevenueSupport'
 import { formatDateTime } from '~/utils/format'
 
 const props = defineProps<{ clientId: number, canConsult: boolean }>()
 const toast = useToast()
-const { fetchHistory, requestConsult } = useSicalcRevenueSupportMonitoring()
+const { fetchHistory, requestConsult } = useSicalcRevenueSupport()
 const revenueCode = ref('')
 const loading = ref(true)
 const requesting = ref(false)

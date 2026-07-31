@@ -21,7 +21,7 @@ const {
       test-id="client-section-dados-adicionais"
     />
 
-    <ClientsClientAdditionalDataPanel
+    <ClientsAdditionalDataPanel
       :client="item"
       :can-manage-clients="canManageClients"
       @updated="load"

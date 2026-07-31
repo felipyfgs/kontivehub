@@ -1,5 +1,5 @@
 /**
- * Abre ClientsClientFormModal a partir de um client_id da carteira monitoring.
+ * Abre ClientsFormModal a partir de um client_id da carteira monitoring.
  */
 import type { Client } from '~/types/api'
 import { apiErrorMessage } from '~/utils/api-error'

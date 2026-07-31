@@ -1,6 +1,6 @@
 # Grafo de testabilidade dos casos de uso
 
-Snapshot: `556f0e1e6498b65d0afe1582275fce50f881347e1f6f4f9dd97bbc48f8380c3b`
+Snapshot: `59b1261b49350c669217a6ef0537c45df04bfff015c03971864c125a77a20983`
 
 O levantamento classifica **584 rotas API**, **83 páginas Nuxt** e **15 clientes HTTP** em **11 jornadas**. 4 jornadas são críticas e exigem evidência L1–L3.
 

@@ -12,7 +12,7 @@ describe('communication shared content e iniciação outbound', () => {
     const context = read('app/components/communication/ContextPanel.vue')
     const contactContext = read('app/components/communication/contacts/ContactContext.vue')
     const api = read('app/composables/api/createCommunicationApi.ts')
-    const types = read('app/types/communication.ts')
+    const types = read('app/types/communication/index.ts')
 
     expect(shared).toContain('data-testid="communication-shared-content"')
     expect(shared).toContain('category = ref<CommunicationSharedContentCategory>(\'media\')')

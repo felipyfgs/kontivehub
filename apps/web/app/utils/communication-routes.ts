@@ -63,7 +63,7 @@ export function parseCommunicationFlowId(param: unknown): number | null {
  * Rotas que compartilham a mesma instância do workspace master-detail.
  * Catálogo, detalhe de contato, respostas rápidas e fluxos usam superfícies próprias.
  */
-export function isCommunicationConversationWorkspacePath(path: string): boolean {
+export function isCommunicationWorkspacePath(path: string): boolean {
   if (path === COMMUNICATION_INDEX_PATH) return true
 
   return /^\/communication\/conversations\/[1-9]\d*(?:\/messages\/[1-9]\d*)?\/?$/.test(path)

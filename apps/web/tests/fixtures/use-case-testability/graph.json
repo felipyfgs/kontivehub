@@ -1,5 +1,5 @@
 {
-  "digest": "556f0e1e6498b65d0afe1582275fce50f881347e1f6f4f9dd97bbc48f8380c3b",
+  "digest": "59b1261b49350c669217a6ef0537c45df04bfff015c03971864c125a77a20983",
   "schemaVersion": 1,
   "source": {
     "catalog": "apps/web/tests/fixtures/use-case-testability/catalog.json",
@@ -2175,7 +2175,7 @@
       "method": "GET",
       "uri": "api/v1/communication/attachments/{attachment}/download",
       "group": "communication",
-      "action": "CommunicationDataController@downloadAttachment"
+      "action": "DataController@downloadAttachment"
     },
     {
       "id": "api:GET:api/v1/communication/attachments/{attachment}/preview",
@@ -2184,7 +2184,7 @@
       "method": "GET",
       "uri": "api/v1/communication/attachments/{attachment}/preview",
       "group": "communication",
-      "action": "CommunicationDataController@previewAttachment"
+      "action": "DataController@previewAttachment"
     },
     {
       "id": "api:GET:api/v1/communication/automation-policies",
@@ -2193,7 +2193,7 @@
       "method": "GET",
       "uri": "api/v1/communication/automation-policies",
       "group": "communication",
-      "action": "CommunicationAutomationController@index"
+      "action": "AutomationController@index"
     },
     {
       "id": "api:PUT:api/v1/communication/automation-policies",
@@ -2202,7 +2202,7 @@
       "method": "PUT",
       "uri": "api/v1/communication/automation-policies",
       "group": "communication",
-      "action": "CommunicationAutomationController@upsert"
+      "action": "AutomationController@upsert"
     },
     {
       "id": "api:GET:api/v1/communication/canned-responses",
@@ -2211,7 +2211,7 @@
       "method": "GET",
       "uri": "api/v1/communication/canned-responses",
       "group": "communication",
-      "action": "CommunicationCatalogController@cannedResponses"
+      "action": "CatalogController@cannedResponses"
     },
     {
       "id": "api:POST:api/v1/communication/canned-responses",
@@ -2220,7 +2220,7 @@
       "method": "POST",
       "uri": "api/v1/communication/canned-responses",
       "group": "communication",
-      "action": "CommunicationCatalogController@storeCannedResponse"
+      "action": "CatalogController@storeCannedResponse"
     },
     {
       "id": "api:PUT:api/v1/communication/canned-responses/{canned}",
@@ -2229,7 +2229,7 @@
       "method": "PUT",
       "uri": "api/v1/communication/canned-responses/{canned}",
       "group": "communication",
-      "action": "CommunicationCatalogController@updateCannedResponse"
+      "action": "CatalogController@updateCannedResponse"
     },
     {
       "id": "api:DELETE:api/v1/communication/canned-responses/{canned}",
@@ -2238,7 +2238,7 @@
       "method": "DELETE",
       "uri": "api/v1/communication/canned-responses/{canned}",
       "group": "communication",
-      "action": "CommunicationCatalogController@deleteCannedResponse"
+      "action": "CatalogController@deleteCannedResponse"
     },
     {
       "id": "api:POST:api/v1/communication/canned-responses/{canned}/deactivate",
@@ -2247,7 +2247,7 @@
       "method": "POST",
       "uri": "api/v1/communication/canned-responses/{canned}/deactivate",
       "group": "communication",
-      "action": "CommunicationCatalogController@deactivateCannedResponse"
+      "action": "CatalogController@deactivateCannedResponse"
     },
     {
       "id": "api:POST:api/v1/communication/canned-responses/{canned}/duplicate",
@@ -2256,7 +2256,7 @@
       "method": "POST",
       "uri": "api/v1/communication/canned-responses/{canned}/duplicate",
       "group": "communication",
-      "action": "CommunicationCatalogController@duplicateCannedResponse"
+      "action": "CatalogController@duplicateCannedResponse"
     },
     {
       "id": "api:POST:api/v1/communication/canned-responses/{canned}/render",
@@ -2265,7 +2265,7 @@
       "method": "POST",
       "uri": "api/v1/communication/canned-responses/{canned}/render",
       "group": "communication",
-      "action": "CommunicationCatalogController@renderCannedResponse"
+      "action": "CatalogController@renderCannedResponse"
     },
     {
       "id": "api:GET:api/v1/communication/clients/{client}/automation-recipients",
@@ -2274,7 +2274,7 @@
       "method": "GET",
       "uri": "api/v1/communication/clients/{client}/automation-recipients",
       "group": "communication",
-      "action": "CommunicationAutomationController@recipients"
+      "action": "AutomationController@recipients"
     },
     {
       "id": "api:PUT:api/v1/communication/clients/{client}/automation-recipients",
@@ -2283,7 +2283,7 @@
       "method": "PUT",
       "uri": "api/v1/communication/clients/{client}/automation-recipients",
       "group": "communication",
-      "action": "CommunicationAutomationController@updateRecipients"
+      "action": "AutomationController@updateRecipients"
     },
     {
       "id": "api:GET:api/v1/communication/contacts",
@@ -2292,7 +2292,7 @@
       "method": "GET",
       "uri": "api/v1/communication/contacts",
       "group": "communication",
-      "action": "CommunicationContactController@index"
+      "action": "ContactController@index"
     },
     {
       "id": "api:POST:api/v1/communication/contacts",
@@ -2301,7 +2301,7 @@
       "method": "POST",
       "uri": "api/v1/communication/contacts",
       "group": "communication",
-      "action": "CommunicationContactController@store"
+      "action": "ContactController@store"
     },
     {
       "id": "api:POST:api/v1/communication/contacts/search",
@@ -2310,7 +2310,7 @@
       "method": "POST",
       "uri": "api/v1/communication/contacts/search",
       "group": "communication",
-      "action": "CommunicationContactController@search"
+      "action": "ContactController@search"
     },
     {
       "id": "api:GET:api/v1/communication/contacts/{contact}",
@@ -2319,7 +2319,7 @@
       "method": "GET",
       "uri": "api/v1/communication/contacts/{contact}",
       "group": "communication",
-      "action": "CommunicationContactController@show"
+      "action": "ContactController@show"
     },
     {
       "id": "api:PATCH:api/v1/communication/contacts/{contact}",
@@ -2328,7 +2328,7 @@
       "method": "PATCH",
       "uri": "api/v1/communication/contacts/{contact}",
       "group": "communication",
-      "action": "CommunicationContactController@update"
+      "action": "ContactController@update"
     },
     {
       "id": "api:GET:api/v1/communication/contacts/{contact}/export",
@@ -2337,7 +2337,7 @@
       "method": "GET",
       "uri": "api/v1/communication/contacts/{contact}/export",
       "group": "communication",
-      "action": "CommunicationDataController@exportContact"
+      "action": "DataController@exportContact"
     },
     {
       "id": "api:POST:api/v1/communication/contacts/{contact}/identities",
@@ -2346,7 +2346,7 @@
       "method": "POST",
       "uri": "api/v1/communication/contacts/{contact}/identities",
       "group": "communication",
-      "action": "CommunicationContactController@addIdentity"
+      "action": "ContactController@addIdentity"
     },
     {
       "id": "api:DELETE:api/v1/communication/contacts/{contact}/personal-data",
@@ -2355,7 +2355,7 @@
       "method": "DELETE",
       "uri": "api/v1/communication/contacts/{contact}/personal-data",
       "group": "communication",
-      "action": "CommunicationDataController@purgeContact"
+      "action": "DataController@purgeContact"
     },
     {
       "id": "api:GET:api/v1/communication/contacts/{contact}/shared-content",
@@ -2364,7 +2364,7 @@
       "method": "GET",
       "uri": "api/v1/communication/contacts/{contact}/shared-content",
       "group": "communication",
-      "action": "CommunicationContactController@sharedContent"
+      "action": "ContactController@sharedContent"
     },
     {
       "id": "api:POST:api/v1/communication/conversation-bulk-operations",
@@ -2418,7 +2418,7 @@
       "method": "GET",
       "uri": "api/v1/communication/conversations",
       "group": "communication",
-      "action": "CommunicationConversationController@index"
+      "action": "ConversationController@index"
     },
     {
       "id": "api:POST:api/v1/communication/conversations",
@@ -2427,7 +2427,7 @@
       "method": "POST",
       "uri": "api/v1/communication/conversations",
       "group": "communication",
-      "action": "CommunicationConversationController@store"
+      "action": "ConversationController@store"
     },
     {
       "id": "api:GET:api/v1/communication/conversations/{conversation}",
@@ -2436,7 +2436,7 @@
       "method": "GET",
       "uri": "api/v1/communication/conversations/{conversation}",
       "group": "communication",
-      "action": "CommunicationConversationController@show"
+      "action": "ConversationController@show"
     },
     {
       "id": "api:PATCH:api/v1/communication/conversations/{conversation}",
@@ -2445,7 +2445,7 @@
       "method": "PATCH",
       "uri": "api/v1/communication/conversations/{conversation}",
       "group": "communication",
-      "action": "CommunicationConversationController@update"
+      "action": "ConversationController@update"
     },
     {
       "id": "api:PUT:api/v1/communication/conversations/{conversation}/disappearing",
@@ -2454,7 +2454,7 @@
       "method": "PUT",
       "uri": "api/v1/communication/conversations/{conversation}/disappearing",
       "group": "communication",
-      "action": "CommunicationConversationGatewayController@disappearing"
+      "action": "ConversationGatewayController@disappearing"
     },
     {
       "id": "api:PUT:api/v1/communication/conversations/{conversation}/labels/{label}",
@@ -2463,7 +2463,7 @@
       "method": "PUT",
       "uri": "api/v1/communication/conversations/{conversation}/labels/{label}",
       "group": "communication",
-      "action": "CommunicationConversationController@addLabel"
+      "action": "ConversationController@addLabel"
     },
     {
       "id": "api:DELETE:api/v1/communication/conversations/{conversation}/labels/{label}",
@@ -2472,7 +2472,7 @@
       "method": "DELETE",
       "uri": "api/v1/communication/conversations/{conversation}/labels/{label}",
       "group": "communication",
-      "action": "CommunicationConversationController@removeLabel"
+      "action": "ConversationController@removeLabel"
     },
     {
       "id": "api:GET:api/v1/communication/conversations/{conversation}/messages",
@@ -2481,7 +2481,7 @@
       "method": "GET",
       "uri": "api/v1/communication/conversations/{conversation}/messages",
       "group": "communication",
-      "action": "CommunicationConversationController@messages"
+      "action": "ConversationController@messages"
     },
     {
       "id": "api:POST:api/v1/communication/conversations/{conversation}/messages",
@@ -2490,7 +2490,7 @@
       "method": "POST",
       "uri": "api/v1/communication/conversations/{conversation}/messages",
       "group": "communication",
-      "action": "CommunicationConversationController@send"
+      "action": "ConversationController@send"
     },
     {
       "id": "api:DELETE:api/v1/communication/conversations/{conversation}/messages/{message}",
@@ -2499,7 +2499,7 @@
       "method": "DELETE",
       "uri": "api/v1/communication/conversations/{conversation}/messages/{message}",
       "group": "communication",
-      "action": "CommunicationConversationGatewayController@revoke"
+      "action": "ConversationGatewayController@revoke"
     },
     {
       "id": "api:PUT:api/v1/communication/conversations/{conversation}/messages/{message}/edit",
@@ -2508,7 +2508,7 @@
       "method": "PUT",
       "uri": "api/v1/communication/conversations/{conversation}/messages/{message}/edit",
       "group": "communication",
-      "action": "CommunicationConversationGatewayController@edit"
+      "action": "ConversationGatewayController@edit"
     },
     {
       "id": "api:POST:api/v1/communication/conversations/{conversation}/messages/{message}/history",
@@ -2517,7 +2517,7 @@
       "method": "POST",
       "uri": "api/v1/communication/conversations/{conversation}/messages/{message}/history",
       "group": "communication",
-      "action": "CommunicationConversationGatewayController@history"
+      "action": "ConversationGatewayController@history"
     },
     {
       "id": "api:POST:api/v1/communication/conversations/{conversation}/messages/{message}/poll-votes",
@@ -2526,7 +2526,7 @@
       "method": "POST",
       "uri": "api/v1/communication/conversations/{conversation}/messages/{message}/poll-votes",
       "group": "communication",
-      "action": "CommunicationConversationGatewayController@votePoll"
+      "action": "ConversationGatewayController@votePoll"
     },
     {
       "id": "api:PUT:api/v1/communication/conversations/{conversation}/messages/{message}/reaction",
@@ -2535,7 +2535,7 @@
       "method": "PUT",
       "uri": "api/v1/communication/conversations/{conversation}/messages/{message}/reaction",
       "group": "communication",
-      "action": "CommunicationConversationGatewayController@react"
+      "action": "ConversationGatewayController@react"
     },
     {
       "id": "api:POST:api/v1/communication/conversations/{conversation}/messages/{message}/receipts",
@@ -2544,7 +2544,7 @@
       "method": "POST",
       "uri": "api/v1/communication/conversations/{conversation}/messages/{message}/receipts",
       "group": "communication",
-      "action": "CommunicationConversationGatewayController@receipt"
+      "action": "ConversationGatewayController@receipt"
     },
     {
       "id": "api:POST:api/v1/communication/conversations/{conversation}/messages/{message}/recovery",
@@ -2553,7 +2553,7 @@
       "method": "POST",
       "uri": "api/v1/communication/conversations/{conversation}/messages/{message}/recovery",
       "group": "communication",
-      "action": "CommunicationConversationGatewayController@recovery"
+      "action": "ConversationGatewayController@recovery"
     },
     {
       "id": "api:PUT:api/v1/communication/conversations/{conversation}/presence",
@@ -2562,7 +2562,7 @@
       "method": "PUT",
       "uri": "api/v1/communication/conversations/{conversation}/presence",
       "group": "communication",
-      "action": "CommunicationConversationGatewayController@chatPresence"
+      "action": "ConversationGatewayController@chatPresence"
     },
     {
       "id": "api:POST:api/v1/communication/conversations/{conversation}/presence/subscribe",
@@ -2571,7 +2571,7 @@
       "method": "POST",
       "uri": "api/v1/communication/conversations/{conversation}/presence/subscribe",
       "group": "communication",
-      "action": "CommunicationConversationGatewayController@subscribePresence"
+      "action": "ConversationGatewayController@subscribePresence"
     },
     {
       "id": "api:PUT:api/v1/communication/conversations/{conversation}/read-state",
@@ -2580,7 +2580,7 @@
       "method": "PUT",
       "uri": "api/v1/communication/conversations/{conversation}/read-state",
       "group": "communication",
-      "action": "CommunicationConversationController@updateReadState"
+      "action": "ConversationController@updateReadState"
     },
     {
       "id": "api:GET:api/v1/communication/conversations/{conversation}/shared-content",
@@ -2589,7 +2589,7 @@
       "method": "GET",
       "uri": "api/v1/communication/conversations/{conversation}/shared-content",
       "group": "communication",
-      "action": "CommunicationConversationController@sharedContent"
+      "action": "ConversationController@sharedContent"
     },
     {
       "id": "api:PUT:api/v1/communication/conversations/{conversation}/state",
@@ -2598,7 +2598,7 @@
       "method": "PUT",
       "uri": "api/v1/communication/conversations/{conversation}/state",
       "group": "communication",
-      "action": "CommunicationConversationGatewayController@state"
+      "action": "ConversationGatewayController@state"
     },
     {
       "id": "api:GET:api/v1/communication/events",
@@ -2607,7 +2607,7 @@
       "method": "GET",
       "uri": "api/v1/communication/events",
       "group": "communication",
-      "action": "CommunicationDataController@sync"
+      "action": "DataController@sync"
     },
     {
       "id": "api:PATCH:api/v1/communication/flow-bindings/{binding}",
@@ -2616,7 +2616,7 @@
       "method": "PATCH",
       "uri": "api/v1/communication/flow-bindings/{binding}",
       "group": "communication",
-      "action": "CommunicationFlowController@updateBinding"
+      "action": "FlowController@updateBinding"
     },
     {
       "id": "api:DELETE:api/v1/communication/flow-bindings/{binding}",
@@ -2625,7 +2625,7 @@
       "method": "DELETE",
       "uri": "api/v1/communication/flow-bindings/{binding}",
       "group": "communication",
-      "action": "CommunicationFlowController@destroyBinding"
+      "action": "FlowController@destroyBinding"
     },
     {
       "id": "api:POST:api/v1/communication/flow-bindings/{binding}/disable",
@@ -2634,7 +2634,7 @@
       "method": "POST",
       "uri": "api/v1/communication/flow-bindings/{binding}/disable",
       "group": "communication",
-      "action": "CommunicationFlowController@disableBinding"
+      "action": "FlowController@disableBinding"
     },
     {
       "id": "api:POST:api/v1/communication/flow-bindings/{binding}/enable",
@@ -2643,7 +2643,7 @@
       "method": "POST",
       "uri": "api/v1/communication/flow-bindings/{binding}/enable",
       "group": "communication",
-      "action": "CommunicationFlowController@enableBinding"
+      "action": "FlowController@enableBinding"
     },
     {
       "id": "api:GET:api/v1/communication/flow-runs",
@@ -2652,7 +2652,7 @@
       "method": "GET",
       "uri": "api/v1/communication/flow-runs",
       "group": "communication",
-      "action": "CommunicationFlowRunController@index"
+      "action": "FlowRunController@index"
     },
     {
       "id": "api:GET:api/v1/communication/flow-runs/{run}",
@@ -2661,7 +2661,7 @@
       "method": "GET",
       "uri": "api/v1/communication/flow-runs/{run}",
       "group": "communication",
-      "action": "CommunicationFlowRunController@show"
+      "action": "FlowRunController@show"
     },
     {
       "id": "api:POST:api/v1/communication/flow-runs/{run}/handoff",
@@ -2670,7 +2670,7 @@
       "method": "POST",
       "uri": "api/v1/communication/flow-runs/{run}/handoff",
       "group": "communication",
-      "action": "CommunicationFlowRunController@handoff"
+      "action": "FlowRunController@handoff"
     },
     {
       "id": "api:POST:api/v1/communication/flow-runs/{run}/pause",
@@ -2679,7 +2679,7 @@
       "method": "POST",
       "uri": "api/v1/communication/flow-runs/{run}/pause",
       "group": "communication",
-      "action": "CommunicationFlowRunController@pause"
+      "action": "FlowRunController@pause"
     },
     {
       "id": "api:POST:api/v1/communication/flow-runs/{run}/restart",
@@ -2688,7 +2688,7 @@
       "method": "POST",
       "uri": "api/v1/communication/flow-runs/{run}/restart",
       "group": "communication",
-      "action": "CommunicationFlowRunController@restart"
+      "action": "FlowRunController@restart"
     },
     {
       "id": "api:POST:api/v1/communication/flow-runs/{run}/resume",
@@ -2697,7 +2697,7 @@
       "method": "POST",
       "uri": "api/v1/communication/flow-runs/{run}/resume",
       "group": "communication",
-      "action": "CommunicationFlowRunController@resume"
+      "action": "FlowRunController@resume"
     },
     {
       "id": "api:POST:api/v1/communication/flow-runs/{run}/stop",
@@ -2706,7 +2706,7 @@
       "method": "POST",
       "uri": "api/v1/communication/flow-runs/{run}/stop",
       "group": "communication",
-      "action": "CommunicationFlowRunController@stop"
+      "action": "FlowRunController@stop"
     },
     {
       "id": "api:GET:api/v1/communication/flows",
@@ -2715,7 +2715,7 @@
       "method": "GET",
       "uri": "api/v1/communication/flows",
       "group": "communication",
-      "action": "CommunicationFlowController@index"
+      "action": "FlowController@index"
     },
     {
       "id": "api:POST:api/v1/communication/flows",
@@ -2724,7 +2724,7 @@
       "method": "POST",
       "uri": "api/v1/communication/flows",
       "group": "communication",
-      "action": "CommunicationFlowController@store"
+      "action": "FlowController@store"
     },
     {
       "id": "api:GET:api/v1/communication/flows/{flow}",
@@ -2733,7 +2733,7 @@
       "method": "GET",
       "uri": "api/v1/communication/flows/{flow}",
       "group": "communication",
-      "action": "CommunicationFlowController@show"
+      "action": "FlowController@show"
     },
     {
       "id": "api:PATCH:api/v1/communication/flows/{flow}",
@@ -2742,7 +2742,7 @@
       "method": "PATCH",
       "uri": "api/v1/communication/flows/{flow}",
       "group": "communication",
-      "action": "CommunicationFlowController@update"
+      "action": "FlowController@update"
     },
     {
       "id": "api:DELETE:api/v1/communication/flows/{flow}",
@@ -2751,7 +2751,7 @@
       "method": "DELETE",
       "uri": "api/v1/communication/flows/{flow}",
       "group": "communication",
-      "action": "CommunicationFlowController@destroy"
+      "action": "FlowController@destroy"
     },
     {
       "id": "api:GET:api/v1/communication/flows/{flow}/bindings",
@@ -2760,7 +2760,7 @@
       "method": "GET",
       "uri": "api/v1/communication/flows/{flow}/bindings",
       "group": "communication",
-      "action": "CommunicationFlowController@indexBindings"
+      "action": "FlowController@indexBindings"
     },
     {
       "id": "api:POST:api/v1/communication/flows/{flow}/bindings",
@@ -2769,7 +2769,7 @@
       "method": "POST",
       "uri": "api/v1/communication/flows/{flow}/bindings",
       "group": "communication",
-      "action": "CommunicationFlowController@storeBinding"
+      "action": "FlowController@storeBinding"
     },
     {
       "id": "api:POST:api/v1/communication/flows/{flow}/clone",
@@ -2778,7 +2778,7 @@
       "method": "POST",
       "uri": "api/v1/communication/flows/{flow}/clone",
       "group": "communication",
-      "action": "CommunicationFlowController@cloneFlow"
+      "action": "FlowController@cloneFlow"
     },
     {
       "id": "api:GET:api/v1/communication/flows/{flow}/draft",
@@ -2787,7 +2787,7 @@
       "method": "GET",
       "uri": "api/v1/communication/flows/{flow}/draft",
       "group": "communication",
-      "action": "CommunicationFlowController@showDraft"
+      "action": "FlowController@showDraft"
     },
     {
       "id": "api:PUT:api/v1/communication/flows/{flow}/draft",
@@ -2796,7 +2796,7 @@
       "method": "PUT",
       "uri": "api/v1/communication/flows/{flow}/draft",
       "group": "communication",
-      "action": "CommunicationFlowController@updateDraft"
+      "action": "FlowController@updateDraft"
     },
     {
       "id": "api:POST:api/v1/communication/flows/{flow}/dry-run",
@@ -2805,7 +2805,7 @@
       "method": "POST",
       "uri": "api/v1/communication/flows/{flow}/dry-run",
       "group": "communication",
-      "action": "CommunicationFlowController@dryRun"
+      "action": "FlowController@dryRun"
     },
     {
       "id": "api:POST:api/v1/communication/flows/{flow}/preview",
@@ -2814,7 +2814,7 @@
       "method": "POST",
       "uri": "api/v1/communication/flows/{flow}/preview",
       "group": "communication",
-      "action": "CommunicationFlowController@previewGraph"
+      "action": "FlowController@previewGraph"
     },
     {
       "id": "api:POST:api/v1/communication/flows/{flow}/publish",
@@ -2823,7 +2823,7 @@
       "method": "POST",
       "uri": "api/v1/communication/flows/{flow}/publish",
       "group": "communication",
-      "action": "CommunicationFlowController@publish"
+      "action": "FlowController@publish"
     },
     {
       "id": "api:POST:api/v1/communication/flows/{flow}/validate",
@@ -2832,7 +2832,7 @@
       "method": "POST",
       "uri": "api/v1/communication/flows/{flow}/validate",
       "group": "communication",
-      "action": "CommunicationFlowController@validateGraph"
+      "action": "FlowController@validateGraph"
     },
     {
       "id": "api:POST:api/v1/communication/flows/{flow}/versions/{version}/clone",
@@ -2841,7 +2841,7 @@
       "method": "POST",
       "uri": "api/v1/communication/flows/{flow}/versions/{version}/clone",
       "group": "communication",
-      "action": "CommunicationFlowController@cloneVersion"
+      "action": "FlowController@cloneVersion"
     },
     {
       "id": "api:POST:api/v1/communication/identities/{identity}/links",
@@ -2850,7 +2850,7 @@
       "method": "POST",
       "uri": "api/v1/communication/identities/{identity}/links",
       "group": "communication",
-      "action": "CommunicationContactController@linkIdentity"
+      "action": "ContactController@linkIdentity"
     },
     {
       "id": "api:DELETE:api/v1/communication/identities/{identity}/links/{link}",
@@ -2859,7 +2859,7 @@
       "method": "DELETE",
       "uri": "api/v1/communication/identities/{identity}/links/{link}",
       "group": "communication",
-      "action": "CommunicationContactController@unlinkIdentity"
+      "action": "ContactController@unlinkIdentity"
     },
     {
       "id": "api:GET:api/v1/communication/inboxes",
@@ -2868,7 +2868,7 @@
       "method": "GET",
       "uri": "api/v1/communication/inboxes",
       "group": "communication",
-      "action": "CommunicationInboxController@index"
+      "action": "InboxController@index"
     },
     {
       "id": "api:POST:api/v1/communication/inboxes",
@@ -2877,7 +2877,7 @@
       "method": "POST",
       "uri": "api/v1/communication/inboxes",
       "group": "communication",
-      "action": "CommunicationInboxController@store"
+      "action": "InboxController@store"
     },
     {
       "id": "api:PATCH:api/v1/communication/inboxes/{inbox}",
@@ -2886,7 +2886,7 @@
       "method": "PATCH",
       "uri": "api/v1/communication/inboxes/{inbox}",
       "group": "communication",
-      "action": "CommunicationInboxController@update"
+      "action": "InboxController@update"
     },
     {
       "id": "api:DELETE:api/v1/communication/inboxes/{inbox}",
@@ -2895,7 +2895,7 @@
       "method": "DELETE",
       "uri": "api/v1/communication/inboxes/{inbox}",
       "group": "communication",
-      "action": "CommunicationInboxController@destroy"
+      "action": "InboxController@destroy"
     },
     {
       "id": "api:POST:api/v1/communication/inboxes/{inbox}/app-state/mark-clean",
@@ -2904,7 +2904,7 @@
       "method": "POST",
       "uri": "api/v1/communication/inboxes/{inbox}/app-state/mark-clean",
       "group": "communication",
-      "action": "CommunicationInboxGatewayController@markStateClean"
+      "action": "InboxGatewayController@markStateClean"
     },
     {
       "id": "api:POST:api/v1/communication/inboxes/{inbox}/app-state/sync",
@@ -2913,7 +2913,7 @@
       "method": "POST",
       "uri": "api/v1/communication/inboxes/{inbox}/app-state/sync",
       "group": "communication",
-      "action": "CommunicationInboxGatewayController@syncState"
+      "action": "InboxGatewayController@syncState"
     },
     {
       "id": "api:GET:api/v1/communication/inboxes/{inbox}/blocklist",
@@ -2922,7 +2922,7 @@
       "method": "GET",
       "uri": "api/v1/communication/inboxes/{inbox}/blocklist",
       "group": "communication",
-      "action": "CommunicationInboxGatewayController@blocklist"
+      "action": "InboxGatewayController@blocklist"
     },
     {
       "id": "api:PUT:api/v1/communication/inboxes/{inbox}/blocklist",
@@ -2931,7 +2931,7 @@
       "method": "PUT",
       "uri": "api/v1/communication/inboxes/{inbox}/blocklist",
       "group": "communication",
-      "action": "CommunicationInboxGatewayController@updateBlocklist"
+      "action": "InboxGatewayController@updateBlocklist"
     },
     {
       "id": "api:POST:api/v1/communication/inboxes/{inbox}/contacts/business-link-resolve",
@@ -2940,7 +2940,7 @@
       "method": "POST",
       "uri": "api/v1/communication/inboxes/{inbox}/contacts/business-link-resolve",
       "group": "communication",
-      "action": "CommunicationInboxGatewayController@resolveBusinessLink"
+      "action": "InboxGatewayController@resolveBusinessLink"
     },
     {
       "id": "api:POST:api/v1/communication/inboxes/{inbox}/contacts/business-profiles",
@@ -2949,7 +2949,7 @@
       "method": "POST",
       "uri": "api/v1/communication/inboxes/{inbox}/contacts/business-profiles",
       "group": "communication",
-      "action": "CommunicationInboxGatewayController@businessProfiles"
+      "action": "InboxGatewayController@businessProfiles"
     },
     {
       "id": "api:POST:api/v1/communication/inboxes/{inbox}/contacts/check",
@@ -2958,7 +2958,7 @@
       "method": "POST",
       "uri": "api/v1/communication/inboxes/{inbox}/contacts/check",
       "group": "communication",
-      "action": "CommunicationInboxGatewayController@checkUsers"
+      "action": "InboxGatewayController@checkUsers"
     },
     {
       "id": "api:POST:api/v1/communication/inboxes/{inbox}/contacts/info",
@@ -2967,7 +2967,7 @@
       "method": "POST",
       "uri": "api/v1/communication/inboxes/{inbox}/contacts/info",
       "group": "communication",
-      "action": "CommunicationInboxGatewayController@userInfo"
+      "action": "InboxGatewayController@userInfo"
     },
     {
       "id": "api:POST:api/v1/communication/inboxes/{inbox}/contacts/profile-picture",
@@ -2976,7 +2976,7 @@
       "method": "POST",
       "uri": "api/v1/communication/inboxes/{inbox}/contacts/profile-picture",
       "group": "communication",
-      "action": "CommunicationInboxGatewayController@profilePicture"
+      "action": "InboxGatewayController@profilePicture"
     },
     {
       "id": "api:POST:api/v1/communication/inboxes/{inbox}/contacts/qr-link",
@@ -2985,7 +2985,7 @@
       "method": "POST",
       "uri": "api/v1/communication/inboxes/{inbox}/contacts/qr-link",
       "group": "communication",
-      "action": "CommunicationInboxGatewayController@contactQrLink"
+      "action": "InboxGatewayController@contactQrLink"
     },
     {
       "id": "api:POST:api/v1/communication/inboxes/{inbox}/contacts/qr-resolve",
@@ -2994,7 +2994,7 @@
       "method": "POST",
       "uri": "api/v1/communication/inboxes/{inbox}/contacts/qr-resolve",
       "group": "communication",
-      "action": "CommunicationInboxGatewayController@resolveContactQr"
+      "action": "InboxGatewayController@resolveContactQr"
     },
     {
       "id": "api:PUT:api/v1/communication/inboxes/{inbox}/default-disappearing",
@@ -3003,7 +3003,7 @@
       "method": "PUT",
       "uri": "api/v1/communication/inboxes/{inbox}/default-disappearing",
       "group": "communication",
-      "action": "CommunicationInboxGatewayController@defaultDisappearing"
+      "action": "InboxGatewayController@defaultDisappearing"
     },
     {
       "id": "api:PUT:api/v1/communication/inboxes/{inbox}/members",
@@ -3012,7 +3012,7 @@
       "method": "PUT",
       "uri": "api/v1/communication/inboxes/{inbox}/members",
       "group": "communication",
-      "action": "CommunicationInboxController@replaceMembers"
+      "action": "InboxController@replaceMembers"
     },
     {
       "id": "api:PUT:api/v1/communication/inboxes/{inbox}/presence",
@@ -3021,7 +3021,7 @@
       "method": "PUT",
       "uri": "api/v1/communication/inboxes/{inbox}/presence",
       "group": "communication",
-      "action": "CommunicationInboxGatewayController@globalPresence"
+      "action": "InboxGatewayController@globalPresence"
     },
     {
       "id": "api:GET:api/v1/communication/inboxes/{inbox}/privacy",
@@ -3030,7 +3030,7 @@
       "method": "GET",
       "uri": "api/v1/communication/inboxes/{inbox}/privacy",
       "group": "communication",
-      "action": "CommunicationInboxGatewayController@privacy"
+      "action": "InboxGatewayController@privacy"
     },
     {
       "id": "api:PUT:api/v1/communication/inboxes/{inbox}/privacy",
@@ -3039,7 +3039,7 @@
       "method": "PUT",
       "uri": "api/v1/communication/inboxes/{inbox}/privacy",
       "group": "communication",
-      "action": "CommunicationInboxGatewayController@updatePrivacy"
+      "action": "InboxGatewayController@updatePrivacy"
     },
     {
       "id": "api:POST:api/v1/communication/inboxes/{inbox}/session/connect",
@@ -3048,7 +3048,7 @@
       "method": "POST",
       "uri": "api/v1/communication/inboxes/{inbox}/session/connect",
       "group": "communication",
-      "action": "CommunicationInboxController@startPairing"
+      "action": "InboxController@startPairing"
     },
     {
       "id": "api:POST:api/v1/communication/inboxes/{inbox}/session/disconnect",
@@ -3057,7 +3057,7 @@
       "method": "POST",
       "uri": "api/v1/communication/inboxes/{inbox}/session/disconnect",
       "group": "communication",
-      "action": "CommunicationInboxGatewayController@disconnect"
+      "action": "InboxGatewayController@disconnect"
     },
     {
       "id": "api:POST:api/v1/communication/inboxes/{inbox}/session/logout",
@@ -3066,7 +3066,7 @@
       "method": "POST",
       "uri": "api/v1/communication/inboxes/{inbox}/session/logout",
       "group": "communication",
-      "action": "CommunicationInboxController@revoke"
+      "action": "InboxController@revoke"
     },
     {
       "id": "api:POST:api/v1/communication/inboxes/{inbox}/session/pair-phone",
@@ -3075,7 +3075,7 @@
       "method": "POST",
       "uri": "api/v1/communication/inboxes/{inbox}/session/pair-phone",
       "group": "communication",
-      "action": "CommunicationInboxGatewayController@pairPhone"
+      "action": "InboxGatewayController@pairPhone"
     },
     {
       "id": "api:PUT:api/v1/communication/inboxes/{inbox}/session/passive",
@@ -3084,7 +3084,7 @@
       "method": "PUT",
       "uri": "api/v1/communication/inboxes/{inbox}/session/passive",
       "group": "communication",
-      "action": "CommunicationInboxGatewayController@passive"
+      "action": "InboxGatewayController@passive"
     },
     {
       "id": "api:POST:api/v1/communication/inboxes/{inbox}/session/passkey/confirm",
@@ -3093,7 +3093,7 @@
       "method": "POST",
       "uri": "api/v1/communication/inboxes/{inbox}/session/passkey/confirm",
       "group": "communication",
-      "action": "CommunicationInboxGatewayController@confirmPasskey"
+      "action": "InboxGatewayController@confirmPasskey"
     },
     {
       "id": "api:POST:api/v1/communication/inboxes/{inbox}/session/passkey/respond",
@@ -3102,7 +3102,7 @@
       "method": "POST",
       "uri": "api/v1/communication/inboxes/{inbox}/session/passkey/respond",
       "group": "communication",
-      "action": "CommunicationInboxGatewayController@respondPasskey"
+      "action": "InboxGatewayController@respondPasskey"
     },
     {
       "id": "api:GET:api/v1/communication/inboxes/{inbox}/session/status",
@@ -3111,7 +3111,7 @@
       "method": "GET",
       "uri": "api/v1/communication/inboxes/{inbox}/session/status",
       "group": "communication",
-      "action": "CommunicationInboxGatewayController@sessionStatus"
+      "action": "InboxGatewayController@sessionStatus"
     },
     {
       "id": "api:GET:api/v1/communication/labels",
@@ -3120,7 +3120,7 @@
       "method": "GET",
       "uri": "api/v1/communication/labels",
       "group": "communication",
-      "action": "CommunicationCatalogController@labels"
+      "action": "CatalogController@labels"
     },
     {
       "id": "api:POST:api/v1/communication/labels",
@@ -3129,7 +3129,7 @@
       "method": "POST",
       "uri": "api/v1/communication/labels",
       "group": "communication",
-      "action": "CommunicationCatalogController@storeLabel"
+      "action": "CatalogController@storeLabel"
     },
     {
       "id": "api:DELETE:api/v1/communication/labels/{label}",
@@ -3138,7 +3138,7 @@
       "method": "DELETE",
       "uri": "api/v1/communication/labels/{label}",
       "group": "communication",
-      "action": "CommunicationCatalogController@deleteLabel"
+      "action": "CatalogController@deleteLabel"
     },
     {
       "id": "api:GET:api/v1/communication/outbound-capabilities",
@@ -3147,7 +3147,7 @@
       "method": "GET",
       "uri": "api/v1/communication/outbound-capabilities",
       "group": "communication",
-      "action": "CommunicationCatalogController@outboundCapabilities"
+      "action": "CatalogController@outboundCapabilities"
     },
     {
       "id": "api:GET:api/v1/communication/profile-pictures/{profile}/{version}",
@@ -3156,7 +3156,7 @@
       "method": "GET",
       "uri": "api/v1/communication/profile-pictures/{profile}/{version}",
       "group": "communication",
-      "action": "CommunicationProfilePictureController@show"
+      "action": "ProfilePictureController@show"
     },
     {
       "id": "api:PATCH:api/v1/communication/settings",
@@ -3165,7 +3165,7 @@
       "method": "PATCH",
       "uri": "api/v1/communication/settings",
       "group": "communication",
-      "action": "CommunicationInboxController@updateTenantSettings"
+      "action": "InboxController@updateTenantSettings"
     },
     {
       "id": "api:GET:api/v1/cte/coverage",
@@ -3912,7 +3912,7 @@
       "method": "POST",
       "uri": "api/v1/fiscal/guides/payment-count/clients/{client}/consult",
       "group": "fiscal",
-      "action": "PagtowebPaymentCountController@consult"
+      "action": "PagtoWebPaymentCountController@consult"
     },
     {
       "id": "api:GET:api/v1/fiscal/guides/payment-count/clients/{client}/history",
@@ -3921,7 +3921,7 @@
       "method": "GET",
       "uri": "api/v1/fiscal/guides/payment-count/clients/{client}/history",
       "group": "fiscal",
-      "action": "PagtowebPaymentCountController@history"
+      "action": "PagtoWebPaymentCountController@history"
     },
     {
       "id": "api:POST:api/v1/fiscal/guides/payments/clients/{client}/consult",
@@ -3930,7 +3930,7 @@
       "method": "POST",
       "uri": "api/v1/fiscal/guides/payments/clients/{client}/consult",
       "group": "fiscal",
-      "action": "PagtowebPaymentListController@consult"
+      "action": "PagtoWebPaymentListController@consult"
     },
     {
       "id": "api:GET:api/v1/fiscal/guides/payments/clients/{client}/history",
@@ -3939,7 +3939,7 @@
       "method": "GET",
       "uri": "api/v1/fiscal/guides/payments/clients/{client}/history",
       "group": "fiscal",
-      "action": "PagtowebPaymentListController@history"
+      "action": "PagtoWebPaymentListController@history"
     },
     {
       "id": "api:POST:api/v1/fiscal/guides/preflight",
@@ -3957,7 +3957,7 @@
       "method": "GET",
       "uri": "api/v1/fiscal/guides/receipts/clients/{client}/history",
       "group": "fiscal",
-      "action": "PagtowebArrecadacaoReceiptController@history"
+      "action": "PagtoWebArrecadacaoReceiptController@history"
     },
     {
       "id": "api:POST:api/v1/fiscal/guides/receipts/clients/{client}/request",
@@ -3966,7 +3966,7 @@
       "method": "POST",
       "uri": "api/v1/fiscal/guides/receipts/clients/{client}/request",
       "group": "fiscal",
-      "action": "PagtowebArrecadacaoReceiptController@request"
+      "action": "PagtoWebArrecadacaoReceiptController@request"
     },
     {
       "id": "api:GET:api/v1/fiscal/guides/receipts/clients/{client}/{receipt}/download",
@@ -3975,7 +3975,7 @@
       "method": "GET",
       "uri": "api/v1/fiscal/guides/receipts/clients/{client}/{receipt}/download",
       "group": "fiscal",
-      "action": "PagtowebArrecadacaoReceiptController@download"
+      "action": "PagtoWebArrecadacaoReceiptController@download"
     },
     {
       "id": "api:POST:api/v1/fiscal/guides/revenue-support/clients/{client}/consult",
@@ -7168,6 +7168,26 @@
       "action": "AuthenticatedSessionController@store"
     },
     {
+      "id": "handler:AutomationController@index",
+      "type": "handler",
+      "action": "AutomationController@index"
+    },
+    {
+      "id": "handler:AutomationController@recipients",
+      "type": "handler",
+      "action": "AutomationController@recipients"
+    },
+    {
+      "id": "handler:AutomationController@updateRecipients",
+      "type": "handler",
+      "action": "AutomationController@updateRecipients"
+    },
+    {
+      "id": "handler:AutomationController@upsert",
+      "type": "handler",
+      "action": "AutomationController@upsert"
+    },
+    {
       "id": "handler:BatchesController@index",
       "type": "handler",
       "action": "BatchesController@index"
@@ -7186,6 +7206,61 @@
       "id": "handler:BroadcastController@authenticate",
       "type": "handler",
       "action": "BroadcastController@authenticate"
+    },
+    {
+      "id": "handler:CatalogController@cannedResponses",
+      "type": "handler",
+      "action": "CatalogController@cannedResponses"
+    },
+    {
+      "id": "handler:CatalogController@deactivateCannedResponse",
+      "type": "handler",
+      "action": "CatalogController@deactivateCannedResponse"
+    },
+    {
+      "id": "handler:CatalogController@deleteCannedResponse",
+      "type": "handler",
+      "action": "CatalogController@deleteCannedResponse"
+    },
+    {
+      "id": "handler:CatalogController@deleteLabel",
+      "type": "handler",
+      "action": "CatalogController@deleteLabel"
+    },
+    {
+      "id": "handler:CatalogController@duplicateCannedResponse",
+      "type": "handler",
+      "action": "CatalogController@duplicateCannedResponse"
+    },
+    {
+      "id": "handler:CatalogController@labels",
+      "type": "handler",
+      "action": "CatalogController@labels"
+    },
+    {
+      "id": "handler:CatalogController@outboundCapabilities",
+      "type": "handler",
+      "action": "CatalogController@outboundCapabilities"
+    },
+    {
+      "id": "handler:CatalogController@renderCannedResponse",
+      "type": "handler",
+      "action": "CatalogController@renderCannedResponse"
+    },
+    {
+      "id": "handler:CatalogController@storeCannedResponse",
+      "type": "handler",
+      "action": "CatalogController@storeCannedResponse"
+    },
+    {
+      "id": "handler:CatalogController@storeLabel",
+      "type": "handler",
+      "action": "CatalogController@storeLabel"
+    },
+    {
+      "id": "handler:CatalogController@updateCannedResponse",
+      "type": "handler",
+      "action": "CatalogController@updateCannedResponse"
     },
     {
       "id": "handler:CcmeiMonitoringController@consult",
@@ -7323,386 +7398,6 @@
       "action": "CnpjLookupController"
     },
     {
-      "id": "handler:CommunicationAutomationController@index",
-      "type": "handler",
-      "action": "CommunicationAutomationController@index"
-    },
-    {
-      "id": "handler:CommunicationAutomationController@recipients",
-      "type": "handler",
-      "action": "CommunicationAutomationController@recipients"
-    },
-    {
-      "id": "handler:CommunicationAutomationController@updateRecipients",
-      "type": "handler",
-      "action": "CommunicationAutomationController@updateRecipients"
-    },
-    {
-      "id": "handler:CommunicationAutomationController@upsert",
-      "type": "handler",
-      "action": "CommunicationAutomationController@upsert"
-    },
-    {
-      "id": "handler:CommunicationCatalogController@cannedResponses",
-      "type": "handler",
-      "action": "CommunicationCatalogController@cannedResponses"
-    },
-    {
-      "id": "handler:CommunicationCatalogController@deactivateCannedResponse",
-      "type": "handler",
-      "action": "CommunicationCatalogController@deactivateCannedResponse"
-    },
-    {
-      "id": "handler:CommunicationCatalogController@deleteCannedResponse",
-      "type": "handler",
-      "action": "CommunicationCatalogController@deleteCannedResponse"
-    },
-    {
-      "id": "handler:CommunicationCatalogController@deleteLabel",
-      "type": "handler",
-      "action": "CommunicationCatalogController@deleteLabel"
-    },
-    {
-      "id": "handler:CommunicationCatalogController@duplicateCannedResponse",
-      "type": "handler",
-      "action": "CommunicationCatalogController@duplicateCannedResponse"
-    },
-    {
-      "id": "handler:CommunicationCatalogController@labels",
-      "type": "handler",
-      "action": "CommunicationCatalogController@labels"
-    },
-    {
-      "id": "handler:CommunicationCatalogController@outboundCapabilities",
-      "type": "handler",
-      "action": "CommunicationCatalogController@outboundCapabilities"
-    },
-    {
-      "id": "handler:CommunicationCatalogController@renderCannedResponse",
-      "type": "handler",
-      "action": "CommunicationCatalogController@renderCannedResponse"
-    },
-    {
-      "id": "handler:CommunicationCatalogController@storeCannedResponse",
-      "type": "handler",
-      "action": "CommunicationCatalogController@storeCannedResponse"
-    },
-    {
-      "id": "handler:CommunicationCatalogController@storeLabel",
-      "type": "handler",
-      "action": "CommunicationCatalogController@storeLabel"
-    },
-    {
-      "id": "handler:CommunicationCatalogController@updateCannedResponse",
-      "type": "handler",
-      "action": "CommunicationCatalogController@updateCannedResponse"
-    },
-    {
-      "id": "handler:CommunicationContactController@addIdentity",
-      "type": "handler",
-      "action": "CommunicationContactController@addIdentity"
-    },
-    {
-      "id": "handler:CommunicationContactController@index",
-      "type": "handler",
-      "action": "CommunicationContactController@index"
-    },
-    {
-      "id": "handler:CommunicationContactController@linkIdentity",
-      "type": "handler",
-      "action": "CommunicationContactController@linkIdentity"
-    },
-    {
-      "id": "handler:CommunicationContactController@search",
-      "type": "handler",
-      "action": "CommunicationContactController@search"
-    },
-    {
-      "id": "handler:CommunicationContactController@sharedContent",
-      "type": "handler",
-      "action": "CommunicationContactController@sharedContent"
-    },
-    {
-      "id": "handler:CommunicationContactController@show",
-      "type": "handler",
-      "action": "CommunicationContactController@show"
-    },
-    {
-      "id": "handler:CommunicationContactController@store",
-      "type": "handler",
-      "action": "CommunicationContactController@store"
-    },
-    {
-      "id": "handler:CommunicationContactController@unlinkIdentity",
-      "type": "handler",
-      "action": "CommunicationContactController@unlinkIdentity"
-    },
-    {
-      "id": "handler:CommunicationContactController@update",
-      "type": "handler",
-      "action": "CommunicationContactController@update"
-    },
-    {
-      "id": "handler:CommunicationConversationController@addLabel",
-      "type": "handler",
-      "action": "CommunicationConversationController@addLabel"
-    },
-    {
-      "id": "handler:CommunicationConversationController@index",
-      "type": "handler",
-      "action": "CommunicationConversationController@index"
-    },
-    {
-      "id": "handler:CommunicationConversationController@messages",
-      "type": "handler",
-      "action": "CommunicationConversationController@messages"
-    },
-    {
-      "id": "handler:CommunicationConversationController@removeLabel",
-      "type": "handler",
-      "action": "CommunicationConversationController@removeLabel"
-    },
-    {
-      "id": "handler:CommunicationConversationController@send",
-      "type": "handler",
-      "action": "CommunicationConversationController@send"
-    },
-    {
-      "id": "handler:CommunicationConversationController@sharedContent",
-      "type": "handler",
-      "action": "CommunicationConversationController@sharedContent"
-    },
-    {
-      "id": "handler:CommunicationConversationController@show",
-      "type": "handler",
-      "action": "CommunicationConversationController@show"
-    },
-    {
-      "id": "handler:CommunicationConversationController@store",
-      "type": "handler",
-      "action": "CommunicationConversationController@store"
-    },
-    {
-      "id": "handler:CommunicationConversationController@update",
-      "type": "handler",
-      "action": "CommunicationConversationController@update"
-    },
-    {
-      "id": "handler:CommunicationConversationController@updateReadState",
-      "type": "handler",
-      "action": "CommunicationConversationController@updateReadState"
-    },
-    {
-      "id": "handler:CommunicationConversationGatewayController@chatPresence",
-      "type": "handler",
-      "action": "CommunicationConversationGatewayController@chatPresence"
-    },
-    {
-      "id": "handler:CommunicationConversationGatewayController@disappearing",
-      "type": "handler",
-      "action": "CommunicationConversationGatewayController@disappearing"
-    },
-    {
-      "id": "handler:CommunicationConversationGatewayController@edit",
-      "type": "handler",
-      "action": "CommunicationConversationGatewayController@edit"
-    },
-    {
-      "id": "handler:CommunicationConversationGatewayController@history",
-      "type": "handler",
-      "action": "CommunicationConversationGatewayController@history"
-    },
-    {
-      "id": "handler:CommunicationConversationGatewayController@react",
-      "type": "handler",
-      "action": "CommunicationConversationGatewayController@react"
-    },
-    {
-      "id": "handler:CommunicationConversationGatewayController@receipt",
-      "type": "handler",
-      "action": "CommunicationConversationGatewayController@receipt"
-    },
-    {
-      "id": "handler:CommunicationConversationGatewayController@recovery",
-      "type": "handler",
-      "action": "CommunicationConversationGatewayController@recovery"
-    },
-    {
-      "id": "handler:CommunicationConversationGatewayController@revoke",
-      "type": "handler",
-      "action": "CommunicationConversationGatewayController@revoke"
-    },
-    {
-      "id": "handler:CommunicationConversationGatewayController@state",
-      "type": "handler",
-      "action": "CommunicationConversationGatewayController@state"
-    },
-    {
-      "id": "handler:CommunicationConversationGatewayController@subscribePresence",
-      "type": "handler",
-      "action": "CommunicationConversationGatewayController@subscribePresence"
-    },
-    {
-      "id": "handler:CommunicationConversationGatewayController@votePoll",
-      "type": "handler",
-      "action": "CommunicationConversationGatewayController@votePoll"
-    },
-    {
-      "id": "handler:CommunicationDataController@downloadAttachment",
-      "type": "handler",
-      "action": "CommunicationDataController@downloadAttachment"
-    },
-    {
-      "id": "handler:CommunicationDataController@exportContact",
-      "type": "handler",
-      "action": "CommunicationDataController@exportContact"
-    },
-    {
-      "id": "handler:CommunicationDataController@previewAttachment",
-      "type": "handler",
-      "action": "CommunicationDataController@previewAttachment"
-    },
-    {
-      "id": "handler:CommunicationDataController@purgeContact",
-      "type": "handler",
-      "action": "CommunicationDataController@purgeContact"
-    },
-    {
-      "id": "handler:CommunicationDataController@sync",
-      "type": "handler",
-      "action": "CommunicationDataController@sync"
-    },
-    {
-      "id": "handler:CommunicationFlowController@cloneFlow",
-      "type": "handler",
-      "action": "CommunicationFlowController@cloneFlow"
-    },
-    {
-      "id": "handler:CommunicationFlowController@cloneVersion",
-      "type": "handler",
-      "action": "CommunicationFlowController@cloneVersion"
-    },
-    {
-      "id": "handler:CommunicationFlowController@destroy",
-      "type": "handler",
-      "action": "CommunicationFlowController@destroy"
-    },
-    {
-      "id": "handler:CommunicationFlowController@destroyBinding",
-      "type": "handler",
-      "action": "CommunicationFlowController@destroyBinding"
-    },
-    {
-      "id": "handler:CommunicationFlowController@disableBinding",
-      "type": "handler",
-      "action": "CommunicationFlowController@disableBinding"
-    },
-    {
-      "id": "handler:CommunicationFlowController@dryRun",
-      "type": "handler",
-      "action": "CommunicationFlowController@dryRun"
-    },
-    {
-      "id": "handler:CommunicationFlowController@enableBinding",
-      "type": "handler",
-      "action": "CommunicationFlowController@enableBinding"
-    },
-    {
-      "id": "handler:CommunicationFlowController@index",
-      "type": "handler",
-      "action": "CommunicationFlowController@index"
-    },
-    {
-      "id": "handler:CommunicationFlowController@indexBindings",
-      "type": "handler",
-      "action": "CommunicationFlowController@indexBindings"
-    },
-    {
-      "id": "handler:CommunicationFlowController@previewGraph",
-      "type": "handler",
-      "action": "CommunicationFlowController@previewGraph"
-    },
-    {
-      "id": "handler:CommunicationFlowController@publish",
-      "type": "handler",
-      "action": "CommunicationFlowController@publish"
-    },
-    {
-      "id": "handler:CommunicationFlowController@show",
-      "type": "handler",
-      "action": "CommunicationFlowController@show"
-    },
-    {
-      "id": "handler:CommunicationFlowController@showDraft",
-      "type": "handler",
-      "action": "CommunicationFlowController@showDraft"
-    },
-    {
-      "id": "handler:CommunicationFlowController@store",
-      "type": "handler",
-      "action": "CommunicationFlowController@store"
-    },
-    {
-      "id": "handler:CommunicationFlowController@storeBinding",
-      "type": "handler",
-      "action": "CommunicationFlowController@storeBinding"
-    },
-    {
-      "id": "handler:CommunicationFlowController@update",
-      "type": "handler",
-      "action": "CommunicationFlowController@update"
-    },
-    {
-      "id": "handler:CommunicationFlowController@updateBinding",
-      "type": "handler",
-      "action": "CommunicationFlowController@updateBinding"
-    },
-    {
-      "id": "handler:CommunicationFlowController@updateDraft",
-      "type": "handler",
-      "action": "CommunicationFlowController@updateDraft"
-    },
-    {
-      "id": "handler:CommunicationFlowController@validateGraph",
-      "type": "handler",
-      "action": "CommunicationFlowController@validateGraph"
-    },
-    {
-      "id": "handler:CommunicationFlowRunController@handoff",
-      "type": "handler",
-      "action": "CommunicationFlowRunController@handoff"
-    },
-    {
-      "id": "handler:CommunicationFlowRunController@index",
-      "type": "handler",
-      "action": "CommunicationFlowRunController@index"
-    },
-    {
-      "id": "handler:CommunicationFlowRunController@pause",
-      "type": "handler",
-      "action": "CommunicationFlowRunController@pause"
-    },
-    {
-      "id": "handler:CommunicationFlowRunController@restart",
-      "type": "handler",
-      "action": "CommunicationFlowRunController@restart"
-    },
-    {
-      "id": "handler:CommunicationFlowRunController@resume",
-      "type": "handler",
-      "action": "CommunicationFlowRunController@resume"
-    },
-    {
-      "id": "handler:CommunicationFlowRunController@show",
-      "type": "handler",
-      "action": "CommunicationFlowRunController@show"
-    },
-    {
-      "id": "handler:CommunicationFlowRunController@stop",
-      "type": "handler",
-      "action": "CommunicationFlowRunController@stop"
-    },
-    {
       "id": "handler:CommunicationGatewayEventController",
       "type": "handler",
       "action": "CommunicationGatewayEventController"
@@ -7711,156 +7406,6 @@
       "id": "handler:CommunicationGatewayMediaController",
       "type": "handler",
       "action": "CommunicationGatewayMediaController"
-    },
-    {
-      "id": "handler:CommunicationInboxController@destroy",
-      "type": "handler",
-      "action": "CommunicationInboxController@destroy"
-    },
-    {
-      "id": "handler:CommunicationInboxController@index",
-      "type": "handler",
-      "action": "CommunicationInboxController@index"
-    },
-    {
-      "id": "handler:CommunicationInboxController@replaceMembers",
-      "type": "handler",
-      "action": "CommunicationInboxController@replaceMembers"
-    },
-    {
-      "id": "handler:CommunicationInboxController@revoke",
-      "type": "handler",
-      "action": "CommunicationInboxController@revoke"
-    },
-    {
-      "id": "handler:CommunicationInboxController@startPairing",
-      "type": "handler",
-      "action": "CommunicationInboxController@startPairing"
-    },
-    {
-      "id": "handler:CommunicationInboxController@store",
-      "type": "handler",
-      "action": "CommunicationInboxController@store"
-    },
-    {
-      "id": "handler:CommunicationInboxController@update",
-      "type": "handler",
-      "action": "CommunicationInboxController@update"
-    },
-    {
-      "id": "handler:CommunicationInboxController@updateTenantSettings",
-      "type": "handler",
-      "action": "CommunicationInboxController@updateTenantSettings"
-    },
-    {
-      "id": "handler:CommunicationInboxGatewayController@blocklist",
-      "type": "handler",
-      "action": "CommunicationInboxGatewayController@blocklist"
-    },
-    {
-      "id": "handler:CommunicationInboxGatewayController@businessProfiles",
-      "type": "handler",
-      "action": "CommunicationInboxGatewayController@businessProfiles"
-    },
-    {
-      "id": "handler:CommunicationInboxGatewayController@checkUsers",
-      "type": "handler",
-      "action": "CommunicationInboxGatewayController@checkUsers"
-    },
-    {
-      "id": "handler:CommunicationInboxGatewayController@confirmPasskey",
-      "type": "handler",
-      "action": "CommunicationInboxGatewayController@confirmPasskey"
-    },
-    {
-      "id": "handler:CommunicationInboxGatewayController@contactQrLink",
-      "type": "handler",
-      "action": "CommunicationInboxGatewayController@contactQrLink"
-    },
-    {
-      "id": "handler:CommunicationInboxGatewayController@defaultDisappearing",
-      "type": "handler",
-      "action": "CommunicationInboxGatewayController@defaultDisappearing"
-    },
-    {
-      "id": "handler:CommunicationInboxGatewayController@disconnect",
-      "type": "handler",
-      "action": "CommunicationInboxGatewayController@disconnect"
-    },
-    {
-      "id": "handler:CommunicationInboxGatewayController@globalPresence",
-      "type": "handler",
-      "action": "CommunicationInboxGatewayController@globalPresence"
-    },
-    {
-      "id": "handler:CommunicationInboxGatewayController@markStateClean",
-      "type": "handler",
-      "action": "CommunicationInboxGatewayController@markStateClean"
-    },
-    {
-      "id": "handler:CommunicationInboxGatewayController@pairPhone",
-      "type": "handler",
-      "action": "CommunicationInboxGatewayController@pairPhone"
-    },
-    {
-      "id": "handler:CommunicationInboxGatewayController@passive",
-      "type": "handler",
-      "action": "CommunicationInboxGatewayController@passive"
-    },
-    {
-      "id": "handler:CommunicationInboxGatewayController@privacy",
-      "type": "handler",
-      "action": "CommunicationInboxGatewayController@privacy"
-    },
-    {
-      "id": "handler:CommunicationInboxGatewayController@profilePicture",
-      "type": "handler",
-      "action": "CommunicationInboxGatewayController@profilePicture"
-    },
-    {
-      "id": "handler:CommunicationInboxGatewayController@resolveBusinessLink",
-      "type": "handler",
-      "action": "CommunicationInboxGatewayController@resolveBusinessLink"
-    },
-    {
-      "id": "handler:CommunicationInboxGatewayController@resolveContactQr",
-      "type": "handler",
-      "action": "CommunicationInboxGatewayController@resolveContactQr"
-    },
-    {
-      "id": "handler:CommunicationInboxGatewayController@respondPasskey",
-      "type": "handler",
-      "action": "CommunicationInboxGatewayController@respondPasskey"
-    },
-    {
-      "id": "handler:CommunicationInboxGatewayController@sessionStatus",
-      "type": "handler",
-      "action": "CommunicationInboxGatewayController@sessionStatus"
-    },
-    {
-      "id": "handler:CommunicationInboxGatewayController@syncState",
-      "type": "handler",
-      "action": "CommunicationInboxGatewayController@syncState"
-    },
-    {
-      "id": "handler:CommunicationInboxGatewayController@updateBlocklist",
-      "type": "handler",
-      "action": "CommunicationInboxGatewayController@updateBlocklist"
-    },
-    {
-      "id": "handler:CommunicationInboxGatewayController@updatePrivacy",
-      "type": "handler",
-      "action": "CommunicationInboxGatewayController@updatePrivacy"
-    },
-    {
-      "id": "handler:CommunicationInboxGatewayController@userInfo",
-      "type": "handler",
-      "action": "CommunicationInboxGatewayController@userInfo"
-    },
-    {
-      "id": "handler:CommunicationProfilePictureController@show",
-      "type": "handler",
-      "action": "CommunicationProfilePictureController@show"
     },
     {
       "id": "handler:CompletedJobsController@index",
@@ -7883,6 +7428,51 @@
       "action": "ConfirmedPasswordStatusController@show"
     },
     {
+      "id": "handler:ContactController@addIdentity",
+      "type": "handler",
+      "action": "ContactController@addIdentity"
+    },
+    {
+      "id": "handler:ContactController@index",
+      "type": "handler",
+      "action": "ContactController@index"
+    },
+    {
+      "id": "handler:ContactController@linkIdentity",
+      "type": "handler",
+      "action": "ContactController@linkIdentity"
+    },
+    {
+      "id": "handler:ContactController@search",
+      "type": "handler",
+      "action": "ContactController@search"
+    },
+    {
+      "id": "handler:ContactController@sharedContent",
+      "type": "handler",
+      "action": "ContactController@sharedContent"
+    },
+    {
+      "id": "handler:ContactController@show",
+      "type": "handler",
+      "action": "ContactController@show"
+    },
+    {
+      "id": "handler:ContactController@store",
+      "type": "handler",
+      "action": "ContactController@store"
+    },
+    {
+      "id": "handler:ContactController@unlinkIdentity",
+      "type": "handler",
+      "action": "ContactController@unlinkIdentity"
+    },
+    {
+      "id": "handler:ContactController@update",
+      "type": "handler",
+      "action": "ContactController@update"
+    },
+    {
       "id": "handler:ConversationBulkOperationController@items",
       "type": "handler",
       "action": "ConversationBulkOperationController@items"
@@ -7896,6 +7486,111 @@
       "id": "handler:ConversationBulkOperationController@store",
       "type": "handler",
       "action": "ConversationBulkOperationController@store"
+    },
+    {
+      "id": "handler:ConversationController@addLabel",
+      "type": "handler",
+      "action": "ConversationController@addLabel"
+    },
+    {
+      "id": "handler:ConversationController@index",
+      "type": "handler",
+      "action": "ConversationController@index"
+    },
+    {
+      "id": "handler:ConversationController@messages",
+      "type": "handler",
+      "action": "ConversationController@messages"
+    },
+    {
+      "id": "handler:ConversationController@removeLabel",
+      "type": "handler",
+      "action": "ConversationController@removeLabel"
+    },
+    {
+      "id": "handler:ConversationController@send",
+      "type": "handler",
+      "action": "ConversationController@send"
+    },
+    {
+      "id": "handler:ConversationController@sharedContent",
+      "type": "handler",
+      "action": "ConversationController@sharedContent"
+    },
+    {
+      "id": "handler:ConversationController@show",
+      "type": "handler",
+      "action": "ConversationController@show"
+    },
+    {
+      "id": "handler:ConversationController@store",
+      "type": "handler",
+      "action": "ConversationController@store"
+    },
+    {
+      "id": "handler:ConversationController@update",
+      "type": "handler",
+      "action": "ConversationController@update"
+    },
+    {
+      "id": "handler:ConversationController@updateReadState",
+      "type": "handler",
+      "action": "ConversationController@updateReadState"
+    },
+    {
+      "id": "handler:ConversationGatewayController@chatPresence",
+      "type": "handler",
+      "action": "ConversationGatewayController@chatPresence"
+    },
+    {
+      "id": "handler:ConversationGatewayController@disappearing",
+      "type": "handler",
+      "action": "ConversationGatewayController@disappearing"
+    },
+    {
+      "id": "handler:ConversationGatewayController@edit",
+      "type": "handler",
+      "action": "ConversationGatewayController@edit"
+    },
+    {
+      "id": "handler:ConversationGatewayController@history",
+      "type": "handler",
+      "action": "ConversationGatewayController@history"
+    },
+    {
+      "id": "handler:ConversationGatewayController@react",
+      "type": "handler",
+      "action": "ConversationGatewayController@react"
+    },
+    {
+      "id": "handler:ConversationGatewayController@receipt",
+      "type": "handler",
+      "action": "ConversationGatewayController@receipt"
+    },
+    {
+      "id": "handler:ConversationGatewayController@recovery",
+      "type": "handler",
+      "action": "ConversationGatewayController@recovery"
+    },
+    {
+      "id": "handler:ConversationGatewayController@revoke",
+      "type": "handler",
+      "action": "ConversationGatewayController@revoke"
+    },
+    {
+      "id": "handler:ConversationGatewayController@state",
+      "type": "handler",
+      "action": "ConversationGatewayController@state"
+    },
+    {
+      "id": "handler:ConversationGatewayController@subscribePresence",
+      "type": "handler",
+      "action": "ConversationGatewayController@subscribePresence"
+    },
+    {
+      "id": "handler:ConversationGatewayController@votePoll",
+      "type": "handler",
+      "action": "ConversationGatewayController@votePoll"
     },
     {
       "id": "handler:ConversationListPreferenceController@show",
@@ -7971,6 +7666,31 @@
       "id": "handler:DasnSimeiController@history",
       "type": "handler",
       "action": "DasnSimeiController@history"
+    },
+    {
+      "id": "handler:DataController@downloadAttachment",
+      "type": "handler",
+      "action": "DataController@downloadAttachment"
+    },
+    {
+      "id": "handler:DataController@exportContact",
+      "type": "handler",
+      "action": "DataController@exportContact"
+    },
+    {
+      "id": "handler:DataController@previewAttachment",
+      "type": "handler",
+      "action": "DataController@previewAttachment"
+    },
+    {
+      "id": "handler:DataController@purgeContact",
+      "type": "handler",
+      "action": "DataController@purgeContact"
+    },
+    {
+      "id": "handler:DataController@sync",
+      "type": "handler",
+      "action": "DataController@sync"
     },
     {
       "id": "handler:DctfwebController@enqueueConsult",
@@ -8458,9 +8178,284 @@
       "action": "FiscalSnapshotController@show"
     },
     {
+      "id": "handler:FlowController@cloneFlow",
+      "type": "handler",
+      "action": "FlowController@cloneFlow"
+    },
+    {
+      "id": "handler:FlowController@cloneVersion",
+      "type": "handler",
+      "action": "FlowController@cloneVersion"
+    },
+    {
+      "id": "handler:FlowController@destroy",
+      "type": "handler",
+      "action": "FlowController@destroy"
+    },
+    {
+      "id": "handler:FlowController@destroyBinding",
+      "type": "handler",
+      "action": "FlowController@destroyBinding"
+    },
+    {
+      "id": "handler:FlowController@disableBinding",
+      "type": "handler",
+      "action": "FlowController@disableBinding"
+    },
+    {
+      "id": "handler:FlowController@dryRun",
+      "type": "handler",
+      "action": "FlowController@dryRun"
+    },
+    {
+      "id": "handler:FlowController@enableBinding",
+      "type": "handler",
+      "action": "FlowController@enableBinding"
+    },
+    {
+      "id": "handler:FlowController@index",
+      "type": "handler",
+      "action": "FlowController@index"
+    },
+    {
+      "id": "handler:FlowController@indexBindings",
+      "type": "handler",
+      "action": "FlowController@indexBindings"
+    },
+    {
+      "id": "handler:FlowController@previewGraph",
+      "type": "handler",
+      "action": "FlowController@previewGraph"
+    },
+    {
+      "id": "handler:FlowController@publish",
+      "type": "handler",
+      "action": "FlowController@publish"
+    },
+    {
+      "id": "handler:FlowController@show",
+      "type": "handler",
+      "action": "FlowController@show"
+    },
+    {
+      "id": "handler:FlowController@showDraft",
+      "type": "handler",
+      "action": "FlowController@showDraft"
+    },
+    {
+      "id": "handler:FlowController@store",
+      "type": "handler",
+      "action": "FlowController@store"
+    },
+    {
+      "id": "handler:FlowController@storeBinding",
+      "type": "handler",
+      "action": "FlowController@storeBinding"
+    },
+    {
+      "id": "handler:FlowController@update",
+      "type": "handler",
+      "action": "FlowController@update"
+    },
+    {
+      "id": "handler:FlowController@updateBinding",
+      "type": "handler",
+      "action": "FlowController@updateBinding"
+    },
+    {
+      "id": "handler:FlowController@updateDraft",
+      "type": "handler",
+      "action": "FlowController@updateDraft"
+    },
+    {
+      "id": "handler:FlowController@validateGraph",
+      "type": "handler",
+      "action": "FlowController@validateGraph"
+    },
+    {
+      "id": "handler:FlowRunController@handoff",
+      "type": "handler",
+      "action": "FlowRunController@handoff"
+    },
+    {
+      "id": "handler:FlowRunController@index",
+      "type": "handler",
+      "action": "FlowRunController@index"
+    },
+    {
+      "id": "handler:FlowRunController@pause",
+      "type": "handler",
+      "action": "FlowRunController@pause"
+    },
+    {
+      "id": "handler:FlowRunController@restart",
+      "type": "handler",
+      "action": "FlowRunController@restart"
+    },
+    {
+      "id": "handler:FlowRunController@resume",
+      "type": "handler",
+      "action": "FlowRunController@resume"
+    },
+    {
+      "id": "handler:FlowRunController@show",
+      "type": "handler",
+      "action": "FlowRunController@show"
+    },
+    {
+      "id": "handler:FlowRunController@stop",
+      "type": "handler",
+      "action": "FlowRunController@stop"
+    },
+    {
       "id": "handler:HomeController@index",
       "type": "handler",
       "action": "HomeController@index"
+    },
+    {
+      "id": "handler:InboxController@destroy",
+      "type": "handler",
+      "action": "InboxController@destroy"
+    },
+    {
+      "id": "handler:InboxController@index",
+      "type": "handler",
+      "action": "InboxController@index"
+    },
+    {
+      "id": "handler:InboxController@replaceMembers",
+      "type": "handler",
+      "action": "InboxController@replaceMembers"
+    },
+    {
+      "id": "handler:InboxController@revoke",
+      "type": "handler",
+      "action": "InboxController@revoke"
+    },
+    {
+      "id": "handler:InboxController@startPairing",
+      "type": "handler",
+      "action": "InboxController@startPairing"
+    },
+    {
+      "id": "handler:InboxController@store",
+      "type": "handler",
+      "action": "InboxController@store"
+    },
+    {
+      "id": "handler:InboxController@update",
+      "type": "handler",
+      "action": "InboxController@update"
+    },
+    {
+      "id": "handler:InboxController@updateTenantSettings",
+      "type": "handler",
+      "action": "InboxController@updateTenantSettings"
+    },
+    {
+      "id": "handler:InboxGatewayController@blocklist",
+      "type": "handler",
+      "action": "InboxGatewayController@blocklist"
+    },
+    {
+      "id": "handler:InboxGatewayController@businessProfiles",
+      "type": "handler",
+      "action": "InboxGatewayController@businessProfiles"
+    },
+    {
+      "id": "handler:InboxGatewayController@checkUsers",
+      "type": "handler",
+      "action": "InboxGatewayController@checkUsers"
+    },
+    {
+      "id": "handler:InboxGatewayController@confirmPasskey",
+      "type": "handler",
+      "action": "InboxGatewayController@confirmPasskey"
+    },
+    {
+      "id": "handler:InboxGatewayController@contactQrLink",
+      "type": "handler",
+      "action": "InboxGatewayController@contactQrLink"
+    },
+    {
+      "id": "handler:InboxGatewayController@defaultDisappearing",
+      "type": "handler",
+      "action": "InboxGatewayController@defaultDisappearing"
+    },
+    {
+      "id": "handler:InboxGatewayController@disconnect",
+      "type": "handler",
+      "action": "InboxGatewayController@disconnect"
+    },
+    {
+      "id": "handler:InboxGatewayController@globalPresence",
+      "type": "handler",
+      "action": "InboxGatewayController@globalPresence"
+    },
+    {
+      "id": "handler:InboxGatewayController@markStateClean",
+      "type": "handler",
+      "action": "InboxGatewayController@markStateClean"
+    },
+    {
+      "id": "handler:InboxGatewayController@pairPhone",
+      "type": "handler",
+      "action": "InboxGatewayController@pairPhone"
+    },
+    {
+      "id": "handler:InboxGatewayController@passive",
+      "type": "handler",
+      "action": "InboxGatewayController@passive"
+    },
+    {
+      "id": "handler:InboxGatewayController@privacy",
+      "type": "handler",
+      "action": "InboxGatewayController@privacy"
+    },
+    {
+      "id": "handler:InboxGatewayController@profilePicture",
+      "type": "handler",
+      "action": "InboxGatewayController@profilePicture"
+    },
+    {
+      "id": "handler:InboxGatewayController@resolveBusinessLink",
+      "type": "handler",
+      "action": "InboxGatewayController@resolveBusinessLink"
+    },
+    {
+      "id": "handler:InboxGatewayController@resolveContactQr",
+      "type": "handler",
+      "action": "InboxGatewayController@resolveContactQr"
+    },
+    {
+      "id": "handler:InboxGatewayController@respondPasskey",
+      "type": "handler",
+      "action": "InboxGatewayController@respondPasskey"
+    },
+    {
+      "id": "handler:InboxGatewayController@sessionStatus",
+      "type": "handler",
+      "action": "InboxGatewayController@sessionStatus"
+    },
+    {
+      "id": "handler:InboxGatewayController@syncState",
+      "type": "handler",
+      "action": "InboxGatewayController@syncState"
+    },
+    {
+      "id": "handler:InboxGatewayController@updateBlocklist",
+      "type": "handler",
+      "action": "InboxGatewayController@updateBlocklist"
+    },
+    {
+      "id": "handler:InboxGatewayController@updatePrivacy",
+      "type": "handler",
+      "action": "InboxGatewayController@updatePrivacy"
+    },
+    {
+      "id": "handler:InboxGatewayController@userInfo",
+      "type": "handler",
+      "action": "InboxGatewayController@userInfo"
     },
     {
       "id": "handler:InitialOnboardingController@complete",
@@ -8813,39 +8808,39 @@
       "action": "OutboundDeadlineController@pendingItems"
     },
     {
-      "id": "handler:PagtowebArrecadacaoReceiptController@download",
+      "id": "handler:PagtoWebArrecadacaoReceiptController@download",
       "type": "handler",
-      "action": "PagtowebArrecadacaoReceiptController@download"
+      "action": "PagtoWebArrecadacaoReceiptController@download"
     },
     {
-      "id": "handler:PagtowebArrecadacaoReceiptController@history",
+      "id": "handler:PagtoWebArrecadacaoReceiptController@history",
       "type": "handler",
-      "action": "PagtowebArrecadacaoReceiptController@history"
+      "action": "PagtoWebArrecadacaoReceiptController@history"
     },
     {
-      "id": "handler:PagtowebArrecadacaoReceiptController@request",
+      "id": "handler:PagtoWebArrecadacaoReceiptController@request",
       "type": "handler",
-      "action": "PagtowebArrecadacaoReceiptController@request"
+      "action": "PagtoWebArrecadacaoReceiptController@request"
     },
     {
-      "id": "handler:PagtowebPaymentCountController@consult",
+      "id": "handler:PagtoWebPaymentCountController@consult",
       "type": "handler",
-      "action": "PagtowebPaymentCountController@consult"
+      "action": "PagtoWebPaymentCountController@consult"
     },
     {
-      "id": "handler:PagtowebPaymentCountController@history",
+      "id": "handler:PagtoWebPaymentCountController@history",
       "type": "handler",
-      "action": "PagtowebPaymentCountController@history"
+      "action": "PagtoWebPaymentCountController@history"
     },
     {
-      "id": "handler:PagtowebPaymentListController@consult",
+      "id": "handler:PagtoWebPaymentListController@consult",
       "type": "handler",
-      "action": "PagtowebPaymentListController@consult"
+      "action": "PagtoWebPaymentListController@consult"
     },
     {
-      "id": "handler:PagtowebPaymentListController@history",
+      "id": "handler:PagtoWebPaymentListController@history",
       "type": "handler",
-      "action": "PagtowebPaymentListController@history"
+      "action": "PagtoWebPaymentListController@history"
     },
     {
       "id": "handler:PasswordController@update",
@@ -9016,6 +9011,11 @@
       "id": "handler:ProfileInformationController@update",
       "type": "handler",
       "action": "ProfileInformationController@update"
+    },
+    {
+      "id": "handler:ProfilePictureController@show",
+      "type": "handler",
+      "action": "ProfilePictureController@show"
     },
     {
       "id": "handler:PublicActivationController@complete",
@@ -10460,7 +10460,7 @@
     },
     {
       "from": "api:GET:api/v1/communication/attachments/{attachment}/download",
-      "to": "handler:CommunicationDataController@downloadAttachment",
+      "to": "handler:DataController@downloadAttachment",
       "type": "handled-by"
     },
     {
@@ -10470,7 +10470,7 @@
     },
     {
       "from": "api:GET:api/v1/communication/attachments/{attachment}/preview",
-      "to": "handler:CommunicationDataController@previewAttachment",
+      "to": "handler:DataController@previewAttachment",
       "type": "handled-by"
     },
     {
@@ -10480,7 +10480,7 @@
     },
     {
       "from": "api:GET:api/v1/communication/automation-policies",
-      "to": "handler:CommunicationAutomationController@index",
+      "to": "handler:AutomationController@index",
       "type": "handled-by"
     },
     {
@@ -10490,7 +10490,7 @@
     },
     {
       "from": "api:PUT:api/v1/communication/automation-policies",
-      "to": "handler:CommunicationAutomationController@upsert",
+      "to": "handler:AutomationController@upsert",
       "type": "handled-by"
     },
     {
@@ -10500,7 +10500,7 @@
     },
     {
       "from": "api:GET:api/v1/communication/canned-responses",
-      "to": "handler:CommunicationCatalogController@cannedResponses",
+      "to": "handler:CatalogController@cannedResponses",
       "type": "handled-by"
     },
     {
@@ -10510,7 +10510,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/canned-responses",
-      "to": "handler:CommunicationCatalogController@storeCannedResponse",
+      "to": "handler:CatalogController@storeCannedResponse",
       "type": "handled-by"
     },
     {
@@ -10520,7 +10520,7 @@
     },
     {
       "from": "api:PUT:api/v1/communication/canned-responses/{canned}",
-      "to": "handler:CommunicationCatalogController@updateCannedResponse",
+      "to": "handler:CatalogController@updateCannedResponse",
       "type": "handled-by"
     },
     {
@@ -10530,7 +10530,7 @@
     },
     {
       "from": "api:DELETE:api/v1/communication/canned-responses/{canned}",
-      "to": "handler:CommunicationCatalogController@deleteCannedResponse",
+      "to": "handler:CatalogController@deleteCannedResponse",
       "type": "handled-by"
     },
     {
@@ -10540,7 +10540,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/canned-responses/{canned}/deactivate",
-      "to": "handler:CommunicationCatalogController@deactivateCannedResponse",
+      "to": "handler:CatalogController@deactivateCannedResponse",
       "type": "handled-by"
     },
     {
@@ -10550,7 +10550,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/canned-responses/{canned}/duplicate",
-      "to": "handler:CommunicationCatalogController@duplicateCannedResponse",
+      "to": "handler:CatalogController@duplicateCannedResponse",
       "type": "handled-by"
     },
     {
@@ -10560,7 +10560,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/canned-responses/{canned}/render",
-      "to": "handler:CommunicationCatalogController@renderCannedResponse",
+      "to": "handler:CatalogController@renderCannedResponse",
       "type": "handled-by"
     },
     {
@@ -10570,7 +10570,7 @@
     },
     {
       "from": "api:GET:api/v1/communication/clients/{client}/automation-recipients",
-      "to": "handler:CommunicationAutomationController@recipients",
+      "to": "handler:AutomationController@recipients",
       "type": "handled-by"
     },
     {
@@ -10580,7 +10580,7 @@
     },
     {
       "from": "api:PUT:api/v1/communication/clients/{client}/automation-recipients",
-      "to": "handler:CommunicationAutomationController@updateRecipients",
+      "to": "handler:AutomationController@updateRecipients",
       "type": "handled-by"
     },
     {
@@ -10590,7 +10590,7 @@
     },
     {
       "from": "api:GET:api/v1/communication/contacts",
-      "to": "handler:CommunicationContactController@index",
+      "to": "handler:ContactController@index",
       "type": "handled-by"
     },
     {
@@ -10600,7 +10600,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/contacts",
-      "to": "handler:CommunicationContactController@store",
+      "to": "handler:ContactController@store",
       "type": "handled-by"
     },
     {
@@ -10610,7 +10610,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/contacts/search",
-      "to": "handler:CommunicationContactController@search",
+      "to": "handler:ContactController@search",
       "type": "handled-by"
     },
     {
@@ -10620,7 +10620,7 @@
     },
     {
       "from": "api:GET:api/v1/communication/contacts/{contact}",
-      "to": "handler:CommunicationContactController@show",
+      "to": "handler:ContactController@show",
       "type": "handled-by"
     },
     {
@@ -10630,7 +10630,7 @@
     },
     {
       "from": "api:PATCH:api/v1/communication/contacts/{contact}",
-      "to": "handler:CommunicationContactController@update",
+      "to": "handler:ContactController@update",
       "type": "handled-by"
     },
     {
@@ -10640,7 +10640,7 @@
     },
     {
       "from": "api:GET:api/v1/communication/contacts/{contact}/export",
-      "to": "handler:CommunicationDataController@exportContact",
+      "to": "handler:DataController@exportContact",
       "type": "handled-by"
     },
     {
@@ -10650,7 +10650,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/contacts/{contact}/identities",
-      "to": "handler:CommunicationContactController@addIdentity",
+      "to": "handler:ContactController@addIdentity",
       "type": "handled-by"
     },
     {
@@ -10660,7 +10660,7 @@
     },
     {
       "from": "api:DELETE:api/v1/communication/contacts/{contact}/personal-data",
-      "to": "handler:CommunicationDataController@purgeContact",
+      "to": "handler:DataController@purgeContact",
       "type": "handled-by"
     },
     {
@@ -10670,7 +10670,7 @@
     },
     {
       "from": "api:GET:api/v1/communication/contacts/{contact}/shared-content",
-      "to": "handler:CommunicationContactController@sharedContent",
+      "to": "handler:ContactController@sharedContent",
       "type": "handled-by"
     },
     {
@@ -10730,7 +10730,7 @@
     },
     {
       "from": "api:GET:api/v1/communication/conversations",
-      "to": "handler:CommunicationConversationController@index",
+      "to": "handler:ConversationController@index",
       "type": "handled-by"
     },
     {
@@ -10740,7 +10740,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/conversations",
-      "to": "handler:CommunicationConversationController@store",
+      "to": "handler:ConversationController@store",
       "type": "handled-by"
     },
     {
@@ -10750,7 +10750,7 @@
     },
     {
       "from": "api:GET:api/v1/communication/conversations/{conversation}",
-      "to": "handler:CommunicationConversationController@show",
+      "to": "handler:ConversationController@show",
       "type": "handled-by"
     },
     {
@@ -10760,7 +10760,7 @@
     },
     {
       "from": "api:PATCH:api/v1/communication/conversations/{conversation}",
-      "to": "handler:CommunicationConversationController@update",
+      "to": "handler:ConversationController@update",
       "type": "handled-by"
     },
     {
@@ -10770,7 +10770,7 @@
     },
     {
       "from": "api:PUT:api/v1/communication/conversations/{conversation}/disappearing",
-      "to": "handler:CommunicationConversationGatewayController@disappearing",
+      "to": "handler:ConversationGatewayController@disappearing",
       "type": "handled-by"
     },
     {
@@ -10780,7 +10780,7 @@
     },
     {
       "from": "api:PUT:api/v1/communication/conversations/{conversation}/labels/{label}",
-      "to": "handler:CommunicationConversationController@addLabel",
+      "to": "handler:ConversationController@addLabel",
       "type": "handled-by"
     },
     {
@@ -10790,7 +10790,7 @@
     },
     {
       "from": "api:DELETE:api/v1/communication/conversations/{conversation}/labels/{label}",
-      "to": "handler:CommunicationConversationController@removeLabel",
+      "to": "handler:ConversationController@removeLabel",
       "type": "handled-by"
     },
     {
@@ -10800,7 +10800,7 @@
     },
     {
       "from": "api:GET:api/v1/communication/conversations/{conversation}/messages",
-      "to": "handler:CommunicationConversationController@messages",
+      "to": "handler:ConversationController@messages",
       "type": "handled-by"
     },
     {
@@ -10810,7 +10810,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/conversations/{conversation}/messages",
-      "to": "handler:CommunicationConversationController@send",
+      "to": "handler:ConversationController@send",
       "type": "handled-by"
     },
     {
@@ -10820,7 +10820,7 @@
     },
     {
       "from": "api:DELETE:api/v1/communication/conversations/{conversation}/messages/{message}",
-      "to": "handler:CommunicationConversationGatewayController@revoke",
+      "to": "handler:ConversationGatewayController@revoke",
       "type": "handled-by"
     },
     {
@@ -10830,7 +10830,7 @@
     },
     {
       "from": "api:PUT:api/v1/communication/conversations/{conversation}/messages/{message}/edit",
-      "to": "handler:CommunicationConversationGatewayController@edit",
+      "to": "handler:ConversationGatewayController@edit",
       "type": "handled-by"
     },
     {
@@ -10840,7 +10840,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/conversations/{conversation}/messages/{message}/history",
-      "to": "handler:CommunicationConversationGatewayController@history",
+      "to": "handler:ConversationGatewayController@history",
       "type": "handled-by"
     },
     {
@@ -10850,7 +10850,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/conversations/{conversation}/messages/{message}/poll-votes",
-      "to": "handler:CommunicationConversationGatewayController@votePoll",
+      "to": "handler:ConversationGatewayController@votePoll",
       "type": "handled-by"
     },
     {
@@ -10860,7 +10860,7 @@
     },
     {
       "from": "api:PUT:api/v1/communication/conversations/{conversation}/messages/{message}/reaction",
-      "to": "handler:CommunicationConversationGatewayController@react",
+      "to": "handler:ConversationGatewayController@react",
       "type": "handled-by"
     },
     {
@@ -10870,7 +10870,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/conversations/{conversation}/messages/{message}/receipts",
-      "to": "handler:CommunicationConversationGatewayController@receipt",
+      "to": "handler:ConversationGatewayController@receipt",
       "type": "handled-by"
     },
     {
@@ -10880,7 +10880,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/conversations/{conversation}/messages/{message}/recovery",
-      "to": "handler:CommunicationConversationGatewayController@recovery",
+      "to": "handler:ConversationGatewayController@recovery",
       "type": "handled-by"
     },
     {
@@ -10890,7 +10890,7 @@
     },
     {
       "from": "api:PUT:api/v1/communication/conversations/{conversation}/presence",
-      "to": "handler:CommunicationConversationGatewayController@chatPresence",
+      "to": "handler:ConversationGatewayController@chatPresence",
       "type": "handled-by"
     },
     {
@@ -10900,7 +10900,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/conversations/{conversation}/presence/subscribe",
-      "to": "handler:CommunicationConversationGatewayController@subscribePresence",
+      "to": "handler:ConversationGatewayController@subscribePresence",
       "type": "handled-by"
     },
     {
@@ -10910,7 +10910,7 @@
     },
     {
       "from": "api:PUT:api/v1/communication/conversations/{conversation}/read-state",
-      "to": "handler:CommunicationConversationController@updateReadState",
+      "to": "handler:ConversationController@updateReadState",
       "type": "handled-by"
     },
     {
@@ -10920,7 +10920,7 @@
     },
     {
       "from": "api:GET:api/v1/communication/conversations/{conversation}/shared-content",
-      "to": "handler:CommunicationConversationController@sharedContent",
+      "to": "handler:ConversationController@sharedContent",
       "type": "handled-by"
     },
     {
@@ -10930,7 +10930,7 @@
     },
     {
       "from": "api:PUT:api/v1/communication/conversations/{conversation}/state",
-      "to": "handler:CommunicationConversationGatewayController@state",
+      "to": "handler:ConversationGatewayController@state",
       "type": "handled-by"
     },
     {
@@ -10940,7 +10940,7 @@
     },
     {
       "from": "api:GET:api/v1/communication/events",
-      "to": "handler:CommunicationDataController@sync",
+      "to": "handler:DataController@sync",
       "type": "handled-by"
     },
     {
@@ -10950,7 +10950,7 @@
     },
     {
       "from": "api:PATCH:api/v1/communication/flow-bindings/{binding}",
-      "to": "handler:CommunicationFlowController@updateBinding",
+      "to": "handler:FlowController@updateBinding",
       "type": "handled-by"
     },
     {
@@ -10960,7 +10960,7 @@
     },
     {
       "from": "api:DELETE:api/v1/communication/flow-bindings/{binding}",
-      "to": "handler:CommunicationFlowController@destroyBinding",
+      "to": "handler:FlowController@destroyBinding",
       "type": "handled-by"
     },
     {
@@ -10970,7 +10970,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/flow-bindings/{binding}/disable",
-      "to": "handler:CommunicationFlowController@disableBinding",
+      "to": "handler:FlowController@disableBinding",
       "type": "handled-by"
     },
     {
@@ -10980,7 +10980,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/flow-bindings/{binding}/enable",
-      "to": "handler:CommunicationFlowController@enableBinding",
+      "to": "handler:FlowController@enableBinding",
       "type": "handled-by"
     },
     {
@@ -10990,7 +10990,7 @@
     },
     {
       "from": "api:GET:api/v1/communication/flow-runs",
-      "to": "handler:CommunicationFlowRunController@index",
+      "to": "handler:FlowRunController@index",
       "type": "handled-by"
     },
     {
@@ -11000,7 +11000,7 @@
     },
     {
       "from": "api:GET:api/v1/communication/flow-runs/{run}",
-      "to": "handler:CommunicationFlowRunController@show",
+      "to": "handler:FlowRunController@show",
       "type": "handled-by"
     },
     {
@@ -11010,7 +11010,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/flow-runs/{run}/handoff",
-      "to": "handler:CommunicationFlowRunController@handoff",
+      "to": "handler:FlowRunController@handoff",
       "type": "handled-by"
     },
     {
@@ -11020,7 +11020,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/flow-runs/{run}/pause",
-      "to": "handler:CommunicationFlowRunController@pause",
+      "to": "handler:FlowRunController@pause",
       "type": "handled-by"
     },
     {
@@ -11030,7 +11030,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/flow-runs/{run}/restart",
-      "to": "handler:CommunicationFlowRunController@restart",
+      "to": "handler:FlowRunController@restart",
       "type": "handled-by"
     },
     {
@@ -11040,7 +11040,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/flow-runs/{run}/resume",
-      "to": "handler:CommunicationFlowRunController@resume",
+      "to": "handler:FlowRunController@resume",
       "type": "handled-by"
     },
     {
@@ -11050,7 +11050,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/flow-runs/{run}/stop",
-      "to": "handler:CommunicationFlowRunController@stop",
+      "to": "handler:FlowRunController@stop",
       "type": "handled-by"
     },
     {
@@ -11060,7 +11060,7 @@
     },
     {
       "from": "api:GET:api/v1/communication/flows",
-      "to": "handler:CommunicationFlowController@index",
+      "to": "handler:FlowController@index",
       "type": "handled-by"
     },
     {
@@ -11070,7 +11070,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/flows",
-      "to": "handler:CommunicationFlowController@store",
+      "to": "handler:FlowController@store",
       "type": "handled-by"
     },
     {
@@ -11080,7 +11080,7 @@
     },
     {
       "from": "api:GET:api/v1/communication/flows/{flow}",
-      "to": "handler:CommunicationFlowController@show",
+      "to": "handler:FlowController@show",
       "type": "handled-by"
     },
     {
@@ -11090,7 +11090,7 @@
     },
     {
       "from": "api:PATCH:api/v1/communication/flows/{flow}",
-      "to": "handler:CommunicationFlowController@update",
+      "to": "handler:FlowController@update",
       "type": "handled-by"
     },
     {
@@ -11100,7 +11100,7 @@
     },
     {
       "from": "api:DELETE:api/v1/communication/flows/{flow}",
-      "to": "handler:CommunicationFlowController@destroy",
+      "to": "handler:FlowController@destroy",
       "type": "handled-by"
     },
     {
@@ -11110,7 +11110,7 @@
     },
     {
       "from": "api:GET:api/v1/communication/flows/{flow}/bindings",
-      "to": "handler:CommunicationFlowController@indexBindings",
+      "to": "handler:FlowController@indexBindings",
       "type": "handled-by"
     },
     {
@@ -11120,7 +11120,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/flows/{flow}/bindings",
-      "to": "handler:CommunicationFlowController@storeBinding",
+      "to": "handler:FlowController@storeBinding",
       "type": "handled-by"
     },
     {
@@ -11130,7 +11130,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/flows/{flow}/clone",
-      "to": "handler:CommunicationFlowController@cloneFlow",
+      "to": "handler:FlowController@cloneFlow",
       "type": "handled-by"
     },
     {
@@ -11140,7 +11140,7 @@
     },
     {
       "from": "api:GET:api/v1/communication/flows/{flow}/draft",
-      "to": "handler:CommunicationFlowController@showDraft",
+      "to": "handler:FlowController@showDraft",
       "type": "handled-by"
     },
     {
@@ -11150,7 +11150,7 @@
     },
     {
       "from": "api:PUT:api/v1/communication/flows/{flow}/draft",
-      "to": "handler:CommunicationFlowController@updateDraft",
+      "to": "handler:FlowController@updateDraft",
       "type": "handled-by"
     },
     {
@@ -11160,7 +11160,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/flows/{flow}/dry-run",
-      "to": "handler:CommunicationFlowController@dryRun",
+      "to": "handler:FlowController@dryRun",
       "type": "handled-by"
     },
     {
@@ -11170,7 +11170,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/flows/{flow}/preview",
-      "to": "handler:CommunicationFlowController@previewGraph",
+      "to": "handler:FlowController@previewGraph",
       "type": "handled-by"
     },
     {
@@ -11180,7 +11180,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/flows/{flow}/publish",
-      "to": "handler:CommunicationFlowController@publish",
+      "to": "handler:FlowController@publish",
       "type": "handled-by"
     },
     {
@@ -11190,7 +11190,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/flows/{flow}/validate",
-      "to": "handler:CommunicationFlowController@validateGraph",
+      "to": "handler:FlowController@validateGraph",
       "type": "handled-by"
     },
     {
@@ -11200,7 +11200,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/flows/{flow}/versions/{version}/clone",
-      "to": "handler:CommunicationFlowController@cloneVersion",
+      "to": "handler:FlowController@cloneVersion",
       "type": "handled-by"
     },
     {
@@ -11210,7 +11210,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/identities/{identity}/links",
-      "to": "handler:CommunicationContactController@linkIdentity",
+      "to": "handler:ContactController@linkIdentity",
       "type": "handled-by"
     },
     {
@@ -11220,7 +11220,7 @@
     },
     {
       "from": "api:DELETE:api/v1/communication/identities/{identity}/links/{link}",
-      "to": "handler:CommunicationContactController@unlinkIdentity",
+      "to": "handler:ContactController@unlinkIdentity",
       "type": "handled-by"
     },
     {
@@ -11230,7 +11230,7 @@
     },
     {
       "from": "api:GET:api/v1/communication/inboxes",
-      "to": "handler:CommunicationInboxController@index",
+      "to": "handler:InboxController@index",
       "type": "handled-by"
     },
     {
@@ -11240,7 +11240,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/inboxes",
-      "to": "handler:CommunicationInboxController@store",
+      "to": "handler:InboxController@store",
       "type": "handled-by"
     },
     {
@@ -11250,7 +11250,7 @@
     },
     {
       "from": "api:PATCH:api/v1/communication/inboxes/{inbox}",
-      "to": "handler:CommunicationInboxController@update",
+      "to": "handler:InboxController@update",
       "type": "handled-by"
     },
     {
@@ -11260,7 +11260,7 @@
     },
     {
       "from": "api:DELETE:api/v1/communication/inboxes/{inbox}",
-      "to": "handler:CommunicationInboxController@destroy",
+      "to": "handler:InboxController@destroy",
       "type": "handled-by"
     },
     {
@@ -11270,7 +11270,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/inboxes/{inbox}/app-state/mark-clean",
-      "to": "handler:CommunicationInboxGatewayController@markStateClean",
+      "to": "handler:InboxGatewayController@markStateClean",
       "type": "handled-by"
     },
     {
@@ -11280,7 +11280,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/inboxes/{inbox}/app-state/sync",
-      "to": "handler:CommunicationInboxGatewayController@syncState",
+      "to": "handler:InboxGatewayController@syncState",
       "type": "handled-by"
     },
     {
@@ -11290,7 +11290,7 @@
     },
     {
       "from": "api:GET:api/v1/communication/inboxes/{inbox}/blocklist",
-      "to": "handler:CommunicationInboxGatewayController@blocklist",
+      "to": "handler:InboxGatewayController@blocklist",
       "type": "handled-by"
     },
     {
@@ -11300,7 +11300,7 @@
     },
     {
       "from": "api:PUT:api/v1/communication/inboxes/{inbox}/blocklist",
-      "to": "handler:CommunicationInboxGatewayController@updateBlocklist",
+      "to": "handler:InboxGatewayController@updateBlocklist",
       "type": "handled-by"
     },
     {
@@ -11310,7 +11310,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/inboxes/{inbox}/contacts/business-link-resolve",
-      "to": "handler:CommunicationInboxGatewayController@resolveBusinessLink",
+      "to": "handler:InboxGatewayController@resolveBusinessLink",
       "type": "handled-by"
     },
     {
@@ -11320,7 +11320,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/inboxes/{inbox}/contacts/business-profiles",
-      "to": "handler:CommunicationInboxGatewayController@businessProfiles",
+      "to": "handler:InboxGatewayController@businessProfiles",
       "type": "handled-by"
     },
     {
@@ -11330,7 +11330,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/inboxes/{inbox}/contacts/check",
-      "to": "handler:CommunicationInboxGatewayController@checkUsers",
+      "to": "handler:InboxGatewayController@checkUsers",
       "type": "handled-by"
     },
     {
@@ -11340,7 +11340,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/inboxes/{inbox}/contacts/info",
-      "to": "handler:CommunicationInboxGatewayController@userInfo",
+      "to": "handler:InboxGatewayController@userInfo",
       "type": "handled-by"
     },
     {
@@ -11350,7 +11350,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/inboxes/{inbox}/contacts/profile-picture",
-      "to": "handler:CommunicationInboxGatewayController@profilePicture",
+      "to": "handler:InboxGatewayController@profilePicture",
       "type": "handled-by"
     },
     {
@@ -11360,7 +11360,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/inboxes/{inbox}/contacts/qr-link",
-      "to": "handler:CommunicationInboxGatewayController@contactQrLink",
+      "to": "handler:InboxGatewayController@contactQrLink",
       "type": "handled-by"
     },
     {
@@ -11370,7 +11370,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/inboxes/{inbox}/contacts/qr-resolve",
-      "to": "handler:CommunicationInboxGatewayController@resolveContactQr",
+      "to": "handler:InboxGatewayController@resolveContactQr",
       "type": "handled-by"
     },
     {
@@ -11380,7 +11380,7 @@
     },
     {
       "from": "api:PUT:api/v1/communication/inboxes/{inbox}/default-disappearing",
-      "to": "handler:CommunicationInboxGatewayController@defaultDisappearing",
+      "to": "handler:InboxGatewayController@defaultDisappearing",
       "type": "handled-by"
     },
     {
@@ -11390,7 +11390,7 @@
     },
     {
       "from": "api:PUT:api/v1/communication/inboxes/{inbox}/members",
-      "to": "handler:CommunicationInboxController@replaceMembers",
+      "to": "handler:InboxController@replaceMembers",
       "type": "handled-by"
     },
     {
@@ -11400,7 +11400,7 @@
     },
     {
       "from": "api:PUT:api/v1/communication/inboxes/{inbox}/presence",
-      "to": "handler:CommunicationInboxGatewayController@globalPresence",
+      "to": "handler:InboxGatewayController@globalPresence",
       "type": "handled-by"
     },
     {
@@ -11410,7 +11410,7 @@
     },
     {
       "from": "api:GET:api/v1/communication/inboxes/{inbox}/privacy",
-      "to": "handler:CommunicationInboxGatewayController@privacy",
+      "to": "handler:InboxGatewayController@privacy",
       "type": "handled-by"
     },
     {
@@ -11420,7 +11420,7 @@
     },
     {
       "from": "api:PUT:api/v1/communication/inboxes/{inbox}/privacy",
-      "to": "handler:CommunicationInboxGatewayController@updatePrivacy",
+      "to": "handler:InboxGatewayController@updatePrivacy",
       "type": "handled-by"
     },
     {
@@ -11430,7 +11430,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/inboxes/{inbox}/session/connect",
-      "to": "handler:CommunicationInboxController@startPairing",
+      "to": "handler:InboxController@startPairing",
       "type": "handled-by"
     },
     {
@@ -11440,7 +11440,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/inboxes/{inbox}/session/disconnect",
-      "to": "handler:CommunicationInboxGatewayController@disconnect",
+      "to": "handler:InboxGatewayController@disconnect",
       "type": "handled-by"
     },
     {
@@ -11450,7 +11450,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/inboxes/{inbox}/session/logout",
-      "to": "handler:CommunicationInboxController@revoke",
+      "to": "handler:InboxController@revoke",
       "type": "handled-by"
     },
     {
@@ -11460,7 +11460,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/inboxes/{inbox}/session/pair-phone",
-      "to": "handler:CommunicationInboxGatewayController@pairPhone",
+      "to": "handler:InboxGatewayController@pairPhone",
       "type": "handled-by"
     },
     {
@@ -11470,7 +11470,7 @@
     },
     {
       "from": "api:PUT:api/v1/communication/inboxes/{inbox}/session/passive",
-      "to": "handler:CommunicationInboxGatewayController@passive",
+      "to": "handler:InboxGatewayController@passive",
       "type": "handled-by"
     },
     {
@@ -11480,7 +11480,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/inboxes/{inbox}/session/passkey/confirm",
-      "to": "handler:CommunicationInboxGatewayController@confirmPasskey",
+      "to": "handler:InboxGatewayController@confirmPasskey",
       "type": "handled-by"
     },
     {
@@ -11490,7 +11490,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/inboxes/{inbox}/session/passkey/respond",
-      "to": "handler:CommunicationInboxGatewayController@respondPasskey",
+      "to": "handler:InboxGatewayController@respondPasskey",
       "type": "handled-by"
     },
     {
@@ -11500,7 +11500,7 @@
     },
     {
       "from": "api:GET:api/v1/communication/inboxes/{inbox}/session/status",
-      "to": "handler:CommunicationInboxGatewayController@sessionStatus",
+      "to": "handler:InboxGatewayController@sessionStatus",
       "type": "handled-by"
     },
     {
@@ -11510,7 +11510,7 @@
     },
     {
       "from": "api:GET:api/v1/communication/labels",
-      "to": "handler:CommunicationCatalogController@labels",
+      "to": "handler:CatalogController@labels",
       "type": "handled-by"
     },
     {
@@ -11520,7 +11520,7 @@
     },
     {
       "from": "api:POST:api/v1/communication/labels",
-      "to": "handler:CommunicationCatalogController@storeLabel",
+      "to": "handler:CatalogController@storeLabel",
       "type": "handled-by"
     },
     {
@@ -11530,7 +11530,7 @@
     },
     {
       "from": "api:DELETE:api/v1/communication/labels/{label}",
-      "to": "handler:CommunicationCatalogController@deleteLabel",
+      "to": "handler:CatalogController@deleteLabel",
       "type": "handled-by"
     },
     {
@@ -11540,7 +11540,7 @@
     },
     {
       "from": "api:GET:api/v1/communication/outbound-capabilities",
-      "to": "handler:CommunicationCatalogController@outboundCapabilities",
+      "to": "handler:CatalogController@outboundCapabilities",
       "type": "handled-by"
     },
     {
@@ -11550,7 +11550,7 @@
     },
     {
       "from": "api:GET:api/v1/communication/profile-pictures/{profile}/{version}",
-      "to": "handler:CommunicationProfilePictureController@show",
+      "to": "handler:ProfilePictureController@show",
       "type": "handled-by"
     },
     {
@@ -11560,7 +11560,7 @@
     },
     {
       "from": "api:PATCH:api/v1/communication/settings",
-      "to": "handler:CommunicationInboxController@updateTenantSettings",
+      "to": "handler:InboxController@updateTenantSettings",
       "type": "handled-by"
     },
     {
@@ -12390,7 +12390,7 @@
     },
     {
       "from": "api:POST:api/v1/fiscal/guides/payment-count/clients/{client}/consult",
-      "to": "handler:PagtowebPaymentCountController@consult",
+      "to": "handler:PagtoWebPaymentCountController@consult",
       "type": "handled-by"
     },
     {
@@ -12400,7 +12400,7 @@
     },
     {
       "from": "api:GET:api/v1/fiscal/guides/payment-count/clients/{client}/history",
-      "to": "handler:PagtowebPaymentCountController@history",
+      "to": "handler:PagtoWebPaymentCountController@history",
       "type": "handled-by"
     },
     {
@@ -12410,7 +12410,7 @@
     },
     {
       "from": "api:POST:api/v1/fiscal/guides/payments/clients/{client}/consult",
-      "to": "handler:PagtowebPaymentListController@consult",
+      "to": "handler:PagtoWebPaymentListController@consult",
       "type": "handled-by"
     },
     {
@@ -12420,7 +12420,7 @@
     },
     {
       "from": "api:GET:api/v1/fiscal/guides/payments/clients/{client}/history",
-      "to": "handler:PagtowebPaymentListController@history",
+      "to": "handler:PagtoWebPaymentListController@history",
       "type": "handled-by"
     },
     {
@@ -12440,7 +12440,7 @@
     },
     {
       "from": "api:GET:api/v1/fiscal/guides/receipts/clients/{client}/history",
-      "to": "handler:PagtowebArrecadacaoReceiptController@history",
+      "to": "handler:PagtoWebArrecadacaoReceiptController@history",
       "type": "handled-by"
     },
     {
@@ -12450,7 +12450,7 @@
     },
     {
       "from": "api:POST:api/v1/fiscal/guides/receipts/clients/{client}/request",
-      "to": "handler:PagtowebArrecadacaoReceiptController@request",
+      "to": "handler:PagtoWebArrecadacaoReceiptController@request",
       "type": "handled-by"
     },
     {
@@ -12460,7 +12460,7 @@
     },
     {
       "from": "api:GET:api/v1/fiscal/guides/receipts/clients/{client}/{receipt}/download",
-      "to": "handler:PagtowebArrecadacaoReceiptController@download",
+      "to": "handler:PagtoWebArrecadacaoReceiptController@download",
       "type": "handled-by"
     },
     {

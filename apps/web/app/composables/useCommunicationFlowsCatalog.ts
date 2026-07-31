@@ -6,7 +6,7 @@ import {
   type ComputedRef,
   type Ref
 } from 'vue'
-import type { CommunicationFlow, CommunicationFlowStatus } from '~/types/communication'
+import type { Flow, FlowStatus } from '~/types/communication/flows'
 import type { DataTableFilterDefinition, DataTableFilterModel } from '~/types/data-table-filter'
 import { apiErrorCode, apiErrorMessage } from '~/utils/api-error'
 import {
@@ -22,14 +22,14 @@ import { COMMUNICATION_SURFACES, consumeSurfaceNavigationIntent, useSurfaceNavig
 
 interface FlowsCatalogApi {
   list: () => Promise<{
-    data: CommunicationFlow[]
+    data: Flow[]
     meta: { flows_enabled: boolean }
   }>
-  create: (body: { name: string }) => Promise<{ data: CommunicationFlow }>
+  create: (body: { name: string }) => Promise<{ data: Flow }>
   update: (
     id: number,
-    body: { status: CommunicationFlowStatus, lock_version: number }
-  ) => Promise<{ data: CommunicationFlow }>
+    body: { status: FlowStatus, lock_version: number }
+  ) => Promise<{ data: Flow }>
 }
 
 interface FlowsCatalogDependencies {
@@ -46,7 +46,7 @@ function allowedPerPage(value: unknown): number {
   return [10, 20, 50].includes(parsed) ? parsed : 20
 }
 
-function initialStatus(value: unknown): 'all' | CommunicationFlowStatus {
+function initialStatus(value: unknown): 'all' | FlowStatus {
   return value === 'paused' || value === 'active' ? value : 'all'
 }
 
@@ -60,7 +60,7 @@ export function createCommunicationFlowsCatalog(dependencies: FlowsCatalogDepend
     toast
   } = dependencies
 
-  const allItems = ref<CommunicationFlow[]>([])
+  const allItems = ref<Flow[]>([])
   const flowsEnabled = ref(false)
   const flagsConfirmed = ref(false)
   const loading = ref(false)
@@ -69,7 +69,7 @@ export function createCommunicationFlowsCatalog(dependencies: FlowsCatalogDepend
   const page = ref(Math.max(1, Number(initialQuery.page) || 1))
   const perPage = ref(allowedPerPage(initialQuery.per_page))
   const q = ref(String(initialQuery.q || ''))
-  const statusFilter = ref<'all' | CommunicationFlowStatus>(
+  const statusFilter = ref<'all' | FlowStatus>(
     initialStatus(initialQuery.status)
   )
   let loadGeneration = 0
@@ -81,7 +81,7 @@ export function createCommunicationFlowsCatalog(dependencies: FlowsCatalogDepend
 
   const pauseOpen = ref(false)
   const pauseBusy = ref(false)
-  const pauseTarget = ref<CommunicationFlow | null>(null)
+  const pauseTarget = ref<Flow | null>(null)
 
   const mutationBlocked = computed(() =>
     communicationFlowsMutationBlocked(
@@ -197,11 +197,11 @@ export function createCommunicationFlowsCatalog(dependencies: FlowsCatalogDepend
     createOpen.value = true
   }
 
-  function openFlow(item: CommunicationFlow) {
+  function openFlow(item: Flow) {
     void navigate(communicationFlowPath(item.id))
   }
 
-  function openPause(item: CommunicationFlow) {
+  function openPause(item: Flow) {
     const blocked = mutationBlocked.value
     if (blocked) {
       toast(blocked, 'warning')

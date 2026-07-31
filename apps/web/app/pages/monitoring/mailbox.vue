@@ -5,7 +5,7 @@
  * lista + NuxtPage (detalhe em /monitoring/mailbox/[id]) abaixo das tabs.
  * Desktop: painéis adjacentes; mobile: detalhe em USlideover.
  *
- * Filtros: triage (status) + client via ModuleToolbar + surface monitoring.mailbox
+ * Filtros: triage (status) + client via ListToolbar + surface monitoring.mailbox
  * (presets salvos) no painel da lista. API mailbox não aplica `q` — busca desligada.
  */
 import { breakpointsTailwind, useBreakpoints } from '@vueuse/core'
@@ -559,7 +559,7 @@ function alertDescription(alert: Record<string, unknown>): string {
                 data-testid="mailbox-filter-strip"
               >
                 <div data-testid="mailbox-triage-filter">
-                  <MonitoringModuleToolbar
+                  <MonitoringListToolbar
                     surface="monitoring.mailbox"
                     :filters="filters"
                     :filter-config="filterConfig"

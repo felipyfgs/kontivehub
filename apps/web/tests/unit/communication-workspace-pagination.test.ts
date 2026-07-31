@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CommunicationConversation } from '~/types/communication'
 import {
-  isCommunicationConversationRequestCurrent,
+  isConversationRequestCurrent,
   mergeCommunicationConversationPage
 } from '~/composables/useCommunicationWorkspace'
 
@@ -40,12 +40,12 @@ describe('paginação do workspace de comunicação', () => {
   it('descarta resposta fora de ordem por geração e por troca de Tenant', () => {
     const active = { generation: 8, sessionEpoch: 12 }
 
-    expect(isCommunicationConversationRequestCurrent(active, active)).toBe(true)
-    expect(isCommunicationConversationRequestCurrent(
+    expect(isConversationRequestCurrent(active, active)).toBe(true)
+    expect(isConversationRequestCurrent(
       { generation: 7, sessionEpoch: 12 },
       active
     )).toBe(false)
-    expect(isCommunicationConversationRequestCurrent(
+    expect(isConversationRequestCurrent(
       { generation: 8, sessionEpoch: 11 },
       active
     )).toBe(false)

@@ -365,7 +365,7 @@ describe('communication contacts — superfícies e contrato Shell', () => {
     expect(api).toContain('sharedContent')
     expect(api).toContain('conversations: {')
     expect(api).toContain('create: (body: {')
-    const types = read('app/types/communication.ts')
+    const types = read('app/types/communication/index.ts')
     expect(types).toContain('is_provisional')
     expect(types).toContain('sort_direction')
     expect(types).toContain('client_name')

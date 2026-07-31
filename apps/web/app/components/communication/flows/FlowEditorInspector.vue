@@ -2,7 +2,7 @@
 /**
  * Inspector de propriedades do nó selecionado.
  */
-import type { CommunicationFlowNode } from '~/types/communication'
+import type { FlowNode } from '~/types/communication/flows'
 import {
   FLOW_ACTION_KINDS,
   FLOW_CONDITION_FIELDS,
@@ -11,7 +11,7 @@ import {
 } from '~/utils/communication-flow-graph'
 
 const props = defineProps<{
-  node: CommunicationFlowNode | null
+  node: FlowNode | null
   disabled?: boolean
 }>()
 

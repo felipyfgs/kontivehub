@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import type { CcmeiRegistrationStatusHistoryPayload } from '~/types/fiscal-modules'
-import { useCcmeiRegistrationStatusMonitoring } from '~/composables/useCcmeiRegistrationStatusMonitoring'
+import { useCcmeiRegistrationStatus } from '~/composables/useCcmeiRegistrationStatus'
 import { formatDateTime } from '~/utils/format'
 
 const props = defineProps<{ clientId: number, canConsult: boolean }>()
 const toast = useToast()
-const { fetchHistory, requestConsult } = useCcmeiRegistrationStatusMonitoring()
+const { fetchHistory, requestConsult } = useCcmeiRegistrationStatus()
 const loading = ref(true)
 const requesting = ref(false)
 const error = ref<string | null>(null)

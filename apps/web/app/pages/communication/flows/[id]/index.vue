@@ -6,12 +6,9 @@
  * Canvas Vue Flow fica em /editor.
  */
 import type {
-  CommunicationFlow,
-  CommunicationFlowBinding,
-  CommunicationFlowRun,
-  CommunicationFlowVersion,
   CommunicationInbox
 } from '~/types/communication'
+import type { Flow, FlowBinding, FlowRun, FlowVersion } from '~/types/communication/flows'
 import { apiErrorCode, apiErrorMessage } from '~/utils/api-error'
 import {
   communicationFlowStatusColor,
@@ -43,7 +40,7 @@ if (!canView.value) {
 }
 
 const flowId = computed(() => parseCommunicationFlowId(route.params.id))
-const flow = ref<CommunicationFlow | null>(null)
+const flow = ref<Flow | null>(null)
 const flowsEnabled = ref(true)
 const loading = ref(false)
 const loadError = ref<string | null>(null)
@@ -66,7 +63,7 @@ const publishOpen = ref(false)
 const publishBusy = ref(false)
 const enableOpen = ref(false)
 const enableBusy = ref(false)
-const enableTarget = ref<CommunicationFlowBinding | null>(null)
+const enableTarget = ref<FlowBinding | null>(null)
 
 const inboxes = ref<CommunicationInbox[]>([])
 const bindingInboxId = ref<number | undefined>(undefined)
@@ -76,7 +73,7 @@ const bindingError = ref<string | null>(null)
 const bindingActionKey = ref<string | null>(null)
 
 /** Runs observáveis do fluxo (carregados via GET /flow-runs?flow_id=). */
-const observedRuns = ref<CommunicationFlowRun[]>([])
+const observedRuns = ref<FlowRun[]>([])
 const runsLoading = ref(false)
 const runsError = ref<string | null>(null)
 const runsActiveOnly = ref(false)
@@ -87,8 +84,8 @@ const mutationBlocked = computed(() =>
   communicationFlowsMutationBlocked(flowsEnabled.value, canManage.value)
 )
 
-const versions = computed<CommunicationFlowVersion[]>(() => flow.value?.versions ?? [])
-const bindings = computed<CommunicationFlowBinding[]>(() => flow.value?.bindings ?? [])
+const versions = computed<FlowVersion[]>(() => flow.value?.versions ?? [])
+const bindings = computed<FlowBinding[]>(() => flow.value?.bindings ?? [])
 
 const inboxItems = computed(() =>
   inboxes.value.map(inbox => ({
@@ -110,7 +107,7 @@ const inboxNameById = computed(() => {
   return map
 })
 
-function applyFlow(next: CommunicationFlow) {
+function applyFlow(next: Flow) {
   flow.value = next
   editName.value = next.name
   editStatus.value = next.status
@@ -370,7 +367,7 @@ async function createBinding() {
   }
 }
 
-function openEnable(binding: CommunicationFlowBinding) {
+function openEnable(binding: FlowBinding) {
   const blocked = mutationBlocked.value
   if (blocked || !flow.value) {
     toast.add({ title: blocked || 'Sem permissão.', color: 'warning' })
@@ -424,7 +421,7 @@ async function onEnableConfirm() {
   }
 }
 
-async function toggleBinding(binding: CommunicationFlowBinding, enabled: boolean) {
+async function toggleBinding(binding: FlowBinding, enabled: boolean) {
   const blocked = mutationBlocked.value
   if (blocked || !flow.value) {
     toast.add({ title: blocked || 'Sem permissão.', color: 'warning' })
@@ -454,7 +451,7 @@ async function toggleBinding(binding: CommunicationFlowBinding, enabled: boolean
 }
 
 async function controlRun(
-  run: CommunicationFlowRun,
+  run: FlowRun,
   action: 'pause' | 'resume' | 'handoff' | 'stop' | 'restart'
 ) {
   const blocked = mutationBlocked.value

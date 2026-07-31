@@ -144,7 +144,7 @@ export function filterMonitoringCoverageSurfaces(
 }
 
 /** Guard comum para respostas que podem chegar após troca de contexto. */
-export function monitoringWorkspaceRequestIsCurrent(
+export function isMonitoringRequestCurrent(
   token: MonitoringWorkspaceRequestToken,
   currentSessionEpoch: number,
   currentGeneration: number

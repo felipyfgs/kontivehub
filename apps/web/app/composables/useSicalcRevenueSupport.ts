@@ -1,7 +1,7 @@
 import type { SicalcRevenueSupportHistoryPayload } from '~/types/fiscal-modules'
 
 /** Consulta explícita e histórico local sanitizado do SICALC 5.2. */
-export function useSicalcRevenueSupportMonitoring() {
+export function useSicalcRevenueSupport() {
   const { fiscal } = useApi()
 
   async function fetchHistory(clientId: number, revenueCode?: string): Promise<SicalcRevenueSupportHistoryPayload> {

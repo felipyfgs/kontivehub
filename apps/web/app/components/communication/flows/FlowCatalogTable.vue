@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
-import type { CommunicationFlow } from '~/types/communication'
+import type { Flow } from '~/types/communication/flows'
 import type { CommunicationFlowsCatalog } from '~/composables/useCommunicationFlowsCatalog'
 import {
   communicationFlowStatusColor,
@@ -18,7 +18,7 @@ const { catalog } = defineProps<{
 
 const page = catalog.page
 
-const columns: TableColumn<CommunicationFlow>[] = [
+const columns: TableColumn<Flow>[] = [
   { accessorKey: 'name', header: 'Nome', enableSorting: false },
   { id: 'status', header: 'Situação', enableSorting: false },
   {

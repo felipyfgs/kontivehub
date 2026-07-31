@@ -193,7 +193,7 @@ onMounted(load)
       v-else
       class="mx-auto flex w-full max-w-none flex-col gap-4 px-4 py-4 sm:gap-6 sm:px-6 lg:px-8"
     >
-      <ClientsClientIdentityHeader
+      <ClientsIdentityHeader
         :client="item"
         :can-manage-clients="canManageClients"
         @edit="openClientEdit"
@@ -204,7 +204,7 @@ onMounted(load)
           <NuxtPage />
         </div>
         <div class="min-w-0 lg:col-span-4">
-          <ClientsClientDetailAside
+          <ClientsDetailAside
             :client="item"
             :credential="credential"
             :can-manage-credentials="canManageCredentials"
@@ -221,7 +221,7 @@ onMounted(load)
       description="Upload e gestão do certificado digital deste cliente."
     >
       <template #body>
-        <ClientsClientCredentialPanel
+        <ClientsCredentialPanel
           v-if="item"
           :client-id="item.id"
           :credential="credential"
@@ -233,7 +233,7 @@ onMounted(load)
       </template>
     </USlideover>
 
-    <ClientsClientFormModal
+    <ClientsFormModal
       v-model:open="clientFormOpen"
       :client="item"
       :can-manage-clients="canManageClients"

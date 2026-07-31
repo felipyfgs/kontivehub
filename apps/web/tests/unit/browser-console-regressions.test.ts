@@ -7,7 +7,7 @@ const readWebSource = (path: string) =>
 
 describe('browser console regressions', () => {
   it('configura o Crosshair com o mesmo accessor horizontal da série', () => {
-    const chart = readWebSource('app/components/clients/ClientListDashboard.vue')
+    const chart = readWebSource('app/components/clients/ListDashboard.vue')
     const crosshair = chart.match(/<VisCrosshair[\s\S]*?\/>/)?.[0]
 
     expect(crosshair).toContain(':x="x"')

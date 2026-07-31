@@ -27,7 +27,7 @@ const toast = useToast()
 const { sessionEpoch } = useDashboard()
 const { download: downloadAuthenticated, downloading: certificateDownloadBusy } = useAuthenticatedDownload()
 const ccmei = useCcmeiMonitoring()
-const ccmeiRegistration = useCcmeiRegistrationStatusMonitoring()
+const ccmeiRegistration = useCcmeiRegistrationStatus()
 
 const activeService = ref<'ccmei' | 'dasn'>(props.initialService)
 const serviceTabs = [

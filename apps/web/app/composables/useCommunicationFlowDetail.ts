@@ -7,14 +7,16 @@ import {
   type Ref
 } from 'vue'
 import type {
-  CommunicationFlow,
-  CommunicationFlowBinding,
-  CommunicationFlowGraph,
-  CommunicationFlowPublishResult,
-  CommunicationFlowStatus,
-  CommunicationFlowValidateResult,
   CommunicationInbox
 } from '~/types/communication'
+import type {
+  Flow,
+  FlowBinding,
+  FlowGraph,
+  FlowPublishResult,
+  FlowStatus,
+  FlowValidateResult
+} from '~/types/communication/flows'
 import { apiErrorCode, apiErrorMessage } from '~/utils/api-error'
 import {
   communicationFlowsMutationBlocked,
@@ -26,26 +28,26 @@ import { parseCommunicationFlowId } from '~/utils/communication-routes'
 
 interface FlowDetailApi {
   list: () => Promise<{
-    data: CommunicationFlow[]
+    data: Flow[]
     meta: { flows_enabled: boolean }
   }>
-  get: (id: number) => Promise<{ data: CommunicationFlow }>
+  get: (id: number) => Promise<{ data: Flow }>
   update: (
     id: number,
-    body: { name?: string, status?: CommunicationFlowStatus, lock_version: number }
-  ) => Promise<{ data: CommunicationFlow }>
+    body: { name?: string, status?: FlowStatus, lock_version: number }
+  ) => Promise<{ data: Flow }>
   updateDraft: (
     id: number,
-    body: { graph: CommunicationFlowGraph, lock_version: number }
-  ) => Promise<{ data: NonNullable<CommunicationFlow['draft']> }>
+    body: { graph: FlowGraph, lock_version: number }
+  ) => Promise<{ data: NonNullable<Flow['draft']> }>
   validate: (
     id: number,
-    body: { graph: CommunicationFlowGraph }
-  ) => Promise<{ data: CommunicationFlowValidateResult }>
+    body: { graph: FlowGraph }
+  ) => Promise<{ data: FlowValidateResult }>
   publish: (
     id: number,
     body: { lock_version: number }
-  ) => Promise<{ data: CommunicationFlowPublishResult }>
+  ) => Promise<{ data: FlowPublishResult }>
   createBinding: (
     id: number,
     body: {
@@ -90,7 +92,7 @@ export function createCommunicationFlowDetail(dependencies: FlowDetailDependenci
     toast
   } = dependencies
 
-  const flow = ref<CommunicationFlow | null>(null)
+  const flow = ref<Flow | null>(null)
   const flowsEnabled = ref(false)
   const flagsConfirmed = ref(false)
   const loading = ref(false)
@@ -100,7 +102,7 @@ export function createCommunicationFlowDetail(dependencies: FlowDetailDependenci
   let loadGeneration = 0
 
   const editName = ref('')
-  const editStatus = ref<CommunicationFlowStatus>('paused')
+  const editStatus = ref<FlowStatus>('paused')
   const metaBusy = ref(false)
   const metaError = ref<string | null>(null)
 
@@ -118,7 +120,7 @@ export function createCommunicationFlowDetail(dependencies: FlowDetailDependenci
   const publishBusy = ref(false)
   const enableOpen = ref(false)
   const enableBusy = ref(false)
-  const enableTarget = ref<CommunicationFlowBinding | null>(null)
+  const enableTarget = ref<FlowBinding | null>(null)
 
   const inboxes = ref<CommunicationInbox[]>([])
   const inboxesError = ref<string | null>(null)
@@ -159,7 +161,7 @@ export function createCommunicationFlowDetail(dependencies: FlowDetailDependenci
     return names
   })
 
-  function applyFlow(next: CommunicationFlow) {
+  function applyFlow(next: Flow) {
     flow.value = next
     editName.value = next.name
     editStatus.value = next.status
@@ -411,7 +413,7 @@ export function createCommunicationFlowDetail(dependencies: FlowDetailDependenci
     }
   }
 
-  function openEnable(binding: CommunicationFlowBinding) {
+  function openEnable(binding: FlowBinding) {
     const blocked = mutationBlocked.value
     if (blocked || !flow.value) {
       toast(blocked || 'Sem permissão.', 'warning')
@@ -459,7 +461,7 @@ export function createCommunicationFlowDetail(dependencies: FlowDetailDependenci
     }
   }
 
-  async function disableBinding(binding: CommunicationFlowBinding) {
+  async function disableBinding(binding: FlowBinding) {
     const blocked = mutationBlocked.value
     if (blocked || !flow.value) {
       toast(blocked || 'Sem permissão.', 'warning')

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
-import type { PagtowebPaymentListHistoryPayload, PagtowebPaymentListItem } from '~/types/fiscal-modules'
-import { usePagtowebPaymentListMonitoring } from '~/composables/usePagtowebPaymentListMonitoring'
+import type { PagtoWebPaymentListHistoryPayload, PagtoWebPaymentListItem } from '~/types/fiscal-modules'
+import { usePagtoWebPaymentList } from '~/composables/usePagtoWebPaymentList'
 import { formatDateTime } from '~/utils/format'
 import { DASHBOARD_TABLE_UI, LIST_TABLE_CLASS } from '~/utils/table-ui'
 
@@ -13,14 +13,14 @@ const props = withDefaults(defineProps<{
   showBillingAlert: true
 })
 const toast = useToast()
-const { fetchHistory, requestConsult } = usePagtowebPaymentListMonitoring()
+const { fetchHistory, requestConsult } = usePagtoWebPaymentList()
 const initialDate = ref('')
 const finalDate = ref('')
 const revenueCodes = ref('')
 const loading = ref(true)
 const requesting = ref(false)
 const error = ref<string | null>(null)
-const history = ref<PagtowebPaymentListHistoryPayload | null>(null)
+const history = ref<PagtoWebPaymentListHistoryPayload | null>(null)
 const canRequest = computed(() => props.canConsult && !requesting.value && initialDate.value !== '' && finalDate.value !== '')
 const period = computed(() => {
   const range = history.value?.current?.filter_summary?.intervalo_data_arrecadacao
@@ -28,7 +28,7 @@ const period = computed(() => {
   const { dataInicial, dataFinal } = range as { dataInicial?: unknown, dataFinal?: unknown }
   return typeof dataInicial === 'string' && typeof dataFinal === 'string' ? `${dataInicial} a ${dataFinal}` : null
 })
-const columns: TableColumn<PagtowebPaymentListItem>[] = [
+const columns: TableColumn<PagtoWebPaymentListItem>[] = [
   { accessorKey: 'document_masked', header: 'Documento' },
   { accessorKey: 'document_type', header: 'Tipo' },
   { accessorKey: 'revenue_code', header: 'Receita' },

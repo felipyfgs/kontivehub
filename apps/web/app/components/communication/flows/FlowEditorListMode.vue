@@ -2,14 +2,14 @@
 /**
  * Modo lista editável (mobile e alternativa ao drag no desktop).
  */
-import type { CommunicationFlowGraph, CommunicationFlowNode } from '~/types/communication'
+import type { FlowGraph, FlowNode } from '~/types/communication/flows'
 import {
   FLOW_NODE_TYPE_META,
   flowNodeSummary
 } from '~/utils/communication-flow-graph'
 
 const props = defineProps<{
-  graph: CommunicationFlowGraph
+  graph: FlowGraph
   selectedNodeId?: string | null
   disabled?: boolean
 }>()
@@ -30,7 +30,7 @@ const nodeItems = computed(() =>
   }))
 )
 
-function onSelect(node: CommunicationFlowNode) {
+function onSelect(node: FlowNode) {
   emit('select', node.id)
 }
 

@@ -1030,7 +1030,7 @@ onBeforeUnmount(() => {
     </template>
   </ShellDataTable>
 
-  <ClientsClientFormModal
+  <ClientsFormModal
     v-if="canManageClients"
     v-model:open="formOpen"
     :client="formClient"
@@ -1040,14 +1040,14 @@ onBeforeUnmount(() => {
     @open-existing="(id) => navigateTo(clientDetailHref(id))"
   />
 
-  <ClientsClientDetailModal
+  <ClientsDetailModal
     v-model:open="detailOpen"
     :client-id="detailClientId"
     :initial-section="detailSection"
     @updated="load"
   />
 
-  <ClientsClientCredentialModal
+  <ClientsCredentialModal
     v-model:open="credentialModalOpen"
     :client-id="credentialModalClient?.id ?? null"
     :client-label="credentialModalClient?.display_name || credentialModalClient?.legal_name"

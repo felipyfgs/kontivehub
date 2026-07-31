@@ -1,7 +1,7 @@
 import type { CcmeiRegistrationStatusHistoryPayload } from '~/types/fiscal-modules'
 
 /** Consulta explícita e histórico local sanitizado de CCMEISITCADASTRAL123. */
-export function useCcmeiRegistrationStatusMonitoring() {
+export function useCcmeiRegistrationStatus() {
   const { fiscal } = useApi()
 
   async function fetchHistory(clientId: number): Promise<CcmeiRegistrationStatusHistoryPayload> {

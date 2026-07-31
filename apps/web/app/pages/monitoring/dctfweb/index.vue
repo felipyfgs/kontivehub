@@ -307,7 +307,7 @@ watch(submodule, (next, prev) => {
     :client-name="modalClientName"
     :cnpj-masked="modalCnpjMasked"
   />
-  <MonitoringPgdasdCommunicationModals
+  <MonitoringCommunicationModals
     v-if="isDctfweb"
     v-model:preview-open="previewOpen"
     v-model:tracking-open="trackingOpen"
@@ -326,7 +326,7 @@ watch(submodule, (next, prev) => {
     :can-consult="canTriggerSync"
   />
 
-  <ClientsClientFormModal
+  <ClientsFormModal
     v-if="canManageClients"
     v-model:open="clientFormOpen"
     :client="formClient"

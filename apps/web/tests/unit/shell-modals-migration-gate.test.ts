@@ -11,9 +11,9 @@ const FORM_OR_CONFIRM = [
   'app/components/settings/TeamAddModal.vue',
   'app/components/settings/DepartmentAddModal.vue',
   'app/components/clients/AssignCategoriesModal.vue',
-  'app/components/clients/ClientFormModal.vue',
-  'app/components/clients/ClientRegistrationRefreshModal.vue',
-  'app/components/clients/ClientCredentialModal.vue',
+  'app/components/clients/FormModal.vue',
+  'app/components/clients/RegistrationRefreshModal.vue',
+  'app/components/clients/CredentialModal.vue',
   'app/components/fiscal/AssociateCategoriesModal.vue',
   'app/components/data-table-filter/ManageSavedFiltersModal.vue',
   'app/components/monitoring/RecentRefreshConfirmModal.vue',
@@ -28,7 +28,7 @@ const FORM_OR_CONFIRM = [
 ] as const
 
 const SCROLLABLE = [
-  'app/components/clients/ClientDetailModal.vue',
+  'app/components/clients/DetailModal.vue',
   'app/components/docs/DetailModal.vue',
   'app/components/clients/CategoryManagerModal.vue',
   'app/components/monitoring/DefisDeclarationsModal.vue',
@@ -82,7 +82,7 @@ describe('shell-modals-migration-gate', () => {
   it('slot #footer Cancel/Submit usa ShellModalFooter (detalhe complexo documentado fica de fora)', () => {
     /** Footers com meta + ações extras (não só Cancel/Submit). */
     const COMPLEX_FOOTER = new Set([
-      'app/components/clients/ClientDetailModal.vue',
+      'app/components/clients/DetailModal.vue',
       'app/components/docs/DetailModal.vue'
     ])
     const modalFiles = [

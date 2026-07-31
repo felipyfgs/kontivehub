@@ -42,7 +42,7 @@ describe('monitoring module shell migration gate', () => {
 
   it('preserves slots, testids and the existing toolbar and KPI adapters', () => {
     const table = source('app/components/monitoring/ModuleTable.vue')
-    const toolbar = source('app/components/monitoring/ModuleToolbar.vue')
+    const toolbar = source('app/components/monitoring/ListToolbar.vue')
     const kpis = source('app/components/monitoring/KpiStrip.vue')
 
     for (const slot of ['submodules', 'kpis', 'utilities', 'bulk-actions', 'detail']) {

@@ -43,7 +43,7 @@ describe('shell-datatable-sort-contract', () => {
   })
 
   it('clientes: whitelist de sort sem cnpj', () => {
-    const source = read('app/components/clients/ClientCatalogList.vue')
+    const source = read('app/components/clients/CatalogList.vue')
     expect(source).not.toMatch(/sort\?\.id === 'cnpj'/)
     expect(source).toMatch(/sort\?\.id === 'is_active' \|\| sort\?\.id === 'tax_regime'/)
   })

@@ -9,7 +9,7 @@ import {
 } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
-import type { CommunicationFlowGraph } from '~/types/communication'
+import type { FlowGraph } from '~/types/communication/flows'
 import {
   domainGraphToVueFlow,
   FLOW_NODE_TYPE_META,
@@ -18,14 +18,14 @@ import {
 } from '~/utils/communication-flow-graph'
 
 const props = defineProps<{
-  graph: CommunicationFlowGraph
+  graph: FlowGraph
   selectedNodeId?: string | null
   readOnly?: boolean
   reducedMotion?: boolean
 }>()
 
 const emit = defineEmits<{
-  'update:graph': [graph: CommunicationFlowGraph]
+  'update:graph': [graph: FlowGraph]
   'select': [nodeId: string | null]
 }>()
 
@@ -36,7 +36,7 @@ const nodes = ref<Array<Record<string, unknown>>>([])
 const edges = ref<Array<Record<string, unknown>>>([])
 const syncing = ref(false)
 
-function applyGraph(graph: CommunicationFlowGraph) {
+function applyGraph(graph: FlowGraph) {
   syncing.value = true
   const mapped = domainGraphToVueFlow(graph)
   nodes.value = mapped.nodes.map((node) => {

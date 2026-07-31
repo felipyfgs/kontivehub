@@ -259,7 +259,7 @@ watch(open, (isOpen) => {
               class="flex items-center gap-2 px-3 py-2"
               :class="category.is_active ? 'bg-default' : 'bg-elevated/40'"
             >
-              <ClientsClientCategoryBadge
+              <ClientsCategoryBadge
                 :label="category.name"
                 :color="category.color"
                 :archived="!category.is_active"

@@ -9,7 +9,7 @@ import {
   filterMonitoringCoverageSurfaces,
   monitoringCoverageOutputLabel,
   monitoringRouteMatches,
-  monitoringWorkspaceRequestIsCurrent
+  isMonitoringRequestCurrent
 } from '~/utils/monitoring-coverage'
 
 function operation(overrides: Partial<MonitoringCoverageOperation> = {}): MonitoringCoverageOperation {
@@ -66,9 +66,9 @@ describe('cobertura documental do monitor', () => {
   it('descarta respostas de outra sessão ou geração', () => {
     const token = { sessionEpoch: 4, generation: 7 }
 
-    expect(monitoringWorkspaceRequestIsCurrent(token, 4, 7)).toBe(true)
-    expect(monitoringWorkspaceRequestIsCurrent(token, 5, 7)).toBe(false)
-    expect(monitoringWorkspaceRequestIsCurrent(token, 4, 8)).toBe(false)
+    expect(isMonitoringRequestCurrent(token, 4, 7)).toBe(true)
+    expect(isMonitoringRequestCurrent(token, 5, 7)).toBe(false)
+    expect(isMonitoringRequestCurrent(token, 4, 8)).toBe(false)
   })
 
   it('mantém o painel de cobertura como componente reutilizável sem coordenadas internas SERPRO', () => {

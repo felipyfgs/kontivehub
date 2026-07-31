@@ -6,7 +6,7 @@ const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8'
 
 describe('comunicação informativa do monitor fiscal', () => {
   it('expõe preferências, histórico e envio fail-closed no modal PGDAS-D', () => {
-    const modal = read('app/components/monitoring/PgdasdCommunicationModals.vue')
+    const modal = read('app/components/monitoring/CommunicationModals.vue')
 
     expect(modal).toContain('displayedPreference')
     expect(modal).toContain('loadTracking')
@@ -26,12 +26,12 @@ describe('comunicação informativa do monitor fiscal', () => {
     const dctfweb = read('app/pages/monitoring/dctfweb/index.vue')
     const fgts = read('app/pages/monitoring/fgts.vue')
 
-    expect(simples.match(/<MonitoringPgdasdCommunicationModals/gu)?.length).toBeGreaterThanOrEqual(1)
+    expect(simples.match(/<MonitoringCommunicationModals/gu)?.length).toBeGreaterThanOrEqual(1)
     expect(simples).toContain('context="PGMEI"')
     expect(dctfweb).toContain('context="DCTFWEB"')
-    expect(dctfweb).toContain('<MonitoringPgdasdCommunicationModals')
+    expect(dctfweb).toContain('<MonitoringCommunicationModals')
     expect(fgts).toContain('context="FGTS"')
-    expect(fgts).toContain('<MonitoringPgdasdCommunicationModals')
+    expect(fgts).toContain('<MonitoringCommunicationModals')
   })
 
   it('remove switches individuais e em lote das tabelas e toolbars', () => {

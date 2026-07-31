@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { PagtowebPaymentCountHistoryPayload } from '~/types/fiscal-modules'
-import { usePagtowebPaymentCountMonitoring } from '~/composables/usePagtowebPaymentCountMonitoring'
+import type { PagtoWebPaymentCountHistoryPayload } from '~/types/fiscal-modules'
+import { usePagtoWebPaymentCount } from '~/composables/usePagtoWebPaymentCount'
 import { formatDateTime } from '~/utils/format'
 
 const props = withDefaults(defineProps<{
@@ -11,14 +11,14 @@ const props = withDefaults(defineProps<{
   showBillingAlert: true
 })
 const toast = useToast()
-const { fetchHistory, requestConsult } = usePagtowebPaymentCountMonitoring()
+const { fetchHistory, requestConsult } = usePagtoWebPaymentCount()
 const initialDate = ref('')
 const finalDate = ref('')
 const revenueCodes = ref('')
 const loading = ref(true)
 const requesting = ref(false)
 const error = ref<string | null>(null)
-const history = ref<PagtowebPaymentCountHistoryPayload | null>(null)
+const history = ref<PagtoWebPaymentCountHistoryPayload | null>(null)
 const canRequest = computed(() => props.canConsult && !requesting.value && ((initialDate.value !== '' && finalDate.value !== '') || revenueCodes.value.trim() !== ''))
 const period = computed(() => {
   const range = history.value?.current?.filter_summary?.intervalo_data_arrecadacao

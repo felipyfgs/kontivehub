@@ -215,7 +215,7 @@ async function excludeSelected() {
       :default-client-ids="selectedClientIds"
       @success="() => { emit('clear'); emit('refresh') }"
     />
-    <MonitoringAssociateMonitoringClientsModal
+    <MonitoringAssociateClientsModal
       v-if="canManageClients"
       v-model:open="membershipOpen"
       :module-key="moduleKey"

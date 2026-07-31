@@ -83,7 +83,7 @@ watch(open, (value) => {
     @cancel="onCancel"
   >
     <template #body>
-      <ClientsClientForm
+      <ClientsForm
         ref="formRef"
         form-id="client-form-modal"
         :client="client"

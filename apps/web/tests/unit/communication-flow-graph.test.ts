@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { CommunicationFlowGraph } from '~/types/communication'
+import type { FlowGraph } from '~/types/communication/flows'
 import {
   canInsertFlowNodeType,
   connectFlowNodes,
@@ -12,7 +12,7 @@ import {
   vueFlowToDomainGraph
 } from '~/utils/communication-flow-graph'
 
-function sampleGraph(): CommunicationFlowGraph {
+function sampleGraph(): FlowGraph {
   return {
     nodes: [
       { id: 'start_1', type: 'start', data: {}, position: { x: 0, y: 0 } },

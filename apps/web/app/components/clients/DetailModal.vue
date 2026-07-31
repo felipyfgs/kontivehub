@@ -128,7 +128,7 @@ watch(
         />
 
         <template v-else>
-          <ClientsClientRegistration
+          <ClientsRegistration
             v-if="activeTab === 'cadastro'"
             :client="item"
             :can-manage-clients="canManageClients"
@@ -137,14 +137,14 @@ watch(
             @updated="reload"
           />
 
-          <ClientsClientContactsSection
+          <ClientsContactsSection
             v-else-if="activeTab === 'contato'"
             :client="item"
             :can-manage-clients="canManageClients"
             @updated="reload"
           />
 
-          <ClientsClientAdditionalDataPanel
+          <ClientsAdditionalDataPanel
             v-else
             :client="item"
             :can-manage-clients="canManageClients"
@@ -193,7 +193,7 @@ watch(
     </template>
   </ShellScrollableModal>
 
-  <ClientsClientFormModal
+  <ClientsFormModal
     v-model:open="formOpen"
     :client="item"
     :can-manage-clients="canManageClients"

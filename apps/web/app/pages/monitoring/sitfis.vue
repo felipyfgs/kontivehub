@@ -597,7 +597,7 @@ const columns = computed(() => buildSitfisColumns({
     @confirm="doRefreshSelected(true)"
   />
 
-  <MonitoringPgdasdCommunicationModals
+  <MonitoringCommunicationModals
     v-model:preview-open="previewOpen"
     v-model:tracking-open="trackingOpen"
     v-model:prefs-open="prefsOpen"
@@ -607,7 +607,7 @@ const columns = computed(() => buildSitfisColumns({
     context="SITFIS"
   />
 
-  <ClientsClientFormModal
+  <ClientsFormModal
     v-if="canManageClients"
     v-model:open="clientFormOpen"
     :client="formClient"

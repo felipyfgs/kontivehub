@@ -104,14 +104,14 @@ function onRefreshCancel() {
       />
     </ShellSectionHeader>
 
-    <ClientsClientRegistration
+    <ClientsRegistration
       :client="item"
       :can-manage-clients="canManageClients"
       panel="all"
       @updated="load"
     />
 
-    <ClientsClientRegistrationRefreshModal
+    <ClientsRegistrationRefreshModal
       v-model:open="refreshOpen"
       :client="item"
       :lookup="refreshLookup"

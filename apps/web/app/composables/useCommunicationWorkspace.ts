@@ -192,7 +192,7 @@ export function mergeCommunicationConversationPage(
   return mergeConversationListInApiOrder(current, incoming, append)
 }
 
-export function isCommunicationConversationRequestCurrent(
+export function isConversationRequestCurrent(
   request: { generation: number, sessionEpoch: number },
   current: { generation: number, sessionEpoch: number }
 ): boolean {
@@ -881,7 +881,7 @@ const _useCommunicationWorkspace = () => {
         listFilters(page),
         { signal: controller.signal }
       )
-      if (!isCommunicationConversationRequestCurrent(request, {
+      if (!isConversationRequestCurrent(request, {
         generation: conversationQueryGeneration,
         sessionEpoch: sessionEpoch.value
       })) return
@@ -934,7 +934,7 @@ const _useCommunicationWorkspace = () => {
       if (conversationQueryController === controller) {
         conversationQueryController = null
       }
-      if (isCommunicationConversationRequestCurrent(request, {
+      if (isConversationRequestCurrent(request, {
         generation: conversationQueryGeneration,
         sessionEpoch: sessionEpoch.value
       })) {

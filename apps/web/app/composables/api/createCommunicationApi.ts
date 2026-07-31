@@ -22,18 +22,6 @@ import type {
   CommunicationConversationStatus,
   CommunicationEvent,
   CommunicationFeatureMeta,
-  CommunicationFlow,
-  CommunicationFlowBinding,
-  CommunicationFlowDraft,
-  CommunicationFlowDryRunContext,
-  CommunicationFlowDryRunResult,
-  CommunicationFlowGraph,
-  CommunicationFlowListMeta,
-  CommunicationFlowPreviewResult,
-  CommunicationFlowPublishResult,
-  CommunicationFlowRun,
-  CommunicationFlowStatus,
-  CommunicationFlowValidateResult,
   CommunicationInbox,
   CommunicationLabel,
   CommunicationListPreferenceStatus,
@@ -51,6 +39,20 @@ import type {
   CommunicationOutboundCapabilities,
   CommunicationSyncMeta
 } from '~/types/communication'
+import type {
+  Flow,
+  FlowBinding,
+  FlowDraft,
+  FlowDryRunContext,
+  FlowDryRunResult,
+  FlowGraph,
+  FlowListMeta,
+  FlowPreviewResult,
+  FlowPublishResult,
+  FlowRun,
+  FlowStatus,
+  FlowValidateResult
+} from '~/types/communication/flows'
 import { isSensitiveCommunicationContactSearch } from '~/utils/communication-contacts'
 import type { ApiClient, ApiUrl } from './types'
 
@@ -451,64 +453,64 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
         deleteCannedResponse: (id: number) => client<unknown>(`${base}/canned-responses/${id}`, { method: 'DELETE' })
       },
       flows: {
-        list: () => client<{ data: CommunicationFlow[], meta: CommunicationFlowListMeta }>(`${base}/flows`),
+        list: () => client<{ data: Flow[], meta: FlowListMeta }>(`${base}/flows`),
         create: (body: { name: string }) =>
-          client<{ data: CommunicationFlow }>(`${base}/flows`, { method: 'POST', body }),
+          client<{ data: Flow }>(`${base}/flows`, { method: 'POST', body }),
         get: (id: number) =>
-          client<{ data: CommunicationFlow }>(`${base}/flows/${id}`),
+          client<{ data: Flow }>(`${base}/flows/${id}`),
         update: (id: number, body: {
           name?: string
-          status?: CommunicationFlowStatus
+          status?: FlowStatus
           lock_version: number
-        }) => client<{ data: CommunicationFlow }>(`${base}/flows/${id}`, { method: 'PATCH', body }),
+        }) => client<{ data: Flow }>(`${base}/flows/${id}`, { method: 'PATCH', body }),
         remove: (id: number) =>
           client<unknown>(`${base}/flows/${id}`, { method: 'DELETE' }),
         getDraft: (id: number) =>
-          client<{ data: CommunicationFlowDraft }>(`${base}/flows/${id}/draft`),
-        updateDraft: (id: number, body: { graph: CommunicationFlowGraph, lock_version: number }) =>
-          client<{ data: CommunicationFlowDraft }>(`${base}/flows/${id}/draft`, {
+          client<{ data: FlowDraft }>(`${base}/flows/${id}/draft`),
+        updateDraft: (id: number, body: { graph: FlowGraph, lock_version: number }) =>
+          client<{ data: FlowDraft }>(`${base}/flows/${id}/draft`, {
             method: 'PUT',
             body
           }),
-        validate: (id: number, body?: { graph?: CommunicationFlowGraph }) =>
-          client<{ data: CommunicationFlowValidateResult }>(`${base}/flows/${id}/validate`, {
+        validate: (id: number, body?: { graph?: FlowGraph }) =>
+          client<{ data: FlowValidateResult }>(`${base}/flows/${id}/validate`, {
             method: 'POST',
             body: body ?? {}
           }),
         dryRun: (id: number, body?: {
-          graph?: CommunicationFlowGraph
-          context?: CommunicationFlowDryRunContext
-        }) => client<{ data: CommunicationFlowDryRunResult }>(`${base}/flows/${id}/dry-run`, {
+          graph?: FlowGraph
+          context?: FlowDryRunContext
+        }) => client<{ data: FlowDryRunResult }>(`${base}/flows/${id}/dry-run`, {
           method: 'POST',
           body: body ?? {}
         }),
-        preview: (id: number, body?: { graph?: CommunicationFlowGraph }) =>
-          client<{ data: CommunicationFlowPreviewResult }>(`${base}/flows/${id}/preview`, {
+        preview: (id: number, body?: { graph?: FlowGraph }) =>
+          client<{ data: FlowPreviewResult }>(`${base}/flows/${id}/preview`, {
             method: 'POST',
             body: body ?? {}
           }),
         publish: (id: number, body: { lock_version: number }) =>
-          client<{ data: CommunicationFlowPublishResult }>(`${base}/flows/${id}/publish`, {
+          client<{ data: FlowPublishResult }>(`${base}/flows/${id}/publish`, {
             method: 'POST',
             body
           }),
         clone: (id: number, body: { name: string, from_version_id?: number | null }) =>
-          client<{ data: CommunicationFlow }>(`${base}/flows/${id}/clone`, {
+          client<{ data: Flow }>(`${base}/flows/${id}/clone`, {
             method: 'POST',
             body
           }),
         cloneVersion: (id: number, versionId: number, body?: { name?: string }) =>
-          client<{ data: CommunicationFlow }>(`${base}/flows/${id}/versions/${versionId}/clone`, {
+          client<{ data: Flow }>(`${base}/flows/${id}/versions/${versionId}/clone`, {
             method: 'POST',
             body: body ?? {}
           }),
         listBindings: (id: number) =>
-          client<{ data: CommunicationFlowBinding[] }>(`${base}/flows/${id}/bindings`),
+          client<{ data: FlowBinding[] }>(`${base}/flows/${id}/bindings`),
         createBinding: (id: number, body: {
           inbox_id: number
           published_version_id?: number | null
           enabled?: boolean
-        }) => client<{ data: CommunicationFlowBinding }>(`${base}/flows/${id}/bindings`, {
+        }) => client<{ data: FlowBinding }>(`${base}/flows/${id}/bindings`, {
           method: 'POST',
           body
         }),
@@ -516,34 +518,34 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
           published_version_id?: number | null
           enabled?: boolean
           lock_version: number
-        }) => client<{ data: CommunicationFlowBinding }>(`${base}/flow-bindings/${bindingId}`, {
+        }) => client<{ data: FlowBinding }>(`${base}/flow-bindings/${bindingId}`, {
           method: 'PATCH',
           body
         }),
         enableBinding: (bindingId: number, body: {
           lock_version: number
           published_version_id?: number | null
-        }) => client<{ data: CommunicationFlowBinding }>(
+        }) => client<{ data: FlowBinding }>(
           `${base}/flow-bindings/${bindingId}/enable`,
           { method: 'POST', body }
         ),
         disableBinding: (bindingId: number, body: { lock_version: number }) =>
-          client<{ data: CommunicationFlowBinding }>(
+          client<{ data: FlowBinding }>(
             `${base}/flow-bindings/${bindingId}/disable`,
             { method: 'POST', body }
           ),
         removeBinding: (bindingId: number) =>
           client<unknown>(`${base}/flow-bindings/${bindingId}`, { method: 'DELETE' }),
         pauseRun: (runId: number) =>
-          client<{ data: CommunicationFlowRun }>(`${base}/flow-runs/${runId}/pause`, { method: 'POST' }),
+          client<{ data: FlowRun }>(`${base}/flow-runs/${runId}/pause`, { method: 'POST' }),
         resumeRun: (runId: number) =>
-          client<{ data: CommunicationFlowRun }>(`${base}/flow-runs/${runId}/resume`, { method: 'POST' }),
+          client<{ data: FlowRun }>(`${base}/flow-runs/${runId}/resume`, { method: 'POST' }),
         handoffRun: (runId: number) =>
-          client<{ data: CommunicationFlowRun }>(`${base}/flow-runs/${runId}/handoff`, { method: 'POST' }),
+          client<{ data: FlowRun }>(`${base}/flow-runs/${runId}/handoff`, { method: 'POST' }),
         stopRun: (runId: number) =>
-          client<{ data: CommunicationFlowRun }>(`${base}/flow-runs/${runId}/stop`, { method: 'POST' }),
+          client<{ data: FlowRun }>(`${base}/flow-runs/${runId}/stop`, { method: 'POST' }),
         restartRun: (runId: number) =>
-          client<{ data: CommunicationFlowRun }>(`${base}/flow-runs/${runId}/restart`, { method: 'POST' }),
+          client<{ data: FlowRun }>(`${base}/flow-runs/${runId}/restart`, { method: 'POST' }),
         listRuns: (params?: {
           flow_id?: number
           status?: string
@@ -551,11 +553,11 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
           page?: number
           per_page?: number
         }) => client<{
-          data: CommunicationFlowRun[]
+          data: FlowRun[]
           meta: { current_page: number, last_page: number, total: number }
         }>(`${base}/flow-runs`, { query: params }),
         getRun: (runId: number) =>
-          client<{ data: CommunicationFlowRun }>(`${base}/flow-runs/${runId}`)
+          client<{ data: FlowRun }>(`${base}/flow-runs/${runId}`)
       },
       events: {
         sync: (after: number, limit = 200) =>
