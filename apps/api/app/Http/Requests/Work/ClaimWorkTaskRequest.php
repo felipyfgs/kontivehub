@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Work;
 
-use App\DTO\Work\WorkTaskTransitionData;
+use App\DTO\Work\TaskTransitionData;
 use App\Models\User;
 use App\Models\WorkTask;
 
@@ -24,9 +24,9 @@ final class ClaimWorkTaskRequest extends WorkRequest
         return ['lock_version' => ['required', 'integer', 'min:1']];
     }
 
-    public function transition(): WorkTaskTransitionData
+    public function transition(): TaskTransitionData
     {
-        return new WorkTaskTransitionData(
+        return new TaskTransitionData(
             lockVersion: $this->integer('lock_version'),
         );
     }

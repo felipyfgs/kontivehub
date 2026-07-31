@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Work;
 
-use App\DTO\Work\WorkTaskAssignmentData;
+use App\DTO\Work\TaskAssignmentData;
 use App\Models\User;
 use App\Models\WorkTask;
 
@@ -28,7 +28,7 @@ final class AssignWorkTaskRequest extends WorkRequest
         ];
     }
 
-    public function assignment(): WorkTaskAssignmentData
+    public function assignment(): TaskAssignmentData
     {
         $validated = $this->validated();
         $attributes = [];
@@ -40,7 +40,7 @@ final class AssignWorkTaskRequest extends WorkRequest
             }
         }
 
-        return new WorkTaskAssignmentData(
+        return new TaskAssignmentData(
             lockVersion: (int) $validated['lock_version'],
             attributes: $attributes,
         );

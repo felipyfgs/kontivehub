@@ -2,9 +2,9 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationInboxCreationData;
+use App\DTO\Communication\InboxCreationData;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 use App\Support\CurrentTenant;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Validation\Rule;
@@ -16,7 +16,7 @@ final class StoreInboxRequest extends CommunicationRequest
         $actor = $this->user();
 
         return $actor instanceof User
-            && app(CommunicationAccess::class)->canManage($actor);
+            && app(Access::class)->canManage($actor);
     }
 
     /** @return array<string, list<mixed>> */
@@ -54,11 +54,11 @@ final class StoreInboxRequest extends CommunicationRequest
         }
     }
 
-    public function inboxData(): CommunicationInboxCreationData
+    public function inboxData(): InboxCreationData
     {
         $validated = $this->validated();
 
-        return new CommunicationInboxCreationData(
+        return new InboxCreationData(
             name: $validated['name'],
             isEnabled: (bool) ($validated['is_enabled'] ?? false),
             isDefault: (bool) ($validated['is_default'] ?? false),

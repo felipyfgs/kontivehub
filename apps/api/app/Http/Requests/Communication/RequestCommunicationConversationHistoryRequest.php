@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationGatewayOperationData;
+use App\DTO\Communication\GatewayOperationData;
 
 final class RequestCommunicationConversationHistoryRequest extends CommunicationConversationGatewayRequest
 {
@@ -19,7 +19,7 @@ final class RequestCommunicationConversationHistoryRequest extends Communication
         ];
     }
 
-    public function gatewayData(): CommunicationGatewayOperationData
+    public function gatewayData(): GatewayOperationData
     {
         return $this->gatewayOperation([
             'count' => (int) $this->validated('count'),

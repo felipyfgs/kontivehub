@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Tenant;
 
-use App\DTO\Tenant\TenantFiscalIdentityData;
+use App\DTO\Tenant\FiscalIdentityData;
 use App\Http\Middleware\EnsureTenantContext;
 use App\Http\Requests\AuthenticatedRequest;
 use App\Models\User;
@@ -28,11 +28,11 @@ final class StoreTenantFiscalIdentityRequest extends AuthenticatedRequest
         ];
     }
 
-    public function identityData(): TenantFiscalIdentityData
+    public function identityData(): FiscalIdentityData
     {
         $validated = $this->validated();
 
-        return new TenantFiscalIdentityData(
+        return new FiscalIdentityData(
             cnpj: (string) $validated['cnpj'],
             legalName: isset($validated['legal_name'])
                 ? (string) $validated['legal_name']

@@ -2,10 +2,10 @@
 
 namespace App\Http\Requests\Work;
 
-use App\DTO\Work\WorkProcessTemplateData;
+use App\DTO\Work\ProcessTemplateData;
 use App\Models\User;
 use App\Models\WorkProcessTemplate;
-use App\Services\Work\WorkProcessTemplateWriter;
+use App\Services\Work\ProcessTemplateWriter;
 
 final class UpdateWorkProcessTemplateRequest extends WorkRequest
 {
@@ -24,13 +24,13 @@ final class UpdateWorkProcessTemplateRequest extends WorkRequest
     {
         $template = $this->route('template');
 
-        return app(WorkProcessTemplateWriter::class)->rules(
+        return app(ProcessTemplateWriter::class)->rules(
             ignoreId: $template instanceof WorkProcessTemplate ? $template->id : null,
         );
     }
 
-    public function payload(): WorkProcessTemplateData
+    public function payload(): ProcessTemplateData
     {
-        return new WorkProcessTemplateData($this->validated());
+        return new ProcessTemplateData($this->validated());
     }
 }

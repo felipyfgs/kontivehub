@@ -6,7 +6,7 @@ use App\DTO\Communication\GatewayQueryData;
 use App\Enums\Communication\GatewayQueryType;
 use App\Enums\Communication\ProfilePictureState;
 use App\Jobs\Communication\RefreshCommunicationProfilePictureJob;
-use App\Services\Communication\Transport\HttpCommunicationTransport;
+use App\Services\Communication\Transport\HttpTransport;
 use ReflectionMethod;
 use Tests\TestCase;
 
@@ -35,7 +35,7 @@ final class CommunicationProfilePictureConfigurationTest extends TestCase
             'communication.gateway.timeout_seconds' => 10,
             'communication.profile_pictures.gateway_timeout_seconds' => 90,
         ]);
-        $transport = app(HttpCommunicationTransport::class);
+        $transport = app(HttpTransport::class);
         $method = new ReflectionMethod($transport, 'queryTimeout');
         $profilePicture = new GatewayQueryData(
             'query-profile-picture-timeout',

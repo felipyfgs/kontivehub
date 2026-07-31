@@ -2,8 +2,8 @@
 
 namespace App\Actions\Tenant;
 
-use App\DTO\Tenant\TenantMemberCreationData;
-use App\DTO\Tenant\TenantMemberRecipientData;
+use App\DTO\Tenant\MemberCreationData;
+use App\DTO\Tenant\MemberRecipientData;
 use App\Enums\ActivationMethod;
 use App\Enums\TenantRole;
 use App\Exceptions\ActivationApiException;
@@ -23,7 +23,7 @@ final readonly class MutateTenantMemberAction
     /** @return array<string, mixed> */
     public function create(
         User $actor,
-        TenantMemberCreationData $data,
+        MemberCreationData $data,
     ): array {
         return $this->translate(
             fn (): array => $this->team->createMember(
@@ -52,7 +52,7 @@ final readonly class MutateTenantMemberAction
     public function correctRecipient(
         User $actor,
         int $membershipId,
-        TenantMemberRecipientData $data,
+        MemberRecipientData $data,
     ): array {
         return $this->translate(
             fn (): array => $this->team->correctRecipient(

@@ -2,9 +2,9 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationCannedResponseFiltersData;
+use App\DTO\Communication\CannedResponseFiltersData;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 
 final class ListCommunicationCannedResponsesRequest extends CommunicationRequest
 {
@@ -28,7 +28,7 @@ final class ListCommunicationCannedResponsesRequest extends CommunicationRequest
             return false;
         }
 
-        $access = app(CommunicationAccess::class);
+        $access = app(Access::class);
 
         return $this->manageMode()
             ? $access->canManageQuickReplies($actor)
@@ -47,12 +47,12 @@ final class ListCommunicationCannedResponsesRequest extends CommunicationRequest
         ];
     }
 
-    public function filters(): CommunicationCannedResponseFiltersData
+    public function filters(): CannedResponseFiltersData
     {
         $validated = $this->validated();
         $search = trim((string) ($validated['q'] ?? ''));
 
-        return new CommunicationCannedResponseFiltersData(
+        return new CannedResponseFiltersData(
             manageMode: $this->manageMode(),
             isActive: array_key_exists('is_active', $validated)
                 ? (bool) $validated['is_active']

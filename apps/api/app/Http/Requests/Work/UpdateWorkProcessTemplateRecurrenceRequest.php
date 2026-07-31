@@ -2,10 +2,10 @@
 
 namespace App\Http\Requests\Work;
 
-use App\DTO\Work\WorkProcessTemplateRecurrenceData;
+use App\DTO\Work\ProcessTemplateRecurrenceData;
 use App\Models\User;
 use App\Models\WorkProcessTemplate;
-use App\Services\Work\WorkProcessTemplateRecurrenceService;
+use App\Services\Work\ProcessTemplateRecurrenceService;
 
 final class UpdateWorkProcessTemplateRecurrenceRequest extends WorkRequest
 {
@@ -22,11 +22,11 @@ final class UpdateWorkProcessTemplateRecurrenceRequest extends WorkRequest
     /** @return array<string, list<mixed>> */
     public function rules(): array
     {
-        return app(WorkProcessTemplateRecurrenceService::class)->rules();
+        return app(ProcessTemplateRecurrenceService::class)->rules();
     }
 
-    public function payload(): WorkProcessTemplateRecurrenceData
+    public function payload(): ProcessTemplateRecurrenceData
     {
-        return new WorkProcessTemplateRecurrenceData($this->validated());
+        return new ProcessTemplateRecurrenceData($this->validated());
     }
 }

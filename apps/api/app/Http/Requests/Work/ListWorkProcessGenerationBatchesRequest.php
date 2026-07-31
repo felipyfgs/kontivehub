@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Work;
 
-use App\DTO\Work\WorkGenerationBatchFiltersData;
+use App\DTO\Work\GenerationBatchFiltersData;
 use App\Enums\Work\GenerationBatchStatus;
 use App\Models\User;
 use App\Models\WorkProcessTemplate;
@@ -31,11 +31,11 @@ final class ListWorkProcessGenerationBatchesRequest extends WorkRequest
         ];
     }
 
-    public function filters(): WorkGenerationBatchFiltersData
+    public function filters(): GenerationBatchFiltersData
     {
         $validated = $this->validated();
 
-        return new WorkGenerationBatchFiltersData(
+        return new GenerationBatchFiltersData(
             status: $validated['status'] ?? null,
             competence: $validated['competence'] ?? null,
             perPage: (int) ($validated['per_page'] ?? 25),

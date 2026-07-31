@@ -3,9 +3,9 @@
 namespace App\Services\Communication\Events;
 
 use App\Contracts\CommunicationTransport;
-use App\DTO\Communication\CommunicationPayloadDigest;
 use App\DTO\Communication\GatewayEventData;
 use App\DTO\Communication\MessageSemanticContent;
+use App\DTO\Communication\PayloadDigest;
 use App\Enums\Communication\ConversationStatus;
 use App\Enums\Communication\GatewayEventType;
 use App\Enums\Communication\InboxStatus;
@@ -24,16 +24,16 @@ use App\Models\CommunicationIdentity;
 use App\Models\CommunicationInbox;
 use App\Models\CommunicationMessage;
 use App\Services\Communication\Automation\FiscalDispatchStatusProjector;
-use App\Services\Communication\CommunicationConversationCanonicalizer;
-use App\Services\Communication\Contact\CommunicationInboxIdentityProfileMerger;
-use App\Services\Communication\Conversation\CommunicationConversationReadStateService;
-use App\Services\Communication\Flows\CommunicationFlowAvailability;
-use App\Services\Communication\Media\CommunicationMediaStore;
-use App\Services\Communication\Pairing\CommunicationPairingStateStore;
-use App\Services\Communication\ProfilePicture\CommunicationProfilePictureRefreshScheduler;
-use App\Services\Communication\WhatsappAddressNormalizer;
-use App\Services\Communication\WhatsappPeerCorrelationService;
-use App\Services\Communication\WhatsappPeerResolver;
+use App\Services\Communication\Contact\InboxIdentityProfileMerger;
+use App\Services\Communication\Conversation\ConversationReadStateService;
+use App\Services\Communication\ConversationCanonicalizer;
+use App\Services\Communication\Flows\FlowAvailability;
+use App\Services\Communication\Media\MediaStore;
+use App\Services\Communication\Pairing\PairingStateStore;
+use App\Services\Communication\ProfilePicture\ProfilePictureRefreshScheduler;
+use App\Services\Communication\WhatsAppAddressNormalizer;
+use App\Services\Communication\WhatsAppPeerCorrelationService;
+use App\Services\Communication\WhatsAppPeerResolver;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -43,24 +43,24 @@ use Throwable;
 final readonly class GatewayEventIngestor
 {
     public function __construct(
-        private WhatsappAddressNormalizer $normalizer,
-        private WhatsappPeerResolver $peerResolver,
-        private WhatsappPeerCorrelationService $peerCorrelation,
+        private WhatsAppAddressNormalizer $normalizer,
+        private WhatsAppPeerResolver $peerResolver,
+        private WhatsAppPeerCorrelationService $peerCorrelation,
         private CommunicationTransport $transport,
-        private CommunicationMediaStore $media,
-        private CommunicationPairingStateStore $pairing,
-        private CommunicationEventRecorder $events,
+        private MediaStore $media,
+        private PairingStateStore $pairing,
+        private EventRecorder $events,
         private FiscalDispatchStatusProjector $fiscalStatuses,
-        private CommunicationConversationCanonicalizer $peerCanonicalizer,
-        private CommunicationInboxIdentityProfileMerger $identityProfiles,
-        private CommunicationConversationReadStateService $readState,
-        private CommunicationProfilePictureRefreshScheduler $profilePictures,
+        private ConversationCanonicalizer $peerCanonicalizer,
+        private InboxIdentityProfileMerger $identityProfiles,
+        private ConversationReadStateService $readState,
+        private ProfilePictureRefreshScheduler $profilePictures,
     ) {}
 
     /** @return 'processed'|'duplicate' */
     public function ingest(GatewayEventData $incoming): string
     {
-        $digest = CommunicationPayloadDigest::make($incoming->toArray());
+        $digest = PayloadDigest::make($incoming->toArray());
         $existing = CommunicationEvent::query()->withoutGlobalScopes()
             ->where('gateway_event_id', $incoming->gatewayEventId)
             ->first();
@@ -179,7 +179,7 @@ final readonly class GatewayEventIngestor
             }
 
             if ($result === 'processed' && $flowCorrelation !== null
-                && app(CommunicationFlowAvailability::class)->runtimeEnabled()) {
+                && app(FlowAvailability::class)->runtimeEnabled()) {
                 CorrelateCommunicationFlowEventJob::dispatch(
                     $flowCorrelation['tenant_id'],
                     $flowCorrelation['conversation_id'],
@@ -323,7 +323,7 @@ final readonly class GatewayEventIngestor
                 $kind->value,
                 $providerType,
                 $body,
-                CommunicationPayloadDigest::make($content),
+                PayloadDigest::make($content),
                 $storedMedia['sha256'] ?? '',
             ])),
             'metadata' => $metadata,
@@ -710,7 +710,7 @@ final readonly class GatewayEventIngestor
         $normalized = $this->normalizer->normalize($address);
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()
             ->where('tenant_id', $inbox->tenant_id)
-            ->where('channel', CommunicationChannel::Whatsapp->value)
+            ->where('channel', CommunicationChannel::WhatsApp->value)
             ->where('address_hash', hash('sha256', $normalized))
             ->first();
         if ($identity === null) {
@@ -789,7 +789,7 @@ final readonly class GatewayEventIngestor
             $incoming->occurredAt,
             'WAZYNC',
             $incoming->gatewayEventId,
-            CommunicationPayloadDigest::make($incoming->payload),
+            PayloadDigest::make($incoming->payload),
         );
 
         return [(int) $message->conversation_id, (int) $message->id, [
@@ -994,7 +994,7 @@ final readonly class GatewayEventIngestor
                 $effectiveKind->value,
                 $effectiveProviderType,
                 $effectiveBody,
-                CommunicationPayloadDigest::make($effectiveContent),
+                PayloadDigest::make($effectiveContent),
                 $attachmentSha,
             ]));
             $message->forceFill($attributes)->save();
@@ -1028,8 +1028,8 @@ final readonly class GatewayEventIngestor
 
                 continue;
             }
-            if (CommunicationPayloadDigest::make(['value' => $current])
-                !== CommunicationPayloadDigest::make(['value' => $value])) {
+            if (PayloadDigest::make(['value' => $current])
+                !== PayloadDigest::make(['value' => $value])) {
                 if ($preserveDivergent) {
                     continue;
                 }

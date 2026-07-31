@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationFlowGraphInputData;
+use App\DTO\Communication\FlowGraphInputData;
 
 final class InspectCommunicationFlowGraphRequest extends CommunicationFlowRequest
 {
@@ -17,11 +17,11 @@ final class InspectCommunicationFlowGraphRequest extends CommunicationFlowReques
         return $this->graphRules('sometimes');
     }
 
-    public function graphData(): CommunicationFlowGraphInputData
+    public function graphData(): FlowGraphInputData
     {
         $validated = $this->validated();
 
-        return new CommunicationFlowGraphInputData(
+        return new FlowGraphInputData(
             graph: isset($validated['graph']) ? $validated['graph'] : null,
         );
     }

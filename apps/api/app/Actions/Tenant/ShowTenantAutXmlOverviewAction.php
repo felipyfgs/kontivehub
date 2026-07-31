@@ -2,8 +2,8 @@
 
 namespace App\Actions\Tenant;
 
-use App\DTO\Tenant\TenantAutXmlEnrollmentData;
-use App\DTO\Tenant\TenantAutXmlOverviewData;
+use App\DTO\Tenant\AutXmlEnrollmentData;
+use App\DTO\Tenant\AutXmlOverviewData;
 use App\Models\Establishment;
 use App\Models\TenantAutXmlEnrollment;
 use App\Services\Sefaz\TenantAutXmlEnrollmentService;
@@ -16,7 +16,7 @@ final readonly class ShowTenantAutXmlOverviewAction
         private TenantAutXmlEnrollmentService $enrollments,
     ) {}
 
-    public function __invoke(int $perPage): TenantAutXmlOverviewData
+    public function __invoke(int $perPage): AutXmlOverviewData
     {
         $tenantId = (int) $this->currentTenant->tenant()->id;
         $identity = $this->enrollments->activeIdentity();
@@ -42,13 +42,13 @@ final readonly class ShowTenantAutXmlOverviewAction
 
         $establishments->setCollection(
             $establishments->getCollection()
-                ->map(fn (Establishment $establishment): TenantAutXmlEnrollmentData => new TenantAutXmlEnrollmentData(
+                ->map(fn (Establishment $establishment): AutXmlEnrollmentData => new AutXmlEnrollmentData(
                     establishment: $establishment,
                     enrollment: $enrollmentsByEstablishment->get($establishment->id),
                 )),
         );
 
-        return new TenantAutXmlOverviewData(
+        return new AutXmlOverviewData(
             identity: $identity,
             cursor: $cursor,
             stream: $this->enrollments->streamGate($cursor),

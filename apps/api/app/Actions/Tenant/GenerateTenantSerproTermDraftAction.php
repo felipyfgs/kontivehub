@@ -2,8 +2,8 @@
 
 namespace App\Actions\Tenant;
 
-use App\DTO\Tenant\TenantSerproTermDraftData;
-use App\DTO\Tenant\TenantSerproTermDraftResult;
+use App\DTO\Tenant\SerproTermDraftData;
+use App\DTO\Tenant\SerproTermDraftResult;
 use App\Exceptions\TenantSerproAuthorizationApiException;
 use App\Services\Integra\TenantSerproAuthorizationService;
 use App\Support\CurrentTenant;
@@ -17,8 +17,8 @@ final readonly class GenerateTenantSerproTermDraftAction
     ) {}
 
     public function __invoke(
-        TenantSerproTermDraftData $data,
-    ): TenantSerproTermDraftResult {
+        SerproTermDraftData $data,
+    ): SerproTermDraftResult {
         try {
             $result = $this->authorizations->generateTermoDraft(
                 $this->currentTenant->tenant(),
@@ -32,7 +32,7 @@ final readonly class GenerateTenantSerproTermDraftAction
             );
         }
 
-        return new TenantSerproTermDraftResult(
+        return new SerproTermDraftResult(
             authorization: $result['auth'],
             draftSha256: $result['draft_sha256'],
         );

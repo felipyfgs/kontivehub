@@ -2,7 +2,7 @@
 
 namespace App\Actions\Tenant;
 
-use App\DTO\Tenant\TenantSerproAuthorConfigurationData;
+use App\DTO\Tenant\SerproAuthorConfigurationData;
 use App\Exceptions\TenantSerproAuthorizationApiException;
 use App\Models\TenantSerproAuthorization;
 use App\Services\Integra\TenantSerproAuthorizationService;
@@ -17,7 +17,7 @@ final readonly class ConfigureTenantSerproAuthorAction
     ) {}
 
     public function __invoke(
-        TenantSerproAuthorConfigurationData $data,
+        SerproAuthorConfigurationData $data,
     ): TenantSerproAuthorization {
         try {
             return $this->authorizations->configureAuthor(

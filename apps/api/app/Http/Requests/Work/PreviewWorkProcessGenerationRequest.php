@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Work;
 
-use App\DTO\Work\WorkProcessGenerationPreviewData;
+use App\DTO\Work\ProcessGenerationPreviewData;
 use App\Models\User;
 use App\Models\WorkProcessTemplate;
 
@@ -44,11 +44,11 @@ final class PreviewWorkProcessGenerationRequest extends WorkRequest
         ];
     }
 
-    public function payload(): WorkProcessGenerationPreviewData
+    public function payload(): ProcessGenerationPreviewData
     {
         $validated = $this->validated();
 
-        return new WorkProcessGenerationPreviewData(
+        return new ProcessGenerationPreviewData(
             competence: $validated['competence'],
             selection: $validated['selection'] ?? [],
             overrides: $validated['overrides'] ?? [],

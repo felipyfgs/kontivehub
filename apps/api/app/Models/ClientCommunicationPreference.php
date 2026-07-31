@@ -82,7 +82,7 @@ class ClientCommunicationPreference extends Model
             'can_send' => $canSend,
             'provider_enabled' => $providerEnabled,
             'execution_mode' => $native
-                ? CommunicationExecutionMode::WhatsappNative->value
+                ? CommunicationExecutionMode::WhatsAppNative->value
                 : CommunicationExecutionMode::TemplateOnly->value,
             'lock_version' => (int) $this->lock_version,
             'eligible_channels' => array_values($eligibleChannels),

@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationGatewayOperationData;
+use App\DTO\Communication\GatewayOperationData;
 
 final class VoteCommunicationPollRequest extends CommunicationConversationGatewayRequest
 {
@@ -15,7 +15,7 @@ final class VoteCommunicationPollRequest extends CommunicationConversationGatewa
         ];
     }
 
-    public function gatewayData(): CommunicationGatewayOperationData
+    public function gatewayData(): GatewayOperationData
     {
         return $this->gatewayOperation([
             'option_names' => array_values($this->validated('option_names')),

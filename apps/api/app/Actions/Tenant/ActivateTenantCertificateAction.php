@@ -2,8 +2,8 @@
 
 namespace App\Actions\Tenant;
 
-use App\DTO\Tenant\TenantCertificateData;
-use App\DTO\Tenant\TenantCertificateUploadData;
+use App\DTO\Tenant\CertificateData;
+use App\DTO\Tenant\CertificateUploadData;
 use App\Exceptions\TenantSettingsApiException;
 use App\Services\Audit\AuditLogger;
 use App\Services\Certificates\TenantCredentialService;
@@ -26,9 +26,9 @@ final readonly class ActivateTenantCertificateAction
     ) {}
 
     public function __invoke(
-        TenantCertificateUploadData $data,
+        CertificateUploadData $data,
         bool $replace = false,
-    ): TenantCertificateData {
+    ): CertificateData {
         $previous = $replace ? $this->credentials->activeForCurrentTenant() : null;
         $previousFingerprint = $previous?->fingerprint_sha256;
         $action = $replace ? 'tenant_credential.replace' : 'tenant_credential.activate';

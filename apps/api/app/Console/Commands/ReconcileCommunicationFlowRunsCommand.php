@@ -5,8 +5,8 @@ namespace App\Console\Commands;
 use App\Enums\Communication\FlowRunStatus;
 use App\Jobs\Communication\AdvanceCommunicationFlowRunJob;
 use App\Models\CommunicationFlowRun;
-use App\Services\Communication\Flows\CommunicationFlowAvailability;
-use App\Services\Communication\Flows\CommunicationFlowRunControlService;
+use App\Services\Communication\Flows\FlowAvailability;
+use App\Services\Communication\Flows\FlowRunControlService;
 use Illuminate\Console\Command;
 
 final class ReconcileCommunicationFlowRunsCommand extends Command
@@ -16,8 +16,8 @@ final class ReconcileCommunicationFlowRunsCommand extends Command
     protected $description = 'Retoma delays/timeouts de runs de fluxo de comunicação de forma idempotente.';
 
     public function handle(
-        CommunicationFlowAvailability $availability,
-        CommunicationFlowRunControlService $controls,
+        FlowAvailability $availability,
+        FlowRunControlService $controls,
     ): int {
         if (! $availability->runtimeEnabled()) {
             return self::SUCCESS;

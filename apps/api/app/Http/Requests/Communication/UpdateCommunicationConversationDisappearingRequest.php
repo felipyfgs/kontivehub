@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationGatewayOperationData;
+use App\DTO\Communication\GatewayOperationData;
 use Illuminate\Validation\Rule;
 
 final class UpdateCommunicationConversationDisappearingRequest extends CommunicationConversationGatewayRequest
@@ -15,7 +15,7 @@ final class UpdateCommunicationConversationDisappearingRequest extends Communica
         ];
     }
 
-    public function gatewayData(): CommunicationGatewayOperationData
+    public function gatewayData(): GatewayOperationData
     {
         return $this->gatewayOperation([
             'timer_seconds' => (int) $this->validated('timer_seconds'),

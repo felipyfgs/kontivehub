@@ -2,7 +2,7 @@
 
 namespace App\Actions\Work;
 
-use App\DTO\Work\WorkCommentData;
+use App\DTO\Work\CommentData;
 use App\Models\WorkComment;
 use App\Models\WorkTask;
 use App\Services\Audit\AuditLogger;
@@ -18,7 +18,7 @@ final readonly class CreateWorkTaskCommentAction
 
     public function execute(
         WorkTask $task,
-        WorkCommentData $data,
+        CommentData $data,
     ): WorkComment {
         return DB::transaction(function () use ($task, $data): WorkComment {
             $comment = WorkComment::query()->create([

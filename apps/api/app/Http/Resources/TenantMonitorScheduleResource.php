@@ -2,17 +2,17 @@
 
 namespace App\Http\Resources;
 
-use App\DTO\Tenant\TenantMonitorScheduleData;
+use App\DTO\Tenant\MonitorScheduleData;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-/** @mixin TenantMonitorScheduleData */
+/** @mixin MonitorScheduleData */
 final class TenantMonitorScheduleResource extends JsonResource
 {
     /** @return array<string, mixed> */
     public function toArray(Request $request): array
     {
-        /** @var TenantMonitorScheduleData $schedule */
+        /** @var MonitorScheduleData $schedule */
         $schedule = $this->resource;
         $policy = $schedule->policy;
 

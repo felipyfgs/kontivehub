@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Work;
 
-use App\DTO\Work\WorkTaskStructureData;
+use App\DTO\Work\TaskStructureData;
 use App\Models\User;
 use App\Models\WorkTask;
 
@@ -38,13 +38,13 @@ final class UpdateWorkTaskStructureRequest extends WorkRequest
         ];
     }
 
-    public function structure(): WorkTaskStructureData
+    public function structure(): TaskStructureData
     {
         $validated = $this->validated();
         $lockVersion = (int) $validated['lock_version'];
         unset($validated['lock_version']);
 
-        return new WorkTaskStructureData(
+        return new TaskStructureData(
             attributes: $validated,
             lockVersion: $lockVersion,
         );

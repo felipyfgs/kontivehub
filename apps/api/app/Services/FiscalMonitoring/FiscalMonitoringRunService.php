@@ -29,7 +29,7 @@ use App\Services\Fiscal\Dctfweb\MitCommunicationService;
 use App\Services\Fiscal\Fgts\FgtsCommunicationService;
 use App\Services\Fiscal\ManualConsult\ManualConsultExecutionContext;
 use App\Services\Fiscal\SimplesMei\Pgdasd\PgdasdCommunicationService;
-use App\Services\Fiscal\SimplesMei\Pgdasd\PgdasdPagtowebReconciliationService;
+use App\Services\Fiscal\SimplesMei\Pgdasd\PgdasdPagtoWebReconciliationService;
 use App\Services\Fiscal\SimplesMei\Pgdasd\PgdasdPostConsultService;
 use App\Services\Fiscal\SimplesMei\Pgdasd\PgdasdRbt12Service;
 use App\Services\Fiscal\SimplesMei\Pgmei\PgmeiCommunicationService;
@@ -61,7 +61,7 @@ final class FiscalMonitoringRunService
         private readonly OperationsMetrics $metrics,
         private readonly MonitorCommercialLedgerService $commercialLedger,
         private readonly PgdasdPostConsultService $pgdasdPostConsult,
-        private readonly PgdasdPagtowebReconciliationService $pgdasdPaymentReconciliation,
+        private readonly PgdasdPagtoWebReconciliationService $pgdasdPaymentReconciliation,
         private readonly PgdasdRbt12Service $pgdasdRbt12,
         private readonly FiscalModuleAvailabilityService $availability,
         private readonly FiscalModuleControlService $moduleControls,

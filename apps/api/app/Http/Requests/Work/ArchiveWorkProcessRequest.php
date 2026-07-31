@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Work;
 
-use App\DTO\Work\WorkProcessLockData;
+use App\DTO\Work\ProcessLockData;
 use App\Models\User;
 use App\Models\WorkProcess;
 
@@ -24,8 +24,8 @@ final class ArchiveWorkProcessRequest extends WorkRequest
         return ['lock_version' => ['required', 'integer', 'min:1']];
     }
 
-    public function lock(): WorkProcessLockData
+    public function lock(): ProcessLockData
     {
-        return new WorkProcessLockData($this->integer('lock_version'));
+        return new ProcessLockData($this->integer('lock_version'));
     }
 }

@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationGatewayOperationData;
+use App\DTO\Communication\GatewayOperationData;
 
 final class QueryCommunicationInboxQrLinkRequest extends CommunicationInboxGatewayRequest
 {
@@ -14,7 +14,7 @@ final class QueryCommunicationInboxQrLinkRequest extends CommunicationInboxGatew
         ];
     }
 
-    public function gatewayData(): CommunicationGatewayOperationData
+    public function gatewayData(): GatewayOperationData
     {
         return $this->gatewayOperation([
             'revoke' => (bool) ($this->validated('revoke') ?? false),

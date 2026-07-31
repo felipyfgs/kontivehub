@@ -26,8 +26,8 @@ use App\Models\CommunicationMessage;
 use App\Models\Tenant;
 use App\Models\TenantMembership;
 use App\Models\User;
-use App\Services\Communication\Contact\CommunicationInboxIdentityProfileMerger;
-use App\Services\Communication\Conversation\CommunicationConversationReadStateService;
+use App\Services\Communication\Contact\InboxIdentityProfileMerger;
+use App\Services\Communication\Conversation\ConversationReadStateService;
 use App\Support\CurrentTenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
@@ -194,7 +194,7 @@ final class CommunicationConversationWorkspaceTest extends TestCase
             'is_provisional' => false,
         ])->save();
 
-        app(CommunicationInboxIdentityProfileMerger::class)->merge(
+        app(InboxIdentityProfileMerger::class)->merge(
             $inbox,
             $conversation->identity,
             ['push_name' => 'Push Novo'],
@@ -229,7 +229,7 @@ final class CommunicationConversationWorkspaceTest extends TestCase
         $donorIdentity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
             'tenant_id' => $tenant->id,
             'contact_id' => $donorContact->id,
-            'channel' => CommunicationChannel::Whatsapp,
+            'channel' => CommunicationChannel::WhatsApp,
             'address_encrypted' => '+5511999992091',
             'address_hash' => hash('sha256', '+5511999992091'),
             'address_masked' => '***2091',
@@ -252,7 +252,7 @@ final class CommunicationConversationWorkspaceTest extends TestCase
         $earlierIdentity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
             'tenant_id' => $tenant->id,
             'contact_id' => $earlierDonor->id,
-            'channel' => CommunicationChannel::Whatsapp,
+            'channel' => CommunicationChannel::WhatsApp,
             'address_encrypted' => '+5511999992094',
             'address_hash' => hash('sha256', '+5511999992094'),
             'address_masked' => '***2094',
@@ -328,7 +328,7 @@ final class CommunicationConversationWorkspaceTest extends TestCase
             'status' => ConversationStatus::Open,
             'last_message_at' => now(),
         ]);
-        $merger = app(CommunicationInboxIdentityProfileMerger::class);
+        $merger = app(InboxIdentityProfileMerger::class);
         $merger->merge(
             $firstInbox,
             $firstConversation->identity,
@@ -398,7 +398,7 @@ final class CommunicationConversationWorkspaceTest extends TestCase
         $tenant = Tenant::factory()->create(['communication_enabled' => true]);
         $inbox = $this->inbox($tenant, 'Perfis');
         $conversation = $this->conversation($tenant, $inbox, '+5511999992011', provisional: true);
-        $merger = app(CommunicationInboxIdentityProfileMerger::class);
+        $merger = app(InboxIdentityProfileMerger::class);
         $base = now()->subMinute();
 
         $merger->merge($inbox, $conversation->identity, [
@@ -445,10 +445,10 @@ final class CommunicationConversationWorkspaceTest extends TestCase
             ->whereIn('id', [$messageB->id, $messageC->id])
             ->update(['conversation_id' => $survivor->id]);
 
-        app(CommunicationConversationReadStateService::class)
+        app(ConversationReadStateService::class)
             ->mergeFragments($survivor->fresh(), [$donor->fresh()]);
 
-        $snapshot = app(CommunicationConversationReadStateService::class)->snapshot($survivor->fresh());
+        $snapshot = app(ConversationReadStateService::class)->snapshot($survivor->fresh());
         $this->assertSame(3, $snapshot['unread_count']);
         $this->assertContains($snapshot['first_unread_message_id'], [$messageA->id, $messageB->id, $messageC->id]);
         $this->assertSame(
@@ -649,7 +649,7 @@ final class CommunicationConversationWorkspaceTest extends TestCase
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
             'tenant_id' => $tenant->id,
             'contact_id' => $contact->id,
-            'channel' => CommunicationChannel::Whatsapp,
+            'channel' => CommunicationChannel::WhatsApp,
             'address_encrypted' => $address,
             'address_hash' => hash('sha256', $address),
             'address_masked' => '***'.substr($address, -4),

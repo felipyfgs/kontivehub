@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Work;
 
-use App\DTO\Work\WorkDepartmentFiltersData;
+use App\DTO\Work\DepartmentFiltersData;
 use App\Models\User;
 use App\Models\WorkDepartment;
 
@@ -49,9 +49,9 @@ final class ListWorkDepartmentsRequest extends WorkRequest
         }
     }
 
-    public function filters(): WorkDepartmentFiltersData
+    public function filters(): DepartmentFiltersData
     {
-        return new WorkDepartmentFiltersData(
+        return new DepartmentFiltersData(
             isActive: $this->has('is_active')
                 ? $this->boolean('is_active')
                 : null,

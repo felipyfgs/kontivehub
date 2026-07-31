@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationGatewayOperationData;
+use App\DTO\Communication\GatewayOperationData;
 
 final class ReactToCommunicationMessageRequest extends CommunicationConversationGatewayRequest
 {
@@ -14,7 +14,7 @@ final class ReactToCommunicationMessageRequest extends CommunicationConversation
         ];
     }
 
-    public function gatewayData(): CommunicationGatewayOperationData
+    public function gatewayData(): GatewayOperationData
     {
         $emoji = $this->validated('emoji');
 

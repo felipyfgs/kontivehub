@@ -2,8 +2,8 @@
 
 namespace App\Actions\Tenant;
 
-use App\DTO\Tenant\TenantInstitutionalProfileUpdateData;
-use App\DTO\Tenant\TenantInstitutionalProfileUpdateResult;
+use App\DTO\Tenant\InstitutionalProfileUpdateData;
+use App\DTO\Tenant\InstitutionalProfileUpdateResult;
 use App\Exceptions\TenantSettingsApiException;
 use App\Services\Audit\AuditLogger;
 use App\Services\Certificates\TenantInstitutionalProfileService;
@@ -18,8 +18,8 @@ final readonly class UpdateTenantInstitutionalProfileAction
     ) {}
 
     public function __invoke(
-        TenantInstitutionalProfileUpdateData $data,
-    ): TenantInstitutionalProfileUpdateResult {
+        InstitutionalProfileUpdateData $data,
+    ): InstitutionalProfileUpdateResult {
         try {
             $result = $this->profiles->update(
                 $data->attributes,
@@ -33,7 +33,7 @@ final readonly class UpdateTenantInstitutionalProfileAction
             throw TenantSettingsApiException::profileUpdateFailed($error->getMessage());
         }
 
-        return new TenantInstitutionalProfileUpdateResult(
+        return new InstitutionalProfileUpdateResult(
             profile: $result['profile'],
             cnpjChanged: $result['cnpj_changed'],
             invalidated: $result['invalidated'],

@@ -2,7 +2,7 @@
 
 namespace Tests\Feature\Communication;
 
-use App\Actions\Communication\DeleteCommunicationInboxAction;
+use App\Actions\Communication\DeleteInboxAction;
 use App\Console\Commands\DispatchCommunicationProfilePictureRefreshesCommand;
 use App\Contracts\CommunicationProfilePictureDownloader;
 use App\Contracts\CommunicationTransport;
@@ -38,11 +38,11 @@ use App\Models\CommunicationMessage;
 use App\Models\Tenant;
 use App\Models\TenantMembership;
 use App\Models\User;
-use App\Services\Communication\Contact\CommunicationInboxIdentityProfileMerger;
-use App\Services\Communication\Contact\CommunicationInboxIdentityProfileReconciler;
-use App\Services\Communication\Media\CommunicationMediaDeletionService;
-use App\Services\Communication\Media\CommunicationMediaStore;
-use App\Services\Communication\ProfilePicture\CommunicationProfilePictureRefreshScheduler;
+use App\Services\Communication\Contact\InboxIdentityProfileMerger;
+use App\Services\Communication\Contact\InboxIdentityProfileReconciler;
+use App\Services\Communication\Media\MediaDeletionService;
+use App\Services\Communication\Media\MediaStore;
+use App\Services\Communication\ProfilePicture\ProfilePictureRefreshScheduler;
 use App\Support\CurrentTenant;
 use GuzzleHttp\Psr7\Utils;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -131,7 +131,7 @@ final class CommunicationProfilePictureTest extends TestCase
 
         $this->authenticate($member);
         $this->get($url)->assertOk();
-        app(CommunicationMediaStore::class)->delete((string) $profile->profile_picture_object_id);
+        app(MediaStore::class)->delete((string) $profile->profile_picture_object_id);
 
         // If the controller/action ran before the limiter, the missing object
         // would produce 404. The second request must be rejected at middleware.
@@ -173,7 +173,7 @@ final class CommunicationProfilePictureTest extends TestCase
             $inbox,
             CommunicationIdentity::query()->withoutGlobalScopes()->findOrFail($conversation->identity_id),
         );
-        app(CommunicationMediaStore::class)->delete((string) $profile->profile_picture_object_id);
+        app(MediaStore::class)->delete((string) $profile->profile_picture_object_id);
 
         $this->authenticate($member);
         $this->get('/api/v1/communication/profile-pictures/'.$profile->id.'/'.$profile->profile_picture_version)
@@ -248,7 +248,7 @@ final class CommunicationProfilePictureTest extends TestCase
         ]]);
         $tenant->forceFill(['communication_enabled' => false])->save();
 
-        (new RefreshCommunicationProfilePictureJob($tenant->id, $profile->id, 1))->handle($transport, new ProfilePictureDownloaderFake, app(CommunicationMediaStore::class), app(CommunicationMediaDeletionService::class));
+        (new RefreshCommunicationProfilePictureJob($tenant->id, $profile->id, 1))->handle($transport, new ProfilePictureDownloaderFake, app(MediaStore::class), app(MediaDeletionService::class));
 
         self::assertSame(0, $transport->queries);
         self::assertSame(ProfilePictureState::Pending, $profile->refresh()->profile_picture_state);
@@ -262,7 +262,7 @@ final class CommunicationProfilePictureTest extends TestCase
         $transport = new ProfilePictureTransport(['profiles' => []]);
         $this->app->instance(CommunicationTransport::class, $transport);
 
-        $result = app(CommunicationInboxIdentityProfileReconciler::class)->reconcile($inbox);
+        $result = app(InboxIdentityProfileReconciler::class)->reconcile($inbox);
 
         self::assertSame(['applied' => 0, 'next_identity_id' => null], $result);
         self::assertSame(1, $transport->queries);
@@ -306,7 +306,7 @@ final class CommunicationProfilePictureTest extends TestCase
             $transport = new ProfilePictureTransport(['profiles' => []]);
             $this->app->instance(CommunicationTransport::class, $transport);
 
-            $result = app(CommunicationInboxIdentityProfileReconciler::class)->reconcile($inbox);
+            $result = app(InboxIdentityProfileReconciler::class)->reconcile($inbox);
 
             self::assertSame(['applied' => 0, 'next_identity_id' => null], $result, $label);
             self::assertSame(0, $transport->queries, $label);
@@ -324,7 +324,7 @@ final class CommunicationProfilePictureTest extends TestCase
         $this->app->instance(CommunicationTransport::class, $transport);
         Queue::fake();
 
-        $job->handle(app(CommunicationInboxIdentityProfileReconciler::class));
+        $job->handle(app(InboxIdentityProfileReconciler::class));
 
         self::assertSame(0, $transport->queries);
         Queue::assertNothingPushed();
@@ -345,7 +345,7 @@ final class CommunicationProfilePictureTest extends TestCase
             'id' => 'provider-picture-v1',
             'url' => 'https://cdn.example.test/picture.png',
         ]]);
-        (new RefreshCommunicationProfilePictureJob($tenant->id, $profile->id, 1))->handle($transport, new ProfilePictureDownloaderFake, app(CommunicationMediaStore::class), app(CommunicationMediaDeletionService::class));
+        (new RefreshCommunicationProfilePictureJob($tenant->id, $profile->id, 1))->handle($transport, new ProfilePictureDownloaderFake, app(MediaStore::class), app(MediaDeletionService::class));
 
         $profile->refresh();
         self::assertSame(ProfilePictureState::Ready, $profile->profile_picture_state);
@@ -374,8 +374,8 @@ final class CommunicationProfilePictureTest extends TestCase
         (new RefreshCommunicationProfilePictureJob($tenant->id, $profile->id, 1))->handle(
             $transport,
             new ProfilePictureDownloaderFake,
-            app(CommunicationMediaStore::class),
-            app(CommunicationMediaDeletionService::class),
+            app(MediaStore::class),
+            app(MediaDeletionService::class),
         );
 
         $profile->refresh();
@@ -395,7 +395,7 @@ final class CommunicationProfilePictureTest extends TestCase
         ]);
         config(['communication.profile_pictures.negative_ttl_seconds' => 60]);
 
-        (new RefreshCommunicationProfilePictureJob($tenant->id, $profile->id, 1))->handle(new ProfilePictureTransport(['profile_picture' => null]), new ProfilePictureDownloaderFake, app(CommunicationMediaStore::class), app(CommunicationMediaDeletionService::class));
+        (new RefreshCommunicationProfilePictureJob($tenant->id, $profile->id, 1))->handle(new ProfilePictureTransport(['profile_picture' => null]), new ProfilePictureDownloaderFake, app(MediaStore::class), app(MediaDeletionService::class));
 
         $profile->refresh();
         self::assertSame(ProfilePictureState::Unavailable, $profile->profile_picture_state);
@@ -417,8 +417,8 @@ final class CommunicationProfilePictureTest extends TestCase
         (new RefreshCommunicationProfilePictureJob($tenant->id, $profile->id, 1))->handle(
             new ProfilePictureTransport(new CommunicationTransportException('PROFILE_PICTURE_PRIVACY', false, 403)),
             new ProfilePictureDownloaderFake,
-            app(CommunicationMediaStore::class),
-            app(CommunicationMediaDeletionService::class),
+            app(MediaStore::class),
+            app(MediaDeletionService::class),
         );
 
         $profile->refresh();
@@ -451,8 +451,8 @@ final class CommunicationProfilePictureTest extends TestCase
         (new RefreshCommunicationProfilePictureJob($tenant->id, $profile->id, 1))->handle(
             $transport,
             new ProfilePictureDownloaderFake,
-            app(CommunicationMediaStore::class),
-            app(CommunicationMediaDeletionService::class),
+            app(MediaStore::class),
+            app(MediaDeletionService::class),
         );
 
         $tenant->forceFill(['communication_enabled' => true])->save();
@@ -461,8 +461,8 @@ final class CommunicationProfilePictureTest extends TestCase
         (new RefreshCommunicationProfilePictureJob($tenant->id, $profile->id, 1))->handle(
             $transport,
             new ProfilePictureDownloaderFake,
-            app(CommunicationMediaStore::class),
-            app(CommunicationMediaDeletionService::class),
+            app(MediaStore::class),
+            app(MediaDeletionService::class),
         );
 
         $inbox->forceFill(['status' => InboxStatus::Connected, 'is_enabled' => false])->save();
@@ -470,8 +470,8 @@ final class CommunicationProfilePictureTest extends TestCase
         (new RefreshCommunicationProfilePictureJob($tenant->id, $profile->id, 1))->handle(
             $transport,
             new ProfilePictureDownloaderFake,
-            app(CommunicationMediaStore::class),
-            app(CommunicationMediaDeletionService::class),
+            app(MediaStore::class),
+            app(MediaDeletionService::class),
         );
 
         $inbox->forceFill(['is_enabled' => true])->save();
@@ -480,8 +480,8 @@ final class CommunicationProfilePictureTest extends TestCase
         (new RefreshCommunicationProfilePictureJob($tenant->id, $profile->id, 1))->handle(
             $transport,
             new ProfilePictureDownloaderFake,
-            app(CommunicationMediaStore::class),
-            app(CommunicationMediaDeletionService::class),
+            app(MediaStore::class),
+            app(MediaDeletionService::class),
         );
 
         $tenant->forceFill([
@@ -492,8 +492,8 @@ final class CommunicationProfilePictureTest extends TestCase
         (new RefreshCommunicationProfilePictureJob($tenant->id, $profile->id, 1))->handle(
             $transport,
             new ProfilePictureDownloaderFake,
-            app(CommunicationMediaStore::class),
-            app(CommunicationMediaDeletionService::class),
+            app(MediaStore::class),
+            app(MediaDeletionService::class),
         );
 
         self::assertSame(0, $transport->queries);
@@ -512,7 +512,7 @@ final class CommunicationProfilePictureTest extends TestCase
             'is_active' => true,
         ]);
         $identity = $this->identityForContact($tenant, $contact, '+5511999994321');
-        $scheduler = app(CommunicationProfilePictureRefreshScheduler::class);
+        $scheduler = app(ProfilePictureRefreshScheduler::class);
 
         $profile = $scheduler->schedule($inbox, $identity);
 
@@ -755,8 +755,8 @@ final class CommunicationProfilePictureTest extends TestCase
                     'url' => 'https://cdn.example.test/secret.png',
                 ]]),
                 new ProfilePictureDownloaderFake,
-                app(CommunicationMediaStore::class),
-                app(CommunicationMediaDeletionService::class),
+                app(MediaStore::class),
+                app(MediaDeletionService::class),
             );
             self::fail('Resultado inesperado do provider deve ser relançado para a fila.');
         } catch (\RuntimeException $error) {
@@ -790,8 +790,8 @@ final class CommunicationProfilePictureTest extends TestCase
                     'url' => 'https://cdn.example.test/picture.png',
                 ]]),
                 new ProfilePictureDownloaderFake(error: $failure),
-                app(CommunicationMediaStore::class),
-                app(CommunicationMediaDeletionService::class),
+                app(MediaStore::class),
+                app(MediaDeletionService::class),
             );
             self::fail('Falha transitória deveria ser devolvida à fila.');
         } catch (CommunicationProfilePictureDownloadException $error) {
@@ -834,8 +834,8 @@ final class CommunicationProfilePictureTest extends TestCase
                 'url' => 'https://cdn.example.test/picture.png',
             ]]),
             $downloader,
-            app(CommunicationMediaStore::class),
-            app(CommunicationMediaDeletionService::class),
+            app(MediaStore::class),
+            app(MediaDeletionService::class),
         );
 
         $profile->refresh();
@@ -858,7 +858,7 @@ final class CommunicationProfilePictureTest extends TestCase
             'is_active' => true,
         ]);
         $identity = $this->identityForContact($tenant, $contact, '+5511999994444');
-        $merger = app(CommunicationInboxIdentityProfileMerger::class);
+        $merger = app(InboxIdentityProfileMerger::class);
         $newerAt = now()->subMinute();
         $profile = $merger->merge($inbox, $identity, ['picture_id' => 'provider-v2'], $newerAt, 'event-v2');
 
@@ -904,7 +904,7 @@ final class CommunicationProfilePictureTest extends TestCase
         $targetObject = $target->profile_picture_object_id;
         $sourceObject = $source->profile_picture_object_id;
 
-        app(CommunicationInboxIdentityProfileMerger::class)->mergeFromDonor($survivor, $donor);
+        app(InboxIdentityProfileMerger::class)->mergeFromDonor($survivor, $donor);
 
         $source->refresh();
         self::assertSame($survivor->id, $source->identity_id);
@@ -950,7 +950,7 @@ final class CommunicationProfilePictureTest extends TestCase
         $targetObject = (string) $target->profile_picture_object_id;
         $sourceObject = (string) $source->profile_picture_object_id;
 
-        app(CommunicationInboxIdentityProfileMerger::class)->mergeFromDonor($survivor, $donor);
+        app(InboxIdentityProfileMerger::class)->mergeFromDonor($survivor, $donor);
 
         $target->refresh();
         self::assertSame('provider-target', $target->picture_id);
@@ -997,14 +997,14 @@ final class CommunicationProfilePictureTest extends TestCase
 
         $this->deleteJson('/api/v1/communication/contacts/'.$contact->id.'/personal-data')->assertOk();
         self::assertFalse(CommunicationInboxIdentityProfile::query()->withoutGlobalScopes()->whereKey($profile->id)->exists());
-        self::assertTrue(app(CommunicationMediaStore::class)->exists($objectId));
+        self::assertTrue(app(MediaStore::class)->exists($objectId));
         $intent = CommunicationMediaDeletionIntent::query()->where('object_id', $objectId)->firstOrFail();
 
         (new DeleteCommunicationMediaObjectJob($objectId, $intent->id))->handle(
-            app(CommunicationMediaStore::class),
-            app(CommunicationMediaDeletionService::class),
+            app(MediaStore::class),
+            app(MediaDeletionService::class),
         );
-        self::assertFalse(app(CommunicationMediaStore::class)->exists($objectId));
+        self::assertFalse(app(MediaStore::class)->exists($objectId));
         self::assertNotNull($intent->refresh()->deleted_at);
     }
 
@@ -1026,7 +1026,7 @@ final class CommunicationProfilePictureTest extends TestCase
 
         try {
             DB::transaction(function () use ($inbox): void {
-                app(DeleteCommunicationInboxAction::class)->handle($inbox);
+                app(DeleteInboxAction::class)->handle($inbox);
                 throw new \RuntimeException('rollback-intencional');
             });
             self::fail('A transação externa deveria ter sido revertida.');
@@ -1039,7 +1039,7 @@ final class CommunicationProfilePictureTest extends TestCase
         self::assertSame(0, CommunicationMediaDeletionIntent::query()->where('object_id', $objectId)->count());
 
         $restoredInbox = CommunicationInbox::query()->withoutGlobalScopes()->findOrFail($inbox->id);
-        app(DeleteCommunicationInboxAction::class)->handle($restoredInbox);
+        app(DeleteInboxAction::class)->handle($restoredInbox);
 
         self::assertFalse(CommunicationInbox::query()->withoutGlobalScopes()->whereKey($inbox->id)->exists());
         self::assertFalse(CommunicationInboxIdentityProfile::query()->withoutGlobalScopes()->whereKey($profile->id)->exists());
@@ -1056,7 +1056,7 @@ final class CommunicationProfilePictureTest extends TestCase
             'object_id' => (string) Str::ulid(),
             'due_at' => now(),
         ]);
-        $service = app(CommunicationMediaDeletionService::class);
+        $service = app(MediaDeletionService::class);
 
         $service->retry($intent->id, new \RuntimeException('provider detail must not persist'));
         $intent->refresh();
@@ -1103,7 +1103,7 @@ final class CommunicationProfilePictureTest extends TestCase
             'content_digest' => hash('sha256', (string) Str::ulid()),
             'occurred_at' => now(),
         ]);
-        $media = app(CommunicationMediaStore::class);
+        $media = app(MediaStore::class);
         $root = (string) config('communication.media.disk_root');
         $cutoff = now()->subHours(2)->getTimestamp();
 
@@ -1126,7 +1126,7 @@ final class CommunicationProfilePictureTest extends TestCase
         usleep(2_000);
         $orphan = $media->putStream(Utils::streamFor('orphan'), ['tenant_id' => (int) $tenant->id]);
         touch($root.'/'.strtolower(substr($orphan['object_id'], 0, 2)).'/'.$orphan['object_id'].'.media', $cutoff);
-        $service = app(CommunicationMediaDeletionService::class);
+        $service = app(MediaDeletionService::class);
 
         self::assertSame(0, $service->sweepOrphans($media, 2, 60));
         self::assertSame(1, $service->sweepOrphans($media, 2, 60));
@@ -1149,7 +1149,7 @@ final class CommunicationProfilePictureTest extends TestCase
         }
 
         $ids = iterator_to_array(
-            app(CommunicationMediaStore::class)->oldObjectIds(now()->subHour(), 10, $cursor),
+            app(MediaStore::class)->oldObjectIds(now()->subHour(), 10, $cursor),
             false,
         );
 
@@ -1179,7 +1179,7 @@ final class CommunicationProfilePictureTest extends TestCase
             'version' => (int) $profile->profile_picture_version,
             'purpose' => 'COMMUNICATION_MEDIA',
         ];
-        $stored = app(CommunicationMediaStore::class)->putStream(Utils::streamFor($bytes), $context);
+        $stored = app(MediaStore::class)->putStream(Utils::streamFor($bytes), $context);
         $profile->forceFill([
             'profile_picture_state' => ProfilePictureState::Ready,
             'profile_picture_object_id' => $stored['object_id'],
@@ -1219,7 +1219,7 @@ final class CommunicationProfilePictureTest extends TestCase
     {
         $contact = CommunicationContact::query()->withoutGlobalScopes()->create(['tenant_id' => $tenant->id, 'name' => 'Foto', 'is_active' => true]);
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
-            'tenant_id' => $tenant->id, 'contact_id' => $contact->id, 'channel' => CommunicationChannel::Whatsapp,
+            'tenant_id' => $tenant->id, 'contact_id' => $contact->id, 'channel' => CommunicationChannel::WhatsApp,
             'address_encrypted' => '+5511999999999', 'address_hash' => hash('sha256', '+5511999999999'), 'address_masked' => '***9999', 'is_active' => true,
         ]);
 
@@ -1235,7 +1235,7 @@ final class CommunicationProfilePictureTest extends TestCase
             'tenant_id' => $tenant->id,
             'contact_id' => $contact->id,
             'canonical_identity_id' => $canonicalIdentityId,
-            'channel' => CommunicationChannel::Whatsapp,
+            'channel' => CommunicationChannel::WhatsApp,
             'address_encrypted' => $address,
             'address_hash' => hash('sha256', $address),
             'address_masked' => '***'.substr($address, -4),
@@ -1269,7 +1269,7 @@ final class CommunicationProfilePictureTest extends TestCase
             $identities[] = [
                 'tenant_id' => $tenant->id,
                 'contact_id' => $contact->id,
-                'channel' => CommunicationChannel::Whatsapp->value,
+                'channel' => CommunicationChannel::WhatsApp->value,
                 'address_encrypted' => null,
                 'address_hash' => hash('sha256', $seed.':'.$index),
                 'address_masked' => '***'.str_pad((string) $index, 4, '0', STR_PAD_LEFT),

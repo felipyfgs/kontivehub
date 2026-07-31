@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationGatewayOperationData;
+use App\DTO\Communication\GatewayOperationData;
 
 final class OperateCommunicationConversationGatewayRequest extends CommunicationConversationGatewayRequest
 {
@@ -12,7 +12,7 @@ final class OperateCommunicationConversationGatewayRequest extends Communication
         return [];
     }
 
-    public function gatewayData(): CommunicationGatewayOperationData
+    public function gatewayData(): GatewayOperationData
     {
         return $this->gatewayOperation();
     }

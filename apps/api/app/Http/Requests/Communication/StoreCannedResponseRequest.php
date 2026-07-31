@@ -2,10 +2,10 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationCannedResponseMutationData;
+use App\DTO\Communication\CannedResponseMutationData;
 use App\Models\User;
 use App\Rules\AllowedCommunicationCannedResponsePlaceholders;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 
 final class StoreCannedResponseRequest extends CommunicationRequest
 {
@@ -23,7 +23,7 @@ final class StoreCannedResponseRequest extends CommunicationRequest
         $actor = $this->user();
 
         return $actor instanceof User
-            && app(CommunicationAccess::class)->canManageQuickReplies($actor);
+            && app(Access::class)->canManageQuickReplies($actor);
     }
 
     /** @return array<string, list<mixed>> */
@@ -37,11 +37,11 @@ final class StoreCannedResponseRequest extends CommunicationRequest
         ];
     }
 
-    public function mutationData(): CommunicationCannedResponseMutationData
+    public function mutationData(): CannedResponseMutationData
     {
         $validated = $this->validated();
 
-        return new CommunicationCannedResponseMutationData(
+        return new CannedResponseMutationData(
             title: $validated['title'],
             shortcut: strtolower($validated['shortcut']),
             body: $validated['body'],

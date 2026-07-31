@@ -2,7 +2,7 @@
 
 namespace Tests\Unit\Communication;
 
-use App\Services\Communication\Flows\CommunicationFlowAvailability;
+use App\Services\Communication\Flows\FlowAvailability;
 use Tests\TestCase;
 
 final class CommunicationFlowAvailabilityTest extends TestCase
@@ -26,7 +26,7 @@ final class CommunicationFlowAvailabilityTest extends TestCase
             'communication.flows.runtime_enabled' => filter_var(env('COMMUNICATION_FLOWS_RUNTIME_ENABLED', false), FILTER_VALIDATE_BOOL),
         ]);
 
-        $availability = app(CommunicationFlowAvailability::class);
+        $availability = app(FlowAvailability::class);
         $this->assertFalse($availability->enabled());
         $this->assertFalse($availability->runtimeEnabled());
     }
@@ -37,7 +37,7 @@ final class CommunicationFlowAvailabilityTest extends TestCase
             'communication.flows.enabled' => true,
             'communication.flows.runtime_enabled' => false,
         ]);
-        $availability = app(CommunicationFlowAvailability::class);
+        $availability = app(FlowAvailability::class);
         $this->assertTrue($availability->enabled());
         $this->assertFalse($availability->runtimeEnabled());
 

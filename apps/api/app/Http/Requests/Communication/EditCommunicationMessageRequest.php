@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationGatewayOperationData;
+use App\DTO\Communication\GatewayOperationData;
 
 final class EditCommunicationMessageRequest extends CommunicationConversationGatewayRequest
 {
@@ -21,7 +21,7 @@ final class EditCommunicationMessageRequest extends CommunicationConversationGat
         }
     }
 
-    public function gatewayData(): CommunicationGatewayOperationData
+    public function gatewayData(): GatewayOperationData
     {
         return $this->gatewayOperation([
             'text' => (string) $this->validated('text'),

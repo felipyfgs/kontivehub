@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Tenant;
 
-use App\DTO\Tenant\TenantSerproEligibilityData;
+use App\DTO\Tenant\SerproEligibilityData;
 use App\Enums\SerproEnvironment;
 use Illuminate\Validation\Rule;
 
@@ -21,9 +21,9 @@ final class EvaluateTenantSerproEligibilityRequest extends TenantSerproAuthoriza
         ];
     }
 
-    public function toDto(): TenantSerproEligibilityData
+    public function toDto(): SerproEligibilityData
     {
-        return new TenantSerproEligibilityData(
+        return new SerproEligibilityData(
             environment: $this->environment(),
             clientId: (int) $this->validated('client_id'),
             solutionCode: (string) $this->validated('solution_code'),

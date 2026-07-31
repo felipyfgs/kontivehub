@@ -19,8 +19,8 @@ use App\Models\CommunicationInbox;
 use App\Models\CommunicationInboxIdentityProfile;
 use App\Models\CommunicationMessage;
 use App\Models\Tenant;
-use App\Services\Communication\Pairing\CommunicationPairingStateStore;
-use App\Services\Communication\Security\CommunicationHmacSigner;
+use App\Services\Communication\Pairing\PairingStateStore;
+use App\Services\Communication\Security\HmacSigner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -288,7 +288,7 @@ final class CommunicationGatewayProjectionTest extends TestCase
             'tenant_id' => $inbox->tenant_id,
             'contact_id' => $contact->id,
             'canonical_identity_id' => $rootIdentity->id,
-            'channel' => CommunicationChannel::Whatsapp,
+            'channel' => CommunicationChannel::WhatsApp,
             'address_encrypted' => $lid,
             'address_hash' => hash('sha256', $lid),
             'address_masked' => 'lid:***3945',
@@ -471,7 +471,7 @@ final class CommunicationGatewayProjectionTest extends TestCase
         ])->assertNoContent();
         $this->assertSame(InboxStatus::Disconnected, $inbox->refresh()->status);
 
-        $pairing = app(CommunicationPairingStateStore::class)->get((int) $inbox->id);
+        $pairing = app(PairingStateStore::class)->get((int) $inbox->id);
         $this->assertSame('CONNECT_RETRIES_EXHAUSTED', $pairing['error_code'] ?? null);
     }
 
@@ -485,7 +485,7 @@ final class CommunicationGatewayProjectionTest extends TestCase
         ])->assertNoContent();
         $this->assertSame(InboxStatus::Disconnected, $inbox->refresh()->status);
 
-        $pairing = app(CommunicationPairingStateStore::class)->get((int) $inbox->id);
+        $pairing = app(PairingStateStore::class)->get((int) $inbox->id);
         $this->assertSame('error', $pairing['event'] ?? null);
         $this->assertSame('SESSION_ALREADY_PAIRED', $pairing['error_code'] ?? null);
         $this->assertArrayHasKey('expires_at', $pairing);
@@ -513,7 +513,7 @@ final class CommunicationGatewayProjectionTest extends TestCase
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
             'tenant_id' => $tenant->id,
             'contact_id' => $contact->id,
-            'channel' => CommunicationChannel::Whatsapp,
+            'channel' => CommunicationChannel::WhatsApp,
             'address_encrypted' => $address,
             'address_hash' => hash('sha256', $address),
             'address_masked' => '***0001',
@@ -567,7 +567,7 @@ final class CommunicationGatewayProjectionTest extends TestCase
     {
         $path = '/api/internal/v1/communication/gateway/events';
         $body = json_encode($event, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
-        $headers = app(CommunicationHmacSigner::class)->headers('POST', $path, $body);
+        $headers = app(HmacSigner::class)->headers('POST', $path, $body);
 
         return $this->json('POST', $path, $event, $headers, JSON_UNESCAPED_SLASHES);
     }

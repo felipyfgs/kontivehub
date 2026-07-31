@@ -2,7 +2,7 @@
 
 namespace App\Actions\Tenant;
 
-use App\DTO\Tenant\TenantSerproTermUploadData;
+use App\DTO\Tenant\SerproTermUploadData;
 use App\Exceptions\TenantSerproAuthorizationApiException;
 use App\Models\TenantSerproAuthorization;
 use App\Services\Integra\TenantSerproAuthorizationService;
@@ -18,7 +18,7 @@ final readonly class UploadTenantSerproTermAction
     ) {}
 
     public function __invoke(
-        TenantSerproTermUploadData $data,
+        SerproTermUploadData $data,
     ): TenantSerproAuthorization {
         try {
             $xml = $data->xml;

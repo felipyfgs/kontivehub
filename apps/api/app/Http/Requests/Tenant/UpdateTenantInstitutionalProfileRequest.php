@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Tenant;
 
-use App\DTO\Tenant\TenantInstitutionalProfileUpdateData;
+use App\DTO\Tenant\InstitutionalProfileUpdateData;
 use App\Rules\ValidCnpj;
 
 final class UpdateTenantInstitutionalProfileRequest extends TenantSettingsMutationRequest
@@ -41,9 +41,9 @@ final class UpdateTenantInstitutionalProfileRequest extends TenantSettingsMutati
         ];
     }
 
-    public function toDto(): TenantInstitutionalProfileUpdateData
+    public function toDto(): InstitutionalProfileUpdateData
     {
-        return new TenantInstitutionalProfileUpdateData(
+        return new InstitutionalProfileUpdateData(
             attributes: $this->validated(),
             actorUserId: $this->actor()->id,
         );

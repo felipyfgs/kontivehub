@@ -2,7 +2,7 @@
 
 namespace App\Actions\Tenant;
 
-use App\DTO\Tenant\TenantTechnicalConsentGrantData;
+use App\DTO\Tenant\TechnicalConsentGrantData;
 use App\Exceptions\TenantSettingsApiException;
 use App\Models\TenantTechnicalConsent;
 use App\Services\Certificates\TenantTechnicalConsentService;
@@ -15,7 +15,7 @@ final readonly class GrantTenantTechnicalConsentAction
     ) {}
 
     public function __invoke(
-        TenantTechnicalConsentGrantData $data,
+        TechnicalConsentGrantData $data,
     ): TenantTechnicalConsent {
         try {
             return $this->consents->grant(

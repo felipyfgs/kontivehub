@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationRecipientSelectionData;
+use App\DTO\Communication\RecipientSelectionData;
 use App\Enums\Communication\RecipientMode;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -36,7 +36,7 @@ final class UpdateCommunicationAutomationRecipientsRequest extends Communication
         ];
     }
 
-    public function selection(): CommunicationRecipientSelectionData
+    public function selection(): RecipientSelectionData
     {
         $validated = $this->validated();
         $identityIds = array_values(array_unique(array_map(
@@ -44,7 +44,7 @@ final class UpdateCommunicationAutomationRecipientsRequest extends Communication
             $validated['identity_ids'],
         )));
 
-        return new CommunicationRecipientSelectionData(
+        return new RecipientSelectionData(
             scope: $this->scope(),
             recipientMode: RecipientMode::from($validated['recipient_mode']),
             identityIds: $identityIds,

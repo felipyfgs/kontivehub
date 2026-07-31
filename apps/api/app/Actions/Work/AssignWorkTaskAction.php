@@ -2,7 +2,7 @@
 
 namespace App\Actions\Work;
 
-use App\DTO\Work\WorkTaskAssignmentData;
+use App\DTO\Work\TaskAssignmentData;
 use App\Models\WorkTask;
 use App\Services\Audit\AuditLogger;
 use App\Services\Work\MembershipResolver;
@@ -18,7 +18,7 @@ final readonly class AssignWorkTaskAction
 
     public function execute(
         WorkTask $task,
-        WorkTaskAssignmentData $data,
+        TaskAssignmentData $data,
     ): WorkTask {
         return DB::transaction(function () use ($task, $data): WorkTask {
             if (isset($data->attributes['assignee_membership_id'])) {

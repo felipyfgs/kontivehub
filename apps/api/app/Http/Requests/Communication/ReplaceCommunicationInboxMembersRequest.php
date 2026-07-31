@@ -2,10 +2,10 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationInboxMembersData;
+use App\DTO\Communication\InboxMembersData;
 use App\Models\CommunicationInbox;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 use App\Support\CurrentTenant;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Validation\Rule;
@@ -19,7 +19,7 @@ final class ReplaceCommunicationInboxMembersRequest extends CommunicationRequest
 
         return $actor instanceof User
             && $inbox instanceof CommunicationInbox
-            && app(CommunicationAccess::class)->canManage($actor, $inbox);
+            && app(Access::class)->canManage($actor, $inbox);
     }
 
     /** @return array<string, list<mixed>> */
@@ -40,7 +40,7 @@ final class ReplaceCommunicationInboxMembersRequest extends CommunicationRequest
         ];
     }
 
-    public function membersData(): CommunicationInboxMembersData
+    public function membersData(): InboxMembersData
     {
         $validated = $this->validated();
         $membershipIds = array_values(array_unique(array_map(
@@ -48,6 +48,6 @@ final class ReplaceCommunicationInboxMembersRequest extends CommunicationRequest
             $validated['membership_ids'],
         )));
 
-        return new CommunicationInboxMembersData($membershipIds);
+        return new InboxMembersData($membershipIds);
     }
 }

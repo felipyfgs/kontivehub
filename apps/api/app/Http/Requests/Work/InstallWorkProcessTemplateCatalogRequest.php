@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Work;
 
-use App\DTO\Work\WorkProcessTemplateCatalogInstallationData;
+use App\DTO\Work\ProcessTemplateCatalogInstallationData;
 use App\Models\User;
 use App\Models\WorkProcessTemplate;
 
@@ -25,11 +25,11 @@ final class InstallWorkProcessTemplateCatalogRequest extends WorkRequest
         ];
     }
 
-    public function payload(): WorkProcessTemplateCatalogInstallationData
+    public function payload(): ProcessTemplateCatalogInstallationData
     {
         $validated = $this->validated();
 
-        return new WorkProcessTemplateCatalogInstallationData(
+        return new ProcessTemplateCatalogInstallationData(
             name: $validated['name'] ?? null,
             defaultDepartmentId: $validated['default_department_id'] ?? null,
         );

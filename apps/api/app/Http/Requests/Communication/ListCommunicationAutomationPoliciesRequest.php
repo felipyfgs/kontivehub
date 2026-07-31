@@ -3,7 +3,7 @@
 namespace App\Http\Requests\Communication;
 
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 
 final class ListCommunicationAutomationPoliciesRequest extends CommunicationRequest
 {
@@ -12,7 +12,7 @@ final class ListCommunicationAutomationPoliciesRequest extends CommunicationRequ
         $actor = $this->user();
 
         return $actor instanceof User
-            && app(CommunicationAccess::class)->canManage($actor);
+            && app(Access::class)->canManage($actor);
     }
 
     /** @return array<string, list<mixed>> */

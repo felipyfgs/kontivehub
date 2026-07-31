@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Work;
 
-use App\DTO\Work\WorkCommentData;
+use App\DTO\Work\CommentData;
 use App\Models\User;
 use App\Models\WorkProcess;
 
@@ -24,8 +24,8 @@ final class CommentWorkProcessRequest extends WorkRequest
         return ['body' => ['required', 'string', 'max:5000']];
     }
 
-    public function comment(): WorkCommentData
+    public function comment(): CommentData
     {
-        return new WorkCommentData((string) $this->validated('body'));
+        return new CommentData((string) $this->validated('body'));
     }
 }

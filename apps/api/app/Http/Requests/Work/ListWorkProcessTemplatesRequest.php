@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Work;
 
-use App\DTO\Work\WorkProcessTemplateFiltersData;
+use App\DTO\Work\ProcessTemplateFiltersData;
 use App\Models\User;
 use App\Models\WorkProcessTemplate;
 use Illuminate\Validation\Rule;
@@ -30,12 +30,12 @@ final class ListWorkProcessTemplatesRequest extends WorkRequest
         ];
     }
 
-    public function filters(): WorkProcessTemplateFiltersData
+    public function filters(): ProcessTemplateFiltersData
     {
         $validated = $this->validated();
         $sort = $validated['sort'] ?? 'name';
 
-        return new WorkProcessTemplateFiltersData(
+        return new ProcessTemplateFiltersData(
             isActive: array_key_exists('is_active', $validated)
                 ? $this->boolean('is_active')
                 : null,

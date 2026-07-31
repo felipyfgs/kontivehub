@@ -3,7 +3,7 @@
 namespace Tests\Unit\Communication;
 
 use App\Enums\Communication\GatewayEventType;
-use App\Services\Communication\Events\CommunicationGatewayEventBoundaryValidator;
+use App\Services\Communication\Events\GatewayEventBoundaryValidator;
 use InvalidArgumentException;
 use Tests\TestCase;
 
@@ -11,7 +11,7 @@ final class CommunicationGatewayEventBoundaryValidatorTest extends TestCase
 {
     public function test_valid_event_is_mapped_to_the_internal_contract_data(): void
     {
-        $event = app(CommunicationGatewayEventBoundaryValidator::class)->validate(json_encode([
+        $event = app(GatewayEventBoundaryValidator::class)->validate(json_encode([
             'contract_version' => 'v1',
             'gateway_event_id' => 'gateway-alert-boundary-0001',
             'session_id' => 'session-boundary-0001',
@@ -51,7 +51,7 @@ final class CommunicationGatewayEventBoundaryValidatorTest extends TestCase
             json_encode([...$valid, 'tenant_id' => 999], JSON_THROW_ON_ERROR),
             json_encode([...$valid, 'payload' => 'not-an-object'], JSON_THROW_ON_ERROR),
         ];
-        $validator = app(CommunicationGatewayEventBoundaryValidator::class);
+        $validator = app(GatewayEventBoundaryValidator::class);
 
         foreach ($invalidPayloads as $body) {
             try {

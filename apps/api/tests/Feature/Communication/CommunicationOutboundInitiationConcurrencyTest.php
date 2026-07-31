@@ -125,7 +125,7 @@ try {
     }
     $tenant = App\Models\Tenant::query()->findOrFail((int) $tenantId);
     app(App\Support\CurrentTenant::class)->bindSystem($tenant);
-    $data = new App\DTO\Communication\CommunicationMessageCreationData(
+    $data = new App\DTO\Communication\MessageCreationData(
         body: 'Primeiro contato concorrente',
         internalNote: false,
         requestedKind: App\Enums\Communication\MessageKind::Text,
@@ -138,7 +138,7 @@ try {
         receiptMessageId: null,
         outboundInitiation: true,
     );
-    $result = app(App\Actions\Communication\StartCommunicationConversationAction::class)->handle(
+    $result = app(App\Actions\Communication\StartConversationAction::class)->handle(
         (int) $contactId,
         (int) $identityId,
         (int) $inboxId,
@@ -293,7 +293,7 @@ PHP;
         return (int) $connection->table('communication_identities')->insertGetId([
             'tenant_id' => $tenantId,
             'contact_id' => $contactId,
-            'channel' => CommunicationChannel::Whatsapp->value,
+            'channel' => CommunicationChannel::WhatsApp->value,
             'address_encrypted' => Crypt::encryptString($address),
             'address_hash' => hash('sha256', $address),
             'address_masked' => '***'.substr($address, -4),

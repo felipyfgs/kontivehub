@@ -2,11 +2,11 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationAutomationPolicyData;
+use App\DTO\Communication\AutomationPolicyData;
 use App\Enums\Communication\RecipientMode;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
-use App\Services\Communication\Automation\CommunicationAutomationCatalog;
+use App\Services\Communication\Authorization\Access;
+use App\Services\Communication\Automation\AutomationCatalog;
 use App\Support\CurrentTenant;
 use DateTimeZone;
 use Illuminate\Database\Query\Builder;
@@ -20,7 +20,7 @@ final class UpsertCommunicationAutomationPolicyRequest extends CommunicationRequ
         $actor = $this->user();
 
         return $actor instanceof User
-            && app(CommunicationAccess::class)->canManage($actor);
+            && app(Access::class)->canManage($actor);
     }
 
     /** @return array<string, list<mixed>> */
@@ -54,7 +54,7 @@ final class UpsertCommunicationAutomationPolicyRequest extends CommunicationRequ
     {
         return [
             function (Validator $validator): void {
-                $catalog = app(CommunicationAutomationCatalog::class);
+                $catalog = app(AutomationCatalog::class);
                 if (! $catalog->supports(
                     (string) $this->input('module_key'),
                     (string) $this->input('submodule_key'),
@@ -68,11 +68,11 @@ final class UpsertCommunicationAutomationPolicyRequest extends CommunicationRequ
         ];
     }
 
-    public function policyData(): CommunicationAutomationPolicyData
+    public function policyData(): AutomationPolicyData
     {
         $validated = $this->validated();
 
-        return new CommunicationAutomationPolicyData(
+        return new AutomationPolicyData(
             moduleKey: $validated['module_key'],
             submoduleKey: $validated['submodule_key'],
             inboxId: isset($validated['inbox_id']) ? (int) $validated['inbox_id'] : null,

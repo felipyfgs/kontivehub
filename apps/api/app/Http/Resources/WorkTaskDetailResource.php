@@ -2,17 +2,17 @@
 
 namespace App\Http\Resources;
 
-use App\DTO\Work\WorkTaskDetailData;
+use App\DTO\Work\TaskDetailData;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-/** @mixin WorkTaskDetailData */
+/** @mixin TaskDetailData */
 final class WorkTaskDetailResource extends JsonResource
 {
     /** @return array<string, mixed> */
     public function toArray(Request $request): array
     {
-        /** @var WorkTaskDetailData $detail */
+        /** @var TaskDetailData $detail */
         $detail = $this->resource;
         $task = $detail->task;
         $process = $task->process;

@@ -2,10 +2,10 @@
 
 namespace App\Http\Requests\Work;
 
-use App\DTO\Work\WorkProcessUpdateData;
+use App\DTO\Work\ProcessUpdateData;
 use App\Models\User;
 use App\Models\WorkProcess;
-use App\Services\Work\WorkMonitoringContextRegistry;
+use App\Services\Work\MonitoringContextRegistry;
 use Illuminate\Validation\Rule;
 
 final class UpdateWorkProcessRequest extends WorkRequest
@@ -30,7 +30,7 @@ final class UpdateWorkProcessRequest extends WorkRequest
             'monitoring_module_key' => [
                 'nullable',
                 'string',
-                Rule::in(app(WorkMonitoringContextRegistry::class)->keys()),
+                Rule::in(app(MonitoringContextRegistry::class)->keys()),
             ],
             'due_date' => ['nullable', 'date_format:Y-m-d'],
             'target_due_date' => ['nullable', 'date_format:Y-m-d'],
@@ -40,12 +40,12 @@ final class UpdateWorkProcessRequest extends WorkRequest
         ];
     }
 
-    public function updateData(): WorkProcessUpdateData
+    public function updateData(): ProcessUpdateData
     {
         $validated = $this->validated();
         $lockVersion = (int) $validated['lock_version'];
         unset($validated['lock_version']);
 
-        return new WorkProcessUpdateData($lockVersion, $validated);
+        return new ProcessUpdateData($lockVersion, $validated);
     }
 }

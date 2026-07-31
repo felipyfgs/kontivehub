@@ -2,11 +2,11 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationAutomationScopeData;
+use App\DTO\Communication\AutomationScopeData;
 use App\Models\Client;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
-use App\Services\Communication\Automation\CommunicationAutomationCatalog;
+use App\Services\Communication\Authorization\Access;
+use App\Services\Communication\Automation\AutomationCatalog;
 use Illuminate\Validation\Validator;
 
 abstract class CommunicationAutomationRecipientsRequest extends CommunicationRequest
@@ -18,7 +18,7 @@ abstract class CommunicationAutomationRecipientsRequest extends CommunicationReq
 
         return $actor instanceof User
             && $client instanceof Client
-            && app(CommunicationAccess::class)->canManage($actor, $client);
+            && app(Access::class)->canManage($actor, $client);
     }
 
     /** @return array<string, list<mixed>> */
@@ -42,7 +42,7 @@ abstract class CommunicationAutomationRecipientsRequest extends CommunicationReq
     {
         return [
             function (Validator $validator): void {
-                if (! app(CommunicationAutomationCatalog::class)->supports(
+                if (! app(AutomationCatalog::class)->supports(
                     (string) $this->input('module_key'),
                     (string) $this->input('submodule_key'),
                 )) {
@@ -59,11 +59,11 @@ abstract class CommunicationAutomationRecipientsRequest extends CommunicationReq
         return [];
     }
 
-    public function scope(): CommunicationAutomationScopeData
+    public function scope(): AutomationScopeData
     {
         $validated = $this->validated();
 
-        return new CommunicationAutomationScopeData(
+        return new AutomationScopeData(
             moduleKey: $validated['module_key'],
             submoduleKey: $validated['submodule_key'],
         );

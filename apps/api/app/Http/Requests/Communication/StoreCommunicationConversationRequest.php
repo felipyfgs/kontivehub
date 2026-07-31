@@ -2,12 +2,12 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationMessageCreationData;
-use App\DTO\Communication\CommunicationMessageUploadData;
+use App\DTO\Communication\MessageCreationData;
+use App\DTO\Communication\MessageUploadData;
 use App\Enums\Communication\MessageKind;
 use App\Models\CommunicationInbox;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -31,7 +31,7 @@ final class StoreCommunicationConversationRequest extends CommunicationRequest
         }
         $inbox = CommunicationInbox::query()->find((int) $inboxId);
 
-        return $inbox !== null && app(CommunicationAccess::class)->canReply($actor, $inbox);
+        return $inbox !== null && app(Access::class)->canReply($actor, $inbox);
     }
 
     /** @return array<string,list<mixed>> */
@@ -59,7 +59,7 @@ final class StoreCommunicationConversationRequest extends CommunicationRequest
         return (int) $this->validated()['inbox_id'];
     }
 
-    public function messageData(): CommunicationMessageCreationData
+    public function messageData(): MessageCreationData
     {
         $v = $this->validated();
         $upload = $this->file('file');
@@ -68,9 +68,9 @@ final class StoreCommunicationConversationRequest extends CommunicationRequest
             $path = $upload->getRealPath();
             if (! is_string($path) || $path === '') {
                 throw ValidationException::withMessages(['file' => 'Arquivo inválido.']);
-            } $uploadData = new CommunicationMessageUploadData($path, $upload->getClientOriginalName(), (string) $upload->getMimeType(), (string) $upload->getClientMimeType());
+            } $uploadData = new MessageUploadData($path, $upload->getClientOriginalName(), (string) $upload->getMimeType(), (string) $upload->getClientMimeType());
         }
 
-        return new CommunicationMessageCreationData(trim((string) ($v['body'] ?? '')), false, isset($v['kind']) ? MessageKind::from($v['kind']) : null, (bool) ($v['ptt'] ?? false), false, [], null, (string) $v['idempotency_key'], $uploadData, null, true);
+        return new MessageCreationData(trim((string) ($v['body'] ?? '')), false, isset($v['kind']) ? MessageKind::from($v['kind']) : null, (bool) ($v['ptt'] ?? false), false, [], null, (string) $v['idempotency_key'], $uploadData, null, true);
     }
 }

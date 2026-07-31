@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Work;
 
-use App\DTO\Work\WorkCalendarIntervalData;
+use App\DTO\Work\CalendarIntervalData;
 use App\Enums\Work\TaskStatus;
 use App\Enums\Work\WorkRisk;
 use App\Models\User;
@@ -33,11 +33,11 @@ final class ListWorkCalendarRequest extends WorkRequest
         ];
     }
 
-    public function filters(): WorkCalendarIntervalData
+    public function filters(): CalendarIntervalData
     {
         $validated = $this->validated();
 
-        return new WorkCalendarIntervalData(
+        return new CalendarIntervalData(
             from: $validated['from'],
             to: $validated['to'],
             departmentId: $validated['department_id'] ?? null,

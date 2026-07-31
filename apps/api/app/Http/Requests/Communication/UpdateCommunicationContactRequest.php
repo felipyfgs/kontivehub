@@ -2,10 +2,10 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationContactUpdateData;
+use App\DTO\Communication\ContactUpdateData;
 use App\Models\CommunicationContact;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 
 final class UpdateCommunicationContactRequest extends CommunicationRequest
 {
@@ -16,7 +16,7 @@ final class UpdateCommunicationContactRequest extends CommunicationRequest
 
         return $actor instanceof User
             && $contact instanceof CommunicationContact
-            && app(CommunicationAccess::class)->canManageContacts($actor, $contact);
+            && app(Access::class)->canManageContacts($actor, $contact);
     }
 
     /** @return array<string, list<mixed>> */
@@ -28,8 +28,8 @@ final class UpdateCommunicationContactRequest extends CommunicationRequest
         ];
     }
 
-    public function payload(): CommunicationContactUpdateData
+    public function payload(): ContactUpdateData
     {
-        return new CommunicationContactUpdateData($this->validated());
+        return new ContactUpdateData($this->validated());
     }
 }

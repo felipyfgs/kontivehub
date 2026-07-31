@@ -2,12 +2,12 @@
 
 namespace App\Http\Resources;
 
-use App\DTO\Tenant\TenantAutXmlEnrollmentData;
+use App\DTO\Tenant\AutXmlEnrollmentData;
 use App\Enums\TenantAutXmlEnrollmentStatus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-/** @mixin TenantAutXmlEnrollmentData */
+/** @mixin AutXmlEnrollmentData */
 final class TenantAutXmlEnrollmentResource extends JsonResource
 {
     /** @return array<string, mixed> */

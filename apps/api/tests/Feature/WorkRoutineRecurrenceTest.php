@@ -17,7 +17,7 @@ use App\Models\WorkProcess;
 use App\Models\WorkProcessGenerationBatch;
 use App\Models\WorkProcessTemplate;
 use App\Models\WorkProcessTemplateTask;
-use App\Services\Work\WorkRoutineRecurrenceDispatcher;
+use App\Services\Work\RoutineRecurrenceDispatcher;
 use App\Support\FiscalDataModel\PrivilegedTenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -130,7 +130,7 @@ class WorkRoutineRecurrenceTest extends TestCase
             ],
         ])->save();
 
-        $dispatcher = app(WorkRoutineRecurrenceDispatcher::class);
+        $dispatcher = app(RoutineRecurrenceDispatcher::class);
         $result = $dispatcher->dispatchDue($runAt->addMinute());
 
         $this->assertSame(1, $result['dispatched']);
@@ -138,7 +138,7 @@ class WorkRoutineRecurrenceTest extends TestCase
             'tenant_id' => $tenant->id,
             'work_process_template_id' => $template->id,
             'competence' => '2026-06',
-            'idempotency_key' => WorkRoutineRecurrenceDispatcher::idempotencyKey(
+            'idempotency_key' => RoutineRecurrenceDispatcher::idempotencyKey(
                 (int) $tenant->id,
                 (int) $template->id,
                 ReferencePeriod::fromString('2026-06'),
@@ -187,7 +187,7 @@ class WorkRoutineRecurrenceTest extends TestCase
         ])->save();
 
         $now = CarbonImmutable::parse('2026-07-01 12:00:00', 'UTC');
-        $result = app(WorkRoutineRecurrenceDispatcher::class)->dispatchDue($now);
+        $result = app(RoutineRecurrenceDispatcher::class)->dispatchDue($now);
 
         $this->assertGreaterThanOrEqual(2, $result['dispatched']);
         $competences = WorkProcessGenerationBatch::query()
@@ -346,7 +346,7 @@ class WorkRoutineRecurrenceTest extends TestCase
             ],
         ])->save();
 
-        $result = app(WorkRoutineRecurrenceDispatcher::class)
+        $result = app(RoutineRecurrenceDispatcher::class)
             ->dispatchDue(CarbonImmutable::parse('2026-07-01 12:00:00', 'UTC'));
 
         $this->assertSame(0, $result['dispatched']);
@@ -384,7 +384,7 @@ class WorkRoutineRecurrenceTest extends TestCase
             ],
         ])->save();
 
-        $result = app(WorkRoutineRecurrenceDispatcher::class)->dispatchDue($runAt->addMinute());
+        $result = app(RoutineRecurrenceDispatcher::class)->dispatchDue($runAt->addMinute());
 
         $this->assertSame(1, $result['dispatched']);
         $this->assertDatabaseHas('work_process_generation_batches', [

@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Work;
 
-use App\DTO\Work\WorkQueueFiltersData;
+use App\DTO\Work\QueueFiltersData;
 use App\Models\User;
 use App\Models\WorkTask;
 
@@ -32,11 +32,11 @@ final class ListWorkTasksRequest extends WorkRequest
         ];
     }
 
-    public function filters(): WorkQueueFiltersData
+    public function filters(): QueueFiltersData
     {
         $validated = $this->validated();
 
-        return new WorkQueueFiltersData([
+        return new QueueFiltersData([
             'tab' => $validated['tab'] ?? 'open',
             'department_id' => $validated['department_id'] ?? null,
             'assignee_membership_id' => $validated['assignee_membership_id'] ?? null,

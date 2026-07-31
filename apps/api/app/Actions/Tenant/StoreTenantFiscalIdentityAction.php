@@ -2,7 +2,7 @@
 
 namespace App\Actions\Tenant;
 
-use App\DTO\Tenant\TenantFiscalIdentityData;
+use App\DTO\Tenant\FiscalIdentityData;
 use App\Exceptions\TenantFiscalIdentityApiException;
 use App\Models\TenantFiscalIdentity;
 use App\Services\Audit\AuditLogger;
@@ -18,7 +18,7 @@ final readonly class StoreTenantFiscalIdentityAction
     ) {}
 
     public function __invoke(
-        TenantFiscalIdentityData $data,
+        FiscalIdentityData $data,
     ): TenantFiscalIdentity {
         try {
             $identity = $this->identities->upsertActive(

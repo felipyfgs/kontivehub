@@ -2,17 +2,17 @@
 
 namespace App\Http\Resources;
 
-use App\DTO\Tenant\TenantConsentStatusData;
+use App\DTO\Tenant\ConsentStatusData;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-/** @mixin TenantConsentStatusData */
+/** @mixin ConsentStatusData */
 final class TenantConsentStatusResource extends JsonResource
 {
     /** @return array<string, mixed> */
     public function toArray(Request $request): array
     {
-        /** @var TenantConsentStatusData $status */
+        /** @var ConsentStatusData $status */
         $status = $this->resource;
 
         return [

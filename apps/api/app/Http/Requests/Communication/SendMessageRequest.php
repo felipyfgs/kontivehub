@@ -2,12 +2,12 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationMessageCreationData;
-use App\DTO\Communication\CommunicationMessageUploadData;
+use App\DTO\Communication\MessageCreationData;
+use App\DTO\Communication\MessageUploadData;
 use App\Enums\Communication\MessageKind;
 use App\Models\CommunicationConversation;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -34,7 +34,7 @@ final class SendMessageRequest extends CommunicationRequest
         $inbox = $conversation->inbox()->first();
 
         return $inbox !== null
-            && app(CommunicationAccess::class)->canReply($actor, $inbox);
+            && app(Access::class)->canReply($actor, $inbox);
     }
 
     /** @return array<string, list<mixed>> */
@@ -88,7 +88,7 @@ final class SendMessageRequest extends CommunicationRequest
         ];
     }
 
-    public function messageData(): CommunicationMessageCreationData
+    public function messageData(): MessageCreationData
     {
         $validated = $this->validated();
         $richPayload = array_filter([
@@ -99,7 +99,7 @@ final class SendMessageRequest extends CommunicationRequest
             'interactive' => $validated['interactive'] ?? null,
         ], static fn (mixed $value): bool => $value !== null);
 
-        return new CommunicationMessageCreationData(
+        return new MessageCreationData(
             body: trim((string) ($validated['body'] ?? '')),
             internalNote: (bool) ($validated['internal_note'] ?? false),
             requestedKind: isset($validated['kind'])
@@ -121,7 +121,7 @@ final class SendMessageRequest extends CommunicationRequest
         );
     }
 
-    private function uploadData(): ?CommunicationMessageUploadData
+    private function uploadData(): ?MessageUploadData
     {
         $upload = $this->file('file');
         if (! $upload instanceof UploadedFile) {
@@ -135,7 +135,7 @@ final class SendMessageRequest extends CommunicationRequest
             ]);
         }
 
-        return new CommunicationMessageUploadData(
+        return new MessageUploadData(
             path: $path,
             originalName: $upload->getClientOriginalName(),
             detectedMime: (string) $upload->getMimeType(),

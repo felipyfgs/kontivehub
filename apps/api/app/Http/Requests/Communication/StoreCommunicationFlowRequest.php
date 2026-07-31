@@ -2,9 +2,9 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationFlowCreationData;
+use App\DTO\Communication\FlowCreationData;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 use App\Support\CurrentTenant;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Validation\Rule;
@@ -16,7 +16,7 @@ final class StoreCommunicationFlowRequest extends CommunicationFlowRequest
         $actor = $this->user();
 
         return $actor instanceof User
-            && app(CommunicationAccess::class)->canManageFlows($actor);
+            && app(Access::class)->canManageFlows($actor);
     }
 
     /** @return array<string, mixed> */
@@ -42,9 +42,9 @@ final class StoreCommunicationFlowRequest extends CommunicationFlowRequest
         }
     }
 
-    public function flowData(): CommunicationFlowCreationData
+    public function flowData(): FlowCreationData
     {
-        return new CommunicationFlowCreationData(
+        return new FlowCreationData(
             name: (string) $this->validated('name'),
         );
     }

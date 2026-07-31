@@ -2,10 +2,10 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationCannedResponseRenderData;
+use App\DTO\Communication\CannedResponseRenderData;
 use App\Models\CommunicationCannedResponse;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 
 final class RenderCommunicationCannedResponseRequest extends CommunicationRequest
 {
@@ -16,7 +16,7 @@ final class RenderCommunicationCannedResponseRequest extends CommunicationReques
 
         return $actor instanceof User
             && $canned instanceof CommunicationCannedResponse
-            && app(CommunicationAccess::class)->canView($actor);
+            && app(Access::class)->canView($actor);
     }
 
     /** @return array<string, list<mixed>> */
@@ -27,9 +27,9 @@ final class RenderCommunicationCannedResponseRequest extends CommunicationReques
         ];
     }
 
-    public function renderData(): CommunicationCannedResponseRenderData
+    public function renderData(): CannedResponseRenderData
     {
-        return new CommunicationCannedResponseRenderData(
+        return new CannedResponseRenderData(
             conversationId: (int) $this->validated('conversation_id'),
         );
     }

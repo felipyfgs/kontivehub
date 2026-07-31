@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationFlowGraphInputData;
+use App\DTO\Communication\FlowGraphInputData;
 
 final class DryRunCommunicationFlowRequest extends CommunicationFlowRequest
 {
@@ -25,11 +25,11 @@ final class DryRunCommunicationFlowRequest extends CommunicationFlowRequest
         ];
     }
 
-    public function graphData(): CommunicationFlowGraphInputData
+    public function graphData(): FlowGraphInputData
     {
         $validated = $this->validated();
 
-        return new CommunicationFlowGraphInputData(
+        return new FlowGraphInputData(
             graph: isset($validated['graph']) ? $validated['graph'] : null,
             context: isset($validated['context']) && is_array($validated['context'])
                 ? $validated['context']

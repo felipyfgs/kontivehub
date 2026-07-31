@@ -4,7 +4,7 @@ namespace App\Http\Requests\Communication;
 
 use App\Models\CommunicationConversation;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 use Illuminate\Validation\Rule;
 
 final class UpdateCommunicationConversationReadStateRequest extends CommunicationRequest
@@ -27,7 +27,7 @@ final class UpdateCommunicationConversationReadStateRequest extends Communicatio
         $inbox = $conversation->inbox()->first();
 
         return $inbox !== null
-            && app(CommunicationAccess::class)->canView($actor, $inbox);
+            && app(Access::class)->canView($actor, $inbox);
     }
 
     /** @return array<string, list<mixed>> */

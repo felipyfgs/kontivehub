@@ -2,8 +2,8 @@
 
 namespace App\Console\Commands;
 
-use App\DTO\Communication\CommunicationMaintenanceContext;
-use App\Services\Communication\Maintenance\CommunicationMessageProjectionMaintenance;
+use App\DTO\Communication\MaintenanceContext;
+use App\Services\Communication\Maintenance\MessageProjectionMaintenance;
 use Illuminate\Console\Command;
 use Illuminate\Support\Str;
 use Throwable;
@@ -20,10 +20,10 @@ final class AuditCommunicationMessageProjectionCommand extends Command
 
     protected $description = 'Audita e, com autorização explícita, quarentena projeções técnicas do WhatsApp';
 
-    public function handle(CommunicationMessageProjectionMaintenance $maintenance): int
+    public function handle(MessageProjectionMaintenance $maintenance): int
     {
         try {
-            $context = new CommunicationMaintenanceContext(
+            $context = new MaintenanceContext(
                 tenantId: (int) $this->option('tenant'),
                 inboxId: (int) $this->option('inbox'),
                 operationId: (string) ($this->option('operation') ?: 'projection-'.strtolower((string) Str::ulid())),

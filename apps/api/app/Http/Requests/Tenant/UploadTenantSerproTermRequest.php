@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Tenant;
 
-use App\DTO\Tenant\TenantSerproTermUploadData;
+use App\DTO\Tenant\SerproTermUploadData;
 use App\Enums\SerproEnvironment;
 use Illuminate\Validation\Rule;
 
@@ -18,9 +18,9 @@ final class UploadTenantSerproTermRequest extends TenantSerproAuthorizationMutat
         ];
     }
 
-    public function toDto(): TenantSerproTermUploadData
+    public function toDto(): SerproTermUploadData
     {
-        return new TenantSerproTermUploadData(
+        return new SerproTermUploadData(
             environment: $this->environment(),
             xml: $this->validated('termo_xml'),
             filePath: $this->file('termo_file')?->getRealPath(),

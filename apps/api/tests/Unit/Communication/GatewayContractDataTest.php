@@ -2,18 +2,18 @@
 
 namespace Tests\Unit\Communication;
 
-use App\DTO\Communication\CommunicationPayloadDigest;
 use App\DTO\Communication\GatewayCommandData;
 use App\DTO\Communication\GatewayContractPayload;
 use App\DTO\Communication\GatewayEventData;
 use App\DTO\Communication\GatewayQueryData;
+use App\DTO\Communication\PayloadDigest;
 use App\Enums\Communication\GatewayCommandType;
 use App\Enums\Communication\GatewayEventType;
 use App\Enums\Communication\GatewayQueryType;
 use App\Enums\Communication\SignatureVerificationResult;
-use App\Services\Communication\Security\CommunicationHmacCanonicalizer;
-use App\Services\Communication\Security\CommunicationHmacSigner;
-use App\Services\Communication\Security\CommunicationHmacVerifier;
+use App\Services\Communication\Security\HmacCanonicalizer;
+use App\Services\Communication\Security\HmacSigner;
+use App\Services\Communication\Security\HmacVerifier;
 use DateTimeImmutable;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use InvalidArgumentException;
@@ -54,7 +54,7 @@ class GatewayContractDataTest extends TestCase
         );
 
         $this->assertSame($left->digest(), $right->digest());
-        $this->assertSame(64, strlen(CommunicationPayloadDigest::make($left->toArray())));
+        $this->assertSame(64, strlen(PayloadDigest::make($left->toArray())));
         $this->assertSame('v1', $left->toArray()['contract_version']);
     }
 
@@ -106,9 +106,9 @@ class GatewayContractDataTest extends TestCase
         $timestamp = 1_785_000_000;
         $nonce = 'query-replay-nonce-0001';
         $path = '/internal/v1/queries';
-        $headers = app(CommunicationHmacSigner::class)->headers('POST', $path, $body, $timestamp, $nonce);
-        $verifier = new CommunicationHmacVerifier(
-            app(CommunicationHmacCanonicalizer::class),
+        $headers = app(HmacSigner::class)->headers('POST', $path, $body, $timestamp, $nonce);
+        $verifier = new HmacVerifier(
+            app(HmacCanonicalizer::class),
             app(CacheRepository::class),
         );
 

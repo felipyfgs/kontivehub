@@ -2,7 +2,7 @@
 
 namespace App\Http\Resources;
 
-use App\DTO\Work\WorkProcessViewData;
+use App\DTO\Work\ProcessViewData;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -12,7 +12,7 @@ final class WorkProcessBulkResultResource extends JsonResource
     public function toArray(Request $request): array
     {
         /** @var array{
-         *   succeeded: list<WorkProcessViewData>,
+         *   succeeded: list<ProcessViewData>,
          *   failed: list<array{id: int, message: string}>
          * } $result
          */

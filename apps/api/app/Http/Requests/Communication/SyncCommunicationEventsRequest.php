@@ -2,9 +2,9 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationEventSyncFiltersData;
+use App\DTO\Communication\EventSyncFiltersData;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 
 final class SyncCommunicationEventsRequest extends CommunicationRequest
 {
@@ -13,7 +13,7 @@ final class SyncCommunicationEventsRequest extends CommunicationRequest
         $actor = $this->user();
 
         return $actor instanceof User
-            && app(CommunicationAccess::class)->canView($actor);
+            && app(Access::class)->canView($actor);
     }
 
     /** @return array<string, list<mixed>> */
@@ -25,11 +25,11 @@ final class SyncCommunicationEventsRequest extends CommunicationRequest
         ];
     }
 
-    public function filters(): CommunicationEventSyncFiltersData
+    public function filters(): EventSyncFiltersData
     {
         $validated = $this->validated();
 
-        return new CommunicationEventSyncFiltersData(
+        return new EventSyncFiltersData(
             after: (int) ($validated['after'] ?? 0),
             limit: (int) ($validated['limit'] ?? 200),
         );

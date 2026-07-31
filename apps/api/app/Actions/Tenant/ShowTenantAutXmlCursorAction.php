@@ -2,8 +2,8 @@
 
 namespace App\Actions\Tenant;
 
-use App\DTO\Tenant\TenantAutXmlCursorData;
-use App\DTO\Tenant\TenantAutXmlCursorOverviewData;
+use App\DTO\Tenant\AutXmlCursorData;
+use App\DTO\Tenant\AutXmlCursorOverviewData;
 use App\Enums\CaptureChannel;
 use App\Enums\SyncCursorStatus;
 use App\Models\TenantDistributionCursor;
@@ -20,7 +20,7 @@ final readonly class ShowTenantAutXmlCursorAction
         private TenantAutXmlEnrollmentService $enrollments,
     ) {}
 
-    public function __invoke(): TenantAutXmlCursorOverviewData
+    public function __invoke(): AutXmlCursorOverviewData
     {
         $tenantId = (int) $this->currentTenant->tenant()->id;
         $cursors = TenantDistributionCursor::query()
@@ -31,12 +31,12 @@ final readonly class ShowTenantAutXmlCursorAction
         $primary = $cursors->first();
 
         $presentedCursors = $cursors->map(
-            function (TenantDistributionCursor $cursor): TenantAutXmlCursorData {
+            function (TenantDistributionCursor $cursor): AutXmlCursorData {
                 $breakerOpen = $this->circuitBreaker->isOpen($cursor);
                 $persistedOpen = $cursor->last_cstat === '656'
                     || $cursor->status === SyncCursorStatus::Blocked;
 
-                return new TenantAutXmlCursorData(
+                return new AutXmlCursorData(
                     cursor: $cursor,
                     backoff: $cursor->next_sync_at?->isFuture() ?? false,
                     circuitBreakerOpen: $breakerOpen,
@@ -54,7 +54,7 @@ final readonly class ShowTenantAutXmlCursorAction
                 ->limit(10)
                 ->get();
 
-        return new TenantAutXmlCursorOverviewData(
+        return new AutXmlCursorOverviewData(
             cursors: $presentedCursors,
             stream: $this->enrollments->streamGate($primary),
             recentRuns: $recentRuns,

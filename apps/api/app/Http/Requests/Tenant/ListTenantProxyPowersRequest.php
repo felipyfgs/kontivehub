@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Tenant;
 
-use App\DTO\Tenant\TenantProxyPowerListFilterData;
+use App\DTO\Tenant\ProxyPowerListFilterData;
 use Illuminate\Validation\Rule;
 
 final class ListTenantProxyPowersRequest extends TenantSerproAuthorizationRequest
@@ -25,9 +25,9 @@ final class ListTenantProxyPowersRequest extends TenantSerproAuthorizationReques
         ];
     }
 
-    public function toDto(): TenantProxyPowerListFilterData
+    public function toDto(): ProxyPowerListFilterData
     {
-        return new TenantProxyPowerListFilterData(
+        return new ProxyPowerListFilterData(
             clientId: $this->has('client_id')
                 ? (int) $this->validated('client_id')
                 : null,

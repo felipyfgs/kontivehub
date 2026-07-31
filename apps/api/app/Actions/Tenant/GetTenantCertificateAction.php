@@ -2,7 +2,7 @@
 
 namespace App\Actions\Tenant;
 
-use App\DTO\Tenant\TenantCertificateData;
+use App\DTO\Tenant\CertificateData;
 use App\Models\TenantCredential;
 use App\Models\TenantCredentialPurposeLink;
 use App\Services\Certificates\TenantCredentialService;
@@ -13,7 +13,7 @@ final readonly class GetTenantCertificateAction
         private TenantCredentialService $credentials,
     ) {}
 
-    public function __invoke(bool $refreshExpiryAlerts = true): TenantCertificateData
+    public function __invoke(bool $refreshExpiryAlerts = true): CertificateData
     {
         if ($refreshExpiryAlerts) {
             $this->credentials->refreshExpiryAlerts();
@@ -31,7 +31,7 @@ final readonly class GetTenantCertificateAction
         ?TenantCredential $credential,
         ?array $onboarding = null,
         bool $removed = false,
-    ): TenantCertificateData {
+    ): CertificateData {
         $links = $credential === null
             ? collect()
             : TenantCredentialPurposeLink::query()
@@ -40,7 +40,7 @@ final readonly class GetTenantCertificateAction
                 ->orderBy('purpose')
                 ->get();
 
-        return new TenantCertificateData(
+        return new CertificateData(
             certificate: $credential,
             purposeLinks: $links,
             alerts: $removed ? [] : $this->credentials->panelExpiryAlerts($credential),

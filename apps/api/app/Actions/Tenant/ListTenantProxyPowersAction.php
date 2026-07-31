@@ -2,7 +2,7 @@
 
 namespace App\Actions\Tenant;
 
-use App\DTO\Tenant\TenantProxyPowerListFilterData;
+use App\DTO\Tenant\ProxyPowerListFilterData;
 use App\Models\TaxProxyPower;
 use App\Support\CurrentTenant;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -15,7 +15,7 @@ final readonly class ListTenantProxyPowersAction
 
     /** @return LengthAwarePaginator<int, TaxProxyPower> */
     public function __invoke(
-        TenantProxyPowerListFilterData $filters,
+        ProxyPowerListFilterData $filters,
     ): LengthAwarePaginator {
         $query = TaxProxyPower::query()
             ->where('tenant_id', $this->currentTenant->id());

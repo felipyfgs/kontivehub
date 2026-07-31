@@ -317,7 +317,7 @@ final class CommunicationCannedResponseTest extends TestCase
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
             'tenant_id' => $tenant->id,
             'contact_id' => $contact->id,
-            'channel' => CommunicationChannel::Whatsapp,
+            'channel' => CommunicationChannel::WhatsApp,
             'address_encrypted' => '+5511999990000',
             'address_hash' => hash('sha256', '+5511999990000'),
             'address_masked' => '***0000',
@@ -368,7 +368,7 @@ final class CommunicationCannedResponseTest extends TestCase
                     'name' => 'Outro',
                     'is_active' => true,
                 ])->id,
-                'channel' => CommunicationChannel::Whatsapp,
+                'channel' => CommunicationChannel::WhatsApp,
                 'address_encrypted' => '+5511888880000',
                 'address_hash' => hash('sha256', '+5511888880000'),
                 'address_masked' => '***0000',

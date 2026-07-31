@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Work;
 
-use App\DTO\Work\WorkCalendarDayData;
+use App\DTO\Work\CalendarDayData;
 use App\Enums\Work\TaskStatus;
 use App\Enums\Work\WorkRisk;
 use App\Models\User;
@@ -34,11 +34,11 @@ final class ListWorkCalendarDayRequest extends WorkRequest
         ];
     }
 
-    public function filters(): WorkCalendarDayData
+    public function filters(): CalendarDayData
     {
         $validated = $this->validated();
 
-        return new WorkCalendarDayData(
+        return new CalendarDayData(
             date: $validated['date'],
             perPage: (int) ($validated['per_page'] ?? 25),
             page: (int) ($validated['page'] ?? 1),

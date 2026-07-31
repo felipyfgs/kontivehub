@@ -4,7 +4,7 @@ namespace App\Http\Requests\Communication;
 
 use App\Models\CommunicationLabel;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 
 final class ManageCommunicationLabelRequest extends CommunicationRequest
 {
@@ -15,7 +15,7 @@ final class ManageCommunicationLabelRequest extends CommunicationRequest
 
         return $actor instanceof User
             && $label instanceof CommunicationLabel
-            && app(CommunicationAccess::class)->canManage($actor, $label);
+            && app(Access::class)->canManage($actor, $label);
     }
 
     /** @return array<string, list<mixed>> */

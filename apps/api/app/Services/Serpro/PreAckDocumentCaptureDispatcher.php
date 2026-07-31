@@ -3,7 +3,7 @@
 namespace App\Services\Serpro;
 
 use App\DTO\Serpro\IntegraResponse;
-use App\Services\Fiscal\Guides\PagtowebArrecadacaoReceiptPreAckStore;
+use App\Services\Fiscal\Guides\PagtoWebArrecadacaoReceiptPreAckStore;
 use App\Services\Fiscal\SimplesMei\Pgdasd\PgdasdPreAckDocumentStore;
 
 /** Despacha respostas documentais ao cofre antes de o attempt receber ACK terminal. */
@@ -11,7 +11,7 @@ final class PreAckDocumentCaptureDispatcher
 {
     public function __construct(
         private readonly PgdasdPreAckDocumentStore $pgdasd,
-        private readonly PagtowebArrecadacaoReceiptPreAckStore $pagtoweb,
+        private readonly PagtoWebArrecadacaoReceiptPreAckStore $pagtoweb,
     ) {}
 
     public function handles(string $operationKey): bool

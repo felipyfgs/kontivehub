@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationGatewayOperationData;
+use App\DTO\Communication\GatewayOperationData;
 use Illuminate\Validation\Rule;
 
 final class RecordCommunicationMessageReceiptRequest extends CommunicationConversationGatewayRequest
@@ -15,7 +15,7 @@ final class RecordCommunicationMessageReceiptRequest extends CommunicationConver
         ];
     }
 
-    public function gatewayData(): CommunicationGatewayOperationData
+    public function gatewayData(): GatewayOperationData
     {
         return $this->gatewayOperation([
             'receipt' => (string) $this->validated('receipt'),

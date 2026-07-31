@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Tenant;
 
-use App\DTO\Tenant\TenantMonitorScheduleUpdateData;
+use App\DTO\Tenant\MonitorScheduleUpdateData;
 
 final class UpdateTenantMonitorScheduleRequest extends TenantSettingsMutationRequest
 {
@@ -15,9 +15,9 @@ final class UpdateTenantMonitorScheduleRequest extends TenantSettingsMutationReq
         ];
     }
 
-    public function toDto(): TenantMonitorScheduleUpdateData
+    public function toDto(): MonitorScheduleUpdateData
     {
-        return new TenantMonitorScheduleUpdateData(
+        return new MonitorScheduleUpdateData(
             dayOfMonth: (int) $this->validated('day_of_month'),
             actorUserId: $this->actor()->id,
         );

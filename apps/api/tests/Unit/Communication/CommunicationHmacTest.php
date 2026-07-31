@@ -3,9 +3,9 @@
 namespace Tests\Unit\Communication;
 
 use App\Enums\Communication\SignatureVerificationResult;
-use App\Services\Communication\Security\CommunicationHmacCanonicalizer;
-use App\Services\Communication\Security\CommunicationHmacSigner;
-use App\Services\Communication\Security\CommunicationHmacVerifier;
+use App\Services\Communication\Security\HmacCanonicalizer;
+use App\Services\Communication\Security\HmacSigner;
+use App\Services\Communication\Security\HmacVerifier;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use RuntimeException;
 use Tests\TestCase;
@@ -32,7 +32,7 @@ class CommunicationHmacTest extends TestCase
         $timestamp = 1_785_000_000;
         $nonce = '3de95ee4-20a8-48c1-a257-944f458f6915';
         $body = '{"command_id":"command-0001"}';
-        $headers = app(CommunicationHmacSigner::class)->headers(
+        $headers = app(HmacSigner::class)->headers(
             'post',
             '/internal/v1/commands',
             $body,
@@ -54,7 +54,7 @@ class CommunicationHmacTest extends TestCase
     public function test_rejects_stale_timestamp_before_claiming_nonce(): void
     {
         $timestamp = 1_785_000_000;
-        $headers = app(CommunicationHmacSigner::class)->headers(
+        $headers = app(HmacSigner::class)->headers(
             'post',
             '/internal/v1/commands',
             '{}',
@@ -72,7 +72,7 @@ class CommunicationHmacTest extends TestCase
     {
         $timestamp = 1_785_000_000;
         $nonce = '724a0612-4832-4696-87e8-0f45d0c5d8e2';
-        $canonical = app(CommunicationHmacCanonicalizer::class)->canonical(
+        $canonical = app(HmacCanonicalizer::class)->canonical(
             'POST',
             '/api/internal/v1/whatsapp/events',
             '{}',
@@ -114,13 +114,13 @@ class CommunicationHmacTest extends TestCase
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('WAZYNC_HMAC_KEY_ID e WAZYNC_HMAC_SECRET devem ser configurados.');
-        app(CommunicationHmacSigner::class)->headers('POST', '/internal/v1/commands');
+        app(HmacSigner::class)->headers('POST', '/internal/v1/commands');
     }
 
-    private function verifier(): CommunicationHmacVerifier
+    private function verifier(): HmacVerifier
     {
-        return new CommunicationHmacVerifier(
-            app(CommunicationHmacCanonicalizer::class),
+        return new HmacVerifier(
+            app(HmacCanonicalizer::class),
             app(CacheRepository::class),
         );
     }

@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationGatewayOperationData;
+use App\DTO\Communication\GatewayOperationData;
 
 final class MarkCommunicationInboxStateCleanRequest extends CommunicationInboxGatewayRequest
 {
@@ -14,7 +14,7 @@ final class MarkCommunicationInboxStateCleanRequest extends CommunicationInboxGa
         ];
     }
 
-    public function gatewayData(): CommunicationGatewayOperationData
+    public function gatewayData(): GatewayOperationData
     {
         return $this->gatewayOperation([
             'action' => 'MARK_CLEAN',

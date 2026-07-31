@@ -6,7 +6,7 @@ use App\DTO\Communication\ConversationBulkOperationAdmissionData;
 use App\Enums\Communication\ConversationBulkAction;
 use App\Enums\Communication\ConversationStatus;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Validator;
@@ -45,7 +45,7 @@ final class StoreConversationBulkOperationRequest extends CommunicationRequest
             return false;
         }
 
-        $access = app(CommunicationAccess::class);
+        $access = app(Access::class);
         if (! $access->canView($actor)) {
             return false;
         }

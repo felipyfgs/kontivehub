@@ -2,8 +2,8 @@
 
 namespace App\Jobs\Communication;
 
-use App\Services\Communication\Media\CommunicationMediaDeletionService;
-use App\Services\Communication\Media\CommunicationMediaStore;
+use App\Services\Communication\Media\MediaDeletionService;
+use App\Services\Communication\Media\MediaStore;
 use App\Support\LogSanitizer;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -29,9 +29,9 @@ final class DeleteCommunicationMediaObjectJob implements ShouldBeUnique, ShouldQ
         $this->afterCommit();
     }
 
-    public function handle(CommunicationMediaStore $media, ?CommunicationMediaDeletionService $deletions = null): void
+    public function handle(MediaStore $media, ?MediaDeletionService $deletions = null): void
     {
-        $deletions ??= app(CommunicationMediaDeletionService::class);
+        $deletions ??= app(MediaDeletionService::class);
         try {
             if ($media->exists($this->objectId)) {
                 $media->delete($this->objectId);

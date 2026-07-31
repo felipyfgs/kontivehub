@@ -4,8 +4,8 @@ namespace App\Http\Resources;
 
 use App\Domain\Work\ReferencePeriod;
 use App\Domain\Work\WorkRiskCalculator;
-use App\DTO\Work\WorkProcessTaskViewData;
-use App\DTO\Work\WorkProcessViewData;
+use App\DTO\Work\ProcessTaskViewData;
+use App\DTO\Work\ProcessViewData;
 use App\Enums\Work\TaskStatus;
 use App\Models\Client;
 use App\Models\WorkTask;
@@ -13,13 +13,13 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use InvalidArgumentException;
 
-/** @mixin WorkProcessViewData */
+/** @mixin ProcessViewData */
 final class WorkProcessResource extends JsonResource
 {
     /** @return array<string, mixed> */
     public function toArray(Request $request): array
     {
-        /** @var WorkProcessViewData $view */
+        /** @var ProcessViewData $view */
         $view = $this->resource;
         $process = $view->process;
         $counts = $this->taskCounts($process);
@@ -74,7 +74,7 @@ final class WorkProcessResource extends JsonResource
         if ($view->includeTasks && $process->relationLoaded('tasks')) {
             $data['tasks'] = WorkProcessTaskResource::collection(
                 $process->tasks->map(
-                    fn (WorkTask $task) => new WorkProcessTaskViewData(
+                    fn (WorkTask $task) => new ProcessTaskViewData(
                         $task,
                         $process,
                         $view->today,
@@ -143,7 +143,7 @@ final class WorkProcessResource extends JsonResource
     }
 
     /** @return list<string> */
-    private function risks(WorkProcessViewData $view): array
+    private function risks(ProcessViewData $view): array
     {
         $process = $view->process;
         if (! $process->relationLoaded('tasks')) {

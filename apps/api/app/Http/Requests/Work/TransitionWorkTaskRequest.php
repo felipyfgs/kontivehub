@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Work;
 
-use App\DTO\Work\WorkTaskTransitionData;
+use App\DTO\Work\TaskTransitionData;
 use App\Models\User;
 use App\Models\WorkTask;
 use Illuminate\Validation\Rule;
@@ -32,11 +32,11 @@ final class TransitionWorkTaskRequest extends WorkRequest
         ];
     }
 
-    public function transition(): WorkTaskTransitionData
+    public function transition(): TaskTransitionData
     {
         $validated = $this->validated();
 
-        return new WorkTaskTransitionData(
+        return new TaskTransitionData(
             lockVersion: (int) $validated['lock_version'],
             reason: isset($validated['reason'])
                 ? (string) $validated['reason']

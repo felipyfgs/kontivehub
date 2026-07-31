@@ -2,8 +2,8 @@
 
 namespace Tests\Unit\Work;
 
-use App\Services\Work\WorkMonitoringContextRegistry;
-use App\Services\Work\WorkProcessTemplateCatalog;
+use App\Services\Work\MonitoringContextRegistry;
+use App\Services\Work\ProcessTemplateCatalog;
 use Tests\TestCase;
 
 class WorkProcessTemplateCatalogTest extends TestCase
@@ -14,8 +14,8 @@ class WorkProcessTemplateCatalogTest extends TestCase
             'config/work_process_catalog.php',
             'app/Http/Controllers/Api/V1/Work/WorkProcessTemplateCatalogController.php',
             'app/Services/Work/ProcessAudienceResolver.php',
-            'app/Services/Work/WorkProcessTemplateCatalog.php',
-            'app/Services/Work/WorkMonitoringContextRegistry.php',
+            'app/Services/Work/ProcessTemplateCatalog.php',
+            'app/Services/Work/MonitoringContextRegistry.php',
             'database/migrations/2026_07_25_000223_create_work_process_generation_batches_table.php',
         ];
 
@@ -33,7 +33,7 @@ class WorkProcessTemplateCatalogTest extends TestCase
 
     public function test_catalog_exposes_five_versioned_and_ordered_models(): void
     {
-        $catalog = app(WorkProcessTemplateCatalog::class)->all();
+        $catalog = app(ProcessTemplateCatalog::class)->all();
 
         $this->assertSame([
             'PGDAS_MENSAL',
@@ -56,8 +56,8 @@ class WorkProcessTemplateCatalogTest extends TestCase
 
     public function test_catalog_monitoring_keys_are_allowlisted_and_do_not_expose_external_coordinates(): void
     {
-        $catalog = app(WorkProcessTemplateCatalog::class)->all();
-        $registry = app(WorkMonitoringContextRegistry::class);
+        $catalog = app(ProcessTemplateCatalog::class)->all();
+        $registry = app(MonitoringContextRegistry::class);
 
         foreach ($catalog as $definition) {
             $this->assertTrue($registry->allows($definition['monitoring_module_key']));

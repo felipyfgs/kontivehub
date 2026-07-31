@@ -2,7 +2,7 @@
 
 namespace App\Services\Sefaz;
 
-use App\DTO\Tenant\TenantAutXmlStreamData;
+use App\DTO\Tenant\AutXmlStreamData;
 use App\Enums\CaptureChannel;
 use App\Enums\TenantAutXmlEnrollmentStatus;
 use App\Exceptions\TenantAutXmlApiException;
@@ -43,7 +43,7 @@ final readonly class TenantAutXmlEnrollmentService
         return $query->first();
     }
 
-    public function streamGate(?TenantDistributionCursor $cursor): TenantAutXmlStreamData
+    public function streamGate(?TenantDistributionCursor $cursor): AutXmlStreamData
     {
         $quietHours = max(
             0.0,
@@ -51,7 +51,7 @@ final readonly class TenantAutXmlEnrollmentService
         );
 
         if ($cursor === null) {
-            return new TenantAutXmlStreamData(
+            return new AutXmlStreamData(
                 streamReady: false,
                 streamReason: 'CURSOR_MISSING',
                 quietHours: $quietHours,
@@ -61,7 +61,7 @@ final readonly class TenantAutXmlEnrollmentService
         }
 
         if ($cursor->activated_at === null) {
-            return new TenantAutXmlStreamData(
+            return new AutXmlStreamData(
                 streamReady: false,
                 streamReason: 'NOT_ACTIVATED',
                 quietHours: $quietHours,
@@ -73,7 +73,7 @@ final readonly class TenantAutXmlEnrollmentService
         $readyAt = $cursor->activated_at->addHours($quietHours);
         $ready = $quietHours <= 0 || $readyAt->lte(now());
 
-        return new TenantAutXmlStreamData(
+        return new AutXmlStreamData(
             streamReady: $ready,
             streamReason: $ready ? null : 'QUIET_PENDING',
             quietHours: $quietHours,

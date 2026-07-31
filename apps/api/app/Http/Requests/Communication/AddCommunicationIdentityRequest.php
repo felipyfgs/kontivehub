@@ -2,12 +2,12 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationIdentityCreationData;
+use App\DTO\Communication\IdentityCreationData;
 use App\Models\CommunicationContact;
 use App\Models\User;
-use App\Rules\ValidWhatsappAddress;
-use App\Services\Communication\Authorization\CommunicationAccess;
-use App\Services\Communication\WhatsappAddressNormalizer;
+use App\Rules\ValidWhatsAppAddress;
+use App\Services\Communication\Authorization\Access;
+use App\Services\Communication\WhatsAppAddressNormalizer;
 
 final class AddCommunicationIdentityRequest extends CommunicationRequest
 {
@@ -18,7 +18,7 @@ final class AddCommunicationIdentityRequest extends CommunicationRequest
 
         return $actor instanceof User
             && $contact instanceof CommunicationContact
-            && app(CommunicationAccess::class)->canManageContacts($actor, $contact);
+            && app(Access::class)->canManageContacts($actor, $contact);
     }
 
     /** @return array<string, list<mixed>> */
@@ -29,14 +29,14 @@ final class AddCommunicationIdentityRequest extends CommunicationRequest
                 'required',
                 'string',
                 'max:40',
-                new ValidWhatsappAddress(app(WhatsappAddressNormalizer::class)),
+                new ValidWhatsAppAddress(app(WhatsAppAddressNormalizer::class)),
             ],
         ];
     }
 
-    public function payload(): CommunicationIdentityCreationData
+    public function payload(): IdentityCreationData
     {
-        return new CommunicationIdentityCreationData(
+        return new IdentityCreationData(
             phone: (string) $this->validated('phone'),
         );
     }

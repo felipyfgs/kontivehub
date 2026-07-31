@@ -2,7 +2,7 @@
 
 namespace App\Actions\Tenant;
 
-use App\DTO\Tenant\TenantAutXmlEnrollmentData;
+use App\DTO\Tenant\AutXmlEnrollmentData;
 use App\Exceptions\TenantAutXmlApiException;
 use App\Models\Establishment;
 use App\Services\Audit\AuditLogger;
@@ -17,7 +17,7 @@ final readonly class EnrollTenantAutXmlAction
         private AuditLogger $audit,
     ) {}
 
-    public function __invoke(int $establishmentId): TenantAutXmlEnrollmentData
+    public function __invoke(int $establishmentId): AutXmlEnrollmentData
     {
         $tenantId = (int) $this->currentTenant->tenant()->id;
         $enrollment = $this->enrollments->ensurePending($establishmentId);
@@ -32,6 +32,6 @@ final readonly class EnrollTenantAutXmlAction
             'status' => $enrollment->status->value,
         ]);
 
-        return new TenantAutXmlEnrollmentData($establishment, $enrollment);
+        return new AutXmlEnrollmentData($establishment, $enrollment);
     }
 }

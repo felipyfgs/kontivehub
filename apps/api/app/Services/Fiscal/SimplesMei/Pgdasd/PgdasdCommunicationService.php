@@ -19,8 +19,8 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use App\Services\Authorization\TenantAuthorization;
-use App\Services\Communication\Automation\CommunicationRecipientResolver;
-use App\Services\Communication\Automation\FiscalCommunicationAutomationService;
+use App\Services\Communication\Automation\FiscalAutomationService;
+use App\Services\Communication\Automation\RecipientResolver;
 use App\Services\Fiscal\Dctfweb\DctfwebPeriod;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\QueryException;
@@ -430,7 +430,7 @@ final class PgdasdCommunicationService
                 $contacts['email'],
             ),
             $this->previewChannel(
-                CommunicationChannel::Whatsapp,
+                CommunicationChannel::WhatsApp,
                 (bool) $preference->whatsapp_enabled,
                 $contacts['whatsapp'],
             ),
@@ -494,7 +494,7 @@ final class PgdasdCommunicationService
 
         if (config('communication.enabled') && config('communication.gateway.enabled')) {
             try {
-                $dispatches = app(FiscalCommunicationAutomationService::class)->sendManual(
+                $dispatches = app(FiscalAutomationService::class)->sendManual(
                     $tenant,
                     $client,
                     $this->moduleKey,
@@ -579,7 +579,7 @@ final class PgdasdCommunicationService
         try {
             if (config('communication.enabled') && config('communication.gateway.enabled')) {
                 if ($periodKey !== null && preg_match('/^\d{4}-\d{2}$/', $periodKey)) {
-                    app(FiscalCommunicationAutomationService::class)->scheduleAutomatic(
+                    app(FiscalAutomationService::class)->scheduleAutomatic(
                         $tenant,
                         $client,
                         $this->moduleKey,
@@ -654,7 +654,7 @@ final class PgdasdCommunicationService
         };
         $providerEnabled = (bool) config('fiscal_monitoring.communication.provider_enabled', false);
         $created = [];
-        foreach ([CommunicationChannel::Email, CommunicationChannel::Whatsapp] as $channel) {
+        foreach ([CommunicationChannel::Email, CommunicationChannel::WhatsApp] as $channel) {
             $enabled = $channel === CommunicationChannel::Email
                 ? (bool) $preference->email_enabled
                 : (bool) $preference->whatsapp_enabled;
@@ -783,7 +783,7 @@ final class PgdasdCommunicationService
 
         return
             ((bool) $preference->email_enabled && in_array(CommunicationChannel::Email->value, $eligibleChannels, true))
-            || ((bool) $preference->whatsapp_enabled && in_array(CommunicationChannel::Whatsapp->value, $eligibleChannels, true));
+            || ((bool) $preference->whatsapp_enabled && in_array(CommunicationChannel::WhatsApp->value, $eligibleChannels, true));
     }
 
     /**
@@ -815,7 +815,7 @@ final class PgdasdCommunicationService
                 return false;
             }
 
-            return app(CommunicationRecipientResolver::class)->resolve(
+            return app(RecipientResolver::class)->resolve(
                 $preference,
                 $policy->recipient_mode instanceof RecipientMode
                     ? $policy->recipient_mode
@@ -902,7 +902,7 @@ final class PgdasdCommunicationService
         );
 
         $channels = [];
-        foreach ([CommunicationChannel::Email, CommunicationChannel::Whatsapp] as $channel) {
+        foreach ([CommunicationChannel::Email, CommunicationChannel::WhatsApp] as $channel) {
             $items = $dispatches
                 ->filter(fn (ClientCommunicationDispatch $dispatch): bool => $dispatch->channel === $channel)
                 ->values();
@@ -956,8 +956,8 @@ final class PgdasdCommunicationService
         }
 
         $hasEmail = $emailEnabled && in_array(CommunicationChannel::Email->value, $eligibleChannels, true);
-        $hasWhatsapp = $whatsappEnabled && in_array(CommunicationChannel::Whatsapp->value, $eligibleChannels, true);
-        if (! $hasEmail && ! $hasWhatsapp) {
+        $hasWhatsApp = $whatsappEnabled && in_array(CommunicationChannel::WhatsApp->value, $eligibleChannels, true);
+        if (! $hasEmail && ! $hasWhatsApp) {
             throw new HttpException(422, "Cliente {$client->id}: ativação exige contato ativo elegível.");
         }
     }
@@ -1013,7 +1013,7 @@ final class PgdasdCommunicationService
             }
             $phone = preg_replace('/\D/', '', (string) $contact->phone) ?? '';
             if ($contact->is_whatsapp && strlen($phone) >= 8) {
-                $channels[] = CommunicationChannel::Whatsapp->value;
+                $channels[] = CommunicationChannel::WhatsApp->value;
             }
             $result[(int) $contact->client_id] = array_values(array_unique($channels));
         }
@@ -1032,7 +1032,7 @@ final class PgdasdCommunicationService
             $channels[] = CommunicationChannel::Email->value;
         }
         if ($contacts['whatsapp'] !== []) {
-            $channels[] = CommunicationChannel::Whatsapp->value;
+            $channels[] = CommunicationChannel::WhatsApp->value;
         }
 
         return $channels;
@@ -1113,7 +1113,7 @@ final class PgdasdCommunicationService
             && (($preference->email_enabled
                 && in_array(CommunicationChannel::Email->value, $eligibleChannels, true))
                 || ($preference->whatsapp_enabled
-                    && in_array(CommunicationChannel::Whatsapp->value, $eligibleChannels, true)));
+                    && in_array(CommunicationChannel::WhatsApp->value, $eligibleChannels, true)));
 
         return $configured
             ? CommunicationDispatchStatus::NoHistory

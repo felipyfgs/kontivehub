@@ -2,17 +2,17 @@
 
 namespace App\Http\Resources;
 
-use App\DTO\Tenant\TenantSettingsOverviewData;
+use App\DTO\Tenant\SettingsOverviewData;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-/** @mixin TenantSettingsOverviewData */
+/** @mixin SettingsOverviewData */
 final class TenantSettingsResource extends JsonResource
 {
     /** @return array<string, mixed> */
     public function toArray(Request $request): array
     {
-        /** @var TenantSettingsOverviewData $settings */
+        /** @var SettingsOverviewData $settings */
         $settings = $this->resource;
 
         return [

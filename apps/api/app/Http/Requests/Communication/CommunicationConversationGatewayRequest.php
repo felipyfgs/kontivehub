@@ -2,10 +2,10 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationGatewayOperationData;
+use App\DTO\Communication\GatewayOperationData;
 use App\Models\CommunicationConversation;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 
 abstract class CommunicationConversationGatewayRequest extends CommunicationRequest
 {
@@ -22,7 +22,7 @@ abstract class CommunicationConversationGatewayRequest extends CommunicationRequ
             return false;
         }
 
-        $access = app(CommunicationAccess::class);
+        $access = app(Access::class);
 
         return $this->requiresInboxManagement()
             ? $access->canManage($actor, $inbox)
@@ -35,8 +35,8 @@ abstract class CommunicationConversationGatewayRequest extends CommunicationRequ
     }
 
     /** @param array<string, mixed> $parameters */
-    final protected function gatewayOperation(array $parameters = []): CommunicationGatewayOperationData
+    final protected function gatewayOperation(array $parameters = []): GatewayOperationData
     {
-        return new CommunicationGatewayOperationData($parameters);
+        return new GatewayOperationData($parameters);
     }
 }

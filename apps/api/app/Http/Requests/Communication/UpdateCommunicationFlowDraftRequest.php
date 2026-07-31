@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationFlowDraftData;
+use App\DTO\Communication\FlowDraftData;
 
 final class UpdateCommunicationFlowDraftRequest extends CommunicationFlowRequest
 {
@@ -20,11 +20,11 @@ final class UpdateCommunicationFlowDraftRequest extends CommunicationFlowRequest
         ];
     }
 
-    public function draftData(): CommunicationFlowDraftData
+    public function draftData(): FlowDraftData
     {
         $validated = $this->validated();
 
-        return new CommunicationFlowDraftData(
+        return new FlowDraftData(
             graph: $validated['graph'],
             lockVersion: (int) $validated['lock_version'],
         );

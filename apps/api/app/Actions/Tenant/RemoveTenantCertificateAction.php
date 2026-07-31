@@ -2,7 +2,7 @@
 
 namespace App\Actions\Tenant;
 
-use App\DTO\Tenant\TenantCertificateData;
+use App\DTO\Tenant\CertificateData;
 use App\Exceptions\TenantSettingsApiException;
 use App\Services\Audit\AuditLogger;
 use App\Services\Certificates\TenantCredentialService;
@@ -16,7 +16,7 @@ final readonly class RemoveTenantCertificateAction
         private AuditLogger $audit,
     ) {}
 
-    public function __invoke(int $actorUserId): TenantCertificateData
+    public function __invoke(int $actorUserId): CertificateData
     {
         try {
             $credential = $this->credentials->remove(

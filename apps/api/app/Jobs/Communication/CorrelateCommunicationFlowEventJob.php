@@ -2,7 +2,7 @@
 
 namespace App\Jobs\Communication;
 
-use App\Services\Communication\Flows\CommunicationFlowCorrelator;
+use App\Services\Communication\Flows\FlowCorrelator;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 
@@ -23,7 +23,7 @@ final class CorrelateCommunicationFlowEventJob implements ShouldQueue
         $this->onQueue('communication');
     }
 
-    public function handle(CommunicationFlowCorrelator $correlator): void
+    public function handle(FlowCorrelator $correlator): void
     {
         $correlator->correlateMessage(
             $this->tenantId,

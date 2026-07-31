@@ -2,10 +2,10 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationFlowRunFiltersData;
+use App\DTO\Communication\FlowRunFiltersData;
 use App\Enums\Communication\FlowRunStatus;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 use Illuminate\Validation\Rule;
 
 final class ListCommunicationFlowRunsRequest extends CommunicationRequest
@@ -22,7 +22,7 @@ final class ListCommunicationFlowRunsRequest extends CommunicationRequest
         $actor = $this->user();
 
         return $actor instanceof User
-            && app(CommunicationAccess::class)->canViewFlows($actor);
+            && app(Access::class)->canViewFlows($actor);
     }
 
     /** @return array<string, list<mixed>> */
@@ -37,11 +37,11 @@ final class ListCommunicationFlowRunsRequest extends CommunicationRequest
         ];
     }
 
-    public function filters(): CommunicationFlowRunFiltersData
+    public function filters(): FlowRunFiltersData
     {
         $validated = $this->validated();
 
-        return new CommunicationFlowRunFiltersData(
+        return new FlowRunFiltersData(
             flowId: isset($validated['flow_id']) ? (int) $validated['flow_id'] : null,
             status: $validated['status'] ?? null,
             activeOnly: $this->boolean('active_only'),

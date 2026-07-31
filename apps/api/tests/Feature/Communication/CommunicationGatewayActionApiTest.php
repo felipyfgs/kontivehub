@@ -29,7 +29,7 @@ use App\Models\Tenant;
 use App\Models\TenantMembership;
 use App\Models\TenantPermissionProfile;
 use App\Models\User;
-use App\Services\Communication\Outbox\CommunicationOutboxDispatcher;
+use App\Services\Communication\Outbox\OutboxDispatcher;
 use App\Support\CurrentTenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
@@ -105,7 +105,7 @@ final class CommunicationGatewayActionApiTest extends TestCase
 
         $editEntry = CommunicationOutboxEntry::query()->withoutGlobalScopes()
             ->where('command_id', $edit->json('data.command_id'))->firstOrFail();
-        app(CommunicationOutboxDispatcher::class)->dispatch((int) $editEntry->id);
+        app(OutboxDispatcher::class)->dispatch((int) $editEntry->id);
         $this->assertCount(1, $this->transport->commands);
         $this->assertSame($editEntry->command_id, $this->transport->commands[0]->providerMessageId);
         $this->assertSame('provider-outbound-0001', $this->transport->commands[0]->payload['target_message_id']);

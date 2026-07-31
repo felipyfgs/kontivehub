@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Work;
 
-use App\DTO\Work\WorkExportFiltersData;
+use App\DTO\Work\ExportFiltersData;
 use App\Enums\Work\TaskStatus;
 use App\Models\User;
 use App\Models\WorkExport;
@@ -29,10 +29,10 @@ final class CreateWorkExportRequest extends WorkRequest
         ];
     }
 
-    public function filters(): WorkExportFiltersData
+    public function filters(): ExportFiltersData
     {
         $validated = $this->validated();
 
-        return new WorkExportFiltersData($validated['filters'] ?? []);
+        return new ExportFiltersData($validated['filters'] ?? []);
     }
 }

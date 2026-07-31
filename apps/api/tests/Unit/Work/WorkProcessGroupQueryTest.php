@@ -2,7 +2,7 @@
 
 namespace Tests\Unit\Work;
 
-use App\Services\Work\WorkProcessGroupQuery;
+use App\Services\Work\ProcessGroupQuery;
 use App\Support\CurrentTenant;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -11,14 +11,14 @@ class WorkProcessGroupQueryTest extends TestCase
 {
     public function test_manual_constants_are_stable(): void
     {
-        $this->assertSame('manual', WorkProcessGroupQuery::MANUAL_KEY);
-        $this->assertSame('Sem rotina', WorkProcessGroupQuery::MANUAL_LABEL);
+        $this->assertSame('manual', ProcessGroupQuery::MANUAL_KEY);
+        $this->assertSame('Sem rotina', ProcessGroupQuery::MANUAL_LABEL);
     }
 
     #[DataProvider('sortProvider')]
     public function test_resolve_sort_whitelist(?string $sort, ?string $direction, string $expectedSort, string $expectedDirection): void
     {
-        $query = new WorkProcessGroupQuery($this->createStub(CurrentTenant::class));
+        $query = new ProcessGroupQuery($this->createStub(CurrentTenant::class));
 
         [$resolvedSort, $resolvedDirection] = $query->resolveSort($sort, $direction);
 

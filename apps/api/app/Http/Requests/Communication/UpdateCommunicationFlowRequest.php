@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationFlowUpdateData;
+use App\DTO\Communication\FlowUpdateData;
 use App\Enums\Communication\FlowStatus;
 use App\Models\CommunicationFlow;
 use App\Support\CurrentTenant;
@@ -45,11 +45,11 @@ final class UpdateCommunicationFlowRequest extends CommunicationFlowRequest
         }
     }
 
-    public function flowData(): CommunicationFlowUpdateData
+    public function flowData(): FlowUpdateData
     {
         $validated = $this->validated();
 
-        return new CommunicationFlowUpdateData(
+        return new FlowUpdateData(
             name: isset($validated['name']) ? (string) $validated['name'] : null,
             status: isset($validated['status'])
                 ? FlowStatus::from((string) $validated['status'])

@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Tenant;
 
-use App\DTO\Tenant\TenantTechnicalConsentGrantData;
+use App\DTO\Tenant\TechnicalConsentGrantData;
 
 final class GrantTenantTechnicalConsentRequest extends TenantSettingsMutationRequest
 {
@@ -18,9 +18,9 @@ final class GrantTenantTechnicalConsentRequest extends TenantSettingsMutationReq
         ];
     }
 
-    public function toDto(): TenantTechnicalConsentGrantData
+    public function toDto(): TechnicalConsentGrantData
     {
-        return new TenantTechnicalConsentGrantData(
+        return new TechnicalConsentGrantData(
             versionCode: $this->validated('version_code'),
             actorUserId: $this->actor()->id,
         );

@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Tenant;
 
-use App\DTO\Tenant\TenantProxyPowerSyncData;
+use App\DTO\Tenant\ProxyPowerSyncData;
 use App\Enums\SerproEnvironment;
 use Illuminate\Validation\Rule;
 
@@ -18,9 +18,9 @@ final class SyncTenantProxyPowersRequest extends TenantSerproAuthorizationMutati
         ];
     }
 
-    public function toDto(): TenantProxyPowerSyncData
+    public function toDto(): ProxyPowerSyncData
     {
-        return new TenantProxyPowerSyncData(
+        return new ProxyPowerSyncData(
             environment: $this->environment(),
             clientId: (int) $this->validated('client_id'),
             actorUserId: $this->actor()->id,

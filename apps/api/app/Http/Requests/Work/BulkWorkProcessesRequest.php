@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Work;
 
-use App\DTO\Work\WorkProcessBulkData;
+use App\DTO\Work\ProcessBulkData;
 use App\Models\User;
 use App\Models\WorkProcess;
 
@@ -31,11 +31,11 @@ final class BulkWorkProcessesRequest extends WorkRequest
         ];
     }
 
-    public function bulk(): WorkProcessBulkData
+    public function bulk(): ProcessBulkData
     {
         $validated = $this->validated();
 
-        return new WorkProcessBulkData(
+        return new ProcessBulkData(
             $validated['items'],
             $validated['changes'],
         );

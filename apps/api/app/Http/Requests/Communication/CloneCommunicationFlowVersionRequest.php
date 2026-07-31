@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationFlowCloneData;
+use App\DTO\Communication\FlowCloneData;
 use App\Models\CommunicationFlow;
 use App\Models\CommunicationFlowVersion;
 
@@ -28,13 +28,13 @@ final class CloneCommunicationFlowVersionRequest extends CommunicationFlowReques
         }
     }
 
-    public function cloneData(): CommunicationFlowCloneData
+    public function cloneData(): FlowCloneData
     {
         $flow = $this->route('flow');
         $version = $this->route('version');
         $validated = $this->validated();
 
-        return new CommunicationFlowCloneData(
+        return new FlowCloneData(
             name: isset($validated['name'])
                 ? (string) $validated['name']
                 : ($flow instanceof CommunicationFlow ? $flow->name : 'Fluxo').' (cópia)',

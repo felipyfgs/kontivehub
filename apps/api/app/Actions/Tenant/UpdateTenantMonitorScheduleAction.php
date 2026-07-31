@@ -2,8 +2,8 @@
 
 namespace App\Actions\Tenant;
 
-use App\DTO\Tenant\TenantMonitorScheduleData;
-use App\DTO\Tenant\TenantMonitorScheduleUpdateData;
+use App\DTO\Tenant\MonitorScheduleData;
+use App\DTO\Tenant\MonitorScheduleUpdateData;
 use App\Models\TenantMonitorSchedulePolicy;
 use App\Services\Audit\AuditLogger;
 use App\Services\Tenant\TenantMonitorScheduleCatalog;
@@ -20,8 +20,8 @@ final readonly class UpdateTenantMonitorScheduleAction
 
     public function __invoke(
         string $monitorKey,
-        TenantMonitorScheduleUpdateData $data,
-    ): TenantMonitorScheduleData {
+        MonitorScheduleUpdateData $data,
+    ): MonitorScheduleData {
         $label = $this->catalog->label($monitorKey);
         if ($label === null) {
             throw new NotFoundHttpException('Monitor desconhecido para agendamento.');
@@ -42,6 +42,6 @@ final readonly class UpdateTenantMonitorScheduleAction
             'is_custom' => $policy->is_custom,
         ], $data->actorUserId, $tenant->id);
 
-        return new TenantMonitorScheduleData($policy, $label);
+        return new MonitorScheduleData($policy, $label);
     }
 }

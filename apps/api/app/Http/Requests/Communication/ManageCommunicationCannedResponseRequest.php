@@ -4,7 +4,7 @@ namespace App\Http\Requests\Communication;
 
 use App\Models\CommunicationCannedResponse;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 
 final class ManageCommunicationCannedResponseRequest extends CommunicationRequest
 {
@@ -15,7 +15,7 @@ final class ManageCommunicationCannedResponseRequest extends CommunicationReques
 
         return $actor instanceof User
             && $canned instanceof CommunicationCannedResponse
-            && app(CommunicationAccess::class)->canManageQuickReplies($actor, $canned);
+            && app(Access::class)->canManageQuickReplies($actor, $canned);
     }
 
     /** @return array<string, list<mixed>> */

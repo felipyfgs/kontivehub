@@ -2,9 +2,9 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationLabelCreationData;
+use App\DTO\Communication\LabelCreationData;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 
 final class StoreCommunicationLabelRequest extends CommunicationRequest
 {
@@ -19,7 +19,7 @@ final class StoreCommunicationLabelRequest extends CommunicationRequest
         $actor = $this->user();
 
         return $actor instanceof User
-            && app(CommunicationAccess::class)->canManage($actor);
+            && app(Access::class)->canManage($actor);
     }
 
     /** @return array<string, list<mixed>> */
@@ -38,11 +38,11 @@ final class StoreCommunicationLabelRequest extends CommunicationRequest
         }
     }
 
-    public function labelData(): CommunicationLabelCreationData
+    public function labelData(): LabelCreationData
     {
         $validated = $this->validated();
 
-        return new CommunicationLabelCreationData(
+        return new LabelCreationData(
             name: $validated['name'],
             color: $validated['color'] ?? 'neutral',
         );

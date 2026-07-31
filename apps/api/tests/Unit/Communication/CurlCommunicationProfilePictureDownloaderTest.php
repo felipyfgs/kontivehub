@@ -3,14 +3,14 @@
 namespace Tests\Unit\Communication;
 
 use App\Exceptions\CommunicationProfilePictureDownloadException;
-use App\Services\Communication\ProfilePicture\CurlCommunicationProfilePictureDownloader;
+use App\Services\Communication\ProfilePicture\CurlProfilePictureDownloader;
 use Tests\TestCase;
 
 final class CurlCommunicationProfilePictureDownloaderTest extends TestCase
 {
     public function test_rejects_non_https_and_non_allowlisted_urls_before_network(): void
     {
-        $downloader = app(CurlCommunicationProfilePictureDownloader::class);
+        $downloader = app(CurlProfilePictureDownloader::class);
 
         foreach (['http://media.whatsapp.net/a.jpg', 'https://other.example.test/a.jpg', 'https://media.whatsapp.net:444/a.jpg', 'https://user:password@media.whatsapp.net/a.jpg', 'https://media.whatsapp.net./a.jpg'] as $url) {
             try {
@@ -25,16 +25,16 @@ final class CurlCommunicationProfilePictureDownloaderTest extends TestCase
     public function test_rejects_documentation_cgnat_multicast_and_mapped_ips(): void
     {
         foreach (['100.64.0.1', '192.0.2.1', '192.88.99.1', '224.0.0.1', '2001:db8::1', '::ffff:192.0.2.1', '::192.0.2.1', '64:ff9b::c000:201', 'fe9f::1', 'fec0::1', '4000::1'] as $ip) {
-            self::assertFalse(CurlCommunicationProfilePictureDownloader::isPublicIp($ip));
+            self::assertFalse(CurlProfilePictureDownloader::isPublicIp($ip));
         }
-        self::assertTrue(CurlCommunicationProfilePictureDownloader::isPublicIp('8.8.8.8'));
-        self::assertTrue(CurlCommunicationProfilePictureDownloader::isPublicIp('2606:4700:4700::1111'));
+        self::assertTrue(CurlProfilePictureDownloader::isPublicIp('8.8.8.8'));
+        self::assertTrue(CurlProfilePictureDownloader::isPublicIp('2606:4700:4700::1111'));
     }
 
     public function test_rejects_mixed_dns_before_curl_and_pins_public_ipv4_without_proxy_or_redirects(): void
     {
         $executed = false;
-        $mixed = new CurlCommunicationProfilePictureDownloader(
+        $mixed = new CurlProfilePictureDownloader(
             static fn (): array => [['ip' => '8.8.8.8'], ['ipv6' => 'fe80::1']],
             static function () use (&$executed): array {
                 $executed = true;
@@ -179,9 +179,9 @@ final class CurlCommunicationProfilePictureDownloaderTest extends TestCase
      * @param  array{ok:bool,status:int,primary_ip:string,mime:string,errno:int}  $result
      * @param  array<int,mixed>  $captured
      */
-    private function fakeDownloader(array $records, array $result, string $body, array &$captured = []): CurlCommunicationProfilePictureDownloader
+    private function fakeDownloader(array $records, array $result, string $body, array &$captured = []): CurlProfilePictureDownloader
     {
-        return new CurlCommunicationProfilePictureDownloader(
+        return new CurlProfilePictureDownloader(
             static fn (): array => $records,
             static function (string $url, array $options) use ($result, $body, &$captured): array {
                 $captured = $options;

@@ -20,7 +20,7 @@ use App\Models\Tenant;
 use App\Models\TenantSerproAuthorization;
 use App\Services\Fiscal\Availability\FiscalModuleAvailabilityService;
 use App\Services\Fiscal\Availability\FiscalOperationClassifier;
-use App\Services\Fiscal\Guides\PagtowebEphemeralResponseRedactor;
+use App\Services\Fiscal\Guides\PagtoWebEphemeralResponseRedactor;
 use App\Services\Integra\AutenticaProcuradorEtag;
 use App\Services\Integra\ClientProcuracaoSyncService;
 use App\Services\Integra\ContributorCnpjResolver;
@@ -69,7 +69,7 @@ final class SerproOperationService implements SerproOperationExecutor
         private readonly SerproTechnicalParameterGuard $technicalParams,
         private readonly ClientProcuracaoSyncService $procuracaoGate,
         private readonly PreAckDocumentCaptureDispatcher $preAckDocuments,
-        private readonly PagtowebEphemeralResponseRedactor $pagtowebResponseRedactor,
+        private readonly PagtoWebEphemeralResponseRedactor $pagtowebResponseRedactor,
         private readonly FiscalModuleAvailabilityService $moduleAvailability,
         private readonly FixtureIntegraContadorClient $fixtureClient,
     ) {}

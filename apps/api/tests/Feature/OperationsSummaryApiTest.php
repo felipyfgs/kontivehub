@@ -218,7 +218,7 @@ final class OperationsSummaryApiTest extends TestCase
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
             'tenant_id' => $tenant->id,
             'contact_id' => $contact->id,
-            'channel' => CommunicationChannel::Whatsapp,
+            'channel' => CommunicationChannel::WhatsApp,
             'address_encrypted' => $address,
             'address_hash' => hash('sha256', $address),
             'address_masked' => '***'.substr($address, -4),

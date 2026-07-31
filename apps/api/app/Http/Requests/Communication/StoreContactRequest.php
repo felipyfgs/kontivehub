@@ -2,11 +2,11 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationContactCreationData;
+use App\DTO\Communication\ContactCreationData;
 use App\Models\User;
-use App\Rules\ValidWhatsappAddress;
-use App\Services\Communication\Authorization\CommunicationAccess;
-use App\Services\Communication\WhatsappAddressNormalizer;
+use App\Rules\ValidWhatsAppAddress;
+use App\Services\Communication\Authorization\Access;
+use App\Services\Communication\WhatsAppAddressNormalizer;
 
 final class StoreContactRequest extends CommunicationRequest
 {
@@ -15,7 +15,7 @@ final class StoreContactRequest extends CommunicationRequest
         $actor = $this->user();
 
         return $actor instanceof User
-            && app(CommunicationAccess::class)->canManageContacts($actor);
+            && app(Access::class)->canManageContacts($actor);
     }
 
     /** @return array<string, list<mixed>> */
@@ -27,7 +27,7 @@ final class StoreContactRequest extends CommunicationRequest
                 'required',
                 'string',
                 'max:40',
-                new ValidWhatsappAddress(app(WhatsappAddressNormalizer::class)),
+                new ValidWhatsAppAddress(app(WhatsAppAddressNormalizer::class)),
             ],
             'client_id' => ['nullable', 'integer', 'min:1'],
             'client_contact_id' => ['nullable', 'integer', 'min:1'],
@@ -36,14 +36,14 @@ final class StoreContactRequest extends CommunicationRequest
         ];
     }
 
-    public function payload(): CommunicationContactCreationData
+    public function payload(): ContactCreationData
     {
         $validated = $this->validated();
         $name = array_key_exists('name', $validated) && $validated['name'] !== null
             ? trim((string) $validated['name'])
             : null;
 
-        return new CommunicationContactCreationData(
+        return new ContactCreationData(
             name: $name,
             phone: $validated['phone'],
             clientId: isset($validated['client_id'])

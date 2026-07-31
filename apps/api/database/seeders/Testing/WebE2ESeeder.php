@@ -24,7 +24,7 @@ use App\Models\Tenant;
 use App\Models\TenantMembership;
 use App\Models\TenantSubscription;
 use App\Models\User;
-use App\Services\Communication\Media\CommunicationMediaStore;
+use App\Services\Communication\Media\MediaStore;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use LogicException;
@@ -162,7 +162,7 @@ final class WebE2ESeeder extends Seeder
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()->updateOrCreate(
             [
                 'tenant_id' => $tenant->id,
-                'channel' => CommunicationChannel::Whatsapp,
+                'channel' => CommunicationChannel::WhatsApp,
                 'address_hash' => hash('sha256', $phone),
             ],
             [
@@ -223,7 +223,7 @@ final class WebE2ESeeder extends Seeder
             return;
         }
 
-        $media = app(CommunicationMediaStore::class);
+        $media = app(MediaStore::class);
         if ($profile->profile_picture_state === ProfilePictureState::Ready
             && is_string($profile->profile_picture_object_id)
             && $media->exists($profile->profile_picture_object_id)) {

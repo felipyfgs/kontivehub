@@ -15,7 +15,7 @@ use App\Enums\Communication\MessageSource;
 use App\Enums\Communication\MessageStatus;
 use App\Enums\CommunicationChannel;
 use App\Exceptions\CommunicationTransportException;
-use App\Http\Resources\Communication\CommunicationMessageResource;
+use App\Http\Resources\Communication\MessageResource;
 use App\Models\CommunicationContact;
 use App\Models\CommunicationConversation;
 use App\Models\CommunicationConversationUnreadMessage;
@@ -25,9 +25,9 @@ use App\Models\CommunicationMessage;
 use App\Models\CommunicationOutboxEntry;
 use App\Models\Tenant;
 use App\Models\User;
-use App\Services\Communication\Conversation\CommunicationConversationMessageQuery;
-use App\Services\Communication\Outbox\CommunicationOutboxDispatcher;
-use App\Services\Communication\Security\CommunicationHmacSigner;
+use App\Services\Communication\Conversation\ConversationMessageQuery;
+use App\Services\Communication\Outbox\OutboxDispatcher;
+use App\Services\Communication\Security\HmacSigner;
 use GuzzleHttp\Psr7\Utils;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
@@ -98,7 +98,7 @@ final class CommunicationMessageLossPreventionTest extends TestCase
             static fn (CommunicationMessage $message): string => $message->direction->value,
         )->all());
         foreach ($messages as $message) {
-            $resource = (new CommunicationMessageResource($message->load('attachments')))->resolve();
+            $resource = (new MessageResource($message->load('attachments')))->resolve();
             $this->assertSame('MEDIA_RETRY_AVAILABLE', $resource['availability']['state']);
             $this->assertTrue($resource['availability']['recoverable']);
             $this->assertNull($resource['body']);
@@ -224,7 +224,7 @@ final class CommunicationMessageLossPreventionTest extends TestCase
         $this->assertSame('projection-operation-0001', $control->quarantine_operation_id);
         $this->assertNull($foreign->refresh()->quarantined_at);
 
-        $page = app(CommunicationConversationMessageQuery::class)->paginate($conversation, 50);
+        $page = app(ConversationMessageQuery::class)->paginate($conversation, 50);
         $this->assertSame([$visible->id], $page['data']->pluck('id')->all());
         $this->assertSame(0, $page['meta']['unread_count']);
         $this->assertNull($page['meta']['first_unread_message_id']);
@@ -257,7 +257,7 @@ final class CommunicationMessageLossPreventionTest extends TestCase
             'media_state' => 'FAILED',
             'media_error_code' => 'MEDIA_RETRY_DESCRIPTOR_EXPIRED',
         ]])->save();
-        $expiredAvailability = (new CommunicationMessageResource($expired->load('attachments')))->resolve()['availability'];
+        $expiredAvailability = (new MessageResource($expired->load('attachments')))->resolve()['availability'];
         $this->assertSame('MEDIA_FAILED', $expiredAvailability['state']);
         $this->assertFalse($expiredAvailability['recoverable']);
         $options = [
@@ -289,9 +289,9 @@ final class CommunicationMessageLossPreventionTest extends TestCase
             $this->assertArrayNotHasKey('from_me', $entry->payload_encrypted);
         }
 
-        app(CommunicationOutboxDispatcher::class)->dispatch((int) $entries[0]->id);
+        app(OutboxDispatcher::class)->dispatch((int) $entries[0]->id);
         $this->transport->failures[$entries[1]->command_id] = new CommunicationTransportException('GATEWAY_TEMPORARY', false);
-        app(CommunicationOutboxDispatcher::class)->dispatch((int) $entries[1]->id);
+        app(OutboxDispatcher::class)->dispatch((int) $entries[1]->id);
         $this->assertSame('REQUESTED', $inbound->refresh()->metadata['media_state']);
         $this->assertSame(MessageStatus::Delivered, $inbound->status);
         $this->assertSame('FAILED', $outbound->refresh()->metadata['media_state']);
@@ -365,7 +365,7 @@ final class CommunicationMessageLossPreventionTest extends TestCase
             'metadata' => ['history' => true],
         ])->save();
         foreach ([$withoutCaption, $withCaption] as $legacy) {
-            $availability = (new CommunicationMessageResource($legacy->load('attachments')))->resolve()['availability'];
+            $availability = (new MessageResource($legacy->load('attachments')))->resolve()['availability'];
             $this->assertSame('UNAVAILABLE', $availability['state']);
             $this->assertFalse($availability['recoverable']);
         }
@@ -392,7 +392,7 @@ final class CommunicationMessageLossPreventionTest extends TestCase
             static fn (CommunicationOutboxEntry $entry): bool => str_starts_with((string) $entry->effect_key, 'media-rescue:'),
         ));
 
-        app(CommunicationOutboxDispatcher::class)->dispatch((int) $entries->first()->id);
+        app(OutboxDispatcher::class)->dispatch((int) $entries->first()->id);
         $this->assertSame('REQUESTED', $withoutCaption->refresh()->metadata['media_state']);
     }
 
@@ -424,7 +424,7 @@ final class CommunicationMessageLossPreventionTest extends TestCase
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
             'tenant_id' => $tenant->id,
             'contact_id' => $contact->id,
-            'channel' => CommunicationChannel::Whatsapp,
+            'channel' => CommunicationChannel::WhatsApp,
             'address_encrypted' => $address,
             'address_hash' => hash('sha256', $address),
             'address_masked' => '***'.substr($address, -4),
@@ -520,7 +520,7 @@ final class CommunicationMessageLossPreventionTest extends TestCase
     {
         $path = '/api/internal/v1/communication/gateway/events';
         $body = json_encode($event, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
-        $headers = app(CommunicationHmacSigner::class)->headers('POST', $path, $body);
+        $headers = app(HmacSigner::class)->headers('POST', $path, $body);
 
         return $this->json('POST', $path, $event, $headers, JSON_UNESCAPED_SLASHES);
     }

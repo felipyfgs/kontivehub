@@ -30,12 +30,12 @@ use App\Http\Resources\WorkTaskResource;
 use App\Models\WorkProcess;
 use App\Models\WorkTask;
 use App\Models\WorkTaskEvidence;
-use App\Services\Work\WorkBulkService;
-use App\Services\Work\WorkEvidenceService;
-use App\Services\Work\WorkProcessService;
-use App\Services\Work\WorkQueueQuery;
-use App\Services\Work\WorkTaskStructureService;
-use App\Services\Work\WorkTaskTransitionService;
+use App\Services\Work\BulkService;
+use App\Services\Work\EvidenceService;
+use App\Services\Work\ProcessService;
+use App\Services\Work\QueueQuery;
+use App\Services\Work\TaskStructureService;
+use App\Services\Work\TaskTransitionService;
 use Illuminate\Http\JsonResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -43,7 +43,7 @@ class WorkTaskController extends Controller
 {
     public function queue(
         ListWorkTasksRequest $request,
-        WorkQueueQuery $query,
+        QueueQuery $query,
     ): JsonResponse {
         return (new WorkTaskQueueCollection(
             $query->paginate($request->filters()->toArray()),
@@ -63,7 +63,7 @@ class WorkTaskController extends Controller
     public function start(
         TransitionWorkTaskRequest $request,
         WorkTask $task,
-        WorkTaskTransitionService $service,
+        TaskTransitionService $service,
     ): JsonResponse {
         $task = $service->start(
             $task,
@@ -76,7 +76,7 @@ class WorkTaskController extends Controller
     public function block(
         TransitionWorkTaskRequest $request,
         WorkTask $task,
-        WorkTaskTransitionService $service,
+        TaskTransitionService $service,
     ): JsonResponse {
         $data = $request->transition();
         $task = $service->block(
@@ -91,7 +91,7 @@ class WorkTaskController extends Controller
     public function resume(
         TransitionWorkTaskRequest $request,
         WorkTask $task,
-        WorkTaskTransitionService $service,
+        TaskTransitionService $service,
     ): JsonResponse {
         $task = $service->resume(
             $task,
@@ -104,7 +104,7 @@ class WorkTaskController extends Controller
     public function complete(
         TransitionWorkTaskRequest $request,
         WorkTask $task,
-        WorkTaskTransitionService $service,
+        TaskTransitionService $service,
     ): JsonResponse {
         $task = $service->complete(
             $task,
@@ -117,7 +117,7 @@ class WorkTaskController extends Controller
     public function dispense(
         JustifyWorkTaskRequest $request,
         WorkTask $task,
-        WorkTaskTransitionService $service,
+        TaskTransitionService $service,
     ): JsonResponse {
         $data = $request->transition();
         $task = $service->dispense(
@@ -132,7 +132,7 @@ class WorkTaskController extends Controller
     public function reopen(
         JustifyWorkTaskRequest $request,
         WorkTask $task,
-        WorkTaskTransitionService $service,
+        TaskTransitionService $service,
     ): JsonResponse {
         $data = $request->transition();
         $task = $service->reopen(
@@ -147,7 +147,7 @@ class WorkTaskController extends Controller
     public function claim(
         ClaimWorkTaskRequest $request,
         WorkTask $task,
-        WorkProcessService $service,
+        ProcessService $service,
     ): JsonResponse {
         $task = $service->claimTask(
             $task,
@@ -170,7 +170,7 @@ class WorkTaskController extends Controller
     public function storeOnProcess(
         StoreWorkTaskRequest $request,
         WorkProcess $process,
-        WorkTaskStructureService $structure,
+        TaskStructureService $structure,
     ): JsonResponse {
         $task = $structure->addTask(
             $process,
@@ -185,7 +185,7 @@ class WorkTaskController extends Controller
     public function updateStructure(
         UpdateWorkTaskStructureRequest $request,
         WorkTask $task,
-        WorkTaskStructureService $structure,
+        TaskStructureService $structure,
     ): JsonResponse {
         $data = $request->structure();
         $task = $structure->updateTask(
@@ -200,7 +200,7 @@ class WorkTaskController extends Controller
     public function reorder(
         ReorderWorkTasksRequest $request,
         WorkProcess $process,
-        WorkTaskStructureService $structure,
+        TaskStructureService $structure,
     ): JsonResponse {
         $data = $request->reorder();
         $structure->reorder(
@@ -216,7 +216,7 @@ class WorkTaskController extends Controller
 
     public function bulk(
         BulkWorkTasksRequest $request,
-        WorkBulkService $service,
+        BulkService $service,
     ): JsonResponse {
         $data = $request->bulk();
         $result = $service->apply(
@@ -243,7 +243,7 @@ class WorkTaskController extends Controller
     public function uploadEvidence(
         UploadWorkTaskEvidenceRequest $request,
         WorkTask $task,
-        WorkEvidenceService $service,
+        EvidenceService $service,
     ): JsonResponse {
         $evidence = $service->upload(
             $task,
@@ -259,7 +259,7 @@ class WorkTaskController extends Controller
         DownloadWorkTaskEvidenceRequest $request,
         WorkTask $task,
         WorkTaskEvidence $evidence,
-        WorkEvidenceService $service,
+        EvidenceService $service,
     ): StreamedResponse {
         return $service->downloadForTask($task, $evidence);
     }
@@ -268,7 +268,7 @@ class WorkTaskController extends Controller
         RemoveWorkTaskEvidenceRequest $request,
         WorkTask $task,
         WorkTaskEvidence $evidence,
-        WorkEvidenceService $service,
+        EvidenceService $service,
     ): JsonResponse {
         $service->removeForTask(
             $task,

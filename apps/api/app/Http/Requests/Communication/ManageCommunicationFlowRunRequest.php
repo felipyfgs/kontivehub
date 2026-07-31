@@ -4,7 +4,7 @@ namespace App\Http\Requests\Communication;
 
 use App\Models\CommunicationFlowRun;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 
 final class ManageCommunicationFlowRunRequest extends CommunicationRequest
 {
@@ -15,7 +15,7 @@ final class ManageCommunicationFlowRunRequest extends CommunicationRequest
 
         return $actor instanceof User
             && $run instanceof CommunicationFlowRun
-            && app(CommunicationAccess::class)->canManageFlows($actor, $run);
+            && app(Access::class)->canManageFlows($actor, $run);
     }
 
     /** @return array<string, list<mixed>> */

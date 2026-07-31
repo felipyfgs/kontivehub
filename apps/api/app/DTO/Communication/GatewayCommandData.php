@@ -43,7 +43,7 @@ final readonly class GatewayCommandData
 
     public function digest(): string
     {
-        return CommunicationPayloadDigest::make($this->toArray());
+        return PayloadDigest::make($this->toArray());
     }
 
     private static function assertIdentifier(string $value, string $field): void

@@ -12,19 +12,19 @@ use App\Http\Controllers\Api\V1\ClientContactController;
 use App\Http\Controllers\Api\V1\ClientController;
 use App\Http\Controllers\Api\V1\ClientCredentialController;
 use App\Http\Controllers\Api\V1\CnpjLookupController;
-use App\Http\Controllers\Api\V1\Communication\CommunicationAutomationController;
-use App\Http\Controllers\Api\V1\Communication\CommunicationCatalogController;
-use App\Http\Controllers\Api\V1\Communication\CommunicationContactController;
-use App\Http\Controllers\Api\V1\Communication\CommunicationConversationController;
-use App\Http\Controllers\Api\V1\Communication\CommunicationConversationGatewayController;
-use App\Http\Controllers\Api\V1\Communication\CommunicationDataController;
-use App\Http\Controllers\Api\V1\Communication\CommunicationFlowController;
-use App\Http\Controllers\Api\V1\Communication\CommunicationFlowRunController;
-use App\Http\Controllers\Api\V1\Communication\CommunicationInboxController;
-use App\Http\Controllers\Api\V1\Communication\CommunicationInboxGatewayController;
-use App\Http\Controllers\Api\V1\Communication\CommunicationProfilePictureController;
+use App\Http\Controllers\Api\V1\Communication\AutomationController;
+use App\Http\Controllers\Api\V1\Communication\CatalogController;
+use App\Http\Controllers\Api\V1\Communication\ContactController;
 use App\Http\Controllers\Api\V1\Communication\ConversationBulkOperationController;
+use App\Http\Controllers\Api\V1\Communication\ConversationController;
+use App\Http\Controllers\Api\V1\Communication\ConversationGatewayController;
 use App\Http\Controllers\Api\V1\Communication\ConversationListPreferenceController;
+use App\Http\Controllers\Api\V1\Communication\DataController;
+use App\Http\Controllers\Api\V1\Communication\FlowController;
+use App\Http\Controllers\Api\V1\Communication\FlowRunController;
+use App\Http\Controllers\Api\V1\Communication\InboxController;
+use App\Http\Controllers\Api\V1\Communication\InboxGatewayController;
+use App\Http\Controllers\Api\V1\Communication\ProfilePictureController;
 use App\Http\Controllers\Api\V1\CteEmitterPushController;
 use App\Http\Controllers\Api\V1\CteOperationsController;
 use App\Http\Controllers\Api\V1\DocumentImportBatchController;
@@ -57,9 +57,9 @@ use App\Http\Controllers\Api\V1\Fiscal\MonitoringCoverageController;
 use App\Http\Controllers\Api\V1\Fiscal\MonitoringInsightsController;
 use App\Http\Controllers\Api\V1\Fiscal\MonitoringModuleCommunicationController;
 use App\Http\Controllers\Api\V1\Fiscal\MonitoringModuleMembershipController;
-use App\Http\Controllers\Api\V1\Fiscal\PagtowebArrecadacaoReceiptController;
-use App\Http\Controllers\Api\V1\Fiscal\PagtowebPaymentCountController;
-use App\Http\Controllers\Api\V1\Fiscal\PagtowebPaymentListController;
+use App\Http\Controllers\Api\V1\Fiscal\PagtoWebArrecadacaoReceiptController;
+use App\Http\Controllers\Api\V1\Fiscal\PagtoWebPaymentCountController;
+use App\Http\Controllers\Api\V1\Fiscal\PagtoWebPaymentListController;
 use App\Http\Controllers\Api\V1\Fiscal\PgdasdMonitoringController;
 use App\Http\Controllers\Api\V1\Fiscal\PgmeiMonitoringController;
 use App\Http\Controllers\Api\V1\Fiscal\PnrRenunciationController;
@@ -308,67 +308,67 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/tenant/subscription', [TenantSubscriptionController::class, 'show']);
 
             Route::prefix('communication')->group(function (): void {
-                Route::get('/inboxes', [CommunicationInboxController::class, 'index']);
-                Route::post('/inboxes', [CommunicationInboxController::class, 'store']);
-                Route::patch('/inboxes/{inbox}', [CommunicationInboxController::class, 'update']);
-                Route::delete('/inboxes/{inbox}', [CommunicationInboxController::class, 'destroy'])
+                Route::get('/inboxes', [InboxController::class, 'index']);
+                Route::post('/inboxes', [InboxController::class, 'store']);
+                Route::patch('/inboxes/{inbox}', [InboxController::class, 'update']);
+                Route::delete('/inboxes/{inbox}', [InboxController::class, 'destroy'])
                     ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive));
-                Route::put('/inboxes/{inbox}/members', [CommunicationInboxController::class, 'replaceMembers']);
-                Route::post('/inboxes/{inbox}/session/logout', [CommunicationInboxController::class, 'revoke'])
+                Route::put('/inboxes/{inbox}/members', [InboxController::class, 'replaceMembers']);
+                Route::post('/inboxes/{inbox}/session/logout', [InboxController::class, 'revoke'])
                     ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive));
-                Route::get('/inboxes/{inbox}/session/status', [CommunicationInboxGatewayController::class, 'sessionStatus']);
-                Route::post('/inboxes/{inbox}/session/connect', [CommunicationInboxController::class, 'startPairing'])
+                Route::get('/inboxes/{inbox}/session/status', [InboxGatewayController::class, 'sessionStatus']);
+                Route::post('/inboxes/{inbox}/session/connect', [InboxController::class, 'startPairing'])
                     ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive));
-                Route::post('/inboxes/{inbox}/session/disconnect', [CommunicationInboxGatewayController::class, 'disconnect']);
-                Route::put('/inboxes/{inbox}/session/passive', [CommunicationInboxGatewayController::class, 'passive']);
-                Route::post('/inboxes/{inbox}/session/pair-phone', [CommunicationInboxGatewayController::class, 'pairPhone'])
+                Route::post('/inboxes/{inbox}/session/disconnect', [InboxGatewayController::class, 'disconnect']);
+                Route::put('/inboxes/{inbox}/session/passive', [InboxGatewayController::class, 'passive']);
+                Route::post('/inboxes/{inbox}/session/pair-phone', [InboxGatewayController::class, 'pairPhone'])
                     ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive));
-                Route::post('/inboxes/{inbox}/session/passkey/respond', [CommunicationInboxGatewayController::class, 'respondPasskey'])
+                Route::post('/inboxes/{inbox}/session/passkey/respond', [InboxGatewayController::class, 'respondPasskey'])
                     ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard));
-                Route::post('/inboxes/{inbox}/session/passkey/confirm', [CommunicationInboxGatewayController::class, 'confirmPasskey'])
+                Route::post('/inboxes/{inbox}/session/passkey/confirm', [InboxGatewayController::class, 'confirmPasskey'])
                     ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard));
-                Route::put('/inboxes/{inbox}/presence', [CommunicationInboxGatewayController::class, 'globalPresence']);
-                Route::put('/inboxes/{inbox}/default-disappearing', [CommunicationInboxGatewayController::class, 'defaultDisappearing']);
-                Route::post('/inboxes/{inbox}/app-state/sync', [CommunicationInboxGatewayController::class, 'syncState']);
-                Route::post('/inboxes/{inbox}/app-state/mark-clean', [CommunicationInboxGatewayController::class, 'markStateClean']);
-                Route::get('/inboxes/{inbox}/blocklist', [CommunicationInboxGatewayController::class, 'blocklist']);
-                Route::put('/inboxes/{inbox}/blocklist', [CommunicationInboxGatewayController::class, 'updateBlocklist']);
-                Route::get('/inboxes/{inbox}/privacy', [CommunicationInboxGatewayController::class, 'privacy']);
-                Route::put('/inboxes/{inbox}/privacy', [CommunicationInboxGatewayController::class, 'updatePrivacy']);
-                Route::post('/inboxes/{inbox}/contacts/check', [CommunicationInboxGatewayController::class, 'checkUsers']);
-                Route::post('/inboxes/{inbox}/contacts/info', [CommunicationInboxGatewayController::class, 'userInfo']);
-                Route::post('/inboxes/{inbox}/contacts/business-profiles', [CommunicationInboxGatewayController::class, 'businessProfiles']);
-                Route::post('/inboxes/{inbox}/contacts/profile-picture', [CommunicationInboxGatewayController::class, 'profilePicture'])
+                Route::put('/inboxes/{inbox}/presence', [InboxGatewayController::class, 'globalPresence']);
+                Route::put('/inboxes/{inbox}/default-disappearing', [InboxGatewayController::class, 'defaultDisappearing']);
+                Route::post('/inboxes/{inbox}/app-state/sync', [InboxGatewayController::class, 'syncState']);
+                Route::post('/inboxes/{inbox}/app-state/mark-clean', [InboxGatewayController::class, 'markStateClean']);
+                Route::get('/inboxes/{inbox}/blocklist', [InboxGatewayController::class, 'blocklist']);
+                Route::put('/inboxes/{inbox}/blocklist', [InboxGatewayController::class, 'updateBlocklist']);
+                Route::get('/inboxes/{inbox}/privacy', [InboxGatewayController::class, 'privacy']);
+                Route::put('/inboxes/{inbox}/privacy', [InboxGatewayController::class, 'updatePrivacy']);
+                Route::post('/inboxes/{inbox}/contacts/check', [InboxGatewayController::class, 'checkUsers']);
+                Route::post('/inboxes/{inbox}/contacts/info', [InboxGatewayController::class, 'userInfo']);
+                Route::post('/inboxes/{inbox}/contacts/business-profiles', [InboxGatewayController::class, 'businessProfiles']);
+                Route::post('/inboxes/{inbox}/contacts/profile-picture', [InboxGatewayController::class, 'profilePicture'])
                     ->middleware(ThrottleRequests::using(ApiRateLimit::CommunicationProfilePicture));
-                Route::post('/inboxes/{inbox}/contacts/qr-link', [CommunicationInboxGatewayController::class, 'contactQrLink']);
-                Route::post('/inboxes/{inbox}/contacts/qr-resolve', [CommunicationInboxGatewayController::class, 'resolveContactQr']);
-                Route::post('/inboxes/{inbox}/contacts/business-link-resolve', [CommunicationInboxGatewayController::class, 'resolveBusinessLink']);
-                Route::patch('/settings', [CommunicationInboxController::class, 'updateTenantSettings']);
+                Route::post('/inboxes/{inbox}/contacts/qr-link', [InboxGatewayController::class, 'contactQrLink']);
+                Route::post('/inboxes/{inbox}/contacts/qr-resolve', [InboxGatewayController::class, 'resolveContactQr']);
+                Route::post('/inboxes/{inbox}/contacts/business-link-resolve', [InboxGatewayController::class, 'resolveBusinessLink']);
+                Route::patch('/settings', [InboxController::class, 'updateTenantSettings']);
 
-                Route::get('/automation-policies', [CommunicationAutomationController::class, 'index']);
-                Route::put('/automation-policies', [CommunicationAutomationController::class, 'upsert']);
-                Route::get('/clients/{client}/automation-recipients', [CommunicationAutomationController::class, 'recipients']);
-                Route::put('/clients/{client}/automation-recipients', [CommunicationAutomationController::class, 'updateRecipients']);
+                Route::get('/automation-policies', [AutomationController::class, 'index']);
+                Route::put('/automation-policies', [AutomationController::class, 'upsert']);
+                Route::get('/clients/{client}/automation-recipients', [AutomationController::class, 'recipients']);
+                Route::put('/clients/{client}/automation-recipients', [AutomationController::class, 'updateRecipients']);
 
-                Route::get('/contacts', [CommunicationContactController::class, 'index']);
-                Route::get('/profile-pictures/{profile}/{version}', [CommunicationProfilePictureController::class, 'show'])
+                Route::get('/contacts', [ContactController::class, 'index']);
+                Route::get('/profile-pictures/{profile}/{version}', [ProfilePictureController::class, 'show'])
                     ->middleware(ThrottleRequests::using(ApiRateLimit::CommunicationProfilePicture))
                     ->whereNumber('version')
                     ->name('communication.profile-pictures.show');
-                Route::post('/contacts/search', [CommunicationContactController::class, 'search'])
+                Route::post('/contacts/search', [ContactController::class, 'search'])
                     ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive))
                     // Busca por telefone é leitura; o POST mantém PII fora da URL.
                     ->withoutMiddleware(EnsureTenantSubscriptionWritable::class);
-                Route::post('/contacts', [CommunicationContactController::class, 'store']);
-                Route::get('/contacts/{contact}', [CommunicationContactController::class, 'show']);
-                Route::get('/contacts/{contact}/shared-content', [CommunicationContactController::class, 'sharedContent']);
-                Route::patch('/contacts/{contact}', [CommunicationContactController::class, 'update']);
-                Route::post('/contacts/{contact}/identities', [CommunicationContactController::class, 'addIdentity']);
-                Route::post('/identities/{identity}/links', [CommunicationContactController::class, 'linkIdentity']);
-                Route::delete('/identities/{identity}/links/{link}', [CommunicationContactController::class, 'unlinkIdentity']);
+                Route::post('/contacts', [ContactController::class, 'store']);
+                Route::get('/contacts/{contact}', [ContactController::class, 'show']);
+                Route::get('/contacts/{contact}/shared-content', [ContactController::class, 'sharedContent']);
+                Route::patch('/contacts/{contact}', [ContactController::class, 'update']);
+                Route::post('/contacts/{contact}/identities', [ContactController::class, 'addIdentity']);
+                Route::post('/identities/{identity}/links', [ContactController::class, 'linkIdentity']);
+                Route::delete('/identities/{identity}/links/{link}', [ContactController::class, 'unlinkIdentity']);
 
-                Route::get('/conversations', [CommunicationConversationController::class, 'index']);
-                Route::post('/conversations', [CommunicationConversationController::class, 'store'])
+                Route::get('/conversations', [ConversationController::class, 'index']);
+                Route::post('/conversations', [ConversationController::class, 'store'])
                     ->middleware(ThrottleRequests::using(ApiRateLimit::CommunicationMessageSend));
                 Route::get('/conversation-list-preferences', [ConversationListPreferenceController::class, 'show']);
                 Route::put('/conversation-list-preferences', [ConversationListPreferenceController::class, 'update']);
@@ -376,73 +376,73 @@ Route::prefix('v1')->group(function (): void {
                     ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedStandard));
                 Route::get('/conversation-bulk-operations/{operation}', [ConversationBulkOperationController::class, 'show']);
                 Route::get('/conversation-bulk-operations/{operation}/items', [ConversationBulkOperationController::class, 'items']);
-                Route::get('/conversations/{conversation}', [CommunicationConversationController::class, 'show']);
-                Route::patch('/conversations/{conversation}', [CommunicationConversationController::class, 'update']);
-                Route::get('/conversations/{conversation}/messages', [CommunicationConversationController::class, 'messages']);
-                Route::get('/conversations/{conversation}/shared-content', [CommunicationConversationController::class, 'sharedContent']);
-                Route::put('/conversations/{conversation}/read-state', [CommunicationConversationController::class, 'updateReadState']);
-                Route::post('/conversations/{conversation}/messages', [CommunicationConversationController::class, 'send'])
+                Route::get('/conversations/{conversation}', [ConversationController::class, 'show']);
+                Route::patch('/conversations/{conversation}', [ConversationController::class, 'update']);
+                Route::get('/conversations/{conversation}/messages', [ConversationController::class, 'messages']);
+                Route::get('/conversations/{conversation}/shared-content', [ConversationController::class, 'sharedContent']);
+                Route::put('/conversations/{conversation}/read-state', [ConversationController::class, 'updateReadState']);
+                Route::post('/conversations/{conversation}/messages', [ConversationController::class, 'send'])
                     ->middleware(ThrottleRequests::using(ApiRateLimit::CommunicationMessageSend));
-                Route::put('/conversations/{conversation}/messages/{message}/edit', [CommunicationConversationGatewayController::class, 'edit']);
-                Route::delete('/conversations/{conversation}/messages/{message}', [CommunicationConversationGatewayController::class, 'revoke']);
-                Route::put('/conversations/{conversation}/messages/{message}/reaction', [CommunicationConversationGatewayController::class, 'react']);
-                Route::post('/conversations/{conversation}/messages/{message}/poll-votes', [CommunicationConversationGatewayController::class, 'votePoll']);
-                Route::post('/conversations/{conversation}/messages/{message}/receipts', [CommunicationConversationGatewayController::class, 'receipt']);
-                Route::post('/conversations/{conversation}/messages/{message}/history', [CommunicationConversationGatewayController::class, 'history'])
+                Route::put('/conversations/{conversation}/messages/{message}/edit', [ConversationGatewayController::class, 'edit']);
+                Route::delete('/conversations/{conversation}/messages/{message}', [ConversationGatewayController::class, 'revoke']);
+                Route::put('/conversations/{conversation}/messages/{message}/reaction', [ConversationGatewayController::class, 'react']);
+                Route::post('/conversations/{conversation}/messages/{message}/poll-votes', [ConversationGatewayController::class, 'votePoll']);
+                Route::post('/conversations/{conversation}/messages/{message}/receipts', [ConversationGatewayController::class, 'receipt']);
+                Route::post('/conversations/{conversation}/messages/{message}/history', [ConversationGatewayController::class, 'history'])
                     ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive));
-                Route::post('/conversations/{conversation}/messages/{message}/recovery', [CommunicationConversationGatewayController::class, 'recovery'])
+                Route::post('/conversations/{conversation}/messages/{message}/recovery', [ConversationGatewayController::class, 'recovery'])
                     ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive));
-                Route::post('/conversations/{conversation}/presence/subscribe', [CommunicationConversationGatewayController::class, 'subscribePresence']);
-                Route::put('/conversations/{conversation}/presence', [CommunicationConversationGatewayController::class, 'chatPresence']);
-                Route::put('/conversations/{conversation}/disappearing', [CommunicationConversationGatewayController::class, 'disappearing']);
-                Route::put('/conversations/{conversation}/state', [CommunicationConversationGatewayController::class, 'state']);
-                Route::put('/conversations/{conversation}/labels/{label}', [CommunicationConversationController::class, 'addLabel']);
-                Route::delete('/conversations/{conversation}/labels/{label}', [CommunicationConversationController::class, 'removeLabel']);
+                Route::post('/conversations/{conversation}/presence/subscribe', [ConversationGatewayController::class, 'subscribePresence']);
+                Route::put('/conversations/{conversation}/presence', [ConversationGatewayController::class, 'chatPresence']);
+                Route::put('/conversations/{conversation}/disappearing', [ConversationGatewayController::class, 'disappearing']);
+                Route::put('/conversations/{conversation}/state', [ConversationGatewayController::class, 'state']);
+                Route::put('/conversations/{conversation}/labels/{label}', [ConversationController::class, 'addLabel']);
+                Route::delete('/conversations/{conversation}/labels/{label}', [ConversationController::class, 'removeLabel']);
 
-                Route::get('/labels', [CommunicationCatalogController::class, 'labels']);
-                Route::get('/outbound-capabilities', [CommunicationCatalogController::class, 'outboundCapabilities']);
-                Route::post('/labels', [CommunicationCatalogController::class, 'storeLabel']);
-                Route::delete('/labels/{label}', [CommunicationCatalogController::class, 'deleteLabel']);
-                Route::get('/canned-responses', [CommunicationCatalogController::class, 'cannedResponses']);
-                Route::post('/canned-responses', [CommunicationCatalogController::class, 'storeCannedResponse']);
-                Route::put('/canned-responses/{canned}', [CommunicationCatalogController::class, 'updateCannedResponse']);
-                Route::post('/canned-responses/{canned}/duplicate', [CommunicationCatalogController::class, 'duplicateCannedResponse']);
-                Route::post('/canned-responses/{canned}/deactivate', [CommunicationCatalogController::class, 'deactivateCannedResponse']);
-                Route::post('/canned-responses/{canned}/render', [CommunicationCatalogController::class, 'renderCannedResponse']);
-                Route::delete('/canned-responses/{canned}', [CommunicationCatalogController::class, 'deleteCannedResponse']);
+                Route::get('/labels', [CatalogController::class, 'labels']);
+                Route::get('/outbound-capabilities', [CatalogController::class, 'outboundCapabilities']);
+                Route::post('/labels', [CatalogController::class, 'storeLabel']);
+                Route::delete('/labels/{label}', [CatalogController::class, 'deleteLabel']);
+                Route::get('/canned-responses', [CatalogController::class, 'cannedResponses']);
+                Route::post('/canned-responses', [CatalogController::class, 'storeCannedResponse']);
+                Route::put('/canned-responses/{canned}', [CatalogController::class, 'updateCannedResponse']);
+                Route::post('/canned-responses/{canned}/duplicate', [CatalogController::class, 'duplicateCannedResponse']);
+                Route::post('/canned-responses/{canned}/deactivate', [CatalogController::class, 'deactivateCannedResponse']);
+                Route::post('/canned-responses/{canned}/render', [CatalogController::class, 'renderCannedResponse']);
+                Route::delete('/canned-responses/{canned}', [CatalogController::class, 'deleteCannedResponse']);
 
-                Route::get('/flows', [CommunicationFlowController::class, 'index']);
-                Route::post('/flows', [CommunicationFlowController::class, 'store']);
-                Route::get('/flows/{flow}', [CommunicationFlowController::class, 'show']);
-                Route::patch('/flows/{flow}', [CommunicationFlowController::class, 'update']);
-                Route::delete('/flows/{flow}', [CommunicationFlowController::class, 'destroy']);
-                Route::get('/flows/{flow}/draft', [CommunicationFlowController::class, 'showDraft']);
-                Route::put('/flows/{flow}/draft', [CommunicationFlowController::class, 'updateDraft']);
-                Route::post('/flows/{flow}/validate', [CommunicationFlowController::class, 'validateGraph']);
-                Route::post('/flows/{flow}/dry-run', [CommunicationFlowController::class, 'dryRun']);
-                Route::post('/flows/{flow}/preview', [CommunicationFlowController::class, 'previewGraph']);
-                Route::post('/flows/{flow}/publish', [CommunicationFlowController::class, 'publish']);
-                Route::post('/flows/{flow}/clone', [CommunicationFlowController::class, 'cloneFlow']);
-                Route::post('/flows/{flow}/versions/{version}/clone', [CommunicationFlowController::class, 'cloneVersion']);
-                Route::get('/flows/{flow}/bindings', [CommunicationFlowController::class, 'indexBindings']);
-                Route::post('/flows/{flow}/bindings', [CommunicationFlowController::class, 'storeBinding']);
-                Route::patch('/flow-bindings/{binding}', [CommunicationFlowController::class, 'updateBinding']);
-                Route::post('/flow-bindings/{binding}/enable', [CommunicationFlowController::class, 'enableBinding']);
-                Route::post('/flow-bindings/{binding}/disable', [CommunicationFlowController::class, 'disableBinding']);
-                Route::delete('/flow-bindings/{binding}', [CommunicationFlowController::class, 'destroyBinding']);
-                Route::get('/flow-runs', [CommunicationFlowRunController::class, 'index']);
-                Route::get('/flow-runs/{run}', [CommunicationFlowRunController::class, 'show']);
-                Route::post('/flow-runs/{run}/pause', [CommunicationFlowRunController::class, 'pause']);
-                Route::post('/flow-runs/{run}/resume', [CommunicationFlowRunController::class, 'resume']);
-                Route::post('/flow-runs/{run}/handoff', [CommunicationFlowRunController::class, 'handoff']);
-                Route::post('/flow-runs/{run}/stop', [CommunicationFlowRunController::class, 'stop']);
-                Route::post('/flow-runs/{run}/restart', [CommunicationFlowRunController::class, 'restart']);
+                Route::get('/flows', [FlowController::class, 'index']);
+                Route::post('/flows', [FlowController::class, 'store']);
+                Route::get('/flows/{flow}', [FlowController::class, 'show']);
+                Route::patch('/flows/{flow}', [FlowController::class, 'update']);
+                Route::delete('/flows/{flow}', [FlowController::class, 'destroy']);
+                Route::get('/flows/{flow}/draft', [FlowController::class, 'showDraft']);
+                Route::put('/flows/{flow}/draft', [FlowController::class, 'updateDraft']);
+                Route::post('/flows/{flow}/validate', [FlowController::class, 'validateGraph']);
+                Route::post('/flows/{flow}/dry-run', [FlowController::class, 'dryRun']);
+                Route::post('/flows/{flow}/preview', [FlowController::class, 'previewGraph']);
+                Route::post('/flows/{flow}/publish', [FlowController::class, 'publish']);
+                Route::post('/flows/{flow}/clone', [FlowController::class, 'cloneFlow']);
+                Route::post('/flows/{flow}/versions/{version}/clone', [FlowController::class, 'cloneVersion']);
+                Route::get('/flows/{flow}/bindings', [FlowController::class, 'indexBindings']);
+                Route::post('/flows/{flow}/bindings', [FlowController::class, 'storeBinding']);
+                Route::patch('/flow-bindings/{binding}', [FlowController::class, 'updateBinding']);
+                Route::post('/flow-bindings/{binding}/enable', [FlowController::class, 'enableBinding']);
+                Route::post('/flow-bindings/{binding}/disable', [FlowController::class, 'disableBinding']);
+                Route::delete('/flow-bindings/{binding}', [FlowController::class, 'destroyBinding']);
+                Route::get('/flow-runs', [FlowRunController::class, 'index']);
+                Route::get('/flow-runs/{run}', [FlowRunController::class, 'show']);
+                Route::post('/flow-runs/{run}/pause', [FlowRunController::class, 'pause']);
+                Route::post('/flow-runs/{run}/resume', [FlowRunController::class, 'resume']);
+                Route::post('/flow-runs/{run}/handoff', [FlowRunController::class, 'handoff']);
+                Route::post('/flow-runs/{run}/stop', [FlowRunController::class, 'stop']);
+                Route::post('/flow-runs/{run}/restart', [FlowRunController::class, 'restart']);
 
-                Route::get('/events', [CommunicationDataController::class, 'sync']);
-                Route::get('/attachments/{attachment}/download', [CommunicationDataController::class, 'downloadAttachment']);
-                Route::get('/attachments/{attachment}/preview', [CommunicationDataController::class, 'previewAttachment']);
-                Route::get('/contacts/{contact}/export', [CommunicationDataController::class, 'exportContact']);
-                Route::delete('/contacts/{contact}/personal-data', [CommunicationDataController::class, 'purgeContact']);
+                Route::get('/events', [DataController::class, 'sync']);
+                Route::get('/attachments/{attachment}/download', [DataController::class, 'downloadAttachment']);
+                Route::get('/attachments/{attachment}/preview', [DataController::class, 'previewAttachment']);
+                Route::get('/contacts/{contact}/export', [DataController::class, 'exportContact']);
+                Route::delete('/contacts/{contact}/personal-data', [DataController::class, 'purgeContact']);
             });
 
             // Tenant SERPRO namespace canônico (/api/v1/serpro/*) — tenant_id só via CurrentTenant
@@ -637,14 +637,14 @@ Route::prefix('v1')->group(function (): void {
             // SICALC 5.2 — metadados de preenchimento de DARF (somente leitura).
             Route::get('/fiscal/guides/revenue-support/clients/{client}/history', [SicalcRevenueSupportController::class, 'history']);
             Route::post('/fiscal/guides/revenue-support/clients/{client}/consult', [SicalcRevenueSupportController::class, 'consult']);
-            Route::get('/fiscal/guides/payment-count/clients/{client}/history', [PagtowebPaymentCountController::class, 'history']);
-            Route::post('/fiscal/guides/payment-count/clients/{client}/consult', [PagtowebPaymentCountController::class, 'consult']);
-            Route::get('/fiscal/guides/payments/clients/{client}/history', [PagtowebPaymentListController::class, 'history']);
-            Route::post('/fiscal/guides/payments/clients/{client}/consult', [PagtowebPaymentListController::class, 'consult']);
-            Route::get('/fiscal/guides/receipts/clients/{client}/history', [PagtowebArrecadacaoReceiptController::class, 'history']);
-            Route::post('/fiscal/guides/receipts/clients/{client}/request', [PagtowebArrecadacaoReceiptController::class, 'request'])
+            Route::get('/fiscal/guides/payment-count/clients/{client}/history', [PagtoWebPaymentCountController::class, 'history']);
+            Route::post('/fiscal/guides/payment-count/clients/{client}/consult', [PagtoWebPaymentCountController::class, 'consult']);
+            Route::get('/fiscal/guides/payments/clients/{client}/history', [PagtoWebPaymentListController::class, 'history']);
+            Route::post('/fiscal/guides/payments/clients/{client}/consult', [PagtoWebPaymentListController::class, 'consult']);
+            Route::get('/fiscal/guides/receipts/clients/{client}/history', [PagtoWebArrecadacaoReceiptController::class, 'history']);
+            Route::post('/fiscal/guides/receipts/clients/{client}/request', [PagtoWebArrecadacaoReceiptController::class, 'request'])
                 ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive));
-            Route::get('/fiscal/guides/receipts/clients/{client}/{receipt}/download', [PagtowebArrecadacaoReceiptController::class, 'download']);
+            Route::get('/fiscal/guides/receipts/clients/{client}/{receipt}/download', [PagtoWebArrecadacaoReceiptController::class, 'download']);
 
             // Simples Nacional / MEI (tenant-scoped; mutações bloqueadas no piloto)
             Route::get('/fiscal/simples-mei/catalog', [SimplesMeiController::class, 'catalog']);

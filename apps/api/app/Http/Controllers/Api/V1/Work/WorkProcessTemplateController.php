@@ -15,17 +15,17 @@ use App\Http\Resources\WorkProcessTemplateCollection;
 use App\Http\Resources\WorkProcessTemplateRecurrenceResource;
 use App\Http\Resources\WorkProcessTemplateResource;
 use App\Models\WorkProcessTemplate;
-use App\Services\Work\WorkProcessGenerationBatchQuery;
-use App\Services\Work\WorkProcessTemplateQuery;
-use App\Services\Work\WorkProcessTemplateRecurrenceService;
-use App\Services\Work\WorkProcessTemplateWriter;
+use App\Services\Work\ProcessGenerationBatchQuery;
+use App\Services\Work\ProcessTemplateQuery;
+use App\Services\Work\ProcessTemplateRecurrenceService;
+use App\Services\Work\ProcessTemplateWriter;
 use Illuminate\Http\JsonResponse;
 
 class WorkProcessTemplateController extends Controller
 {
     public function index(
         ListWorkProcessTemplatesRequest $request,
-        WorkProcessTemplateQuery $query,
+        ProcessTemplateQuery $query,
     ): JsonResponse {
         return (new WorkProcessTemplateCollection(
             $query->paginate($request->filters()),
@@ -43,7 +43,7 @@ class WorkProcessTemplateController extends Controller
 
     public function store(
         StoreWorkProcessTemplateRequest $request,
-        WorkProcessTemplateWriter $writer,
+        ProcessTemplateWriter $writer,
     ): JsonResponse {
         return (new WorkProcessTemplateResource(
             $writer->create($request->payload()),
@@ -53,7 +53,7 @@ class WorkProcessTemplateController extends Controller
     public function update(
         UpdateWorkProcessTemplateRequest $request,
         WorkProcessTemplate $template,
-        WorkProcessTemplateWriter $writer,
+        ProcessTemplateWriter $writer,
     ): JsonResponse {
         return (new WorkProcessTemplateResource(
             $writer->update($template, $request->payload()),
@@ -70,7 +70,7 @@ class WorkProcessTemplateController extends Controller
     public function updateRecurrence(
         UpdateWorkProcessTemplateRecurrenceRequest $request,
         WorkProcessTemplate $template,
-        WorkProcessTemplateRecurrenceService $recurrence,
+        ProcessTemplateRecurrenceService $recurrence,
     ): JsonResponse {
         return (new WorkProcessTemplateRecurrenceResource(
             $recurrence->update($template, $request->payload()),
@@ -80,7 +80,7 @@ class WorkProcessTemplateController extends Controller
     public function generationBatches(
         ListWorkProcessGenerationBatchesRequest $request,
         WorkProcessTemplate $template,
-        WorkProcessGenerationBatchQuery $query,
+        ProcessGenerationBatchQuery $query,
     ): JsonResponse {
         return (new WorkProcessGenerationBatchSummaryCollection(
             $query->paginate($template, $request->filters()),

@@ -32,9 +32,9 @@ use App\Models\CommunicationInbox;
 use App\Models\CommunicationMessage;
 use App\Models\CommunicationOutboxEntry;
 use App\Models\Tenant;
-use App\Services\Communication\Flows\CommunicationFlowCorrelator;
-use App\Services\Communication\Flows\CommunicationFlowExecutor;
-use App\Services\Communication\Security\CommunicationHmacSigner;
+use App\Services\Communication\Flows\FlowCorrelator;
+use App\Services\Communication\Flows\FlowExecutor;
+use App\Services\Communication\Security\HmacSigner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Psr\Http\Message\StreamInterface;
@@ -90,7 +90,7 @@ final class CommunicationFlowRuntimeTest extends TestCase
         $this->postLiveInbound($inbox, 'gw-flag-off-0001', 'provider-flag-off-0001', 'oi');
         Queue::assertNotPushed(CorrelateCommunicationFlowEventJob::class);
         // Mesmo se correlacionar manualmente, no-op:
-        app(CommunicationFlowCorrelator::class)->correlateMessage(
+        app(FlowCorrelator::class)->correlateMessage(
             (int) $inbox->tenant_id,
             (int) CommunicationConversation::query()->withoutGlobalScopes()->value('id'),
             (int) CommunicationMessage::query()->withoutGlobalScopes()->value('id'),
@@ -133,7 +133,7 @@ final class CommunicationFlowRuntimeTest extends TestCase
         $runCount = CommunicationFlowRun::query()->withoutGlobalScopes()->count();
         $outboxCount = CommunicationOutboxEntry::query()->withoutGlobalScopes()->whereNotNull('effect_key')->count();
 
-        app(CommunicationFlowCorrelator::class)->correlateMessage(
+        app(FlowCorrelator::class)->correlateMessage(
             (int) $inbox->tenant_id,
             (int) CommunicationConversation::query()->withoutGlobalScopes()->value('id'),
             (int) CommunicationMessage::query()->withoutGlobalScopes()
@@ -186,7 +186,7 @@ final class CommunicationFlowRuntimeTest extends TestCase
             'lock_version' => (int) $donor->lock_version + 1,
         ])->save();
 
-        app(CommunicationFlowCorrelator::class)->correlateMessage(
+        app(FlowCorrelator::class)->correlateMessage(
             (int) $inbox->tenant_id,
             (int) $donor->id,
             (int) $message->id,
@@ -241,7 +241,7 @@ final class CommunicationFlowRuntimeTest extends TestCase
             'metadata' => ['source' => 'flow_runtime'],
             'occurred_at' => now(),
         ]);
-        app(CommunicationFlowCorrelator::class)->correlateMessage(
+        app(FlowCorrelator::class)->correlateMessage(
             (int) $inbox->tenant_id,
             (int) $conversation->id,
             (int) $message->id,
@@ -312,7 +312,7 @@ final class CommunicationFlowRuntimeTest extends TestCase
             'result_meta' => ['outbox_entry_id' => $entry->id],
         ]);
 
-        app(CommunicationFlowExecutor::class)->advance((int) $run->id);
+        app(FlowExecutor::class)->advance((int) $run->id);
         $this->assertSame(FlowRunStatus::WaitingOutbox, $run->refresh()->status);
         $this->assertSame('m', $run->current_node_id);
 
@@ -320,11 +320,11 @@ final class CommunicationFlowRuntimeTest extends TestCase
             'status' => OutboxStatus::Accepted,
             'accepted_at' => now(),
         ])->save();
-        app(CommunicationFlowExecutor::class)->onOutboxAccepted($entry->fresh());
+        app(FlowExecutor::class)->onOutboxAccepted($entry->fresh());
         // onOutboxAccepted dispara job sync
         $run->refresh();
         if ($run->status !== FlowRunStatus::Completed) {
-            app(CommunicationFlowExecutor::class)->advance((int) $run->id);
+            app(FlowExecutor::class)->advance((int) $run->id);
         }
         $this->assertSame(FlowRunStatus::Completed, $run->refresh()->status);
     }
@@ -338,8 +338,8 @@ final class CommunicationFlowRuntimeTest extends TestCase
         $this->assertSame(FlowRunStatus::WaitingDelay, $run->status);
         $run->forceFill(['waiting_until' => now()->subSecond()])->save();
 
-        app(CommunicationFlowExecutor::class)->advance((int) $run->id);
-        app(CommunicationFlowExecutor::class)->advance((int) $run->id);
+        app(FlowExecutor::class)->advance((int) $run->id);
+        app(FlowExecutor::class)->advance((int) $run->id);
 
         $run->refresh();
         $this->assertSame(FlowRunStatus::Completed, $run->status);
@@ -384,7 +384,7 @@ final class CommunicationFlowRuntimeTest extends TestCase
             ->whereNotNull('effect_key')
             ->count();
 
-        app(CommunicationFlowExecutor::class)->advance((int) $run->id);
+        app(FlowExecutor::class)->advance((int) $run->id);
 
         $run->refresh();
         $this->assertSame(FlowRunStatus::Stopped, $run->status);
@@ -432,7 +432,7 @@ final class CommunicationFlowRuntimeTest extends TestCase
             ->where('source', MessageSource::FlowAutomation->value)
             ->count();
 
-        app(CommunicationFlowExecutor::class)->advance((int) $run->id);
+        app(FlowExecutor::class)->advance((int) $run->id);
 
         $run->refresh();
         $this->assertSame(FlowRunStatus::Stopped, $run->status);
@@ -505,7 +505,7 @@ final class CommunicationFlowRuntimeTest extends TestCase
             ->where('source', MessageSource::FlowAutomation->value)
             ->count();
 
-        app(CommunicationFlowCorrelator::class)->correlateMessage(
+        app(FlowCorrelator::class)->correlateMessage(
             (int) $inbox->tenant_id,
             (int) $conversation->id,
             (int) $message->id,
@@ -545,7 +545,7 @@ final class CommunicationFlowRuntimeTest extends TestCase
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
             'tenant_id' => $tenant->id,
             'contact_id' => $contact->id,
-            'channel' => CommunicationChannel::Whatsapp,
+            'channel' => CommunicationChannel::WhatsApp,
             'address_encrypted' => $address,
             'address_hash' => hash('sha256', $address),
             'address_masked' => '****0001',
@@ -622,7 +622,7 @@ final class CommunicationFlowRuntimeTest extends TestCase
         ];
         $path = '/api/internal/v1/communication/gateway/events';
         $body = json_encode($event, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
-        $headers = app(CommunicationHmacSigner::class)->headers('POST', $path, $body);
+        $headers = app(HmacSigner::class)->headers('POST', $path, $body);
 
         return $this->json('POST', $path, $event, $headers, JSON_UNESCAPED_SLASHES);
     }

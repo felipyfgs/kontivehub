@@ -3,7 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\WorkProcessTemplate;
-use App\Services\Work\WorkProcessTemplateProjection;
+use App\Services\Work\ProcessTemplateProjection;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -15,6 +15,6 @@ final class WorkProcessTemplateResource extends JsonResource
         /** @var WorkProcessTemplate $template */
         $template = $this->resource;
 
-        return app(WorkProcessTemplateProjection::class)->build($template);
+        return app(ProcessTemplateProjection::class)->build($template);
     }
 }

@@ -2,11 +2,11 @@
 
 namespace App\Http\Resources;
 
-use App\DTO\Tenant\TenantAutXmlStreamData;
+use App\DTO\Tenant\AutXmlStreamData;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-/** @mixin TenantAutXmlStreamData */
+/** @mixin AutXmlStreamData */
 final class TenantAutXmlStreamResource extends JsonResource
 {
     /** @return array<string, mixed> */

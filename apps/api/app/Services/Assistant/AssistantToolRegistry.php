@@ -6,8 +6,8 @@ use App\Exceptions\AssistantToolNotAllowedException;
 use App\Models\User;
 use App\Models\WorkDepartment;
 use App\Models\WorkProcessTemplate;
-use App\Services\Work\WorkMonitoringContextRegistry;
-use App\Services\Work\WorkProcessTemplateWriter;
+use App\Services\Work\MonitoringContextRegistry;
+use App\Services\Work\ProcessTemplateWriter;
 use App\Support\CurrentTenant;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Gate;
@@ -35,8 +35,8 @@ final class AssistantToolRegistry
 
     public function __construct(
         private readonly CurrentTenant $currentTenant,
-        private readonly WorkMonitoringContextRegistry $monitoringContexts,
-        private readonly WorkProcessTemplateWriter $templateWriter,
+        private readonly MonitoringContextRegistry $monitoringContexts,
+        private readonly ProcessTemplateWriter $templateWriter,
         private readonly AssistantPendingApprovalStore $approvals,
     ) {}
 

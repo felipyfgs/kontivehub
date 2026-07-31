@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Tenant;
 
-use App\DTO\Tenant\TenantMemberCreationData;
+use App\DTO\Tenant\MemberCreationData;
 use App\Enums\ActivationMethod;
 use App\Enums\TenantRole;
 use App\Models\User;
@@ -22,11 +22,11 @@ final class StoreTenantMemberRequest extends TenantMemberRequest
         ];
     }
 
-    public function memberData(): TenantMemberCreationData
+    public function memberData(): MemberCreationData
     {
         $validated = $this->validated();
 
-        return new TenantMemberCreationData(
+        return new MemberCreationData(
             name: (string) $validated['name'],
             email: (string) $validated['email'],
             role: TenantRole::from((string) $validated['role']),

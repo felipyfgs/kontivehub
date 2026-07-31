@@ -4,7 +4,7 @@ namespace App\Http\Requests\Communication;
 
 use App\Models\CommunicationAttachment;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 
 final class ViewCommunicationAttachmentRequest extends CommunicationRequest
 {
@@ -19,7 +19,7 @@ final class ViewCommunicationAttachmentRequest extends CommunicationRequest
         $attachment->loadMissing('message.inbox');
 
         return $attachment->message?->inbox !== null
-            && app(CommunicationAccess::class)->canView(
+            && app(Access::class)->canView(
                 $actor,
                 $attachment->message->inbox,
             );

@@ -3,18 +3,18 @@
 namespace App\Http\Resources;
 
 use App\Domain\Work\WorkRiskCalculator;
-use App\DTO\Work\WorkProcessTaskViewData;
+use App\DTO\Work\ProcessTaskViewData;
 use App\Enums\Work\WorkRisk;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-/** @mixin WorkProcessTaskViewData */
+/** @mixin ProcessTaskViewData */
 final class WorkProcessTaskResource extends JsonResource
 {
     /** @return array<string, mixed> */
     public function toArray(Request $request): array
     {
-        /** @var WorkProcessTaskViewData $view */
+        /** @var ProcessTaskViewData $view */
         $view = $this->resource;
         $task = $view->task;
         $process = $view->process;

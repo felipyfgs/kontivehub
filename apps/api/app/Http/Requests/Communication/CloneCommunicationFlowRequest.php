@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationFlowCloneData;
+use App\DTO\Communication\FlowCloneData;
 
 final class CloneCommunicationFlowRequest extends CommunicationFlowRequest
 {
@@ -27,11 +27,11 @@ final class CloneCommunicationFlowRequest extends CommunicationFlowRequest
         }
     }
 
-    public function cloneData(): CommunicationFlowCloneData
+    public function cloneData(): FlowCloneData
     {
         $validated = $this->validated();
 
-        return new CommunicationFlowCloneData(
+        return new FlowCloneData(
             name: (string) $validated['name'],
             fromVersionId: isset($validated['from_version_id'])
                 ? (int) $validated['from_version_id']

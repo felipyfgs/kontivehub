@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Work;
 
-use App\DTO\Work\WorkTaskReorderData;
+use App\DTO\Work\TaskReorderData;
 use App\Models\User;
 use App\Models\WorkProcess;
 
@@ -30,11 +30,11 @@ final class ReorderWorkTasksRequest extends WorkRequest
         ];
     }
 
-    public function reorder(): WorkTaskReorderData
+    public function reorder(): TaskReorderData
     {
         $validated = $this->validated();
 
-        return new WorkTaskReorderData(
+        return new TaskReorderData(
             order: $validated['order'],
             justification: $validated['justification'] ?? null,
         );

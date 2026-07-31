@@ -4,7 +4,7 @@ namespace App\Console\Commands;
 
 use App\Enums\CommunicationDispatchStatus;
 use App\Models\ClientCommunicationDispatch;
-use App\Services\Communication\Automation\FiscalCommunicationAutomationService;
+use App\Services\Communication\Automation\FiscalAutomationService;
 use Illuminate\Console\Command;
 use Throwable;
 
@@ -14,7 +14,7 @@ final class DispatchFiscalCommunicationCommand extends Command
 
     protected $description = 'Processa cutoffs de comunicação fiscal com documento canônico exato.';
 
-    public function handle(FiscalCommunicationAutomationService $automation): int
+    public function handle(FiscalAutomationService $automation): int
     {
         if (! config('communication.enabled') || ! config('communication.gateway.enabled')) {
             return self::SUCCESS;

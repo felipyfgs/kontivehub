@@ -15,9 +15,9 @@ use App\Http\Resources\WorkCalendarResource;
 use App\Http\Resources\WorkExportResource;
 use App\Http\Resources\WorkKpiResource;
 use App\Models\WorkExport;
-use App\Services\Work\WorkCalendarQuery;
-use App\Services\Work\WorkExportService;
-use App\Services\Work\WorkKpiQuery;
+use App\Services\Work\CalendarQuery;
+use App\Services\Work\ExportService;
+use App\Services\Work\KpiQuery;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -26,14 +26,14 @@ class WorkDashboardController extends Controller
 {
     public function kpis(
         ViewWorkKpisRequest $request,
-        WorkKpiQuery $query,
+        KpiQuery $query,
     ): JsonResponse {
         return (new WorkKpiResource($query->build()))->response();
     }
 
     public function calendar(
         ListWorkCalendarRequest $request,
-        WorkCalendarQuery $query,
+        CalendarQuery $query,
     ): JsonResponse {
         return (new WorkCalendarResource(
             $query->interval($request->filters()),
@@ -42,7 +42,7 @@ class WorkDashboardController extends Controller
 
     public function calendarDay(
         ListWorkCalendarDayRequest $request,
-        WorkCalendarQuery $query,
+        CalendarQuery $query,
     ): JsonResponse {
         return (new WorkCalendarDayCollection(
             $query->day($request->filters()),
@@ -51,7 +51,7 @@ class WorkDashboardController extends Controller
 
     public function createExport(
         CreateWorkExportRequest $request,
-        WorkExportService $service,
+        ExportService $service,
     ): JsonResponse {
         return (new WorkExportResource(
             $service->create($request->filters()),

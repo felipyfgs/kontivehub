@@ -2,11 +2,11 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationConversationUpdateData;
+use App\DTO\Communication\ConversationUpdateData;
 use App\Enums\Communication\ConversationStatus;
 use App\Models\CommunicationConversation;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 use Illuminate\Validation\Rule;
 
 final class UpdateConversationRequest extends CommunicationRequest
@@ -22,7 +22,7 @@ final class UpdateConversationRequest extends CommunicationRequest
         $inbox = $conversation->inbox()->first();
 
         return $inbox !== null
-            && app(CommunicationAccess::class)->canReply($actor, $inbox);
+            && app(Access::class)->canReply($actor, $inbox);
     }
 
     /** @return array<string, list<mixed>> */
@@ -38,11 +38,11 @@ final class UpdateConversationRequest extends CommunicationRequest
         ];
     }
 
-    public function updateData(): CommunicationConversationUpdateData
+    public function updateData(): ConversationUpdateData
     {
         $validated = $this->validated();
 
-        return new CommunicationConversationUpdateData(
+        return new ConversationUpdateData(
             lockVersion: (int) $validated['lock_version'],
             status: isset($validated['status'])
                 ? ConversationStatus::from((string) $validated['status'])

@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Services\Work\WorkVaultCleanupService;
+use App\Services\Work\VaultCleanupService;
 use Illuminate\Console\Command;
 
 class WorkCleanupCommand extends Command
@@ -11,7 +11,7 @@ class WorkCleanupCommand extends Command
 
     protected $description = 'Limpa previews expirados, exports CSV operacionais e evidências removidas (somente purpose operacional).';
 
-    public function handle(WorkVaultCleanupService $cleanup): int
+    public function handle(VaultCleanupService $cleanup): int
     {
         $result = $cleanup->run();
         $this->info(sprintf(

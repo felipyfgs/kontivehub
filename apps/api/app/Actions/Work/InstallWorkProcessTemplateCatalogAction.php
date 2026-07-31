@@ -2,15 +2,15 @@
 
 namespace App\Actions\Work;
 
-use App\DTO\Work\WorkProcessTemplateCatalogInstallationData;
+use App\DTO\Work\ProcessTemplateCatalogInstallationData;
 use App\Models\WorkDepartment;
 use App\Models\WorkProcessTemplate;
 use App\Models\WorkProcessTemplateTask;
 use App\Services\Audit\AuditLogger;
 use App\Services\Work\MembershipResolver;
+use App\Services\Work\MonitoringContextRegistry;
 use App\Services\Work\ProcessAudienceResolver;
-use App\Services\Work\WorkMonitoringContextRegistry;
-use App\Services\Work\WorkProcessTemplateCatalog;
+use App\Services\Work\ProcessTemplateCatalog;
 use App\Support\CurrentTenant;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -22,16 +22,16 @@ final class InstallWorkProcessTemplateCatalogAction
 {
     public function __construct(
         private readonly CurrentTenant $currentTenant,
-        private readonly WorkProcessTemplateCatalog $catalog,
+        private readonly ProcessTemplateCatalog $catalog,
         private readonly ProcessAudienceResolver $audiences,
-        private readonly WorkMonitoringContextRegistry $monitoring,
+        private readonly MonitoringContextRegistry $monitoring,
         private readonly MembershipResolver $memberships,
         private readonly AuditLogger $audit,
     ) {}
 
     public function execute(
         string $catalogKey,
-        WorkProcessTemplateCatalogInstallationData $data,
+        ProcessTemplateCatalogInstallationData $data,
     ): WorkProcessTemplate {
         try {
             $definition = $this->catalog->findOrFail($catalogKey);

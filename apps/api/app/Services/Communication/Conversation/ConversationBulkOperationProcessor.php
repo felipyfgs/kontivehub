@@ -2,12 +2,12 @@
 
 namespace App\Services\Communication\Conversation;
 
-use App\Actions\Communication\AssignCommunicationConversationLabelAction;
-use App\Actions\Communication\MarkCommunicationConversationReadAction;
-use App\Actions\Communication\MarkCommunicationConversationUnreadAction;
-use App\Actions\Communication\RemoveCommunicationConversationLabelAction;
-use App\Actions\Communication\UpdateCommunicationConversationAction;
-use App\DTO\Communication\CommunicationConversationUpdateData;
+use App\Actions\Communication\AssignConversationLabelAction;
+use App\Actions\Communication\MarkConversationReadAction;
+use App\Actions\Communication\MarkConversationUnreadAction;
+use App\Actions\Communication\RemoveConversationLabelAction;
+use App\Actions\Communication\UpdateConversationAction;
+use App\DTO\Communication\ConversationUpdateData;
 use App\Enums\Communication\ConversationBulkAction;
 use App\Enums\Communication\ConversationBulkItemStatus;
 use App\Enums\Communication\ConversationBulkOperationStatus;
@@ -23,8 +23,8 @@ use App\Models\CommunicationLabel;
 use App\Models\Tenant;
 use App\Models\TenantMembership;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
-use App\Services\Communication\CommunicationConversationCanonicalizer;
+use App\Services\Communication\Authorization\Access;
+use App\Services\Communication\ConversationCanonicalizer;
 use App\Support\CurrentTenant;
 use App\Support\FeatureFlags;
 use App\Support\LogSanitizer;
@@ -40,13 +40,13 @@ final readonly class ConversationBulkOperationProcessor
 
     public function __construct(
         private CurrentTenant $currentTenant,
-        private CommunicationAccess $access,
-        private CommunicationConversationCanonicalizer $canonicalizer,
-        private UpdateCommunicationConversationAction $updateConversation,
-        private AssignCommunicationConversationLabelAction $assignLabel,
-        private RemoveCommunicationConversationLabelAction $removeLabel,
-        private MarkCommunicationConversationReadAction $markRead,
-        private MarkCommunicationConversationUnreadAction $markUnread,
+        private Access $access,
+        private ConversationCanonicalizer $canonicalizer,
+        private UpdateConversationAction $updateConversation,
+        private AssignConversationLabelAction $assignLabel,
+        private RemoveConversationLabelAction $removeLabel,
+        private MarkConversationReadAction $markRead,
+        private MarkConversationUnreadAction $markUnread,
     ) {}
 
     public function process(int $operationId): void
@@ -399,7 +399,7 @@ final readonly class ConversationBulkOperationProcessor
     ): array {
         $lockVersion = (int) ($item->lock_version ?? 0);
         $data = match ($action) {
-            ConversationBulkAction::SetStatus => new CommunicationConversationUpdateData(
+            ConversationBulkAction::SetStatus => new ConversationUpdateData(
                 lockVersion: $lockVersion,
                 status: ConversationStatus::from((string) $params['status']),
                 hasStatus: true,
@@ -412,7 +412,7 @@ final readonly class ConversationBulkOperationProcessor
                 snoozedUntil: isset($params['snoozed_until']) ? (string) $params['snoozed_until'] : null,
                 hasSnoozedUntil: array_key_exists('snoozed_until', $params),
             ),
-            ConversationBulkAction::SetAssignee => new CommunicationConversationUpdateData(
+            ConversationBulkAction::SetAssignee => new ConversationUpdateData(
                 lockVersion: $lockVersion,
                 status: null,
                 hasStatus: false,
@@ -429,7 +429,7 @@ final readonly class ConversationBulkOperationProcessor
                 snoozedUntil: null,
                 hasSnoozedUntil: false,
             ),
-            ConversationBulkAction::SetDepartment => new CommunicationConversationUpdateData(
+            ConversationBulkAction::SetDepartment => new ConversationUpdateData(
                 lockVersion: $lockVersion,
                 status: null,
                 hasStatus: false,

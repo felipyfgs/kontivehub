@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationFlowBindingUpdateData;
+use App\DTO\Communication\FlowBindingUpdateData;
 
 final class UpdateCommunicationFlowBindingRequest extends CommunicationFlowRequest
 {
@@ -21,11 +21,11 @@ final class UpdateCommunicationFlowBindingRequest extends CommunicationFlowReque
         ];
     }
 
-    public function bindingData(): CommunicationFlowBindingUpdateData
+    public function bindingData(): FlowBindingUpdateData
     {
         $validated = $this->validated();
 
-        return new CommunicationFlowBindingUpdateData(
+        return new FlowBindingUpdateData(
             lockVersion: (int) $validated['lock_version'],
             publishedVersionId: isset($validated['published_version_id'])
                 ? (int) $validated['published_version_id']

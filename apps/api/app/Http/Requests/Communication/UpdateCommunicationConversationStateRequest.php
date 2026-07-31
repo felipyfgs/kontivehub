@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationGatewayOperationData;
+use App\DTO\Communication\GatewayOperationData;
 use Illuminate\Validation\Rule;
 
 final class UpdateCommunicationConversationStateRequest extends CommunicationConversationGatewayRequest
@@ -39,7 +39,7 @@ final class UpdateCommunicationConversationStateRequest extends CommunicationCon
         ];
     }
 
-    public function gatewayData(): CommunicationGatewayOperationData
+    public function gatewayData(): GatewayOperationData
     {
         $validated = $this->validated();
 

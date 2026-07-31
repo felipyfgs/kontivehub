@@ -8,14 +8,14 @@ use App\Http\Requests\Work\InstallWorkProcessTemplateCatalogRequest;
 use App\Http\Requests\Work\ListWorkProcessTemplateCatalogRequest;
 use App\Http\Resources\WorkProcessTemplateCatalogResource;
 use App\Http\Resources\WorkProcessTemplateInstallationResource;
-use App\Services\Work\WorkProcessTemplateCatalogQuery;
+use App\Services\Work\ProcessTemplateCatalogQuery;
 use Illuminate\Http\JsonResponse;
 
 class WorkProcessTemplateCatalogController extends Controller
 {
     public function index(
         ListWorkProcessTemplateCatalogRequest $request,
-        WorkProcessTemplateCatalogQuery $query,
+        ProcessTemplateCatalogQuery $query,
     ): JsonResponse {
         return WorkProcessTemplateCatalogResource::collection(
             $query->all(),

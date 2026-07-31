@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Work;
 
-use App\DTO\Work\WorkProcessFiltersData;
+use App\DTO\Work\ProcessFiltersData;
 use App\Enums\Work\ProcessStatus;
 use App\Models\User;
 use App\Models\WorkProcess;
@@ -58,14 +58,14 @@ final class ListWorkProcessesRequest extends WorkRequest
         ];
     }
 
-    public function filters(): WorkProcessFiltersData
+    public function filters(): ProcessFiltersData
     {
         $validated = $this->validated();
         $includeTasks = array_key_exists('include_tasks', $validated)
             ? $this->boolean('include_tasks')
             : true;
 
-        return new WorkProcessFiltersData(
+        return new ProcessFiltersData(
             filters: [
                 'status' => $validated['status'] ?? null,
                 'competence' => $validated['competence'] ?? null,

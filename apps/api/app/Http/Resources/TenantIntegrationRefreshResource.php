@@ -2,17 +2,17 @@
 
 namespace App\Http\Resources;
 
-use App\DTO\Tenant\TenantIntegrationRefreshData;
+use App\DTO\Tenant\IntegrationRefreshData;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-/** @mixin TenantIntegrationRefreshData */
+/** @mixin IntegrationRefreshData */
 final class TenantIntegrationRefreshResource extends JsonResource
 {
     /** @return array<string, mixed> */
     public function toArray(Request $request): array
     {
-        /** @var TenantIntegrationRefreshData $result */
+        /** @var IntegrationRefreshData $result */
         $result = $this->resource;
         $payload = [
             'status' => $result->status,

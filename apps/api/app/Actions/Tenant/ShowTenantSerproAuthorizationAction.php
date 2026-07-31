@@ -2,7 +2,7 @@
 
 namespace App\Actions\Tenant;
 
-use App\DTO\Tenant\TenantSerproAuthorizationOverviewData;
+use App\DTO\Tenant\SerproAuthorizationOverviewData;
 use App\Enums\SerproEnvironment;
 use App\Services\Integra\SerproTenantActionableStatusService;
 use App\Services\Integra\TenantIntegraHealthService;
@@ -20,12 +20,12 @@ final readonly class ShowTenantSerproAuthorizationAction
 
     public function __invoke(
         SerproEnvironment $environment,
-    ): TenantSerproAuthorizationOverviewData {
+    ): SerproAuthorizationOverviewData {
         $tenant = $this->currentTenant->tenant();
         $authorization = $this->authorizations->getOrCreate($tenant, $environment);
         $tenantStatus = $this->actionableStatus->forTenant($tenant, $environment);
 
-        return new TenantSerproAuthorizationOverviewData(
+        return new SerproAuthorizationOverviewData(
             authorization: $authorization,
             platformHealth: $this->health->forEnvironment($environment),
             onboarding: $tenantStatus['onboarding'],

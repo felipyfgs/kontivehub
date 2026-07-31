@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Work;
 
-use App\DTO\Work\WorkTaskStructureData;
+use App\DTO\Work\TaskStructureData;
 use App\Models\User;
 use App\Models\WorkProcess;
 
@@ -35,8 +35,8 @@ final class StoreWorkTaskRequest extends WorkRequest
         ];
     }
 
-    public function structure(): WorkTaskStructureData
+    public function structure(): TaskStructureData
     {
-        return new WorkTaskStructureData($this->validated());
+        return new TaskStructureData($this->validated());
     }
 }

@@ -28,7 +28,7 @@ use App\Models\CommunicationOutboxEntry;
 use App\Models\Tenant;
 use App\Models\TenantMembership;
 use App\Models\User;
-use App\Services\Communication\Media\CommunicationMediaStore;
+use App\Services\Communication\Media\MediaStore;
 use App\Support\CurrentTenant;
 use GuzzleHttp\Psr7\Utils;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -588,7 +588,7 @@ final class CommunicationApiTest extends TestCase
             'gateway_event_id' => 'gateway-download-0001',
             'sha256' => hash('sha256', 'conteudo privado'),
         ];
-        $stored = app(CommunicationMediaStore::class)->putStream(
+        $stored = app(MediaStore::class)->putStream(
             Utils::streamFor('conteudo privado'),
             $metadata,
         );
@@ -609,7 +609,7 @@ final class CommunicationApiTest extends TestCase
             'gateway_event_id' => 'gateway-preview-0001',
             'sha256' => hash('sha256', $imageBytes),
         ];
-        $storedImage = app(CommunicationMediaStore::class)->putStream(
+        $storedImage = app(MediaStore::class)->putStream(
             Utils::streamFor($imageBytes),
             $imageMetadata,
         );
@@ -704,7 +704,7 @@ final class CommunicationApiTest extends TestCase
             ->assertJsonCount(0, 'data.messages.0.attachments');
         $this->get('/api/v1/communication/attachments/'.$attachment->id.'/download')->assertNotFound();
         $this->get('/api/v1/communication/attachments/'.$imageAttachment->id.'/preview')->assertNotFound();
-        $this->assertTrue(app(CommunicationMediaStore::class)->exists($stored['object_id']));
+        $this->assertTrue(app(MediaStore::class)->exists($stored['object_id']));
     }
 
     public function test_platform_privileged_broadcast_auth_follows_active_tenant(): void
@@ -771,7 +771,7 @@ final class CommunicationApiTest extends TestCase
             'gateway_event_id' => 'gateway-purge-0001',
             'sha256' => hash('sha256', 'blob a remover'),
         ];
-        $stored = app(CommunicationMediaStore::class)->putStream(
+        $stored = app(MediaStore::class)->putStream(
             Utils::streamFor('blob a remover'),
             $metadata,
         );
@@ -831,7 +831,7 @@ final class CommunicationApiTest extends TestCase
             ->assertJsonPath('data.contact_id', $contact->id)
             ->assertJsonPath('data.deleted_blobs', 1);
 
-        $this->assertFalse(app(CommunicationMediaStore::class)->exists($stored['object_id']));
+        $this->assertFalse(app(MediaStore::class)->exists($stored['object_id']));
         $this->assertNull($message->refresh()->body_encrypted);
         $this->assertNull($message->content_encrypted);
         $this->assertNull($message->metadata);
@@ -935,7 +935,7 @@ final class CommunicationApiTest extends TestCase
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
             'tenant_id' => $tenant->id,
             'contact_id' => $contact->id,
-            'channel' => CommunicationChannel::Whatsapp,
+            'channel' => CommunicationChannel::WhatsApp,
             'address_encrypted' => $address,
             'address_hash' => hash('sha256', $address),
             'address_masked' => '***'.substr($address, -4),

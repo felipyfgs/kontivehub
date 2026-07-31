@@ -46,11 +46,11 @@ use App\Models\TaxObligationProjection;
 use App\Models\Tenant;
 use App\Models\TenantMembership;
 use App\Models\User;
-use App\Services\Communication\Automation\FiscalCommunicationArtifactResolver;
-use App\Services\Communication\Automation\FiscalCommunicationAutomationService;
-use App\Services\Communication\Media\CommunicationMediaStore;
-use App\Services\Communication\Security\CommunicationHmacSigner;
-use App\Services\Communication\WhatsappPeerCorrelationService;
+use App\Services\Communication\Automation\FiscalArtifactResolver;
+use App\Services\Communication\Automation\FiscalAutomationService;
+use App\Services\Communication\Media\MediaStore;
+use App\Services\Communication\Security\HmacSigner;
+use App\Services\Communication\WhatsAppPeerCorrelationService;
 use App\Services\Fiscal\Guides\GuideStorageService;
 use App\Services\FiscalMonitoring\FiscalEvidenceStore;
 use App\Services\Integra\Dctfweb\DctfwebEvidenceVersioningService;
@@ -90,7 +90,7 @@ final class FiscalCommunicationAutomationTest extends TestCase
         $second = $this->identity($tenant, $client, false);
         $this->pgdasdDocument($tenant, $client, '2026-06', CarbonImmutable::now()->subDay(), '%PDF-exact-period');
 
-        $service = app(FiscalCommunicationAutomationService::class);
+        $service = app(FiscalAutomationService::class);
         $created = $service->scheduleAutomatic($tenant, $client, 'simples_mei', 'pgdasd', '2026-06');
         $this->assertCount(2, $created);
         $this->assertSame(0, $service->scheduleAutomatic($tenant, $client, 'simples_mei', 'pgdasd', '2026-06')->count());
@@ -167,7 +167,7 @@ final class FiscalCommunicationAutomationTest extends TestCase
         ])->assertNoContent();
         $this->assertSame(MessageStatus::Read, $humanMessage->refresh()->status);
 
-        $service = app(FiscalCommunicationAutomationService::class);
+        $service = app(FiscalAutomationService::class);
         $dispatch = $service->scheduleAutomatic(
             $tenant,
             $client,
@@ -202,7 +202,7 @@ final class FiscalCommunicationAutomationTest extends TestCase
         $lidIdentity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
             'tenant_id' => $tenant->id,
             'contact_id' => $lidContact->id,
-            'channel' => CommunicationChannel::Whatsapp,
+            'channel' => CommunicationChannel::WhatsApp,
             'address_encrypted' => $lid,
             'address_hash' => hash('sha256', $lid),
             'address_masked' => 'lid:***3945',
@@ -223,7 +223,7 @@ final class FiscalCommunicationAutomationTest extends TestCase
         $remoteIdentity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
             'tenant_id' => $tenant->id,
             'contact_id' => $remoteContact->id,
-            'channel' => CommunicationChannel::Whatsapp,
+            'channel' => CommunicationChannel::WhatsApp,
             'address_encrypted' => $remotePn,
             'address_hash' => hash('sha256', $remotePn),
             'address_masked' => '***2709',
@@ -244,7 +244,7 @@ final class FiscalCommunicationAutomationTest extends TestCase
             'last_message_at' => now(),
         ]);
 
-        DB::transaction(fn () => app(WhatsappPeerCorrelationService::class)->correlate(
+        DB::transaction(fn () => app(WhatsAppPeerCorrelationService::class)->correlate(
             $inbox,
             $remotePn,
             [$lid, $remotePn],
@@ -264,7 +264,7 @@ final class FiscalCommunicationAutomationTest extends TestCase
             CarbonImmutable::now()->subDay(),
             '%PDF-canonical-alias',
         );
-        $service = app(FiscalCommunicationAutomationService::class);
+        $service = app(FiscalAutomationService::class);
         $dispatch = $service
             ->scheduleAutomatic($tenant, $client, 'simples_mei', 'pgdasd', '2026-06')
             ->sole();
@@ -290,7 +290,7 @@ final class FiscalCommunicationAutomationTest extends TestCase
         [$tenant, $client] = $this->context();
         $this->identity($tenant, $client, true);
         $this->pgdasdDocument($tenant, $client, '2026-05', CarbonImmutable::now()->subMonth(), '%PDF-wrong-period');
-        $service = app(FiscalCommunicationAutomationService::class);
+        $service = app(FiscalAutomationService::class);
         $dispatch = $service->scheduleAutomatic($tenant, $client, 'simples_mei', 'pgdasd', '2026-06')->first();
         $dispatch->forceFill(['scheduled_at' => now()->subMinute()])->save();
 
@@ -312,11 +312,11 @@ final class FiscalCommunicationAutomationTest extends TestCase
             'fgts',
         );
         $this->identity($tenant, $client, true);
-        $dispatch = app(FiscalCommunicationAutomationService::class)
+        $dispatch = app(FiscalAutomationService::class)
             ->scheduleAutomatic($tenant, $client, 'fgts', 'fgts', '2026-06')->first();
         $dispatch->forceFill(['scheduled_at' => now()])->save();
 
-        $processed = app(FiscalCommunicationAutomationService::class)->process((int) $dispatch->id);
+        $processed = app(FiscalAutomationService::class)->process((int) $dispatch->id);
         $this->assertSame(CommunicationDispatchStatus::SkippedNoDocument, $processed?->status);
         $this->assertSame('FGTS_GUIDE_UNSUPPORTED', $processed?->error_code);
         $this->assertDatabaseCount('communication_messages', 0);
@@ -330,7 +330,7 @@ final class FiscalCommunicationAutomationTest extends TestCase
         [$tenant, $client] = $this->context();
         $this->identity($tenant, $client, true);
         $this->pgdasdDocument($tenant, $client, '2026-06', CarbonImmutable::now()->subDay(), '%PDF-private-exact');
-        $service = app(FiscalCommunicationAutomationService::class);
+        $service = app(FiscalAutomationService::class);
         $dispatch = $service->scheduleAutomatic($tenant, $client, 'simples_mei', 'pgdasd', '2026-06')->first();
         $dispatch->forceFill(['scheduled_at' => now()])->save();
         $service->process((int) $dispatch->id);
@@ -338,7 +338,7 @@ final class FiscalCommunicationAutomationTest extends TestCase
         $path = '/api/internal/v1/communication/gateway/media/'.$command;
 
         $this->get($path)->assertUnauthorized();
-        $headers = app(CommunicationHmacSigner::class)->headers('GET', $path);
+        $headers = app(HmacSigner::class)->headers('GET', $path);
         $response = $this->get($path, $headers)
             ->assertOk()
             ->assertHeader('Content-Type', 'application/pdf')
@@ -352,19 +352,19 @@ final class FiscalCommunicationAutomationTest extends TestCase
         $attachment = CommunicationAttachment::query()->withoutGlobalScopes()->firstOrFail();
         $message = $attachment->message()->withoutGlobalScopes()->firstOrFail();
         $attachment->forceFill(['purged_at' => now()])->save();
-        $this->get($path, app(CommunicationHmacSigner::class)->headers('GET', $path))
+        $this->get($path, app(HmacSigner::class)->headers('GET', $path))
             ->assertNotFound()
             ->assertJson(['error' => 'MEDIA_NOT_FOUND']);
 
         $attachment->forceFill(['purged_at' => null])->save();
         $message->forceFill(['revoked_at' => now()])->save();
-        $this->get($path, app(CommunicationHmacSigner::class)->headers('GET', $path))
+        $this->get($path, app(HmacSigner::class)->headers('GET', $path))
             ->assertNotFound()
             ->assertJson(['error' => 'MEDIA_NOT_FOUND']);
 
         $message->forceFill(['revoked_at' => null])->save();
-        app(CommunicationMediaStore::class)->delete($attachment->object_id);
-        $this->get($path, app(CommunicationHmacSigner::class)->headers('GET', $path))
+        app(MediaStore::class)->delete($attachment->object_id);
+        $this->get($path, app(HmacSigner::class)->headers('GET', $path))
             ->assertNotFound()
             ->assertJson(['error' => 'MEDIA_NOT_FOUND']);
     }
@@ -376,7 +376,7 @@ final class FiscalCommunicationAutomationTest extends TestCase
         $this->pgmeiGuide($tenant, $client, '2026-05', '%PDF-pgmei-old');
         $pgmei = $this->pgmeiGuide($tenant, $client, '2026-06', '%PDF-pgmei-exact');
 
-        $resolver = app(FiscalCommunicationArtifactResolver::class);
+        $resolver = app(FiscalArtifactResolver::class);
         $resolvedPgmei = $resolver->resolve($tenant, $client, 'simples_mei', 'pgmei', '2026-06');
         $this->assertSame($pgmei->id, $resolvedPgmei->artifact?->id);
         $this->assertSame('%PDF-pgmei-exact', $resolver->read($resolvedPgmei->artifact, (int) $tenant->id));
@@ -446,7 +446,7 @@ final class FiscalCommunicationAutomationTest extends TestCase
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
             'tenant_id' => $tenant->id,
             'contact_id' => $contact->id,
-            'channel' => CommunicationChannel::Whatsapp,
+            'channel' => CommunicationChannel::WhatsApp,
             'address_encrypted' => '+'.$digits,
             'address_hash' => hash('sha256', '+'.$digits),
             'address_masked' => '***'.substr($digits, -4),
@@ -621,7 +621,7 @@ final class FiscalCommunicationAutomationTest extends TestCase
             'payload' => $payload,
         ];
         $body = json_encode($event, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
-        $headers = app(CommunicationHmacSigner::class)->headers('POST', $path, $body);
+        $headers = app(HmacSigner::class)->headers('POST', $path, $body);
 
         return $this->json('POST', $path, $event, $headers, JSON_UNESCAPED_SLASHES);
     }

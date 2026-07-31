@@ -19,13 +19,13 @@ use App\Models\CommunicationInboxMember;
 use App\Models\Tenant;
 use App\Models\TenantMembership;
 use App\Models\User;
-use App\Services\Communication\Gateway\CommunicationGatewayOperationPolicy;
-use App\Services\Communication\Gateway\CommunicationGatewayOperations;
-use App\Services\Communication\Outbox\CommunicationOutboxDispatcher;
-use App\Services\Communication\Outbox\CommunicationOutboxService;
-use App\Services\Communication\Security\CommunicationHmacCanonicalizer;
-use App\Services\Communication\Security\CommunicationHmacVerifier;
-use App\Services\Communication\Transport\HttpCommunicationTransport;
+use App\Services\Communication\Gateway\GatewayOperationPolicy;
+use App\Services\Communication\Gateway\GatewayOperations;
+use App\Services\Communication\Outbox\OutboxDispatcher;
+use App\Services\Communication\Outbox\OutboxService;
+use App\Services\Communication\Security\HmacCanonicalizer;
+use App\Services\Communication\Security\HmacVerifier;
+use App\Services\Communication\Transport\HttpTransport;
 use App\Support\CurrentTenant;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
@@ -72,7 +72,7 @@ final class CommunicationGatewayTransportTest extends TestCase
             type: GatewayQueryType::CheckUsers,
             payload: ['users' => ['+5511999991234']],
         );
-        $transport = app(HttpCommunicationTransport::class);
+        $transport = app(HttpTransport::class);
 
         $this->assertTrue($transport->query($query)['users'][0]['exists']);
         $this->assertTrue($transport->query($query)['users'][0]['exists']);
@@ -88,8 +88,8 @@ final class CommunicationGatewayTransportTest extends TestCase
 
         $headers = $requests[0]->headers();
         $timestamp = (int) $this->header($requests[0], 'X-Communication-Timestamp');
-        $verifier = new CommunicationHmacVerifier(
-            app(CommunicationHmacCanonicalizer::class),
+        $verifier = new HmacVerifier(
+            app(HmacCanonicalizer::class),
             app(CacheRepository::class),
         );
         $this->assertSame(SignatureVerificationResult::Valid, $verifier->verify(
@@ -136,7 +136,7 @@ final class CommunicationGatewayTransportTest extends TestCase
             type: GatewayQueryType::UserInfo,
             payload: ['users' => ['+5511999991234']],
         );
-        $transport = app(HttpCommunicationTransport::class);
+        $transport = app(HttpTransport::class);
 
         try {
             $transport->query($query);
@@ -166,7 +166,7 @@ final class CommunicationGatewayTransportTest extends TestCase
             ->push(['error' => 'PROFILE_PICTURE_PRIVACY'], 403)
             ->push(['error' => 'PROFILE_PICTURE_NOT_FOUND'], 404)
             ->push(['error' => $unsafe], 502);
-        $transport = app(HttpCommunicationTransport::class);
+        $transport = app(HttpTransport::class);
         $query = new GatewayQueryData(
             queryId: 'query-profile-picture-errors',
             sessionId: 'session-query-0001',
@@ -217,7 +217,7 @@ final class CommunicationGatewayTransportTest extends TestCase
                 'ready' => false,
                 'has_credentials' => false,
             ]);
-        $transport = app(HttpCommunicationTransport::class);
+        $transport = app(HttpTransport::class);
 
         $status = $transport->sessionStatus('session-status-0001');
         $this->assertSame('DISCONNECTED', $status['status']);
@@ -244,7 +244,7 @@ final class CommunicationGatewayTransportTest extends TestCase
         $foreignInbox = $this->inbox($foreignTenant, 'session-foreign-0001');
         $transport = new GatewayTransportProbe;
         $this->app->instance(CommunicationTransport::class, $transport);
-        $operations = app(CommunicationGatewayOperations::class);
+        $operations = app(GatewayOperations::class);
 
         $this->bindActor($operator);
         $entry = $operations->enqueue($operator, $inbox, GatewayCommandType::MarkMessage, [
@@ -310,7 +310,7 @@ final class CommunicationGatewayTransportTest extends TestCase
     {
         $tenant = Tenant::factory()->create(['communication_enabled' => true]);
         $inbox = $this->inbox($tenant, 'session-kill-switch-0001');
-        $entry = app(CommunicationOutboxService::class)->enqueue(
+        $entry = app(OutboxService::class)->enqueue(
             $inbox,
             GatewayCommandType::MarkMessage,
             [
@@ -324,7 +324,7 @@ final class CommunicationGatewayTransportTest extends TestCase
         $this->app->instance(CommunicationTransport::class, $transport);
 
         $tenant->forceFill(['communication_enabled' => false])->save();
-        app(CommunicationOutboxDispatcher::class)->dispatch((int) $entry->id);
+        app(OutboxDispatcher::class)->dispatch((int) $entry->id);
 
         $this->assertSame(OutboxStatus::Dead, $entry->refresh()->status);
         $this->assertSame('TENANT_COMMUNICATION_DISABLED', $entry->last_error_code);
@@ -335,7 +335,7 @@ final class CommunicationGatewayTransportTest extends TestCase
     {
         $tenant = Tenant::factory()->create(['communication_enabled' => true]);
         $inbox = $this->inbox($tenant, 'session-admin-off-0001');
-        $outbox = app(CommunicationOutboxService::class);
+        $outbox = app(OutboxService::class);
         $disconnect = $outbox->enqueue(
             $inbox,
             GatewayCommandType::DisconnectSession,
@@ -353,8 +353,8 @@ final class CommunicationGatewayTransportTest extends TestCase
         $transport = new GatewayTransportProbe;
         $this->app->instance(CommunicationTransport::class, $transport);
 
-        app(CommunicationOutboxDispatcher::class)->dispatch((int) $disconnect->id);
-        app(CommunicationOutboxDispatcher::class)->dispatch((int) $logout->id);
+        app(OutboxDispatcher::class)->dispatch((int) $disconnect->id);
+        app(OutboxDispatcher::class)->dispatch((int) $logout->id);
 
         $this->assertSame(OutboxStatus::Accepted, $disconnect->refresh()->status);
         $this->assertSame(OutboxStatus::Accepted, $logout->refresh()->status);
@@ -369,7 +369,7 @@ final class CommunicationGatewayTransportTest extends TestCase
         $tenant = Tenant::factory()->create(['communication_enabled' => true]);
         $foreignTenant = Tenant::factory()->create(['communication_enabled' => true]);
         $inbox = $this->inbox($tenant, 'session-tenant-worker-0001');
-        $outbox = app(CommunicationOutboxService::class);
+        $outbox = app(OutboxService::class);
         config(['communication.gateway.enabled' => false]);
 
         try {
@@ -394,7 +394,7 @@ final class CommunicationGatewayTransportTest extends TestCase
         $transport = new GatewayTransportProbe;
         $this->app->instance(CommunicationTransport::class, $transport);
 
-        app(CommunicationOutboxDispatcher::class)->dispatch((int) $entry->id);
+        app(OutboxDispatcher::class)->dispatch((int) $entry->id);
 
         $this->assertSame(OutboxStatus::Dead, $entry->refresh()->status);
         $this->assertSame('OUTBOX_TENANT_SCOPE_INVALID', $entry->last_error_code);
@@ -403,7 +403,7 @@ final class CommunicationGatewayTransportTest extends TestCase
 
     public function test_every_mutable_command_has_explicit_permission_and_connection_policy(): void
     {
-        $policy = app(CommunicationGatewayOperationPolicy::class);
+        $policy = app(GatewayOperationPolicy::class);
 
         foreach (GatewayCommandType::cases() as $type) {
             $this->assertNotNull($policy->permissionFor($type), $type->value);

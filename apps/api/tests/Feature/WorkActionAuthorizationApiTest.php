@@ -18,7 +18,7 @@ use App\Models\WorkProcessTemplate;
 use App\Models\WorkTask;
 use App\Models\WorkTaskEvidence;
 use App\Services\Authorization\TenantAuthorization;
-use App\Services\Work\WorkEvidenceService;
+use App\Services\Work\EvidenceService;
 use App\Support\CurrentTenant;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -426,7 +426,7 @@ final class WorkActionAuthorizationApiTest extends TestCase
             'vault_object_id' => $placeholder,
             'uploaded_by_membership_id' => $downloader->memberships()->where('tenant_id', $tenant->id)->value('id'),
         ]);
-        $aad = WorkEvidenceService::aad(
+        $aad = EvidenceService::aad(
             (int) $tenant->id,
             (int) $task->id,
             (string) $evidence->id,

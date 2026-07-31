@@ -14,10 +14,10 @@ use App\Exceptions\CommunicationUnavailableException;
 use App\Models\CommunicationIdentity;
 use App\Models\CommunicationInbox;
 use App\Models\CommunicationInboxIdentityProfile;
-use App\Services\Communication\CommunicationAvailability;
-use App\Services\Communication\Events\CommunicationEventRecorder;
-use App\Services\Communication\Media\CommunicationMediaDeletionService;
-use App\Services\Communication\Media\CommunicationMediaStore;
+use App\Services\Communication\Availability;
+use App\Services\Communication\Events\EventRecorder;
+use App\Services\Communication\Media\MediaDeletionService;
+use App\Services\Communication\Media\MediaStore;
 use DateTimeInterface;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -70,9 +70,9 @@ final class RefreshCommunicationProfilePictureJob implements ShouldBeUnique, Sho
     public function handle(
         CommunicationTransport $transport,
         CommunicationProfilePictureDownloader $downloader,
-        CommunicationMediaStore $media,
-        CommunicationMediaDeletionService $deletions,
-        ?CommunicationAvailability $availability = null,
+        MediaStore $media,
+        MediaDeletionService $deletions,
+        ?Availability $availability = null,
     ): void {
         $profile = CommunicationInboxIdentityProfile::query()->withoutGlobalScopes()
             ->where('tenant_id', $this->tenantId)->find($this->profileId);
@@ -82,13 +82,13 @@ final class RefreshCommunicationProfilePictureJob implements ShouldBeUnique, Sho
         $inbox = CommunicationInbox::query()->withoutGlobalScopes()->where('tenant_id', $this->tenantId)->find($profile->inbox_id);
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()->where('tenant_id', $this->tenantId)->find($profile->identity_id);
         if ($inbox === null || $identity === null
-            || $identity->channel !== CommunicationChannel::Whatsapp || ! $identity->is_active
+            || $identity->channel !== CommunicationChannel::WhatsApp || ! $identity->is_active
             || $identity->purged_at !== null || ! is_string($identity->address_encrypted)
             || $identity->address_encrypted === '') {
             return;
         }
         try {
-            ($availability ?? app(CommunicationAvailability::class))->assertEnabled($inbox, true);
+            ($availability ?? app(Availability::class))->assertEnabled($inbox, true);
         } catch (CommunicationUnavailableException) {
             return;
         }
@@ -183,7 +183,7 @@ final class RefreshCommunicationProfilePictureJob implements ShouldBeUnique, Sho
         ?string $providerId,
         string $observedAt,
         string $eventId,
-        CommunicationMediaDeletionService $deletions,
+        MediaDeletionService $deletions,
     ): bool {
         return DB::transaction(function () use ($providerId, $observedAt, $eventId, $deletions): bool {
             $current = CommunicationInboxIdentityProfile::query()->withoutGlobalScopes()->where('tenant_id', $this->tenantId)->lockForUpdate()->find($this->profileId);
@@ -235,7 +235,7 @@ final class RefreshCommunicationProfilePictureJob implements ShouldBeUnique, Sho
         });
     }
 
-    private function markUnavailableIfCurrent(CommunicationMediaDeletionService $deletions, string $code): void
+    private function markUnavailableIfCurrent(MediaDeletionService $deletions, string $code): void
     {
         DB::transaction(function () use ($deletions, $code): void {
             $current = CommunicationInboxIdentityProfile::query()->withoutGlobalScopes()->where('tenant_id', $this->tenantId)->lockForUpdate()->find($this->profileId);
@@ -291,7 +291,7 @@ final class RefreshCommunicationProfilePictureJob implements ShouldBeUnique, Sho
 
     private function recordUpdate(CommunicationInboxIdentityProfile $profile): void
     {
-        app(CommunicationEventRecorder::class)->record(
+        app(EventRecorder::class)->record(
             (int) $profile->tenant_id,
             'contact.profile_picture.updated',
             [

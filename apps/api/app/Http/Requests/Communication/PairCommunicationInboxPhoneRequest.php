@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationGatewayOperationData;
+use App\DTO\Communication\GatewayOperationData;
 
 final class PairCommunicationInboxPhoneRequest extends CommunicationInboxGatewayRequest
 {
@@ -15,7 +15,7 @@ final class PairCommunicationInboxPhoneRequest extends CommunicationInboxGateway
         ];
     }
 
-    public function gatewayData(): CommunicationGatewayOperationData
+    public function gatewayData(): GatewayOperationData
     {
         $validated = $this->validated();
 

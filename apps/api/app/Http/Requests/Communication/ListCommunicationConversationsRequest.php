@@ -2,11 +2,11 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationConversationFiltersData;
+use App\DTO\Communication\ConversationFiltersData;
 use App\Enums\Communication\ConversationListSort;
 use App\Enums\Communication\ConversationStatus;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 use Illuminate\Validation\Rule;
 
 final class ListCommunicationConversationsRequest extends CommunicationRequest
@@ -47,7 +47,7 @@ final class ListCommunicationConversationsRequest extends CommunicationRequest
         $actor = $this->user();
 
         return $actor instanceof User
-            && app(CommunicationAccess::class)->canView($actor);
+            && app(Access::class)->canView($actor);
     }
 
     /** @return array<string, list<mixed>> */
@@ -70,7 +70,7 @@ final class ListCommunicationConversationsRequest extends CommunicationRequest
         ];
     }
 
-    public function filters(): CommunicationConversationFiltersData
+    public function filters(): ConversationFiltersData
     {
         $validated = $this->validated();
         $search = trim((string) ($validated['q'] ?? ''));
@@ -83,7 +83,7 @@ final class ListCommunicationConversationsRequest extends CommunicationRequest
             ? ConversationListSort::from((string) $validated['sort_by'])
             : null;
 
-        return new CommunicationConversationFiltersData(
+        return new ConversationFiltersData(
             inboxId: isset($validated['inbox_id']) ? (int) $validated['inbox_id'] : null,
             status: ConversationStatus::tryFrom($status),
             assigneeMembershipId: isset($validated['assignee_membership_id'])

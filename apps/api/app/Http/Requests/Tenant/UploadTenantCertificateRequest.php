@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Tenant;
 
-use App\DTO\Tenant\TenantCertificateUploadData;
+use App\DTO\Tenant\CertificateUploadData;
 
 final class UploadTenantCertificateRequest extends TenantSettingsMutationRequest
 {
@@ -17,9 +17,9 @@ final class UploadTenantCertificateRequest extends TenantSettingsMutationRequest
         ];
     }
 
-    public function toDto(): TenantCertificateUploadData
+    public function toDto(): CertificateUploadData
     {
-        return new TenantCertificateUploadData(
+        return new CertificateUploadData(
             filePath: $this->file('pfx')?->getRealPath() ?: '',
             password: (string) $this->validated('password'),
             actorUserId: $this->actor()->id,

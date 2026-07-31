@@ -270,7 +270,7 @@ final class CommunicationFlowRunControlTest extends TestCase
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
             'tenant_id' => $tenant->id,
             'contact_id' => $contact->id,
-            'channel' => CommunicationChannel::Whatsapp,
+            'channel' => CommunicationChannel::WhatsApp,
             'address_encrypted' => '+5511977770001',
             'address_hash' => hash('sha256', '+5511977770001'),
             'address_masked' => '****0001',

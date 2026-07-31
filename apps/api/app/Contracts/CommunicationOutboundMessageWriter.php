@@ -2,8 +2,8 @@
 
 namespace App\Contracts;
 
-use App\DTO\Communication\CommunicationMessageCreationData;
-use App\DTO\Communication\CommunicationMessageCreationResult;
+use App\DTO\Communication\MessageCreationData;
+use App\DTO\Communication\MessageCreationResult;
 use App\Models\CommunicationConversation;
 
 /**
@@ -16,6 +16,6 @@ interface CommunicationOutboundMessageWriter
 {
     public function handle(
         CommunicationConversation $conversation,
-        CommunicationMessageCreationData $data,
-    ): CommunicationMessageCreationResult;
+        MessageCreationData $data,
+    ): MessageCreationResult;
 }

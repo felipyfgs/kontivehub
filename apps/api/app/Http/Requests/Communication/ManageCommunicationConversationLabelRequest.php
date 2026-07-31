@@ -5,7 +5,7 @@ namespace App\Http\Requests\Communication;
 use App\Models\CommunicationConversation;
 use App\Models\CommunicationLabel;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 
 final class ManageCommunicationConversationLabelRequest extends CommunicationRequest
 {
@@ -23,7 +23,7 @@ final class ManageCommunicationConversationLabelRequest extends CommunicationReq
         $inbox = $conversation->inbox()->first();
 
         return $inbox !== null
-            && app(CommunicationAccess::class)->canReply($actor, $inbox);
+            && app(Access::class)->canReply($actor, $inbox);
     }
 
     /** @return array<string, list<mixed>> */

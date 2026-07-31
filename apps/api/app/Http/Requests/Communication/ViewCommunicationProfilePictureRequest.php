@@ -4,7 +4,7 @@ namespace App\Http\Requests\Communication;
 
 use App\Models\CommunicationInboxIdentityProfile;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 
 final class ViewCommunicationProfilePictureRequest extends CommunicationRequest
 {
@@ -20,7 +20,7 @@ final class ViewCommunicationProfilePictureRequest extends CommunicationRequest
 
         return $actor instanceof User && $profile instanceof CommunicationInboxIdentityProfile
             && $profile->inbox()->exists()
-            && app(CommunicationAccess::class)->canView($actor, $profile->inbox()->first());
+            && app(Access::class)->canView($actor, $profile->inbox()->first());
     }
 
     public function rules(): array

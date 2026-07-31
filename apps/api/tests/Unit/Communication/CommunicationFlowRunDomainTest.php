@@ -13,8 +13,8 @@ use App\Models\CommunicationFlowVersion;
 use App\Models\CommunicationIdentity;
 use App\Models\CommunicationInbox;
 use App\Models\Tenant;
-use App\Services\Communication\Flows\CommunicationFlowConsumptionService;
-use App\Services\Communication\Flows\CommunicationFlowLock;
+use App\Services\Communication\Flows\FlowConsumptionService;
+use App\Services\Communication\Flows\FlowLock;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -27,7 +27,7 @@ final class CommunicationFlowRunDomainTest extends TestCase
     public function test_consumption_is_idempotent(): void
     {
         $tenant = Tenant::factory()->create();
-        $service = app(CommunicationFlowConsumptionService::class);
+        $service = app(FlowConsumptionService::class);
 
         $this->assertTrue($service->consumeOnce((int) $tenant->id, 'evt-1', eventDigest: hash('sha256', 'a')));
         $this->assertFalse($service->consumeOnce((int) $tenant->id, 'evt-1', eventDigest: hash('sha256', 'a')));
@@ -101,7 +101,7 @@ final class CommunicationFlowRunDomainTest extends TestCase
             'started_at' => now(),
         ]);
 
-        $seen = app(CommunicationFlowLock::class)->withConversationAndRun(
+        $seen = app(FlowLock::class)->withConversationAndRun(
             (int) $conversation->id,
             (int) $run->id,
             static fn ($c, $r): array => [(int) $c->id, (int) $r->id],

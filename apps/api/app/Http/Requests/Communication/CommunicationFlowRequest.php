@@ -3,7 +3,7 @@
 namespace App\Http\Requests\Communication;
 
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 
 abstract class CommunicationFlowRequest extends CommunicationRequest
 {
@@ -12,7 +12,7 @@ abstract class CommunicationFlowRequest extends CommunicationRequest
         $actor = $this->user();
 
         return $actor instanceof User
-            && app(CommunicationAccess::class)->canViewFlows(
+            && app(Access::class)->canViewFlows(
                 $actor,
                 $this->routeTarget(),
             );
@@ -23,7 +23,7 @@ abstract class CommunicationFlowRequest extends CommunicationRequest
         $actor = $this->user();
 
         return $actor instanceof User
-            && app(CommunicationAccess::class)->canManageFlows(
+            && app(Access::class)->canManageFlows(
                 $actor,
                 $this->routeTarget(),
             );

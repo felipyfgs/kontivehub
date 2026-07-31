@@ -4,7 +4,7 @@ namespace App\Http\Requests\Communication;
 
 use App\Models\CommunicationContact;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 
 final class ViewCommunicationContactRequest extends CommunicationRequest
 {
@@ -15,7 +15,7 @@ final class ViewCommunicationContactRequest extends CommunicationRequest
 
         return $actor instanceof User
             && $contact instanceof CommunicationContact
-            && app(CommunicationAccess::class)->canView($actor);
+            && app(Access::class)->canView($actor);
     }
 
     /** @return array<string, list<mixed>> */

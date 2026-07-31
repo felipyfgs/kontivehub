@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationFlowPublicationData;
+use App\DTO\Communication\FlowPublicationData;
 
 final class PublishCommunicationFlowRequest extends CommunicationFlowRequest
 {
@@ -19,9 +19,9 @@ final class PublishCommunicationFlowRequest extends CommunicationFlowRequest
         ];
     }
 
-    public function publicationData(): CommunicationFlowPublicationData
+    public function publicationData(): FlowPublicationData
     {
-        return new CommunicationFlowPublicationData(
+        return new FlowPublicationData(
             lockVersion: (int) $this->validated('lock_version'),
         );
     }

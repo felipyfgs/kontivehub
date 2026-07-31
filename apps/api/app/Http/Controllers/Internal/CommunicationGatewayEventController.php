@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers\Internal;
 
-use App\Actions\Communication\IngestCommunicationGatewayEventAction;
+use App\Actions\Communication\IngestGatewayEventAction;
 use App\Exceptions\GatewayEventConflictException;
-use App\Exceptions\WhatsappPeerCorrelationConflictException;
+use App\Exceptions\WhatsAppPeerCorrelationConflictException;
 use App\Http\Controllers\Controller;
-use App\Services\Communication\Security\CommunicationHmacVerifier;
+use App\Services\Communication\Security\HmacVerifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use InvalidArgumentException;
@@ -16,8 +16,8 @@ final class CommunicationGatewayEventController extends Controller
 {
     public function __invoke(
         Request $request,
-        CommunicationHmacVerifier $verifier,
-        IngestCommunicationGatewayEventAction $action,
+        HmacVerifier $verifier,
+        IngestGatewayEventAction $action,
     ): Response|JsonResponse {
         if (! config('communication.enabled') || ! config('communication.gateway.enabled')) {
             return response()->json(['error' => 'COMMUNICATION_DISABLED'], 503);
@@ -40,7 +40,7 @@ final class CommunicationGatewayEventController extends Controller
             return response()->json(['error' => 'INVALID_EVENT'], 422);
         } catch (GatewayEventConflictException) {
             return response()->json(['error' => 'EVENT_DIGEST_CONFLICT'], 409);
-        } catch (WhatsappPeerCorrelationConflictException) {
+        } catch (WhatsAppPeerCorrelationConflictException) {
             return response()->json(['error' => 'PEER_CORRELATION_CONFLICT'], 409);
         }
 

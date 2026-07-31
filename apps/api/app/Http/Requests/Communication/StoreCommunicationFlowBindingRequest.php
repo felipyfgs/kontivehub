@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationFlowBindingCreationData;
+use App\DTO\Communication\FlowBindingCreationData;
 use App\Support\CurrentTenant;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Validation\Rule;
@@ -31,11 +31,11 @@ final class StoreCommunicationFlowBindingRequest extends CommunicationFlowReques
         ];
     }
 
-    public function bindingData(): CommunicationFlowBindingCreationData
+    public function bindingData(): FlowBindingCreationData
     {
         $validated = $this->validated();
 
-        return new CommunicationFlowBindingCreationData(
+        return new FlowBindingCreationData(
             inboxId: (int) $validated['inbox_id'],
             publishedVersionId: isset($validated['published_version_id'])
                 ? (int) $validated['published_version_id']

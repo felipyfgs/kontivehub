@@ -2,11 +2,11 @@
 
 namespace App\Http\Resources;
 
-use App\DTO\Tenant\TenantMemberListData;
+use App\DTO\Tenant\MemberListData;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-/** @mixin TenantMemberListData */
+/** @mixin MemberListData */
 final class TenantMemberListResource extends JsonResource
 {
     /** @return array<string, mixed> */

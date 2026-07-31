@@ -3,7 +3,7 @@
 namespace App\Jobs\Communication;
 
 use App\Models\CommunicationInbox;
-use App\Services\Communication\Contact\CommunicationInboxIdentityProfileReconciler;
+use App\Services\Communication\Contact\InboxIdentityProfileReconciler;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Str;
@@ -35,7 +35,7 @@ final class ReconcileCommunicationInboxIdentityProfilesJob implements ShouldQueu
         $this->afterCommit();
     }
 
-    public function handle(CommunicationInboxIdentityProfileReconciler $reconciler): void
+    public function handle(InboxIdentityProfileReconciler $reconciler): void
     {
         $inbox = CommunicationInbox::query()->withoutGlobalScopes()
             ->whereKey($this->inboxId)->where('tenant_id', $this->tenantId)->first();

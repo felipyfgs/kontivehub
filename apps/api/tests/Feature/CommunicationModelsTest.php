@@ -193,7 +193,7 @@ class CommunicationModelsTest extends TestCase
         return CommunicationIdentity::query()->create([
             'tenant_id' => $tenant->id,
             'contact_id' => $contact->id,
-            'channel' => CommunicationChannel::Whatsapp,
+            'channel' => CommunicationChannel::WhatsApp,
             'address_encrypted' => '+5511999991234',
             'address_hash' => $hash,
             'address_masked' => '+55•••••1234',

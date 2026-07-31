@@ -2,7 +2,7 @@
 
 namespace App\Jobs\Communication;
 
-use App\Services\Communication\Flows\CommunicationFlowExecutor;
+use App\Services\Communication\Flows\FlowExecutor;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 
@@ -19,7 +19,7 @@ final class AdvanceCommunicationFlowRunJob implements ShouldQueue
         $this->onQueue('communication');
     }
 
-    public function handle(CommunicationFlowExecutor $executor): void
+    public function handle(FlowExecutor $executor): void
     {
         $executor->advance($this->runId);
     }

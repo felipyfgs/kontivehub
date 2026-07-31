@@ -2,10 +2,10 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationCannedResponseDuplicationData;
+use App\DTO\Communication\CannedResponseDuplicationData;
 use App\Models\CommunicationCannedResponse;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 
 final class DuplicateCommunicationCannedResponseRequest extends CommunicationRequest
 {
@@ -25,7 +25,7 @@ final class DuplicateCommunicationCannedResponseRequest extends CommunicationReq
 
         return $actor instanceof User
             && $canned instanceof CommunicationCannedResponse
-            && app(CommunicationAccess::class)->canManageQuickReplies($actor, $canned);
+            && app(Access::class)->canManageQuickReplies($actor, $canned);
     }
 
     /** @return array<string, list<mixed>> */
@@ -37,11 +37,11 @@ final class DuplicateCommunicationCannedResponseRequest extends CommunicationReq
         ];
     }
 
-    public function duplicationData(): CommunicationCannedResponseDuplicationData
+    public function duplicationData(): CannedResponseDuplicationData
     {
         $validated = $this->validated();
 
-        return new CommunicationCannedResponseDuplicationData(
+        return new CannedResponseDuplicationData(
             shortcut: strtolower($validated['shortcut']),
             title: $validated['title'] ?? null,
         );

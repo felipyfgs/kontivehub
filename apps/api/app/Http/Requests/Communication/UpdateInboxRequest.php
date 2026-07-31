@@ -2,10 +2,10 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationInboxUpdateData;
+use App\DTO\Communication\InboxUpdateData;
 use App\Models\CommunicationInbox;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 use App\Support\CurrentTenant;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Validation\Rule;
@@ -19,7 +19,7 @@ final class UpdateInboxRequest extends CommunicationRequest
 
         return $actor instanceof User
             && $inbox instanceof CommunicationInbox
-            && app(CommunicationAccess::class)->canManage($actor, $inbox);
+            && app(Access::class)->canManage($actor, $inbox);
     }
 
     /** @return array<string, list<mixed>> */
@@ -62,11 +62,11 @@ final class UpdateInboxRequest extends CommunicationRequest
         }
     }
 
-    public function inboxData(): CommunicationInboxUpdateData
+    public function inboxData(): InboxUpdateData
     {
         $validated = $this->validated();
 
-        return new CommunicationInboxUpdateData(
+        return new InboxUpdateData(
             name: isset($validated['name']) ? (string) $validated['name'] : null,
             isEnabled: array_key_exists('is_enabled', $validated)
                 ? (bool) $validated['is_enabled']

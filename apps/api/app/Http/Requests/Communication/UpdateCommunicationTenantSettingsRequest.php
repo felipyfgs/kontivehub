@@ -2,9 +2,9 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationTenantSettingsData;
+use App\DTO\Communication\TenantSettingsData;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 
 final class UpdateCommunicationTenantSettingsRequest extends CommunicationRequest
 {
@@ -13,7 +13,7 @@ final class UpdateCommunicationTenantSettingsRequest extends CommunicationReques
         $actor = $this->user();
 
         return $actor instanceof User
-            && app(CommunicationAccess::class)->canManage($actor);
+            && app(Access::class)->canManage($actor);
     }
 
     /** @return array<string, list<mixed>> */
@@ -24,9 +24,9 @@ final class UpdateCommunicationTenantSettingsRequest extends CommunicationReques
         ];
     }
 
-    public function settingsData(): CommunicationTenantSettingsData
+    public function settingsData(): TenantSettingsData
     {
-        return new CommunicationTenantSettingsData(
+        return new TenantSettingsData(
             enabled: (bool) $this->validated('enabled'),
         );
     }

@@ -2,9 +2,9 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationContactFiltersData;
+use App\DTO\Communication\ContactFiltersData;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 
 final class ListCommunicationContactsRequest extends CommunicationRequest
 {
@@ -27,7 +27,7 @@ final class ListCommunicationContactsRequest extends CommunicationRequest
         $actor = $this->user();
 
         return $actor instanceof User
-            && app(CommunicationAccess::class)->canView($actor);
+            && app(Access::class)->canView($actor);
     }
 
     /** @return array<string, list<mixed>> */
@@ -48,11 +48,11 @@ final class ListCommunicationContactsRequest extends CommunicationRequest
         ];
     }
 
-    public function filters(): CommunicationContactFiltersData
+    public function filters(): ContactFiltersData
     {
         $validated = $this->validated();
 
-        return new CommunicationContactFiltersData(
+        return new ContactFiltersData(
             search: isset($validated['q']) ? trim((string) $validated['q']) : null,
             phoneSearch: $this->isMethod('POST'),
             isActive: array_key_exists('is_active', $validated)

@@ -4,7 +4,7 @@ namespace App\Http\Requests\Communication;
 
 use App\Models\CommunicationInbox;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 
 final class ManageCommunicationInboxRequest extends CommunicationRequest
 {
@@ -15,7 +15,7 @@ final class ManageCommunicationInboxRequest extends CommunicationRequest
 
         return $actor instanceof User
             && $inbox instanceof CommunicationInbox
-            && app(CommunicationAccess::class)->canManage($actor, $inbox);
+            && app(Access::class)->canManage($actor, $inbox);
     }
 
     /** @return array<string, list<mixed>> */

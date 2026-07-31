@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Work;
 
-use App\DTO\Work\WorkDepartmentData;
+use App\DTO\Work\DepartmentData;
 use App\Models\User;
 use App\Models\WorkDepartment;
 use App\Support\CurrentTenant;
@@ -55,8 +55,8 @@ final class UpdateWorkDepartmentRequest extends WorkRequest
         ];
     }
 
-    public function department(): WorkDepartmentData
+    public function department(): DepartmentData
     {
-        return new WorkDepartmentData($this->validated());
+        return new DepartmentData($this->validated());
     }
 }

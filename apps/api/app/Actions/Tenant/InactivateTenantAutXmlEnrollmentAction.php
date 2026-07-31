@@ -2,7 +2,7 @@
 
 namespace App\Actions\Tenant;
 
-use App\DTO\Tenant\TenantAutXmlEnrollmentData;
+use App\DTO\Tenant\AutXmlEnrollmentData;
 use App\Exceptions\TenantAutXmlApiException;
 use App\Models\Establishment;
 use App\Services\Audit\AuditLogger;
@@ -17,7 +17,7 @@ final readonly class InactivateTenantAutXmlEnrollmentAction
         private AuditLogger $audit,
     ) {}
 
-    public function __invoke(int $enrollmentId): TenantAutXmlEnrollmentData
+    public function __invoke(int $enrollmentId): AutXmlEnrollmentData
     {
         $tenantId = (int) $this->currentTenant->tenant()->id;
         $enrollment = $this->enrollments->inactivate($enrollmentId);
@@ -34,6 +34,6 @@ final readonly class InactivateTenantAutXmlEnrollmentAction
             ['establishment_id' => $enrollment->establishment_id],
         );
 
-        return new TenantAutXmlEnrollmentData($establishment, $enrollment);
+        return new AutXmlEnrollmentData($establishment, $enrollment);
     }
 }

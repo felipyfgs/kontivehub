@@ -2,7 +2,7 @@
 
 namespace App\Actions\Tenant;
 
-use App\DTO\Tenant\TenantOnboardingStatusData;
+use App\DTO\Tenant\OnboardingStatusData;
 use App\Enums\ClientProcuracaoSyncStatus;
 use App\Enums\FiscalControlModule;
 use App\Enums\FiscalOperationClass;
@@ -37,7 +37,7 @@ final readonly class ShowTenantOnboardingStatusAction
         private FiscalModuleAvailabilityService $moduleAvailability,
     ) {}
 
-    public function __invoke(): TenantOnboardingStatusData
+    public function __invoke(): OnboardingStatusData
     {
         $tenant = $this->currentTenant->tenant();
         $status = $this->actionableStatus->forTenant($tenant);
@@ -64,7 +64,7 @@ final readonly class ShowTenantOnboardingStatusAction
             ->where('tenant_id', $tenant->id)
             ->where('trigger', 'SCHEDULED');
 
-        return new TenantOnboardingStatusData([
+        return new OnboardingStatusData([
             'status' => $onboarding['status'] ?? 'incomplete',
             'stage' => $this->onboardingStage((string) ($onboarding['status'] ?? 'incomplete')),
             'actions' => $actions,

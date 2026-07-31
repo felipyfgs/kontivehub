@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationGatewayOperationData;
+use App\DTO\Communication\GatewayOperationData;
 
 final class QueryCommunicationInboxUsersRequest extends CommunicationInboxGatewayRequest
 {
@@ -15,7 +15,7 @@ final class QueryCommunicationInboxUsersRequest extends CommunicationInboxGatewa
         ];
     }
 
-    public function gatewayData(): CommunicationGatewayOperationData
+    public function gatewayData(): GatewayOperationData
     {
         return $this->gatewayOperation([
             'users' => array_values($this->validated('users')),

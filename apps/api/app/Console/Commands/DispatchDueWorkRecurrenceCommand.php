@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Services\Work\WorkRoutineRecurrenceDispatcher;
+use App\Services\Work\RoutineRecurrenceDispatcher;
 use Illuminate\Console\Command;
 
 class DispatchDueWorkRecurrenceCommand extends Command
@@ -11,7 +11,7 @@ class DispatchDueWorkRecurrenceCommand extends Command
 
     protected $description = 'Dispara Lotes de geração de Rotinas com recorrência devida (fuso do Escritório, catch-up idempotente)';
 
-    public function handle(WorkRoutineRecurrenceDispatcher $dispatcher): int
+    public function handle(RoutineRecurrenceDispatcher $dispatcher): int
     {
         $result = $dispatcher->dispatchDue();
 

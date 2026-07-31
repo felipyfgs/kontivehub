@@ -2,17 +2,17 @@
 
 namespace App\Http\Resources;
 
-use App\DTO\Work\WorkTaskQueueItemData;
+use App\DTO\Work\TaskQueueItemData;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-/** @mixin WorkTaskQueueItemData */
+/** @mixin TaskQueueItemData */
 final class WorkTaskQueueItemResource extends JsonResource
 {
     /** @return array<string, mixed> */
     public function toArray(Request $request): array
     {
-        /** @var WorkTaskQueueItemData $item */
+        /** @var TaskQueueItemData $item */
         $item = $this->resource;
         $task = $item->task;
 

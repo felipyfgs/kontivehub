@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Tenant;
 
-use App\DTO\Tenant\TenantSerproAuthorConfigurationData;
+use App\DTO\Tenant\SerproAuthorConfigurationData;
 use App\Enums\AuthorCertificateMode;
 use App\Enums\AuthorIdentityType;
 use App\Enums\SerproEnvironment;
@@ -22,9 +22,9 @@ final class ConfigureTenantSerproAuthorRequest extends TenantSerproAuthorization
         ];
     }
 
-    public function toDto(): TenantSerproAuthorConfigurationData
+    public function toDto(): SerproAuthorConfigurationData
     {
-        return new TenantSerproAuthorConfigurationData(
+        return new SerproAuthorConfigurationData(
             environment: $this->environment(),
             identityType: AuthorIdentityType::from(
                 (string) $this->validated('author_identity_type'),

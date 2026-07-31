@@ -2,11 +2,11 @@
 
 namespace App\Http\Requests\Work;
 
-use App\DTO\Work\WorkProcessGroupFiltersData;
+use App\DTO\Work\ProcessGroupFiltersData;
 use App\Enums\Work\ProcessStatus;
 use App\Models\User;
 use App\Models\WorkProcess;
-use App\Services\Work\WorkProcessGroupQuery;
+use App\Services\Work\ProcessGroupQuery;
 use Illuminate\Validation\Rule;
 
 final class ListWorkProcessGroupsRequest extends WorkRequest
@@ -37,7 +37,7 @@ final class ListWorkProcessGroupsRequest extends WorkRequest
                 'sometimes',
                 'nullable',
                 'string',
-                Rule::in(WorkProcessGroupQuery::SORT_WHITELIST),
+                Rule::in(ProcessGroupQuery::SORT_WHITELIST),
             ],
             'direction' => [
                 'sometimes',
@@ -48,11 +48,11 @@ final class ListWorkProcessGroupsRequest extends WorkRequest
         ];
     }
 
-    public function filters(): WorkProcessGroupFiltersData
+    public function filters(): ProcessGroupFiltersData
     {
         $validated = $this->validated();
         $validated['include_archived'] = $this->boolean('include_archived');
 
-        return new WorkProcessGroupFiltersData($validated);
+        return new ProcessGroupFiltersData($validated);
     }
 }

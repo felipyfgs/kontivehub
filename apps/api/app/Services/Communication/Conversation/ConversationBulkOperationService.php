@@ -17,8 +17,8 @@ use App\Models\CommunicationInbox;
 use App\Models\CommunicationLabel;
 use App\Models\CommunicationMessage;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
-use App\Services\Communication\CommunicationConversationCanonicalizer;
+use App\Services\Communication\Authorization\Access;
+use App\Services\Communication\ConversationCanonicalizer;
 use App\Support\CurrentTenant;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -27,8 +27,8 @@ final readonly class ConversationBulkOperationService
 {
     public function __construct(
         private CurrentTenant $currentTenant,
-        private CommunicationAccess $access,
-        private CommunicationConversationCanonicalizer $canonicalizer,
+        private Access $access,
+        private ConversationCanonicalizer $canonicalizer,
     ) {}
 
     public function admit(ConversationBulkOperationAdmissionData $data): ConversationBulkOperationAdmissionResult

@@ -2,7 +2,7 @@
 
 namespace App\Providers;
 
-use App\Actions\Communication\CreateCommunicationMessageAction;
+use App\Actions\Communication\CreateMessageAction;
 use App\Contracts\AdnContributorClient;
 use App\Contracts\AssistantLlmGateway;
 use App\Contracts\AutenticarProcuradorClient;
@@ -88,9 +88,9 @@ use App\Services\Clients\NullCcmeiDadosFetcher;
 use App\Services\Clients\RegistrationLookupMerger;
 use App\Services\Clients\RegistrationLookupOrchestrator;
 use App\Services\Clients\SerproConsultaCnpjLookup;
-use App\Services\Communication\Media\CommunicationMediaStore;
-use App\Services\Communication\ProfilePicture\CurlCommunicationProfilePictureDownloader;
-use App\Services\Communication\Transport\HttpCommunicationTransport;
+use App\Services\Communication\Media\MediaStore;
+use App\Services\Communication\ProfilePicture\CurlProfilePictureDownloader;
+use App\Services\Communication\Transport\HttpTransport;
 use App\Services\Esocial\CurlEsocialBxSoapTransport;
 use App\Services\Esocial\DisabledEsocialEventClient;
 use App\Services\Esocial\FgtsEsocialSourceAdapter;
@@ -99,9 +99,9 @@ use App\Services\Esocial\NativeEsocialBxCurlRuntime;
 use App\Services\FgtsDigital\Clients\DisabledFgtsDigitalPortalClient;
 use App\Services\FgtsDigital\Clients\FixtureFgtsDigitalPortalClient;
 use App\Services\FgtsDigital\Clients\ProcessFgtsDigitalPortalClient;
-use App\Services\Fiscal\Guides\PagtowebArrecadacaoReceiptAdapter;
-use App\Services\Fiscal\Guides\PagtowebPaymentCountAdapter;
-use App\Services\Fiscal\Guides\PagtowebPaymentListAdapter;
+use App\Services\Fiscal\Guides\PagtoWebArrecadacaoReceiptAdapter;
+use App\Services\Fiscal\Guides\PagtoWebPaymentCountAdapter;
+use App\Services\Fiscal\Guides\PagtoWebPaymentListAdapter;
 use App\Services\Fiscal\Guides\SerproGuideEmissionClient;
 use App\Services\Fiscal\Guides\SicalcRevenueSupportAdapter;
 use App\Services\Fiscal\ManualConsult\ManualConsultExecutionContext;
@@ -242,15 +242,15 @@ class AppServiceProvider extends ServiceProvider
             );
         });
 
-        $this->app->singleton(CommunicationMediaStore::class, function ($app) {
-            return new CommunicationMediaStore(
+        $this->app->singleton(MediaStore::class, function ($app) {
+            return new MediaStore(
                 $app->make(EnvelopeCrypto::class),
                 (string) config('communication.media.disk_root'),
             );
         });
-        $this->app->bind(CommunicationProfilePictureDownloader::class, CurlCommunicationProfilePictureDownloader::class);
-        $this->app->bind(CommunicationOutboundMessageWriter::class, CreateCommunicationMessageAction::class);
-        $this->app->bind(CommunicationTransport::class, HttpCommunicationTransport::class);
+        $this->app->bind(CommunicationProfilePictureDownloader::class, CurlProfilePictureDownloader::class);
+        $this->app->bind(CommunicationOutboundMessageWriter::class, CreateMessageAction::class);
+        $this->app->bind(CommunicationTransport::class, HttpTransport::class);
         $this->app->bind(AssistantLlmGateway::class, OpenAiAssistantLlmGateway::class);
 
         $this->app->singleton(CurlMtlsTransport::class, function () {
@@ -508,9 +508,9 @@ class AppServiceProvider extends ServiceProvider
         $registry->register($this->app->make(CaixaPostalIndicatorAdapter::class));
         $registry->register($this->app->make(DteIndicatorAdapter::class));
         $registry->register($this->app->make(SicalcRevenueSupportAdapter::class));
-        $registry->register($this->app->make(PagtowebPaymentCountAdapter::class));
-        $registry->register($this->app->make(PagtowebPaymentListAdapter::class));
-        $registry->register($this->app->make(PagtowebArrecadacaoReceiptAdapter::class));
+        $registry->register($this->app->make(PagtoWebPaymentCountAdapter::class));
+        $registry->register($this->app->make(PagtoWebPaymentListAdapter::class));
+        $registry->register($this->app->make(PagtoWebArrecadacaoReceiptAdapter::class));
 
         // Integra-SN / Integra-MEI — um adapter por operação do catálogo
         foreach (SimplesMeiCatalog::all() as $def) {

@@ -2,17 +2,17 @@
 
 namespace App\Http\Resources;
 
-use App\DTO\Tenant\TenantSerproTermDraftResult;
+use App\DTO\Tenant\SerproTermDraftResult;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-/** @mixin TenantSerproTermDraftResult */
+/** @mixin SerproTermDraftResult */
 final class TenantSerproTermDraftResource extends JsonResource
 {
     /** @return array<string, mixed> */
     public function toArray(Request $request): array
     {
-        /** @var TenantSerproTermDraftResult $result */
+        /** @var SerproTermDraftResult $result */
         $result = $this->resource;
 
         return TenantSerproAuthorizationResource::make(
@@ -22,7 +22,7 @@ final class TenantSerproTermDraftResource extends JsonResource
 
     public function with(Request $request): array
     {
-        /** @var TenantSerproTermDraftResult $result */
+        /** @var SerproTermDraftResult $result */
         $result = $this->resource;
 
         return ['draft_sha256' => $result->draftSha256];

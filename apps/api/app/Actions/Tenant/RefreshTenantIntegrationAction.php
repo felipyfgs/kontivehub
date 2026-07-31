@@ -2,7 +2,7 @@
 
 namespace App\Actions\Tenant;
 
-use App\DTO\Tenant\TenantIntegrationRefreshData;
+use App\DTO\Tenant\IntegrationRefreshData;
 use App\Enums\FiscalProfile;
 use App\Exceptions\TenantSettingsApiException;
 use App\Services\Audit\AuditLogger;
@@ -22,7 +22,7 @@ final readonly class RefreshTenantIntegrationAction
         private AuditLogger $audit,
     ) {}
 
-    public function __invoke(int $actorUserId): TenantIntegrationRefreshData
+    public function __invoke(int $actorUserId): IntegrationRefreshData
     {
         $tenant = $this->currentTenant->tenant();
         $environment = FiscalProfile::configured()->serproEnvironment();
@@ -83,7 +83,7 @@ final readonly class RefreshTenantIntegrationAction
         }
 
         $authorization ??= $this->authorizations->getOrCreate($tenant, $environment);
-        $result = new TenantIntegrationRefreshData(
+        $result = new IntegrationRefreshData(
             status: $authorization->status->value,
             procuradorTokenExpiresAt: $authorization->procurador_token_expires_at?->toIso8601String(),
             hasProcuradorToken: $authorization->procurador_token_vault_object_id !== null,

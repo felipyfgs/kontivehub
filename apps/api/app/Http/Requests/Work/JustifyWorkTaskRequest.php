@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Work;
 
-use App\DTO\Work\WorkTaskTransitionData;
+use App\DTO\Work\TaskTransitionData;
 use App\Models\User;
 use App\Models\WorkTask;
 
@@ -30,9 +30,9 @@ final class JustifyWorkTaskRequest extends WorkRequest
         ];
     }
 
-    public function transition(): WorkTaskTransitionData
+    public function transition(): TaskTransitionData
     {
-        return new WorkTaskTransitionData(
+        return new TaskTransitionData(
             lockVersion: $this->integer('lock_version'),
             justification: (string) $this->validated('justification'),
         );

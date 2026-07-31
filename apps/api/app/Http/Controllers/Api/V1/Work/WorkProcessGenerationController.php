@@ -10,7 +10,7 @@ use App\Http\Requests\Work\ShowWorkProcessGenerationRequest;
 use App\Http\Resources\WorkProcessGenerationBatchResource;
 use App\Models\WorkProcessGenerationBatch;
 use App\Models\WorkProcessTemplate;
-use App\Services\Work\WorkProcessGenerationService;
+use App\Services\Work\ProcessGenerationService;
 use Illuminate\Http\JsonResponse;
 
 class WorkProcessGenerationController extends Controller
@@ -18,7 +18,7 @@ class WorkProcessGenerationController extends Controller
     public function preview(
         PreviewWorkProcessGenerationRequest $request,
         WorkProcessTemplate $template,
-        WorkProcessGenerationService $service,
+        ProcessGenerationService $service,
     ): JsonResponse {
         return (new WorkProcessGenerationBatchResource(
             $service->preview($template, $request->payload()),
@@ -28,7 +28,7 @@ class WorkProcessGenerationController extends Controller
     public function confirm(
         ConfirmWorkProcessGenerationRequest $request,
         WorkProcessGenerationBatch $batch,
-        WorkProcessGenerationService $service,
+        ProcessGenerationService $service,
     ): JsonResponse {
         return (new WorkProcessGenerationBatchResource(
             $service->confirm($batch, $request->idempotencyKey()),
@@ -38,7 +38,7 @@ class WorkProcessGenerationController extends Controller
     public function retry(
         RetryWorkProcessGenerationRequest $request,
         WorkProcessGenerationBatch $batch,
-        WorkProcessGenerationService $service,
+        ProcessGenerationService $service,
     ): JsonResponse {
         return (new WorkProcessGenerationBatchResource(
             $service->retryFailedItems($batch),

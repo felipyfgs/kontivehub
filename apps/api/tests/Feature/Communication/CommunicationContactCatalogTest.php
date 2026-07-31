@@ -452,7 +452,7 @@ final class CommunicationContactCatalogTest extends TestCase
         return CommunicationIdentity::query()->withoutGlobalScopes()->create([
             'tenant_id' => $tenant->id,
             'contact_id' => $contact->id,
-            'channel' => CommunicationChannel::Whatsapp,
+            'channel' => CommunicationChannel::WhatsApp,
             'address_encrypted' => $address,
             'address_hash' => hash('sha256', $address),
             'address_masked' => substr($address, 0, min(3, strlen($address))).'•••••'.substr($address, -4),

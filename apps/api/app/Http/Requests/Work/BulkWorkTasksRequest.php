@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Work;
 
-use App\DTO\Work\WorkTaskBulkData;
+use App\DTO\Work\TaskBulkData;
 use App\Models\User;
 use App\Models\WorkTask;
 
@@ -32,11 +32,11 @@ final class BulkWorkTasksRequest extends WorkRequest
         ];
     }
 
-    public function bulk(): WorkTaskBulkData
+    public function bulk(): TaskBulkData
     {
         $validated = $this->validated();
 
-        return new WorkTaskBulkData(
+        return new TaskBulkData(
             items: $validated['items'],
             changes: $validated['changes'],
         );

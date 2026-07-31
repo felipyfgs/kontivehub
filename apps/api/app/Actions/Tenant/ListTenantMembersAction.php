@@ -2,7 +2,7 @@
 
 namespace App\Actions\Tenant;
 
-use App\DTO\Tenant\TenantMemberListData;
+use App\DTO\Tenant\MemberListData;
 use App\Exceptions\ActivationApiException;
 use App\Models\User;
 use App\Services\Activation\ActivationException;
@@ -16,7 +16,7 @@ final readonly class ListTenantMembersAction
         private CurrentTenant $currentTenant,
     ) {}
 
-    public function __invoke(User $actor): TenantMemberListData
+    public function __invoke(User $actor): MemberListData
     {
         try {
             $members = $this->team->list($actor);
@@ -26,7 +26,7 @@ final readonly class ListTenantMembersAction
 
         $tenant = $this->currentTenant->tenant();
 
-        return new TenantMemberListData(
+        return new MemberListData(
             members: $members,
             occupiedSeats: $this->team->occupiedSeats($tenant),
             maxUsers: $tenant->subscription?->max_users,

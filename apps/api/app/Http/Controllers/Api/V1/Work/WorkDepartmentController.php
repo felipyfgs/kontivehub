@@ -11,15 +11,15 @@ use App\Http\Resources\WorkDepartmentAssignmentResource;
 use App\Http\Resources\WorkDepartmentCollection;
 use App\Http\Resources\WorkDepartmentResource;
 use App\Models\WorkDepartment;
-use App\Services\Work\WorkDepartmentQuery;
-use App\Services\Work\WorkDepartmentService;
+use App\Services\Work\DepartmentQuery;
+use App\Services\Work\DepartmentService;
 use Illuminate\Http\JsonResponse;
 
 class WorkDepartmentController extends Controller
 {
     public function index(
         ListWorkDepartmentsRequest $request,
-        WorkDepartmentQuery $query,
+        DepartmentQuery $query,
     ): JsonResponse {
         return (new WorkDepartmentCollection(
             $query->paginate($request->filters()),
@@ -28,7 +28,7 @@ class WorkDepartmentController extends Controller
 
     public function store(
         StoreWorkDepartmentRequest $request,
-        WorkDepartmentService $service,
+        DepartmentService $service,
     ): JsonResponse {
         return WorkDepartmentResource::make(
             $service->create($request->department()),
@@ -38,7 +38,7 @@ class WorkDepartmentController extends Controller
     public function update(
         UpdateWorkDepartmentRequest $request,
         WorkDepartment $department,
-        WorkDepartmentService $service,
+        DepartmentService $service,
     ): JsonResponse {
         return WorkDepartmentResource::make(
             $service->update($department, $request->department()),
@@ -48,7 +48,7 @@ class WorkDepartmentController extends Controller
     public function assignMembership(
         AssignWorkDepartmentMembershipRequest $request,
         WorkDepartment $department,
-        WorkDepartmentService $service,
+        DepartmentService $service,
     ): JsonResponse {
         return WorkDepartmentAssignmentResource::make(
             $service->assignMembership(

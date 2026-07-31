@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationGatewayOperationData;
+use App\DTO\Communication\GatewayOperationData;
 use Illuminate\Validation\Rule;
 
 final class UpdateCommunicationConversationPresenceRequest extends CommunicationConversationGatewayRequest
@@ -16,7 +16,7 @@ final class UpdateCommunicationConversationPresenceRequest extends Communication
         ];
     }
 
-    public function gatewayData(): CommunicationGatewayOperationData
+    public function gatewayData(): GatewayOperationData
     {
         $validated = $this->validated();
         $parameters = ['presence' => (string) $validated['presence']];

@@ -6,7 +6,7 @@ use App\DTO\Communication\ConversationListPreferenceData;
 use App\Enums\Communication\ConversationListSort;
 use App\Enums\Communication\ConversationStatus;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
@@ -17,7 +17,7 @@ final class UpdateConversationListPreferencesRequest extends CommunicationReques
         $actor = $this->user();
 
         return $actor instanceof User
-            && app(CommunicationAccess::class)->canView($actor);
+            && app(Access::class)->canView($actor);
     }
 
     protected function prepareCommunicationValidation(): void

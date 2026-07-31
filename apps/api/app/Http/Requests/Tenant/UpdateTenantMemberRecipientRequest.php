@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Tenant;
 
-use App\DTO\Tenant\TenantMemberRecipientData;
+use App\DTO\Tenant\MemberRecipientData;
 use App\Enums\ActivationMethod;
 use App\Models\User;
 use App\Policies\TenantMemberPolicy;
@@ -20,11 +20,11 @@ final class UpdateTenantMemberRecipientRequest extends TenantMemberRequest
         ];
     }
 
-    public function recipientData(): TenantMemberRecipientData
+    public function recipientData(): MemberRecipientData
     {
         $validated = $this->validated();
 
-        return new TenantMemberRecipientData(
+        return new MemberRecipientData(
             name: (string) $validated['name'],
             email: (string) $validated['email'],
             method: ActivationMethod::from((string) $validated['method']),

@@ -3,10 +3,10 @@
 namespace App\Http\Requests\Work;
 
 use App\Domain\Work\ReferencePeriod;
-use App\DTO\Work\WorkProcessCreationData;
+use App\DTO\Work\ProcessCreationData;
 use App\Models\User;
 use App\Models\WorkProcess;
-use App\Services\Work\WorkMonitoringContextRegistry;
+use App\Services\Work\MonitoringContextRegistry;
 use Illuminate\Validation\Rule;
 use InvalidArgumentException;
 
@@ -30,7 +30,7 @@ final class StoreWorkProcessRequest extends WorkRequest
             'monitoring_module_key' => [
                 'nullable',
                 'string',
-                Rule::in(app(WorkMonitoringContextRegistry::class)->keys()),
+                Rule::in(app(MonitoringContextRegistry::class)->keys()),
             ],
             'competence' => [
                 'required',
@@ -63,12 +63,12 @@ final class StoreWorkProcessRequest extends WorkRequest
         ];
     }
 
-    public function creation(): WorkProcessCreationData
+    public function creation(): ProcessCreationData
     {
         $validated = $this->validated();
         $tasks = $validated['tasks'];
         unset($validated['tasks']);
 
-        return new WorkProcessCreationData($validated, $tasks);
+        return new ProcessCreationData($validated, $tasks);
     }
 }

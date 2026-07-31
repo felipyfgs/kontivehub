@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Tenant;
 
-use App\DTO\Tenant\TenantSerproTermDraftData;
+use App\DTO\Tenant\SerproTermDraftData;
 use App\Enums\SerproEnvironment;
 use Illuminate\Validation\Rule;
 
@@ -17,9 +17,9 @@ final class GenerateTenantSerproTermDraftRequest extends TenantSerproAuthorizati
         ];
     }
 
-    public function toDto(): TenantSerproTermDraftData
+    public function toDto(): SerproTermDraftData
     {
-        return new TenantSerproTermDraftData(
+        return new SerproTermDraftData(
             environment: $this->environment(),
             validUntil: $this->validated('vigencia'),
             actorUserId: $this->actor()->id,

@@ -2,8 +2,8 @@
 
 namespace App\Console\Commands;
 
-use App\DTO\Communication\CommunicationMaintenanceContext;
-use App\Services\Communication\Maintenance\CommunicationHistoryMediaRescue;
+use App\DTO\Communication\MaintenanceContext;
+use App\Services\Communication\Maintenance\HistoryMediaRescue;
 use Illuminate\Console\Command;
 use Illuminate\Support\Str;
 use Throwable;
@@ -20,10 +20,10 @@ final class RescueCommunicationHistoryMediaCommand extends Command
 
     protected $description = 'Inventaria e, com autorização explícita, solicita mídia histórica recuperável';
 
-    public function handle(CommunicationHistoryMediaRescue $rescue): int
+    public function handle(HistoryMediaRescue $rescue): int
     {
         try {
-            $context = new CommunicationMaintenanceContext(
+            $context = new MaintenanceContext(
                 tenantId: (int) $this->option('tenant'),
                 inboxId: (int) $this->option('inbox'),
                 operationId: (string) ($this->option('operation') ?: 'media-rescue-'.strtolower((string) Str::ulid())),

@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationGatewayOperationData;
+use App\DTO\Communication\GatewayOperationData;
 
 final class RespondCommunicationInboxPasskeyRequest extends CommunicationInboxGatewayRequest
 {
@@ -17,7 +17,7 @@ final class RespondCommunicationInboxPasskeyRequest extends CommunicationInboxGa
         ];
     }
 
-    public function gatewayData(): CommunicationGatewayOperationData
+    public function gatewayData(): GatewayOperationData
     {
         return $this->gatewayOperation($this->validated());
     }

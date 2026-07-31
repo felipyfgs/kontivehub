@@ -17,18 +17,18 @@ use App\Http\Resources\WorkProcessCommentResource;
 use App\Http\Resources\WorkProcessResource;
 use App\Http\Resources\WorkTimelineResource;
 use App\Models\WorkProcess;
-use App\Services\Work\WorkProcessBulkService;
-use App\Services\Work\WorkProcessQuery;
-use App\Services\Work\WorkProcessService;
-use App\Services\Work\WorkProcessViewBuilder;
-use App\Services\Work\WorkTimelineQuery;
+use App\Services\Work\ProcessBulkService;
+use App\Services\Work\ProcessQuery;
+use App\Services\Work\ProcessService;
+use App\Services\Work\ProcessViewBuilder;
+use App\Services\Work\TimelineQuery;
 use Illuminate\Http\JsonResponse;
 
 class WorkProcessController extends Controller
 {
     public function index(
         ListWorkProcessesRequest $request,
-        WorkProcessQuery $query,
+        ProcessQuery $query,
     ): JsonResponse {
         return (new WorkProcessCollection(
             $query->paginate($request->filters()),
@@ -38,7 +38,7 @@ class WorkProcessController extends Controller
     public function show(
         ViewWorkProcessRequest $request,
         WorkProcess $process,
-        WorkProcessViewBuilder $views,
+        ProcessViewBuilder $views,
     ): JsonResponse {
         return WorkProcessResource::make(
             $views->detailed($process),
@@ -47,8 +47,8 @@ class WorkProcessController extends Controller
 
     public function store(
         StoreWorkProcessRequest $request,
-        WorkProcessService $service,
-        WorkProcessViewBuilder $views,
+        ProcessService $service,
+        ProcessViewBuilder $views,
     ): JsonResponse {
         $process = $service->createManual($request->creation());
 
@@ -60,8 +60,8 @@ class WorkProcessController extends Controller
     public function update(
         UpdateWorkProcessRequest $request,
         WorkProcess $process,
-        WorkProcessService $service,
-        WorkProcessViewBuilder $views,
+        ProcessService $service,
+        ProcessViewBuilder $views,
     ): JsonResponse {
         $process = $service->update($process, $request->updateData());
 
@@ -73,8 +73,8 @@ class WorkProcessController extends Controller
     public function archive(
         ArchiveWorkProcessRequest $request,
         WorkProcess $process,
-        WorkProcessService $service,
-        WorkProcessViewBuilder $views,
+        ProcessService $service,
+        ProcessViewBuilder $views,
     ): JsonResponse {
         $process = $service->archive(
             $process,
@@ -88,8 +88,8 @@ class WorkProcessController extends Controller
 
     public function bulk(
         BulkWorkProcessesRequest $request,
-        WorkProcessBulkService $service,
-        WorkProcessViewBuilder $views,
+        ProcessBulkService $service,
+        ProcessViewBuilder $views,
     ): JsonResponse {
         $data = $request->bulk();
         $result = $service->apply(
@@ -120,7 +120,7 @@ class WorkProcessController extends Controller
     public function timeline(
         ViewWorkProcessRequest $request,
         WorkProcess $process,
-        WorkTimelineQuery $timeline,
+        TimelineQuery $timeline,
     ): JsonResponse {
         return WorkTimelineResource::make(
             $timeline->forProcess($process),

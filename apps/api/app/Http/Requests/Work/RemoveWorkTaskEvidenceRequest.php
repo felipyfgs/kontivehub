@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Work;
 
-use App\DTO\Work\WorkEvidenceRemovalData;
+use App\DTO\Work\EvidenceRemovalData;
 use App\Models\User;
 use App\Models\WorkTask;
 
@@ -24,9 +24,9 @@ final class RemoveWorkTaskEvidenceRequest extends WorkRequest
         return ['reason' => ['required', 'string', 'max:2000']];
     }
 
-    public function removal(): WorkEvidenceRemovalData
+    public function removal(): EvidenceRemovalData
     {
-        return new WorkEvidenceRemovalData(
+        return new EvidenceRemovalData(
             (string) $this->validated('reason'),
         );
     }

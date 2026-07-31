@@ -4,7 +4,7 @@ namespace App\Console\Commands;
 
 use App\Enums\Communication\ConversationStatus;
 use App\Models\CommunicationConversation;
-use App\Services\Communication\Events\CommunicationEventRecorder;
+use App\Services\Communication\Events\EventRecorder;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -14,7 +14,7 @@ final class WakeSnoozedCommunicationCommand extends Command
 
     protected $description = 'Reabre conversas cujo prazo de adiamento terminou.';
 
-    public function handle(CommunicationEventRecorder $events): int
+    public function handle(EventRecorder $events): int
     {
         $limit = min(2000, max(1, (int) $this->option('limit')));
         $ids = CommunicationConversation::query()->withoutGlobalScopes()

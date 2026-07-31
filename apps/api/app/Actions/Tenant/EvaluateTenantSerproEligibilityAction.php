@@ -3,7 +3,7 @@
 namespace App\Actions\Tenant;
 
 use App\DTO\Serpro\EligibilityResult;
-use App\DTO\Tenant\TenantSerproEligibilityData;
+use App\DTO\Tenant\SerproEligibilityData;
 use App\Models\Client;
 use App\Models\User;
 use App\Services\Integra\IntegraEligibilityService;
@@ -17,7 +17,7 @@ final readonly class EvaluateTenantSerproEligibilityAction
     ) {}
 
     public function __invoke(
-        TenantSerproEligibilityData $data,
+        SerproEligibilityData $data,
         User $actor,
     ): EligibilityResult {
         $tenant = $this->currentTenant->tenant();

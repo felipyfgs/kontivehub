@@ -42,10 +42,10 @@ use App\Models\CommunicationLabel;
 use App\Models\CommunicationMessage;
 use App\Models\CommunicationOutboxEntry;
 use App\Models\Tenant;
-use App\Services\Communication\Conversation\CommunicationConversationReadStateService;
-use App\Services\Communication\Media\CommunicationMediaStore;
-use App\Services\Communication\Outbox\CommunicationOutboxDispatcher;
-use App\Services\Communication\Security\CommunicationHmacSigner;
+use App\Services\Communication\Conversation\ConversationReadStateService;
+use App\Services\Communication\Media\MediaStore;
+use App\Services\Communication\Outbox\OutboxDispatcher;
+use App\Services\Communication\Security\HmacSigner;
 use GuzzleHttp\Psr7\Utils;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -149,7 +149,7 @@ final class CommunicationGatewayFlowTest extends TestCase
                 ->whereKey($message->conversation_id)
                 ->lockForUpdate()
                 ->firstOrFail();
-            app(CommunicationConversationReadStateService::class)->markRead(
+            app(ConversationReadStateService::class)->markRead(
                 $conversation,
                 (int) $message->id,
                 null,
@@ -275,7 +275,7 @@ final class CommunicationGatewayFlowTest extends TestCase
         $otherRemoteIdentity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
             'tenant_id' => $tenant->id,
             'contact_id' => $remoteContact->id,
-            'channel' => CommunicationChannel::Whatsapp,
+            'channel' => CommunicationChannel::WhatsApp,
             'address_encrypted' => '+559992032700',
             'address_hash' => hash('sha256', '+559992032700'),
             'address_masked' => '***2700',
@@ -771,7 +771,7 @@ final class CommunicationGatewayFlowTest extends TestCase
     {
         [, $inbox] = $this->context();
         $path = '/api/internal/v1/communication/gateway/events';
-        $signer = app(CommunicationHmacSigner::class);
+        $signer = app(HmacSigner::class);
         $malformedBody = '{"contract_version":';
 
         $this->call('POST', $path, content: $malformedBody)
@@ -927,8 +927,8 @@ final class CommunicationGatewayFlowTest extends TestCase
             'module_key' => 'simples_mei',
             'submodule_key' => 'pgdasd',
             'period_key' => '2026-06',
-            'channel' => CommunicationChannel::Whatsapp,
-            'execution_mode' => CommunicationExecutionMode::WhatsappNative,
+            'channel' => CommunicationChannel::WhatsApp,
+            'execution_mode' => CommunicationExecutionMode::WhatsAppNative,
             'status' => CommunicationDispatchStatus::Accepted,
             'recipient_masked' => '***0002',
             'recipient_hash' => hash('sha256', '+5511999990002'),
@@ -987,7 +987,7 @@ final class CommunicationGatewayFlowTest extends TestCase
         [$identity, $conversation] = $this->identityAndConversation($tenant, $inbox);
         $acceptedMessage = $this->outboundMessage($tenant, $inbox, $identity, $conversation, 'accepted');
         $accepted = $this->outbox($tenant, $inbox, $acceptedMessage, 'command-accepted-0001');
-        $dispatcher = app(CommunicationOutboxDispatcher::class);
+        $dispatcher = app(OutboxDispatcher::class);
 
         $dispatcher->dispatch((int) $accepted->id);
         $this->assertSame(OutboxStatus::Accepted, $accepted->refresh()->status);
@@ -1037,7 +1037,7 @@ final class CommunicationGatewayFlowTest extends TestCase
         $outbound->forceFill(['metadata' => ['receipt_message_id' => $inbound->id]])->save();
         $send = $this->outbox($tenant, $inbox, $outbound, 'command-receipt-follow-up-0001');
 
-        $dispatcher = app(CommunicationOutboxDispatcher::class);
+        $dispatcher = app(OutboxDispatcher::class);
         $dispatcher->dispatch((int) $send->id);
 
         $this->assertSame(OutboxStatus::Accepted, $send->refresh()->status);
@@ -1079,7 +1079,7 @@ final class CommunicationGatewayFlowTest extends TestCase
             'gateway_event_id' => 'gateway-old-media-0001',
             'sha256' => hash('sha256', 'old'),
         ];
-        $old = app(CommunicationMediaStore::class)->putStream(Utils::streamFor('old'), $oldContext);
+        $old = app(MediaStore::class)->putStream(Utils::streamFor('old'), $oldContext);
         $attachment = CommunicationAttachment::query()->withoutGlobalScopes()->create([
             'tenant_id' => $tenant->id,
             'message_id' => $message->id,
@@ -1112,11 +1112,11 @@ final class CommunicationGatewayFlowTest extends TestCase
         $this->assertSame('READY', $message->refresh()->metadata['media_state']);
         $this->assertDatabaseCount('communication_messages', 1);
         $this->assertDatabaseCount('communication_attachments', 1);
-        $this->assertTrue(app(CommunicationMediaStore::class)->exists($old['object_id']));
+        $this->assertTrue(app(MediaStore::class)->exists($old['object_id']));
         Queue::assertPushed(DeleteCommunicationMediaObjectJob::class, fn ($job) => $job->objectId === $old['object_id']);
 
-        (new DeleteCommunicationMediaObjectJob($old['object_id']))->handle(app(CommunicationMediaStore::class));
-        $this->assertFalse(app(CommunicationMediaStore::class)->exists($old['object_id']));
+        (new DeleteCommunicationMediaObjectJob($old['object_id']))->handle(app(MediaStore::class));
+        $this->assertFalse(app(MediaStore::class)->exists($old['object_id']));
     }
 
     public function test_logout_outbox_remains_dispatchable_after_inbox_is_soft_deleted(): void
@@ -1137,7 +1137,7 @@ final class CommunicationGatewayFlowTest extends TestCase
         $entry->forceFill(['inbox_id' => null])->save();
         $inbox->delete();
 
-        app(CommunicationOutboxDispatcher::class)->dispatch((int) $entry->id);
+        app(OutboxDispatcher::class)->dispatch((int) $entry->id);
 
         $this->assertSame(OutboxStatus::Accepted, $entry->refresh()->status);
         $this->assertNull($entry->inbox_id);
@@ -1204,7 +1204,7 @@ final class CommunicationGatewayFlowTest extends TestCase
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
             'tenant_id' => $tenant->id,
             'contact_id' => $contact->id,
-            'channel' => CommunicationChannel::Whatsapp,
+            'channel' => CommunicationChannel::WhatsApp,
             'address_encrypted' => $address,
             'address_hash' => hash('sha256', $address),
             'address_masked' => '***0002',
@@ -1237,7 +1237,7 @@ final class CommunicationGatewayFlowTest extends TestCase
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
             'tenant_id' => $tenant->id,
             'contact_id' => $contact->id,
-            'channel' => CommunicationChannel::Whatsapp,
+            'channel' => CommunicationChannel::WhatsApp,
             'address_encrypted' => $address,
             'address_hash' => hash('sha256', $address),
             'address_masked' => '***'.substr($address, -4),
@@ -1404,7 +1404,7 @@ final class CommunicationGatewayFlowTest extends TestCase
     {
         $path = '/api/internal/v1/communication/gateway/events';
         $body = json_encode($event, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
-        $headers = app(CommunicationHmacSigner::class)->headers('POST', $path, $body);
+        $headers = app(HmacSigner::class)->headers('POST', $path, $body);
 
         return $this->json('POST', $path, $event, $headers, JSON_UNESCAPED_SLASHES);
     }

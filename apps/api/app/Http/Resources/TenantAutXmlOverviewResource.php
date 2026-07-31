@@ -2,12 +2,12 @@
 
 namespace App\Http\Resources;
 
-use App\DTO\Tenant\TenantAutXmlOverviewData;
+use App\DTO\Tenant\AutXmlOverviewData;
 use App\Enums\SyncCursorStatus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-/** @mixin TenantAutXmlOverviewData */
+/** @mixin AutXmlOverviewData */
 final class TenantAutXmlOverviewResource extends JsonResource
 {
     /** @return array<string, mixed> */

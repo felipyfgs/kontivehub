@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Work;
 
-use App\DTO\Work\WorkDepartmentMembershipData;
+use App\DTO\Work\DepartmentMembershipData;
 use App\Models\User;
 use App\Models\WorkDepartment;
 
@@ -24,9 +24,9 @@ final class AssignWorkDepartmentMembershipRequest extends WorkRequest
         return ['membership_id' => ['required', 'integer']];
     }
 
-    public function membership(): WorkDepartmentMembershipData
+    public function membership(): DepartmentMembershipData
     {
-        return new WorkDepartmentMembershipData(
+        return new DepartmentMembershipData(
             $this->integer('membership_id'),
         );
     }

@@ -10,7 +10,7 @@ use App\Enums\Communication\MessageSource;
 use App\Enums\Communication\MessageStatus;
 use App\Enums\CommunicationChannel;
 use App\Enums\TenantRole;
-use App\Http\Resources\Communication\CommunicationMessageResource;
+use App\Http\Resources\Communication\MessageResource;
 use App\Models\CommunicationAttachment;
 use App\Models\CommunicationContact;
 use App\Models\CommunicationConversation;
@@ -22,7 +22,7 @@ use App\Models\CommunicationOutboxEntry;
 use App\Models\Tenant;
 use App\Models\TenantMembership;
 use App\Models\User;
-use App\Services\Communication\Media\CommunicationMediaStore;
+use App\Services\Communication\Media\MediaStore;
 use App\Support\CurrentTenant;
 use GuzzleHttp\Psr7\Utils;
 use Illuminate\Database\QueryException;
@@ -182,7 +182,7 @@ final class CommunicationSharedContentAndInitiationTest extends TestCase
             'gateway_event_id' => 'view-once-test',
             'sha256' => hash('sha256', 'privado'),
         ];
-        $stored = app(CommunicationMediaStore::class)->putStream(Utils::streamFor('privado'), $metadata);
+        $stored = app(MediaStore::class)->putStream(Utils::streamFor('privado'), $metadata);
         $attachment = CommunicationAttachment::query()->withoutGlobalScopes()->create([
             'tenant_id' => $tenant->id,
             'message_id' => $message->id,
@@ -245,7 +245,7 @@ final class CommunicationSharedContentAndInitiationTest extends TestCase
         $this->get('/api/v1/communication/attachments/'.$attachment->id.'/preview')
             ->assertNotFound();
 
-        $legacyResource = (new CommunicationMessageResource(
+        $legacyResource = (new MessageResource(
             $legacyMessage->load('attachments'),
         ))->resolve();
         $this->assertSame('UNAVAILABLE', $legacyResource['availability']['state']);
@@ -597,7 +597,7 @@ final class CommunicationSharedContentAndInitiationTest extends TestCase
             'tenant_id' => $tenant->id,
             'contact_id' => $contact->id,
             'canonical_identity_id' => $identity->id,
-            'channel' => CommunicationChannel::Whatsapp,
+            'channel' => CommunicationChannel::WhatsApp,
             'address_encrypted' => '+5511999990014',
             'address_hash' => hash('sha256', '+5511999990014'),
             'address_masked' => '***0014',
@@ -932,7 +932,7 @@ final class CommunicationSharedContentAndInitiationTest extends TestCase
         $identity = CommunicationIdentity::query()->withoutGlobalScopes()->create([
             'tenant_id' => $tenant->id,
             'contact_id' => $contact->id,
-            'channel' => CommunicationChannel::Whatsapp,
+            'channel' => CommunicationChannel::WhatsApp,
             'address_encrypted' => $address,
             'address_hash' => hash('sha256', $address),
             'address_masked' => '***'.substr($address, -4),

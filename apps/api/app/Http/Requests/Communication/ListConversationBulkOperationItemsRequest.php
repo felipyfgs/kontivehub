@@ -4,7 +4,7 @@ namespace App\Http\Requests\Communication;
 
 use App\Enums\Communication\ConversationBulkItemStatus;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 use Illuminate\Validation\Rule;
 
 final class ListConversationBulkOperationItemsRequest extends CommunicationRequest
@@ -14,7 +14,7 @@ final class ListConversationBulkOperationItemsRequest extends CommunicationReque
         $actor = $this->user();
 
         return $actor instanceof User
-            && app(CommunicationAccess::class)->canView($actor);
+            && app(Access::class)->canView($actor);
     }
 
     protected function prepareCommunicationValidation(): void

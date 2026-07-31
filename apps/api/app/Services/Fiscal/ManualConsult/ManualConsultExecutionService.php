@@ -9,8 +9,8 @@ use App\Jobs\Fiscal\RefreshRegistrationLinksJob;
 use App\Jobs\Fiscal\RefreshTaxProcessesJob;
 use App\Models\Client;
 use App\Models\Tenant;
-use App\Services\Fiscal\Guides\PagtowebPaymentCountQueryService;
-use App\Services\Fiscal\Guides\PagtowebPaymentListQueryService;
+use App\Services\Fiscal\Guides\PagtoWebPaymentCountQueryService;
+use App\Services\Fiscal\Guides\PagtoWebPaymentListQueryService;
 use App\Services\Fiscal\Guides\SicalcRevenueSupportQueryService;
 use App\Services\Fiscal\SimplesMei\CcmeiMonitoringQueryService;
 use App\Services\Fiscal\SimplesMei\CcmeiRegistrationStatusQueryService;
@@ -52,8 +52,8 @@ final class ManualConsultExecutionService
         private readonly PgdasdMonitoringQueryService $pgdasd,
         private readonly SimplesMeiQueryService $simplesMei,
         private readonly SicalcRevenueSupportQueryService $sicalc,
-        private readonly PagtowebPaymentListQueryService $pagtowebList,
-        private readonly PagtowebPaymentCountQueryService $pagtowebCount,
+        private readonly PagtoWebPaymentListQueryService $pagtowebList,
+        private readonly PagtoWebPaymentCountQueryService $pagtowebCount,
         private readonly SitfisSnapshotService $sitfis,
         private readonly DctfwebDeclarationService $dctfwebDeclarations,
         private readonly MitAssessmentService $mit,

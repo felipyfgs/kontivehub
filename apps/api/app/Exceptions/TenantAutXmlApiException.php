@@ -2,7 +2,7 @@
 
 namespace App\Exceptions;
 
-use App\DTO\Tenant\TenantAutXmlStreamData;
+use App\DTO\Tenant\AutXmlStreamData;
 use Illuminate\Contracts\Debug\ShouldntReport;
 
 final class TenantAutXmlApiException extends ApiDomainException implements ShouldntReport
@@ -49,7 +49,7 @@ final class TenantAutXmlApiException extends ApiDomainException implements Shoul
         );
     }
 
-    public static function streamNotReady(TenantAutXmlStreamData $stream): self
+    public static function streamNotReady(AutXmlStreamData $stream): self
     {
         return new self(
             'tenant_autxml_stream_not_ready',

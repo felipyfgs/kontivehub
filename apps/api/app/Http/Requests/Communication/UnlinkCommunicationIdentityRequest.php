@@ -4,7 +4,7 @@ namespace App\Http\Requests\Communication;
 
 use App\Models\CommunicationIdentity;
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 
 final class UnlinkCommunicationIdentityRequest extends CommunicationRequest
 {
@@ -15,7 +15,7 @@ final class UnlinkCommunicationIdentityRequest extends CommunicationRequest
 
         return $actor instanceof User
             && $identity instanceof CommunicationIdentity
-            && app(CommunicationAccess::class)->canManageContacts($actor, $identity);
+            && app(Access::class)->canManageContacts($actor, $identity);
     }
 
     /** @return array<string, list<mixed>> */

@@ -5,7 +5,7 @@ namespace App\Actions\Work;
 use App\Domain\Work\DueDateCalculator;
 use App\Domain\Work\QueueBucketResolver;
 use App\Domain\Work\WorkRiskCalculator;
-use App\DTO\Work\WorkTaskDetailData;
+use App\DTO\Work\TaskDetailData;
 use App\Models\WorkTask;
 use App\Support\CurrentTenant;
 use App\Support\Work\TenantTimezone;
@@ -19,7 +19,7 @@ final readonly class ShowWorkTaskAction
         private DueDateCalculator $dates = new DueDateCalculator,
     ) {}
 
-    public function execute(WorkTask $task): WorkTaskDetailData
+    public function execute(WorkTask $task): TaskDetailData
     {
         $task->load([
             'process.client',
@@ -48,7 +48,7 @@ final readonly class ShowWorkTaskAction
             $today,
         );
 
-        return new WorkTaskDetailData(
+        return new TaskDetailData(
             task: $task,
             risks: array_map(
                 static fn ($risk): string => $risk->value,

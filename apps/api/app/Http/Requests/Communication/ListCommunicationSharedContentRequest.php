@@ -3,7 +3,7 @@
 namespace App\Http\Requests\Communication;
 
 use App\Models\User;
-use App\Services\Communication\Authorization\CommunicationAccess;
+use App\Services\Communication\Authorization\Access;
 use Illuminate\Validation\Rule;
 
 final class ListCommunicationSharedContentRequest extends CommunicationRequest
@@ -12,7 +12,7 @@ final class ListCommunicationSharedContentRequest extends CommunicationRequest
     {
         $actor = $this->user();
 
-        return $actor instanceof User && app(CommunicationAccess::class)->canView($actor);
+        return $actor instanceof User && app(Access::class)->canView($actor);
     }
 
     /** @return array<string, list<mixed>> */

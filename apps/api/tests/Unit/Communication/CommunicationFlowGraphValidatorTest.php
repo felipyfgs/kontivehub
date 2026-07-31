@@ -5,8 +5,8 @@ namespace Tests\Unit\Communication;
 use App\Enums\TenantPermission;
 use App\Models\CommunicationCannedResponse;
 use App\Models\Tenant;
-use App\Services\Communication\Flows\CommunicationFlowGraphCanonicalizer;
-use App\Services\Communication\Flows\CommunicationFlowGraphValidator;
+use App\Services\Communication\Flows\FlowGraphCanonicalizer;
+use App\Services\Communication\Flows\FlowGraphValidator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -14,15 +14,15 @@ final class CommunicationFlowGraphValidatorTest extends TestCase
 {
     use RefreshDatabase;
 
-    private CommunicationFlowGraphValidator $validator;
+    private FlowGraphValidator $validator;
 
-    private CommunicationFlowGraphCanonicalizer $canonicalizer;
+    private FlowGraphCanonicalizer $canonicalizer;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->canonicalizer = new CommunicationFlowGraphCanonicalizer;
-        $this->validator = new CommunicationFlowGraphValidator($this->canonicalizer);
+        $this->canonicalizer = new FlowGraphCanonicalizer;
+        $this->validator = new FlowGraphValidator($this->canonicalizer);
     }
 
     public function test_accepts_allowlisted_dag(): void

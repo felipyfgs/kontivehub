@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Communication;
 
-use App\DTO\Communication\CommunicationGatewayOperationData;
+use App\DTO\Communication\GatewayOperationData;
 
 final class ResolveCommunicationInboxLinkRequest extends CommunicationInboxGatewayRequest
 {
@@ -21,7 +21,7 @@ final class ResolveCommunicationInboxLinkRequest extends CommunicationInboxGatew
         }
     }
 
-    public function gatewayData(): CommunicationGatewayOperationData
+    public function gatewayData(): GatewayOperationData
     {
         return $this->gatewayOperation([
             'link' => (string) $this->validated('link'),
