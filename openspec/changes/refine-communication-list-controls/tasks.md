@@ -20,4 +20,16 @@
 
 - [x] 4.1 Cobrir em gate e E2E o alinhamento `start`/`end` de filtros e ações bulk, incluindo colisão sem overflow em viewport estreito.
 - [x] 4.2 Refatorar os dropdowns para declarar a ancoragem conforme a posição de cada gatilho no grupo.
-- [ ] 4.3 Reexecutar testes focados, inspeção desktop/mobile e gates Web após a refatoração.
+- [x] 4.3 Reexecutar testes focados, inspeção desktop/mobile e gates Web após a refatoração.
+
+## 5. Atendimento limpo e contextual
+
+- [x] 5.1 Adicionar gates e testes para busca exclusiva, três tabs fixas no padrão Chatwoot, dois popovers iconográficos, badge/resumo, troca tabs↔seleção e ausência de overflow.
+- [x] 5.2 Extrair o modelo dos presets `Em aberto`, `Não lidas` e `Não atribuídas` com aplicação atômica, ordem estável, estado sem tab falsa e preservação dos demais filtros no estado de sessão.
+- [x] 5.3 Refatorar `ConversationListFilters` para busca primeiro, tabs com sublinhado ativo, popover de status/ordenação e popover avançado separado com rascunho e limpeza.
+- [x] 5.4 Simplificar navbar e faixa bulk: realtime semântico, nova conversa direta, reticências secundárias e somente leitura/status como ações bulk diretas.
+- [x] 5.5 Extrair um builder/componente compartilhado de ações unitárias com leitura aplicável e submenus de status, responsável, fila e marcadores, respeitando autorização e estado atual.
+- [x] 5.6 Tornar mutações unitárias target-aware e integrar o menu compartilhado nas linhas sem alterar seleção bulk, conversa aberta ou contratos HTTP.
+- [x] 5.7 Reorganizar o cabeçalho da timeline para preservar identidade/status/contexto, remover select largo/adiar isolado e consumir o menu compartilhado.
+- [x] 5.8 Cobrir teclado, Escape/foco, ações no-op, submenus, rótulo compacto de `Não atribuídas`, 320/390/1024/1440 px, master-detail/slideover e fazer uma rodada visual desktop/mobile.
+- [x] 5.9 Executar testes focados, lint, typecheck, generate, test, test:fidelity e test:artifacts no container Web e validar o change OpenSpec.
