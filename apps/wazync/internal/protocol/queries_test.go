@@ -138,7 +138,7 @@ func TestQueryTimeoutKeepsProfilePicturesSeparate(t *testing.T) {
 		domain.QueryBusinessProfile,
 		domain.QueryContactQRLink,
 		domain.QueryResolveContactQR,
-		domain.QueryResolveBusinessURL,
+		domain.QueryResolveBusinessLink,
 		domain.QueryBlocklist,
 		domain.QueryPrivacySettings,
 	} {
@@ -606,7 +606,7 @@ func TestQueryExecutorMatchesStrictContractResultKeys(t *testing.T) {
 		{"profile picture", domain.QueryProfilePicture, user, "profile_picture"},
 		{"contact qr", domain.QueryContactQRLink, qr, "contact_qr_link"},
 		{"contact resolve", domain.QueryResolveContactQR, contactLink, "contact"},
-		{"business resolve", domain.QueryResolveBusinessURL, businessLink, "business"},
+		{"business resolve", domain.QueryResolveBusinessLink, businessLink, "business"},
 		{"blocklist", domain.QueryBlocklist, json.RawMessage(`{}`), "blocked_users"},
 		{"privacy", domain.QueryPrivacySettings, json.RawMessage(`{}`), "settings"},
 	}

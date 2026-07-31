@@ -284,7 +284,7 @@ func TestSessionStatusTreatsAnUnprovisionedInboxAsDisconnectedWithoutCredentials
 func TestMediaEndpointRequiresSignatureAndStreamsPlaintextOnlyAfterAuthentication(t *testing.T) {
 	t.Parallel()
 	persistence := store.NewMemory()
-	server := newTestServer(persistence).WithMediaStore(testMediaStore{content: "media-bytes"})
+	server := newTestServer(persistence).WithSpoolStore(testMediaStore{content: "media-bytes"})
 
 	unsigned := httptest.NewRequest(http.MethodGet, "/internal/v1/media/media-0001", nil)
 	unsignedResponse := httptest.NewRecorder()

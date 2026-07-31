@@ -258,7 +258,7 @@ func (a *WhatsMeowAdapter) Execute(ctx context.Context, query domain.Query) (any
 		}
 		return map[string]any{"contact": map[string]string{"user": address.Normalized}}, nil
 
-	case domain.QueryResolveBusinessURL:
+	case domain.QueryResolveBusinessLink:
 		var payload domain.LinkQueryPayload
 		if err := json.Unmarshal(query.Payload, &payload); err != nil {
 			return nil, err

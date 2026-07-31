@@ -284,7 +284,7 @@ func (c Command) ValidatePayload() error {
 		return payload.Validate()
 	case CommandEditMessage:
 		return decodePayload(c.Payload, &MessageEditPayload{})
-	case CommandRevokeMessage, CommandRequestUnavailable:
+	case CommandRevokeMessage, CommandRequestUnavailableMessage:
 		return decodePayload(c.Payload, &MessageTargetPayload{})
 	case CommandReactMessage:
 		return decodePayload(c.Payload, &MessageReactionPayload{})
@@ -431,7 +431,7 @@ func (q Query) ValidatePayload() error {
 		return decodePayload(q.Payload, &ProfilePictureQueryPayload{})
 	case QueryContactQRLink:
 		return decodePayload(q.Payload, &ContactQRQueryPayload{})
-	case QueryResolveContactQR, QueryResolveBusinessURL:
+	case QueryResolveContactQR, QueryResolveBusinessLink:
 		return decodePayload(q.Payload, &LinkQueryPayload{})
 	case QueryBlocklist, QueryPrivacySettings:
 		return decodePayload(q.Payload, &EmptyPayload{})

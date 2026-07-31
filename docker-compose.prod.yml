@@ -332,8 +332,8 @@ services:
     environment:
       WAZYNC_ENABLED: ${WAZYNC_ENABLED:-false}
       WAZYNC_DATABASE_URL: ${WAZYNC_DATABASE_URL:-}
-      WAZYNC_EVENTS_URL: http://web/api/internal/v1/communication/gateway/events
-      WAZYNC_MEDIA_URL: http://web/api/internal/v1/communication/gateway/media
+      WAZYNC_EVENT_INGEST_URL: http://web/api/internal/v1/communication/gateway/events
+      WAZYNC_MEDIA_SOURCE_URL: http://web/api/internal/v1/communication/gateway/media
       WAZYNC_HMAC_KEY_ID: ${WAZYNC_HMAC_KEY_ID:-}
       WAZYNC_HMAC_SECRET: ${WAZYNC_HMAC_SECRET:-}
       WAZYNC_HMAC_PREVIOUS_KEY_ID: ${WAZYNC_HMAC_PREVIOUS_KEY_ID:-}

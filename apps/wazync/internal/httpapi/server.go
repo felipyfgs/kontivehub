@@ -23,7 +23,7 @@ type Server struct {
 	maxBodyBytes int64
 	store        store.Store
 	verifier     *security.Verifier
-	media        interface {
+	spool        interface {
 		Reader(context.Context, string) (io.ReadCloser, error)
 	}
 	queries  QueryExecutor
@@ -52,7 +52,7 @@ func New(enabled bool, maxBodyBytes int64, persistence store.Store, verifier *se
 	server.mux.HandleFunc("POST /internal/v1/commands", server.acceptCommand)
 	server.mux.HandleFunc("POST /internal/v1/queries", server.executeQuery)
 	server.mux.HandleFunc("GET /internal/v1/sessions/{sessionID}", server.sessionStatus)
-	server.mux.HandleFunc("GET /internal/v1/media/{spoolID}", server.downloadMedia)
+	server.mux.HandleFunc("GET /internal/v1/media/{spoolID}", server.downloadSpoolMedia)
 	server.mux.HandleFunc("GET /healthz", server.health)
 	server.mux.HandleFunc("GET /metrics", server.metrics)
 	return server
@@ -78,14 +78,14 @@ func (s *Server) WithRecipientScopeMetrics(metrics interface {
 	return s
 }
 
-func (s *Server) WithMediaStore(media interface {
+func (s *Server) WithSpoolStore(spool interface {
 	Reader(context.Context, string) (io.ReadCloser, error)
 }) *Server {
-	s.media = media
+	s.spool = spool
 	return s
 }
 
-func (s *Server) downloadMedia(w http.ResponseWriter, r *http.Request) {
+func (s *Server) downloadSpoolMedia(w http.ResponseWriter, r *http.Request) {
 	if !s.enabled {
 		writeError(w, http.StatusServiceUnavailable, "GATEWAY_DISABLED")
 		return
@@ -94,11 +94,11 @@ func (s *Server) downloadMedia(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "INVALID_INTERNAL_SIGNATURE")
 		return
 	}
-	if s.media == nil {
+	if s.spool == nil {
 		writeError(w, http.StatusServiceUnavailable, "MEDIA_SPOOL_UNAVAILABLE")
 		return
 	}
-	reader, err := s.media.Reader(r.Context(), r.PathValue("spoolID"))
+	reader, err := s.spool.Reader(r.Context(), r.PathValue("spoolID"))
 	if err != nil {
 		writeError(w, http.StatusNotFound, "MEDIA_NOT_FOUND")
 		return

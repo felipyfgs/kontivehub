@@ -72,7 +72,7 @@ func main() {
 	verifier := security.NewVerifier(keys, cfg.HMACWindow, cfg.NonceTTL, persistence)
 	api := httpapi.New(cfg.Enabled, cfg.MaxBodyBytes, persistence, verifier)
 	if cfg.Enabled {
-		api.WithMediaStore(mediaSpool)
+		api.WithSpoolStore(mediaSpool)
 		eventBridge := protocol.NewEventBridge(persistence, mediaSpool, cfg.MaxMediaBytes)
 		api.WithRecipientScopeMetrics(eventBridge)
 		eventBridge.SetDeviceRecorder(deviceResolver)
@@ -85,12 +85,12 @@ func main() {
 		eventBridge.SetLifecycleObserver(sessionManager.NotifyLifecycle)
 		pairing := session.NewPairingCoordinator(persistence, adapter, deviceResolver)
 		mediaFetcher := media.NewFetcher(
-			cfg.LaravelMediaURL, cfg.CurrentKeyID, cfg.CurrentSecret, cfg.MaxMediaBytes, nil,
+			cfg.LaravelMediaSourceURL, cfg.CurrentKeyID, cfg.CurrentSecret, cfg.MaxMediaBytes, nil,
 		)
 		worker := command.New(persistence, sessionManager, pairing, adapter, cfg.ReplicaID).
 			WithMediaFetcher(mediaFetcher)
 		eventDispatcher := dispatcher.New(
-			persistence, cfg.LaravelEventsURL, cfg.CurrentKeyID, cfg.CurrentSecret, nil,
+			persistence, cfg.LaravelEventIngestURL, cfg.CurrentKeyID, cfg.CurrentSecret, nil,
 		).WithSpool(mediaSpool)
 		go sessionManager.Run(ctx)
 		go worker.Run(ctx, 250*time.Millisecond)

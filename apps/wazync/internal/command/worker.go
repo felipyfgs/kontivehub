@@ -297,7 +297,7 @@ func (w *Worker) process(ctx context.Context, command domain.Command) error {
 
 	case domain.CommandEditMessage, domain.CommandRevokeMessage, domain.CommandReactMessage,
 		domain.CommandVotePoll, domain.CommandMarkMessage, domain.CommandSetDisappearing,
-		domain.CommandRequestUnavailable:
+		domain.CommandRequestUnavailableMessage:
 		if _, owns := w.sessions.Owns(ctx, command.SessionID); !owns {
 			return errLeaseUnavailable
 		}
@@ -342,7 +342,7 @@ func (w *Worker) process(ctx context.Context, command domain.Command) error {
 				return err
 			}
 			return actions.SetChatDisappearing(ctx, command.SessionID, payload)
-		case domain.CommandRequestUnavailable:
+		case domain.CommandRequestUnavailableMessage:
 			var payload domain.MessageTargetPayload
 			if err := json.Unmarshal(command.Payload, &payload); err != nil {
 				return err

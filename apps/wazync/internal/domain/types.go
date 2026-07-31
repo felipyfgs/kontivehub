@@ -22,32 +22,32 @@ var (
 type CommandType string
 
 const (
-	CommandProvisionSession       CommandType = "SESSION_PROVISION"
-	CommandPairSession            CommandType = "SESSION_PAIR"
-	CommandPairPhone              CommandType = "SESSION_PAIR_PHONE"
-	CommandPasskeyRespond         CommandType = "SESSION_PASSKEY_RESPOND"
-	CommandPasskeyConfirm         CommandType = "SESSION_PASSKEY_CONFIRM"
-	CommandConnectSession         CommandType = "SESSION_CONNECT"
-	CommandDisconnectSession      CommandType = "SESSION_DISCONNECT"
-	CommandSetPassive             CommandType = "SESSION_SET_PASSIVE"
-	CommandLogoutSession          CommandType = "SESSION_LOGOUT"
-	CommandSendMessage            CommandType = "MESSAGE_SEND"
-	CommandEditMessage            CommandType = "MESSAGE_EDIT"
-	CommandRevokeMessage          CommandType = "MESSAGE_REVOKE"
-	CommandReactMessage           CommandType = "MESSAGE_REACT"
-	CommandVotePoll               CommandType = "POLL_VOTE"
-	CommandMarkMessage            CommandType = "MESSAGE_MARK"
-	CommandRequestUnavailable     CommandType = "MESSAGE_REQUEST_UNAVAILABLE"
-	CommandRetryMedia             CommandType = "MEDIA_RETRY_REQUEST"
-	CommandSetPresence            CommandType = "PRESENCE_SET"
-	CommandSubscribePresence      CommandType = "PRESENCE_SUBSCRIBE"
-	CommandSetChatPresence        CommandType = "CHAT_PRESENCE_SET"
-	CommandSetDisappearing        CommandType = "CHAT_DISAPPEARING_SET"
-	CommandUpdateChatState        CommandType = "CHAT_STATE_UPDATE"
-	CommandUpdateBlocklist        CommandType = "BLOCKLIST_UPDATE"
-	CommandUpdatePrivacy          CommandType = "PRIVACY_UPDATE"
-	CommandSetDefaultDisappearing CommandType = "DEFAULT_DISAPPEARING_SET"
-	CommandRequestHistorySync     CommandType = "HISTORY_SYNC_REQUEST"
+	CommandProvisionSession          CommandType = "SESSION_PROVISION"
+	CommandPairSession               CommandType = "SESSION_PAIR"
+	CommandPairPhone                 CommandType = "SESSION_PAIR_PHONE"
+	CommandPasskeyRespond            CommandType = "SESSION_PASSKEY_RESPOND"
+	CommandPasskeyConfirm            CommandType = "SESSION_PASSKEY_CONFIRM"
+	CommandConnectSession            CommandType = "SESSION_CONNECT"
+	CommandDisconnectSession         CommandType = "SESSION_DISCONNECT"
+	CommandSetPassive                CommandType = "SESSION_SET_PASSIVE"
+	CommandLogoutSession             CommandType = "SESSION_LOGOUT"
+	CommandSendMessage               CommandType = "MESSAGE_SEND"
+	CommandEditMessage               CommandType = "MESSAGE_EDIT"
+	CommandRevokeMessage             CommandType = "MESSAGE_REVOKE"
+	CommandReactMessage              CommandType = "MESSAGE_REACT"
+	CommandVotePoll                  CommandType = "POLL_VOTE"
+	CommandMarkMessage               CommandType = "MESSAGE_MARK"
+	CommandRequestUnavailableMessage CommandType = "MESSAGE_REQUEST_UNAVAILABLE"
+	CommandRetryMedia                CommandType = "MEDIA_RETRY_REQUEST"
+	CommandSetPresence               CommandType = "PRESENCE_SET"
+	CommandSubscribePresence         CommandType = "PRESENCE_SUBSCRIBE"
+	CommandSetChatPresence           CommandType = "CHAT_PRESENCE_SET"
+	CommandSetDisappearing           CommandType = "CHAT_DISAPPEARING_SET"
+	CommandUpdateChatState           CommandType = "CHAT_STATE_UPDATE"
+	CommandUpdateBlocklist           CommandType = "BLOCKLIST_UPDATE"
+	CommandUpdatePrivacy             CommandType = "PRIVACY_UPDATE"
+	CommandSetDefaultDisappearing    CommandType = "DEFAULT_DISAPPEARING_SET"
+	CommandRequestHistorySync        CommandType = "HISTORY_SYNC_REQUEST"
 )
 
 func (t CommandType) Valid() bool {
@@ -56,7 +56,7 @@ func (t CommandType) Valid() bool {
 		CommandPasskeyConfirm, CommandConnectSession, CommandDisconnectSession,
 		CommandSetPassive, CommandLogoutSession, CommandSendMessage, CommandEditMessage,
 		CommandRevokeMessage, CommandReactMessage, CommandVotePoll, CommandMarkMessage,
-		CommandRequestUnavailable, CommandRetryMedia, CommandSetPresence, CommandSubscribePresence,
+		CommandRequestUnavailableMessage, CommandRetryMedia, CommandSetPresence, CommandSubscribePresence,
 		CommandSetChatPresence, CommandSetDisappearing, CommandUpdateChatState,
 		CommandUpdateBlocklist, CommandUpdatePrivacy, CommandSetDefaultDisappearing,
 		CommandRequestHistorySync:
@@ -148,22 +148,22 @@ type PendingEvent struct {
 type QueryType string
 
 const (
-	QueryIsOnWhatsApp       QueryType = "USER_CHECK"
-	QueryUserInfo           QueryType = "USER_INFO"
-	QueryContactProfiles    QueryType = "CONTACT_PROFILES"
-	QueryBusinessProfile    QueryType = "BUSINESS_PROFILE"
-	QueryProfilePicture     QueryType = "PROFILE_PICTURE"
-	QueryContactQRLink      QueryType = "CONTACT_QR_LINK"
-	QueryResolveContactQR   QueryType = "CONTACT_QR_RESOLVE"
-	QueryResolveBusinessURL QueryType = "BUSINESS_LINK_RESOLVE"
-	QueryBlocklist          QueryType = "BLOCKLIST"
-	QueryPrivacySettings    QueryType = "PRIVACY_SETTINGS"
+	QueryIsOnWhatsApp        QueryType = "USER_CHECK"
+	QueryUserInfo            QueryType = "USER_INFO"
+	QueryContactProfiles     QueryType = "CONTACT_PROFILES"
+	QueryBusinessProfile     QueryType = "BUSINESS_PROFILE"
+	QueryProfilePicture      QueryType = "PROFILE_PICTURE"
+	QueryContactQRLink       QueryType = "CONTACT_QR_LINK"
+	QueryResolveContactQR    QueryType = "CONTACT_QR_RESOLVE"
+	QueryResolveBusinessLink QueryType = "BUSINESS_LINK_RESOLVE"
+	QueryBlocklist           QueryType = "BLOCKLIST"
+	QueryPrivacySettings     QueryType = "PRIVACY_SETTINGS"
 )
 
 func (t QueryType) Valid() bool {
 	switch t {
 	case QueryIsOnWhatsApp, QueryUserInfo, QueryContactProfiles, QueryBusinessProfile, QueryProfilePicture,
-		QueryContactQRLink, QueryResolveContactQR, QueryResolveBusinessURL,
+		QueryContactQRLink, QueryResolveContactQR, QueryResolveBusinessLink,
 		QueryBlocklist, QueryPrivacySettings:
 		return true
 	default:

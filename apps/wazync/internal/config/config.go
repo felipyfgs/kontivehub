@@ -11,57 +11,57 @@ import (
 )
 
 type Config struct {
-	Enabled          bool
-	HTTPAddress      string
-	DatabaseURL      string
-	LaravelEventsURL string
-	LaravelMediaURL  string
-	CurrentKeyID     string
-	CurrentSecret    string
-	PreviousKeyID    string
-	PreviousSecret   string
-	HMACWindow       time.Duration
-	NonceTTL         time.Duration
-	DataKey          []byte
-	MaxBodyBytes     int64
-	MaxMediaBytes    int64
-	ReplicaID        string
-	SessionCapacity  int
-	LeaseTTL         time.Duration
-	HeartbeatEvery   time.Duration
-	SpoolDirectory   string
-	WAConnectTimeout time.Duration
-	WAReadyTimeout   time.Duration
-	WAHTTPTimeout    time.Duration
-	WAProxyURL       string
-	WARetryHandlers  int64
+	Enabled               bool
+	HTTPAddress           string
+	DatabaseURL           string
+	LaravelEventIngestURL string
+	LaravelMediaSourceURL string
+	CurrentKeyID          string
+	CurrentSecret         string
+	PreviousKeyID         string
+	PreviousSecret        string
+	HMACWindow            time.Duration
+	NonceTTL              time.Duration
+	DataKey               []byte
+	MaxBodyBytes          int64
+	MaxMediaBytes         int64
+	ReplicaID             string
+	SessionCapacity       int
+	LeaseTTL              time.Duration
+	HeartbeatEvery        time.Duration
+	SpoolDirectory        string
+	WAConnectTimeout      time.Duration
+	WAReadyTimeout        time.Duration
+	WAHTTPTimeout         time.Duration
+	WAProxyURL            string
+	WARetryHandlers       int64
 }
 
 func Load() (Config, error) {
 	cfg := Config{
-		Enabled:          envBool("WAZYNC_ENABLED", false),
-		HTTPAddress:      env("WAZYNC_HTTP_ADDRESS", ":8080"),
-		DatabaseURL:      strings.TrimSpace(os.Getenv("WAZYNC_DATABASE_URL")),
-		LaravelEventsURL: strings.TrimSpace(os.Getenv("WAZYNC_EVENTS_URL")),
-		LaravelMediaURL:  strings.TrimSpace(os.Getenv("WAZYNC_MEDIA_URL")),
-		CurrentKeyID:     strings.TrimSpace(os.Getenv("WAZYNC_HMAC_KEY_ID")),
-		CurrentSecret:    os.Getenv("WAZYNC_HMAC_SECRET"),
-		PreviousKeyID:    strings.TrimSpace(os.Getenv("WAZYNC_HMAC_PREVIOUS_KEY_ID")),
-		PreviousSecret:   os.Getenv("WAZYNC_HMAC_PREVIOUS_SECRET"),
-		HMACWindow:       envDuration("WAZYNC_HMAC_WINDOW", 5*time.Minute),
-		NonceTTL:         envDuration("WAZYNC_NONCE_TTL", 10*time.Minute),
-		MaxBodyBytes:     envInt64("WAZYNC_MAX_BODY_BYTES", 1<<20),
-		MaxMediaBytes:    envInt64("WAZYNC_MEDIA_MAX_BYTES", 20<<20),
-		ReplicaID:        env("WAZYNC_REPLICA_ID", hostname()),
-		SessionCapacity:  envInt("WAZYNC_SESSION_CAPACITY", 250),
-		LeaseTTL:         envDuration("WAZYNC_LEASE_TTL", 2*time.Minute),
-		HeartbeatEvery:   envDuration("WAZYNC_HEARTBEAT_EVERY", 10*time.Second),
-		SpoolDirectory:   env("WAZYNC_SPOOL_DIR", "/var/lib/wazync/spool"),
-		WAConnectTimeout: envDuration("WAZYNC_WA_CONNECT_TIMEOUT", 20*time.Second),
-		WAReadyTimeout:   envDuration("WAZYNC_WA_READY_TIMEOUT", 30*time.Second),
-		WAHTTPTimeout:    envDuration("WAZYNC_WA_HTTP_TIMEOUT", 45*time.Second),
-		WAProxyURL:       strings.TrimSpace(os.Getenv("WAZYNC_WA_PROXY_URL")),
-		WARetryHandlers:  envInt64("WAZYNC_WA_RETRY_HANDLERS", 4),
+		Enabled:               envBool("WAZYNC_ENABLED", false),
+		HTTPAddress:           env("WAZYNC_HTTP_ADDRESS", ":8080"),
+		DatabaseURL:           strings.TrimSpace(os.Getenv("WAZYNC_DATABASE_URL")),
+		LaravelEventIngestURL: envWithLegacyAlias("WAZYNC_EVENT_INGEST_URL", "WAZYNC_EVENTS_URL"),
+		LaravelMediaSourceURL: envWithLegacyAlias("WAZYNC_MEDIA_SOURCE_URL", "WAZYNC_MEDIA_URL"),
+		CurrentKeyID:          strings.TrimSpace(os.Getenv("WAZYNC_HMAC_KEY_ID")),
+		CurrentSecret:         os.Getenv("WAZYNC_HMAC_SECRET"),
+		PreviousKeyID:         strings.TrimSpace(os.Getenv("WAZYNC_HMAC_PREVIOUS_KEY_ID")),
+		PreviousSecret:        os.Getenv("WAZYNC_HMAC_PREVIOUS_SECRET"),
+		HMACWindow:            envDuration("WAZYNC_HMAC_WINDOW", 5*time.Minute),
+		NonceTTL:              envDuration("WAZYNC_NONCE_TTL", 10*time.Minute),
+		MaxBodyBytes:          envInt64("WAZYNC_MAX_BODY_BYTES", 1<<20),
+		MaxMediaBytes:         envInt64("WAZYNC_MEDIA_MAX_BYTES", 20<<20),
+		ReplicaID:             env("WAZYNC_REPLICA_ID", hostname()),
+		SessionCapacity:       envInt("WAZYNC_SESSION_CAPACITY", 250),
+		LeaseTTL:              envDuration("WAZYNC_LEASE_TTL", 2*time.Minute),
+		HeartbeatEvery:        envDuration("WAZYNC_HEARTBEAT_EVERY", 10*time.Second),
+		SpoolDirectory:        env("WAZYNC_SPOOL_DIR", "/var/lib/wazync/spool"),
+		WAConnectTimeout:      envDuration("WAZYNC_WA_CONNECT_TIMEOUT", 20*time.Second),
+		WAReadyTimeout:        envDuration("WAZYNC_WA_READY_TIMEOUT", 30*time.Second),
+		WAHTTPTimeout:         envDuration("WAZYNC_WA_HTTP_TIMEOUT", 45*time.Second),
+		WAProxyURL:            strings.TrimSpace(os.Getenv("WAZYNC_WA_PROXY_URL")),
+		WARetryHandlers:       envInt64("WAZYNC_WA_RETRY_HANDLERS", 4),
 	}
 
 	if raw := strings.TrimSpace(os.Getenv("WAZYNC_DATA_KEY")); raw != "" {
@@ -91,11 +91,11 @@ func Load() (Config, error) {
 		if len(cfg.DataKey) != 32 {
 			return Config{}, errors.New("WAZYNC_DATA_KEY is required when WAZYNC_ENABLED=true")
 		}
-		if cfg.LaravelEventsURL == "" {
-			return Config{}, errors.New("WAZYNC_EVENTS_URL is required when WAZYNC_ENABLED=true")
+		if cfg.LaravelEventIngestURL == "" {
+			return Config{}, errors.New("WAZYNC_EVENT_INGEST_URL is required when WAZYNC_ENABLED=true")
 		}
-		if cfg.LaravelMediaURL == "" {
-			return Config{}, errors.New("WAZYNC_MEDIA_URL is required when WAZYNC_ENABLED=true")
+		if cfg.LaravelMediaSourceURL == "" {
+			return Config{}, errors.New("WAZYNC_MEDIA_SOURCE_URL is required when WAZYNC_ENABLED=true")
 		}
 	}
 	if cfg.SessionCapacity < 1 || cfg.HMACWindow <= 0 || cfg.NonceTTL < cfg.HMACWindow {
@@ -116,6 +116,13 @@ func env(name, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func envWithLegacyAlias(primary, legacy string) string {
+	if value := strings.TrimSpace(os.Getenv(primary)); value != "" {
+		return value
+	}
+	return strings.TrimSpace(os.Getenv(legacy))
 }
 
 func envBool(name string, fallback bool) bool {

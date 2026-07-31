@@ -28,7 +28,7 @@ func ValidateCommandRecipientScope(command domain.Command) error {
 			return ErrRecipientInvalid
 		}
 		recipients = append(recipients, payload.To)
-	case domain.CommandRevokeMessage, domain.CommandRequestUnavailable:
+	case domain.CommandRevokeMessage, domain.CommandRequestUnavailableMessage:
 		var payload domain.MessageTargetPayload
 		if err := json.Unmarshal(command.Payload, &payload); err != nil {
 			return ErrRecipientInvalid

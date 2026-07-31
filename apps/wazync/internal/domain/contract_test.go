@@ -13,7 +13,7 @@ func TestOneToOneCommandAndQueryFamiliesAreExplicit(t *testing.T) {
 		CommandPasskeyConfirm, CommandConnectSession, CommandDisconnectSession,
 		CommandSetPassive, CommandLogoutSession, CommandSendMessage, CommandEditMessage,
 		CommandRevokeMessage, CommandReactMessage, CommandVotePoll, CommandMarkMessage,
-		CommandRequestUnavailable, CommandRetryMedia, CommandSetPresence, CommandSubscribePresence,
+		CommandRequestUnavailableMessage, CommandRetryMedia, CommandSetPresence, CommandSubscribePresence,
 		CommandSetChatPresence, CommandSetDisappearing, CommandUpdateChatState,
 		CommandUpdateBlocklist, CommandUpdatePrivacy, CommandSetDefaultDisappearing,
 		CommandRequestHistorySync,
@@ -25,7 +25,7 @@ func TestOneToOneCommandAndQueryFamiliesAreExplicit(t *testing.T) {
 	}
 	queries := []QueryType{
 		QueryIsOnWhatsApp, QueryUserInfo, QueryContactProfiles, QueryBusinessProfile, QueryProfilePicture,
-		QueryContactQRLink, QueryResolveContactQR, QueryResolveBusinessURL,
+		QueryContactQRLink, QueryResolveContactQR, QueryResolveBusinessLink,
 		QueryBlocklist, QueryPrivacySettings,
 	}
 	for _, query := range queries {

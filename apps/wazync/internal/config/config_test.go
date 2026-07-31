@@ -43,8 +43,8 @@ func TestLoadReportsEachMissingRequiredWazyncVariable(t *testing.T) {
 		"WAZYNC_HMAC_KEY_ID",
 		"WAZYNC_HMAC_SECRET",
 		"WAZYNC_DATA_KEY",
-		"WAZYNC_EVENTS_URL",
-		"WAZYNC_MEDIA_URL",
+		"WAZYNC_EVENT_INGEST_URL",
+		"WAZYNC_MEDIA_SOURCE_URL",
 	}
 	for _, variable := range required {
 		t.Run(variable, func(t *testing.T) {
@@ -113,12 +113,46 @@ func TestLoadAcceptsCompleteEnabledWazyncConfiguration(t *testing.T) {
 	}
 }
 
+func TestLoadAcceptsLegacyLaravelEndpointAliases(t *testing.T) {
+	setCompleteEnabledConfiguration(t)
+	t.Setenv("WAZYNC_EVENT_INGEST_URL", "")
+	t.Setenv("WAZYNC_MEDIA_SOURCE_URL", "")
+	t.Setenv("WAZYNC_EVENTS_URL", "http://php/api/internal/v1/whatsapp/events")
+	t.Setenv("WAZYNC_MEDIA_URL", "http://php/api/internal/v1/communication/gateway/media")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("load legacy endpoint aliases: %v", err)
+	}
+	if cfg.LaravelEventIngestURL != "http://php/api/internal/v1/whatsapp/events" ||
+		cfg.LaravelMediaSourceURL != "http://php/api/internal/v1/communication/gateway/media" {
+		t.Fatalf("legacy aliases were not applied: %+v", cfg)
+	}
+}
+
+func TestLoadPrefersPreciseLaravelEndpointNamesOverLegacyAliases(t *testing.T) {
+	setCompleteEnabledConfiguration(t)
+	t.Setenv("WAZYNC_EVENTS_URL", "http://legacy/events")
+	t.Setenv("WAZYNC_MEDIA_URL", "http://legacy/media")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("load endpoint names with legacy aliases: %v", err)
+	}
+	if cfg.LaravelEventIngestURL != "http://php/api/internal/v1/whatsapp/events" ||
+		cfg.LaravelMediaSourceURL != "http://php/api/internal/v1/communication/gateway/media" {
+		t.Fatalf("precise endpoint names did not take precedence: %+v", cfg)
+	}
+}
+
 func setCompleteEnabledConfiguration(t *testing.T) {
 	t.Helper()
 	t.Setenv("WAZYNC_ENABLED", "true")
 	t.Setenv("WAZYNC_DATABASE_URL", "postgres://wazync@postgres/nfse")
-	t.Setenv("WAZYNC_EVENTS_URL", "http://php/api/internal/v1/whatsapp/events")
-	t.Setenv("WAZYNC_MEDIA_URL", "http://php/api/internal/v1/communication/gateway/media")
+	t.Setenv("WAZYNC_EVENT_INGEST_URL", "http://php/api/internal/v1/whatsapp/events")
+	t.Setenv("WAZYNC_MEDIA_SOURCE_URL", "http://php/api/internal/v1/communication/gateway/media")
+	t.Setenv("WAZYNC_EVENTS_URL", "")
+	t.Setenv("WAZYNC_MEDIA_URL", "")
 	t.Setenv("WAZYNC_HMAC_KEY_ID", "wazync-v1")
 	t.Setenv("WAZYNC_HMAC_SECRET", strings.Repeat("s", 32))
 	t.Setenv("WAZYNC_HMAC_PREVIOUS_KEY_ID", "")

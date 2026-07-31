@@ -389,12 +389,12 @@ func (b *EventBridge) prepareMessage(
 	if encrypted := message.GetSecretEncryptedMessage(); encrypted != nil {
 		targetID = encrypted.GetTargetMessageKey().GetID()
 		if client == nil {
-			b.handleMessageDecryptFailure(ctx, sessionID, event, "SECRET_MESSAGE_DECRYPT_UNAVAILABLE")
+			b.emitDecryptFailureAlert(ctx, sessionID, event, "SECRET_MESSAGE_DECRYPT_UNAVAILABLE")
 			return nil, true
 		}
 		decrypted, decryptErr := client.DecryptSecretEncryptedMessage(ctx, event)
 		if decryptErr != nil || decrypted == nil {
-			b.handleMessageDecryptFailure(ctx, sessionID, event, "SECRET_MESSAGE_DECRYPT_FAILED")
+			b.emitDecryptFailureAlert(ctx, sessionID, event, "SECRET_MESSAGE_DECRYPT_FAILED")
 			return nil, true
 		}
 		message = decrypted
@@ -461,12 +461,12 @@ func (b *EventBridge) handlePollVote(
 ) {
 	targetID := update.GetPollCreationMessageKey().GetID()
 	if client == nil {
-		b.handleMessageDecryptFailure(ctx, sessionID, event, "POLL_VOTE_DECRYPT_UNAVAILABLE")
+		b.emitDecryptFailureAlert(ctx, sessionID, event, "POLL_VOTE_DECRYPT_UNAVAILABLE")
 		return
 	}
 	vote, err := client.DecryptPollVote(ctx, event)
 	if err != nil || vote == nil {
-		b.handleMessageDecryptFailure(ctx, sessionID, event, "POLL_VOTE_DECRYPT_FAILED")
+		b.emitDecryptFailureAlert(ctx, sessionID, event, "POLL_VOTE_DECRYPT_FAILED")
 		return
 	}
 	hashes := make([]string, 0, len(vote.GetSelectedOptions()))
@@ -512,7 +512,7 @@ func (b *EventBridge) appendMessageAction(
 	b.append(ctx, eventID, sessionID, domain.EventMessageActionReceived, info.Timestamp, payload)
 }
 
-func (b *EventBridge) handleMessageDecryptFailure(
+func (b *EventBridge) emitDecryptFailureAlert(
 	ctx context.Context,
 	sessionID string,
 	event *events.Message,
