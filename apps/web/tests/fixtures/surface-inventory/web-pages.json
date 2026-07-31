@@ -43,6 +43,12 @@
   },
   {
     "section": "communication",
+    "file": "app/pages/communication.vue",
+    "route": "/communication",
+    "notes": "Parent shell persistente do workspace de conversas"
+  },
+  {
+    "section": "communication",
     "file": "app/pages/communication/index.vue",
     "route": "/communication",
     "notes": "Inbox WhatsApp compartilhada com lista, timeline, contexto e administração"

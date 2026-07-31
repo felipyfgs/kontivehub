@@ -225,6 +225,7 @@ async function syncRouteToSelection(id: number | null): Promise<void> {
 }
 
 async function openConversation(id: number): Promise<void> {
+  const previousConversationId = workspace.selectedConversationId.value
   contextOpen.value = false
   pendingConversationFocusId.value = null
   if (mobileFocusRestoreTimer !== null) {
@@ -235,7 +236,7 @@ async function openConversation(id: number): Promise<void> {
   const ok = await workspace.selectConversation(id)
   if (epoch !== routeApplyEpoch.value) return
   if (!ok) {
-    await syncRouteToSelection(null)
+    await syncRouteToSelection(previousConversationId)
     return
   }
   await syncRouteToSelection(id)
@@ -252,17 +253,11 @@ async function clearConversationSelection(): Promise<void> {
   await syncRouteToSelection(null)
   if (!isMobile.value) {
     await restoreConversationFocus()
-    return
   }
-  scheduleMobileConversationFocusRestore(conversationId, 750)
 }
 
 async function closeMobileConversation(): Promise<void> {
-  const conversationId = workspace.selectedConversationId.value
   await clearConversationSelection()
-  if (conversationId !== null) {
-    scheduleMobileConversationFocusRestore(conversationId, 750)
-  }
 }
 
 function scheduleMobileConversationFocusRestore(conversationId: number, delay: number): void {
@@ -289,18 +284,22 @@ async function restoreConversationFocus(): Promise<void> {
 
 async function focusConversationAfterOverlay(conversationId: number): Promise<void> {
   if (pendingConversationFocusId.value !== conversationId) return
-  pendingConversationFocusId.value = null
   await nextTick()
   await new Promise<void>((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
   })
-  let restored = await conversationListRef.value?.focusConversation(conversationId)
+  if (pendingConversationFocusId.value !== conversationId) return
+  let restored = await conversationListRef.value?.focusConversation(conversationId) ?? false
   if (!restored) {
     const button = document.getElementById(`communication-conversation-${conversationId}`)
     if (button instanceof HTMLButtonElement) {
       button.focus({ preventScroll: true })
       restored = document.activeElement === button
     }
+  }
+  if (!restored) restored = await conversationListRef.value?.focusList() ?? false
+  if (restored && pendingConversationFocusId.value === conversationId) {
+    pendingConversationFocusId.value = null
   }
 }
 
@@ -310,6 +309,10 @@ async function selectConversation(conversation: CommunicationConversation) {
 
 function prefetchConversation(conversationId: number): void {
   void workspace.prefetchConversation(conversationId)
+}
+
+function prefetchVisibleConversations(conversationIds: number[]): void {
+  workspace.queueConversationPrefetch(conversationIds)
 }
 
 function onToggleSelect(conversationId: number, selected: boolean): void {
@@ -625,7 +628,7 @@ async function applyRouteConversation(id: number | null): Promise<void> {
     }
   }
   if (!ok && workspace.selectedConversationId.value !== id) {
-    await syncRouteToSelection(null)
+    await syncRouteToSelection(workspace.selectedConversationId.value)
   }
 }
 
@@ -1071,6 +1074,7 @@ onBeforeUnmount(() => {
         :action-disabled="conversationActionPending"
         @select="selectConversation"
         @prefetch="prefetchConversation"
+        @prefetch-visible="prefetchVisibleConversations"
         @load-more="workspace.loadMoreConversations"
         @toggle-select="onToggleSelect"
         @action="onConversationAction"
@@ -1138,23 +1142,17 @@ onBeforeUnmount(() => {
       v-if="!workspace.selectedConversation.value"
       class="hidden min-w-0 flex-1 flex-col items-center justify-center gap-4 lg:flex"
       data-testid="communication-empty-detail"
-      :role="workspace.openingConversationId.value ? 'status' : undefined"
-      :aria-live="workspace.openingConversationId.value ? 'polite' : undefined"
     >
       <UIcon
-        :name="workspace.openingConversationId.value
-          ? 'i-lucide-message-square-more'
-          : 'i-lucide-message-square-dashed'"
+        name="i-lucide-message-square-dashed"
         class="size-24 text-dimmed"
       />
       <div class="text-center">
         <p class="font-medium text-highlighted">
-          {{ workspace.openingConversationId.value ? 'Abrindo conversa' : 'Selecione uma conversa' }}
+          Selecione uma conversa
         </p>
         <p class="mt-1 text-sm text-muted">
-          {{ workspace.openingConversationId.value
-            ? 'O histórico aparecerá assim que estiver pronto.'
-            : 'Use ↑ e ↓ para navegar pela fila.' }}
+          Use ↑ e ↓ para navegar pela fila.
         </p>
       </div>
     </div>
@@ -1163,6 +1161,7 @@ onBeforeUnmount(() => {
       <USlideover
         v-if="isMobile"
         v-model:open="mobileConversationOpen"
+        :transition="false"
         data-testid="communication-mobile-timeline"
         :ui="{ content: 'w-screen max-w-none' }"
         @after:leave="restoreConversationFocusAfterLeave"

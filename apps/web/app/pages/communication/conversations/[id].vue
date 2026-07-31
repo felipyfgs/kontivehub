@@ -17,6 +17,5 @@ definePageMeta({
 </script>
 
 <template>
-  <CommunicationWorkspacePage />
   <NuxtPage />
 </template>

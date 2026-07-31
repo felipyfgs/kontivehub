@@ -505,6 +505,7 @@ describe('deep-link de conversas', () => {
       communicationContactConversationsPath,
       communicationConversationMessagePath,
       communicationConversationPath,
+      isCommunicationConversationWorkspacePath,
       parseCommunicationConversationId,
       parseCommunicationMessageId,
       isCommunicationNavActive
@@ -522,7 +523,20 @@ describe('deep-link de conversas', () => {
     expect(isCommunicationNavActive('/communication')).toBe(true)
     expect(isCommunicationNavActive('/communication/conversations/9')).toBe(true)
     expect(isCommunicationNavActive('/clients')).toBe(false)
+    expect(isCommunicationConversationWorkspacePath('/communication')).toBe(true)
+    expect(isCommunicationConversationWorkspacePath('/communication/conversations/9')).toBe(true)
+    expect(isCommunicationConversationWorkspacePath('/communication/conversations/9/messages/3')).toBe(true)
+    expect(isCommunicationConversationWorkspacePath('/communication/contacts/4/conversations')).toBe(true)
+    expect(isCommunicationConversationWorkspacePath('/communication/contacts/4/conversations/9')).toBe(true)
+    expect(isCommunicationConversationWorkspacePath('/communication/contacts/4')).toBe(false)
+    expect(isCommunicationConversationWorkspacePath('/communication/contacts')).toBe(false)
+    expect(isCommunicationConversationWorkspacePath('/communication/flows')).toBe(false)
+    expect(isCommunicationConversationWorkspacePath('/communication/conversations/invalida')).toBe(false)
 
+    const communicationPage = readFileSync(
+      resolve(process.cwd(), 'app/pages/communication.vue'),
+      'utf8'
+    )
     const conversationPage = readFileSync(
       resolve(process.cwd(), 'app/pages/communication/conversations/[id].vue'),
       'utf8'
@@ -530,6 +544,10 @@ describe('deep-link de conversas', () => {
     expect(conversationPage).toContain('definePageMeta')
     expect(conversationPage).toContain('parsePositiveRouteId(to.params.id)')
     expect(conversationPage).not.toContain('const conversationId =')
+    expect(communicationPage).toContain('isCommunicationConversationWorkspacePath(route.path)')
+    expect(communicationPage).toContain('<CommunicationWorkspacePage v-if="usesConversationWorkspace" />')
+    expect(communicationPage).toContain('<NuxtPage />')
+    expect(conversationPage).not.toContain('CommunicationWorkspacePage')
   })
 })
 

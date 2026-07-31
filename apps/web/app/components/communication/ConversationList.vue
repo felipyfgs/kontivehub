@@ -50,6 +50,7 @@ const skeletonRows = Array.from({ length: 8 }, (_, index) => index)
 const emit = defineEmits<{
   'select': [conversation: CommunicationConversation]
   'prefetch': [conversationId: number]
+  'prefetch-visible': [conversationIds: number[]]
   'loadMore': []
   'toggle-select': [conversationId: number, selected: boolean]
   'action': [payload: CommunicationConversationActionPayload]
@@ -86,6 +87,21 @@ const virtualRange = computed(() => {
 const virtualRows = computed(() =>
   props.conversations.slice(virtualRange.value.start, virtualRange.value.end)
 )
+
+const visibleConversationIds = computed(() => {
+  const count = props.conversations.length
+  if (count === 0) return []
+  const start = Math.min(count, Math.max(0, Math.floor(scrollTop.value / rowHeightPx.value)))
+  const end = Math.min(
+    count,
+    Math.max(start, Math.ceil((scrollTop.value + viewportHeight.value) / rowHeightPx.value))
+  )
+  return props.conversations.slice(start, end).map(conversation => conversation.id)
+})
+
+watch(visibleConversationIds, (conversationIds) => {
+  if (conversationIds.length) emit('prefetch-visible', conversationIds)
+}, { immediate: true })
 
 function onListScroll(event: Event): void {
   const target = event.target
@@ -186,9 +202,9 @@ function statusMeta(conversation: CommunicationConversation) {
   return COMMUNICATION_CONVERSATION_STATUS[conversation.status]
 }
 
-/** Status OPEN é o default da fila; só destaca os demais (e o estado “Abrindo”). */
+/** Status OPEN é o default da fila; só destaca os demais. */
 function showStatusBadge(conversation: CommunicationConversation): boolean {
-  return conversation.status !== 'OPEN' || props.openingId === conversation.id
+  return conversation.status !== 'OPEN'
 }
 
 function phoneLine(conversation: CommunicationConversation): string {
@@ -364,15 +380,7 @@ function onCheckboxChange(conversationId: number, value: boolean | 'indeterminat
                     {{ inboxName(conversation.inbox_id) }}
                   </span>
                   <UBadge
-                    v-if="openingId === conversation.id"
-                    label="Abrindo"
-                    color="neutral"
-                    variant="subtle"
-                    size="sm"
-                    class="shrink-0"
-                  />
-                  <UBadge
-                    v-else-if="showStatusBadge(conversation)"
+                    v-if="showStatusBadge(conversation)"
                     :label="statusMeta(conversation).label"
                     :color="statusMeta(conversation).color"
                     variant="subtle"

@@ -1,5 +1,5 @@
 {
-  "digest": "2d8a9ea98ca2fd94d3e21f67903711e703253cba4cc88daf73f6249c9d05fcc8",
+  "digest": "556f0e1e6498b65d0afe1582275fce50f881347e1f6f4f9dd97bbc48f8380c3b",
   "schemaVersion": 1,
   "source": {
     "catalog": "apps/web/tests/fixtures/use-case-testability/catalog.json",
@@ -10,7 +10,7 @@
     "journeys": 11,
     "criticalJourneys": 4,
     "apiRoutes": 584,
-    "pages": 74,
+    "pages": 83,
     "handlers": 582,
     "apiClients": 15,
     "tests": 12,
@@ -105,7 +105,7 @@
       "title": "Documentos, notas e exportações",
       "critical": false,
       "apiRoutes": 18,
-      "pages": 6,
+      "pages": 9,
       "apiClients": 1,
       "levels": {
         "L0": true,
@@ -124,7 +124,7 @@
       "title": "Atendimento WhatsApp compartilhado",
       "critical": false,
       "apiRoutes": 114,
-      "pages": 8,
+      "pages": 12,
       "apiClients": 1,
       "levels": {
         "L0": true,
@@ -156,7 +156,7 @@
       "title": "Fila e processos operacionais",
       "critical": true,
       "apiRoutes": 64,
-      "pages": 8,
+      "pages": 10,
       "apiClients": 3,
       "levels": {
         "L0": true,
@@ -580,6 +580,16 @@
       "notes": "layout: `auth`; callback público de redefinição de senha"
     },
     {
+      "id": "page:app/pages/communication.vue",
+      "type": "page",
+      "journeyId": "communication-inbox",
+      "redirectOnly": false,
+      "section": "communication",
+      "file": "app/pages/communication.vue",
+      "route": "/communication",
+      "notes": "Parent shell persistente do workspace de conversas"
+    },
+    {
       "id": "page:app/pages/communication/index.vue",
       "type": "page",
       "journeyId": "communication-inbox",
@@ -600,6 +610,16 @@
       "notes": "Deep-link canônico de uma conversa no workspace compartilhado"
     },
     {
+      "id": "page:app/pages/communication/conversations/[id]/messages/[messageId].vue",
+      "type": "page",
+      "journeyId": "communication-inbox",
+      "redirectOnly": false,
+      "section": "communication",
+      "file": "app/pages/communication/conversations/[id]/messages/[messageId].vue",
+      "route": "/communication/conversations/:id/messages/:messageId",
+      "notes": "Deep-link canônico de uma mensagem na timeline da conversa"
+    },
+    {
       "id": "page:app/pages/communication/contacts/index.vue",
       "type": "page",
       "journeyId": "communication-inbox",
@@ -618,6 +638,26 @@
       "file": "app/pages/communication/contacts/[id].vue",
       "route": "/communication/contacts/:id",
       "notes": "Detalhes do contato: edit, identities, links, export e purge"
+    },
+    {
+      "id": "page:app/pages/communication/contacts/[contactId]/conversations/index.vue",
+      "type": "page",
+      "journeyId": "communication-inbox",
+      "redirectOnly": false,
+      "section": "communication",
+      "file": "app/pages/communication/contacts/[contactId]/conversations/index.vue",
+      "route": "/communication/contacts/:contactId/conversations",
+      "notes": "Workspace de conversas filtrado pelo contexto estável do contato"
+    },
+    {
+      "id": "page:app/pages/communication/contacts/[contactId]/conversations/[id].vue",
+      "type": "page",
+      "journeyId": "communication-inbox",
+      "redirectOnly": false,
+      "section": "communication",
+      "file": "app/pages/communication/contacts/[contactId]/conversations/[id].vue",
+      "route": "/communication/contacts/:contactId/conversations/:id",
+      "notes": "Conversa selecionada dentro do contexto estável do contato"
     },
     {
       "id": "page:app/pages/communication/quick-responses/index.vue",
@@ -1150,6 +1190,26 @@
       "notes": "Filtered catalog (incl. CT-e)"
     },
     {
+      "id": "page:app/pages/docs/catalog/type/[kind].vue",
+      "type": "page",
+      "journeyId": "documents-notes",
+      "redirectOnly": false,
+      "section": "docs",
+      "file": "app/pages/docs/catalog/type/[kind].vue",
+      "route": "/docs/catalog/type/:kind",
+      "notes": "Catálogo com contexto compartilhável de tipo documental"
+    },
+    {
+      "id": "page:app/pages/docs/catalog/client/[clientId].vue",
+      "type": "page",
+      "journeyId": "documents-notes",
+      "redirectOnly": false,
+      "section": "docs",
+      "file": "app/pages/docs/catalog/client/[clientId].vue",
+      "route": "/docs/catalog/client/:clientId",
+      "notes": "Catálogo com contexto compartilhável de cliente"
+    },
+    {
       "id": "page:app/pages/docs/[accessKey].vue",
       "type": "page",
       "journeyId": "documents-notes",
@@ -1168,6 +1228,16 @@
       "file": "app/pages/docs/imports/index.vue",
       "route": "/docs/imports",
       "notes": "Import history"
+    },
+    {
+      "id": "page:app/pages/docs/imports/new.vue",
+      "type": "page",
+      "journeyId": "documents-notes",
+      "redirectOnly": false,
+      "section": "docs",
+      "file": "app/pages/docs/imports/new.vue",
+      "route": "/docs/imports/new",
+      "notes": "Criação canônica de uma importação documental"
     },
     {
       "id": "page:app/pages/docs/imports/[id].vue",
@@ -1200,6 +1270,16 @@
       "notes": "Calendar view"
     },
     {
+      "id": "page:app/pages/work/calendar/[view]/[date].vue",
+      "type": "page",
+      "journeyId": "operational-work",
+      "redirectOnly": false,
+      "section": "work",
+      "file": "app/pages/work/calendar/[view]/[date].vue",
+      "route": "/work/calendar/:view/:date",
+      "notes": "Visão e data compartilháveis do calendário operacional"
+    },
+    {
       "id": "page:app/pages/work/processes/index.vue",
       "type": "page",
       "journeyId": "operational-work",
@@ -1218,6 +1298,16 @@
       "file": "app/pages/work/processes/[id].vue",
       "route": "/work/processes/:id",
       "notes": "Process detail"
+    },
+    {
+      "id": "page:app/pages/work/processes/[id]/[section].vue",
+      "type": "page",
+      "journeyId": "operational-work",
+      "redirectOnly": false,
+      "section": "work",
+      "file": "app/pages/work/processes/[id]/[section].vue",
+      "route": "/work/processes/:id/:section",
+      "notes": "Seção canônica allowlisted do detalhe de processo"
     },
     {
       "id": "page:app/pages/work/templates/index.vue",
@@ -15910,6 +16000,11 @@
     },
     {
       "from": "journey:communication-inbox",
+      "to": "page:app/pages/communication.vue",
+      "type": "enters"
+    },
+    {
+      "from": "journey:communication-inbox",
       "to": "page:app/pages/communication/index.vue",
       "type": "enters"
     },
@@ -15920,12 +16015,27 @@
     },
     {
       "from": "journey:communication-inbox",
+      "to": "page:app/pages/communication/conversations/[id]/messages/[messageId].vue",
+      "type": "enters"
+    },
+    {
+      "from": "journey:communication-inbox",
       "to": "page:app/pages/communication/contacts/index.vue",
       "type": "enters"
     },
     {
       "from": "journey:communication-inbox",
       "to": "page:app/pages/communication/contacts/[id].vue",
+      "type": "enters"
+    },
+    {
+      "from": "journey:communication-inbox",
+      "to": "page:app/pages/communication/contacts/[contactId]/conversations/index.vue",
+      "type": "enters"
+    },
+    {
+      "from": "journey:communication-inbox",
+      "to": "page:app/pages/communication/contacts/[contactId]/conversations/[id].vue",
       "type": "enters"
     },
     {
@@ -16195,12 +16305,27 @@
     },
     {
       "from": "journey:documents-notes",
+      "to": "page:app/pages/docs/catalog/type/[kind].vue",
+      "type": "enters"
+    },
+    {
+      "from": "journey:documents-notes",
+      "to": "page:app/pages/docs/catalog/client/[clientId].vue",
+      "type": "enters"
+    },
+    {
+      "from": "journey:documents-notes",
       "to": "page:app/pages/docs/[accessKey].vue",
       "type": "enters"
     },
     {
       "from": "journey:documents-notes",
       "to": "page:app/pages/docs/imports/index.vue",
+      "type": "enters"
+    },
+    {
+      "from": "journey:documents-notes",
+      "to": "page:app/pages/docs/imports/new.vue",
       "type": "enters"
     },
     {
@@ -16220,12 +16345,22 @@
     },
     {
       "from": "journey:operational-work",
+      "to": "page:app/pages/work/calendar/[view]/[date].vue",
+      "type": "enters"
+    },
+    {
+      "from": "journey:operational-work",
       "to": "page:app/pages/work/processes/index.vue",
       "type": "enters"
     },
     {
       "from": "journey:operational-work",
       "to": "page:app/pages/work/processes/[id].vue",
+      "type": "enters"
+    },
+    {
+      "from": "journey:operational-work",
+      "to": "page:app/pages/work/processes/[id]/[section].vue",
       "type": "enters"
     },
     {
@@ -16649,6 +16784,16 @@
       "type": "uses-client"
     },
     {
+      "from": "page:app/pages/docs/catalog/type/[kind].vue",
+      "to": "api-client:app/composables/api/createDocumentsApi.ts",
+      "type": "uses-client"
+    },
+    {
+      "from": "page:app/pages/docs/catalog/client/[clientId].vue",
+      "to": "api-client:app/composables/api/createDocumentsApi.ts",
+      "type": "uses-client"
+    },
+    {
       "from": "page:app/pages/docs/[accessKey].vue",
       "to": "api-client:app/composables/api/createDocumentsApi.ts",
       "type": "uses-client"
@@ -16659,8 +16804,18 @@
       "type": "uses-client"
     },
     {
+      "from": "page:app/pages/docs/imports/new.vue",
+      "to": "api-client:app/composables/api/createDocumentsApi.ts",
+      "type": "uses-client"
+    },
+    {
       "from": "page:app/pages/docs/imports/[id].vue",
       "to": "api-client:app/composables/api/createDocumentsApi.ts",
+      "type": "uses-client"
+    },
+    {
+      "from": "page:app/pages/communication.vue",
+      "to": "api-client:app/composables/api/createCommunicationApi.ts",
       "type": "uses-client"
     },
     {
@@ -16674,12 +16829,27 @@
       "type": "uses-client"
     },
     {
+      "from": "page:app/pages/communication/conversations/[id]/messages/[messageId].vue",
+      "to": "api-client:app/composables/api/createCommunicationApi.ts",
+      "type": "uses-client"
+    },
+    {
       "from": "page:app/pages/communication/contacts/index.vue",
       "to": "api-client:app/composables/api/createCommunicationApi.ts",
       "type": "uses-client"
     },
     {
       "from": "page:app/pages/communication/contacts/[id].vue",
+      "to": "api-client:app/composables/api/createCommunicationApi.ts",
+      "type": "uses-client"
+    },
+    {
+      "from": "page:app/pages/communication/contacts/[contactId]/conversations/index.vue",
+      "to": "api-client:app/composables/api/createCommunicationApi.ts",
+      "type": "uses-client"
+    },
+    {
+      "from": "page:app/pages/communication/contacts/[contactId]/conversations/[id].vue",
       "to": "api-client:app/composables/api/createCommunicationApi.ts",
       "type": "uses-client"
     },
@@ -16974,12 +17144,22 @@
       "type": "uses-client"
     },
     {
+      "from": "page:app/pages/work/calendar/[view]/[date].vue",
+      "to": "api-client:app/composables/api/createWorkApi.ts",
+      "type": "uses-client"
+    },
+    {
       "from": "page:app/pages/work/processes/index.vue",
       "to": "api-client:app/composables/api/createWorkApi.ts",
       "type": "uses-client"
     },
     {
       "from": "page:app/pages/work/processes/[id].vue",
+      "to": "api-client:app/composables/api/createWorkApi.ts",
+      "type": "uses-client"
+    },
+    {
+      "from": "page:app/pages/work/processes/[id]/[section].vue",
       "to": "api-client:app/composables/api/createWorkApi.ts",
       "type": "uses-client"
     },
@@ -17014,12 +17194,22 @@
       "type": "uses-client"
     },
     {
+      "from": "page:app/pages/work/calendar/[view]/[date].vue",
+      "to": "api-client:app/composables/api/createOperationsApi.ts",
+      "type": "uses-client"
+    },
+    {
       "from": "page:app/pages/work/processes/index.vue",
       "to": "api-client:app/composables/api/createOperationsApi.ts",
       "type": "uses-client"
     },
     {
       "from": "page:app/pages/work/processes/[id].vue",
+      "to": "api-client:app/composables/api/createOperationsApi.ts",
+      "type": "uses-client"
+    },
+    {
+      "from": "page:app/pages/work/processes/[id]/[section].vue",
       "to": "api-client:app/composables/api/createOperationsApi.ts",
       "type": "uses-client"
     },
@@ -17054,12 +17244,22 @@
       "type": "uses-client"
     },
     {
+      "from": "page:app/pages/work/calendar/[view]/[date].vue",
+      "to": "api-client:app/composables/api/createSavedListFiltersApi.ts",
+      "type": "uses-client"
+    },
+    {
       "from": "page:app/pages/work/processes/index.vue",
       "to": "api-client:app/composables/api/createSavedListFiltersApi.ts",
       "type": "uses-client"
     },
     {
       "from": "page:app/pages/work/processes/[id].vue",
+      "to": "api-client:app/composables/api/createSavedListFiltersApi.ts",
+      "type": "uses-client"
+    },
+    {
+      "from": "page:app/pages/work/processes/[id]/[section].vue",
       "to": "api-client:app/composables/api/createSavedListFiltersApi.ts",
       "type": "uses-client"
     },

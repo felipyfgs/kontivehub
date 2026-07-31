@@ -1,5 +1,5 @@
 {
-  "digest": "ceb2679d16a54ad29118dfcee3ae5b937cb473a8b784e1068685dfa2a32033df",
+  "digest": "556f0e1e6498b65d0afe1582275fce50f881347e1f6f4f9dd97bbc48f8380c3b",
   "schemaVersion": 1,
   "source": {
     "catalog": "apps/web/tests/fixtures/use-case-testability/catalog.json",
@@ -10,7 +10,7 @@
     "journeys": 11,
     "criticalJourneys": 4,
     "apiRoutes": 584,
-    "pages": 82,
+    "pages": 83,
     "handlers": 582,
     "apiClients": 15,
     "tests": 12,
@@ -124,7 +124,7 @@
       "title": "Atendimento WhatsApp compartilhado",
       "critical": false,
       "apiRoutes": 114,
-      "pages": 11,
+      "pages": 12,
       "apiClients": 1,
       "levels": {
         "L0": true,
@@ -578,6 +578,16 @@
       "file": "app/pages/reset-password.vue",
       "route": "/reset-password",
       "notes": "layout: `auth`; callback público de redefinição de senha"
+    },
+    {
+      "id": "page:app/pages/communication.vue",
+      "type": "page",
+      "journeyId": "communication-inbox",
+      "redirectOnly": false,
+      "section": "communication",
+      "file": "app/pages/communication.vue",
+      "route": "/communication",
+      "notes": "Parent shell persistente do workspace de conversas"
     },
     {
       "id": "page:app/pages/communication/index.vue",
@@ -15990,6 +16000,11 @@
     },
     {
       "from": "journey:communication-inbox",
+      "to": "page:app/pages/communication.vue",
+      "type": "enters"
+    },
+    {
+      "from": "journey:communication-inbox",
       "to": "page:app/pages/communication/index.vue",
       "type": "enters"
     },
@@ -16796,6 +16811,11 @@
     {
       "from": "page:app/pages/docs/imports/[id].vue",
       "to": "api-client:app/composables/api/createDocumentsApi.ts",
+      "type": "uses-client"
+    },
+    {
+      "from": "page:app/pages/communication.vue",
+      "to": "api-client:app/composables/api/createCommunicationApi.ts",
       "type": "uses-client"
     },
     {

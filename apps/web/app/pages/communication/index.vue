@@ -5,5 +5,6 @@
 </script>
 
 <template>
-  <CommunicationWorkspacePage />
+  <!-- O workspace visual pertence ao outlet persistente pages/communication.vue. -->
+  <NuxtPage />
 </template>

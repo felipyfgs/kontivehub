@@ -36,14 +36,14 @@
     "tenants": 2,
     "work": 50
   },
-  "pagesTotal": 82,
+  "pagesTotal": 83,
   "pagesBySection": {
     "/": 7,
     "admin": 4,
     "admin/serpro": 8,
     "auth": 3,
     "clients": 10,
-    "communication": 11,
+    "communication": 12,
     "conta": 7,
     "docs": 8,
     "monitoring": 15,

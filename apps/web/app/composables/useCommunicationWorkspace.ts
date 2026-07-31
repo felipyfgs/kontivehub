@@ -92,6 +92,7 @@ const EMPTY_AUTOMATION_META: CommunicationAutomationMeta = {
 
 export const COMMUNICATION_CONVERSATION_PAGE_SIZE = 50
 export const COMMUNICATION_TIMELINE_PAGE_SIZE = 50
+export const COMMUNICATION_PREFETCH_CONCURRENCY = 2
 
 type CommunicationWorkspaceNavigationState = {
   search: string
@@ -104,6 +105,15 @@ type CommunicationWorkspaceNavigationState = {
   labelIdsFilter: number[]
   contactIdFilter: number | null
   sortBy: CommunicationConversationSortBy
+}
+
+type CommunicationLifecycleRequest = {
+  lifecycleEpoch: number
+  sessionEpoch: number
+}
+
+type CommunicationSynchronizationRequest = CommunicationLifecycleRequest & {
+  generation: number
 }
 
 const communicationWorkspaceNavigationDefaults = (): CommunicationWorkspaceNavigationState => ({
@@ -363,6 +373,10 @@ const _useCommunicationWorkspace = () => {
   const signalTimers = new Map<string, ReturnType<typeof setTimeout>>()
   const presenceSubscriptions = new Set<number>()
   const detailRequests = new Map<number, Promise<boolean>>()
+  const initialTimelineRequests = new Map<string, Promise<boolean>>()
+  const queuedConversationPrefetchIds = new Set<number>()
+  const activeConversationPrefetchIds = new Set<number>()
+  const conversationPrefetchQueue: number[] = []
   const conversationTimelineGenerations = new Map<number, number>()
   let tenantSubscription: (() => void) | null = null
   let synchronizeAgain = false
@@ -371,19 +385,39 @@ const _useCommunicationWorkspace = () => {
   let conversationQueryController: AbortController | null = null
   let lastPresenceState: CommunicationChatPresence | null = null
   let lastPresenceSentAt = 0
+  let lifecycleEpoch = 0
+  let synchronizeGeneration = 0
 
   function beginConversationTimelineRequest(id: number) {
     const generation = (conversationTimelineGenerations.get(id) ?? 0) + 1
     conversationTimelineGenerations.set(id, generation)
-    return { generation, sessionEpoch: sessionEpoch.value }
+    return { generation, lifecycleEpoch, sessionEpoch: sessionEpoch.value }
   }
 
   function isConversationTimelineRequestCurrent(
     id: number,
-    request: { generation: number, sessionEpoch: number }
+    request: { generation: number, lifecycleEpoch: number, sessionEpoch: number }
   ): boolean {
     return request.sessionEpoch === sessionEpoch.value
+      && request.lifecycleEpoch === lifecycleEpoch
       && request.generation === conversationTimelineGenerations.get(id)
+  }
+
+  function currentLifecycleRequest(): CommunicationLifecycleRequest {
+    return { lifecycleEpoch, sessionEpoch: sessionEpoch.value }
+  }
+
+  function isLifecycleRequestCurrent(request: CommunicationLifecycleRequest): boolean {
+    return request.lifecycleEpoch === lifecycleEpoch
+      && request.sessionEpoch === sessionEpoch.value
+  }
+
+  function isSynchronizationRequestCurrent(
+    request: CommunicationSynchronizationRequest
+  ): boolean {
+    return request.generation === synchronizeGeneration
+      && request.lifecycleEpoch === lifecycleEpoch
+      && request.sessionEpoch === sessionEpoch.value
   }
 
   function listFilters(page = 1): CommunicationConversationFilters {
@@ -604,16 +638,19 @@ const _useCommunicationWorkspace = () => {
   }
 
   async function loadListPreferences(): Promise<void> {
+    const request = currentLifecycleRequest()
     try {
       const response = await api.communication.conversationListPreferences.get()
+      if (!isLifecycleRequestCurrent(request)) return
       preferencesUnavailable.value = false
       applyListPreferences(response.data)
     } catch {
+      if (!isLifecycleRequestCurrent(request)) return
       preferencesUnavailable.value = true
       // Defaults locais já estão aplicados (OPEN / last_activity_desc).
       // Não tenta regravar preferência até o endpoint voltar.
     } finally {
-      preferencesLoaded.value = true
+      if (isLifecycleRequestCurrent(request)) preferencesLoaded.value = true
     }
   }
 
@@ -788,7 +825,9 @@ const _useCommunicationWorkspace = () => {
   }
 
   async function loadInboxes(): Promise<void> {
+    const request = currentLifecycleRequest()
     const response = await api.communication.inboxes.list()
+    if (!isLifecycleRequestCurrent(request)) return
     inboxes.value = response.data
     featureMeta.value = response.meta
     departments.value = response.meta.departments ?? departments.value
@@ -917,10 +956,12 @@ const _useCommunicationWorkspace = () => {
   }
 
   async function loadCatalog(): Promise<void> {
+    const request = currentLifecycleRequest()
     const [labelsResponse, cannedResponse] = await Promise.all([
       api.communication.catalog.labels(),
       api.communication.catalog.cannedResponses()
     ])
+    if (!isLifecycleRequestCurrent(request)) return
     labels.value = labelsResponse.data
     cannedResponses.value = cannedResponse.data
   }
@@ -1018,11 +1059,12 @@ const _useCommunicationWorkspace = () => {
     const active = detailRequests.get(id)
     if (active) return active
     const epoch = sessionEpoch.value
+    const requestLifecycleEpoch = lifecycleEpoch
     const request = (async () => {
       const response = await api.communication.conversations.get(id, {
         include_messages: false
       })
-      if (epoch !== sessionEpoch.value) return false
+      if (epoch !== sessionEpoch.value || requestLifecycleEpoch !== lifecycleEpoch) return false
       storeConversationDetail(response.data)
       void ensurePresenceSubscription(id)
       return true
@@ -1050,25 +1092,60 @@ const _useCommunicationWorkspace = () => {
   }
 
   async function prefetchConversation(id: number): Promise<boolean> {
-    if (hasConversationDetail(id)) return true
-    return refreshConversationDetail(id, { reportError: false })
+    const detailReady = hasConversationDetail(id)
+      || await refreshConversationDetail(id, { reportError: false })
+    if (!detailReady) return false
+    return loadInitialConversationTimeline(id)
   }
 
-  async function loadInitialConversationTimeline(id: number, messageId?: number | null): Promise<boolean> {
+  function initialTimelineRequestKey(id: number, messageId?: number | null): string {
+    return `${id}:${messageId ?? 'default'}`
+  }
+
+  function latestInitialTimelineRequest(id: number): Promise<boolean> | null {
+    const prefix = `${id}:`
+    let latest: Promise<boolean> | null = null
+    for (const [key, request] of initialTimelineRequests) {
+      if (key.startsWith(prefix)) latest = request
+    }
+    return latest
+  }
+
+  function trackInitialTimelineRequest(
+    key: string,
+    request: Promise<boolean>
+  ): Promise<boolean> {
+    initialTimelineRequests.set(key, request)
+    void request.finally(() => {
+      if (initialTimelineRequests.get(key) === request) initialTimelineRequests.delete(key)
+    }).catch(() => undefined)
+    return request
+  }
+
+  function hasInitializedConversationTimeline(id: number): boolean {
+    return conversationTimelines.value[id]?.initialized === true
+  }
+
+  async function fetchInitialConversationTimeline(id: number, messageId?: number | null): Promise<boolean> {
     const request = beginConversationTimelineRequest(id)
     const summary = conversationDetails.value[id]
       ?? conversations.value.find(item => item.id === id)
     const anchor = messageId ? 'message' : ((summary?.unread_count ?? 0) > 0 ? 'first_unread' : 'latest')
+    const previousTimeline = conversationTimelines.value[id]
     timelineReadAcknowledgementFailures.delete(id)
     updateConversationTimeline(id, {
       loading: true,
       error: null,
-      initialized: false,
-      initial_read_pending: false,
-      manual_unread: false,
       loading_older: false,
       loading_newer: false,
-      divider_message_id: null
+      ...(previousTimeline?.initialized
+        ? {}
+        : {
+            initialized: false,
+            initial_read_pending: false,
+            manual_unread: false,
+            divider_message_id: null
+          })
     })
     try {
       const response = await api.communication.conversations.messages(id, {
@@ -1095,11 +1172,80 @@ const _useCommunicationWorkspace = () => {
       if (!isConversationTimelineRequestCurrent(id, request)) return false
       updateConversationTimeline(id, {
         loading: false,
-        initialized: false,
+        initialized: previousTimeline?.initialized ?? false,
         error: apiErrorMessage(caught, 'Falha ao carregar a timeline.')
       })
       return false
     }
+  }
+
+  function loadInitialConversationTimeline(id: number, messageId?: number | null): Promise<boolean> {
+    const request = currentLifecycleRequest()
+    const key = initialTimelineRequestKey(id, messageId)
+    const active = initialTimelineRequests.get(key)
+    if (active) return active
+    if (!messageId && hasInitializedConversationTimeline(id)) return Promise.resolve(true)
+
+    const pending = latestInitialTimelineRequest(id)
+    if (pending) {
+      if (!messageId) return pending
+      return trackInitialTimelineRequest(
+        key,
+        pending.then(() => isLifecycleRequestCurrent(request)
+          ? fetchInitialConversationTimeline(id, messageId)
+          : false)
+      )
+    }
+
+    return trackInitialTimelineRequest(key, fetchInitialConversationTimeline(id, messageId))
+  }
+
+  function clearConversationPrefetchQueue(): void {
+    conversationPrefetchQueue.splice(0)
+    queuedConversationPrefetchIds.clear()
+    activeConversationPrefetchIds.clear()
+  }
+
+  function drainConversationPrefetchQueue(): void {
+    while (
+      activeConversationPrefetchIds.size < COMMUNICATION_PREFETCH_CONCURRENCY
+      && conversationPrefetchQueue.length > 0
+    ) {
+      const id = conversationPrefetchQueue.shift()
+      if (id === undefined) return
+      queuedConversationPrefetchIds.delete(id)
+      if (hasInitializedConversationTimeline(id)) continue
+
+      const requestLifecycleEpoch = lifecycleEpoch
+      activeConversationPrefetchIds.add(id)
+      void prefetchConversation(id).finally(() => {
+        if (requestLifecycleEpoch !== lifecycleEpoch) return
+        activeConversationPrefetchIds.delete(id)
+        drainConversationPrefetchQueue()
+      }).catch(() => undefined)
+    }
+  }
+
+  function queueConversationPrefetch(ids: number[]): void {
+    const visibleIds = new Set(ids.filter(id => Number.isSafeInteger(id) && id > 0))
+    const retainedIds = conversationPrefetchQueue.filter(id => visibleIds.has(id))
+    conversationPrefetchQueue.splice(0, conversationPrefetchQueue.length, ...retainedIds)
+    queuedConversationPrefetchIds.clear()
+    for (const id of retainedIds) queuedConversationPrefetchIds.add(id)
+
+    for (const id of ids) {
+      if (
+        !Number.isSafeInteger(id)
+        || id <= 0
+        || hasInitializedConversationTimeline(id)
+        || queuedConversationPrefetchIds.has(id)
+        || activeConversationPrefetchIds.has(id)
+      ) continue
+
+      queuedConversationPrefetchIds.add(id)
+      conversationPrefetchQueue.push(id)
+    }
+    drainConversationPrefetchQueue()
   }
 
   async function loadConversationTimelinePage(
@@ -1268,14 +1414,22 @@ const _useCommunicationWorkspace = () => {
       return false
     }
     if (cached) void refreshConversationDetail(id, { reportError: false })
-    selectedConversationId.value = id
+    const timelineWasReady = hasInitializedConversationTimeline(id)
     const timelineReady = await loadInitialConversationTimeline(id)
     if (epoch !== selectionEpoch) return false
+    if (!timelineReady) {
+      openingConversationId.value = null
+      const timelineError = conversationTimelines.value[id]?.error
+      if (timelineError) toast.add({ title: timelineError, color: 'error' })
+      return false
+    }
+    selectedConversationId.value = id
     openingConversationId.value = null
+    if (timelineWasReady) void refreshConversationTimeline(id)
     if (unreadOnly.value) {
       void loadConversations({ silent: true }).catch(() => undefined)
     }
-    return timelineReady || selectedConversationId.value === id
+    return true
   }
 
   async function selectConversationAtMessage(id: number, messageId: number): Promise<boolean> {
@@ -1286,11 +1440,14 @@ const _useCommunicationWorkspace = () => {
       openingConversationId.value = null
       return false
     }
-    selectedConversationId.value = id
     const timelineReady = await loadInitialConversationTimeline(id, messageId)
-    if (epoch !== selectionEpoch) return false
+    if (epoch !== selectionEpoch || !timelineReady) {
+      openingConversationId.value = null
+      return false
+    }
+    selectedConversationId.value = id
     openingConversationId.value = null
-    return timelineReady
+    return true
   }
 
   function clearSignal(kind: 'chat' | 'contact', conversationId: number): void {
@@ -1402,7 +1559,11 @@ const _useCommunicationWorkspace = () => {
     }
   }
 
-  async function hydrateFromEvents(incoming: CommunicationEvent[]): Promise<void> {
+  async function hydrateFromEvents(
+    incoming: CommunicationEvent[],
+    request: CommunicationSynchronizationRequest
+  ): Promise<void> {
+    if (!isSynchronizationRequestCurrent(request)) return
     applyEphemeralSignals(incoming)
     const durable = incoming.filter(event => !isCommunicationEphemeralEvent(event))
     if (!durable.length) return
@@ -1420,16 +1581,20 @@ const _useCommunicationWorkspace = () => {
     // mesmo quando o filtro (ex.: OPEN) excluiria a conversa.
     if (touchesSelected && selectedId !== null) {
       await refreshConversationDetail(selectedId, { reportError: false })
+      if (!isSynchronizationRequestCurrent(request)) return
       const touchesTimeline = durable.some(event =>
         event.conversation_id === selectedId && event.message_id != null
       )
       if (touchesTimeline) {
         await refreshConversationTimeline(selectedId)
+        if (!isSynchronizationRequestCurrent(request)) return
       }
     }
     await loadConversations({ silent: true }).catch(() => undefined)
+    if (!isSynchronizationRequestCurrent(request)) return
     if (selectedId !== null && !conversations.value.some(item => item.id === selectedId)) {
       await refreshConversationDetail(selectedId, { reportError: false })
+      if (!isSynchronizationRequestCurrent(request)) return
     }
     await loadInboxes().catch(() => undefined)
   }
@@ -1440,16 +1605,23 @@ const _useCommunicationWorkspace = () => {
       synchronizeAgain = true
       return
     }
+    const request: CommunicationSynchronizationRequest = {
+      generation: ++synchronizeGeneration,
+      lifecycleEpoch,
+      sessionEpoch: sessionEpoch.value
+    }
     syncing.value = true
     syncError.value = null
     const received: CommunicationEvent[] = []
     try {
       do {
+        if (!isSynchronizationRequestCurrent(request)) return
         synchronizeAgain = false
         let hasMore = true
         let after = cursor.value
         while (hasMore) {
           const response = await api.communication.events.sync(after)
+          if (!isSynchronizationRequestCurrent(request)) return
           received.push(...response.data)
           events.value = mergeCommunicationEvents(events.value, response.data).slice(-500)
           const next = Math.max(
@@ -1461,12 +1633,15 @@ const _useCommunicationWorkspace = () => {
           cursor.value = Math.max(cursor.value, next)
           hasMore = response.meta.has_more
         }
-        await hydrateFromEvents(received.splice(0))
+        await hydrateFromEvents(received.splice(0), request)
+        if (!isSynchronizationRequestCurrent(request)) return
       } while (synchronizeAgain)
     } catch (caught) {
-      syncError.value = apiErrorMessage(caught, 'Sincronização temporariamente indisponível.')
+      if (isSynchronizationRequestCurrent(request)) {
+        syncError.value = apiErrorMessage(caught, 'Sincronização temporariamente indisponível.')
+      }
     } finally {
-      syncing.value = false
+      if (isSynchronizationRequestCurrent(request)) syncing.value = false
     }
   }
 
@@ -1509,26 +1684,32 @@ const _useCommunicationWorkspace = () => {
     )
     if (intent) navigationState.patch(intent)
     if (!canView.value || loading.value) return
+    const request = currentLifecycleRequest()
     loading.value = true
     error.value = null
     try {
       await Promise.all([loadInboxes(), loadCatalog(), loadListPreferences()])
+      if (!isLifecycleRequestCurrent(request)) return
       // Membros para filtro/bulk de responsável (soft-fail se sem permissão).
       try {
         const members = await api.tenant.members.list()
+        if (!isLifecycleRequestCurrent(request)) return
         tenantMembers.value = members.data.filter(member => member.is_active)
       } catch {
+        if (!isLifecycleRequestCurrent(request)) return
         // Filtro de responsável fica sem nomes se a listagem for negada.
       }
       lastSelectionQueryKey = communicationSelectionQueryKey(selectionQueryContext())
       await loadConversations({ silent: true })
-      await synchronize()
+      if (!isLifecycleRequestCurrent(request)) return
       initialized.value = true
+      void synchronize()
     } catch (caught) {
+      if (!isLifecycleRequestCurrent(request)) return
       error.value = apiErrorMessage(caught, 'Não foi possível abrir o atendimento.')
       toast.add({ title: error.value, color: 'error' })
     } finally {
-      loading.value = false
+      if (isLifecycleRequestCurrent(request)) loading.value = false
     }
   }
 
@@ -2020,11 +2201,6 @@ const _useCommunicationWorkspace = () => {
   })
   watch(sessionEpoch, () => {
     navigationState.reset()
-    selectionEpoch++
-    conversationQueryGeneration++
-    conversationQueryController?.abort()
-    conversationQueryController = null
-    detailRequests.clear()
     dispose()
     inboxes.value = []
     conversations.value = []
@@ -2053,6 +2229,15 @@ const _useCommunicationWorkspace = () => {
   })
 
   function dispose(): void {
+    lifecycleEpoch++
+    selectionEpoch++
+    synchronizeGeneration++
+    synchronizeAgain = false
+    loading.value = false
+    syncing.value = false
+    detailRequests.clear()
+    initialTimelineRequests.clear()
+    clearConversationPrefetchQueue()
     conversationQueryGeneration++
     conversationQueryController?.abort()
     conversationQueryController = null
@@ -2137,6 +2322,7 @@ const _useCommunicationWorkspace = () => {
     pendingBulkOperation: readonly(pendingBulkOperation),
     policies,
     prefetchConversation,
+    queueConversationPrefetch,
     preferencesLoaded: readonly(preferencesLoaded),
     realtimeState: realtime.state,
     reloadConversations,

@@ -12,13 +12,14 @@ chrome próprio ou casca de produto; `CHILD` herda a casca do pai; `AUTH` e
 | `pages/syncs.vue` | `/syncs` | `SHELL` | sincronizações |
 | `pages/exports.vue` | `/exports` | `SHELL` | exportações; alias canônico `/exports/new` |
 | `pages/onboarding.vue` | `/onboarding` | `AUTH` | onboarding |
-| `pages/communication/index.vue` | `/communication` | `SHELL` | atendimento master-detail via CommunicationWorkspacePage |
-| `pages/communication/conversations/[id].vue` | `/communication/conversations/:id` | `SHELL` | deep-link do atendimento via CommunicationWorkspacePage |
+| `pages/communication.vue` | `/communication/*` | `SHELL` | outlet persistente; mantém CommunicationWorkspacePage entre lista, conversa e mensagem |
+| `pages/communication/index.vue` | `/communication` | `CHILD` | estado de lista do atendimento; herda o workspace persistente |
+| `pages/communication/conversations/[id].vue` | `/communication/conversations/:id` | `CHILD` | deep-link do atendimento; herda o workspace persistente |
 | `pages/communication/conversations/[id]/messages/[messageId].vue` | `/communication/conversations/:id/messages/:messageId` | `CHILD` | âncora de mensagem; herda o master-detail sem remontá-lo |
 | `pages/communication/contacts/index.vue` | `/communication/contacts` | `SHELL` | catálogo Chatwoot-like: cards expansíveis full-width/full-height |
 | `pages/communication/contacts/[id].vue` | `/communication/contacts/:id` | `SHELL` | detalhes full-width/full-height com contexto lateral/slideover |
-| `pages/communication/contacts/[contactId]/conversations/index.vue` | `/communication/contacts/:contactId/conversations` | `SHELL` | atendimento filtrado pelo contexto estável do contato |
-| `pages/communication/contacts/[contactId]/conversations/[id].vue` | `/communication/contacts/:contactId/conversations/:id` | `SHELL` | conversa aberta no contexto estável do contato |
+| `pages/communication/contacts/[contactId]/conversations/index.vue` | `/communication/contacts/:contactId/conversations` | `CHILD` | atendimento filtrado; herda o workspace persistente |
+| `pages/communication/contacts/[contactId]/conversations/[id].vue` | `/communication/contacts/:contactId/conversations/:id` | `CHILD` | conversa no contexto do contato; herda o workspace persistente |
 | `pages/communication/quick-responses/index.vue` | `/communication/quick-responses` | `SHELL` | gestão de respostas rápidas (ShellDataTable) |
 | `pages/communication/flows/index.vue` | `/communication/flows` | `SHELL` | gestão de fluxos (ShellDataTable) |
 | `pages/communication/flows/[id]/index.vue` | `/communication/flows/:id` | `SHELL` | detalhe: metadados, versões, bindings, runs |

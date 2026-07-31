@@ -121,6 +121,44 @@ describe('ConversationList — foco acessível', () => {
     }).focusConversation(999)).resolves.toBe(false)
   })
 
+  it('emite somente as conversas visíveis para preparação da timeline', async () => {
+    const conversations: CommunicationConversation[] = Array.from({ length: 12 }, (_, index) => ({
+      id: index + 1,
+      inbox_id: 7,
+      status: 'OPEN',
+      priority: 0,
+      lock_version: 1,
+      last_message_at: '2026-07-23T12:00:00-03:00',
+      contact: {
+        id: index + 1,
+        name: `Contato ${index + 1}`
+      }
+    }))
+
+    wrapper = await mountSuspended(ConversationList, {
+      attachTo: document.body,
+      props: { conversations, inboxes: [] },
+      global: {
+        stubs: {
+          UAlert: true,
+          UAvatar: true,
+          UBadge: true,
+          UIcon: true,
+          UCheckbox: true,
+          UButton: true,
+          UDropdownMenu: true,
+          UTooltip: true,
+          USkeleton: true,
+          ShellInfiniteTableLoader: true
+        }
+      }
+    })
+
+    const emitted = wrapper.emitted('prefetch-visible')
+    expect(emitted).toBeDefined()
+    expect(emitted?.at(-1)?.[0]).toEqual([1, 2, 3, 4, 5, 6, 7])
+  })
+
   it('oferece o contêiner da lista como fallback de foco', async () => {
     wrapper = await mountSuspended(ConversationList, {
       attachTo: document.body,
