@@ -572,7 +572,7 @@ final class SerproOperationService implements SerproOperationExecutor
         }
 
         if ($operationKey === 'pagtoweb.comparrecadacao') {
-            $response = $this->pagtowebResponseRedactor->redact(
+            $response = $this->pagtoWebResponseRedactor->redact(
                 $response,
                 $command->businessData['numeroDocumento'] ?? null,
             );

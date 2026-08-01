@@ -198,13 +198,13 @@ final class ManualConsultExecutionService
                 (string) $this->requireParam($params, 'codigo_receita'),
                 $actorUserId,
             ),
-            'pagtoweb_list' => $this->pagtowebList->enqueueManualConsult(
+            'pagtoweb_list' => $this->pagtoWebList->enqueueManualConsult(
                 $tenant,
                 $client,
                 (array) ($params['filters'] ?? []),
                 $actorUserId,
             ),
-            'pagtoweb_count' => $this->pagtowebCount->enqueueManualConsult(
+            'pagtoweb_count' => $this->pagtoWebCount->enqueueManualConsult(
                 $tenant,
                 $client,
                 (array) ($params['filters'] ?? []),
