@@ -286,3 +286,4 @@ openspec/**/.DS_Store
 # Playwright agent CLI (local sessions/screenshots)
 .playwright-cli/
 apps/web/.playwright-cli/
+apps/web/.playwright/

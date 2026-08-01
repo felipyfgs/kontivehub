@@ -26,7 +26,7 @@ const router = useRouter()
 const { sessionEpoch } = useDashboard()
 const {
   page, perPage, total, lastPage, clientId, q,
-  loading, loadError, applyPaginator, syncUrl, resetPage
+  loading, loadError, applyPaginator, resetPage
 } = useServerPage()
 
 type MailboxTriageFilter = (typeof MAILBOX_TRIAGE_FILTER_ITEMS)[number]['value']
@@ -150,7 +150,6 @@ async function load() {
         clientId.value = String(handoffClientId)
       }
     }
-    await syncUrl()
     if (seq !== loadSeq || epoch !== sessionEpoch.value) return
     const clientNum = Number(clientId.value)
     const res = await api.fiscal.mailbox.list({

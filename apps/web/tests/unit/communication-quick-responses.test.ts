@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 import { computed, effectScope, nextTick, ref } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
 import type { MeUser } from '~/types/api'
-import type { CommunicationCannedResponse } from '~/types/communication'
+import type { CannedResponse } from '~/types/communication/quick-responses'
 import { createCommunicationQuickResponsesCatalog } from '~/composables/useCommunicationQuickResponsesCatalog'
 import {
   buildCannedResponseListQuery,
@@ -30,7 +30,7 @@ import {
 const root = (...parts: string[]) => resolve(process.cwd(), ...parts)
 const read = (...parts: string[]) => readFileSync(root(...parts), 'utf8')
 
-const sample: CommunicationCannedResponse[] = [
+const sample: CannedResponse[] = [
   {
     id: 1,
     title: 'Saudação',
@@ -163,13 +163,13 @@ describe('communication quick-responses — permissões, nav e API client', () =
       'app/components/communication/quick-responses/CatalogTable.vue'
     )
     const editorModal = read(
-      'app/components/communication/quick-responses/QuickResponseEditorModal.vue'
+      'app/components/communication/quick-responses/EditorModal.vue'
     )
     const duplicateModal = read(
-      'app/components/communication/quick-responses/QuickResponseDuplicateModal.vue'
+      'app/components/communication/quick-responses/DuplicateModal.vue'
     )
     const deactivateModal = read(
-      'app/components/communication/quick-responses/QuickResponseDeactivateModal.vue'
+      'app/components/communication/quick-responses/DeactivateModal.vue'
     )
     const api = read('app/composables/api/createCommunicationApi.ts')
     const catalog = read('app/components/communication/CatalogAdminPanel.vue')
@@ -366,7 +366,7 @@ describe('communication quick-responses — catálogo extraído', () => {
 
   it('descarta resposta atrasada e reinicia dados ao trocar de Tenant', async () => {
     let resolveFirst: ((value: {
-      data: CommunicationCannedResponse[]
+      data: CannedResponse[]
       meta: { current_page: number, last_page: number, total: number }
     }) => void) | undefined
     const api = createApiMock()

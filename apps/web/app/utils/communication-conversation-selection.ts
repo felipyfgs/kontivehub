@@ -1,14 +1,10 @@
-import type {
-  CommunicationBulkAction,
-  CommunicationBulkOperationSubmitItem,
-  CommunicationConversation
-} from '~/types/communication'
+import type { BulkAction, BulkOperationSubmitItem, Conversation } from '~/types/communication/conversations'
 
 /**
  * Contexto de consulta que limpa a seleção operacional.
  * Paginação não entra: carregar mais não reseta seleção.
  */
-export interface CommunicationSelectionQueryContext {
+export interface SelectionQueryContext {
   q: string
   inboxId: number | null
   status: string | null
@@ -22,7 +18,7 @@ export interface CommunicationSelectionQueryContext {
 }
 
 export function communicationSelectionQueryKey(
-  context: CommunicationSelectionQueryContext
+  context: SelectionQueryContext
 ): string {
   return JSON.stringify([
     context.q.trim(),
@@ -40,7 +36,7 @@ export function communicationSelectionQueryKey(
 
 /** Substitui a seleção pelos IDs atualmente carregados. */
 export function selectLoadedConversationIds(
-  conversations: readonly CommunicationConversation[]
+  conversations: readonly Conversation[]
 ): Set<number> {
   return new Set(conversations.map(item => item.id))
 }
@@ -63,7 +59,7 @@ export function toggleConversationSelection(
  */
 export function pruneConversationSelection(
   current: ReadonlySet<number>,
-  conversations: readonly CommunicationConversation[]
+  conversations: readonly Conversation[]
 ): Set<number> {
   if (current.size === 0) return new Set()
   const loaded = new Set(conversations.map(item => item.id))
@@ -76,7 +72,7 @@ export function pruneConversationSelection(
 
 export function conversationSelectionState(
   selected: ReadonlySet<number>,
-  conversations: readonly CommunicationConversation[]
+  conversations: readonly Conversation[]
 ): {
   selectedCount: number
   allLoadedSelected: boolean
@@ -102,7 +98,7 @@ export function conversationSelectionState(
 }
 
 function resolveThroughMessageId(
-  conversation: CommunicationConversation
+  conversation: Conversation
 ): number | null {
   const messages = conversation.messages
   if (Array.isArray(messages) && messages.length > 0) {
@@ -116,14 +112,14 @@ function resolveThroughMessageId(
  * Itens sem snapshot obrigatório são omitidos (fail-closed no cliente).
  */
 export function buildConversationBulkItems(
-  conversations: readonly CommunicationConversation[],
+  conversations: readonly Conversation[],
   selectedIds: ReadonlySet<number>,
-  action: CommunicationBulkAction
-): CommunicationBulkOperationSubmitItem[] {
-  const items: CommunicationBulkOperationSubmitItem[] = []
+  action: BulkAction
+): BulkOperationSubmitItem[] {
+  const items: BulkOperationSubmitItem[] = []
   for (const conversation of conversations) {
     if (!selectedIds.has(conversation.id)) continue
-    const base: CommunicationBulkOperationSubmitItem = {
+    const base: BulkOperationSubmitItem = {
       conversation_id: conversation.id
     }
     if (
@@ -149,10 +145,10 @@ export function buildConversationBulkItems(
 
 /** Concatena páginas preservando a ordem autoritativa da API. */
 export function mergeConversationListInApiOrder(
-  current: CommunicationConversation[],
-  incoming: CommunicationConversation[],
+  current: Conversation[],
+  incoming: Conversation[],
   append: boolean
-): CommunicationConversation[] {
+): Conversation[] {
   if (!append) {
     return incoming.slice()
   }

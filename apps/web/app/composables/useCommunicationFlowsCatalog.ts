@@ -331,7 +331,7 @@ export function createCommunicationFlowsCatalog(dependencies: FlowsCatalogDepend
   }
 }
 
-export type CommunicationFlowsCatalog = ReturnType<
+export type FlowsCatalog = ReturnType<
   typeof createCommunicationFlowsCatalog
 >
 
@@ -343,8 +343,8 @@ export function useCommunicationFlowsCatalog() {
   const surface = useSurfaceNavigationState(COMMUNICATION_SURFACES.flows, {
     page: 1, per_page: 20, q: '', status: 'all'
   }, { resetKey: () => `${me.value?.id ?? 'guest'}:${me.value?.current_tenant?.id ?? 'none'}:${sessionEpoch.value}` })
-  const legacyIntent = consumeSurfaceNavigationIntent<Record<string, unknown>>(COMMUNICATION_SURFACES.flows)
-  if (legacyIntent) surface.patch(legacyIntent)
+  const Intent = consumeSurfaceNavigationIntent<Record<string, unknown>>(COMMUNICATION_SURFACES.flows)
+  if (Intent) surface.patch(Intent)
 
   const catalog = createCommunicationFlowsCatalog({
     api: api.communication.flows,

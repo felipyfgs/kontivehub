@@ -1,18 +1,18 @@
 <script setup lang="ts">
-import type { CommunicationContact, CommunicationIdentity, CommunicationIdentityLinkEntry } from '~/types/communication'
+import type { Contact, Identity, IdentityLinkEntry } from '~/types/communication/contacts'
 
 defineProps<{
-  contact: CommunicationContact
+  contact: Contact
   canMutate: boolean
   canManage: boolean
-  identityLinks: CommunicationIdentityLinkEntry[]
+  identityLinks: IdentityLinkEntry[]
   unlinkingKey: string | null
   exporting: boolean
 }>()
 
 const emit = defineEmits<{
   addIdentity: []
-  link: [identity: CommunicationIdentity]
+  link: [identity: Identity]
   unlink: [identityId: number, linkId: number]
   export: []
   openPurge: []

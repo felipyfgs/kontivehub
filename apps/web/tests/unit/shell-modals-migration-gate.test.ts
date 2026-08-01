@@ -23,7 +23,7 @@ const FORM_OR_CONFIRM = [
   'app/pages/closing.vue',
   'app/components/monitoring/simples-mei/Portfolio.vue',
   'app/components/settings/TenantProfileSection.vue',
-  'app/components/communication/CommunicationWorkspacePage.vue',
+  'app/components/communication/WorkspacePage.vue',
   'app/components/communication/TimelinePanel.vue'
 ] as const
 

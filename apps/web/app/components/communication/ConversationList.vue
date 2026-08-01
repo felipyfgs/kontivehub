@@ -1,11 +1,8 @@
 <script setup lang="ts">
 import CommunicationConversationActions from './ConversationActions.vue'
-import type {
-  CommunicationConversation,
-  CommunicationConversationActionPayload,
-  CommunicationInbox,
-  CommunicationLabel
-} from '~/types/communication'
+import type { Conversation, ConversationActionPayload } from '~/types/communication/conversations'
+import type { Inbox } from '~/types/communication/inboxes'
+import type { Label } from '~/types/communication/contacts'
 import type { WorkDepartment } from '~/types/work'
 import {
   COMMUNICATION_CONVERSATION_STATUS,
@@ -20,10 +17,10 @@ import {
 const apiBase = String(useRuntimeConfig().public.apiBase || '')
 
 const props = withDefaults(defineProps<{
-  conversations: CommunicationConversation[]
-  inboxes: CommunicationInbox[]
+  conversations: Conversation[]
+  inboxes: Inbox[]
   departments?: WorkDepartment[]
-  labels?: CommunicationLabel[]
+  labels?: Label[]
   selectedId?: number | null
   openingId?: number | null
   selectedIds?: ReadonlySet<number> | Set<number>
@@ -48,12 +45,12 @@ const OVERSCAN = 6
 const skeletonRows = Array.from({ length: 8 }, (_, index) => index)
 
 const emit = defineEmits<{
-  'select': [conversation: CommunicationConversation]
+  'select': [conversation: Conversation]
   'prefetch': [conversationId: number]
   'prefetch-visible': [conversationIds: number[]]
   'loadMore': []
   'toggle-select': [conversationId: number, selected: boolean]
-  'action': [payload: CommunicationConversationActionPayload]
+  'action': [payload: ConversationActionPayload]
 }>()
 
 const listRoot = ref<HTMLElement | null>(null)
@@ -179,18 +176,18 @@ function inboxName(id: number): string {
   return props.inboxes.find(inbox => inbox.id === id)?.name || `Inbox #${id}`
 }
 
-function inboxFor(id: number): CommunicationInbox | null {
+function inboxFor(id: number): Inbox | null {
   return props.inboxes.find(inbox => inbox.id === id) ?? null
 }
 
-function previewLine(conversation: CommunicationConversation): string {
+function previewLine(conversation: Conversation): string {
   const preview = communicationPreviewText(conversation)
   if (preview) return preview
   if (communicationConversationImageEvidence(conversation)) return 'Imagem'
   return '—'
 }
 
-function isUnread(conversation: CommunicationConversation): boolean {
+function isUnread(conversation: Conversation): boolean {
   return (conversation.unread_count ?? 0) > 0
 }
 
@@ -198,16 +195,16 @@ function isSelected(conversationId: number): boolean {
   return selectedSet.value.has(conversationId)
 }
 
-function statusMeta(conversation: CommunicationConversation) {
+function statusMeta(conversation: Conversation) {
   return COMMUNICATION_CONVERSATION_STATUS[conversation.status]
 }
 
 /** Status OPEN é o default da fila; só destaca os demais. */
-function showStatusBadge(conversation: CommunicationConversation): boolean {
+function showStatusBadge(conversation: Conversation): boolean {
   return conversation.status !== 'OPEN'
 }
 
-function phoneLine(conversation: CommunicationConversation): string {
+function phoneLine(conversation: Conversation): string {
   return communicationListPhoneLine(conversation)
 }
 

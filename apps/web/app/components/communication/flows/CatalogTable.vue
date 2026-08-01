@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
 import type { Flow } from '~/types/communication/flows'
-import type { CommunicationFlowsCatalog } from '~/composables/useCommunicationFlowsCatalog'
+import type { FlowsCatalog } from '~/composables/useCommunicationFlowsCatalog'
 import {
   communicationFlowStatusColor,
   communicationFlowStatusLabel
@@ -13,7 +13,7 @@ import {
 } from '~/utils/table-ui'
 
 const { catalog } = defineProps<{
-  catalog: CommunicationFlowsCatalog
+  catalog: FlowsCatalog
 }>()
 
 const page = catalog.page

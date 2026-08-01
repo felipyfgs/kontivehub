@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import type { CommunicationFlowDetail } from '~/composables/useCommunicationFlowDetail'
+import type { FlowDetail } from '~/composables/useCommunicationFlowDetail'
 import { communicationFlowEditorPath } from '~/utils/communication-routes'
 
 const { detail } = defineProps<{
-  detail: CommunicationFlowDetail
+  detail: FlowDetail
 }>()
 
 const draftJson = detail.draftJson

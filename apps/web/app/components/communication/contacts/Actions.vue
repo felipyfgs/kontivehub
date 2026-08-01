@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
-import type { CommunicationContact } from '~/types/communication'
+import type { Contact } from '~/types/communication/contacts'
 import {
   COMMUNICATION_CONTACT_ACTION_LABELS,
   communicationContactActions,
@@ -9,7 +9,7 @@ import {
 import { communicationContactPath } from '~/utils/communication-routes'
 
 const props = withDefaults(defineProps<{
-  contact: CommunicationContact
+  contact: Contact
   canManage: boolean
   label?: string
   compact?: boolean

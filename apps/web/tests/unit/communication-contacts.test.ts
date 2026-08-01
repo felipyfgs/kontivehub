@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 import { nextTick, ref } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
 import type { MeUser } from '~/types/api'
-import type { CommunicationContact } from '~/types/communication'
+import type { Contact } from '~/types/communication/contacts'
 import { createCommunicationContactDetail } from '~/composables/useCommunicationContactDetail'
 import { createCommunicationContactsCatalog } from '~/composables/useCommunicationContactsCatalog'
 import {
@@ -40,7 +40,7 @@ import {
 const root = (...parts: string[]) => resolve(process.cwd(), ...parts)
 const read = (...parts: string[]) => readFileSync(root(...parts), 'utf8')
 
-const sampleContact: CommunicationContact = {
+const sampleContact: Contact = {
   id: 7,
   name: 'Ana Silva',
   is_provisional: false,
@@ -345,7 +345,7 @@ describe('communication contacts — superfícies e contrato Shell', () => {
     expect(table).toContain('watch(() => props.items')
     expect(table).toContain('hasUnsavedDraft')
     expect(table).toContain('ShellConfirmModal')
-    expect(table).not.toContain('CommunicationContactsContactActions')
+    expect(table).not.toContain('CommunicationContactsActions')
     expect(toolbar).toContain('i-lucide-arrow-up-down')
     expect(toolbar).not.toContain('i-lucide-arrow-down-up')
     expect(toolbar).toContain('aria-live="polite"')
@@ -358,19 +358,19 @@ describe('communication contacts — superfícies e contrato Shell', () => {
     expect(composable).toContain('response.meta.last_page')
     expect(table).not.toContain('ShellDataTable')
 
-    expect(api).toContain('CommunicationContactListParams')
+    expect(api).toContain('ContactListParams')
     expect(api).toContain('isSensitiveCommunicationContactSearch')
     expect(api).toContain('`${base}/contacts/search`')
     expect(api).toContain('{ method: \'POST\', body: params }')
     expect(api).toContain('sharedContent')
     expect(api).toContain('conversations: {')
     expect(api).toContain('create: (body: {')
-    const types = read('app/types/communication/index.ts')
+    const types = read('app/types/communication/contacts.ts')
     expect(types).toContain('is_provisional')
     expect(types).toContain('sort_direction')
     expect(types).toContain('client_name')
-    expect(types).toContain('CommunicationSharedContentItem')
-    expect(types).toContain('conversation_initiation')
+    expect(read('app/types/communication/shared-content.ts')).toContain('SharedContentItem')
+    expect(read('app/types/communication/conversations.ts')).toContain('conversation_initiation')
   })
 
   it('detalhes orquestram composable, seções, deep-link e gates de privacidade', () => {
@@ -384,7 +384,7 @@ describe('communication contacts — superfícies e contrato Shell', () => {
     expect(page).toContain('ShellPagePanel')
     expect(page).toContain('useCommunicationContactDetail')
     expect(page).toContain('CommunicationContactsProfileSection')
-    expect(page).toContain('CommunicationContactsContactContext')
+    expect(page).toContain('CommunicationContactsContext')
     expect(page).toContain('USlideover')
     expect(page).toContain('communication-contact-context-trigger')
     expect(page).toContain('ShellFormModal')
@@ -409,7 +409,7 @@ describe('communication contacts — superfícies e contrato Shell', () => {
     expect(page).not.toContain('lg:max-w-[40.625rem]')
     expect(page).not.toContain('lg:w-[clamp(13rem,28vw,28rem)]')
     expect(page).not.toContain('max-w-6xl')
-    const context = read('app/components/communication/contacts/ContactContext.vue')
+    const context = read('app/components/communication/contacts/Context.vue')
     expect(context).toContain('min-h-0 flex-1 overflow-y-auto')
     expect(context).toContain('CommunicationSharedContent')
     expect(context).toContain('compact')
@@ -669,7 +669,7 @@ describe('communication contacts — composable de detalhe', () => {
   })
 
   it('não exporta nem expurga contato purged e descarta resposta de sessão antiga', async () => {
-    let resolveLoad: ((value: { data: CommunicationContact }) => void) | undefined
+    let resolveLoad: ((value: { data: Contact }) => void) | undefined
     const pendingGet = vi.fn().mockImplementation(() => new Promise((resolve) => {
       resolveLoad = resolve
     }))
@@ -710,7 +710,7 @@ describe('communication contacts — composable de detalhe', () => {
   })
 
   it('não aplica resposta de mutação iniciada em outro contexto de Tenant', async () => {
-    let resolveUpdate: ((value: { data: CommunicationContact }) => void) | undefined
+    let resolveUpdate: ((value: { data: Contact }) => void) | undefined
     const fixture = makeDetail()
     fixture.update.mockImplementationOnce(() => new Promise((resolve) => {
       resolveUpdate = resolve

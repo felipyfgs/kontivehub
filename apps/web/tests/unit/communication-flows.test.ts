@@ -170,8 +170,8 @@ describe('communication flows — superfícies e contrato Shell', () => {
     expect(list).toContain('useCommunicationFlowsCatalog')
     expect(list).toContain('catalog.flowsEnabled')
     expect(list).toContain('communication-flows-disabled-alert')
-    expect(list).toContain('FlowCatalogTable')
-    expect(list).toContain('FlowCatalogModals')
+    expect(list).toContain('CommunicationFlowsCatalogTable')
+    expect(list).toContain('CommunicationFlowsCatalogModals')
     expect(list).not.toContain('@vue-flow')
     expect(list).not.toContain('VueFlow')
 

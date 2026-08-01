@@ -1,4 +1,4 @@
-import type { CommunicationSendKind } from '~/types/communication'
+import type { SendKind } from '~/types/communication/messages'
 
 export const COMMUNICATION_REACTION_EMOJIS = [
   '👍', '❤️', '😂', '😮', '😢', '🙏', '👏', '🎉',
@@ -12,7 +12,7 @@ export const COMMUNICATION_RECORDER_MIME_TYPES = [
   'audio/webm'
 ] as const
 
-export interface CommunicationComposerKeyEvent {
+export interface ComposerKeyEvent {
   key: string
   shiftKey: boolean
   isComposing?: boolean
@@ -20,7 +20,7 @@ export interface CommunicationComposerKeyEvent {
 }
 
 /** Enter envia; Shift+Enter quebra linha; IME nunca dispara envio no meio da composição. */
-export function shouldSubmitCommunicationComposer(event: CommunicationComposerKeyEvent): boolean {
+export function shouldSubmitCommunicationComposer(event: ComposerKeyEvent): boolean {
   return event.key === 'Enter'
     && !event.shiftKey
     && event.isComposing !== true
@@ -40,7 +40,7 @@ export function communicationRecordingExtension(mimeType: string): 'ogg' | 'm4a'
   return 'webm'
 }
 
-export function communicationSendKindForMime(mimeType: string): CommunicationSendKind {
+export function communicationSendKindForMime(mimeType: string): SendKind {
   const normalized = mimeType.toLowerCase().split(';', 1)[0] || ''
   if (normalized.startsWith('image/')) return 'IMAGE'
   if (normalized.startsWith('audio/')) return 'AUDIO'

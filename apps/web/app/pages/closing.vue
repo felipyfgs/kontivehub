@@ -101,8 +101,8 @@ const {
   normalize: normalizeClosingNavigation,
   resetKey: navigationContext
 })
-const legacyClosingIntent = consumeSurfaceNavigationIntent<Partial<ClosingNavigationState>>(SURFACE_NAVIGATION.closing)
-if (legacyClosingIntent) patchClosingNavigation(legacyClosingIntent)
+const closingIntent = consumeSurfaceNavigationIntent<Partial<ClosingNavigationState>>(SURFACE_NAVIGATION.closing)
+if (closingIntent) patchClosingNavigation(closingIntent)
 
 const competence = computed({
   get: () => closingNavigation.value.competence,

@@ -2,11 +2,9 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { MeUser } from '~/types/api'
-import type {
-  CommunicationConversation,
-  CommunicationEvent,
-  CommunicationMessage
-} from '~/types/communication'
+import type { Conversation } from '~/types/communication/conversations'
+import type { Event } from '~/types/communication/realtime'
+import type { Message } from '~/types/communication/messages'
 import {
   communicationContactLabel,
   communicationAvailabilityPlaceholder,
@@ -46,7 +44,7 @@ import {
 } from '~/utils/permissions'
 import { pgdasdTrackingMeta } from '~/utils/pgdasd'
 
-function message(id: number, status: CommunicationMessage['status'], occurredAt: string): CommunicationMessage {
+function message(id: number, status: Message['status'], occurredAt: string): Message {
   return {
     id,
     conversation_id: 1,
@@ -59,7 +57,7 @@ function message(id: number, status: CommunicationMessage['status'], occurredAt:
   }
 }
 
-function conversation(id: number, priority: number, messages?: CommunicationMessage[]): CommunicationConversation {
+function conversation(id: number, priority: number, messages?: Message[]): Conversation {
   return {
     id,
     inbox_id: 10,
@@ -72,7 +70,7 @@ function conversation(id: number, priority: number, messages?: CommunicationMess
 }
 
 describe('projeção local da comunicação', () => {
-  it('usa foto somente quando READY e preserva compatibilidade com URL legada', () => {
+  it('usa foto somente quando READY', () => {
     expect(communicationProfilePictureUrl({
       profile_picture_url: '/api/v1/communication/profile-pictures/1/2',
       profile_picture_state: 'READY'
@@ -83,7 +81,7 @@ describe('projeção local da comunicação', () => {
     })).toBeNull()
     expect(communicationProfilePictureUrl({
       profile_picture_url: '/api/v1/communication/profile-pictures/1/2'
-    })).toBe('/api/v1/communication/profile-pictures/1/2')
+    })).toBeNull()
     expect(communicationProfilePictureUrl({
       profile_picture_url: null,
       profile_picture_state: 'READY'
@@ -122,7 +120,7 @@ describe('projeção local da comunicação', () => {
   })
 
   it('mantém conteúdo e disponibilidade, mas respeita anexos explicitamente vazios', () => {
-    const initial: CommunicationMessage = {
+    const initial: Message = {
       ...message(1, 'DELIVERED', '2026-07-22T10:00:00Z'),
       body: 'Mensagem preservada',
       content: { text: 'Mensagem preservada' },
@@ -152,7 +150,7 @@ describe('projeção local da comunicação', () => {
   })
 
   it('normaliza texto e legenda aditivos e expõe placeholders de disponibilidade', () => {
-    const caption: CommunicationMessage = {
+    const caption: Message = {
       ...message(3, 'SENT', '2026-07-22T10:00:00Z'),
       body: null,
       content: { caption: 'Legenda da imagem' },
@@ -189,7 +187,7 @@ describe('projeção local da comunicação', () => {
   })
 
   it('deduplica eventos por cursor e mantém o cursor mais recente', () => {
-    const first: CommunicationEvent = {
+    const first: Event = {
       cursor: 12,
       type: 'MESSAGE_QUEUED',
       payload: {},
@@ -212,7 +210,7 @@ describe('projeção local da comunicação', () => {
   })
 
   it('projeta presence allowlisted com TTL limitado e pausa sem item durável', () => {
-    const composing: CommunicationEvent = {
+    const composing: Event = {
       cursor: 20,
       type: 'CHAT_PRESENCE_CHANGED',
       conversation_id: 7,
@@ -238,7 +236,7 @@ describe('projeção local da comunicação', () => {
   })
 
   it('limita TTL de presença de contato e preserva somente last seen sanitizado', () => {
-    const event: CommunicationEvent = {
+    const event: Event = {
       cursor: 21,
       type: 'CONTACT_PRESENCE_CHANGED',
       conversation_id: 8,
@@ -423,7 +421,7 @@ describe('Reverb fail-closed e recuperável', () => {
     expect(workspace).toContain('sessionEpoch: sessionEpoch.value')
     expect(workspace).toContain('conversationQueryGeneration')
     expect(workspace).toContain('conversationQueryController?.abort()')
-    expect(api).toContain('CommunicationConversationListMeta')
+    expect(api).toContain('ConversationListMeta')
     expect(api).toContain('options?: { signal?: AbortSignal }')
     expect(api).toContain('conversationListPreferences')
     expect(api).toContain('conversationBulkOperations')
@@ -466,7 +464,7 @@ describe('Reverb fail-closed e recuperável', () => {
       'utf8'
     )
     const page = readFileSync(
-      resolve(process.cwd(), 'app/components/communication/CommunicationWorkspacePage.vue'),
+      resolve(process.cwd(), 'app/components/communication/WorkspacePage.vue'),
       'utf8'
     )
     expect(plugin).toContain('\'/api/broadcasting/auth\'')

@@ -49,12 +49,12 @@ describe('company-first-monitoring fidelity', () => {
 
   it('histórico PGDAS-D usa a grade oficial por PA na página e no modal', () => {
     const view = readFileSync(root('app/components/monitoring/PgdasdHistoryView.vue'), 'utf8')
-    const grid = readFileSync(root('app/components/monitoring/pgdasd/PgdasdHistoryPeriodGrid.vue'), 'utf8')
+    const grid = readFileSync(root('app/components/monitoring/pgdasd/HistoryPeriodGrid.vue'), 'utf8')
     const dasModal = readFileSync(root('app/components/monitoring/PgdasdDasHistoryModal.vue'), 'utf8')
 
     expect(view).toContain('data-testid="pgdasd-history-view"')
     expect(view).toContain('data-testid="pgdasd-history-periods"')
-    expect(view).toContain('PgdasdHistoryPeriodGrid')
+    expect(view).toContain('HistoryPeriodGrid')
     expect(view).toContain('Buscar documentos')
     expect(view).toContain('documentConfirmOpen')
 

@@ -1,15 +1,12 @@
-import type {
-  CommunicationConversationQuickView,
-  CommunicationConversationStatus
-} from '~/types/communication'
+import type { ConversationQuickView, ConversationStatus } from '~/types/communication/conversations'
 
-export type CommunicationFixedQuickView = Extract<
-  CommunicationConversationQuickView,
+export type FixedQuickView = Extract<
+  ConversationQuickView,
   'OPEN' | 'UNASSIGNED' | 'UNREAD'
 >
 
-export interface CommunicationQuickViewState {
-  status: CommunicationConversationStatus | null
+export interface QuickViewState {
+  status: ConversationStatus | null
   unreadOnly: boolean
   unassignedOnly: boolean
 }
@@ -21,12 +18,12 @@ export const COMMUNICATION_CONVERSATION_QUICK_VIEW_TABS = [
 ] as const satisfies ReadonlyArray<{
   label: string
   compactLabel?: string
-  value: CommunicationFixedQuickView
+  value: FixedQuickView
 }>
 
 export function communicationQuickViewState(
-  view: CommunicationConversationQuickView
-): CommunicationQuickViewState {
+  view: ConversationQuickView
+): QuickViewState {
   if (view === 'UNREAD') {
     return { status: 'OPEN', unreadOnly: true, unassignedOnly: false }
   }
@@ -41,8 +38,8 @@ export function communicationQuickViewState(
 }
 
 export function activeCommunicationQuickView(
-  state: CommunicationQuickViewState
-): CommunicationConversationQuickView | null {
+  state: QuickViewState
+): ConversationQuickView | null {
   if (state.status !== 'OPEN') return null
   if (state.unreadOnly && !state.unassignedOnly) return 'UNREAD'
   if (state.unassignedOnly && !state.unreadOnly) return 'UNASSIGNED'

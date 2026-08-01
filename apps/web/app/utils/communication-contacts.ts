@@ -1,24 +1,19 @@
 import type { DropdownMenuItem } from '@nuxt/ui'
-import type {
-  CommunicationContact,
-  CommunicationContactListParams,
-  CommunicationContactSortField,
-  CommunicationIdentity
-} from '~/types/communication'
+import type { Contact, ContactListParams, ContactSortField, Identity } from '~/types/communication/contacts'
 import {
   communicationContactConversationsPath,
   communicationContactPath
 } from '~/utils/communication-routes'
 
 /** Whitelist alinhada ao contrato HTTP de sort do catálogo. */
-export const COMMUNICATION_CONTACT_SORT_FIELDS = ['name', 'id', 'created_at'] as const satisfies readonly CommunicationContactSortField[]
+export const COMMUNICATION_CONTACT_SORT_FIELDS = ['name', 'id', 'created_at'] as const satisfies readonly ContactSortField[]
 
-export function isCommunicationContactSortField(value: unknown): value is CommunicationContactSortField {
+export function isCommunicationContactSortField(value: unknown): value is ContactSortField {
   return typeof value === 'string'
     && (COMMUNICATION_CONTACT_SORT_FIELDS as readonly string[]).includes(value)
 }
 
-export function communicationContactDisplayName(contact: Pick<CommunicationContact, 'name' | 'id' | 'is_provisional'>): string {
+export function communicationContactDisplayName(contact: Pick<Contact, 'name' | 'id' | 'is_provisional'>): string {
   const name = contact.name?.trim()
   if (name) return name
   if (contact.is_provisional) return `Provisório #${contact.id}`
@@ -30,7 +25,7 @@ export function communicationContactDisplayName(contact: Pick<CommunicationConta
  * Sem foto remota de gateway no catálogo.
  */
 export function communicationContactInitials(
-  contact: Pick<CommunicationContact, 'name' | 'id' | 'is_provisional'>
+  contact: Pick<Contact, 'name' | 'id' | 'is_provisional'>
 ): string {
   const name = contact.name?.trim()
   if (!name) return '?'
@@ -44,18 +39,18 @@ export function communicationContactInitials(
   return `${parts[0]![0] || ''}${parts[1]![0] || ''}`.toUpperCase()
 }
 
-export function communicationContactIdentityCount(contact: CommunicationContact): number {
+export function communicationContactIdentityCount(contact: Contact): number {
   return (contact.identities || []).length
 }
 
-export function communicationContactPrimaryPhone(contact: CommunicationContact): string | null {
+export function communicationContactPrimaryPhone(contact: Contact): string | null {
   const identities = contact.identities || []
   const preferred = identities.find(identity => identity.is_active && identity.phone)
     || identities.find(identity => identity.phone)
   return preferred?.phone || null
 }
 
-export function communicationContactLinkedClientNames(contact: CommunicationContact): string[] {
+export function communicationContactLinkedClientNames(contact: Contact): string[] {
   const names = new Set<string>()
   for (const identity of contact.identities || []) {
     for (const link of identity.links || []) {
@@ -66,11 +61,11 @@ export function communicationContactLinkedClientNames(contact: CommunicationCont
   return [...names]
 }
 
-export function communicationContactHasLinks(contact: CommunicationContact): boolean {
+export function communicationContactHasLinks(contact: Contact): boolean {
   return (contact.identities || []).some(identity => (identity.links || []).length > 0)
 }
 
-export function communicationContactStatusLabel(contact: CommunicationContact): string {
+export function communicationContactStatusLabel(contact: Contact): string {
   if (contact.purged_at) return 'Expurgado'
   if (!contact.is_active) return 'Inativo'
   if (contact.is_provisional) return 'Provisório'
@@ -78,7 +73,7 @@ export function communicationContactStatusLabel(contact: CommunicationContact): 
 }
 
 export function communicationContactStatusColor(
-  contact: CommunicationContact
+  contact: Contact
 ): 'success' | 'warning' | 'neutral' | 'error' {
   if (contact.purged_at) return 'error'
   if (!contact.is_active) return 'neutral'
@@ -90,7 +85,7 @@ export function communicationContactStatusColor(
  * Reforça contraste do texto sobre badges `subtle` sem perder a cor semântica.
  * As variantes padrão do tema usam o tom 500, insuficiente para texto pequeno.
  */
-export function communicationContactStatusContrastClass(contact: CommunicationContact): string {
+export function communicationContactStatusContrastClass(contact: Contact): string {
   if (contact.purged_at) return '!text-red-900 dark:!text-red-100'
   if (!contact.is_active) return '!text-zinc-900 dark:!text-zinc-100'
   if (contact.is_provisional) return '!text-amber-900 dark:!text-amber-100'
@@ -111,16 +106,16 @@ export const COMMUNICATION_CONTACT_ACTION_LABELS = {
   purge: 'Expurgar'
 } as const
 
-export type CommunicationContactActionHandlers = {
+export type ContactActionHandlers = {
   onExport?: () => void
   onPurge?: () => void
 }
 
 /** Fonte única das ações compactas de contato para lista, navbar e contexto. */
 export function communicationContactActions(
-  contact: CommunicationContact,
+  contact: Contact,
   canManage: boolean,
-  handlers: CommunicationContactActionHandlers = {}
+  handlers: ContactActionHandlers = {}
 ): DropdownMenuItem[][] {
   const navigation: DropdownMenuItem[] = [
     { label: COMMUNICATION_CONTACT_ACTION_LABELS.openDetail, icon: 'i-lucide-arrow-up-right', to: communicationContactPath(contact.id) },
@@ -134,7 +129,7 @@ export function communicationContactActions(
 }
 
 export function communicationContactRowActionsAriaLabel(
-  contact: Pick<CommunicationContact, 'name' | 'id' | 'is_provisional'>
+  contact: Pick<Contact, 'name' | 'id' | 'is_provisional'>
 ): string {
   return `Ações de ${communicationContactDisplayName(contact)}`
 }
@@ -153,12 +148,12 @@ export function buildCommunicationContactListQuery(input: {
   isActive: 'all' | 'true' | 'false'
   isProvisional: 'all' | 'true' | 'false'
   linked: 'all' | 'true' | 'false'
-  sort: CommunicationContactSortField | null
+  sort: ContactSortField | null
   sortDirection: 'asc' | 'desc' | null
   page: number
   perPage: number
-}): CommunicationContactListParams {
-  const params: CommunicationContactListParams = {
+}): ContactListParams {
+  const params: ContactListParams = {
     page: input.page,
     per_page: input.perPage
   }
@@ -211,7 +206,7 @@ export function communicationContactEmptyKind(input: {
   return hasActiveCommunicationContactFilters(input) ? 'filtered' : 'empty'
 }
 
-export function flattenCommunicationIdentityLinks(identities: CommunicationIdentity[] | undefined) {
+export function flattenCommunicationIdentityLinks(identities: Identity[] | undefined) {
   return (identities || []).flatMap(identity =>
     (identity.links || []).map(link => ({ identity, link }))
   )

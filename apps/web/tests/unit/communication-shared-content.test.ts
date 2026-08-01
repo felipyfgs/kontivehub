@@ -10,12 +10,12 @@ describe('communication shared content e iniciação outbound', () => {
   it('módulo SharedContent cobre teaser, galeria, viewer e jump autenticado', () => {
     const shared = read('app/components/communication/SharedContent.vue')
     const context = read('app/components/communication/ContextPanel.vue')
-    const contactContext = read('app/components/communication/contacts/ContactContext.vue')
+    const contactContext = read('app/components/communication/contacts/Context.vue')
     const api = read('app/composables/api/createCommunicationApi.ts')
-    const types = read('app/types/communication/index.ts')
+    const types = read('app/types/communication/shared-content.ts')
 
     expect(shared).toContain('data-testid="communication-shared-content"')
-    expect(shared).toContain('category = ref<CommunicationSharedContentCategory>(\'media\')')
+    expect(shared).toContain('category = ref<SharedContentCategory>(\'media\')')
     expect(shared).toContain('label: \'Mídias\'')
     expect(shared).toContain('label: \'Links\'')
     expect(shared).toContain('label: \'Documentos\'')
@@ -46,14 +46,14 @@ describe('communication shared content e iniciação outbound', () => {
     expect(contactContext).toContain('CommunicationSharedContent')
     expect(api).toContain('`${base}/contacts/${contactId}/shared-content`')
     expect(api).toContain('`${base}/conversations/${id}/shared-content`')
-    expect(types).toContain('export type CommunicationSharedContentCategory = \'media\' | \'links\' | \'documents\'')
+    expect(types).toContain('export type SharedContentCategory = \'media\' | \'links\' | \'documents\'')
   })
 
   it('NewConversationModal aplica gates reais de reply, capability e multipart', () => {
     const modal = read('app/components/communication/NewConversationModal.vue')
     const catalog = read('app/components/communication/contacts/Catalog.vue')
     const detail = read('app/pages/communication/contacts/[id].vue')
-    const workspace = read('app/components/communication/CommunicationWorkspacePage.vue')
+    const workspace = read('app/components/communication/WorkspacePage.vue')
     const api = read('app/composables/api/createCommunicationApi.ts')
 
     expect(modal).toContain('canReply')
@@ -104,7 +104,7 @@ describe('communication shared content e iniciação outbound', () => {
   })
 
   it('deep-link de mensagem ancora a timeline e destaca a origem', () => {
-    const workspace = read('app/components/communication/CommunicationWorkspacePage.vue')
+    const workspace = read('app/components/communication/WorkspacePage.vue')
     const timeline = read('app/components/communication/TimelinePanel.vue')
     const composable = read('app/composables/useCommunicationWorkspace.ts')
     const api = read('app/composables/api/createCommunicationApi.ts')

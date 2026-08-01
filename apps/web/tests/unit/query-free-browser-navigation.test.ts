@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { basename, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   healthTypePath,
@@ -13,7 +13,6 @@ import {
 import { EXPORT_CREATE_PATH } from '~/utils/export-routes'
 
 const APP_ROOT = resolve(process.cwd(), 'app')
-const LEGACY_ADAPTER = resolve(APP_ROOT, 'middleware/00.legacy-query.global.ts')
 const FRAGMENT_CONSUMERS = new Set([
   resolve(APP_ROOT, 'utils/activation.ts'),
   resolve(APP_ROOT, 'utils/reset-password.ts')
@@ -35,15 +34,10 @@ function browserNavigationFiles(): string[] {
 }
 
 describe('navegação canônica sem query', () => {
-  it('executa o adaptador legado antes da autenticação global', () => {
-    expect(basename(LEGACY_ADAPTER).localeCompare('auth.global.ts')).toBeLessThan(0)
-  })
-
-  it('bloqueia consumidores e produtores de query do navegador fora do adaptador legado', () => {
+  it('bloqueia consumidores e produtores de query do navegador', () => {
     const violations: string[] = []
 
     for (const path of browserNavigationFiles()) {
-      if (path === LEGACY_ADAPTER) continue
       const source = readFileSync(path, 'utf8')
       const relative = path.slice(APP_ROOT.length + 1)
 

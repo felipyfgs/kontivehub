@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import type { CommunicationQuickResponsesCatalog } from '~/composables/useCommunicationQuickResponsesCatalog'
+import type { QuickResponsesCatalog } from '~/composables/useCommunicationQuickResponsesCatalog'
 import { CANNED_RESPONSE_VARIABLES } from '~/utils/communication-quick-responses'
 
 const { catalog } = defineProps<{
-  catalog: CommunicationQuickResponsesCatalog
+  catalog: QuickResponsesCatalog
 }>()
 
 const editorOpen = catalog.editorOpen

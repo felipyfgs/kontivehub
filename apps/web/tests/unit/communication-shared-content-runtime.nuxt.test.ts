@@ -5,11 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
 import NewConversationModal from '../../app/components/communication/NewConversationModal.vue'
 import SharedContent from '../../app/components/communication/SharedContent.vue'
-import type {
-  CommunicationContact,
-  CommunicationInbox,
-  CommunicationSharedContentItem
-} from '../../app/types/communication'
+import type { Contact } from '../../app/types/communication/contacts'
+import type { Inbox } from '../../app/types/communication/inboxes'
+import type { SharedContentItem } from '../../app/types/communication/shared-content'
 
 const mocks = vi.hoisted(() => ({
   addToast: vi.fn(),
@@ -118,7 +116,7 @@ function mediaItem(
   messageId: number,
   filename: string,
   mimeType: string
-): CommunicationSharedContentItem {
+): SharedContentItem {
   return {
     id,
     type: 'attachment',
@@ -266,7 +264,7 @@ describe('Communication shared content — comportamento', () => {
 })
 
 describe('Nova conversa — comportamento', () => {
-  const contact: CommunicationContact = {
+  const contact: Contact = {
     id: 9,
     name: 'Maria Silva',
     is_provisional: false,
@@ -280,7 +278,7 @@ describe('Nova conversa — comportamento', () => {
       links: []
     }]
   }
-  const inboxes: CommunicationInbox[] = [{
+  const inboxes: Inbox[] = [{
     id: 7,
     name: 'Atendimento',
     status: 'CONNECTED',

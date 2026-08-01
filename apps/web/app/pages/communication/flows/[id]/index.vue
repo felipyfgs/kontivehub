@@ -5,9 +5,7 @@
  * Cascas: ShellPagePanel, ShellPageNavbar, ShellSection*, ShellConfirmModal.
  * Canvas Vue Flow fica em /editor.
  */
-import type {
-  CommunicationInbox
-} from '~/types/communication'
+import type { Inbox } from '~/types/communication/inboxes'
 import type { Flow, FlowBinding, FlowRun, FlowVersion } from '~/types/communication/flows'
 import { apiErrorCode, apiErrorMessage } from '~/utils/api-error'
 import {
@@ -65,7 +63,7 @@ const enableOpen = ref(false)
 const enableBusy = ref(false)
 const enableTarget = ref<FlowBinding | null>(null)
 
-const inboxes = ref<CommunicationInbox[]>([])
+const inboxes = ref<Inbox[]>([])
 const bindingInboxId = ref<number | undefined>(undefined)
 const bindingVersionId = ref<number | undefined>(undefined)
 const bindingBusy = ref(false)

@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import type { CommunicationContact, CommunicationIdentity } from '~/types/communication'
+import type { Contact, Identity } from '~/types/communication/contacts'
 import { COMMUNICATION_CONTACT_SOLID_ACTION_CLASS } from '~/utils/communication-contacts'
 
 defineProps<{
-  contact: CommunicationContact
+  contact: Contact
   canMutate: boolean
 }>()
 
 const emit = defineEmits<{
   add: []
-  link: [identity: CommunicationIdentity]
+  link: [identity: Identity]
 }>()
 </script>
 

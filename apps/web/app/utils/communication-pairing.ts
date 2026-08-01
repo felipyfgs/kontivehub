@@ -1,4 +1,4 @@
-import type { CommunicationPairingState } from '~/types/communication'
+import type { PairingState } from '~/types/communication/inboxes'
 
 const ACTIVE_PAIRING_EVENTS = new Set([
   'pending',
@@ -22,12 +22,12 @@ const TERMINAL_PAIRING_EVENTS = new Set([
   'err-scanned-without-multidevice'
 ])
 
-export function communicationPairingEvent(state: CommunicationPairingState | null | undefined): string {
+export function communicationPairingEvent(state: PairingState | null | undefined): string {
   return String(state?.event || '').trim().toLowerCase()
 }
 
 export function communicationPairingDeadline(
-  state: CommunicationPairingState | null | undefined,
+  state: PairingState | null | undefined,
   fallbackDeadline: number
 ): number {
   const parsed = state?.expires_at ? Date.parse(state.expires_at) : Number.NaN
@@ -35,13 +35,13 @@ export function communicationPairingDeadline(
 }
 
 export function isCommunicationPairingTerminal(
-  state: CommunicationPairingState | null | undefined
+  state: PairingState | null | undefined
 ): boolean {
   return TERMINAL_PAIRING_EVENTS.has(communicationPairingEvent(state))
 }
 
 export function isCommunicationPairingActive(
-  state: CommunicationPairingState | null | undefined,
+  state: PairingState | null | undefined,
   deadline: number,
   now = Date.now()
 ): boolean {

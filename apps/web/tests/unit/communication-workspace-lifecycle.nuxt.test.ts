@@ -1,11 +1,8 @@
 import { computed, ref } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type {
-  CommunicationConversation,
-  CommunicationConversationTimelineMeta,
-  CommunicationEvent,
-  CommunicationMessage
-} from '~/types/communication'
+import type { Conversation, ConversationTimelineMeta } from '~/types/communication/conversations'
+import type { Event } from '~/types/communication/realtime'
+import type { Message } from '~/types/communication/messages'
 import { useCommunicationWorkspace } from '~/composables/useCommunicationWorkspace'
 
 type Deferred<T> = {
@@ -15,8 +12,8 @@ type Deferred<T> = {
 }
 
 type TimelineResponse = {
-  data: CommunicationMessage[]
-  meta: CommunicationConversationTimelineMeta
+  data: Message[]
+  meta: ConversationTimelineMeta
 }
 
 function deferred<T>(): Deferred<T> {
@@ -29,7 +26,7 @@ function deferred<T>(): Deferred<T> {
   return { promise, resolve, reject }
 }
 
-function conversation(id: number): CommunicationConversation {
+function conversation(id: number): Conversation {
   return {
     id,
     inbox_id: 7,
@@ -77,12 +74,12 @@ describe('ciclo de vida do workspace de comunicação', () => {
   it('serializa timelines e ignora callbacks de ciclos descartados', async () => {
     const sessionEpoch = ref(1)
     const eventSyncRequest = deferred<{
-      data: CommunicationEvent[]
+      data: Event[]
       meta: { next_cursor: number, has_more: boolean }
     }>()
     const detailCalls: Array<{
       id: number
-      request: Deferred<{ data: CommunicationConversation }>
+      request: Deferred<{ data: Conversation }>
     }> = []
     const timelineCalls: Array<{
       id: number
@@ -110,7 +107,7 @@ describe('ciclo de vida do workspace de comunicação', () => {
       meta: { current_page: 1, last_page: 1, per_page: 50, total: 4 }
     })
     const conversationGet = vi.fn((id: number) => {
-      const request = deferred<{ data: CommunicationConversation }>()
+      const request = deferred<{ data: Conversation }>()
       detailCalls.push({ id, request })
       return request.promise
     })

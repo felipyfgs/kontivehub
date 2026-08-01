@@ -6,11 +6,7 @@ import {
   type ComputedRef,
   type Ref
 } from 'vue'
-import type {
-  CommunicationCannedResponse,
-  CommunicationCannedResponseListParams,
-  CommunicationCannedResponseWriteBody
-} from '~/types/communication'
+import type { CannedResponse, CannedResponseListParams, CannedResponseWriteBody } from '~/types/communication/quick-responses'
 import type { DataTableFilterDefinition, DataTableFilterModel } from '~/types/data-table-filter'
 import { apiErrorCode, apiErrorMessage } from '~/utils/api-error'
 import {
@@ -26,15 +22,15 @@ type ActiveFilter = 'all' | 'true' | 'false'
 type EditorMode = 'create' | 'edit'
 
 interface QuickResponsesCatalogApi {
-  cannedResponses: (params?: { q?: string }) => Promise<{ data: CommunicationCannedResponse[] }>
-  listCannedResponses: (params?: CommunicationCannedResponseListParams) => Promise<{
-    data: CommunicationCannedResponse[]
+  cannedResponses: (params?: { q?: string }) => Promise<{ data: CannedResponse[] }>
+  listCannedResponses: (params?: CannedResponseListParams) => Promise<{
+    data: CannedResponse[]
     meta: { current_page: number, last_page: number, total: number }
   }>
-  createCannedResponse: (body: CommunicationCannedResponseWriteBody) => Promise<unknown>
+  createCannedResponse: (body: CannedResponseWriteBody) => Promise<unknown>
   updateCannedResponse: (
     id: number,
-    body: CommunicationCannedResponseWriteBody & { lock_version: number }
+    body: CannedResponseWriteBody & { lock_version: number }
   ) => Promise<unknown>
   duplicateCannedResponse: (id: number, body: { shortcut: string }) => Promise<unknown>
   deactivateCannedResponse: (id: number) => Promise<unknown>
@@ -61,7 +57,7 @@ export function createCommunicationQuickResponsesCatalog(
   dependencies: QuickResponsesCatalogDependencies
 ) {
   const { api, canManage, initialQuery, sessionEpoch, toast } = dependencies
-  const items = ref<CommunicationCannedResponse[]>([])
+  const items = ref<CannedResponse[]>([])
   const loading = ref(false)
   const loadError = ref<string | null>(null)
   const hasLoaded = ref(false)
@@ -86,12 +82,12 @@ export function createCommunicationQuickResponsesCatalog(
   const duplicateOpen = ref(false)
   const duplicateBusy = ref(false)
   const duplicateError = ref<string | null>(null)
-  const duplicateSource = ref<CommunicationCannedResponse | null>(null)
+  const duplicateSource = ref<CannedResponse | null>(null)
   const duplicateShortcut = ref('')
 
   const deactivateOpen = ref(false)
   const deactivateBusy = ref(false)
-  const deactivateTarget = ref<CommunicationCannedResponse | null>(null)
+  const deactivateTarget = ref<CannedResponse | null>(null)
 
   const filterDefinitions = computed<DataTableFilterDefinition[]>(() => [{
     key: 'is_active',
@@ -192,7 +188,7 @@ export function createCommunicationQuickResponsesCatalog(
     editorOpen.value = true
   }
 
-  function openEdit(item: CommunicationCannedResponse) {
+  function openEdit(item: CannedResponse) {
     if (!canManage.value) return
     editorMode.value = 'edit'
     editorError.value = null
@@ -205,7 +201,7 @@ export function createCommunicationQuickResponsesCatalog(
     editorOpen.value = true
   }
 
-  function openDuplicate(item: CommunicationCannedResponse) {
+  function openDuplicate(item: CannedResponse) {
     if (!canManage.value) return
     duplicateSource.value = item
     duplicateShortcut.value = `${item.shortcut}-copia`
@@ -213,7 +209,7 @@ export function createCommunicationQuickResponsesCatalog(
     duplicateOpen.value = true
   }
 
-  function openDeactivate(item: CommunicationCannedResponse) {
+  function openDeactivate(item: CannedResponse) {
     if (!canManage.value || !item.is_active) return
     deactivateTarget.value = item
     deactivateOpen.value = true
@@ -372,7 +368,7 @@ export function createCommunicationQuickResponsesCatalog(
   }
 }
 
-export type CommunicationQuickResponsesCatalog = ReturnType<
+export type QuickResponsesCatalog = ReturnType<
   typeof createCommunicationQuickResponsesCatalog
 >
 
@@ -384,8 +380,8 @@ export function useCommunicationQuickResponsesCatalog() {
   const surface = useSurfaceNavigationState(COMMUNICATION_SURFACES.quickResponses, {
     page: 1, per_page: 20, q: '', is_active: 'all'
   }, { resetKey: () => `${me.value?.id ?? 'guest'}:${me.value?.current_tenant?.id ?? 'none'}:${sessionEpoch.value}` })
-  const legacyIntent = consumeSurfaceNavigationIntent<Record<string, unknown>>(COMMUNICATION_SURFACES.quickResponses)
-  if (legacyIntent) surface.patch(legacyIntent)
+  const intent = consumeSurfaceNavigationIntent<Record<string, unknown>>(COMMUNICATION_SURFACES.quickResponses)
+  if (intent) surface.patch(intent)
   const catalog = createCommunicationQuickResponsesCatalog({
     api: api.communication.catalog,
     canManage,

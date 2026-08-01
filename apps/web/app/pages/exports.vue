@@ -54,8 +54,8 @@ const {
   normalize: normalizeExportsNavigation,
   resetKey: navigationContext
 })
-const legacyExportsIntent = consumeSurfaceNavigationIntent<Partial<ExportsNavigationState>>(SURFACE_NAVIGATION.exports)
-if (legacyExportsIntent) patchExportsNavigation(legacyExportsIntent)
+const exportsIntent = consumeSurfaceNavigationIntent<Partial<ExportsNavigationState>>(SURFACE_NAVIGATION.exports)
+if (exportsIntent) patchExportsNavigation(exportsIntent)
 
 const page = computed({
   get: () => exportsNavigation.value.page,

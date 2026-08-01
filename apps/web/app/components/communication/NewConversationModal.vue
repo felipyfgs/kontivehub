@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { useDebounceFn } from '@vueuse/core'
-import type { CommunicationContact, CommunicationInbox, CommunicationSendKind } from '~/types/communication'
+import type { Contact } from '~/types/communication/contacts'
+import type { Inbox } from '~/types/communication/inboxes'
+import type { SendKind } from '~/types/communication/messages'
 import { apiErrorMessage } from '~/utils/api-error'
 
 const open = defineModel<boolean>('open', { default: false })
 const props = defineProps<{
-  contact: CommunicationContact | null
-  contacts?: CommunicationContact[]
-  inboxes: CommunicationInbox[]
+  contact: Contact | null
+  contacts?: Contact[]
+  inboxes: Inbox[]
   canReply: boolean
 }>()
 const emit = defineEmits<{ created: [conversationId: number] }>()
@@ -27,8 +29,8 @@ const initiationReason = ref<string | null>(null)
 const idempotencyKey = ref('')
 const lastAttemptFingerprint = ref<string | null>(null)
 const contactSearch = ref('')
-const contactResults = ref<CommunicationContact[]>([])
-const knownContacts = ref<CommunicationContact[]>([])
+const contactResults = ref<Contact[]>([])
+const knownContacts = ref<Contact[]>([])
 const contactsPage = ref(1)
 const contactsLastPage = ref(1)
 const contactsLoading = ref(false)
@@ -88,7 +90,7 @@ function reset() {
   lastAttemptFingerprint.value = null
 }
 
-function mergeKnownContacts(incoming: CommunicationContact[]): void {
+function mergeKnownContacts(incoming: Contact[]): void {
   const byId = new Map(knownContacts.value.map(contact => [contact.id, contact]))
   for (const contact of incoming) byId.set(contact.id, contact)
   knownContacts.value = [...byId.values()]
@@ -145,7 +147,7 @@ async function loadCapability() {
   }
 }
 
-function kindForFile(input: File | null): CommunicationSendKind | undefined {
+function kindForFile(input: File | null): SendKind | undefined {
   if (!input) return undefined
   if (input.type.startsWith('image/')) return 'IMAGE'
   if (input.type.startsWith('audio/')) return 'AUDIO'

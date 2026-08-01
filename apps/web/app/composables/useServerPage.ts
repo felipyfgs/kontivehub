@@ -56,12 +56,6 @@ export function useServerPage(defaults?: Partial<ServerPageState>) {
     })
   }
 
-  // Compatibilidade interna: consumidores antigos ainda aguardam este hook,
-  // mas paginação/filtros nunca são projetados na URL do navegador.
-  function syncUrl(): Promise<void> {
-    return Promise.resolve()
-  }
-
   function resetPage() {
     page.value = 1
   }
@@ -79,7 +73,6 @@ export function useServerPage(defaults?: Partial<ServerPageState>) {
     loadError,
     applyMeta,
     applyPaginator,
-    syncUrl,
     resetPage
   }
 }

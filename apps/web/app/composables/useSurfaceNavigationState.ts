@@ -88,7 +88,7 @@ function assertSurfaceNavigationId(value: string): asserts value is SurfaceNavig
   }
 }
 
-export type CommunicationSurface = typeof COMMUNICATION_SURFACES[keyof typeof COMMUNICATION_SURFACES]
+export type Surface = typeof COMMUNICATION_SURFACES[keyof typeof COMMUNICATION_SURFACES]
 
 const surfaceEntries = new Map<string, {
   state: Ref<unknown>

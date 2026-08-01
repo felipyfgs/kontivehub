@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import type { CommunicationIdentityLinkEntry } from '~/types/communication'
+import type { IdentityLinkEntry } from '~/types/communication/contacts'
 import { COMMUNICATION_CONTACT_DANGER_SOFT_CLASS } from '~/utils/communication-contacts'
 
 defineProps<{
-  identityLinks: CommunicationIdentityLinkEntry[]
+  identityLinks: IdentityLinkEntry[]
   canMutate: boolean
   unlinkingKey: string | null
 }>()

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { CommunicationConversation } from '~/types/communication'
+import type { Conversation } from '~/types/communication/conversations'
 import {
   buildConversationBulkItems,
   communicationSelectionQueryKey,
@@ -11,8 +11,8 @@ import {
 
 function conversation(
   id: number,
-  patch: Partial<CommunicationConversation> = {}
-): CommunicationConversation {
+  patch: Partial<Conversation> = {}
+): Conversation {
   return {
     id,
     inbox_id: 1,

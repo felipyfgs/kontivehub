@@ -1,33 +1,18 @@
-import type {
-  CommunicationChatPresenceSignal,
-  CommunicationContactPresenceSignal,
-  CommunicationConversation,
-  CommunicationConversationStatus,
-  CommunicationEvent,
-  CommunicationInboxStatus,
-  CommunicationMessage,
-  CommunicationMessageAvailability,
-  CommunicationMessagePollVote,
-  CommunicationMessageStatus,
-  CommunicationProfilePictureState,
-  CommunicationRealtimeState
-} from '~/types/communication'
+import type { ChatPresenceSignal, ContactPresenceSignal, Event, RealtimeState } from '~/types/communication/realtime'
+import type { Conversation, ConversationStatus } from '~/types/communication/conversations'
+import type { InboxStatus } from '~/types/communication/inboxes'
+import type { Message, MessageAvailability, MessagePollVote, MessageStatus } from '~/types/communication/messages'
+import type { ProfilePictureState } from '~/types/communication/contacts'
 import { resolveApiUrl } from '~/utils/api-url'
 
 export function communicationProfilePictureUrl(
   subject?: {
     profile_picture_url?: string | null
-    profile_picture_state?: CommunicationProfilePictureState
+    profile_picture_state?: ProfilePictureState
   } | null
 ): string | null {
   const url = subject?.profile_picture_url?.trim()
-  if (!url) return null
-
-  // Compatibilidade aditiva: APIs anteriores não informavam state, mas uma URL
-  // não nula já representava um asset READY autorizado.
-  return subject?.profile_picture_state && subject.profile_picture_state !== 'READY'
-    ? null
-    : url
+  return subject?.profile_picture_state === 'READY' && url ? url : null
 }
 
 export function communicationProfilePictureSrc(
@@ -38,34 +23,34 @@ export function communicationProfilePictureSrc(
   return url ? resolveApiUrl(url, apiBase) : undefined
 }
 
-export type CommunicationBadgeColor
+export type BadgeColor
   = 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
 
-export interface CommunicationStatusMeta {
+export interface StatusMeta {
   label: string
-  color: CommunicationBadgeColor
+  color: BadgeColor
   icon: string
 }
 
-export interface CommunicationConversationImageEvidence {
+export interface ConversationImageEvidence {
   messageId: number
   previewUrl: string | null
 }
 
-export const COMMUNICATION_INBOX_STATUS: Record<CommunicationInboxStatus, CommunicationStatusMeta> = {
+export const COMMUNICATION_INBOX_STATUS: Record<InboxStatus, StatusMeta> = {
   DISCONNECTED: { label: 'Desconectado', color: 'neutral', icon: 'i-lucide-circle-off' },
   CONNECTING: { label: 'Conectando', color: 'warning', icon: 'i-lucide-loader-circle' },
   CONNECTED: { label: 'Conectado', color: 'success', icon: 'i-lucide-circle-check' }
 }
 
-export const COMMUNICATION_CONVERSATION_STATUS: Record<CommunicationConversationStatus, CommunicationStatusMeta> = {
+export const COMMUNICATION_CONVERSATION_STATUS: Record<ConversationStatus, StatusMeta> = {
   OPEN: { label: 'Aberta', color: 'primary', icon: 'i-lucide-message-circle' },
   PENDING: { label: 'Pendente', color: 'warning', icon: 'i-lucide-clock-3' },
   RESOLVED: { label: 'Resolvida', color: 'success', icon: 'i-lucide-circle-check' },
   SNOOZED: { label: 'Adiada', color: 'info', icon: 'i-lucide-alarm-clock' }
 }
 
-export const COMMUNICATION_MESSAGE_STATUS: Record<CommunicationMessageStatus, CommunicationStatusMeta> = {
+export const COMMUNICATION_MESSAGE_STATUS: Record<MessageStatus, StatusMeta> = {
   QUEUED: { label: 'Na fila', color: 'neutral', icon: 'i-lucide-clock' },
   ACCEPTED: { label: 'Aceita', color: 'info', icon: 'i-lucide-check' },
   SENT: { label: 'Enviada', color: 'info', icon: 'i-lucide-check-check' },
@@ -80,21 +65,21 @@ export const COMMUNICATION_MESSAGE_STATUS: Record<CommunicationMessageStatus, Co
 /** Resolve status de receipt com fallback seguro para valores desconhecidos da API. */
 export function communicationMessageStatusMeta(
   status?: string | null
-): CommunicationStatusMeta {
+): StatusMeta {
   if (status && status in COMMUNICATION_MESSAGE_STATUS) {
-    return COMMUNICATION_MESSAGE_STATUS[status as CommunicationMessageStatus]
+    return COMMUNICATION_MESSAGE_STATUS[status as MessageStatus]
   }
   return COMMUNICATION_MESSAGE_STATUS.UNKNOWN
 }
 
-export const COMMUNICATION_REALTIME_META: Record<CommunicationRealtimeState, CommunicationStatusMeta> = {
+export const COMMUNICATION_REALTIME_META: Record<RealtimeState, StatusMeta> = {
   disabled: { label: 'Tempo real desativado', color: 'neutral', icon: 'i-lucide-wifi-off' },
   connecting: { label: 'Conectando', color: 'warning', icon: 'i-lucide-loader-circle' },
   connected: { label: 'Tempo real ativo', color: 'success', icon: 'i-lucide-radio' },
   unavailable: { label: 'Sincronizando por cursor', color: 'warning', icon: 'i-lucide-refresh-cw' }
 }
 
-export const COMMUNICATION_MESSAGE_KIND: Record<CommunicationMessage['kind'], CommunicationStatusMeta> = {
+export const COMMUNICATION_MESSAGE_KIND: Record<Message['kind'], StatusMeta> = {
   TEXT: { label: 'Mensagem', color: 'neutral', icon: 'i-lucide-message-square-text' },
   IMAGE: { label: 'Imagem', color: 'info', icon: 'i-lucide-image' },
   AUDIO: { label: 'Áudio', color: 'info', icon: 'i-lucide-audio-lines' },
@@ -108,7 +93,7 @@ export const COMMUNICATION_MESSAGE_KIND: Record<CommunicationMessage['kind'], Co
   NOTE: { label: 'Nota interna', color: 'warning', icon: 'i-lucide-sticky-note' }
 }
 
-const successfulMessageRank: Partial<Record<CommunicationMessageStatus, number>> = {
+const successfulMessageRank: Partial<Record<MessageStatus, number>> = {
   QUEUED: 10,
   ACCEPTED: 20,
   SENT: 30,
@@ -119,9 +104,9 @@ const successfulMessageRank: Partial<Record<CommunicationMessageStatus, number>>
 
 /** Espelha a projeção monotônica do backend para merges locais/realtime. */
 export function mergeCommunicationMessageStatus(
-  current: CommunicationMessageStatus,
-  incoming: CommunicationMessageStatus
-): CommunicationMessageStatus {
+  current: MessageStatus,
+  incoming: MessageStatus
+): MessageStatus {
   if (current === incoming || current === 'READ' || current === 'PLAYED' || current === 'CANCELED') {
     return current === 'READ' && incoming === 'PLAYED' ? incoming : current
   }
@@ -140,10 +125,10 @@ export function mergeCommunicationMessageStatus(
 }
 
 export function mergeCommunicationMessages(
-  current: CommunicationMessage[],
-  incoming: CommunicationMessage[]
-): CommunicationMessage[] {
-  const byId = new Map<number, CommunicationMessage>()
+  current: Message[],
+  incoming: Message[]
+): Message[] {
+  const byId = new Map<number, Message>()
   for (const message of current) byId.set(message.id, message)
   for (const message of incoming) {
     const previous = byId.get(message.id)
@@ -166,15 +151,15 @@ export function mergeCommunicationMessages(
 }
 
 function communicationMessageAvailability(
-  availability?: CommunicationMessageAvailability | null
-): CommunicationMessageAvailability | null {
+  availability?: MessageAvailability | null
+): MessageAvailability | null {
   return availability?.state ? availability : null
 }
 
 function mergeCommunicationMessageContent(
-  current: CommunicationMessage['content'],
-  incoming: CommunicationMessage['content']
-): CommunicationMessage['content'] {
+  current: Message['content'],
+  incoming: Message['content']
+): Message['content'] {
   if (!incoming) return current
   const text = incoming.text?.trim() || current?.text?.trim() || null
   const caption = incoming.caption?.trim() || current?.caption?.trim() || null
@@ -182,14 +167,14 @@ function mergeCommunicationMessageContent(
 }
 
 /** Texto compatível para recursos antigos e a projeção pública aditiva. */
-export function communicationMessageBody(message: CommunicationMessage): string | null {
+export function communicationMessageBody(message: Message): string | null {
   return message.body?.trim()
     || message.content?.text?.trim()
     || message.content?.caption?.trim()
     || null
 }
 
-export function communicationAvailabilityPlaceholder(message: CommunicationMessage): string | null {
+export function communicationAvailabilityPlaceholder(message: Message): string | null {
   switch (message.availability?.state) {
     case 'UNSUPPORTED': return 'Este tipo de mensagem ainda não é compatível.'
     case 'MEDIA_RETRY_AVAILABLE': return 'Esta mídia histórica pode ser recuperada.'
@@ -206,10 +191,10 @@ export function communicationAvailabilityPlaceholder(message: CommunicationMessa
 
 /** Merge idempotente que não apaga a timeline já carregada ao atualizar a lista. */
 export function mergeCommunicationConversations(
-  current: CommunicationConversation[],
-  incoming: CommunicationConversation[]
-): CommunicationConversation[] {
-  const byId = new Map<number, CommunicationConversation>()
+  current: Conversation[],
+  incoming: Conversation[]
+): Conversation[] {
+  const byId = new Map<number, Conversation>()
   for (const conversation of current) byId.set(conversation.id, conversation)
   for (const conversation of incoming) {
     const previous = byId.get(conversation.id)
@@ -231,16 +216,16 @@ export function mergeCommunicationConversations(
 }
 
 export function mergeCommunicationEvents(
-  current: CommunicationEvent[],
-  incoming: CommunicationEvent[]
-): CommunicationEvent[] {
-  const byCursor = new Map<number, CommunicationEvent>()
+  current: Event[],
+  incoming: Event[]
+): Event[] {
+  const byCursor = new Map<number, Event>()
   for (const event of current) byCursor.set(event.cursor, event)
   for (const event of incoming) byCursor.set(event.cursor, event)
   return [...byCursor.values()].sort((a, b) => a.cursor - b.cursor)
 }
 
-export function latestCommunicationCursor(events: CommunicationEvent[], fallback = 0): number {
+export function latestCommunicationCursor(events: Event[], fallback = 0): number {
   return events.reduce((cursor, event) => Math.max(cursor, event.cursor), fallback)
 }
 
@@ -254,7 +239,7 @@ export function normalizeCommunicationCursor(value: unknown): number | null {
   return null
 }
 
-export function isCommunicationEphemeralEvent(event: CommunicationEvent): boolean {
+export function isCommunicationEphemeralEvent(event: Event): boolean {
   return event.type === 'CHAT_PRESENCE_CHANGED' || event.type === 'CONTACT_PRESENCE_CHANGED'
 }
 
@@ -270,9 +255,9 @@ function signalExpiry(payload: Record<string, unknown>, now: number, fallbackSec
 
 /** Normaliza apenas o payload efêmero allowlisted; PAUSED remove typing imediatamente. */
 export function communicationSignalFromEvent(
-  event: CommunicationEvent,
+  event: Event,
   now = Date.now()
-): CommunicationChatPresenceSignal | CommunicationContactPresenceSignal | null {
+): ChatPresenceSignal | ContactPresenceSignal | null {
   const conversationId = event.conversation_id
   if (!Number.isInteger(conversationId) || !conversationId || conversationId < 1) return null
 
@@ -303,13 +288,13 @@ export function communicationSignalFromEvent(
 }
 
 export function isCommunicationSignalActive(
-  signal: CommunicationChatPresenceSignal | CommunicationContactPresenceSignal | null | undefined,
+  signal: ChatPresenceSignal | ContactPresenceSignal | null | undefined,
   now = Date.now()
 ): boolean {
   return Boolean(signal && signal.expires_at > now)
 }
 
-export function communicationMessageSummary(message?: CommunicationMessage | null): string {
+export function communicationMessageSummary(message?: Message | null): string {
   if (!message) return 'Mensagem indisponível'
   if (message.metadata?.revoked) return 'Mensagem apagada'
   const body = communicationMessageBody(message)
@@ -322,8 +307,8 @@ export function communicationMessageSummary(message?: CommunicationMessage | nul
 }
 
 export function communicationConversationImageEvidence(
-  conversation: CommunicationConversation
-): CommunicationConversationImageEvidence | null {
+  conversation: Conversation
+): ConversationImageEvidence | null {
   const message = conversation.last_message ?? conversation.messages?.at(-1)
   if (!message
     || message.direction !== 'INBOUND'
@@ -343,30 +328,30 @@ export function communicationConversationImageEvidence(
   }
 }
 
-export function communicationPollVotes(message: CommunicationMessage): CommunicationMessagePollVote[] {
+export function communicationPollVotes(message: Message): MessagePollVote[] {
   const votes = message.metadata?.poll_votes
   if (!votes) return []
   return Array.isArray(votes) ? votes : Object.values(votes)
 }
 
-export function communicationPollVoteCount(message: CommunicationMessage, option: string): number {
+export function communicationPollVoteCount(message: Message, option: string): number {
   return communicationPollVotes(message).reduce((total, vote) =>
     total + (vote.option_names?.includes(option) ? 1 : 0), 0)
 }
 
 /** Retorna somente o E.164 seguro apresentado pela API. */
-export function communicationPeerAddress(conversation: CommunicationConversation | null): string | null {
+export function communicationPeerAddress(conversation: Conversation | null): string | null {
   if (!conversation?.contact) return null
   return conversation.contact.phone?.trim() || null
 }
 
-function looksMaskedAddress(value: string, conversation: CommunicationConversation): boolean {
+function looksMaskedAddress(value: string, conversation: Conversation): boolean {
   const masked = conversation.contact?.address_masked?.trim()
   if (masked && value === masked) return true
   return /[*•●·]{2,}/u.test(value)
 }
 
-export function communicationDisplayName(conversation: CommunicationConversation | null): string {
+export function communicationDisplayName(conversation: Conversation | null): string {
   if (!conversation) return 'Conversa'
   const address = communicationPeerAddress(conversation)
   const resolved = conversation.display_title?.trim()
@@ -384,7 +369,7 @@ export function communicationDisplayName(conversation: CommunicationConversation
     || `Contato #${conversation.contact?.id ?? conversation.id}`
 }
 
-export function communicationSecondaryTitle(conversation: CommunicationConversation | null): string | null {
+export function communicationSecondaryTitle(conversation: Conversation | null): string | null {
   if (!conversation) return null
   const secondary = conversation.secondary_title?.trim()
   if (secondary) {
@@ -396,7 +381,7 @@ export function communicationSecondaryTitle(conversation: CommunicationConversat
 }
 
 /** Linha de telefone/endereço da lista: sempre preferir número completo. */
-export function communicationListPhoneLine(conversation: CommunicationConversation | null): string {
+export function communicationListPhoneLine(conversation: Conversation | null): string {
   if (!conversation) return '—'
   const address = communicationPeerAddress(conversation)
   if (address) return address
@@ -405,7 +390,7 @@ export function communicationListPhoneLine(conversation: CommunicationConversati
   return '—'
 }
 
-export function communicationPreviewText(conversation: CommunicationConversation | null): string | null {
+export function communicationPreviewText(conversation: Conversation | null): string | null {
   if (!conversation) return null
   const preview = conversation.preview
   if (preview?.text?.trim()) return preview.text.trim()
@@ -430,7 +415,7 @@ export function communicationSnoozeTomorrowMorning(): string {
   return date.toISOString()
 }
 
-export function communicationContactLabel(conversation: CommunicationConversation | null): string | null {
+export function communicationContactLabel(conversation: Conversation | null): string | null {
   if (!conversation) return null
   const address = communicationPeerAddress(conversation)
   if (conversation.secondary_title?.trim()) {
@@ -458,7 +443,7 @@ export function formatCommunicationDate(value?: string | null): string {
   }).format(date)
 }
 
-export function communicationAttachmentFilename(message: CommunicationMessage, attachmentId: number): string {
+export function communicationAttachmentFilename(message: Message, attachmentId: number): string {
   const extensionByMime: Record<string, string> = {
     'application/pdf': 'pdf',
     'image/jpeg': 'jpg',

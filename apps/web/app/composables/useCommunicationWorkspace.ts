@@ -1,36 +1,12 @@
 import { createSharedComposable, useDebounceFn } from '@vueuse/core'
 import type { TenantMember } from '~/types/api'
-import type {
-  CommunicationAutomationMeta,
-  CommunicationAutomationPolicy,
-  CommunicationBulkAction,
-  CommunicationBulkOperation,
-  CommunicationBulkOperationParams,
-  CommunicationCannedResponse,
-  CommunicationChatPresence,
-  CommunicationChatPresenceSignal,
-  CommunicationContactPresenceSignal,
-  CommunicationComposerPayload,
-  CommunicationConversation,
-  CommunicationConversationListMeta,
-  CommunicationConversationListPreferences,
-  CommunicationConversationSignals,
-  CommunicationConversationSortBy,
-  CommunicationConversationStatus,
-  CommunicationConversationTimelineMeta,
-  CommunicationConversationTimelineState,
-  CommunicationEvent,
-  CommunicationFeatureMeta,
-  CommunicationInbox,
-  CommunicationLabel,
-  CommunicationListPreferenceStatus,
-  CommunicationMessage,
-  CommunicationPairingState,
-  CommunicationRecipientConfiguration,
-  CommunicationRecipientMode,
-  CommunicationRealtimeEvent,
-  CommunicationSessionStatus
-} from '~/types/communication'
+import type { AutomationMeta, AutomationPolicy, RecipientConfiguration, RecipientMode } from '~/types/communication/automation'
+import type { BulkAction, BulkOperation, BulkOperationParams, Conversation, ConversationListMeta, ConversationListPreferences, ConversationSortBy, ConversationStatus, ConversationTimelineMeta, ConversationTimelineState, ListPreferenceStatus } from '~/types/communication/conversations'
+import type { CannedResponse } from '~/types/communication/quick-responses'
+import type { ChatPresence, ChatPresenceSignal, ContactPresenceSignal, ConversationSignals, Event, RealtimeEvent } from '~/types/communication/realtime'
+import type { ComposerPayload, Message } from '~/types/communication/messages'
+import type { FeatureMeta, Inbox, PairingState, SessionStatus } from '~/types/communication/inboxes'
+import type { Label } from '~/types/communication/contacts'
 import type { WorkDepartment } from '~/types/work'
 import { apiErrorCode, apiErrorMessage } from '~/utils/api-error'
 import {
@@ -68,8 +44,8 @@ import {
   canViewCommunication as userCanViewCommunication
 } from '~/utils/permissions'
 import type {
-  CommunicationConversationFilters,
-  CommunicationPolicyBody
+  ConversationFilters,
+  PolicyBody
 } from './api/createCommunicationApi'
 import {
   COMMUNICATION_SURFACES,
@@ -77,13 +53,13 @@ import {
   useSurfaceNavigationState
 } from './useSurfaceNavigationState'
 
-const EMPTY_FEATURE_META: CommunicationFeatureMeta = {
+const EMPTY_FEATURE_META: FeatureMeta = {
   global_enabled: false,
   gateway_enabled: false,
   tenant_enabled: false
 }
 
-const EMPTY_AUTOMATION_META: CommunicationAutomationMeta = {
+const EMPTY_AUTOMATION_META: AutomationMeta = {
   supported_scopes: [],
   inboxes: [],
   tenant_enabled: false,
@@ -94,29 +70,29 @@ export const COMMUNICATION_CONVERSATION_PAGE_SIZE = 50
 export const COMMUNICATION_TIMELINE_PAGE_SIZE = 50
 export const COMMUNICATION_PREFETCH_CONCURRENCY = 2
 
-type CommunicationWorkspaceNavigationState = {
+type WorkspaceNavigationState = {
   search: string
   inboxFilter: number | null
-  statusFilter: CommunicationConversationStatus | null
+  statusFilter: ConversationStatus | null
   assigneeFilter: number | null
   departmentFilter: number | null
   unassignedOnly: boolean
   unreadOnly: boolean
   labelIdsFilter: number[]
   contactIdFilter: number | null
-  sortBy: CommunicationConversationSortBy
+  sortBy: ConversationSortBy
 }
 
-type CommunicationLifecycleRequest = {
+type LifecycleRequest = {
   lifecycleEpoch: number
   sessionEpoch: number
 }
 
-type CommunicationSynchronizationRequest = CommunicationLifecycleRequest & {
+type SynchronizationRequest = LifecycleRequest & {
   generation: number
 }
 
-const communicationWorkspaceNavigationDefaults = (): CommunicationWorkspaceNavigationState => ({
+const workspaceNavigationDefaults = (): WorkspaceNavigationState => ({
   search: '',
   inboxFilter: null,
   statusFilter: 'OPEN',
@@ -129,9 +105,9 @@ const communicationWorkspaceNavigationDefaults = (): CommunicationWorkspaceNavig
   sortBy: COMMUNICATION_DEFAULT_SORT_BY
 })
 
-function normalizeCommunicationWorkspaceNavigation(
-  value: CommunicationWorkspaceNavigationState
-): CommunicationWorkspaceNavigationState {
+function normalizeWorkspaceNavigation(
+  value: WorkspaceNavigationState
+): WorkspaceNavigationState {
   const positiveId = (candidate: unknown): number | null =>
     typeof candidate === 'number' && Number.isSafeInteger(candidate) && candidate > 0
       ? candidate
@@ -159,7 +135,7 @@ function normalizeCommunicationWorkspaceNavigation(
   }
 }
 
-const EMPTY_TIMELINE_META: CommunicationConversationTimelineMeta = {
+const EMPTY_TIMELINE_META: ConversationTimelineMeta = {
   older_cursor: null,
   newer_cursor: null,
   first_unread_message_id: null,
@@ -169,7 +145,7 @@ const EMPTY_TIMELINE_META: CommunicationConversationTimelineMeta = {
   limit: COMMUNICATION_TIMELINE_PAGE_SIZE
 }
 
-function emptyTimelineState(): CommunicationConversationTimelineState {
+function emptyTimelineState(): ConversationTimelineState {
   return {
     meta: { ...EMPTY_TIMELINE_META },
     divider_message_id: null,
@@ -184,10 +160,10 @@ function emptyTimelineState(): CommunicationConversationTimelineState {
 }
 
 export function mergeCommunicationConversationPage(
-  current: CommunicationConversation[],
-  incoming: CommunicationConversation[],
+  current: Conversation[],
+  incoming: Conversation[],
   append: boolean
-): CommunicationConversation[] {
+): Conversation[] {
   // Mantém a ordenação autoritativa da API (sort_by), sem reordenar no cliente.
   return mergeConversationListInApiOrder(current, incoming, append)
 }
@@ -204,37 +180,37 @@ const _useCommunicationWorkspace = () => {
   const api = useApi()
   const toast = useToast()
   const { me, sessionEpoch } = useDashboard()
-  const navigationState = useSurfaceNavigationState<CommunicationWorkspaceNavigationState>(
+  const navigationState = useSurfaceNavigationState<WorkspaceNavigationState>(
     COMMUNICATION_SURFACES.workspace,
-    communicationWorkspaceNavigationDefaults,
+    workspaceNavigationDefaults,
     {
       // A identidade, o tenant efetivo e o epoch compõem o isolamento lógico.
       resetKey: () => `${me.value?.id ?? 'guest'}:${me.value?.current_tenant?.id ?? 'none'}:${sessionEpoch.value}`,
-      normalize: normalizeCommunicationWorkspaceNavigation
+      normalize: normalizeWorkspaceNavigation
     }
   )
   const realtime = useNuxtApp().$communicationRealtime
 
-  const inboxes = ref<CommunicationInbox[]>([])
-  const featureMeta = ref<CommunicationFeatureMeta>({ ...EMPTY_FEATURE_META })
-  const conversations = ref<CommunicationConversation[]>([])
-  const conversationDetails = ref<Record<number, CommunicationConversation>>({})
-  const conversationTimelines = ref<Record<number, CommunicationConversationTimelineState>>({})
+  const inboxes = ref<Inbox[]>([])
+  const featureMeta = ref<FeatureMeta>({ ...EMPTY_FEATURE_META })
+  const conversations = ref<Conversation[]>([])
+  const conversationDetails = ref<Record<number, Conversation>>({})
+  const conversationTimelines = ref<Record<number, ConversationTimelineState>>({})
   const selectedConversationId = ref<number | null>(null)
   const openingConversationId = ref<number | null>(null)
   /** Seleção operacional (bulk) — independente do detalhe aberto. */
   const selectedConversationIds = ref<Set<number>>(new Set())
-  const labels = ref<CommunicationLabel[]>([])
-  const cannedResponses = ref<CommunicationCannedResponse[]>([])
-  const events = ref<CommunicationEvent[]>([])
+  const labels = ref<Label[]>([])
+  const cannedResponses = ref<CannedResponse[]>([])
+  const events = ref<Event[]>([])
   const cursor = ref(0)
-  const policies = ref<CommunicationAutomationPolicy[]>([])
-  const automationMeta = ref<CommunicationAutomationMeta>({ ...EMPTY_AUTOMATION_META })
+  const policies = ref<AutomationPolicy[]>([])
+  const automationMeta = ref<AutomationMeta>({ ...EMPTY_AUTOMATION_META })
   const tenantMembers = ref<TenantMember[]>([])
   const departments = ref<WorkDepartment[]>([])
-  const chatPresenceByConversation = ref<Record<number, CommunicationChatPresenceSignal>>({})
-  const contactPresenceByConversation = ref<Record<number, CommunicationContactPresenceSignal>>({})
-  const pendingBulkOperation = ref<CommunicationBulkOperation | null>(null)
+  const chatPresenceByConversation = ref<Record<number, ChatPresenceSignal>>({})
+  const contactPresenceByConversation = ref<Record<number, ContactPresenceSignal>>({})
+  const pendingBulkOperation = ref<BulkOperation | null>(null)
   const bulkSubmitting = ref(false)
   const preferencesLoaded = ref(false)
   const preferencesUnavailable = ref(false)
@@ -266,7 +242,7 @@ const _useCommunicationWorkspace = () => {
   })
   const statusFilter = computed({
     get: () => navigationState.state.value.statusFilter,
-    set: (value: CommunicationConversationStatus | null) => navigationState.patch({ statusFilter: value })
+    set: (value: ConversationStatus | null) => navigationState.patch({ statusFilter: value })
   })
   const assigneeFilter = computed({
     get: () => navigationState.state.value.assigneeFilter,
@@ -294,7 +270,7 @@ const _useCommunicationWorkspace = () => {
   })
   const sortBy = computed({
     get: () => navigationState.state.value.sortBy,
-    set: (value: CommunicationConversationSortBy) => navigationState.patch({ sortBy: value })
+    set: (value: ConversationSortBy) => navigationState.patch({ sortBy: value })
   })
   let preferencesSaveGeneration = 0
   let bulkPollTimer: ReturnType<typeof setTimeout> | null = null
@@ -324,13 +300,13 @@ const _useCommunicationWorkspace = () => {
       ?? conversations.value.find(item => item.id === id)
       ?? null
   })
-  const selectedTimeline = computed<CommunicationConversationTimelineState | null>(() => {
+  const selectedTimeline = computed<ConversationTimelineState | null>(() => {
     const id = selectedConversationId.value
     return id === null ? null : conversationTimelines.value[id] ?? null
   })
   const selectedInbox = computed(() =>
     inboxes.value.find(item => item.id === selectedConversation.value?.inbox_id) ?? null)
-  const selectedSignals = computed<CommunicationConversationSignals>(() => {
+  const selectedSignals = computed<ConversationSignals>(() => {
     const conversationId = selectedConversationId.value
     if (conversationId === null) return {}
     return {
@@ -383,7 +359,7 @@ const _useCommunicationWorkspace = () => {
   let selectionEpoch = 0
   let conversationQueryGeneration = 0
   let conversationQueryController: AbortController | null = null
-  let lastPresenceState: CommunicationChatPresence | null = null
+  let lastPresenceState: ChatPresence | null = null
   let lastPresenceSentAt = 0
   let lifecycleEpoch = 0
   let synchronizeGeneration = 0
@@ -403,24 +379,24 @@ const _useCommunicationWorkspace = () => {
       && request.generation === conversationTimelineGenerations.get(id)
   }
 
-  function currentLifecycleRequest(): CommunicationLifecycleRequest {
+  function currentLifecycleRequest(): LifecycleRequest {
     return { lifecycleEpoch, sessionEpoch: sessionEpoch.value }
   }
 
-  function isLifecycleRequestCurrent(request: CommunicationLifecycleRequest): boolean {
+  function isLifecycleRequestCurrent(request: LifecycleRequest): boolean {
     return request.lifecycleEpoch === lifecycleEpoch
       && request.sessionEpoch === sessionEpoch.value
   }
 
   function isSynchronizationRequestCurrent(
-    request: CommunicationSynchronizationRequest
+    request: SynchronizationRequest
   ): boolean {
     return request.generation === synchronizeGeneration
       && request.lifecycleEpoch === lifecycleEpoch
       && request.sessionEpoch === sessionEpoch.value
   }
 
-  function listFilters(page = 1): CommunicationConversationFilters {
+  function listFilters(page = 1): ConversationFilters {
     return {
       q: search.value || undefined,
       inbox_id: inboxFilter.value || undefined,
@@ -437,7 +413,7 @@ const _useCommunicationWorkspace = () => {
     }
   }
 
-  function preferenceStatusValue(): CommunicationListPreferenceStatus {
+  function preferenceStatusValue(): ListPreferenceStatus {
     return statusFilter.value ?? 'ALL'
   }
 
@@ -500,7 +476,7 @@ const _useCommunicationWorkspace = () => {
     bulkPollTimer = null
   }
 
-  function toastBulkTerminal(operation: CommunicationBulkOperation): void {
+  function toastBulkTerminal(operation: BulkOperation): void {
     const succeeded = operation.succeeded_count
     const failed = operation.failed_count
     const skipped = operation.skipped_count
@@ -580,8 +556,8 @@ const _useCommunicationWorkspace = () => {
   }
 
   async function submitBulkOperation(
-    action: CommunicationBulkAction,
-    params?: CommunicationBulkOperationParams
+    action: BulkAction,
+    params?: BulkOperationParams
   ): Promise<boolean> {
     if (
       bulkSubmitting.value
@@ -654,7 +630,7 @@ const _useCommunicationWorkspace = () => {
     }
   }
 
-  function applyListPreferences(prefs: CommunicationConversationListPreferences): void {
+  function applyListPreferences(prefs: ConversationListPreferences): void {
     suppressPreferenceSave = true
     if (prefs.status === 'ALL') statusFilter.value = null
     else statusFilter.value = prefs.status
@@ -799,8 +775,8 @@ const _useCommunicationWorkspace = () => {
     }
   }
 
-  function patchConversationReadState(conversation: CommunicationConversation): void {
-    const apply = (item: CommunicationConversation): CommunicationConversation => ({
+  function patchConversationReadState(conversation: Conversation): void {
+    const apply = (item: Conversation): Conversation => ({
       ...item,
       unread_count: conversation.unread_count ?? item.unread_count ?? 0,
       first_unread_message_id: conversation.first_unread_message_id ?? null,
@@ -842,7 +818,7 @@ const _useCommunicationWorkspace = () => {
     conversationsLoadMoreError.value = null
   }
 
-  function applyConversationMeta(meta: CommunicationConversationListMeta): void {
+  function applyConversationMeta(meta: ConversationListMeta): void {
     conversationsPage.value = meta.current_page
     conversationsLastPage.value = Math.max(meta.current_page, meta.last_page)
     conversationsTotal.value = meta.total
@@ -970,7 +946,7 @@ const _useCommunicationWorkspace = () => {
     return conversationDetails.value[id] !== undefined
   }
 
-  function storeConversationDetail(incoming: CommunicationConversation): void {
+  function storeConversationDetail(incoming: Conversation): void {
     const cached = conversationDetails.value[incoming.id]
     const detail = mergeCommunicationConversations(cached ? [cached] : [], [incoming])[0] ?? incoming
     conversationDetails.value = {
@@ -988,13 +964,13 @@ const _useCommunicationWorkspace = () => {
 
   function storeConversationMessages(
     conversationId: number,
-    incoming: CommunicationMessage[],
+    incoming: Message[],
     replace: boolean
   ): void {
     const base = conversationDetails.value[conversationId]
       ?? conversations.value.find(item => item.id === conversationId)
     if (!base) return
-    const detail: CommunicationConversation = {
+    const detail: Conversation = {
       ...base,
       messages: replace
         ? [...incoming]
@@ -1011,7 +987,7 @@ const _useCommunicationWorkspace = () => {
 
   function patchConversationTimelineProjection(
     conversationId: number,
-    meta: CommunicationConversationTimelineMeta
+    meta: ConversationTimelineMeta
   ): void {
     const known = conversationDetails.value[conversationId]
       ?? conversations.value.find(item => item.id === conversationId)
@@ -1020,7 +996,7 @@ const _useCommunicationWorkspace = () => {
       && !isCommunicationReadStateVersionNewer(meta.read_state_version, knownVersion)) {
       return
     }
-    const apply = (item: CommunicationConversation): CommunicationConversation => ({
+    const apply = (item: Conversation): Conversation => ({
       ...item,
       unread_count: meta.unread_count,
       first_unread_message_id: meta.first_unread_message_id,
@@ -1043,7 +1019,7 @@ const _useCommunicationWorkspace = () => {
 
   function updateConversationTimeline(
     conversationId: number,
-    patch: Partial<CommunicationConversationTimelineState>
+    patch: Partial<ConversationTimelineState>
   ): void {
     const current = conversationTimelines.value[conversationId] ?? emptyTimelineState()
     conversationTimelines.value = {
@@ -1464,7 +1440,7 @@ const _useCommunicationWorkspace = () => {
     contactPresenceByConversation.value = next
   }
 
-  function storeSignal(signal: CommunicationChatPresenceSignal | CommunicationContactPresenceSignal): void {
+  function storeSignal(signal: ChatPresenceSignal | ContactPresenceSignal): void {
     const kind = signal.kind
     const conversationId = signal.conversation_id
     clearSignal(kind, conversationId)
@@ -1486,7 +1462,7 @@ const _useCommunicationWorkspace = () => {
     }, delay))
   }
 
-  function applyEphemeralSignals(incoming: CommunicationEvent[]): void {
+  function applyEphemeralSignals(incoming: Event[]): void {
     for (const event of incoming) {
       if (!isCommunicationEphemeralEvent(event) || event.conversation_id == null) continue
       if (event.type === 'CHAT_PRESENCE_CHANGED' && event.payload.presence === 'PAUSED') {
@@ -1498,7 +1474,7 @@ const _useCommunicationWorkspace = () => {
     }
   }
 
-  function applyReadStateEvent(event: CommunicationEvent): void {
+  function applyReadStateEvent(event: Event): void {
     if (event.type !== 'conversation.read_state.updated') return
     const conversationId = event.conversation_id
     const version = event.payload.version
@@ -1522,7 +1498,7 @@ const _useCommunicationWorkspace = () => {
       conversationTimelines.value[conversationId]?.meta.read_state_version ?? 0
     )
     if (!isCommunicationReadStateVersionNewer(version, knownVersion)) return
-    const apply = (item: CommunicationConversation): CommunicationConversation => ({
+    const apply = (item: Conversation): Conversation => ({
       ...item,
       unread_count: unreadCount,
       first_unread_message_id: incomingFirstUnread
@@ -1560,8 +1536,8 @@ const _useCommunicationWorkspace = () => {
   }
 
   async function hydrateFromEvents(
-    incoming: CommunicationEvent[],
-    request: CommunicationSynchronizationRequest
+    incoming: Event[],
+    request: SynchronizationRequest
   ): Promise<void> {
     if (!isSynchronizationRequestCurrent(request)) return
     applyEphemeralSignals(incoming)
@@ -1605,14 +1581,14 @@ const _useCommunicationWorkspace = () => {
       synchronizeAgain = true
       return
     }
-    const request: CommunicationSynchronizationRequest = {
+    const request: SynchronizationRequest = {
       generation: ++synchronizeGeneration,
       lifecycleEpoch,
       sessionEpoch: sessionEpoch.value
     }
     syncing.value = true
     syncError.value = null
-    const received: CommunicationEvent[] = []
+    const received: Event[] = []
     try {
       do {
         if (!isSynchronizationRequestCurrent(request)) return
@@ -1645,10 +1621,10 @@ const _useCommunicationWorkspace = () => {
     }
   }
 
-  function onRealtimeEvent(event: CommunicationRealtimeEvent): void {
+  function onRealtimeEvent(event: RealtimeEvent): void {
     const nextCursor = normalizeCommunicationCursor(event.cursor)
     if (nextCursor === null || nextCursor <= cursor.value) return
-    const normalized: CommunicationRealtimeEvent = { ...event, cursor: nextCursor }
+    const normalized: RealtimeEvent = { ...event, cursor: nextCursor }
     applyReadStateEvent(normalized)
     events.value = mergeCommunicationEvents(events.value, [normalized]).slice(-500)
     // Não avança o cursor aqui: o sync usa `after` exclusivo e precisa buscar o evento.
@@ -1679,7 +1655,7 @@ const _useCommunicationWorkspace = () => {
   }
 
   async function initialize(): Promise<void> {
-    const intent = consumeSurfaceNavigationIntent<Partial<CommunicationWorkspaceNavigationState>>(
+    const intent = consumeSurfaceNavigationIntent<Partial<WorkspaceNavigationState>>(
       COMMUNICATION_SURFACES.workspace
     )
     if (intent) navigationState.patch(intent)
@@ -1713,7 +1689,7 @@ const _useCommunicationWorkspace = () => {
     }
   }
 
-  async function sendMessage(input: CommunicationComposerPayload): Promise<boolean> {
+  async function sendMessage(input: ComposerPayload): Promise<boolean> {
     const conversation = selectedConversation.value
     if (!conversation || !canReply.value || sending.value) return false
     sending.value = true
@@ -1850,7 +1826,7 @@ const _useCommunicationWorkspace = () => {
     }
   }
 
-  async function setChatPresence(presence: CommunicationChatPresence): Promise<void> {
+  async function setChatPresence(presence: ChatPresence): Promise<void> {
     const conversation = selectedConversation.value
     if (!conversation || !canReply.value || !outboundOperational.value) return
     const now = Date.now()
@@ -1886,9 +1862,9 @@ const _useCommunicationWorkspace = () => {
   }
 
   async function updateConversation(
-    patch: Partial<Pick<CommunicationConversation,
+    patch: Partial<Pick<Conversation,
       'status' | 'assignee_membership_id' | 'work_department_id' | 'priority' | 'snoozed_until'>>,
-    target: CommunicationConversation | null = selectedConversation.value
+    target: Conversation | null = selectedConversation.value
   ): Promise<boolean> {
     const conversation = target
     if (!conversation || !canReply.value) return false
@@ -1909,7 +1885,7 @@ const _useCommunicationWorkspace = () => {
   }
 
   async function setConversationLabel(
-    conversation: CommunicationConversation,
+    conversation: Conversation,
     labelId: number,
     assigned: boolean
   ): Promise<boolean> {
@@ -1928,7 +1904,7 @@ const _useCommunicationWorkspace = () => {
     }
   }
 
-  async function toggleLabel(label: CommunicationLabel): Promise<void> {
+  async function toggleLabel(label: Label): Promise<void> {
     const conversation = selectedConversation.value
     if (!conversation) return
     const assigned = conversation.labels?.some(item => item.id === label.id) ?? false
@@ -1960,7 +1936,7 @@ const _useCommunicationWorkspace = () => {
     is_enabled?: boolean
     is_default?: boolean
     work_department_id?: number | null
-  }): Promise<CommunicationInbox | null> {
+  }): Promise<Inbox | null> {
     try {
       const response = await api.communication.inboxes.create(body)
       await loadInboxes()
@@ -1972,8 +1948,8 @@ const _useCommunicationWorkspace = () => {
   }
 
   async function updateInbox(
-    inbox: CommunicationInbox,
-    patch: Partial<Pick<CommunicationInbox,
+    inbox: Inbox,
+    patch: Partial<Pick<Inbox,
       'name' | 'is_enabled' | 'is_default' | 'work_department_id'>>
   ): Promise<boolean> {
     try {
@@ -2011,7 +1987,7 @@ const _useCommunicationWorkspace = () => {
     }
   }
 
-  async function connectInbox(inboxId: number): Promise<CommunicationPairingState | null> {
+  async function connectInbox(inboxId: number): Promise<PairingState | null> {
     try {
       const response = await api.communication.inboxes.connect(inboxId)
       await loadInboxes()
@@ -2033,7 +2009,7 @@ const _useCommunicationWorkspace = () => {
     }
   }
 
-  async function getSessionStatus(inboxId: number): Promise<CommunicationSessionStatus | null> {
+  async function getSessionStatus(inboxId: number): Promise<SessionStatus | null> {
     try {
       return (await api.communication.inboxes.sessionStatus(inboxId)).data
     } catch {
@@ -2041,7 +2017,7 @@ const _useCommunicationWorkspace = () => {
     }
   }
 
-  async function getPairing(inboxId: number): Promise<CommunicationPairingState | null> {
+  async function getPairing(inboxId: number): Promise<PairingState | null> {
     try {
       return (await api.communication.inboxes.sessionStatus(inboxId)).data.pairing ?? null
     } catch (caught) {
@@ -2072,7 +2048,7 @@ const _useCommunicationWorkspace = () => {
     }
   }
 
-  async function savePolicy(body: CommunicationPolicyBody): Promise<boolean> {
+  async function savePolicy(body: PolicyBody): Promise<boolean> {
     try {
       const response = await api.communication.automation.upsert(body)
       policies.value = [
@@ -2090,7 +2066,7 @@ const _useCommunicationWorkspace = () => {
     clientId: number,
     moduleKey: string,
     submoduleKey: string
-  ): Promise<CommunicationRecipientConfiguration | null> {
+  ): Promise<RecipientConfiguration | null> {
     try {
       return (await api.communication.automation.recipients(clientId, moduleKey, submoduleKey)).data
     } catch (caught) {
@@ -2100,12 +2076,12 @@ const _useCommunicationWorkspace = () => {
   }
 
   async function saveRecipients(
-    configuration: CommunicationRecipientConfiguration,
+    configuration: RecipientConfiguration,
     moduleKey: string,
     submoduleKey: string,
-    recipientMode: CommunicationRecipientMode,
+    recipientMode: RecipientMode,
     identityIds: number[]
-  ): Promise<CommunicationRecipientConfiguration | null> {
+  ): Promise<RecipientConfiguration | null> {
     try {
       return (await api.communication.automation.updateRecipients(configuration.client_id, {
         module_key: moduleKey,

@@ -1,11 +1,7 @@
 <script setup lang="ts">
 import QRCode from 'qrcode'
 import type { TenantMember } from '~/types/api'
-import type {
-  CommunicationInbox,
-  CommunicationPairingState,
-  CommunicationSessionStatus
-} from '~/types/communication'
+import type { Inbox, PairingState, SessionStatus } from '~/types/communication/inboxes'
 import type { WorkDepartment } from '~/types/work'
 import { COMMUNICATION_INBOX_STATUS, formatCommunicationDate } from '~/utils/communication'
 import {
@@ -17,7 +13,7 @@ import {
 import { communicationSessionActions } from '~/utils/communication-session'
 
 const props = defineProps<{
-  inbox: CommunicationInbox
+  inbox: Inbox
   members: TenantMember[]
   departments: WorkDepartment[]
 }>()
@@ -30,9 +26,9 @@ const departmentId = ref<number>(props.inbox.work_department_id || 0)
 const memberIds = ref<number[]>([...(props.inbox.member_ids ?? [])])
 const saving = ref(false)
 const actionLoading = ref<'connect' | 'disconnect' | 'logout' | 'delete' | null>(null)
-const session = ref<CommunicationSessionStatus | null>(null)
+const session = ref<SessionStatus | null>(null)
 const sessionStatusUnavailable = ref(false)
-const pairing = ref<CommunicationPairingState | null>(null)
+const pairing = ref<PairingState | null>(null)
 const qrDataUrl = ref<string | null>(null)
 const pairingDeadlineAt = ref<number | null>(null)
 const logoutOpen = ref(false)
@@ -228,7 +224,7 @@ async function save() {
   await persistSettings()
 }
 
-function applySessionStatus(current: CommunicationSessionStatus): void {
+function applySessionStatus(current: SessionStatus): void {
   session.value = current
   if (current.pairing) {
     pairing.value = current.pairing
@@ -236,7 +232,7 @@ function applySessionStatus(current: CommunicationSessionStatus): void {
   }
 }
 
-async function refreshSessionStatus(): Promise<CommunicationSessionStatus | null> {
+async function refreshSessionStatus(): Promise<SessionStatus | null> {
   const current = await workspace.getSessionStatus(props.inbox.id)
   sessionStatusUnavailable.value = current === null
   if (current) applySessionStatus(current)

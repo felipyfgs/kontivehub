@@ -1,15 +1,9 @@
 <script setup lang="ts">
 import { breakpointsTailwind, useBreakpoints } from '@vueuse/core'
 import type { DropdownMenuItem } from '@nuxt/ui'
-import type {
-  CommunicationComposerPayload,
-  CommunicationContact,
-  CommunicationConversation,
-  CommunicationConversationActionPayload,
-  CommunicationConversationQuickView,
-  CommunicationConversationStatus,
-  CommunicationMessage
-} from '~/types/communication'
+import type { ComposerPayload, Message } from '~/types/communication/messages'
+import type { Contact } from '~/types/communication/contacts'
+import type { Conversation, ConversationActionPayload, ConversationQuickView, ConversationStatus } from '~/types/communication/conversations'
 import { apiErrorMessage } from '~/utils/api-error'
 import {
   COMMUNICATION_REALTIME_META,
@@ -56,8 +50,8 @@ const purgeContactId = ref<number | null>(null)
 const purging = ref(false)
 const routeApplyEpoch = ref(0)
 const newConversationOpen = ref(false)
-const newConversationContact = ref<CommunicationContact | null>(null)
-const newConversationContacts = ref<CommunicationContact[]>([])
+const newConversationContact = ref<Contact | null>(null)
+const newConversationContacts = ref<Contact[]>([])
 const newConversationLoading = ref(false)
 const conversationActionPending = ref(false)
 const contactFilterName = ref<string | null>(null)
@@ -83,8 +77,8 @@ const inboxItems = computed(() => [
   ...workspace.inboxes.value.map(inbox => ({ label: inbox.name, value: inbox.id }))
 ])
 const statusSelection = computed({
-  get: (): CommunicationConversationStatus | 'ALL' => workspace.statusFilter.value || 'ALL',
-  set: (value: CommunicationConversationStatus | 'ALL') => {
+  get: (): ConversationStatus | 'ALL' => workspace.statusFilter.value || 'ALL',
+  set: (value: ConversationStatus | 'ALL') => {
     workspace.statusFilter.value = value === 'ALL' ? null : value
   }
 })
@@ -143,7 +137,7 @@ const sortSelection = computed({
   }
 })
 
-function applyQuickView(view: CommunicationConversationQuickView): void {
+function applyQuickView(view: ConversationQuickView): void {
   const next = communicationQuickViewState(view)
   workspace.clearOperationalSelection()
   workspace.statusFilter.value = next.status
@@ -303,7 +297,7 @@ async function focusConversationAfterOverlay(conversationId: number): Promise<vo
   }
 }
 
-async function selectConversation(conversation: CommunicationConversation) {
+async function selectConversation(conversation: Conversation) {
   await openConversation(conversation.id)
 }
 
@@ -389,7 +383,7 @@ function unsupportedConversationAction(_action: never): never {
 }
 
 async function onConversationAction(
-  payload: CommunicationConversationActionPayload
+  payload: ConversationActionPayload
 ): Promise<void> {
   if (conversationActionPending.value) return
   const { conversation, action } = payload
@@ -471,7 +465,7 @@ const bulkActionMenus = computed<BulkActionMenu[]>(() => {
   if (workspace.canReply.value) {
     const statusItems: DropdownMenuItem[] = []
     const addStatus = (
-      status: CommunicationConversationStatus,
+      status: ConversationStatus,
       label: string,
       icon: string
     ) => {
@@ -642,7 +636,7 @@ function toggleContext() {
 }
 
 async function send(
-  payload: CommunicationComposerPayload,
+  payload: ComposerPayload,
   acknowledge?: (ok: boolean) => void
 ) {
   const ok = await workspace.sendMessage(payload)
@@ -681,7 +675,7 @@ function acknowledgeTimeline(state: {
 }
 
 async function editMessage(
-  message: CommunicationMessage,
+  message: Message,
   text: string,
   acknowledge?: (ok: boolean) => void
 ) {
@@ -689,24 +683,24 @@ async function editMessage(
   acknowledge?.(ok)
 }
 
-function revokeMessage(message: CommunicationMessage) {
+function revokeMessage(message: Message) {
   void workspace.revokeMessage(message.id)
 }
 
-function reactMessage(message: CommunicationMessage, emoji: string | null) {
+function reactMessage(message: Message, emoji: string | null) {
   void workspace.reactMessage(message.id, emoji)
 }
 
-function votePoll(message: CommunicationMessage, optionNames: string[]) {
+function votePoll(message: Message, optionNames: string[]) {
   void workspace.votePoll(message.id, optionNames)
 }
 
-function sendReceipt(message: CommunicationMessage, receipt: 'READ' | 'PLAYED') {
+function sendReceipt(message: Message, receipt: 'READ' | 'PLAYED') {
   void workspace.sendReceipt(message.id, receipt)
 }
 
 function recoverMessage(
-  message: CommunicationMessage,
+  message: Message,
   operation: 'UNAVAILABLE' | 'MEDIA_RETRY'
 ) {
   void workspace.recoverMessage(message.id, operation)
@@ -717,7 +711,7 @@ function updateConversation(patch: Record<string, unknown>) {
 }
 
 async function downloadAttachment(
-  _message: CommunicationMessage,
+  _message: Message,
   attachmentId: number,
   filename: string
 ) {

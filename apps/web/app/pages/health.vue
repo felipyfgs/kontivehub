@@ -102,8 +102,8 @@ const {
   normalize: normalizeHealthNavigation,
   resetKey: navigationContext
 })
-const legacyHealthIntent = consumeSurfaceNavigationIntent<Partial<HealthNavigationState>>(SURFACE_NAVIGATION.health)
-if (legacyHealthIntent) patchHealthNavigation(legacyHealthIntent)
+const healthIntent = consumeSurfaceNavigationIntent<Partial<HealthNavigationState>>(SURFACE_NAVIGATION.health)
+if (healthIntent) patchHealthNavigation(healthIntent)
 
 const severityFilter = computed({
   get: () => healthNavigation.value.severity,

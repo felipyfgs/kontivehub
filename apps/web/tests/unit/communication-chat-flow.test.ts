@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { CommunicationMessage } from '~/types/communication'
+import type { Message } from '~/types/communication/messages'
 import {
   COMMUNICATION_TIMELINE_BOTTOM_THRESHOLD,
   appendedCommunicationMessages,
@@ -13,7 +13,7 @@ import {
   shouldMarkCommunicationTimelineRead
 } from '~/utils/communication-timeline'
 
-function message(id: number, direction: CommunicationMessage['direction']): CommunicationMessage {
+function message(id: number, direction: Message['direction']): Message {
   return {
     id,
     conversation_id: 10,

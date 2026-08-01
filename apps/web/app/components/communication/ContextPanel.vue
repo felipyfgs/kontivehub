@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import type { WorkDepartment } from '~/types/work'
-import type {
-  CommunicationConversation,
-  CommunicationConversationSignals,
-  CommunicationInbox,
-  CommunicationLabel
-} from '~/types/communication'
+import type { Conversation } from '~/types/communication/conversations'
+import type { ConversationSignals } from '~/types/communication/realtime'
+import type { Inbox } from '~/types/communication/inboxes'
+import type { Label } from '~/types/communication/contacts'
 import {
   COMMUNICATION_CONVERSATION_STATUS,
   communicationDisplayName,
@@ -17,21 +15,21 @@ import { communicationContactPath } from '~/utils/communication-routes'
 const apiBase = String(useRuntimeConfig().public.apiBase || '')
 
 const props = defineProps<{
-  conversation: CommunicationConversation
-  inbox?: CommunicationInbox | null
-  labels: CommunicationLabel[]
+  conversation: Conversation
+  inbox?: Inbox | null
+  labels: Label[]
   departments: WorkDepartment[]
   canReply: boolean
   canManageContacts: boolean
   outboundOperational?: boolean
-  signals?: CommunicationConversationSignals
+  signals?: ConversationSignals
   mobile?: boolean
 }>()
 
 const emit = defineEmits<{
   close: []
   update: [patch: Record<string, unknown>]
-  toggleLabel: [label: CommunicationLabel]
+  toggleLabel: [label: Label]
   exportContact: [contactId: number]
   purgeContact: [contactId: number]
   setDisappearing: [seconds: 0 | 86400 | 604800 | 7776000]

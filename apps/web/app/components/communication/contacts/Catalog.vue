@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { canReplyCommunication } from '~/utils/permissions'
-import type { CommunicationContact, CommunicationInbox } from '~/types/communication'
+import type { Contact } from '~/types/communication/contacts'
+import type { Inbox } from '~/types/communication/inboxes'
 import { apiErrorMessage } from '~/utils/api-error'
 import { communicationConversationPath } from '~/utils/communication-routes'
 
@@ -8,20 +9,20 @@ const { sessionEpoch, me } = useDashboard()
 const catalog = useCommunicationContactsCatalog()
 const api = useApi()
 const toast = useToast()
-const selectedContact = ref<CommunicationContact | null>(null)
+const selectedContact = ref<Contact | null>(null)
 const newConversationOpen = ref(false)
-const conversationInboxes = ref<CommunicationInbox[]>([])
+const conversationInboxes = ref<Inbox[]>([])
 let conversationRequestSequence = 0
 
 async function saveContact(
-  contact: CommunicationContact,
+  contact: Contact,
   body: { name: string | null, is_active: boolean },
   done: (ok: boolean) => void
 ) {
   done(await catalog.updateContact(contact, body))
 }
 
-async function openNewConversation(contact: CommunicationContact) {
+async function openNewConversation(contact: Contact) {
   const sequence = ++conversationRequestSequence
   const epoch = sessionEpoch.value
   selectedContact.value = contact

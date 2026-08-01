@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
-import type { CommunicationCannedResponse } from '~/types/communication'
-import type { CommunicationQuickResponsesCatalog } from '~/composables/useCommunicationQuickResponsesCatalog'
+import type { CannedResponse } from '~/types/communication/quick-responses'
+import type { QuickResponsesCatalog } from '~/composables/useCommunicationQuickResponsesCatalog'
 import {
   cannedResponseStatusColor,
   cannedResponseStatusLabel
@@ -12,12 +12,12 @@ import {
 } from '~/utils/table-ui'
 
 const { catalog } = defineProps<{
-  catalog: CommunicationQuickResponsesCatalog
+  catalog: QuickResponsesCatalog
 }>()
 
 const page = catalog.page
 
-const columns: TableColumn<CommunicationCannedResponse>[] = [
+const columns: TableColumn<CannedResponse>[] = [
   { accessorKey: 'shortcut', header: 'Atalho', enableSorting: false },
   { accessorKey: 'title', header: 'Título', enableSorting: false },
   {

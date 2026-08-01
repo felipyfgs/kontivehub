@@ -8,7 +8,7 @@ import {
   type Ref
 } from 'vue'
 import type { ClientContact } from '~/types/api'
-import type { CommunicationContact, CommunicationIdentity } from '~/types/communication'
+import type { Contact, Identity } from '~/types/communication/contacts'
 import { apiErrorMessage } from '~/utils/api-error'
 import {
   communicationContactDisplayName,
@@ -17,12 +17,12 @@ import {
 import { parseCommunicationContactId } from '~/utils/communication-routes'
 import { canManageCommunicationContacts } from '~/utils/permissions'
 
-export type CommunicationContactDetailApi = {
-  get: (id: number) => Promise<{ data: CommunicationContact }>
+export type ContactDetailApi = {
+  get: (id: number) => Promise<{ data: Contact }>
   update: (
     id: number,
     body: { name?: string | null, is_active?: boolean }
-  ) => Promise<{ data: CommunicationContact }>
+  ) => Promise<{ data: Contact }>
   addIdentity: (contactId: number, phone: string) => Promise<unknown>
   linkIdentity: (
     identityId: number,
@@ -39,8 +39,8 @@ export type CommunicationContactDetailApi = {
   listClientContacts: (clientId: number) => Promise<{ data: ClientContact[] }>
 }
 
-export type CommunicationContactDetailDependencies = {
-  api: CommunicationContactDetailApi
+export type ContactDetailDependencies = {
+  api: ContactDetailApi
   canManage: ComputedRef<boolean> | Ref<boolean>
   contactId: ComputedRef<number | null> | Ref<number | null>
   sessionEpoch: Ref<number>
@@ -53,9 +53,9 @@ export type CommunicationContactDetailDependencies = {
 }
 
 export function createCommunicationContactDetail(
-  dependencies: CommunicationContactDetailDependencies
+  dependencies: ContactDetailDependencies
 ) {
-  const contact = ref<CommunicationContact | null>(null)
+  const contact = ref<Contact | null>(null)
   const loading = ref(false)
   const loadError = ref<string | null>(null)
   const saving = ref(false)
@@ -69,7 +69,7 @@ export function createCommunicationContactDetail(
   const identityBusy = ref(false)
 
   const linkOpen = ref(false)
-  const linkIdentity = ref<CommunicationIdentity | null>(null)
+  const linkIdentity = ref<Identity | null>(null)
   const linkClientId = ref<number | null>(null)
   const linkClientContactId = ref<number | undefined>(undefined)
   const linkIsPrimary = ref(false)
@@ -265,7 +265,7 @@ export function createCommunicationContactDetail(
     }
   }
 
-  function openLink(identity: CommunicationIdentity) {
+  function openLink(identity: Identity) {
     ++clientContactsSequence
     linkIdentity.value = identity
     linkClientId.value = null

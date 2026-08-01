@@ -1,9 +1,9 @@
 import { useDebounceFn } from '@vueuse/core'
-import type { CommunicationRealtimeEvent } from '~/types/communication'
+import type { RealtimeEvent } from '~/types/communication/realtime'
 
 export function useCommunicationProfilePictureRealtime(
   refresh: () => void | Promise<void>,
-  shouldRefresh: (event: CommunicationRealtimeEvent) => boolean = () => true
+  shouldRefresh: (event: RealtimeEvent) => boolean = () => true
 ) {
   const api = useApi()
   const realtime = useNuxtApp().$communicationRealtime
@@ -22,7 +22,7 @@ export function useCommunicationProfilePictureRealtime(
     unsubscribers.clear()
   }
 
-  function onEvent(event: CommunicationRealtimeEvent): void {
+  function onEvent(event: RealtimeEvent): void {
     if (event.type !== 'contact.profile_picture.updated' || !shouldRefresh(event)) return
     refreshDebounced()
   }

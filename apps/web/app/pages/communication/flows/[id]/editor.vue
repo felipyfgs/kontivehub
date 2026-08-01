@@ -12,10 +12,10 @@ import type {
   FlowNodeType,
   FlowPreviewResult
 } from '~/types/communication/flows'
-import FlowEditorCanvas from '~/components/communication/flows/FlowEditorCanvas.client.vue'
-import FlowEditorInspector from '~/components/communication/flows/FlowEditorInspector.vue'
-import FlowEditorListMode from '~/components/communication/flows/FlowEditorListMode.vue'
-import FlowEditorPalette from '~/components/communication/flows/FlowEditorPalette.vue'
+import EditorCanvas from '~/components/communication/flows/EditorCanvas.client.vue'
+import EditorInspector from '~/components/communication/flows/EditorInspector.vue'
+import EditorListMode from '~/components/communication/flows/EditorListMode.vue'
+import EditorPalette from '~/components/communication/flows/EditorPalette.vue'
 import { apiErrorCode, apiErrorMessage, apiGraphErrors } from '~/utils/api-error'
 import { communicationFlowsMutationBlocked } from '~/utils/communication-flows'
 import {
@@ -570,7 +570,7 @@ onMounted(() => {
             v-if="canManage"
             class="overflow-hidden p-0"
           >
-            <FlowEditorPalette
+            <EditorPalette
               :disabled="Boolean(mutationBlocked)"
               @add="onAddNode"
             />
@@ -578,7 +578,7 @@ onMounted(() => {
 
           <div class="flex min-h-72 flex-col gap-3">
             <ClientOnly>
-              <FlowEditorCanvas
+              <EditorCanvas
                 :graph="editor.graph.value"
                 :selected-node-id="editor.selectedNodeId.value"
                 :read-only="canvasReadOnly"
@@ -600,7 +600,7 @@ onMounted(() => {
                 title="Modo lista"
                 description="Edição acessível sem drag completo no canvas."
               />
-              <FlowEditorListMode
+              <EditorListMode
                 class="mt-3"
                 :graph="editor.graph.value"
                 :selected-node-id="editor.selectedNodeId.value"
@@ -616,7 +616,7 @@ onMounted(() => {
             v-if="!isMobile"
             class="overflow-hidden p-0"
           >
-            <FlowEditorInspector
+            <EditorInspector
               :node="editor.selectedNode.value"
               :disabled="Boolean(mutationBlocked)"
               @update="editor.patchSelectedData"
@@ -630,7 +630,7 @@ onMounted(() => {
           v-if="isMobile"
           class="overflow-hidden p-0"
         >
-          <FlowEditorInspector
+          <EditorInspector
             :node="editor.selectedNode.value"
             :disabled="Boolean(mutationBlocked)"
             @update="editor.patchSelectedData"

@@ -81,8 +81,8 @@ const catalog = useCommunicationFlowsCatalog()
         description="Você pode consultar fluxos. Mutações exigem a permissão communication.manage_flows."
       />
 
-      <CommunicationFlowsFlowCatalogTable :catalog="catalog" />
-      <CommunicationFlowsFlowCatalogModals :catalog="catalog" />
+      <CommunicationFlowsCatalogTable :catalog="catalog" />
+      <CommunicationFlowsCatalogModals :catalog="catalog" />
     </template>
   </ShellPagePanel>
 </template>

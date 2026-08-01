@@ -143,12 +143,12 @@ const _useDashboard = () => {
   watch(
     () => [me.value?.id ?? null, isAuthenticated.value] as const,
     ([nextId, authenticated], [prevId, wasAuthenticated]) => {
-      // O primeiro login pode carregar uma intenção legada allowlisted criada
-      // ainda como guest; mudanças entre identidades autenticadas não podem.
       const identityChanged = wasAuthenticated && authenticated && nextId !== prevId
-      const loggedOut = wasAuthenticated && !authenticated
+      // Sem o middleware de query removido, não há mais intenção de navegação
+      // criada como guest a preservar: qualquer troca fecha painéis.
+      const authenticationChanged = authenticated !== wasAuthenticated
 
-      if (identityChanged || loggedOut) {
+      if (identityChanged || authenticationChanged) {
         isNotificationsSlideoverOpen.value = false
         isAssistantSlideoverOpen.value = false
         isClientFormOpen.value = false

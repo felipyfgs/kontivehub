@@ -6,11 +6,7 @@
  * - status/ordenação e filtros avançados em popovers separados.
  */
 import type { TabsItem } from '@nuxt/ui'
-import type {
-  CommunicationConversationQuickView,
-  CommunicationConversationSortBy,
-  CommunicationConversationStatus
-} from '~/types/communication'
+import type { ConversationQuickView, ConversationSortBy, ConversationStatus } from '~/types/communication/conversations'
 import {
   COMMUNICATION_SORT_BY_OPTIONS,
   normalizeCommunicationConversationSortBy
@@ -21,7 +17,7 @@ import {
 } from '~/utils/communication-conversation-quick-views'
 
 type SelectItem = { label: string, value: number | string }
-type StatusValue = CommunicationConversationStatus | 'ALL'
+type StatusValue = ConversationStatus | 'ALL'
 type ActiveFilterSummary = { key: string, label: string }
 type QuickViewTabItem = TabsItem & {
   testId: string
@@ -60,7 +56,7 @@ const props = defineProps<{
   assigneeId: number
   departmentId: number
   labelIds: number[]
-  sortBy: CommunicationConversationSortBy
+  sortBy: ConversationSortBy
   unassignedOnly: boolean
   unreadOnly: boolean
   contactFilterLabel?: string | null
@@ -77,10 +73,10 @@ const emit = defineEmits<{
   'update:assigneeId': [value: number]
   'update:departmentId': [value: number]
   'update:labelIds': [value: number[]]
-  'update:sortBy': [value: CommunicationConversationSortBy]
+  'update:sortBy': [value: ConversationSortBy]
   'update:unassignedOnly': [value: boolean]
   'update:unreadOnly': [value: boolean]
-  'apply-quick-view': [view: CommunicationConversationQuickView]
+  'apply-quick-view': [view: ConversationQuickView]
   'clear-contact': []
 }>()
 
@@ -132,7 +128,7 @@ const sortLabel = computed(() =>
   || 'Ordenação'
 )
 
-const activeQuickView = computed<CommunicationConversationQuickView | null>(() =>
+const activeQuickView = computed<ConversationQuickView | null>(() =>
   activeCommunicationQuickView({
     status: props.status === 'ALL' ? null : props.status,
     unreadOnly: props.unreadOnly,
@@ -198,14 +194,14 @@ const searchModel = computed({
   set: (value: string) => emit('update:search', value)
 })
 
-function applyQuickView(view: CommunicationConversationQuickView): void {
+function applyQuickView(view: ConversationQuickView): void {
   emit('apply-quick-view', view)
 }
 
 function onQuickViewChange(value: string | number): void {
   if (typeof value !== 'string') return
   if (!COMMUNICATION_CONVERSATION_QUICK_VIEW_TABS.some(item => item.value === value)) return
-  applyQuickView(value as CommunicationConversationQuickView)
+  applyQuickView(value as ConversationQuickView)
 }
 
 function updateSort(value: unknown): void {

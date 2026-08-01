@@ -1,8 +1,5 @@
 <script setup lang="ts">
-import type {
-  CommunicationSharedContentCategory,
-  CommunicationSharedContentItem
-} from '~/types/communication'
+import type { SharedContentCategory, SharedContentItem } from '~/types/communication/shared-content'
 import { apiErrorMessage } from '~/utils/api-error'
 import { resolveApiUrl } from '~/utils/api-url'
 
@@ -21,13 +18,13 @@ const emit = defineEmits<{
 const api = useApi()
 const download = useAuthenticatedDownload()
 const apiBase = String(useRuntimeConfig().public.apiBase || '')
-const category = ref<CommunicationSharedContentCategory>('media')
-const items = ref<CommunicationSharedContentItem[]>([])
+const category = ref<SharedContentCategory>('media')
+const items = ref<SharedContentItem[]>([])
 const cursor = ref<string | null>(null)
 const loading = ref(false)
 const loaded = ref(false)
 const error = ref<string | null>(null)
-const viewer = ref<CommunicationSharedContentItem | null>(null)
+const viewer = ref<SharedContentItem | null>(null)
 const expanded = ref(false)
 const zoom = ref(1)
 const rotation = ref(0)
@@ -41,7 +38,7 @@ const tabs = [
   { label: 'Mídias', value: 'media', icon: 'i-lucide-images' },
   { label: 'Links', value: 'links', icon: 'i-lucide-link-2' },
   { label: 'Documentos', value: 'documents', icon: 'i-lucide-file-text' }
-] satisfies Array<{ label: string, value: CommunicationSharedContentCategory, icon: string }>
+] satisfies Array<{ label: string, value: SharedContentCategory, icon: string }>
 
 const megabyteFormatter = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 })
 
@@ -103,7 +100,7 @@ watch(() => [props.conversationId, props.contactId, props.inboxId], () => {
   void load()
 }, { immediate: true })
 
-function open(item: CommunicationSharedContentItem) {
+function open(item: SharedContentItem) {
   if (!item.attachment) return
   viewer.value = item
 }
@@ -135,7 +132,7 @@ function next() {
   viewer.value = mediaItems.value[(index + 1) % mediaItems.value.length] ?? null
 }
 
-function jump(item: CommunicationSharedContentItem) {
+function jump(item: SharedContentItem) {
   viewer.value = null
   emit('jump', { conversationId: item.conversation_id, messageId: item.message_id })
 }
@@ -174,7 +171,7 @@ watch(viewer, resetViewerTransform)
 onMounted(() => window.addEventListener('keydown', onViewerKeydown))
 onBeforeUnmount(() => window.removeEventListener('keydown', onViewerKeydown))
 
-function downloadAttachment(item: CommunicationSharedContentItem) {
+function downloadAttachment(item: SharedContentItem) {
   if (!item.attachment?.download_url) return
   void download.download(item.attachment.download_url, item.attachment.filename)
 }

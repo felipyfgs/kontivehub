@@ -6,11 +6,7 @@ import {
   watch,
   type Ref
 } from 'vue'
-import type {
-  CommunicationContact,
-  CommunicationContactListParams,
-  CommunicationContactSortField
-} from '~/types/communication'
+import type { Contact, ContactListParams, ContactSortField } from '~/types/communication/contacts'
 import type { DataTableFilterDefinition, DataTableFilterModel } from '~/types/data-table-filter'
 import { apiErrorMessage } from '~/utils/api-error'
 import {
@@ -24,7 +20,7 @@ import { canManageCommunicationContacts } from '~/utils/permissions'
 import { COMMUNICATION_SURFACES, consumeSurfaceNavigationIntent, useSurfaceNavigationState } from './useSurfaceNavigationState'
 
 type ContactListResponse = {
-  data: CommunicationContact[]
+  data: Contact[]
   meta: {
     current_page: number
     last_page: number
@@ -48,10 +44,10 @@ type ContactUpdateBody = {
 
 const DEFAULT_PER_PAGE = 20
 
-export type CommunicationContactsCatalogDependencies = {
-  list: (query: CommunicationContactListParams) => Promise<ContactListResponse>
-  create: (body: ContactCreateBody) => Promise<{ data: CommunicationContact }>
-  update: (id: number, body: ContactUpdateBody) => Promise<{ data: CommunicationContact }>
+export type ContactsCatalogDependencies = {
+  list: (query: ContactListParams) => Promise<ContactListResponse>
+  create: (body: ContactCreateBody) => Promise<{ data: Contact }>
+  update: (id: number, body: ContactUpdateBody) => Promise<{ data: Contact }>
   pushRoute: (location: { path: string }) => Promise<unknown> | unknown
   notify: (title: string, color: 'success' | 'error') => void
   sessionEpoch: Ref<number>
@@ -105,10 +101,10 @@ function contactPageSize(value: unknown): number {
 }
 
 export function createCommunicationContactsCatalog(
-  dependencies: CommunicationContactsCatalogDependencies
+  dependencies: ContactsCatalogDependencies
 ) {
   const initialQuery = dependencies.initialQuery ?? {}
-  const items = ref<CommunicationContact[]>([])
+  const items = ref<Contact[]>([])
   const loading = ref(false)
   const hasLoaded = ref(false)
   const loadError = ref<string | null>(null)
@@ -121,7 +117,7 @@ export function createCommunicationContactsCatalog(
   const isActive = ref(triState(initialQuery.is_active, 'true'))
   const isProvisional = ref(triState(initialQuery.is_provisional, 'all'))
   const linked = ref(triState(initialQuery.linked, 'all'))
-  const sort = ref<CommunicationContactSortField | null>(
+  const sort = ref<ContactSortField | null>(
     isCommunicationContactSortField(initialQuery.sort) ? initialQuery.sort : 'name'
   )
   const sortDirection = ref<'asc' | 'desc' | null>(
@@ -245,7 +241,7 @@ export function createCommunicationContactsCatalog(
     page.value = 1
   }
 
-  function openContact(contact: CommunicationContact) {
+  function openContact(contact: Contact) {
     return dependencies.pushRoute({ path: communicationContactPath(contact.id) })
   }
 
@@ -270,7 +266,7 @@ export function createCommunicationContactsCatalog(
     }
   }
 
-  async function updateContact(contact: CommunicationContact, body: ContactUpdateBody) {
+  async function updateContact(contact: Contact, body: ContactUpdateBody) {
     if (!dependencies.canManage.value || contact.purged_at || updatingId.value !== null) return false
     const epoch = dependencies.sessionEpoch.value
     updatingId.value = contact.id
@@ -380,8 +376,8 @@ export function useCommunicationContactsCatalog() {
     page: 1, per_page: DEFAULT_PER_PAGE, q: '', is_active: 'true', is_provisional: 'all',
     linked: 'all', sort: 'name', sort_direction: 'asc'
   }, { resetKey: () => `${me.value?.id ?? 'guest'}:${me.value?.current_tenant?.id ?? 'none'}:${sessionEpoch.value}` })
-  const legacyIntent = consumeSurfaceNavigationIntent<Record<string, unknown>>(COMMUNICATION_SURFACES.contacts)
-  if (legacyIntent) surface.patch(legacyIntent)
+  const intent = consumeSurfaceNavigationIntent<Record<string, unknown>>(COMMUNICATION_SURFACES.contacts)
+  if (intent) surface.patch(intent)
   const catalog = createCommunicationContactsCatalog({
     list: query => api.communication.contacts.list(query),
     create: body => api.communication.contacts.create(body),

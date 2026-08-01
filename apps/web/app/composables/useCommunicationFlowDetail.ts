@@ -6,9 +6,7 @@ import {
   type ComputedRef,
   type Ref
 } from 'vue'
-import type {
-  CommunicationInbox
-} from '~/types/communication'
+import type { Inbox } from '~/types/communication/inboxes'
 import type {
   Flow,
   FlowBinding,
@@ -68,7 +66,7 @@ interface FlowDetailApi {
 
 interface FlowDetailDependencies {
   api: FlowDetailApi
-  listInboxes: () => Promise<{ data: CommunicationInbox[] }>
+  listInboxes: () => Promise<{ data: Inbox[] }>
   canManage: ComputedRef<boolean> | Ref<boolean>
   flowId: ComputedRef<number | null> | Ref<number | null>
   sessionEpoch: Ref<number>
@@ -122,7 +120,7 @@ export function createCommunicationFlowDetail(dependencies: FlowDetailDependenci
   const enableBusy = ref(false)
   const enableTarget = ref<FlowBinding | null>(null)
 
-  const inboxes = ref<CommunicationInbox[]>([])
+  const inboxes = ref<Inbox[]>([])
   const inboxesError = ref<string | null>(null)
   const bindingInboxId = ref<number | undefined>(undefined)
   const bindingVersionId = ref<number | undefined>(undefined)
@@ -569,7 +567,7 @@ export function createCommunicationFlowDetail(dependencies: FlowDetailDependenci
   }
 }
 
-export type CommunicationFlowDetail = ReturnType<
+export type FlowDetail = ReturnType<
   typeof createCommunicationFlowDetail
 >
 

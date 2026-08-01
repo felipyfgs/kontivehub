@@ -1,10 +1,6 @@
 <script setup lang="ts">
-import type {
-  CommunicationCannedResponse,
-  CommunicationComposerPayload,
-  CommunicationMessage,
-  CommunicationSendKind
-} from '~/types/communication'
+import type { CannedResponse } from '~/types/communication/quick-responses'
+import type { ComposerPayload, Message, SendKind } from '~/types/communication/messages'
 import { communicationMessageSummary } from '~/utils/communication'
 import {
   COMMUNICATION_REACTION_EMOJIS,
@@ -33,12 +29,12 @@ const props = defineProps<{
   unavailableReason?: string
   sending?: boolean
   conversationId?: number | null
-  cannedResponses: CommunicationCannedResponse[]
-  replyTo?: CommunicationMessage | null
+  cannedResponses: CannedResponse[]
+  replyTo?: Message | null
 }>()
 
 const emit = defineEmits<{
-  send: [payload: CommunicationComposerPayload, acknowledge: (ok: boolean) => void]
+  send: [payload: ComposerPayload, acknowledge: (ok: boolean) => void]
   cancelReply: []
   presence: [presence: 'COMPOSING' | 'PAUSED' | 'RECORDING']
 }>()
@@ -48,7 +44,7 @@ const toast = useToast()
 const body = ref('')
 const internalNote = ref(false)
 const file = ref<File | null>(null)
-const fileKind = ref<CommunicationSendKind>('TEXT')
+const fileKind = ref<SendKind>('TEXT')
 const ptt = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 const stickerInput = ref<HTMLInputElement | null>(null)
@@ -178,7 +174,7 @@ function onCompositionEnd(event: Event) {
   refreshAutocomplete()
 }
 
-async function applyCannedResponse(item: CommunicationCannedResponse) {
+async function applyCannedResponse(item: CannedResponse) {
   const match = autocompleteToken.value ?? findCannedSlashToken(body.value, cursor.value)
   if (!match || insertingCanned.value) return
   insertingCanned.value = true
@@ -252,7 +248,7 @@ function chooseSticker() {
   stickerInput.value?.click()
 }
 
-function attachFile(next: File, kind: CommunicationSendKind, asPtt = false) {
+function attachFile(next: File, kind: SendKind, asPtt = false) {
   if (next.size > MAX_MEDIA_BYTES) {
     toast.add({ title: 'O arquivo excede o limite de 20 MB.', color: 'warning' })
     return

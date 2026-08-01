@@ -6,7 +6,7 @@ const source = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf
 
 describe('master-detail shell navbar gate', () => {
   it('migrates only the authorized communication master navbar', () => {
-    const page = source('app/components/communication/CommunicationWorkspacePage.vue')
+    const page = source('app/components/communication/WorkspacePage.vue')
     const master = page.split('id="communication-list"')[1]?.split('</UDashboardPanel>')[0] ?? ''
 
     expect(master.match(/<ShellPageNavbar\b/g)).toHaveLength(1)

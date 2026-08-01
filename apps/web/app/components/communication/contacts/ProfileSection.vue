@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CommunicationContact } from '~/types/communication'
+import type { Contact } from '~/types/communication/contacts'
 import { communicationProfilePictureSrc } from '~/utils/communication'
 import {
   COMMUNICATION_CONTACT_SOLID_ACTION_CLASS,
@@ -14,7 +14,7 @@ import {
 const apiBase = String(useRuntimeConfig().public.apiBase || '')
 
 defineProps<{
-  contact: CommunicationContact
+  contact: Contact
   editName: string
   editActive: boolean
   canMutate: boolean

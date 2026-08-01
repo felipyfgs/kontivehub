@@ -1,7 +1,6 @@
 /**
- * Normalização de filtros de lista. As funções de parse/serialize permanecem
- * disponíveis exclusivamente para o adaptador legado; a lista em si mantém o
- * recorte na sessão da SPA, nunca na query da rota.
+ * Normalização de filtros de lista. As funções de parse/serialize mantêm o
+ * recorte da superfície na sessão da SPA, nunca na query da rota.
  */
 import type { LocationQuery, LocationQueryRaw } from 'vue-router'
 import type { SurfaceNavigationId } from '~/composables/useSurfaceNavigationState'

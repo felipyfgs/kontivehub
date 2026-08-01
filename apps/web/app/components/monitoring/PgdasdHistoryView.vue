@@ -4,7 +4,7 @@ import type {
   PgdasdHistoryPayload,
   PgdasdHistoryPeriod
 } from '~/types/fiscal-modules'
-import PgdasdHistoryPeriodGrid from './pgdasd/PgdasdHistoryPeriodGrid.vue'
+import HistoryPeriodGrid from './pgdasd/HistoryPeriodGrid.vue'
 import { usePgdasdMonitoring } from '~/composables/usePgdasdMonitoring'
 import { apiErrorMessage } from '~/utils/api-error'
 import { formatDateTime } from '~/utils/format'
@@ -275,7 +275,7 @@ async function confirmDocumentCollection() {
           role="list"
           aria-label="Histórico PGDAS-D por período de apuração"
         >
-          <PgdasdHistoryPeriodGrid
+          <HistoryPeriodGrid
             v-for="period in periods"
             :key="period.period_key || periodKeyFallback(period)"
             :period="period"
@@ -295,7 +295,7 @@ async function confirmDocumentCollection() {
                 @click="requestDocuments(period)"
               />
             </template>
-          </PgdasdHistoryPeriodGrid>
+          </HistoryPeriodGrid>
         </div>
 
         <div v-else class="rounded-lg border border-dashed border-default px-4 py-12 text-center">

@@ -20,8 +20,8 @@ describe('communication flow designer — N2/N3 surfaces', () => {
   it('editor usa Vue Flow, composable sem Pinia e lock 409', () => {
     const editor = read('app/pages/communication/flows/[id]/editor.vue')
     const composable = read('app/composables/useFlowEditorDraft.ts')
-    const canvas = read('app/components/communication/flows/FlowEditorCanvas.client.vue')
-    const list = read('app/components/communication/flows/FlowEditorListMode.vue')
+    const canvas = read('app/components/communication/flows/EditorCanvas.client.vue')
+    const list = read('app/components/communication/flows/EditorListMode.vue')
     const pkg = read('package.json')
 
     expect(pkg).toContain('"@vue-flow/core"')
@@ -36,7 +36,7 @@ describe('communication flow designer — N2/N3 surfaces', () => {
     expect(editor).toContain('flow-editor-preview')
     expect(editor).toContain('usePreferredReducedMotion')
     expect(editor).toContain('useMediaQuery')
-    expect(editor).toContain('FlowEditorListMode')
+    expect(editor).toContain('EditorListMode')
     expect(editor).not.toContain('defineStore')
     expect(editor).not.toContain('pinia')
 
@@ -87,7 +87,7 @@ describe('communication flow designer — N2/N3 surfaces', () => {
   })
 
   it('paleta só oferece nós allowlisted', () => {
-    const palette = read('app/components/communication/flows/FlowEditorPalette.vue')
+    const palette = read('app/components/communication/flows/EditorPalette.vue')
     expect(palette).toContain('FLOW_NODE_TYPES')
     expect(palette).not.toContain('webhook')
     expect(palette).not.toContain('llm')

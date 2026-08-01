@@ -1,44 +1,11 @@
-import type {
-  CommunicationAutomationMeta,
-  CommunicationAutomationPolicy,
-  CommunicationBulkAction,
-  CommunicationBulkItemStatus,
-  CommunicationBulkOperation,
-  CommunicationBulkOperationItemsMeta,
-  CommunicationBulkOperationParams,
-  CommunicationBulkOperationResultItem,
-  CommunicationBulkOperationSubmitItem,
-  CommunicationCannedRenderResult,
-  CommunicationCannedResponse,
-  CommunicationCannedResponseListParams,
-  CommunicationCannedResponseWriteBody,
-  CommunicationContact,
-  CommunicationContactListParams,
-  CommunicationConversation,
-  CommunicationConversationListMeta,
-  CommunicationConversationListPreferences,
-  CommunicationConversationTimelineMeta,
-  CommunicationConversationSortBy,
-  CommunicationConversationStatus,
-  CommunicationEvent,
-  CommunicationFeatureMeta,
-  CommunicationInbox,
-  CommunicationLabel,
-  CommunicationListPreferenceStatus,
-  CommunicationMessage,
-  CommunicationPairingState,
-  CommunicationQueuedCommand,
-  CommunicationRecipientConfiguration,
-  CommunicationRecipientMode,
-  CommunicationSessionStatus,
-  CommunicationSendKind,
-  CommunicationSharedContentCategory,
-  CommunicationSharedContentItem,
-  CommunicationSharedContentMeta,
-  CommunicationConversationInitiation,
-  CommunicationOutboundCapabilities,
-  CommunicationSyncMeta
-} from '~/types/communication'
+import type { AutomationMeta, AutomationPolicy, RecipientConfiguration, RecipientMode } from '~/types/communication/automation'
+import type { BulkAction, BulkItemStatus, BulkOperation, BulkOperationItemsMeta, BulkOperationParams, BulkOperationResultItem, BulkOperationSubmitItem, Conversation, ConversationListMeta, ConversationListPreferences, ConversationTimelineMeta, ConversationSortBy, ConversationStatus, ListPreferenceStatus, ConversationInitiation, OutboundCapabilities } from '~/types/communication/conversations'
+import type { CannedRenderResult, CannedResponse, CannedResponseListParams, CannedResponseWriteBody } from '~/types/communication/quick-responses'
+import type { Contact, ContactListParams, Label } from '~/types/communication/contacts'
+import type { Event, SyncMeta } from '~/types/communication/realtime'
+import type { FeatureMeta, Inbox, PairingState, QueuedCommand, SessionStatus } from '~/types/communication/inboxes'
+import type { Message, SendKind } from '~/types/communication/messages'
+import type { SharedContentCategory, SharedContentItem, SharedContentMeta } from '~/types/communication/shared-content'
 import type {
   Flow,
   FlowBinding,
@@ -56,10 +23,10 @@ import type {
 import { isSensitiveCommunicationContactSearch } from '~/utils/communication-contacts'
 import type { ApiClient, ApiUrl } from './types'
 
-export interface CommunicationConversationFilters {
+export interface ConversationFilters {
   q?: string
   inbox_id?: number
-  status?: CommunicationConversationStatus
+  status?: ConversationStatus
   assignee_membership_id?: number
   work_department_id?: number
   unassigned?: boolean
@@ -67,18 +34,18 @@ export interface CommunicationConversationFilters {
   /** OR entre rótulos válidos do tenant. */
   label_ids?: number[]
   contact_id?: number
-  sort_by?: CommunicationConversationSortBy
+  sort_by?: ConversationSortBy
   page?: number
   per_page?: number
 }
 
-export interface CommunicationBulkOperationCreateBody {
-  action: CommunicationBulkAction
-  params?: CommunicationBulkOperationParams
-  items: CommunicationBulkOperationSubmitItem[]
+export interface BulkOperationCreateBody {
+  action: BulkAction
+  params?: BulkOperationParams
+  items: BulkOperationSubmitItem[]
 }
 
-export interface CommunicationPolicyBody {
+export interface PolicyBody {
   module_key: string
   submodule_key: string
   inbox_id: number | null
@@ -86,7 +53,7 @@ export interface CommunicationPolicyBody {
   send_day: number
   send_time: string
   timezone: string
-  recipient_mode: CommunicationRecipientMode
+  recipient_mode: RecipientMode
   template_key: string
   template_version: string
   lock_version: number
@@ -98,18 +65,18 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
   return {
     communication: {
       inboxes: {
-        list: () => client<{ data: CommunicationInbox[], meta: CommunicationFeatureMeta }>(`${base}/inboxes`),
+        list: () => client<{ data: Inbox[], meta: FeatureMeta }>(`${base}/inboxes`),
         create: (body: {
           name: string
           is_enabled?: boolean
           is_default?: boolean
           work_department_id?: number | null
-        }) => client<{ data: CommunicationInbox }>(`${base}/inboxes`, { method: 'POST', body }),
-        update: (id: number, body: Partial<Pick<CommunicationInbox,
+        }) => client<{ data: Inbox }>(`${base}/inboxes`, { method: 'POST', body }),
+        update: (id: number, body: Partial<Pick<Inbox,
           'name' | 'is_enabled' | 'is_default' | 'work_department_id'>> & { lock_version: number }) =>
-          client<{ data: CommunicationInbox }>(`${base}/inboxes/${id}`, { method: 'PATCH', body }),
+          client<{ data: Inbox }>(`${base}/inboxes/${id}`, { method: 'PATCH', body }),
         remove: (id: number) =>
-          client<{ data: CommunicationQueuedCommand & { deleted: boolean } }>(`${base}/inboxes/${id}`, {
+          client<{ data: QueuedCommand & { deleted: boolean } }>(`${base}/inboxes/${id}`, {
             method: 'DELETE'
           }),
         replaceMembers: (id: number, membershipIds: number[]) =>
@@ -118,19 +85,19 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
             body: { membership_ids: membershipIds }
           }),
         connect: (id: number) =>
-          client<{ data: CommunicationPairingState }>(`${base}/inboxes/${id}/session/connect`, {
+          client<{ data: PairingState }>(`${base}/inboxes/${id}/session/connect`, {
             method: 'POST'
           }),
         disconnect: (id: number) =>
-          client<{ data: CommunicationQueuedCommand }>(`${base}/inboxes/${id}/session/disconnect`, {
+          client<{ data: QueuedCommand }>(`${base}/inboxes/${id}/session/disconnect`, {
             method: 'POST'
           }),
         logout: (id: number) =>
-          client<{ data: CommunicationQueuedCommand }>(`${base}/inboxes/${id}/session/logout`, {
+          client<{ data: QueuedCommand }>(`${base}/inboxes/${id}/session/logout`, {
             method: 'POST'
           }),
         sessionStatus: (id: number) =>
-          client<{ data: CommunicationSessionStatus }>(`${base}/inboxes/${id}/session/status`),
+          client<{ data: SessionStatus }>(`${base}/inboxes/${id}/session/status`),
         updateTenantSettings: (enabled: boolean) =>
           client<{ data: { enabled: boolean } }>(`${base}/settings`, {
             method: 'PATCH',
@@ -138,16 +105,16 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
           })
       },
       contacts: {
-        list: (params?: CommunicationContactListParams) => {
+        list: (params?: ContactListParams) => {
           const sensitiveSearch = isSensitiveCommunicationContactSearch(params?.q)
-          return client<{ data: CommunicationContact[], meta: { current_page: number, last_page: number, total: number } }>(
+          return client<{ data: Contact[], meta: { current_page: number, last_page: number, total: number } }>(
             sensitiveSearch ? `${base}/contacts/search` : `${base}/contacts`,
             sensitiveSearch
               ? { method: 'POST', body: params }
               : { query: params }
           )
         },
-        get: (id: number) => client<{ data: CommunicationContact }>(`${base}/contacts/${id}`),
+        get: (id: number) => client<{ data: Contact }>(`${base}/contacts/${id}`),
         create: (body: {
           name?: string | null
           phone: string
@@ -155,9 +122,9 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
           client_contact_id?: number
           is_primary?: boolean
           receives_automatic?: boolean
-        }) => client<{ data: CommunicationContact }>(`${base}/contacts`, { method: 'POST', body }),
+        }) => client<{ data: Contact }>(`${base}/contacts`, { method: 'POST', body }),
         update: (id: number, body: { name?: string | null, is_active?: boolean }) =>
-          client<{ data: CommunicationContact }>(`${base}/contacts/${id}`, { method: 'PATCH', body }),
+          client<{ data: Contact }>(`${base}/contacts/${id}`, { method: 'PATCH', body }),
         addIdentity: (contactId: number, phone: string) =>
           client<{ data: { id: number, address_masked: string } }>(`${base}/contacts/${contactId}/identities`, {
             method: 'POST',
@@ -186,24 +153,24 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
           tombstone_digest: string
         } }>(`${base}/contacts/${contactId}/personal-data`, { method: 'DELETE' }),
         sharedContent: (contactId: number, params: {
-          category: CommunicationSharedContentCategory
+          category: SharedContentCategory
           cursor?: string
           limit?: number
           inbox_id?: number
-        }) => client<{ data: CommunicationSharedContentItem[], meta: CommunicationSharedContentMeta }>(
+        }) => client<{ data: SharedContentItem[], meta: SharedContentMeta }>(
           `${base}/contacts/${contactId}/shared-content`, { query: params }
         )
       },
       conversationListPreferences: {
         get: () =>
-          client<{ data: CommunicationConversationListPreferences }>(
+          client<{ data: ConversationListPreferences }>(
             `${base}/conversation-list-preferences`
           ),
         update: (body: {
-          status: CommunicationListPreferenceStatus
-          sort_by: CommunicationConversationSortBy
+          status: ListPreferenceStatus
+          sort_by: ConversationSortBy
         }) =>
-          client<{ data: CommunicationConversationListPreferences }>(
+          client<{ data: ConversationListPreferences }>(
             `${base}/conversation-list-preferences`,
             {
               method: 'PUT',
@@ -213,10 +180,10 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
       },
       conversationBulkOperations: {
         create: (
-          body: CommunicationBulkOperationCreateBody,
+          body: BulkOperationCreateBody,
           idempotencyKey: string
         ) =>
-          client<{ data: CommunicationBulkOperation }>(
+          client<{ data: BulkOperation }>(
             `${base}/conversation-bulk-operations`,
             {
               method: 'POST',
@@ -225,20 +192,20 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
             }
           ),
         get: (operationId: string) =>
-          client<{ data: CommunicationBulkOperation }>(
+          client<{ data: BulkOperation }>(
             `${base}/conversation-bulk-operations/${operationId}`
           ),
         items: (
           operationId: string,
           params?: {
-            status?: CommunicationBulkItemStatus
+            status?: BulkItemStatus
             page?: number
             per_page?: number
           }
         ) =>
           client<{
-            data: CommunicationBulkOperationResultItem[]
-            meta: CommunicationBulkOperationItemsMeta
+            data: BulkOperationResultItem[]
+            meta: BulkOperationItemsMeta
           }>(`${base}/conversation-bulk-operations/${operationId}/items`, {
             query: params
           })
@@ -250,7 +217,7 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
           inbox_id: number
           body?: string
           file?: File | null
-          kind?: CommunicationSendKind
+          kind?: SendKind
           ptt?: boolean
         }, idempotencyKey: string) => {
           const payload = new FormData()
@@ -261,20 +228,20 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
           if (body.kind) payload.set('kind', body.kind)
           if (body.ptt) payload.set('ptt', '1')
           if (body.file) payload.set('file', body.file, body.file.name)
-          return client<{ data: CommunicationConversationInitiation }>(`${base}/conversations`, {
+          return client<{ data: ConversationInitiation }>(`${base}/conversations`, {
             method: 'POST', body: payload, headers: { 'Idempotency-Key': idempotencyKey }
           })
         },
         list: (
-          params?: CommunicationConversationFilters,
+          params?: ConversationFilters,
           options?: { signal?: AbortSignal }
         ) =>
-          client<{ data: CommunicationConversation[], meta: CommunicationConversationListMeta }>(
+          client<{ data: Conversation[], meta: ConversationListMeta }>(
             `${base}/conversations`,
             { query: params, signal: options?.signal }
           ),
         get: (id: number, params?: { include_messages?: boolean }) =>
-          client<{ data: CommunicationConversation }>(`${base}/conversations/${id}`, {
+          client<{ data: Conversation }>(`${base}/conversations/${id}`, {
             query: params?.include_messages === undefined
               ? undefined
               : { include_messages: params.include_messages ? 1 : 0 }
@@ -286,42 +253,42 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
           message_id?: number
         }) =>
           client<{
-            data: CommunicationMessage[]
-            meta: CommunicationConversationTimelineMeta
+            data: Message[]
+            meta: ConversationTimelineMeta
           }>(`${base}/conversations/${id}/messages`, { query: params }),
         sharedContent: (id: number, params: {
-          category: CommunicationSharedContentCategory
+          category: SharedContentCategory
           cursor?: string
           limit?: number
-        }) => client<{ data: CommunicationSharedContentItem[], meta: CommunicationSharedContentMeta }>(
+        }) => client<{ data: SharedContentItem[], meta: SharedContentMeta }>(
           `${base}/conversations/${id}/shared-content`, { query: params }
         ),
         updateReadState: (id: number, body:
           | { state: 'READ', through_message_id: number }
           | { state: 'UNREAD', expected_version: number }
         ) =>
-          client<{ data: CommunicationConversation }>(`${base}/conversations/${id}/read-state`, {
+          client<{ data: Conversation }>(`${base}/conversations/${id}/read-state`, {
             method: 'PUT',
             body
           }),
         markRead: (id: number, body: { through_message_id: number }) =>
-          client<{ data: CommunicationConversation }>(`${base}/conversations/${id}/read-state`, {
+          client<{ data: Conversation }>(`${base}/conversations/${id}/read-state`, {
             method: 'PUT',
             body: { state: 'READ', through_message_id: body.through_message_id }
           }),
         markUnread: (id: number, body: { expected_version: number }) =>
-          client<{ data: CommunicationConversation }>(`${base}/conversations/${id}/read-state`, {
+          client<{ data: Conversation }>(`${base}/conversations/${id}/read-state`, {
             method: 'PUT',
             body: { state: 'UNREAD', expected_version: body.expected_version }
           }),
         update: (id: number, body: {
           lock_version: number
-          status?: CommunicationConversationStatus
+          status?: ConversationStatus
           assignee_membership_id?: number | null
           work_department_id?: number | null
           priority?: number
           snoozed_until?: string | null
-        }) => client<{ data: CommunicationConversation }>(`${base}/conversations/${id}`, {
+        }) => client<{ data: Conversation }>(`${base}/conversations/${id}`, {
           method: 'PATCH',
           body
         }),
@@ -331,7 +298,7 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
           reply_to_message_id?: number | null
           idempotency_key?: string
           file?: File | null
-          kind?: CommunicationSendKind
+          kind?: SendKind
           ptt?: boolean
           receipt_message_id?: number
         }) => {
@@ -346,33 +313,33 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
             payload.set('receipt_message_id', String(body.receipt_message_id))
           }
           if (body.file) payload.set('file', body.file, body.file.name)
-          return client<{ data: CommunicationMessage }>(`${base}/conversations/${id}/messages`, {
+          return client<{ data: Message }>(`${base}/conversations/${id}/messages`, {
             method: 'POST',
             body: payload
           })
         },
         editMessage: (conversationId: number, messageId: number, text: string) =>
-          client<{ data: CommunicationQueuedCommand }>(
+          client<{ data: QueuedCommand }>(
             `${base}/conversations/${conversationId}/messages/${messageId}/edit`,
             { method: 'PUT', body: { text } }
           ),
         revokeMessage: (conversationId: number, messageId: number) =>
-          client<{ data: CommunicationQueuedCommand }>(
+          client<{ data: QueuedCommand }>(
             `${base}/conversations/${conversationId}/messages/${messageId}`,
             { method: 'DELETE' }
           ),
         reactMessage: (conversationId: number, messageId: number, emoji: string | null) =>
-          client<{ data: CommunicationQueuedCommand }>(
+          client<{ data: QueuedCommand }>(
             `${base}/conversations/${conversationId}/messages/${messageId}/reaction`,
             { method: 'PUT', body: { emoji } }
           ),
         votePoll: (conversationId: number, messageId: number, optionNames: string[]) =>
-          client<{ data: CommunicationQueuedCommand }>(
+          client<{ data: QueuedCommand }>(
             `${base}/conversations/${conversationId}/messages/${messageId}/poll-votes`,
             { method: 'POST', body: { option_names: optionNames } }
           ),
         receipt: (conversationId: number, messageId: number, receipt: 'READ' | 'PLAYED') =>
-          client<{ data: CommunicationQueuedCommand }>(
+          client<{ data: QueuedCommand }>(
             `${base}/conversations/${conversationId}/messages/${messageId}/receipts`,
             { method: 'POST', body: { receipt } }
           ),
@@ -380,12 +347,12 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
           conversationId: number,
           messageId: number,
           operation: 'UNAVAILABLE' | 'MEDIA_RETRY'
-        ) => client<{ data: CommunicationQueuedCommand }>(
+        ) => client<{ data: QueuedCommand }>(
           `${base}/conversations/${conversationId}/messages/${messageId}/recovery`,
           { method: 'POST', body: { operation } }
         ),
         subscribePresence: (conversationId: number) =>
-          client<{ data: CommunicationQueuedCommand }>(
+          client<{ data: QueuedCommand }>(
             `${base}/conversations/${conversationId}/presence/subscribe`,
             { method: 'POST' }
           ),
@@ -393,14 +360,14 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
           conversationId: number,
           presence: 'COMPOSING' | 'PAUSED' | 'RECORDING',
           media?: 'TEXT' | 'AUDIO'
-        ) => client<{ data: CommunicationQueuedCommand }>(
+        ) => client<{ data: QueuedCommand }>(
           `${base}/conversations/${conversationId}/presence`,
           { method: 'PUT', body: { presence, ...(media ? { media } : {}) } }
         ),
         setDisappearing: (
           conversationId: number,
           timerSeconds: 0 | 86400 | 604800 | 7776000
-        ) => client<{ data: CommunicationQueuedCommand }>(
+        ) => client<{ data: QueuedCommand }>(
           `${base}/conversations/${conversationId}/disappearing`,
           { method: 'PUT', body: { timer_seconds: timerSeconds } }
         ),
@@ -412,41 +379,41 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
           client<unknown>(`${base}/conversations/${conversationId}/labels/${labelId}`, { method: 'DELETE' })
       },
       catalog: {
-        outboundCapabilities: () => client<{ data: CommunicationOutboundCapabilities }>(
+        outboundCapabilities: () => client<{ data: OutboundCapabilities }>(
           `${base}/outbound-capabilities`
         ),
-        labels: () => client<{ data: CommunicationLabel[] }>(`${base}/labels`),
+        labels: () => client<{ data: Label[] }>(`${base}/labels`),
         createLabel: (body: { name: string, color?: string }) =>
-          client<{ data: CommunicationLabel }>(`${base}/labels`, { method: 'POST', body }),
+          client<{ data: Label }>(`${base}/labels`, { method: 'POST', body }),
         deleteLabel: (id: number) => client<unknown>(`${base}/labels/${id}`, { method: 'DELETE' }),
         /** Listagem de uso no composer (somente ativos; sem meta se sem page/per_page). */
         cannedResponses: (params?: { q?: string }) =>
-          client<{ data: CommunicationCannedResponse[] }>(`${base}/canned-responses`, {
+          client<{ data: CannedResponse[] }>(`${base}/canned-responses`, {
             query: params?.q ? { q: params.q } : undefined
           }),
         /** Listagem de gestão (ativos/inativos, paginação). Exige manage_quick_replies. */
-        listCannedResponses: (params?: CommunicationCannedResponseListParams) =>
+        listCannedResponses: (params?: CannedResponseListParams) =>
           client<{
-            data: CommunicationCannedResponse[]
+            data: CannedResponse[]
             meta: { current_page: number, last_page: number, total: number }
           }>(`${base}/canned-responses`, {
             query: { manage: 1, ...params }
           }),
-        createCannedResponse: (body: CommunicationCannedResponseWriteBody) =>
-          client<{ data: CommunicationCannedResponse }>(`${base}/canned-responses`, { method: 'POST', body }),
-        updateCannedResponse: (id: number, body: CommunicationCannedResponseWriteBody & { lock_version: number }) =>
-          client<{ data: CommunicationCannedResponse }>(`${base}/canned-responses/${id}`, { method: 'PUT', body }),
+        createCannedResponse: (body: CannedResponseWriteBody) =>
+          client<{ data: CannedResponse }>(`${base}/canned-responses`, { method: 'POST', body }),
+        updateCannedResponse: (id: number, body: CannedResponseWriteBody & { lock_version: number }) =>
+          client<{ data: CannedResponse }>(`${base}/canned-responses/${id}`, { method: 'PUT', body }),
         duplicateCannedResponse: (id: number, body: { shortcut: string }) =>
-          client<{ data: CommunicationCannedResponse }>(`${base}/canned-responses/${id}/duplicate`, {
+          client<{ data: CannedResponse }>(`${base}/canned-responses/${id}/duplicate`, {
             method: 'POST',
             body
           }),
         deactivateCannedResponse: (id: number) =>
-          client<{ data: CommunicationCannedResponse }>(`${base}/canned-responses/${id}/deactivate`, {
+          client<{ data: CannedResponse }>(`${base}/canned-responses/${id}/deactivate`, {
             method: 'POST'
           }),
         renderCannedResponse: (id: number, body: { conversation_id: number }) =>
-          client<{ data: CommunicationCannedRenderResult }>(`${base}/canned-responses/${id}/render`, {
+          client<{ data: CannedRenderResult }>(`${base}/canned-responses/${id}/render`, {
             method: 'POST',
             body
           }),
@@ -561,7 +528,7 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
       },
       events: {
         sync: (after: number, limit = 200) =>
-          client<{ data: CommunicationEvent[], meta: CommunicationSyncMeta }>(`${base}/events`, {
+          client<{ data: Event[], meta: SyncMeta }>(`${base}/events`, {
             query: { after, limit }
           })
       },
@@ -569,26 +536,26 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
         downloadUrl: (id: number) => apiUrl(`${base}/attachments/${id}/download`)
       },
       automation: {
-        list: () => client<{ data: CommunicationAutomationPolicy[], meta: CommunicationAutomationMeta }>(
+        list: () => client<{ data: AutomationPolicy[], meta: AutomationMeta }>(
           `${base}/automation-policies`
         ),
-        upsert: (body: CommunicationPolicyBody) =>
-          client<{ data: CommunicationAutomationPolicy }>(`${base}/automation-policies`, {
+        upsert: (body: PolicyBody) =>
+          client<{ data: AutomationPolicy }>(`${base}/automation-policies`, {
             method: 'PUT',
             body
           }),
         recipients: (clientId: number, moduleKey: string, submoduleKey: string) =>
-          client<{ data: CommunicationRecipientConfiguration }>(
+          client<{ data: RecipientConfiguration }>(
             `${base}/clients/${clientId}/automation-recipients`,
             { query: { module_key: moduleKey, submodule_key: submoduleKey } }
           ),
         updateRecipients: (clientId: number, body: {
           module_key: string
           submodule_key: string
-          recipient_mode: CommunicationRecipientMode
+          recipient_mode: RecipientMode
           identity_ids: number[]
           lock_version: number
-        }) => client<{ data: CommunicationRecipientConfiguration }>(
+        }) => client<{ data: RecipientConfiguration }>(
           `${base}/clients/${clientId}/automation-recipients`,
           { method: 'PUT', body }
         )

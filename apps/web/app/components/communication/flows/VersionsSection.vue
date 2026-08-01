@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { CommunicationFlowDetail } from '~/composables/useCommunicationFlowDetail'
+import type { FlowDetail } from '~/composables/useCommunicationFlowDetail'
 
 defineProps<{
-  detail: CommunicationFlowDetail
+  detail: FlowDetail
 }>()
 </script>
 

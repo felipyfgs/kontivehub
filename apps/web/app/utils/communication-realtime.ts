@@ -1,4 +1,4 @@
-export interface CommunicationRealtimeRuntimeInput {
+export interface RealtimeRuntimeInput {
   communicationEnabled?: unknown
   reverb?: {
     key?: unknown
@@ -8,7 +8,7 @@ export interface CommunicationRealtimeRuntimeInput {
   }
 }
 
-export interface CommunicationRealtimeConfiguration {
+export interface RealtimeConfiguration {
   enabled: boolean
   key: string
   host: string
@@ -18,8 +18,8 @@ export interface CommunicationRealtimeConfiguration {
 
 /** Sanitiza runtime config e mantém Reverb fail-closed diante de configuração parcial. */
 export function communicationRealtimeConfiguration(
-  input: CommunicationRealtimeRuntimeInput
-): CommunicationRealtimeConfiguration {
+  input: RealtimeRuntimeInput
+): RealtimeConfiguration {
   const key = String(input.reverb?.key || '').trim()
   const host = String(input.reverb?.host || '').trim()
   const port = Number(input.reverb?.port || 0)

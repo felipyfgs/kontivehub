@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { CommunicationQuickResponsesCatalog } from '~/composables/useCommunicationQuickResponsesCatalog'
+import type { QuickResponsesCatalog } from '~/composables/useCommunicationQuickResponsesCatalog'
 
 const { catalog } = defineProps<{
-  catalog: CommunicationQuickResponsesCatalog
+  catalog: QuickResponsesCatalog
 }>()
 
 const duplicateOpen = catalog.duplicateOpen

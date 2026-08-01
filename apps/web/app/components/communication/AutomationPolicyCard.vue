@@ -1,14 +1,11 @@
 <script setup lang="ts">
-import type {
-  CommunicationAutomationPolicy,
-  CommunicationInbox,
-  CommunicationRecipientMode
-} from '~/types/communication'
+import type { AutomationPolicy, RecipientMode } from '~/types/communication/automation'
+import type { Inbox } from '~/types/communication/inboxes'
 
 const props = defineProps<{
   scope: string
-  policy?: CommunicationAutomationPolicy | null
-  inboxes: CommunicationInbox[]
+  policy?: AutomationPolicy | null
+  inboxes: Inbox[]
 }>()
 
 const workspace = useCommunicationWorkspace()
@@ -24,7 +21,7 @@ const enabled = ref(props.policy?.is_enabled ?? false)
 const inboxId = ref<number>(props.policy?.inbox_id ?? 0)
 const sendDay = ref(props.policy?.send_day ?? 10)
 const sendTime = ref(props.policy?.send_time ?? '09:00')
-const recipientMode = ref<CommunicationRecipientMode>(props.policy?.recipient_mode ?? 'PRIMARY')
+const recipientMode = ref<RecipientMode>(props.policy?.recipient_mode ?? 'PRIMARY')
 const templateKey = ref(props.policy?.template_key ?? `fiscal.${moduleKey}.${submoduleKey}`)
 const templateVersion = ref(props.policy?.template_version ?? 'v1')
 const saving = ref(false)

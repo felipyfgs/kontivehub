@@ -1,7 +1,4 @@
-import type {
-  CommunicationCannedResponse,
-  CommunicationCannedResponseListParams
-} from '~/types/communication'
+import type { CannedResponse, CannedResponseListParams } from '~/types/communication/quick-responses'
 
 /** Variáveis allowlist do backend (store/update/render). */
 export const CANNED_RESPONSE_VARIABLES = [
@@ -22,12 +19,12 @@ export function isValidCannedShortcut(value: string): boolean {
   return normalized.length > 0 && SHORTCUT_PATTERN.test(normalized)
 }
 
-export function cannedResponseStatusLabel(item: Pick<CommunicationCannedResponse, 'is_active'>): string {
+export function cannedResponseStatusLabel(item: Pick<CannedResponse, 'is_active'>): string {
   return item.is_active ? 'Ativa' : 'Inativa'
 }
 
 export function cannedResponseStatusColor(
-  item: Pick<CommunicationCannedResponse, 'is_active'>
+  item: Pick<CannedResponse, 'is_active'>
 ): 'success' | 'neutral' {
   return item.is_active ? 'success' : 'neutral'
 }
@@ -37,8 +34,8 @@ export function buildCannedResponseListQuery(input: {
   isActive: 'all' | 'true' | 'false'
   page: number
   perPage: number
-}): CommunicationCannedResponseListParams {
-  const params: CommunicationCannedResponseListParams = {
+}): CannedResponseListParams {
+  const params: CannedResponseListParams = {
     manage: 1,
     page: input.page,
     per_page: input.perPage
@@ -81,9 +78,9 @@ export function findCannedSlashToken(text: string, cursor: number): CannedSlashT
 }
 
 export function filterCannedResponsesByShortcut(
-  items: CommunicationCannedResponse[],
+  items: CannedResponse[],
   query: string
-): CommunicationCannedResponse[] {
+): CannedResponse[] {
   const needle = query.trim().toLowerCase()
   const active = items.filter(item => item.is_active)
   if (!needle) return active.slice(0, 8)

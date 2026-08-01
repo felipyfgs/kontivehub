@@ -70,9 +70,9 @@ const catalog = useCommunicationQuickResponsesCatalog()
       />
 
       <CommunicationQuickResponsesCatalogTable :catalog="catalog" />
-      <CommunicationQuickResponsesQuickResponseEditorModal :catalog="catalog" />
-      <CommunicationQuickResponsesQuickResponseDuplicateModal :catalog="catalog" />
-      <CommunicationQuickResponsesQuickResponseDeactivateModal :catalog="catalog" />
+      <CommunicationQuickResponsesEditorModal :catalog="catalog" />
+      <CommunicationQuickResponsesDuplicateModal :catalog="catalog" />
+      <CommunicationQuickResponsesDeactivateModal :catalog="catalog" />
     </template>
   </ShellPagePanel>
 </template>

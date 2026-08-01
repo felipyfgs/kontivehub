@@ -1,15 +1,15 @@
-import type { CommunicationMessage } from '~/types/communication'
+import type { Message } from '~/types/communication/messages'
 
 export const COMMUNICATION_TIMELINE_BOTTOM_THRESHOLD = 96
 
-export interface CommunicationTimelineScrollMetrics {
+export interface TimelineScrollMetrics {
   scrollTop: number
   scrollHeight: number
   clientHeight: number
 }
 
 export function isCommunicationTimelineNearBottom(
-  metrics: CommunicationTimelineScrollMetrics,
+  metrics: TimelineScrollMetrics,
   threshold = COMMUNICATION_TIMELINE_BOTTOM_THRESHOLD
 ): boolean {
   const distance = metrics.scrollHeight - metrics.clientHeight - metrics.scrollTop
@@ -18,8 +18,8 @@ export function isCommunicationTimelineNearBottom(
 
 export function appendedCommunicationMessages(
   previousIds: Iterable<number>,
-  current: CommunicationMessage[]
-): CommunicationMessage[] {
+  current: Message[]
+): Message[] {
   const previous = new Set(previousIds)
   return current.filter(message => !previous.has(message.id))
 }
@@ -27,7 +27,7 @@ export function appendedCommunicationMessages(
 export function shouldFollowCommunicationTimeline(input: {
   conversationChanged: boolean
   wasNearBottom: boolean
-  appended: CommunicationMessage[]
+  appended: Message[]
 }): boolean {
   return input.conversationChanged
     || input.wasNearBottom

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CommunicationConversation } from '~/types/communication'
+import type { Conversation } from '~/types/communication/conversations'
 import {
   COMMUNICATION_CONVERSATION_STATUS,
   communicationDisplayName,
@@ -14,7 +14,7 @@ const props = defineProps<{
 const api = useApi()
 const loading = ref(false)
 const error = ref<string | null>(null)
-const conversations = ref<CommunicationConversation[]>([])
+const conversations = ref<Conversation[]>([])
 const inboxes = ref<Record<number, string>>({})
 let loadSequence = 0
 
@@ -47,7 +47,7 @@ async function load() {
   }
 }
 
-function conversationStatus(status: CommunicationConversation['status']) {
+function conversationStatus(status: Conversation['status']) {
   return COMMUNICATION_CONVERSATION_STATUS[status] ?? {
     color: 'neutral' as const,
     label: status || 'Desconhecido'

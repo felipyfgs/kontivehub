@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CommunicationContact } from '~/types/communication'
+import type { Contact } from '~/types/communication/contacts'
 import { communicationProfilePictureSrc } from '~/utils/communication'
 import {
   communicationContactDisplayName,
@@ -15,7 +15,7 @@ import {
 const apiBase = String(useRuntimeConfig().public.apiBase || '')
 
 const props = defineProps<{
-  items: CommunicationContact[]
+  items: Contact[]
   loading: boolean
   stale: boolean
   error: string | null
@@ -32,12 +32,12 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:page': [page: number]
   'update:perPage': [perPage: number]
-  'open': [contact: CommunicationContact]
+  'open': [contact: Contact]
   'retry': []
   'clear': []
   'create': []
-  'newConversation': [contact: CommunicationContact]
-  'save': [contact: CommunicationContact, body: { name: string | null, is_active: boolean }, done: (ok: boolean) => void]
+  'newConversation': [contact: Contact]
+  'save': [contact: Contact, body: { name: string | null, is_active: boolean }, done: (ok: boolean) => void]
 }>()
 
 const expandedId = ref<number | null>(null)
@@ -61,7 +61,7 @@ function applyExpansion(id: number | null) {
   editActive.value = contact?.is_active ?? true
 }
 
-function requestExpansion(contact: CommunicationContact) {
+function requestExpansion(contact: Contact) {
   const target = expandedId.value === contact.id ? null : contact.id
   if (dirty.value) {
     pendingExpansion.value = { id: target }
@@ -92,7 +92,7 @@ function cancelEdit() {
   applyExpansion(null)
 }
 
-function save(contact: CommunicationContact) {
+function save(contact: Contact) {
   emit('save', contact, {
     name: editName.value.trim() || null,
     is_active: editActive.value

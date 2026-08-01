@@ -4,7 +4,7 @@
  * Visualização gated por communication.view; mutações por communication.manage_contacts.
  */
 import type { DropdownMenuItem } from '@nuxt/ui'
-import type { CommunicationInbox } from '~/types/communication'
+import type { Inbox } from '~/types/communication/inboxes'
 import { apiErrorMessage } from '~/utils/api-error'
 import {
   COMMUNICATION_CONTACT_DANGER_SOFT_CLASS,
@@ -36,7 +36,7 @@ const newConversationOpen = ref(false)
 const newConversationLoading = ref(false)
 const api = useApi()
 const toast = useToast()
-const conversationInboxes = ref<CommunicationInbox[]>([])
+const conversationInboxes = ref<Inbox[]>([])
 let conversationRequestSequence = 0
 const canReply = computed(() => canReplyCommunication(me.value))
 const backTo = computed(() => COMMUNICATION_CONTACTS_PATH)
@@ -263,7 +263,7 @@ const headerMoreActions = computed<DropdownMenuItem[]>(() => {
           class="min-h-0 w-full overflow-hidden border-l border-default p-4 sm:p-6 lg:w-auto lg:flex-[2_1_0%]"
           aria-label="Contexto do contato"
         >
-          <CommunicationContactsContactContext
+          <CommunicationContactsContext
             :contact="contact"
             :can-mutate="canMutate"
             :can-manage="canManage"
@@ -285,7 +285,7 @@ const headerMoreActions = computed<DropdownMenuItem[]>(() => {
           description="Conversas, identidades, vínculos, conteúdo compartilhado e privacidade."
         >
           <template #body>
-            <CommunicationContactsContactContext
+            <CommunicationContactsContext
               :contact="contact"
               :can-mutate="canMutate"
               :can-manage="canManage"

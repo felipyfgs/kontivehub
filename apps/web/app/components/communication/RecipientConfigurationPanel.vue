@@ -1,20 +1,17 @@
 <script setup lang="ts">
-import type {
-  CommunicationClientReference,
-  CommunicationRecipientConfiguration,
-  CommunicationRecipientMode
-} from '~/types/communication'
+import type { ClientReference } from '~/types/communication/contacts'
+import type { RecipientConfiguration, RecipientMode } from '~/types/communication/automation'
 
 const props = defineProps<{
-  clients: CommunicationClientReference[]
+  clients: ClientReference[]
   scopes: string[]
 }>()
 
 const workspace = useCommunicationWorkspace()
 const clientId = ref<number>(props.clients[0]?.id ?? 0)
 const scope = ref(props.scopes[0] ?? 'simples_mei:pgdasd')
-const configuration = ref<CommunicationRecipientConfiguration | null>(null)
-const recipientMode = ref<CommunicationRecipientMode>('PRIMARY')
+const configuration = ref<RecipientConfiguration | null>(null)
+const recipientMode = ref<RecipientMode>('PRIMARY')
 const selectedIds = ref<number[]>([])
 const loading = ref(false)
 const saving = ref(false)

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { CommunicationConversation } from '~/types/communication'
+import type { Conversation } from '~/types/communication/conversations'
 import {
   isConversationRequestCurrent,
   mergeCommunicationConversationPage
 } from '~/composables/useCommunicationWorkspace'
 
-function conversation(id: number, priority = 0): CommunicationConversation {
+function conversation(id: number, priority = 0): Conversation {
   return {
     id,
     inbox_id: 1,

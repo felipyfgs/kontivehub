@@ -48,7 +48,7 @@ describe('superfície de atendimento compartilhado', () => {
   })
 
   it('segue o arquétipo master-detail com painel de contexto colapsável', () => {
-    const page = source('app/components/communication/CommunicationWorkspacePage.vue')
+    const page = source('app/components/communication/WorkspacePage.vue')
     const timeline = source('app/components/communication/TimelinePanel.vue')
     expect(page).toContain('communication-list-panel')
     expect(page).toContain('CommunicationTimelinePanel')
@@ -79,7 +79,7 @@ describe('superfície de atendimento compartilhado', () => {
     const context = source('app/components/communication/ContextPanel.vue')
     const catalog = source('app/components/communication/contacts/CatalogTable.vue')
     const profile = source('app/components/communication/contacts/ProfileSection.vue')
-    const types = source('app/types/communication/index.ts')
+    const types = source('app/types/communication/contacts.ts')
     const generatedTypes = source('app/types/generated/public-api.ts')
 
     expect(types.match(/profile_picture_url\?: string \| null/g)).toHaveLength(2)
@@ -120,7 +120,7 @@ describe('superfície de atendimento compartilhado', () => {
   })
 
   it('protege edição por teclado, restaura foco e oferece retry contextual', () => {
-    const page = source('app/components/communication/CommunicationWorkspacePage.vue')
+    const page = source('app/components/communication/WorkspacePage.vue')
     const list = source('app/components/communication/ConversationList.vue')
 
     expect(page.match(/usingInput: false/g)).toHaveLength(2)
@@ -159,7 +159,7 @@ describe('superfície de atendimento compartilhado', () => {
   })
 
   it('oferece paginação incremental sem apagar estados válidos da fila', () => {
-    const page = source('app/components/communication/CommunicationWorkspacePage.vue')
+    const page = source('app/components/communication/WorkspacePage.vue')
     const list = source('app/components/communication/ConversationList.vue')
     const workspace = source('app/composables/useCommunicationWorkspace.ts')
 
@@ -188,7 +188,7 @@ describe('superfície de atendimento compartilhado', () => {
   })
 
   it('usa cascas Shell nos overlays críticos do atendimento', () => {
-    const page = source('app/components/communication/CommunicationWorkspacePage.vue')
+    const page = source('app/components/communication/WorkspacePage.vue')
     const timeline = source('app/components/communication/TimelinePanel.vue')
 
     expect(page).toContain('<ShellConfirmModal')
@@ -234,7 +234,7 @@ describe('superfície de atendimento compartilhado', () => {
 
   it('prefetch visível prepara a timeline, deduplica requests e evita loading na troca', () => {
     const workspace = source('app/composables/useCommunicationWorkspace.ts')
-    const page = source('app/components/communication/CommunicationWorkspacePage.vue')
+    const page = source('app/components/communication/WorkspacePage.vue')
     const list = source('app/components/communication/ConversationList.vue')
     const timeline = source('app/components/communication/TimelinePanel.vue')
     const clearSelection = page.slice(
@@ -279,7 +279,7 @@ describe('superfície de atendimento compartilhado', () => {
 
   it('carrega a timeline por cursor e confirma leitura somente após render visível', () => {
     const api = source('app/composables/api/createCommunicationApi.ts')
-    const page = source('app/components/communication/CommunicationWorkspacePage.vue')
+    const page = source('app/components/communication/WorkspacePage.vue')
     const timeline = source('app/components/communication/TimelinePanel.vue')
     const workspace = source('app/composables/useCommunicationWorkspace.ts')
     const timelineUtils = source('app/utils/communication-timeline.ts')
@@ -409,14 +409,14 @@ describe('superfície de atendimento compartilhado', () => {
 
   it('lista compacta expõe preview semântico, badge de não lidas e altura responsiva', () => {
     const list = source('app/components/communication/ConversationList.vue')
-    const page = source('app/components/communication/CommunicationWorkspacePage.vue')
+    const page = source('app/components/communication/WorkspacePage.vue')
     const filters = source('app/components/communication/ConversationListFilters.vue')
     const timeline = source('app/components/communication/TimelinePanel.vue')
     const communication = source('app/utils/communication.ts')
-    const types = source('app/types/communication/index.ts')
-    expect(types).toContain('last_message?: CommunicationMessage | null')
+    const types = source('app/types/communication/conversations.ts')
+    expect(types).toContain('last_message?: Message | null')
     expect(types).toContain('unread_count?: number')
-    expect(types).toContain('preview?: CommunicationConversationPreview | null')
+    expect(types).toContain('preview?: ConversationPreview | null')
     expect(communication).toContain('communicationPreviewText')
     expect(communication).toContain('communicationPeerAddress')
     expect(communication).toContain('communicationListPhoneLine')
@@ -434,18 +434,18 @@ describe('superfície de atendimento compartilhado', () => {
   })
 
   it('expõe filtros operacionais, seleção bulk e preferências no workspace', () => {
-    const page = source('app/components/communication/CommunicationWorkspacePage.vue')
+    const page = source('app/components/communication/WorkspacePage.vue')
     const list = source('app/components/communication/ConversationList.vue')
     const filters = source('app/components/communication/ConversationListFilters.vue')
     const timeline = source('app/components/communication/TimelinePanel.vue')
     const quickViews = source('app/utils/communication-conversation-quick-views.ts')
     const workspace = source('app/composables/useCommunicationWorkspace.ts')
     const api = source('app/composables/api/createCommunicationApi.ts')
-    const types = source('app/types/communication/index.ts')
+    const types = source('app/types/communication/conversations.ts')
 
-    expect(types).toContain('CommunicationConversationSortBy')
-    expect(types).toContain('CommunicationBulkOperation')
-    expect(types).toContain('CommunicationConversationListPreferences')
+    expect(types).toContain('ConversationSortBy')
+    expect(types).toContain('BulkOperation')
+    expect(types).toContain('ConversationListPreferences')
     expect(api).toContain('conversation-list-preferences')
     expect(api).toContain('conversation-bulk-operations')
     expect(api).toContain('Idempotency-Key')
@@ -555,7 +555,7 @@ describe('superfície de atendimento compartilhado', () => {
     expect(timeline).not.toContain('aria-label="Adiar conversa"')
     expect(page).toContain('@toggle-select')
     expect(page).not.toContain('@toggle-select-all')
-    expect(page).toContain('CommunicationConversationActionPayload')
+    expect(page).toContain('ConversationActionPayload')
     expect(workspace).toContain('setConversationLabel')
     expect(workspace).toContain('useSurfaceNavigationState')
     expect(workspace).toContain('COMMUNICATION_SURFACES.workspace')
@@ -579,7 +579,7 @@ describe('superfície de atendimento compartilhado', () => {
 
   it('contexto cobre operação, deep-link e privacidade gated por manage_contacts', () => {
     const context = source('app/components/communication/ContextPanel.vue')
-    const page = source('app/components/communication/CommunicationWorkspacePage.vue')
+    const page = source('app/components/communication/WorkspacePage.vue')
     const workspace = source('app/composables/useCommunicationWorkspace.ts')
     expect(context).toContain('Responsável')
     expect(context).toContain('Fila / departamento')

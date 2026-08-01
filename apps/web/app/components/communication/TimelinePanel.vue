@@ -1,17 +1,12 @@
 <script setup lang="ts">
 import { usePreferredReducedMotion } from '@vueuse/core'
 import CommunicationConversationActions from './ConversationActions.vue'
-import type {
-  CommunicationCannedResponse,
-  CommunicationComposerPayload,
-  CommunicationConversation,
-  CommunicationConversationActionPayload,
-  CommunicationConversationSignals,
-  CommunicationConversationTimelineState,
-  CommunicationInbox,
-  CommunicationLabel,
-  CommunicationMessage
-} from '~/types/communication'
+import type { CannedResponse } from '~/types/communication/quick-responses'
+import type { ComposerPayload, Message } from '~/types/communication/messages'
+import type { Conversation, ConversationActionPayload, ConversationTimelineState } from '~/types/communication/conversations'
+import type { ConversationSignals } from '~/types/communication/realtime'
+import type { Inbox } from '~/types/communication/inboxes'
+import type { Label } from '~/types/communication/contacts'
 import type { WorkDepartment } from '~/types/work'
 import {
   COMMUNICATION_CONVERSATION_STATUS,
@@ -35,12 +30,12 @@ const apiBase = String(useRuntimeConfig().public.apiBase || '')
 const toast = useToast()
 
 const props = defineProps<{
-  conversation: CommunicationConversation
-  inbox?: CommunicationInbox | null
-  signals?: CommunicationConversationSignals
-  cannedResponses: CommunicationCannedResponse[]
+  conversation: Conversation
+  inbox?: Inbox | null
+  signals?: ConversationSignals
+  cannedResponses: CannedResponse[]
   departments: WorkDepartment[]
-  labels: CommunicationLabel[]
+  labels: Label[]
   canView: boolean
   canReply: boolean
   operational: boolean
@@ -50,7 +45,7 @@ const props = defineProps<{
   actionLoadingId?: number | null
   mobile?: boolean
   contextOpen?: boolean
-  timeline?: CommunicationConversationTimelineState | null
+  timeline?: ConversationTimelineState | null
   viewportActive?: boolean
   highlightedMessageId?: number | null
   actionDisabled?: boolean
@@ -59,18 +54,18 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
   toggleContext: []
-  action: [payload: CommunicationConversationActionPayload]
+  action: [payload: ConversationActionPayload]
   send: [
-    payload: CommunicationComposerPayload,
+    payload: ComposerPayload,
     acknowledge: (ok: boolean) => void
   ]
-  download: [message: CommunicationMessage, attachmentId: number, filename: string]
-  edit: [message: CommunicationMessage, text: string, acknowledge: (ok: boolean) => void]
-  revoke: [message: CommunicationMessage]
-  react: [message: CommunicationMessage, emoji: string | null]
-  vote: [message: CommunicationMessage, optionNames: string[]]
-  receipt: [message: CommunicationMessage, receipt: 'READ' | 'PLAYED']
-  recover: [message: CommunicationMessage, operation: 'UNAVAILABLE' | 'MEDIA_RETRY']
+  download: [message: Message, attachmentId: number, filename: string]
+  edit: [message: Message, text: string, acknowledge: (ok: boolean) => void]
+  revoke: [message: Message]
+  react: [message: Message, emoji: string | null]
+  vote: [message: Message, optionNames: string[]]
+  receipt: [message: Message, receipt: 'READ' | 'PLAYED']
+  recover: [message: Message, operation: 'UNAVAILABLE' | 'MEDIA_RETRY']
   presence: [presence: 'COMPOSING' | 'PAUSED' | 'RECORDING']
   loadOlder: [acknowledge: (ok: boolean) => void]
   loadNewer: [acknowledge: (ok: boolean) => void]
@@ -84,10 +79,10 @@ const emit = defineEmits<{
 
 const messagesContainer = ref<HTMLElement | null>(null)
 const messagesContent = ref<HTMLElement | null>(null)
-const replyTo = ref<CommunicationMessage | null>(null)
-const editTarget = ref<CommunicationMessage | null>(null)
+const replyTo = ref<Message | null>(null)
+const editTarget = ref<Message | null>(null)
 const editDraft = ref('')
-const revokeTarget = ref<CommunicationMessage | null>(null)
+const revokeTarget = ref<Message | null>(null)
 const activeHighlightedMessageId = ref<number | null>(null)
 const pendingNewMessages = ref(0)
 const followingLatest = ref(true)
@@ -125,11 +120,11 @@ const revokeOpen = computed({
   }
 })
 
-function quotedMessage(message: CommunicationMessage): CommunicationMessage | undefined {
+function quotedMessage(message: Message): Message | undefined {
   return props.conversation.messages?.find(item => item.id === message.reply_to_message_id)
 }
 
-function openEdit(message: CommunicationMessage): void {
+function openEdit(message: Message): void {
   editTarget.value = message
   editDraft.value = message.body || ''
 }
@@ -165,7 +160,7 @@ function confirmRevoke(): void {
   closeRevoke()
 }
 
-function messageActionItems(message: CommunicationMessage): MessageActionItem[][] {
+function messageActionItems(message: Message): MessageActionItem[][] {
   const remote = message.direction !== 'INTERNAL' && !message.metadata?.revoked
   const groups: MessageActionItem[][] = [[{
     label: 'Citar mensagem',
@@ -205,7 +200,7 @@ function messageActionItems(message: CommunicationMessage): MessageActionItem[][
   return groups
 }
 
-function isRemoteMessage(message: CommunicationMessage): boolean {
+function isRemoteMessage(message: Message): boolean {
   return message.direction !== 'INTERNAL' && !message.metadata?.revoked
 }
 
@@ -680,15 +675,15 @@ watch(
                         </p>
                       </button>
 
-                      <CommunicationMessageContent
+                      <MessageContent
                         class="relative"
                         :message="message"
                         :can-reply="canReply && outboundOperational"
                         :action-loading="actionLoadingId === message.id"
-                        @download="(target, attachmentId, filename) => emit('download', target, attachmentId, filename)"
-                        @vote="(target, options) => emit('vote', target, options)"
-                        @receipt="(target, receipt) => emit('receipt', target, receipt)"
-                        @recover="(target, operation) => emit('recover', target, operation)"
+                        @download="(target: Message, attachmentId: number, filename: string) => emit('download', target, attachmentId, filename)"
+                        @vote="(target: Message, options: string[]) => emit('vote', target, options)"
+                        @receipt="(target: Message, receipt: 'READ' | 'PLAYED') => emit('receipt', target, receipt)"
+                        @recover="(target: Message, operation: 'UNAVAILABLE' | 'MEDIA_RETRY') => emit('recover', target, operation)"
                       />
 
                       <div v-if="message.metadata?.reactions?.length" class="relative mt-2 flex flex-wrap gap-1">

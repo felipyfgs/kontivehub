@@ -1,13 +1,8 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
-import type {
-  CommunicationConversation,
-  CommunicationConversationAction,
-  CommunicationConversationActionPayload,
-  CommunicationConversationStatus,
-  CommunicationInbox,
-  CommunicationLabel
-} from '~/types/communication'
+import type { Conversation, ConversationAction, ConversationActionPayload, ConversationStatus } from '~/types/communication/conversations'
+import type { Inbox } from '~/types/communication/inboxes'
+import type { Label } from '~/types/communication/contacts'
 import type { WorkDepartment } from '~/types/work'
 import {
   communicationDisplayName,
@@ -16,10 +11,10 @@ import {
 } from '~/utils/communication'
 
 const props = defineProps<{
-  conversation: CommunicationConversation
-  inbox?: CommunicationInbox | null
+  conversation: Conversation
+  inbox?: Inbox | null
   departments: WorkDepartment[]
-  labels: CommunicationLabel[]
+  labels: Label[]
   canView: boolean
   canReply: boolean
   disabled?: boolean
@@ -28,15 +23,15 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  action: [payload: CommunicationConversationActionPayload]
+  action: [payload: ConversationActionPayload]
 }>()
 
-function emitAction(action: CommunicationConversationAction): void {
+function emitAction(action: ConversationAction): void {
   emit('action', { conversation: props.conversation, action })
 }
 
 function statusAction(
-  status: CommunicationConversationStatus,
+  status: ConversationStatus,
   label: string,
   icon: string
 ): DropdownMenuItem | null {

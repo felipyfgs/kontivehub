@@ -1,4 +1,4 @@
-import type { CommunicationConversationSortBy } from '~/types/communication'
+import type { ConversationSortBy } from '~/types/communication/conversations'
 
 /** Allowlist canônica — espelha App\Enums\Communication\ConversationListSort. */
 export const COMMUNICATION_SORT_BY_VALUES = [
@@ -9,13 +9,13 @@ export const COMMUNICATION_SORT_BY_VALUES = [
   'unread_desc',
   'priority_desc',
   'priority_asc'
-] as const satisfies readonly CommunicationConversationSortBy[]
+] as const satisfies readonly ConversationSortBy[]
 
-export const COMMUNICATION_DEFAULT_SORT_BY: CommunicationConversationSortBy = 'last_activity_desc'
+export const COMMUNICATION_DEFAULT_SORT_BY: ConversationSortBy = 'last_activity_desc'
 
 export const COMMUNICATION_SORT_BY_OPTIONS: Array<{
   label: string
-  value: CommunicationConversationSortBy
+  value: ConversationSortBy
 }> = [
   { label: 'Atividade (recente)', value: 'last_activity_desc' },
   { label: 'Atividade (antiga)', value: 'last_activity_asc' },
@@ -28,7 +28,7 @@ export const COMMUNICATION_SORT_BY_OPTIONS: Array<{
 
 export function isCommunicationConversationSortBy(
   value: unknown
-): value is CommunicationConversationSortBy {
+): value is ConversationSortBy {
   return typeof value === 'string'
     && (COMMUNICATION_SORT_BY_VALUES as readonly string[]).includes(value)
 }
@@ -39,7 +39,7 @@ export function isCommunicationConversationSortBy(
  */
 export function normalizeCommunicationConversationSortBy(
   value: unknown
-): CommunicationConversationSortBy {
+): ConversationSortBy {
   if (isCommunicationConversationSortBy(value)) {
     return value
   }

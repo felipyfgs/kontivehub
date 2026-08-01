@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { CommunicationFlowsCatalog } from '~/composables/useCommunicationFlowsCatalog'
+import type { FlowsCatalog } from '~/composables/useCommunicationFlowsCatalog'
 
 const { catalog } = defineProps<{
-  catalog: CommunicationFlowsCatalog
+  catalog: FlowsCatalog
 }>()
 
 const createOpen = catalog.createOpen

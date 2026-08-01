@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { VueWrapper } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
 import MessageContent from '../../app/components/communication/MessageContent.vue'
-import type { CommunicationMessage } from '../../app/types/communication'
+import type { Message } from '../../app/types/communication/messages'
 
 let wrapper: VueWrapper | null = null
 
@@ -14,7 +14,7 @@ const UButtonStub = defineComponent({
   }
 })
 
-function message(overrides: Partial<CommunicationMessage> = {}): CommunicationMessage {
+function message(overrides: Partial<Message> = {}): Message {
   return {
     id: 1,
     conversation_id: 1,
@@ -106,7 +106,7 @@ describe('MessageContent — disponibilidade de mídia', () => {
     expect(wrapper.get(`[data-testid="communication-message-availability-${state}"]`).text()).toContain(label)
   })
 
-  it('não deixa balão vazio quando o payload legado não contém corpo, conteúdo ou anexo', async () => {
+  it('não deixa balão vazio quando o payload não contém corpo, conteúdo ou anexo', async () => {
     wrapper = await mountSuspended(MessageContent, {
       attachTo: document.body,
       props: { message: message(), canReply: false },

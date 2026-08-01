@@ -1,12 +1,12 @@
-import type { CommunicationInboxStatus } from '~/types/communication'
+import type { InboxStatus } from '~/types/communication/inboxes'
 
-export type CommunicationSessionAction = 'connect' | 'disconnect' | 'logout'
+export type SessionAction = 'connect' | 'disconnect' | 'logout'
 
 /** Matriz canônica das ações administrativas por estado e credencial. */
 export function communicationSessionActions(
-  status: CommunicationInboxStatus,
+  status: InboxStatus,
   hasCredentials: boolean
-): CommunicationSessionAction[] {
+): SessionAction[] {
   if (status === 'CONNECTING') return ['disconnect']
   if (status === 'CONNECTED') {
     return hasCredentials ? ['disconnect', 'logout'] : ['disconnect']

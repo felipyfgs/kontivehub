@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
-import type { CommunicationContactSortField } from '~/types/communication'
+import type { ContactSortField } from '~/types/communication/contacts'
 import type { DataTableFilterDefinition, DataTableFilterModel } from '~/types/data-table-filter'
 
 const props = defineProps<{
@@ -9,7 +9,7 @@ const props = defineProps<{
   models: readonly DataTableFilterModel[]
   loading: boolean
   resetKey: number
-  sort: CommunicationContactSortField | null
+  sort: ContactSortField | null
   sortDirection: 'asc' | 'desc' | null
   canManage: boolean
 }>()
@@ -45,7 +45,7 @@ onBeforeUnmount(() => {
   if (searchDebounce) clearTimeout(searchDebounce)
 })
 
-const sortOptions: Array<{ label: string, value: CommunicationContactSortField }> = [
+const sortOptions: Array<{ label: string, value: ContactSortField }> = [
   { label: 'Nome', value: 'name' },
   { label: 'Data de criação', value: 'created_at' },
   { label: 'Identificador', value: 'id' }

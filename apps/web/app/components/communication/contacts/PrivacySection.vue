@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import type { CommunicationContact } from '~/types/communication'
+import type { Contact } from '~/types/communication/contacts'
 import {
   COMMUNICATION_CONTACT_ACTION_LABELS,
   COMMUNICATION_CONTACT_DANGER_SOFT_CLASS
 } from '~/utils/communication-contacts'
 
 defineProps<{
-  contact: CommunicationContact
+  contact: Contact
   canManage: boolean
   exporting: boolean
 }>()

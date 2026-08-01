@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { VueWrapper } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
 import ConversationList from '../../app/components/communication/ConversationList.vue'
-import type { CommunicationConversation, CommunicationInbox } from '../../app/types/communication'
+import type { Conversation } from '../../app/types/communication/conversations'
+import type { Inbox } from '../../app/types/communication/inboxes'
 
 let wrapper: VueWrapper | null = null
 
@@ -39,7 +40,7 @@ afterEach(() => {
 
 describe('ConversationList — foco acessível', () => {
   it('foca e mantém visível a conversa pedida por id estável', async () => {
-    const conversations: CommunicationConversation[] = [{
+    const conversations: Conversation[] = [{
       id: 42,
       inbox_id: 7,
       status: 'OPEN',
@@ -53,7 +54,7 @@ describe('ConversationList — foco acessível', () => {
         phone: '+5511999991234'
       }
     }]
-    const inboxes: CommunicationInbox[] = [{
+    const inboxes: Inbox[] = [{
       id: 7,
       name: 'Atendimento',
       status: 'CONNECTED',
@@ -122,7 +123,7 @@ describe('ConversationList — foco acessível', () => {
   })
 
   it('emite somente as conversas visíveis para preparação da timeline', async () => {
-    const conversations: CommunicationConversation[] = Array.from({ length: 12 }, (_, index) => ({
+    const conversations: Conversation[] = Array.from({ length: 12 }, (_, index) => ({
       id: index + 1,
       inbox_id: 7,
       status: 'OPEN',
@@ -195,7 +196,7 @@ describe('ConversationList — foco acessível', () => {
 
   it('acompanha a fonte em rem e materializa uma conversa distante antes de focar', async () => {
     document.documentElement.style.fontSize = '20px'
-    const conversations: CommunicationConversation[] = Array.from({ length: 200 }, (_, index) => ({
+    const conversations: Conversation[] = Array.from({ length: 200 }, (_, index) => ({
       id: index + 1,
       inbox_id: 7,
       status: 'OPEN',
@@ -207,7 +208,7 @@ describe('ConversationList — foco acessível', () => {
         name: `Contato ${index + 1}`
       }
     }))
-    const inboxes: CommunicationInbox[] = [{
+    const inboxes: Inbox[] = [{
       id: 7,
       name: 'Atendimento',
       status: 'CONNECTED',
@@ -259,7 +260,7 @@ describe('ConversationList — foco acessível', () => {
   })
 
   it('alterna somente a seleção pelo checkbox com clique, Space ou Enter', async () => {
-    const conversations: CommunicationConversation[] = [{
+    const conversations: Conversation[] = [{
       id: 42,
       inbox_id: 7,
       status: 'OPEN',

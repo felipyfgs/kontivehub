@@ -1,10 +1,6 @@
 import Echo from 'laravel-echo'
 import Pusher from 'pusher-js'
-import type {
-  CommunicationRealtimeEvent,
-  CommunicationRealtimeService,
-  CommunicationRealtimeState
-} from '~/types/communication'
+import type { RealtimeEvent, RealtimeService, RealtimeState } from '~/types/communication/realtime'
 import {
   communicationRealtimeConfiguration,
   communicationRealtimeStateForConnection,
@@ -34,7 +30,7 @@ export default defineNuxtPlugin(() => {
     communicationEnabled: runtime.communicationEnabled,
     reverb: runtime.reverb
   })
-  const state = ref<CommunicationRealtimeState>(settings.enabled ? 'connecting' : 'disabled')
+  const state = ref<RealtimeState>(settings.enabled ? 'connecting' : 'disabled')
   const subscribedChannelCount = ref(0)
   const transportState = ref<'connecting' | 'connected' | 'unavailable'>(
     settings.enabled ? 'connecting' : 'unavailable'
@@ -56,7 +52,7 @@ export default defineNuxtPlugin(() => {
     state.value = 'connecting'
   }
 
-  const noopService: CommunicationRealtimeService = {
+  const noopService: RealtimeService = {
     enabled: false,
     state: readonly(state),
     channelsReady: computed(() => false),
@@ -124,11 +120,11 @@ export default defineNuxtPlugin(() => {
     refreshRealtimeState()
   })
 
-  const handlers = new Map<number, Set<(event: CommunicationRealtimeEvent) => void>>()
-  const channelCallbacks = new Map<number, (event: CommunicationRealtimeEvent) => void>()
+  const handlers = new Map<number, Set<(event: RealtimeEvent) => void>>()
+  const channelCallbacks = new Map<number, (event: RealtimeEvent) => void>()
   const subscribedInboxes = new Set<number>()
-  const tenantHandlers = new Map<number, Set<(event: CommunicationRealtimeEvent) => void>>()
-  const tenantCallbacks = new Map<number, (event: CommunicationRealtimeEvent) => void>()
+  const tenantHandlers = new Map<number, Set<(event: RealtimeEvent) => void>>()
+  const tenantCallbacks = new Map<number, (event: RealtimeEvent) => void>()
   const subscribedTenants = new Set<number>()
 
   function markSubscribed(kind: 'inbox' | 'tenant', id: number): void {
@@ -147,7 +143,7 @@ export default defineNuxtPlugin(() => {
     refreshRealtimeState()
   }
 
-  const service: CommunicationRealtimeService = {
+  const service: RealtimeService = {
     enabled: true,
     state: readonly(state),
     channelsReady: computed(() => subscribedChannelCount.value > 0),
@@ -157,7 +153,7 @@ export default defineNuxtPlugin(() => {
       handlers.set(inboxId, currentHandlers)
 
       if (!channelCallbacks.has(inboxId)) {
-        const channelCallback = (event: CommunicationRealtimeEvent) => {
+        const channelCallback = (event: RealtimeEvent) => {
           for (const subscriber of handlers.get(inboxId) ?? []) subscriber(event)
         }
         channelCallbacks.set(inboxId, channelCallback)
@@ -194,7 +190,7 @@ export default defineNuxtPlugin(() => {
       tenantHandlers.set(tenantId, currentHandlers)
 
       if (!tenantCallbacks.has(tenantId)) {
-        const channelCallback = (event: CommunicationRealtimeEvent) => {
+        const channelCallback = (event: RealtimeEvent) => {
           for (const subscriber of tenantHandlers.get(tenantId) ?? []) subscriber(event)
         }
         tenantCallbacks.set(tenantId, channelCallback)

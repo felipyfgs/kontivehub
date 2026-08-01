@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CommunicationAttachment, CommunicationMessage } from '~/types/communication'
+import type { Attachment, Message } from '~/types/communication/messages'
 import {
   communicationAttachmentFilename,
   communicationAvailabilityPlaceholder,
@@ -8,16 +8,16 @@ import {
 } from '~/utils/communication'
 
 const props = defineProps<{
-  message: CommunicationMessage
+  message: Message
   canReply: boolean
   actionLoading?: boolean
 }>()
 
 const emit = defineEmits<{
-  download: [message: CommunicationMessage, attachmentId: number, filename: string]
-  vote: [message: CommunicationMessage, optionNames: string[]]
-  receipt: [message: CommunicationMessage, receipt: 'READ' | 'PLAYED']
-  recover: [message: CommunicationMessage, operation: 'MEDIA_RETRY']
+  download: [message: Message, attachmentId: number, filename: string]
+  vote: [message: Message, optionNames: string[]]
+  receipt: [message: Message, receipt: 'READ' | 'PLAYED']
+  recover: [message: Message, operation: 'MEDIA_RETRY']
 }>()
 
 const pollSelection = ref<string[]>([])
@@ -38,7 +38,7 @@ const selectableOptions = computed(() => Math.max(
   Math.min(pollOptions.value.length || 1, props.message.metadata?.poll?.selectable_options || 1)
 ))
 
-function attachmentIcon(attachment: CommunicationAttachment): string {
+function attachmentIcon(attachment: Attachment): string {
   if (props.message.kind === 'STICKER') return 'i-lucide-sticker'
   if (attachment.mime_type.startsWith('image/')) return 'i-lucide-image'
   if (attachment.mime_type.startsWith('audio/')) return 'i-lucide-audio-lines'
@@ -46,14 +46,14 @@ function attachmentIcon(attachment: CommunicationAttachment): string {
   return 'i-lucide-file-text'
 }
 
-function attachmentSize(attachment: CommunicationAttachment): string {
+function attachmentSize(attachment: Attachment): string {
   if (attachment.size_bytes < 1024) return `${attachment.size_bytes} B`
   const kilobytes = attachment.size_bytes / 1024
   if (kilobytes < 1024) return `${Math.ceil(kilobytes)} KB`
   return `${(kilobytes / 1024).toFixed(1)} MB`
 }
 
-function downloadAttachment(attachment: CommunicationAttachment): void {
+function downloadAttachment(attachment: Attachment): void {
   emit(
     'download',
     props.message,

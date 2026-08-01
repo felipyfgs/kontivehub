@@ -409,7 +409,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** CommunicationDataController downloadAttachment */
+        /** DataController downloadAttachment */
         get: operations["getCommunicationAttachmentsAttachmentDownload"];
         put?: never;
         post?: never;
@@ -426,7 +426,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** CommunicationDataController previewAttachment */
+        /** DataController previewAttachment */
         get: operations["getCommunicationAttachmentsAttachmentPreview"];
         put?: never;
         post?: never;
@@ -443,9 +443,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** CommunicationAutomationController index */
+        /** AutomationController index */
         get: operations["getCommunicationAutomationPolicies"];
-        /** CommunicationAutomationController upsert */
+        /** AutomationController upsert */
         put: operations["putCommunicationAutomationPolicies"];
         post?: never;
         delete?: never;
@@ -461,10 +461,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** CommunicationCatalogController cannedResponses */
+        /** CatalogController cannedResponses */
         get: operations["getCommunicationCannedResponses"];
         put?: never;
-        /** CommunicationCatalogController storeCannedResponse */
+        /** CatalogController storeCannedResponse */
         post: operations["postCommunicationCannedResponses"];
         delete?: never;
         options?: never;
@@ -480,10 +480,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** CommunicationCatalogController updateCannedResponse */
+        /** CatalogController updateCannedResponse */
         put: operations["putCommunicationCannedResponsesCanned"];
         post?: never;
-        /** CommunicationCatalogController deleteCannedResponse */
+        /** CatalogController deleteCannedResponse */
         delete: operations["deleteCommunicationCannedResponsesCanned"];
         options?: never;
         head?: never;
@@ -499,7 +499,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationCatalogController deactivateCannedResponse */
+        /** CatalogController deactivateCannedResponse */
         post: operations["postCommunicationCannedResponsesCannedDeactivate"];
         delete?: never;
         options?: never;
@@ -516,7 +516,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationCatalogController duplicateCannedResponse */
+        /** CatalogController duplicateCannedResponse */
         post: operations["postCommunicationCannedResponsesCannedDuplicate"];
         delete?: never;
         options?: never;
@@ -533,7 +533,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationCatalogController renderCannedResponse */
+        /** CatalogController renderCannedResponse */
         post: operations["postCommunicationCannedResponsesCannedRender"];
         delete?: never;
         options?: never;
@@ -548,9 +548,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** CommunicationAutomationController recipients */
+        /** AutomationController recipients */
         get: operations["getCommunicationClientsClientAutomationRecipients"];
-        /** CommunicationAutomationController updateRecipients */
+        /** AutomationController updateRecipients */
         put: operations["putCommunicationClientsClientAutomationRecipients"];
         post?: never;
         delete?: never;
@@ -566,10 +566,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** CommunicationContactController index */
+        /** ContactController index */
         get: operations["getCommunicationContacts"];
         put?: never;
-        /** CommunicationContactController store */
+        /** ContactController store */
         post: operations["postCommunicationContacts"];
         delete?: never;
         options?: never;
@@ -586,7 +586,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationContactController search */
+        /** ContactController search */
         post: operations["postCommunicationContactsSearch"];
         delete?: never;
         options?: never;
@@ -601,14 +601,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** CommunicationContactController show */
+        /** ContactController show */
         get: operations["getCommunicationContactsContact"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** CommunicationContactController update */
+        /** ContactController update */
         patch: operations["patchCommunicationContactsContact"];
         trace?: never;
     };
@@ -619,7 +619,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** CommunicationDataController exportContact */
+        /** DataController exportContact */
         get: operations["getCommunicationContactsContactExport"];
         put?: never;
         post?: never;
@@ -638,7 +638,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationContactController addIdentity */
+        /** ContactController addIdentity */
         post: operations["postCommunicationContactsContactIdentities"];
         delete?: never;
         options?: never;
@@ -656,7 +656,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** CommunicationDataController purgeContact */
+        /** DataController purgeContact */
         delete: operations["deleteCommunicationContactsContactPersonalData"];
         options?: never;
         head?: never;
@@ -670,7 +670,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** CommunicationContactController sharedContent */
+        /** ContactController sharedContent */
         get: operations["getCommunicationContactsContactSharedContent"];
         put?: never;
         post?: never;
@@ -756,10 +756,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** CommunicationConversationController index */
+        /** ConversationController index */
         get: operations["getCommunicationConversations"];
         put?: never;
-        /** CommunicationConversationController store */
+        /** ConversationController store */
         post: operations["postCommunicationConversations"];
         delete?: never;
         options?: never;
@@ -774,14 +774,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** CommunicationConversationController show */
+        /** ConversationController show */
         get: operations["getCommunicationConversationsConversation"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** CommunicationConversationController update */
+        /** ConversationController update */
         patch: operations["patchCommunicationConversationsConversation"];
         trace?: never;
     };
@@ -793,7 +793,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** CommunicationConversationGatewayController disappearing */
+        /** ConversationGatewayController disappearing */
         put: operations["putCommunicationConversationsConversationDisappearing"];
         post?: never;
         delete?: never;
@@ -810,10 +810,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** CommunicationConversationController addLabel */
+        /** ConversationController addLabel */
         put: operations["putCommunicationConversationsConversationLabelsLabel"];
         post?: never;
-        /** CommunicationConversationController removeLabel */
+        /** ConversationController removeLabel */
         delete: operations["deleteCommunicationConversationsConversationLabelsLabel"];
         options?: never;
         head?: never;
@@ -827,10 +827,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** CommunicationConversationController messages */
+        /** ConversationController messages */
         get: operations["getCommunicationConversationsConversationMessages"];
         put?: never;
-        /** CommunicationConversationController send */
+        /** ConversationController send */
         post: operations["postCommunicationConversationsConversationMessages"];
         delete?: never;
         options?: never;
@@ -848,7 +848,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** CommunicationConversationGatewayController revoke */
+        /** ConversationGatewayController revoke */
         delete: operations["deleteCommunicationConversationsConversationMessagesMessage"];
         options?: never;
         head?: never;
@@ -863,7 +863,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** CommunicationConversationGatewayController edit */
+        /** ConversationGatewayController edit */
         put: operations["putCommunicationConversationsConversationMessagesMessageEdit"];
         post?: never;
         delete?: never;
@@ -881,7 +881,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationConversationGatewayController history */
+        /** ConversationGatewayController history */
         post: operations["postCommunicationConversationsConversationMessagesMessageHistory"];
         delete?: never;
         options?: never;
@@ -898,7 +898,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationConversationGatewayController votePoll */
+        /** ConversationGatewayController votePoll */
         post: operations["postCommunicationConversationsConversationMessagesMessagePollVotes"];
         delete?: never;
         options?: never;
@@ -914,7 +914,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** CommunicationConversationGatewayController react */
+        /** ConversationGatewayController react */
         put: operations["putCommunicationConversationsConversationMessagesMessageReaction"];
         post?: never;
         delete?: never;
@@ -932,7 +932,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationConversationGatewayController receipt */
+        /** ConversationGatewayController receipt */
         post: operations["postCommunicationConversationsConversationMessagesMessageReceipts"];
         delete?: never;
         options?: never;
@@ -949,7 +949,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationConversationGatewayController recovery */
+        /** ConversationGatewayController recovery */
         post: operations["postCommunicationConversationsConversationMessagesMessageRecovery"];
         delete?: never;
         options?: never;
@@ -965,7 +965,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** CommunicationConversationGatewayController chatPresence */
+        /** ConversationGatewayController chatPresence */
         put: operations["putCommunicationConversationsConversationPresence"];
         post?: never;
         delete?: never;
@@ -983,7 +983,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationConversationGatewayController subscribePresence */
+        /** ConversationGatewayController subscribePresence */
         post: operations["postCommunicationConversationsConversationPresenceSubscribe"];
         delete?: never;
         options?: never;
@@ -999,7 +999,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** CommunicationConversationController updateReadState */
+        /** ConversationController updateReadState */
         put: operations["putCommunicationConversationsConversationReadState"];
         post?: never;
         delete?: never;
@@ -1015,7 +1015,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** CommunicationConversationController sharedContent */
+        /** ConversationController sharedContent */
         get: operations["getCommunicationConversationsConversationSharedContent"];
         put?: never;
         post?: never;
@@ -1033,7 +1033,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** CommunicationConversationGatewayController state */
+        /** ConversationGatewayController state */
         put: operations["putCommunicationConversationsConversationState"];
         post?: never;
         delete?: never;
@@ -1049,7 +1049,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** CommunicationDataController sync */
+        /** DataController sync */
         get: operations["getCommunicationEvents"];
         put?: never;
         post?: never;
@@ -1069,11 +1069,11 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** CommunicationFlowController destroyBinding */
+        /** FlowController destroyBinding */
         delete: operations["deleteCommunicationFlowBindingsBinding"];
         options?: never;
         head?: never;
-        /** CommunicationFlowController updateBinding */
+        /** FlowController updateBinding */
         patch: operations["patchCommunicationFlowBindingsBinding"];
         trace?: never;
     };
@@ -1086,7 +1086,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationFlowController disableBinding */
+        /** FlowController disableBinding */
         post: operations["postCommunicationFlowBindingsBindingDisable"];
         delete?: never;
         options?: never;
@@ -1103,7 +1103,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationFlowController enableBinding */
+        /** FlowController enableBinding */
         post: operations["postCommunicationFlowBindingsBindingEnable"];
         delete?: never;
         options?: never;
@@ -1118,7 +1118,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** CommunicationFlowRunController index */
+        /** FlowRunController index */
         get: operations["getCommunicationFlowRuns"];
         put?: never;
         post?: never;
@@ -1135,7 +1135,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** CommunicationFlowRunController show */
+        /** FlowRunController show */
         get: operations["getCommunicationFlowRunsRun"];
         put?: never;
         post?: never;
@@ -1154,7 +1154,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationFlowRunController handoff */
+        /** FlowRunController handoff */
         post: operations["postCommunicationFlowRunsRunHandoff"];
         delete?: never;
         options?: never;
@@ -1171,7 +1171,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationFlowRunController pause */
+        /** FlowRunController pause */
         post: operations["postCommunicationFlowRunsRunPause"];
         delete?: never;
         options?: never;
@@ -1188,7 +1188,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationFlowRunController restart */
+        /** FlowRunController restart */
         post: operations["postCommunicationFlowRunsRunRestart"];
         delete?: never;
         options?: never;
@@ -1205,7 +1205,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationFlowRunController resume */
+        /** FlowRunController resume */
         post: operations["postCommunicationFlowRunsRunResume"];
         delete?: never;
         options?: never;
@@ -1222,7 +1222,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationFlowRunController stop */
+        /** FlowRunController stop */
         post: operations["postCommunicationFlowRunsRunStop"];
         delete?: never;
         options?: never;
@@ -1237,10 +1237,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** CommunicationFlowController index */
+        /** FlowController index */
         get: operations["getCommunicationFlows"];
         put?: never;
-        /** CommunicationFlowController store */
+        /** FlowController store */
         post: operations["postCommunicationFlows"];
         delete?: never;
         options?: never;
@@ -1255,15 +1255,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** CommunicationFlowController show */
+        /** FlowController show */
         get: operations["getCommunicationFlowsFlow"];
         put?: never;
         post?: never;
-        /** CommunicationFlowController destroy */
+        /** FlowController destroy */
         delete: operations["deleteCommunicationFlowsFlow"];
         options?: never;
         head?: never;
-        /** CommunicationFlowController update */
+        /** FlowController update */
         patch: operations["patchCommunicationFlowsFlow"];
         trace?: never;
     };
@@ -1274,10 +1274,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** CommunicationFlowController indexBindings */
+        /** FlowController indexBindings */
         get: operations["getCommunicationFlowsFlowBindings"];
         put?: never;
-        /** CommunicationFlowController storeBinding */
+        /** FlowController storeBinding */
         post: operations["postCommunicationFlowsFlowBindings"];
         delete?: never;
         options?: never;
@@ -1294,7 +1294,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationFlowController cloneFlow */
+        /** FlowController cloneFlow */
         post: operations["postCommunicationFlowsFlowClone"];
         delete?: never;
         options?: never;
@@ -1309,9 +1309,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** CommunicationFlowController showDraft */
+        /** FlowController showDraft */
         get: operations["getCommunicationFlowsFlowDraft"];
-        /** CommunicationFlowController updateDraft */
+        /** FlowController updateDraft */
         put: operations["putCommunicationFlowsFlowDraft"];
         post?: never;
         delete?: never;
@@ -1329,7 +1329,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationFlowController dryRun */
+        /** FlowController dryRun */
         post: operations["postCommunicationFlowsFlowDryRun"];
         delete?: never;
         options?: never;
@@ -1346,7 +1346,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationFlowController previewGraph */
+        /** FlowController previewGraph */
         post: operations["postCommunicationFlowsFlowPreview"];
         delete?: never;
         options?: never;
@@ -1363,7 +1363,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationFlowController publish */
+        /** FlowController publish */
         post: operations["postCommunicationFlowsFlowPublish"];
         delete?: never;
         options?: never;
@@ -1380,7 +1380,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationFlowController validateGraph */
+        /** FlowController validateGraph */
         post: operations["postCommunicationFlowsFlowValidate"];
         delete?: never;
         options?: never;
@@ -1397,7 +1397,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationFlowController cloneVersion */
+        /** FlowController cloneVersion */
         post: operations["postCommunicationFlowsFlowVersionsVersionClone"];
         delete?: never;
         options?: never;
@@ -1414,7 +1414,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationContactController linkIdentity */
+        /** ContactController linkIdentity */
         post: operations["postCommunicationIdentitiesIdentityLinks"];
         delete?: never;
         options?: never;
@@ -1432,7 +1432,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** CommunicationContactController unlinkIdentity */
+        /** ContactController unlinkIdentity */
         delete: operations["deleteCommunicationIdentitiesIdentityLinksLink"];
         options?: never;
         head?: never;
@@ -1446,10 +1446,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** CommunicationInboxController index */
+        /** InboxController index */
         get: operations["getCommunicationInboxes"];
         put?: never;
-        /** CommunicationInboxController store */
+        /** InboxController store */
         post: operations["postCommunicationInboxes"];
         delete?: never;
         options?: never;
@@ -1467,11 +1467,11 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** CommunicationInboxController destroy */
+        /** InboxController destroy */
         delete: operations["deleteCommunicationInboxesInbox"];
         options?: never;
         head?: never;
-        /** CommunicationInboxController update */
+        /** InboxController update */
         patch: operations["patchCommunicationInboxesInbox"];
         trace?: never;
     };
@@ -1484,7 +1484,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationInboxGatewayController markStateClean */
+        /** InboxGatewayController markStateClean */
         post: operations["postCommunicationInboxesInboxAppStateMarkClean"];
         delete?: never;
         options?: never;
@@ -1501,7 +1501,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationInboxGatewayController syncState */
+        /** InboxGatewayController syncState */
         post: operations["postCommunicationInboxesInboxAppStateSync"];
         delete?: never;
         options?: never;
@@ -1516,9 +1516,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** CommunicationInboxGatewayController blocklist */
+        /** InboxGatewayController blocklist */
         get: operations["getCommunicationInboxesInboxBlocklist"];
-        /** CommunicationInboxGatewayController updateBlocklist */
+        /** InboxGatewayController updateBlocklist */
         put: operations["putCommunicationInboxesInboxBlocklist"];
         post?: never;
         delete?: never;
@@ -1536,7 +1536,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationInboxGatewayController resolveBusinessLink */
+        /** InboxGatewayController resolveBusinessLink */
         post: operations["postCommunicationInboxesInboxContactsBusinessLinkResolve"];
         delete?: never;
         options?: never;
@@ -1553,7 +1553,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationInboxGatewayController businessProfiles */
+        /** InboxGatewayController businessProfiles */
         post: operations["postCommunicationInboxesInboxContactsBusinessProfiles"];
         delete?: never;
         options?: never;
@@ -1570,7 +1570,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationInboxGatewayController checkUsers */
+        /** InboxGatewayController checkUsers */
         post: operations["postCommunicationInboxesInboxContactsCheck"];
         delete?: never;
         options?: never;
@@ -1587,7 +1587,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationInboxGatewayController userInfo */
+        /** InboxGatewayController userInfo */
         post: operations["postCommunicationInboxesInboxContactsInfo"];
         delete?: never;
         options?: never;
@@ -1604,7 +1604,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationInboxGatewayController profilePicture */
+        /** InboxGatewayController profilePicture */
         post: operations["postCommunicationInboxesInboxContactsProfilePicture"];
         delete?: never;
         options?: never;
@@ -1621,7 +1621,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationInboxGatewayController contactQrLink */
+        /** InboxGatewayController contactQrLink */
         post: operations["postCommunicationInboxesInboxContactsQrLink"];
         delete?: never;
         options?: never;
@@ -1638,7 +1638,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationInboxGatewayController resolveContactQr */
+        /** InboxGatewayController resolveContactQr */
         post: operations["postCommunicationInboxesInboxContactsQrResolve"];
         delete?: never;
         options?: never;
@@ -1654,7 +1654,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** CommunicationInboxGatewayController defaultDisappearing */
+        /** InboxGatewayController defaultDisappearing */
         put: operations["putCommunicationInboxesInboxDefaultDisappearing"];
         post?: never;
         delete?: never;
@@ -1671,7 +1671,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** CommunicationInboxController replaceMembers */
+        /** InboxController replaceMembers */
         put: operations["putCommunicationInboxesInboxMembers"];
         post?: never;
         delete?: never;
@@ -1688,7 +1688,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** CommunicationInboxGatewayController globalPresence */
+        /** InboxGatewayController globalPresence */
         put: operations["putCommunicationInboxesInboxPresence"];
         post?: never;
         delete?: never;
@@ -1704,9 +1704,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** CommunicationInboxGatewayController privacy */
+        /** InboxGatewayController privacy */
         get: operations["getCommunicationInboxesInboxPrivacy"];
-        /** CommunicationInboxGatewayController updatePrivacy */
+        /** InboxGatewayController updatePrivacy */
         put: operations["putCommunicationInboxesInboxPrivacy"];
         post?: never;
         delete?: never;
@@ -1724,7 +1724,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationInboxController startPairing */
+        /** InboxController startPairing */
         post: operations["postCommunicationInboxesInboxSessionConnect"];
         delete?: never;
         options?: never;
@@ -1741,7 +1741,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationInboxGatewayController disconnect */
+        /** InboxGatewayController disconnect */
         post: operations["postCommunicationInboxesInboxSessionDisconnect"];
         delete?: never;
         options?: never;
@@ -1758,7 +1758,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationInboxController revoke */
+        /** InboxController revoke */
         post: operations["postCommunicationInboxesInboxSessionLogout"];
         delete?: never;
         options?: never;
@@ -1775,7 +1775,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationInboxGatewayController pairPhone */
+        /** InboxGatewayController pairPhone */
         post: operations["postCommunicationInboxesInboxSessionPairPhone"];
         delete?: never;
         options?: never;
@@ -1791,7 +1791,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** CommunicationInboxGatewayController passive */
+        /** InboxGatewayController passive */
         put: operations["putCommunicationInboxesInboxSessionPassive"];
         post?: never;
         delete?: never;
@@ -1809,7 +1809,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationInboxGatewayController confirmPasskey */
+        /** InboxGatewayController confirmPasskey */
         post: operations["postCommunicationInboxesInboxSessionPasskeyConfirm"];
         delete?: never;
         options?: never;
@@ -1826,7 +1826,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** CommunicationInboxGatewayController respondPasskey */
+        /** InboxGatewayController respondPasskey */
         post: operations["postCommunicationInboxesInboxSessionPasskeyRespond"];
         delete?: never;
         options?: never;
@@ -1841,7 +1841,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** CommunicationInboxGatewayController sessionStatus */
+        /** InboxGatewayController sessionStatus */
         get: operations["getCommunicationInboxesInboxSessionStatus"];
         put?: never;
         post?: never;
@@ -1858,10 +1858,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** CommunicationCatalogController labels */
+        /** CatalogController labels */
         get: operations["getCommunicationLabels"];
         put?: never;
-        /** CommunicationCatalogController storeLabel */
+        /** CatalogController storeLabel */
         post: operations["postCommunicationLabels"];
         delete?: never;
         options?: never;
@@ -1879,7 +1879,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** CommunicationCatalogController deleteLabel */
+        /** CatalogController deleteLabel */
         delete: operations["deleteCommunicationLabelsLabel"];
         options?: never;
         head?: never;
@@ -1893,7 +1893,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** CommunicationCatalogController outboundCapabilities */
+        /** CatalogController outboundCapabilities */
         get: operations["getCommunicationOutboundCapabilities"];
         put?: never;
         post?: never;
@@ -1910,7 +1910,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** CommunicationProfilePictureController show */
+        /** ProfilePictureController show */
         get: operations["getCommunicationProfilePicturesProfileVersion"];
         put?: never;
         post?: never;
@@ -1933,7 +1933,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** CommunicationInboxController updateTenantSettings */
+        /** InboxController updateTenantSettings */
         patch: operations["patchCommunicationSettings"];
         trace?: never;
     };
@@ -3276,7 +3276,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** PagtowebPaymentCountController consult */
+        /** PagtoWebPaymentCountController consult */
         post: operations["postFiscalGuidesPaymentCountClientsClientConsult"];
         delete?: never;
         options?: never;
@@ -3291,7 +3291,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** PagtowebPaymentCountController history */
+        /** PagtoWebPaymentCountController history */
         get: operations["getFiscalGuidesPaymentCountClientsClientHistory"];
         put?: never;
         post?: never;
@@ -3310,7 +3310,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** PagtowebPaymentListController consult */
+        /** PagtoWebPaymentListController consult */
         post: operations["postFiscalGuidesPaymentsClientsClientConsult"];
         delete?: never;
         options?: never;
@@ -3325,7 +3325,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** PagtowebPaymentListController history */
+        /** PagtoWebPaymentListController history */
         get: operations["getFiscalGuidesPaymentsClientsClientHistory"];
         put?: never;
         post?: never;
@@ -3359,7 +3359,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** PagtowebArrecadacaoReceiptController history */
+        /** PagtoWebArrecadacaoReceiptController history */
         get: operations["getFiscalGuidesReceiptsClientsClientHistory"];
         put?: never;
         post?: never;
@@ -3378,7 +3378,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** PagtowebArrecadacaoReceiptController request */
+        /** PagtoWebArrecadacaoReceiptController request */
         post: operations["postFiscalGuidesReceiptsClientsClientRequest"];
         delete?: never;
         options?: never;
@@ -3393,7 +3393,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** PagtowebArrecadacaoReceiptController download */
+        /** PagtoWebArrecadacaoReceiptController download */
         get: operations["getFiscalGuidesReceiptsClientsClientReceiptDownload"];
         put?: never;
         post?: never;
@@ -7500,7 +7500,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** WorkDashboardController calendar */
+        /** DashboardController calendar */
         get: operations["getWorkCalendar"];
         put?: never;
         post?: never;
@@ -7517,7 +7517,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** WorkDashboardController calendarDay */
+        /** DashboardController calendarDay */
         get: operations["getWorkCalendarDay"];
         put?: never;
         post?: never;
@@ -7534,10 +7534,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** WorkDepartmentController index */
+        /** DepartmentController index */
         get: operations["getWorkDepartments"];
         put?: never;
-        /** WorkDepartmentController store */
+        /** DepartmentController store */
         post: operations["postWorkDepartments"];
         delete?: never;
         options?: never;
@@ -7558,7 +7558,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** WorkDepartmentController update */
+        /** DepartmentController update */
         patch: operations["patchWorkDepartmentsDepartment"];
         trace?: never;
     };
@@ -7571,7 +7571,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** WorkDepartmentController assignMembership */
+        /** DepartmentController assignMembership */
         post: operations["postWorkDepartmentsDepartmentAssignMembership"];
         delete?: never;
         options?: never;
@@ -7588,7 +7588,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** WorkDashboardController createExport */
+        /** DashboardController createExport */
         post: operations["postWorkExports"];
         delete?: never;
         options?: never;
@@ -7603,7 +7603,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** WorkDashboardController showExport */
+        /** DashboardController showExport */
         get: operations["getWorkExportsExport"];
         put?: never;
         post?: never;
@@ -7620,7 +7620,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** WorkDashboardController downloadExport */
+        /** DashboardController downloadExport */
         get: operations["getWorkExportsExportDownload"];
         put?: never;
         post?: never;
@@ -7637,7 +7637,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** WorkProcessGenerationController show */
+        /** ProcessGenerationController show */
         get: operations["getWorkGenerationBatchesBatch"];
         put?: never;
         post?: never;
@@ -7656,7 +7656,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** WorkProcessGenerationController confirm */
+        /** ProcessGenerationController confirm */
         post: operations["postWorkGenerationBatchesBatchConfirm"];
         delete?: never;
         options?: never;
@@ -7673,7 +7673,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** WorkProcessGenerationController retry */
+        /** ProcessGenerationController retry */
         post: operations["postWorkGenerationBatchesBatchRetry"];
         delete?: never;
         options?: never;
@@ -7688,7 +7688,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** WorkDashboardController kpis */
+        /** DashboardController kpis */
         get: operations["getWorkKpis"];
         put?: never;
         post?: never;
@@ -7705,7 +7705,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** WorkProcessGroupController index */
+        /** ProcessGroupController index */
         get: operations["getWorkProcessGroups"];
         put?: never;
         post?: never;
@@ -7722,10 +7722,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** WorkProcessController index */
+        /** ProcessController index */
         get: operations["getWorkProcesses"];
         put?: never;
-        /** WorkProcessController store */
+        /** ProcessController store */
         post: operations["postWorkProcesses"];
         delete?: never;
         options?: never;
@@ -7742,7 +7742,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** WorkProcessController bulk */
+        /** ProcessController bulk */
         post: operations["postWorkProcessesBulk"];
         delete?: never;
         options?: never;
@@ -7757,14 +7757,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** WorkProcessController show */
+        /** ProcessController show */
         get: operations["getWorkProcessesProcess"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** WorkProcessController update */
+        /** ProcessController update */
         patch: operations["patchWorkProcessesProcess"];
         trace?: never;
     };
@@ -7777,7 +7777,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** WorkProcessController archive */
+        /** ProcessController archive */
         post: operations["postWorkProcessesProcessArchive"];
         delete?: never;
         options?: never;
@@ -7794,7 +7794,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** WorkProcessController comment */
+        /** ProcessController comment */
         post: operations["postWorkProcessesProcessComments"];
         delete?: never;
         options?: never;
@@ -7811,7 +7811,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** WorkTaskController storeOnProcess */
+        /** TaskController storeOnProcess */
         post: operations["postWorkProcessesProcessTasks"];
         delete?: never;
         options?: never;
@@ -7828,7 +7828,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** WorkTaskController reorder */
+        /** TaskController reorder */
         post: operations["postWorkProcessesProcessTasksReorder"];
         delete?: never;
         options?: never;
@@ -7843,7 +7843,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** WorkProcessController timeline */
+        /** ProcessController timeline */
         get: operations["getWorkProcessesProcessTimeline"];
         put?: never;
         post?: never;
@@ -7860,7 +7860,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** WorkTaskController queue */
+        /** TaskController queue */
         get: operations["getWorkQueue"];
         put?: never;
         post?: never;
@@ -7879,7 +7879,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** WorkTaskController bulk */
+        /** TaskController bulk */
         post: operations["postWorkTasksBulk"];
         delete?: never;
         options?: never;
@@ -7894,7 +7894,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** WorkTaskController show */
+        /** TaskController show */
         get: operations["getWorkTasksTask"];
         put?: never;
         post?: never;
@@ -7913,7 +7913,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** WorkTaskController assign */
+        /** TaskController assign */
         post: operations["postWorkTasksTaskAssign"];
         delete?: never;
         options?: never;
@@ -7930,7 +7930,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** WorkTaskController block */
+        /** TaskController block */
         post: operations["postWorkTasksTaskBlock"];
         delete?: never;
         options?: never;
@@ -7947,7 +7947,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** WorkTaskController claim */
+        /** TaskController claim */
         post: operations["postWorkTasksTaskClaim"];
         delete?: never;
         options?: never;
@@ -7964,7 +7964,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** WorkTaskController comment */
+        /** TaskController comment */
         post: operations["postWorkTasksTaskComments"];
         delete?: never;
         options?: never;
@@ -7981,7 +7981,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** WorkTaskController complete */
+        /** TaskController complete */
         post: operations["postWorkTasksTaskComplete"];
         delete?: never;
         options?: never;
@@ -7998,7 +7998,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** WorkTaskController dispense */
+        /** TaskController dispense */
         post: operations["postWorkTasksTaskDispense"];
         delete?: never;
         options?: never;
@@ -8015,7 +8015,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** WorkTaskController uploadEvidence */
+        /** TaskController uploadEvidence */
         post: operations["postWorkTasksTaskEvidences"];
         delete?: never;
         options?: never;
@@ -8033,7 +8033,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** WorkTaskController removeEvidence */
+        /** TaskController removeEvidence */
         delete: operations["deleteWorkTasksTaskEvidencesEvidence"];
         options?: never;
         head?: never;
@@ -8047,7 +8047,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** WorkTaskController downloadEvidence */
+        /** TaskController downloadEvidence */
         get: operations["getWorkTasksTaskEvidencesEvidenceDownload"];
         put?: never;
         post?: never;
@@ -8066,7 +8066,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** WorkTaskController reopen */
+        /** TaskController reopen */
         post: operations["postWorkTasksTaskReopen"];
         delete?: never;
         options?: never;
@@ -8083,7 +8083,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** WorkTaskController resume */
+        /** TaskController resume */
         post: operations["postWorkTasksTaskResume"];
         delete?: never;
         options?: never;
@@ -8100,7 +8100,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** WorkTaskController start */
+        /** TaskController start */
         post: operations["postWorkTasksTaskStart"];
         delete?: never;
         options?: never;
@@ -8121,7 +8121,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** WorkTaskController updateStructure */
+        /** TaskController updateStructure */
         patch: operations["patchWorkTasksTaskStructure"];
         trace?: never;
     };
@@ -8132,7 +8132,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** WorkProcessTemplateCatalogController index */
+        /** ProcessTemplateCatalogController index */
         get: operations["getWorkTemplateCatalog"];
         put?: never;
         post?: never;
@@ -8151,7 +8151,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** WorkProcessTemplateCatalogController install */
+        /** ProcessTemplateCatalogController install */
         post: operations["postWorkTemplateCatalogCatalogKeyInstall"];
         delete?: never;
         options?: never;
@@ -8166,10 +8166,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** WorkProcessTemplateController index */
+        /** ProcessTemplateController index */
         get: operations["getWorkTemplates"];
         put?: never;
-        /** WorkProcessTemplateController store */
+        /** ProcessTemplateController store */
         post: operations["postWorkTemplates"];
         delete?: never;
         options?: never;
@@ -8184,14 +8184,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** WorkProcessTemplateController show */
+        /** ProcessTemplateController show */
         get: operations["getWorkTemplatesTemplate"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** WorkProcessTemplateController update */
+        /** ProcessTemplateController update */
         patch: operations["patchWorkTemplatesTemplate"];
         trace?: never;
     };
@@ -8202,7 +8202,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** WorkProcessTemplateController generationBatches */
+        /** ProcessTemplateController generationBatches */
         get: operations["getWorkTemplatesTemplateGenerationBatches"];
         put?: never;
         post?: never;
@@ -8221,7 +8221,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** WorkProcessGenerationController preview */
+        /** ProcessGenerationController preview */
         post: operations["postWorkTemplatesTemplatePreview"];
         delete?: never;
         options?: never;
@@ -8236,14 +8236,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** WorkProcessTemplateController showRecurrence */
+        /** ProcessTemplateController showRecurrence */
         get: operations["getWorkTemplatesTemplateRecurrence"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** WorkProcessTemplateController updateRecurrence */
+        /** ProcessTemplateController updateRecurrence */
         patch: operations["patchWorkTemplatesTemplateRecurrence"];
         trace?: never;
     };
@@ -8253,6 +8253,33 @@ export interface components {
     schemas: {
         JsonResponse: {
             [key: string]: unknown;
+        };
+        ConversationBulkOperationBody: {
+            action: string;
+            params?: Record<string, never>;
+            items: unknown[];
+        };
+        ConversationBulkOperationResponse: {
+            data: {
+                [key: string]: unknown;
+            };
+        };
+        ConversationBulkOperationItemCollection: {
+            data: {
+                [key: string]: unknown;
+            }[];
+            meta?: {
+                [key: string]: unknown;
+            };
+        };
+        ConversationListPreferenceBody: {
+            status?: string;
+            sort_by?: string;
+        };
+        ConversationListPreferenceResponse: {
+            data: {
+                [key: string]: unknown;
+            };
         };
         /** @enum {string} */
         TenantRole: "tenant_admin" | "tenant_user";
@@ -8377,7 +8404,7 @@ export interface components {
             /** @enum {string} */
             profile_picture_state: "UNKNOWN" | "PENDING" | "READY" | "UNAVAILABLE" | "FAILED";
             phone: string | null;
-            /** @description Alias legado de phone; nunca contém endereço técnico. */
+            /** @description Alias  de phone; nunca contém endereço técnico. */
             address: string | null;
         };
         /** @enum {string} */
@@ -9734,8 +9761,8 @@ export interface operations {
             200: {
                 headers: {
                     /** @description Resposta privada e não armazenável. */
-                    "Cache-Control"?: "max-age=0, no-store, private";
-                    /** @description Compatibilidade com caches HTTP legados. */
+                    "Cache-Control"?: "private, no-store, max-age=0";
+                    /** @description Compatibilidade com caches HTTP s. */
                     Pragma?: "no-cache";
                     [name: string]: unknown;
                 };
@@ -9748,14 +9775,38 @@ export interface operations {
     postCommunicationConversationBulkOperations: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConversationBulkOperationBody"];
+            };
+        };
         responses: {
-            /** @description Resposta definida pela operação Laravel. */
-            default: {
+            /** @description Resposta canônica. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationBulkOperationResponse"];
+                };
+            };
+            /** @description Resposta canônica. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JsonResponse"];
+                };
+            };
+            /** @description Resposta canônica. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9776,20 +9827,24 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Resposta definida pela operação Laravel. */
-            default: {
+            /** @description Resposta canônica. */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JsonResponse"];
+                    "application/json": components["schemas"]["ConversationBulkOperationResponse"];
                 };
             };
         };
     };
     getCommunicationConversationBulkOperationsOperationItems: {
         parameters: {
-            query?: never;
+            query?: {
+                status?: string;
+                page?: number;
+                per_page?: number;
+            };
             header?: never;
             path: {
                 operation: string;
@@ -9798,13 +9853,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Resposta definida pela operação Laravel. */
-            default: {
+            /** @description Resposta canônica. */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JsonResponse"];
+                    "application/json": components["schemas"]["ConversationBulkOperationItemCollection"];
                 };
             };
         };
@@ -9818,13 +9873,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Resposta definida pela operação Laravel. */
-            default: {
+            /** @description Resposta canônica. */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JsonResponse"];
+                    "application/json": components["schemas"]["ConversationListPreferenceResponse"];
                 };
             };
         };
@@ -9836,10 +9891,23 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConversationListPreferenceBody"];
+            };
+        };
         responses: {
-            /** @description Resposta definida pela operação Laravel. */
-            default: {
+            /** @description Resposta canônica. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationListPreferenceResponse"];
+                };
+            };
+            /** @description Resposta canônica. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10329,8 +10397,8 @@ export interface operations {
             200: {
                 headers: {
                     /** @description Resposta privada e não armazenável. */
-                    "Cache-Control"?: "max-age=0, no-store, private";
-                    /** @description Compatibilidade com caches HTTP legados. */
+                    "Cache-Control"?: "private, no-store, max-age=0";
+                    /** @description Compatibilidade com caches HTTP s. */
                     Pragma?: "no-cache";
                     [name: string]: unknown;
                 };
