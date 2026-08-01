@@ -4,9 +4,9 @@ namespace App\Http\Controllers\Api\V1\Communication;
 
 use App\Actions\Communication\ControlFlowRunAction;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Communication\ListCommunicationFlowRunsRequest;
-use App\Http\Requests\Communication\ManageCommunicationFlowRunRequest;
-use App\Http\Requests\Communication\ViewCommunicationFlowRunRequest;
+use App\Http\Requests\Communication\ListFlowRunsRequest;
+use App\Http\Requests\Communication\ManageFlowRunRequest;
+use App\Http\Requests\Communication\ViewFlowRunRequest;
 use App\Http\Resources\Communication\FlowRunCollection;
 use App\Http\Resources\Communication\FlowRunResource;
 use App\Models\CommunicationFlowRun;
@@ -16,7 +16,7 @@ use Illuminate\Http\JsonResponse;
 final class FlowRunController extends Controller
 {
     public function index(
-        ListCommunicationFlowRunsRequest $request,
+        ListFlowRunsRequest $request,
         FlowRunQuery $query,
     ): JsonResponse {
         return (new FlowRunCollection(
@@ -25,14 +25,14 @@ final class FlowRunController extends Controller
     }
 
     public function show(
-        ViewCommunicationFlowRunRequest $request,
+        ViewFlowRunRequest $request,
         CommunicationFlowRun $run,
     ): JsonResponse {
         return (new FlowRunResource($run))->response();
     }
 
     public function pause(
-        ManageCommunicationFlowRunRequest $request,
+        ManageFlowRunRequest $request,
         CommunicationFlowRun $run,
         ControlFlowRunAction $action,
     ): JsonResponse {
@@ -40,7 +40,7 @@ final class FlowRunController extends Controller
     }
 
     public function resume(
-        ManageCommunicationFlowRunRequest $request,
+        ManageFlowRunRequest $request,
         CommunicationFlowRun $run,
         ControlFlowRunAction $action,
     ): JsonResponse {
@@ -48,7 +48,7 @@ final class FlowRunController extends Controller
     }
 
     public function handoff(
-        ManageCommunicationFlowRunRequest $request,
+        ManageFlowRunRequest $request,
         CommunicationFlowRun $run,
         ControlFlowRunAction $action,
     ): JsonResponse {
@@ -56,7 +56,7 @@ final class FlowRunController extends Controller
     }
 
     public function stop(
-        ManageCommunicationFlowRunRequest $request,
+        ManageFlowRunRequest $request,
         CommunicationFlowRun $run,
         ControlFlowRunAction $action,
     ): JsonResponse {
@@ -64,7 +64,7 @@ final class FlowRunController extends Controller
     }
 
     public function restart(
-        ManageCommunicationFlowRunRequest $request,
+        ManageFlowRunRequest $request,
         CommunicationFlowRun $run,
         ControlFlowRunAction $action,
     ): JsonResponse {

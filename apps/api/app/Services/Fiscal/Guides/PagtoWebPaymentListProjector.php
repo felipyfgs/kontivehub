@@ -5,9 +5,9 @@ namespace App\Services\Fiscal\Guides;
 use App\Enums\FiscalSourceProvenance;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
-use App\Models\PagtowebPaymentListItem;
-use App\Models\PagtowebPaymentListObservation;
-use App\Models\PagtowebPaymentListProjection;
+use App\Models\PagtoWebPaymentListItem;
+use App\Models\PagtoWebPaymentListObservation;
+use App\Models\PagtoWebPaymentListProjection;
 use App\Models\Tenant;
 use App\Services\Fiscal\SimplesMei\Pgdasd\PgdasdPagtoWebEvidenceService;
 use Carbon\CarbonImmutable;
@@ -18,7 +18,7 @@ final class PagtoWebPaymentListProjector
 {
     public function __construct(private readonly PgdasdPagtoWebEvidenceService $pgdasdEvidence) {}
 
-    /** @param list<array<string,mixed>> $items @param array<string,mixed> $filterSummary @return array{observation:PagtowebPaymentListObservation,created:bool} */
+    /** @param list<array<string,mixed>> $items @param array<string,mixed> $filterSummary @return array{observation:PagtoWebPaymentListObservation,created:bool} */
     public function project(Tenant $tenant, Client $client, array $items, array $filterSummary, ?int $sourceRunId, string $provenance, ?CarbonImmutable $observedAt = null): array
     {
         if ((int) $client->tenant_id !== (int) $tenant->id) {
@@ -31,17 +31,17 @@ final class PagtoWebPaymentListProjector
             if ($sourceRunId !== null && ! FiscalMonitoringRun::query()->withoutGlobalScopes()->whereKey($sourceRunId)->where('tenant_id', $tenant->id)->where('client_id', $client->id)->exists()) {
                 throw new RuntimeException('Execução de origem PAGTOWEB inválida.');
             }
-            $observation = PagtowebPaymentListObservation::query()->withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('client_id', $client->id)->where('digest', $digest)->lockForUpdate()->first();
+            $observation = PagtoWebPaymentListObservation::query()->withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('client_id', $client->id)->where('digest', $digest)->lockForUpdate()->first();
             $created = $observation === null;
-            $observation ??= PagtowebPaymentListObservation::query()->create(['tenant_id' => $tenant->id, 'client_id' => $client->id, 'filter_summary' => $filterSummary, 'returned_count' => count($items), 'digest' => $digest, 'observed_at' => $observedAt, 'source_run_id' => $sourceRunId, 'source_provenance' => $provenance, 'created_at' => $observedAt]);
+            $observation ??= PagtoWebPaymentListObservation::query()->create(['tenant_id' => $tenant->id, 'client_id' => $client->id, 'filter_summary' => $filterSummary, 'returned_count' => count($items), 'digest' => $digest, 'observed_at' => $observedAt, 'source_run_id' => $sourceRunId, 'source_provenance' => $provenance, 'created_at' => $observedAt]);
             if ($created) {
                 foreach ($items as $item) {
-                    PagtowebPaymentListItem::query()->create(['observation_id' => $observation->id, 'tenant_id' => $tenant->id, 'client_id' => $client->id, ...$item, 'created_at' => $observedAt]);
+                    PagtoWebPaymentListItem::query()->create(['observation_id' => $observation->id, 'tenant_id' => $tenant->id, 'client_id' => $client->id, ...$item, 'created_at' => $observedAt]);
                 }
             }
-            $projection = PagtowebPaymentListProjection::query()->withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('client_id', $client->id)->lockForUpdate()->first();
+            $projection = PagtoWebPaymentListProjection::query()->withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('client_id', $client->id)->lockForUpdate()->first();
             $data = ['last_observation_id' => $observation->id, 'last_run_id' => $sourceRunId, 'last_valid_query_at' => $observedAt, 'source_provenance' => $provenance];
-            $projection === null ? PagtowebPaymentListProjection::query()->create(['tenant_id' => $tenant->id, 'client_id' => $client->id, ...$data]) : $projection->forceFill($data)->save();
+            $projection === null ? PagtoWebPaymentListProjection::query()->create(['tenant_id' => $tenant->id, 'client_id' => $client->id, ...$data]) : $projection->forceFill($data)->save();
 
             if ($provenance === FiscalSourceProvenance::SerproReal->value) {
                 $this->pgdasdEvidence->apply(

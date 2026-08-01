@@ -6,8 +6,8 @@ use App\Enums\Communication\FlowStatus;
 use App\Enums\TenantPermission;
 use App\Enums\TenantRole;
 use App\Events\CommunicationEventCommitted;
-use App\Jobs\Communication\AdvanceCommunicationFlowRunJob;
-use App\Jobs\Communication\CorrelateCommunicationFlowEventJob;
+use App\Jobs\Communication\AdvanceFlowRunJob;
+use App\Jobs\Communication\CorrelateFlowEventJob;
 use App\Models\CommunicationEvent;
 use App\Models\CommunicationFlow;
 use App\Models\CommunicationFlowDraft;
@@ -84,8 +84,8 @@ final class CommunicationFlowDryRunTest extends TestCase
         $this->assertSame($outboxBefore, CommunicationOutboxEntry::query()->withoutGlobalScopes()->count());
         $this->assertSame($runsBefore, CommunicationFlowRun::query()->withoutGlobalScopes()->count());
         Queue::assertNothingPushed();
-        Queue::assertNotPushed(AdvanceCommunicationFlowRunJob::class);
-        Queue::assertNotPushed(CorrelateCommunicationFlowEventJob::class);
+        Queue::assertNotPushed(AdvanceFlowRunJob::class);
+        Queue::assertNotPushed(CorrelateFlowEventJob::class);
     }
 
     public function test_dry_run_accepts_graph_body_and_flag_off_denies(): void

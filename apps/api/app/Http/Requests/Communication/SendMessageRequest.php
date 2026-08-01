@@ -12,9 +12,9 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
-final class SendMessageRequest extends CommunicationRequest
+final class SendMessageRequest extends TenantScopedRequest
 {
-    protected function prepareCommunicationValidation(): void
+    protected function prepareScopedValidation(): void
     {
         foreach (['ptt', 'gif', 'internal_note'] as $field) {
             if ($this->has($field)) {

@@ -3,7 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Enums\Communication\FlowRunStatus;
-use App\Jobs\Communication\AdvanceCommunicationFlowRunJob;
+use App\Jobs\Communication\AdvanceFlowRunJob;
 use App\Models\CommunicationFlowRun;
 use App\Services\Communication\Flows\FlowAvailability;
 use App\Services\Communication\Flows\FlowRunControlService;
@@ -36,7 +36,7 @@ final class ReconcileCommunicationFlowRunsCommand extends Command
             ->pluck('id');
 
         foreach ($delayIds as $id) {
-            AdvanceCommunicationFlowRunJob::dispatch((int) $id);
+            AdvanceFlowRunJob::dispatch((int) $id);
         }
 
         $outboxIds = CommunicationFlowRun::query()->withoutGlobalScopes()
@@ -46,7 +46,7 @@ final class ReconcileCommunicationFlowRunsCommand extends Command
             ->pluck('id');
 
         foreach ($outboxIds as $id) {
-            AdvanceCommunicationFlowRunJob::dispatch((int) $id);
+            AdvanceFlowRunJob::dispatch((int) $id);
         }
 
         $timedOut = CommunicationFlowRun::query()->withoutGlobalScopes()

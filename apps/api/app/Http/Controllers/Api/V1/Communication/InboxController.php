@@ -10,12 +10,12 @@ use App\Actions\Communication\StartInboxPairingAction;
 use App\Actions\Communication\UpdateInboxAction;
 use App\Actions\Communication\UpdateTenantSettingsAction;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Communication\ListCommunicationInboxesRequest;
-use App\Http\Requests\Communication\ManageCommunicationInboxRequest;
-use App\Http\Requests\Communication\ReplaceCommunicationInboxMembersRequest;
+use App\Http\Requests\Communication\ListInboxesRequest;
+use App\Http\Requests\Communication\ManageInboxRequest;
+use App\Http\Requests\Communication\ReplaceInboxMembersRequest;
 use App\Http\Requests\Communication\StoreInboxRequest;
-use App\Http\Requests\Communication\UpdateCommunicationTenantSettingsRequest;
 use App\Http\Requests\Communication\UpdateInboxRequest;
+use App\Http\Requests\Communication\UpdateTenantSettingsRequest;
 use App\Http\Resources\Communication\InboxCollection;
 use App\Http\Resources\Communication\InboxCommandResource;
 use App\Http\Resources\Communication\InboxMembersResource;
@@ -40,7 +40,7 @@ final class InboxController extends Controller
     ) {}
 
     public function index(
-        ListCommunicationInboxesRequest $request,
+        ListInboxesRequest $request,
     ): InboxCollection {
         return new InboxCollection(
             $this->query->index($request->actor()),
@@ -64,7 +64,7 @@ final class InboxController extends Controller
     }
 
     public function updateTenantSettings(
-        UpdateCommunicationTenantSettingsRequest $request,
+        UpdateTenantSettingsRequest $request,
     ): JsonResponse {
         return (new TenantSettingsResource(
             $this->updateSettings->handle($request->settingsData()),
@@ -72,7 +72,7 @@ final class InboxController extends Controller
     }
 
     public function startPairing(
-        ManageCommunicationInboxRequest $request,
+        ManageInboxRequest $request,
         CommunicationInbox $inbox,
     ): JsonResponse {
         return (new InboxPairingResource(
@@ -81,7 +81,7 @@ final class InboxController extends Controller
     }
 
     public function revoke(
-        ManageCommunicationInboxRequest $request,
+        ManageInboxRequest $request,
         CommunicationInbox $inbox,
     ): JsonResponse {
         return (new InboxCommandResource(
@@ -90,7 +90,7 @@ final class InboxController extends Controller
     }
 
     public function replaceMembers(
-        ReplaceCommunicationInboxMembersRequest $request,
+        ReplaceInboxMembersRequest $request,
         CommunicationInbox $inbox,
     ): JsonResponse {
         return (new InboxMembersResource(
@@ -99,7 +99,7 @@ final class InboxController extends Controller
     }
 
     public function destroy(
-        ManageCommunicationInboxRequest $request,
+        ManageInboxRequest $request,
         CommunicationInbox $inbox,
     ): JsonResponse {
         return (new InboxCommandResource(

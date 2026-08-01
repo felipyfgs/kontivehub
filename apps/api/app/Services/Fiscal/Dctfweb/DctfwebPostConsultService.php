@@ -54,7 +54,7 @@ final class DctfwebPostConsultService
 
         if (! $response->success || $result->result !== FiscalRunResult::Success) {
             $failReason = $response->errorCode ?? 'UPSTREAM_ERROR';
-            $this->markExistingExpectedProjectionUnverified($request, $periodKey, $failReason);
+            $this->markExpectedProjectionUnverified($request, $periodKey, $failReason);
             $this->recordObservation(
                 request: $request,
                 periodKey: $periodKey,
@@ -73,7 +73,7 @@ final class DctfwebPostConsultService
         }
 
         if ($response->simulated || ! $this->isRealProductive($response)) {
-            $this->markExistingExpectedProjectionUnverified($request, $periodKey, 'SOURCE_NOT_SERPRO_REAL');
+            $this->markExpectedProjectionUnverified($request, $periodKey, 'SOURCE_NOT_SERPRO_REAL');
             $statePack = $this->stateResolver->resolve(
                 declarationForExpectedPa: null,
                 lastProductiveConsultedAt: null,
@@ -136,7 +136,7 @@ final class DctfwebPostConsultService
                 $this->touchProjection($request, $periodKey, $declaration, $statePack, $observedAt, productive: true);
             } else {
                 // Documento inválido / incompleto não é evidência produtiva: demove last-known-good.
-                $this->markExistingExpectedProjectionUnverified($request, $periodKey, $reason);
+                $this->markExpectedProjectionUnverified($request, $periodKey, $reason);
             }
 
             $this->recordObservation(
@@ -340,7 +340,7 @@ final class DctfwebPostConsultService
             $periodKey = DctfwebPeriod::toPeriodKey($pa);
         }
 
-        $this->markExistingExpectedProjectionUnverified($request, $periodKey, $reason);
+        $this->markExpectedProjectionUnverified($request, $periodKey, $reason);
         $this->recordObservation(
             request: $request,
             periodKey: $periodKey,
@@ -368,7 +368,7 @@ final class DctfwebPostConsultService
      * Fail-closed: consulta não produtiva não mantém CURRENT/Em dia na carteira.
      * Só demove registros já existentes (não cria declaração/projeção fantasma).
      */
-    private function markExistingExpectedProjectionUnverified(
+    private function markExpectedProjectionUnverified(
         FiscalAdapterRequest $request,
         string $periodKey,
         string $reason,

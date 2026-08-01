@@ -8,8 +8,8 @@ use App\Enums\Communication\InboxStatus;
 use App\Enums\TenantPermission;
 use App\Enums\TenantRole;
 use App\Events\CommunicationEventCommitted;
-use App\Jobs\Communication\AdvanceCommunicationFlowRunJob;
-use App\Jobs\Communication\CorrelateCommunicationFlowEventJob;
+use App\Jobs\Communication\AdvanceFlowRunJob;
+use App\Jobs\Communication\CorrelateFlowEventJob;
 use App\Models\CommunicationEvent;
 use App\Models\CommunicationFlow;
 use App\Models\CommunicationFlowDraft;
@@ -567,8 +567,8 @@ final class CommunicationFlowApiTest extends TestCase
 
     public function test_flow_executor_jobs_are_registered(): void
     {
-        $this->assertTrue(class_exists(CorrelateCommunicationFlowEventJob::class));
-        $this->assertTrue(class_exists(AdvanceCommunicationFlowRunJob::class));
+        $this->assertTrue(class_exists(CorrelateFlowEventJob::class));
+        $this->assertTrue(class_exists(AdvanceFlowRunJob::class));
         $this->assertTrue(class_exists(CommunicationFlowRun::class));
     }
 

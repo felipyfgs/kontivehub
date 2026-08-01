@@ -9,7 +9,7 @@ use App\Models\User;
 use App\Services\Communication\Authorization\Access;
 use Illuminate\Validation\Rule;
 
-final class UpdateConversationRequest extends CommunicationRequest
+final class UpdateConversationRequest extends TenantScopedRequest
 {
     public function authorize(): bool
     {

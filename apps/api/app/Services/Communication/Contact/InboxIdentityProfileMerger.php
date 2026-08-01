@@ -3,7 +3,7 @@
 namespace App\Services\Communication\Contact;
 
 use App\Enums\Communication\ProfilePictureState;
-use App\Jobs\Communication\RefreshCommunicationProfilePictureJob;
+use App\Jobs\Communication\RefreshProfilePictureJob;
 use App\Models\CommunicationIdentity;
 use App\Models\CommunicationInbox;
 use App\Models\CommunicationInboxIdentityProfile;
@@ -116,7 +116,7 @@ final class InboxIdentityProfileMerger
                 $this->recordPictureUpdate($profile);
             }
             if ($pictureChanged && $profile->picture_id !== null) {
-                RefreshCommunicationProfilePictureJob::dispatch(
+                RefreshProfilePictureJob::dispatch(
                     (int) $inbox->tenant_id,
                     (int) $profile->id,
                     (int) $profile->profile_picture_version,
@@ -239,7 +239,7 @@ final class InboxIdentityProfileMerger
                     $this->recordPictureUpdate($target);
                 }
                 if ($sourceWinsPicture && $target->picture_id !== null) {
-                    RefreshCommunicationProfilePictureJob::dispatch(
+                    RefreshProfilePictureJob::dispatch(
                         (int) $donor->tenant_id,
                         (int) $target->id,
                         (int) $target->profile_picture_version,

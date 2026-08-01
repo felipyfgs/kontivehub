@@ -2,7 +2,7 @@
 
 namespace App\Services\Communication\Flows;
 
-use App\Enums\Communication\CommunicationFlowFailure;
+use App\Enums\Communication\FlowFailure;
 use App\Exceptions\CommunicationFlowException;
 
 final class FlowAvailability
@@ -20,14 +20,14 @@ final class FlowAvailability
     public function assertEnabled(): void
     {
         if (! $this->enabled()) {
-            throw new CommunicationFlowException(CommunicationFlowFailure::Disabled);
+            throw new CommunicationFlowException(FlowFailure::Disabled);
         }
     }
 
     public function assertRuntimeEnabled(): void
     {
         if (! $this->runtimeEnabled()) {
-            throw new CommunicationFlowException(CommunicationFlowFailure::RuntimeDisabled);
+            throw new CommunicationFlowException(FlowFailure::RuntimeDisabled);
         }
     }
 }

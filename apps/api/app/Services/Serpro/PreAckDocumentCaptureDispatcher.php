@@ -11,7 +11,7 @@ final class PreAckDocumentCaptureDispatcher
 {
     public function __construct(
         private readonly PgdasdPreAckDocumentStore $pgdasd,
-        private readonly PagtoWebArrecadacaoReceiptPreAckStore $pagtoweb,
+        private readonly PagtoWebArrecadacaoReceiptPreAckStore $pagtoWeb,
     ) {}
 
     public function handles(string $operationKey): bool

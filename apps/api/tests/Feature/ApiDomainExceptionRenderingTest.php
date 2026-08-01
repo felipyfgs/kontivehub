@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
-use App\Enums\Communication\CommunicationAvailabilityFailure;
-use App\Enums\Communication\CommunicationFlowFailure;
+use App\Enums\Communication\AvailabilityFailure;
+use App\Enums\Communication\FlowFailure;
 use App\Exceptions\AssistantUnavailableException;
 use App\Exceptions\CommunicationFlowException;
 use App\Exceptions\CommunicationUnavailableException;
@@ -22,13 +22,13 @@ class ApiDomainExceptionRenderingTest extends TestCase
         $router->get(
             '/api/_test/exceptions/communication',
             static fn () => throw new CommunicationUnavailableException(
-                CommunicationAvailabilityFailure::InboxNotConnected,
+                AvailabilityFailure::InboxNotConnected,
             ),
         );
         $router->get(
             '/api/_test/exceptions/flow',
             static fn () => throw new CommunicationFlowException(
-                CommunicationFlowFailure::RunTerminal,
+                FlowFailure::RunTerminal,
             ),
         );
 

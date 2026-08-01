@@ -4,8 +4,8 @@ namespace Tests\Feature;
 
 use App\Enums\ActivationMethod;
 use App\Enums\TenantRole;
-use App\Http\Requests\Tenant\ReactivateTenantMemberRequest;
-use App\Http\Requests\Tenant\RegenerateTenantMemberActivationRequest;
+use App\Http\Requests\Tenant\ReactivateMemberRequest;
+use App\Http\Requests\Tenant\RegenerateMemberActivationRequest;
 use App\Models\Tenant;
 use App\Models\TenantMembership;
 use App\Models\User;
@@ -22,11 +22,11 @@ final class TenantMemberApiTest extends TestCase
 
     public function test_delivery_method_accessors_do_not_shadow_the_http_method(): void
     {
-        $reactivate = ReactivateTenantMemberRequest::create(
+        $reactivate = ReactivateMemberRequest::create(
             '/api/v1/tenant/members/1/reactivate',
             'POST',
         );
-        $regenerate = RegenerateTenantMemberActivationRequest::create(
+        $regenerate = RegenerateMemberActivationRequest::create(
             '/api/v1/tenant/members/1/activation/regenerate',
             'POST',
         );

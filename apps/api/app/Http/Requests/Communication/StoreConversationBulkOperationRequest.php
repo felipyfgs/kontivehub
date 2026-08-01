@@ -11,9 +11,9 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Validator;
 
-final class StoreConversationBulkOperationRequest extends CommunicationRequest
+final class StoreConversationBulkOperationRequest extends TenantScopedRequest
 {
-    protected function prepareCommunicationValidation(): void
+    protected function prepareScopedValidation(): void
     {
         if ($this->filled('idempotency_key')) {
             // body already provided

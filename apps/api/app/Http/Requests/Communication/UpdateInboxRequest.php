@@ -10,7 +10,7 @@ use App\Support\CurrentTenant;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Validation\Rule;
 
-final class UpdateInboxRequest extends CommunicationRequest
+final class UpdateInboxRequest extends TenantScopedRequest
 {
     public function authorize(): bool
     {
@@ -55,7 +55,7 @@ final class UpdateInboxRequest extends CommunicationRequest
         ];
     }
 
-    protected function prepareCommunicationValidation(): void
+    protected function prepareScopedValidation(): void
     {
         if ($this->has('name') && is_string($this->input('name'))) {
             $this->merge(['name' => trim($this->string('name')->toString())]);

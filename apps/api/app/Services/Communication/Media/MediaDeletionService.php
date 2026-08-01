@@ -2,7 +2,7 @@
 
 namespace App\Services\Communication\Media;
 
-use App\Jobs\Communication\DeleteCommunicationMediaObjectJob;
+use App\Jobs\Communication\DeleteMediaObjectJob;
 use App\Models\CommunicationMediaDeletionIntent;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -128,7 +128,7 @@ final class MediaDeletionService
         }
         $intent = CommunicationMediaDeletionIntent::query()->find($intentId);
         if ($intent !== null) {
-            DeleteCommunicationMediaObjectJob::dispatch($intent->object_id, $intent->id);
+            DeleteMediaObjectJob::dispatch($intent->object_id, $intent->id);
         }
     }
 }

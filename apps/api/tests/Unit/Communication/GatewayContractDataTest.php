@@ -173,7 +173,7 @@ class GatewayContractDataTest extends TestCase
         );
     }
 
-    public function test_media_retry_accepts_legacy_inbound_and_v2_directions_but_rejects_hybrid_shapes(): void
+    public function test_media_retry_accepts__inbound_and_v2_directions_but_rejects_hybrid_shapes(): void
     {
         foreach ([
             ['to' => '+5511999991234', 'target_message_id' => 'message-target-0001', 'sender' => '+5511999991234', 'from_me' => false],

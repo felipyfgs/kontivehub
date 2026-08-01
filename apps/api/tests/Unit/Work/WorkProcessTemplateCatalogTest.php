@@ -12,7 +12,7 @@ class WorkProcessTemplateCatalogTest extends TestCase
     {
         $runtimeArtifacts = [
             'config/work_process_catalog.php',
-            'app/Http/Controllers/Api/V1/Work/WorkProcessTemplateCatalogController.php',
+            'app/Http/Controllers/Api/V1/Work/ProcessTemplateCatalogController.php',
             'app/Services/Work/ProcessAudienceResolver.php',
             'app/Services/Work/ProcessTemplateCatalog.php',
             'app/Services/Work/MonitoringContextRegistry.php',

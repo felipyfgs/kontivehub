@@ -7,9 +7,9 @@ use App\Models\User;
 use App\Rules\AllowedCommunicationCannedResponsePlaceholders;
 use App\Services\Communication\Authorization\Access;
 
-final class StoreCannedResponseRequest extends CommunicationRequest
+final class StoreCannedResponseRequest extends TenantScopedRequest
 {
-    protected function prepareCommunicationValidation(): void
+    protected function prepareScopedValidation(): void
     {
         foreach (['shortcut', 'title'] as $field) {
             if ($this->has($field) && is_string($this->input($field))) {

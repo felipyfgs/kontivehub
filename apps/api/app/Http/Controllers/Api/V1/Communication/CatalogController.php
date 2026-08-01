@@ -11,16 +11,16 @@ use App\Actions\Communication\DuplicateCannedResponseAction;
 use App\Actions\Communication\RenderCannedResponseAction;
 use App\Actions\Communication\UpdateCannedResponseAction;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Communication\DuplicateCommunicationCannedResponseRequest;
-use App\Http\Requests\Communication\ListCommunicationCannedResponsesRequest;
-use App\Http\Requests\Communication\ListCommunicationLabelsRequest;
-use App\Http\Requests\Communication\ManageCommunicationCannedResponseRequest;
-use App\Http\Requests\Communication\ManageCommunicationLabelRequest;
-use App\Http\Requests\Communication\RenderCommunicationCannedResponseRequest;
+use App\Http\Requests\Communication\DuplicateCannedResponseRequest;
+use App\Http\Requests\Communication\ListCannedResponsesRequest;
+use App\Http\Requests\Communication\ListLabelsRequest;
+use App\Http\Requests\Communication\ManageCannedResponseRequest;
+use App\Http\Requests\Communication\ManageLabelRequest;
+use App\Http\Requests\Communication\RenderCannedResponseRequest;
 use App\Http\Requests\Communication\StoreCannedResponseRequest;
-use App\Http\Requests\Communication\StoreCommunicationLabelRequest;
+use App\Http\Requests\Communication\StoreLabelRequest;
 use App\Http\Requests\Communication\UpdateCannedResponseRequest;
-use App\Http\Requests\Communication\ViewCommunicationOutboundCapabilitiesRequest;
+use App\Http\Requests\Communication\ViewOutboundCapabilitiesRequest;
 use App\Http\Resources\Communication\CannedResponseCollection;
 use App\Http\Resources\Communication\CannedResponseRenderResource;
 use App\Http\Resources\Communication\CannedResponseResource;
@@ -40,20 +40,20 @@ final class CatalogController extends Controller
         private readonly DeleteLabelAction $deleteLabel,
     ) {}
 
-    public function labels(ListCommunicationLabelsRequest $request): JsonResponse
+    public function labels(ListLabelsRequest $request): JsonResponse
     {
         return LabelResource::collection($this->catalog->labels())->response();
     }
 
     public function outboundCapabilities(
-        ViewCommunicationOutboundCapabilitiesRequest $request,
+        ViewOutboundCapabilitiesRequest $request,
     ): JsonResponse {
         return (new OutboundCapabilitiesResource(
             $this->catalog->outboundCapabilities($request->user()),
         ))->response()->header('Cache-Control', 'private, no-store');
     }
 
-    public function storeLabel(StoreCommunicationLabelRequest $request): JsonResponse
+    public function storeLabel(StoreLabelRequest $request): JsonResponse
     {
         return (new LabelResource(
             $this->createLabel->handle($request->labelData()),
@@ -61,7 +61,7 @@ final class CatalogController extends Controller
     }
 
     public function deleteLabel(
-        ManageCommunicationLabelRequest $request,
+        ManageLabelRequest $request,
         CommunicationLabel $label,
     ): JsonResponse {
         $this->deleteLabel->handle($label);
@@ -70,7 +70,7 @@ final class CatalogController extends Controller
     }
 
     public function cannedResponses(
-        ListCommunicationCannedResponsesRequest $request,
+        ListCannedResponsesRequest $request,
         CannedResponseQuery $query,
     ): JsonResponse {
         $filters = $request->filters();
@@ -105,7 +105,7 @@ final class CatalogController extends Controller
     }
 
     public function duplicateCannedResponse(
-        DuplicateCommunicationCannedResponseRequest $request,
+        DuplicateCannedResponseRequest $request,
         CommunicationCannedResponse $canned,
         DuplicateCannedResponseAction $action,
     ): JsonResponse {
@@ -115,7 +115,7 @@ final class CatalogController extends Controller
     }
 
     public function deactivateCannedResponse(
-        ManageCommunicationCannedResponseRequest $request,
+        ManageCannedResponseRequest $request,
         CommunicationCannedResponse $canned,
         DeactivateCannedResponseAction $action,
     ): JsonResponse {
@@ -125,7 +125,7 @@ final class CatalogController extends Controller
     }
 
     public function renderCannedResponse(
-        RenderCommunicationCannedResponseRequest $request,
+        RenderCannedResponseRequest $request,
         CommunicationCannedResponse $canned,
         RenderCannedResponseAction $action,
     ): JsonResponse {
@@ -135,7 +135,7 @@ final class CatalogController extends Controller
     }
 
     public function deleteCannedResponse(
-        ManageCommunicationCannedResponseRequest $request,
+        ManageCannedResponseRequest $request,
         CommunicationCannedResponse $canned,
         DeleteCannedResponseAction $action,
     ): JsonResponse {

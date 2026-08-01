@@ -5,7 +5,7 @@ namespace App\Services\Fiscal\SimplesMei\Pgdasd;
 use App\Enums\FiscalSourceProvenance;
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
-use App\Models\PagtowebPaymentListObservation;
+use App\Models\PagtoWebPaymentListObservation;
 use App\Models\Tenant;
 use App\Services\Fiscal\Guides\PagtoWebPaymentListCodec;
 use Carbon\CarbonImmutable;
@@ -31,7 +31,7 @@ final class PgdasdPagtoWebEvidenceReapplyService
 
         $summary = ['observations' => 0, 'paid' => 0, 'not_found' => 0, 'skipped' => 0];
 
-        $query = PagtowebPaymentListObservation::query()
+        $query = PagtoWebPaymentListObservation::query()
             ->withoutGlobalScopes()
             ->where('source_provenance', FiscalSourceProvenance::SerproReal->value)
             ->orderBy('id');
@@ -61,7 +61,7 @@ final class PgdasdPagtoWebEvidenceReapplyService
     /**
      * @return array{paid:int,not_found:int}|null
      */
-    private function reapplyObservation(PagtowebPaymentListObservation $observation): ?array
+    private function reapplyObservation(PagtoWebPaymentListObservation $observation): ?array
     {
         $tenant = Tenant::query()->find($observation->tenant_id);
         $client = Client::query()->withoutGlobalScopes()
@@ -96,7 +96,7 @@ final class PgdasdPagtoWebEvidenceReapplyService
     /**
      * @return list<string>
      */
-    private function consultedDigests(PagtowebPaymentListObservation $observation): array
+    private function consultedDigests(PagtoWebPaymentListObservation $observation): array
     {
         $documents = $this->documentsFromSourceRun($observation);
         if ($documents !== []) {
@@ -118,7 +118,7 @@ final class PgdasdPagtoWebEvidenceReapplyService
     /**
      * @return list<string>
      */
-    private function documentsFromSourceRun(PagtowebPaymentListObservation $observation): array
+    private function documentsFromSourceRun(PagtoWebPaymentListObservation $observation): array
     {
         if ($observation->source_run_id === null) {
             return [];

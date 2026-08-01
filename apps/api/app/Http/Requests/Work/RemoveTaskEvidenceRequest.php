@@ -1,0 +1,33 @@
+<?php
+
+namespace App\Http\Requests\Work;
+
+use App\DTO\Work\EvidenceRemovalData;
+use App\Models\User;
+use App\Models\WorkTask;
+
+final class RemoveTaskEvidenceRequest extends TenantScopedRequest
+{
+    public function authorize(): bool
+    {
+        $actor = $this->user();
+        $task = $this->route('task');
+
+        return $actor instanceof User
+            && $task instanceof WorkTask
+            && $actor->can('uploadEvidence', $task);
+    }
+
+    /** @return array<string, list<string>> */
+    public function rules(): array
+    {
+        return ['reason' => ['required', 'string', 'max:2000']];
+    }
+
+    public function removal(): EvidenceRemovalData
+    {
+        return new EvidenceRemovalData(
+            (string) $this->validated('reason'),
+        );
+    }
+}

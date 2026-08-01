@@ -2,16 +2,16 @@
 
 namespace App\Http\Controllers\Api\V1\Tenant;
 
-use App\Actions\Tenant\ListTenantMembersAction;
-use App\Actions\Tenant\MutateTenantMemberAction;
+use App\Actions\Tenant\ListMembersAction;
+use App\Actions\Tenant\MutateMemberAction;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Tenant\DeactivateTenantMemberRequest;
-use App\Http\Requests\Tenant\ReactivateTenantMemberRequest;
-use App\Http\Requests\Tenant\RegenerateTenantMemberActivationRequest;
-use App\Http\Requests\Tenant\StoreTenantMemberRequest;
-use App\Http\Requests\Tenant\UpdateTenantMemberRecipientRequest;
-use App\Http\Requests\Tenant\UpdateTenantMemberRoleRequest;
-use App\Http\Requests\Tenant\ViewTenantMembersRequest;
+use App\Http\Requests\Tenant\DeactivateMemberRequest;
+use App\Http\Requests\Tenant\ReactivateMemberRequest;
+use App\Http\Requests\Tenant\RegenerateMemberActivationRequest;
+use App\Http\Requests\Tenant\StoreMemberRequest;
+use App\Http\Requests\Tenant\UpdateMemberRecipientRequest;
+use App\Http\Requests\Tenant\UpdateMemberRoleRequest;
+use App\Http\Requests\Tenant\ViewMembersRequest;
 use App\Http\Resources\TenantMemberDeliveryResource;
 use App\Http\Resources\TenantMemberListResource;
 use App\Http\Resources\TenantMemberResource;
@@ -20,8 +20,8 @@ use Illuminate\Http\JsonResponse;
 final class TenantMemberController extends Controller
 {
     public function index(
-        ViewTenantMembersRequest $request,
-        ListTenantMembersAction $action,
+        ViewMembersRequest $request,
+        ListMembersAction $action,
     ): JsonResponse {
         return TenantMemberListResource::make(
             $action($request->actor()),
@@ -29,8 +29,8 @@ final class TenantMemberController extends Controller
     }
 
     public function store(
-        StoreTenantMemberRequest $request,
-        MutateTenantMemberAction $action,
+        StoreMemberRequest $request,
+        MutateMemberAction $action,
     ): JsonResponse {
         return TenantMemberDeliveryResource::make(
             $action->create($request->actor(), $request->memberData()),
@@ -38,9 +38,9 @@ final class TenantMemberController extends Controller
     }
 
     public function update(
-        UpdateTenantMemberRoleRequest $request,
+        UpdateMemberRoleRequest $request,
         int $membership,
-        MutateTenantMemberAction $action,
+        MutateMemberAction $action,
     ): JsonResponse {
         return TenantMemberResource::make(
             $action->changeRole(
@@ -52,9 +52,9 @@ final class TenantMemberController extends Controller
     }
 
     public function updateRecipient(
-        UpdateTenantMemberRecipientRequest $request,
+        UpdateMemberRecipientRequest $request,
         int $membership,
-        MutateTenantMemberAction $action,
+        MutateMemberAction $action,
     ): JsonResponse {
         return TenantMemberDeliveryResource::make(
             $action->correctRecipient(
@@ -66,9 +66,9 @@ final class TenantMemberController extends Controller
     }
 
     public function deactivate(
-        DeactivateTenantMemberRequest $request,
+        DeactivateMemberRequest $request,
         int $membership,
-        MutateTenantMemberAction $action,
+        MutateMemberAction $action,
     ): JsonResponse {
         return TenantMemberResource::make(
             $action->deactivate($request->actor(), $membership),
@@ -76,9 +76,9 @@ final class TenantMemberController extends Controller
     }
 
     public function reactivate(
-        ReactivateTenantMemberRequest $request,
+        ReactivateMemberRequest $request,
         int $membership,
-        MutateTenantMemberAction $action,
+        MutateMemberAction $action,
     ): JsonResponse {
         return TenantMemberDeliveryResource::make(
             $action->reactivate(
@@ -90,9 +90,9 @@ final class TenantMemberController extends Controller
     }
 
     public function regenerateActivation(
-        RegenerateTenantMemberActivationRequest $request,
+        RegenerateMemberActivationRequest $request,
         int $membership,
-        MutateTenantMemberAction $action,
+        MutateMemberAction $action,
     ): JsonResponse {
         return TenantMemberDeliveryResource::make(
             $action->regenerate(

@@ -7,7 +7,7 @@ use App\Models\User;
 use App\Services\Communication\Authorization\Access;
 use Illuminate\Validation\Rule;
 
-final class ListConversationBulkOperationItemsRequest extends CommunicationRequest
+final class ListConversationBulkOperationItemsRequest extends TenantScopedRequest
 {
     public function authorize(): bool
     {
@@ -17,7 +17,7 @@ final class ListConversationBulkOperationItemsRequest extends CommunicationReque
             && app(Access::class)->canView($actor);
     }
 
-    protected function prepareCommunicationValidation(): void
+    protected function prepareScopedValidation(): void
     {
         if ($this->query->has('status') && is_string($this->query('status'))) {
             $this->merge(['status' => strtoupper(trim($this->string('status')->toString()))]);

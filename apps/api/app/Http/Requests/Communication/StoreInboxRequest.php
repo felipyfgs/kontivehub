@@ -9,7 +9,7 @@ use App\Support\CurrentTenant;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Validation\Rule;
 
-final class StoreInboxRequest extends CommunicationRequest
+final class StoreInboxRequest extends TenantScopedRequest
 {
     public function authorize(): bool
     {
@@ -47,7 +47,7 @@ final class StoreInboxRequest extends CommunicationRequest
         ];
     }
 
-    protected function prepareCommunicationValidation(): void
+    protected function prepareScopedValidation(): void
     {
         if ($this->has('name') && is_string($this->input('name'))) {
             $this->merge(['name' => trim($this->string('name')->toString())]);

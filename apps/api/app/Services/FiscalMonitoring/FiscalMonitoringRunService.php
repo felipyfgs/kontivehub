@@ -656,7 +656,7 @@ final class FiscalMonitoringRunService
             );
         }
 
-        $outcome = $this->commercialLedger->authorizeAndDebitBeforeRemoteDispatch(
+        $outcome = $this->commercialLedger->authorizeAndDebit(
             tenantId: (int) $tenant->id,
             clientId: (int) $client->id,
             monitorKey: $monitorKey,

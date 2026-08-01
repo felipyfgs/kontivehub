@@ -17,7 +17,7 @@ use App\Enums\Communication\MessageStatus;
 use App\Enums\TenantPermission;
 use App\Enums\TenantRole;
 use App\Exceptions\CommunicationTransportException;
-use App\Jobs\Communication\RefreshCommunicationProfilePictureJob;
+use App\Jobs\Communication\RefreshProfilePictureJob;
 use App\Models\CommunicationContact;
 use App\Models\CommunicationConversation;
 use App\Models\CommunicationIdentity;
@@ -447,7 +447,7 @@ final class CommunicationGatewayActionApiTest extends TestCase
             ->assertJsonMissingPath('data.url')
             ->assertJsonMissingPath('data.user')
             ->assertJsonMissingPath('data.id');
-        Queue::assertPushed(RefreshCommunicationProfilePictureJob::class);
+        Queue::assertPushed(RefreshProfilePictureJob::class);
         $this->postJson('/api/v1/communication/inboxes/'.$inbox->id.'/contacts/qr-link', [
             'revoke' => false,
         ])->assertOk()->assertJsonPath('data.type', 'CONTACT_QR_LINK');

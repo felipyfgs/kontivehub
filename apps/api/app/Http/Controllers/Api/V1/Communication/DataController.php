@@ -6,9 +6,9 @@ use App\Actions\Communication\ExportContactAction;
 use App\Actions\Communication\PurgeContactAction;
 use App\Actions\Communication\StreamAttachmentAction;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Communication\ManageCommunicationContactDataRequest;
-use App\Http\Requests\Communication\SyncCommunicationEventsRequest;
-use App\Http\Requests\Communication\ViewCommunicationAttachmentRequest;
+use App\Http\Requests\Communication\ManageContactDataRequest;
+use App\Http\Requests\Communication\SyncEventsRequest;
+use App\Http\Requests\Communication\ViewAttachmentRequest;
 use App\Http\Resources\Communication\ContactPurgeResource;
 use App\Http\Resources\Communication\EventSyncResource;
 use App\Models\CommunicationAttachment;
@@ -20,7 +20,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 final class DataController extends Controller
 {
     public function sync(
-        SyncCommunicationEventsRequest $request,
+        SyncEventsRequest $request,
         EventSyncQuery $query,
     ): JsonResponse {
         return (new EventSyncResource(
@@ -29,7 +29,7 @@ final class DataController extends Controller
     }
 
     public function downloadAttachment(
-        ViewCommunicationAttachmentRequest $request,
+        ViewAttachmentRequest $request,
         CommunicationAttachment $attachment,
         StreamAttachmentAction $action,
     ): StreamedResponse {
@@ -37,7 +37,7 @@ final class DataController extends Controller
     }
 
     public function previewAttachment(
-        ViewCommunicationAttachmentRequest $request,
+        ViewAttachmentRequest $request,
         CommunicationAttachment $attachment,
         StreamAttachmentAction $action,
     ): StreamedResponse {
@@ -45,7 +45,7 @@ final class DataController extends Controller
     }
 
     public function exportContact(
-        ManageCommunicationContactDataRequest $request,
+        ManageContactDataRequest $request,
         CommunicationContact $contact,
         ExportContactAction $action,
     ): StreamedResponse {
@@ -53,7 +53,7 @@ final class DataController extends Controller
     }
 
     public function purgeContact(
-        ManageCommunicationContactDataRequest $request,
+        ManageContactDataRequest $request,
         CommunicationContact $contact,
         PurgeContactAction $action,
     ): JsonResponse {

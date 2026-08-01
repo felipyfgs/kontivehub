@@ -2,27 +2,27 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Actions\Tenant\ActivateTenantCertificateAction;
-use App\Actions\Tenant\GetTenantCertificateAction;
-use App\Actions\Tenant\GetTenantConsentStatusAction;
-use App\Actions\Tenant\GrantTenantTechnicalConsentAction;
-use App\Actions\Tenant\ListTenantMonitorSchedulesAction;
-use App\Actions\Tenant\RefreshTenantIntegrationAction;
-use App\Actions\Tenant\RemoveTenantCertificateAction;
-use App\Actions\Tenant\RevokeTenantTechnicalConsentAction;
-use App\Actions\Tenant\ShowTenantOnboardingStatusAction;
-use App\Actions\Tenant\ShowTenantSettingsAction;
-use App\Actions\Tenant\UpdateTenantInstitutionalProfileAction;
-use App\Actions\Tenant\UpdateTenantMonitorScheduleAction;
+use App\Actions\Tenant\ActivateCertificateAction;
+use App\Actions\Tenant\GetCertificateAction;
+use App\Actions\Tenant\GetConsentStatusAction;
+use App\Actions\Tenant\GrantTechnicalConsentAction;
+use App\Actions\Tenant\ListMonitorSchedulesAction;
+use App\Actions\Tenant\RefreshIntegrationAction;
+use App\Actions\Tenant\RemoveCertificateAction;
+use App\Actions\Tenant\RevokeTechnicalConsentAction;
+use App\Actions\Tenant\ShowOnboardingStatusAction;
+use App\Actions\Tenant\ShowSettingsAction;
+use App\Actions\Tenant\UpdateInstitutionalProfileAction;
+use App\Actions\Tenant\UpdateMonitorScheduleAction;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Tenant\GrantTenantTechnicalConsentRequest;
-use App\Http\Requests\Tenant\RefreshTenantIntegrationRequest;
-use App\Http\Requests\Tenant\RemoveTenantCertificateRequest;
-use App\Http\Requests\Tenant\RevokeTenantTechnicalConsentRequest;
-use App\Http\Requests\Tenant\UpdateTenantInstitutionalProfileRequest;
-use App\Http\Requests\Tenant\UpdateTenantMonitorScheduleRequest;
-use App\Http\Requests\Tenant\UploadTenantCertificateRequest;
-use App\Http\Requests\Tenant\ViewTenantSettingsRequest;
+use App\Http\Requests\Tenant\GrantTechnicalConsentRequest;
+use App\Http\Requests\Tenant\RefreshIntegrationRequest;
+use App\Http\Requests\Tenant\RemoveCertificateRequest;
+use App\Http\Requests\Tenant\RevokeTechnicalConsentRequest;
+use App\Http\Requests\Tenant\UpdateInstitutionalProfileRequest;
+use App\Http\Requests\Tenant\UpdateMonitorScheduleRequest;
+use App\Http\Requests\Tenant\UploadCertificateRequest;
+use App\Http\Requests\Tenant\ViewSettingsRequest;
 use App\Http\Resources\TenantCertificateActivationResource;
 use App\Http\Resources\TenantCertificateRemovalResource;
 use App\Http\Resources\TenantCertificateStatusResource;
@@ -44,15 +44,15 @@ use Illuminate\Http\JsonResponse;
 final class TenantSettingsController extends Controller
 {
     public function show(
-        ViewTenantSettingsRequest $request,
-        ShowTenantSettingsAction $showSettings,
+        ViewSettingsRequest $request,
+        ShowSettingsAction $showSettings,
     ): JsonResponse {
         return TenantSettingsResource::make($showSettings())->response();
     }
 
     public function updateProfile(
-        UpdateTenantInstitutionalProfileRequest $request,
-        UpdateTenantInstitutionalProfileAction $updateProfile,
+        UpdateInstitutionalProfileRequest $request,
+        UpdateInstitutionalProfileAction $updateProfile,
     ): JsonResponse {
         return TenantInstitutionalProfileUpdateResource::make(
             $updateProfile($request->toDto()),
@@ -60,15 +60,15 @@ final class TenantSettingsController extends Controller
     }
 
     public function showConsent(
-        ViewTenantSettingsRequest $request,
-        GetTenantConsentStatusAction $getConsentStatus,
+        ViewSettingsRequest $request,
+        GetConsentStatusAction $getConsentStatus,
     ): JsonResponse {
         return TenantConsentStatusResource::make($getConsentStatus())->response();
     }
 
     public function grantConsent(
-        GrantTenantTechnicalConsentRequest $request,
-        GrantTenantTechnicalConsentAction $grantConsent,
+        GrantTechnicalConsentRequest $request,
+        GrantTechnicalConsentAction $grantConsent,
     ): JsonResponse {
         return TenantTechnicalConsentResource::make(
             $grantConsent($request->toDto()),
@@ -76,8 +76,8 @@ final class TenantSettingsController extends Controller
     }
 
     public function revokeConsent(
-        RevokeTenantTechnicalConsentRequest $request,
-        RevokeTenantTechnicalConsentAction $revokeConsent,
+        RevokeTechnicalConsentRequest $request,
+        RevokeTechnicalConsentAction $revokeConsent,
     ): JsonResponse {
         return TenantTechnicalConsentResource::make(
             $revokeConsent($request->actor()->id),
@@ -85,8 +85,8 @@ final class TenantSettingsController extends Controller
     }
 
     public function showCertificate(
-        ViewTenantSettingsRequest $request,
-        GetTenantCertificateAction $getCertificate,
+        ViewSettingsRequest $request,
+        GetCertificateAction $getCertificate,
     ): JsonResponse {
         return TenantCertificateStatusResource::make(
             $getCertificate(),
@@ -94,8 +94,8 @@ final class TenantSettingsController extends Controller
     }
 
     public function storeCertificate(
-        UploadTenantCertificateRequest $request,
-        ActivateTenantCertificateAction $activateCertificate,
+        UploadCertificateRequest $request,
+        ActivateCertificateAction $activateCertificate,
     ): JsonResponse {
         return TenantCertificateActivationResource::make(
             $activateCertificate($request->toDto()),
@@ -103,8 +103,8 @@ final class TenantSettingsController extends Controller
     }
 
     public function replaceCertificate(
-        UploadTenantCertificateRequest $request,
-        ActivateTenantCertificateAction $activateCertificate,
+        UploadCertificateRequest $request,
+        ActivateCertificateAction $activateCertificate,
     ): JsonResponse {
         return TenantCertificateActivationResource::make(
             $activateCertificate($request->toDto(), replace: true),
@@ -112,8 +112,8 @@ final class TenantSettingsController extends Controller
     }
 
     public function removeCertificate(
-        RemoveTenantCertificateRequest $request,
-        RemoveTenantCertificateAction $removeCertificate,
+        RemoveCertificateRequest $request,
+        RemoveCertificateAction $removeCertificate,
     ): JsonResponse {
         return TenantCertificateRemovalResource::make(
             $removeCertificate($request->actor()->id),
@@ -121,8 +121,8 @@ final class TenantSettingsController extends Controller
     }
 
     public function refreshIntegration(
-        RefreshTenantIntegrationRequest $request,
-        RefreshTenantIntegrationAction $refreshIntegration,
+        RefreshIntegrationRequest $request,
+        RefreshIntegrationAction $refreshIntegration,
     ): JsonResponse {
         return TenantIntegrationRefreshResource::make(
             $refreshIntegration($request->actor()->id),
@@ -130,8 +130,8 @@ final class TenantSettingsController extends Controller
     }
 
     public function listMonitorSchedules(
-        ViewTenantSettingsRequest $request,
-        ListTenantMonitorSchedulesAction $listSchedules,
+        ViewSettingsRequest $request,
+        ListMonitorSchedulesAction $listSchedules,
     ): JsonResponse {
         return TenantMonitorScheduleResource::collection(
             $listSchedules(),
@@ -139,9 +139,9 @@ final class TenantSettingsController extends Controller
     }
 
     public function updateMonitorSchedule(
-        UpdateTenantMonitorScheduleRequest $request,
+        UpdateMonitorScheduleRequest $request,
         string $monitorKey,
-        UpdateTenantMonitorScheduleAction $updateSchedule,
+        UpdateMonitorScheduleAction $updateSchedule,
     ): JsonResponse {
         return TenantMonitorScheduleResource::make(
             $updateSchedule($monitorKey, $request->toDto()),
@@ -149,8 +149,8 @@ final class TenantSettingsController extends Controller
     }
 
     public function onboardingStatus(
-        ViewTenantSettingsRequest $request,
-        ShowTenantOnboardingStatusAction $showOnboardingStatus,
+        ViewSettingsRequest $request,
+        ShowOnboardingStatusAction $showOnboardingStatus,
     ): JsonResponse {
         return TenantOnboardingStatusResource::make(
             $showOnboardingStatus(),

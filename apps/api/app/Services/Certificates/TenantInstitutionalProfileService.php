@@ -138,7 +138,7 @@ final class TenantInstitutionalProfileService
             $locked->save();
 
             if ($cnpjChanging) {
-                $invalidated = $this->invalidateMismatchedCredentialsInTransaction(
+                $invalidated = $this->invalidateMismatchedCredentials(
                     $tenant,
                     $newCnpj,
                     $vaultsToDelete,
@@ -192,7 +192,7 @@ final class TenantInstitutionalProfileService
      * @param  list<array{id: int, object_id: string}>  $vaultsToDelete
      * @return array{credentials_revoked: int, purpose_links_revoked: int, reonboarding_triggered: bool}
      */
-    private function invalidateMismatchedCredentialsInTransaction(
+    private function invalidateMismatchedCredentials(
         Tenant $tenant,
         string $newCnpj,
         array &$vaultsToDelete,

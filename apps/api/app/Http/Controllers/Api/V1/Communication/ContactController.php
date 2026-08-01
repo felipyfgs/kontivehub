@@ -3,14 +3,14 @@
 namespace App\Http\Controllers\Api\V1\Communication;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Communication\AddCommunicationIdentityRequest;
-use App\Http\Requests\Communication\LinkCommunicationIdentityRequest;
-use App\Http\Requests\Communication\ListCommunicationContactsRequest;
-use App\Http\Requests\Communication\ListCommunicationSharedContentRequest;
+use App\Http\Requests\Communication\AddIdentityRequest;
+use App\Http\Requests\Communication\LinkIdentityRequest;
+use App\Http\Requests\Communication\ListContactsRequest;
+use App\Http\Requests\Communication\ListSharedContentRequest;
 use App\Http\Requests\Communication\StoreContactRequest;
-use App\Http\Requests\Communication\UnlinkCommunicationIdentityRequest;
-use App\Http\Requests\Communication\UpdateCommunicationContactRequest;
-use App\Http\Requests\Communication\ViewCommunicationContactRequest;
+use App\Http\Requests\Communication\UnlinkIdentityRequest;
+use App\Http\Requests\Communication\UpdateContactRequest;
+use App\Http\Requests\Communication\ViewContactRequest;
 use App\Http\Resources\Communication\ContactCollection;
 use App\Http\Resources\Communication\ContactResource;
 use App\Http\Resources\Communication\IdentityLinkResource;
@@ -28,21 +28,21 @@ use Symfony\Component\HttpFoundation\Response;
 final class ContactController extends Controller
 {
     public function index(
-        ListCommunicationContactsRequest $request,
+        ListContactsRequest $request,
         ContactQuery $query,
     ): JsonResponse {
         return $this->contactCollection($request, $query);
     }
 
     public function search(
-        ListCommunicationContactsRequest $request,
+        ListContactsRequest $request,
         ContactQuery $query,
     ): JsonResponse {
         return $this->contactCollection($request, $query);
     }
 
     private function contactCollection(
-        ListCommunicationContactsRequest $request,
+        ListContactsRequest $request,
         ContactQuery $query,
     ): JsonResponse {
         return (new ContactCollection(
@@ -51,7 +51,7 @@ final class ContactController extends Controller
     }
 
     public function show(
-        ViewCommunicationContactRequest $request,
+        ViewContactRequest $request,
         CommunicationContact $contact,
         ContactCanonicalizer $canonicalizer,
         ContactQuery $query,
@@ -69,7 +69,7 @@ final class ContactController extends Controller
     }
 
     public function sharedContent(
-        ListCommunicationSharedContentRequest $request,
+        ListSharedContentRequest $request,
         CommunicationContact $contact,
         ContactCanonicalizer $canonicalizer,
         ContactQuery $contacts,
@@ -109,7 +109,7 @@ final class ContactController extends Controller
     }
 
     public function update(
-        UpdateCommunicationContactRequest $request,
+        UpdateContactRequest $request,
         CommunicationContact $contact,
         ContactService $service,
         ContactQuery $query,
@@ -129,7 +129,7 @@ final class ContactController extends Controller
     }
 
     public function addIdentity(
-        AddCommunicationIdentityRequest $request,
+        AddIdentityRequest $request,
         CommunicationContact $contact,
         ContactService $service,
     ): JsonResponse {
@@ -139,7 +139,7 @@ final class ContactController extends Controller
     }
 
     public function linkIdentity(
-        LinkCommunicationIdentityRequest $request,
+        LinkIdentityRequest $request,
         CommunicationIdentity $identity,
         ContactService $service,
     ): JsonResponse {
@@ -149,7 +149,7 @@ final class ContactController extends Controller
     }
 
     public function unlinkIdentity(
-        UnlinkCommunicationIdentityRequest $request,
+        UnlinkIdentityRequest $request,
         CommunicationIdentity $identity,
         int $link,
         ContactService $service,

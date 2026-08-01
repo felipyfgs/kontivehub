@@ -1079,7 +1079,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationDataController downloadAttachment",
+                "summary": "DataController downloadAttachment",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -1116,7 +1116,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationDataController previewAttachment",
+                "summary": "DataController previewAttachment",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -1153,7 +1153,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationAutomationController index",
+                "summary": "AutomationController index",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -1177,7 +1177,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationAutomationController upsert",
+                "summary": "AutomationController upsert",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -1203,7 +1203,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationCatalogController cannedResponses",
+                "summary": "CatalogController cannedResponses",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -1227,7 +1227,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationCatalogController storeCannedResponse",
+                "summary": "CatalogController storeCannedResponse",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -1253,7 +1253,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationCatalogController deleteCannedResponse",
+                "summary": "CatalogController deleteCannedResponse",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -1288,7 +1288,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationCatalogController updateCannedResponse",
+                "summary": "CatalogController updateCannedResponse",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -1325,7 +1325,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationCatalogController deactivateCannedResponse",
+                "summary": "CatalogController deactivateCannedResponse",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -1362,7 +1362,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationCatalogController duplicateCannedResponse",
+                "summary": "CatalogController duplicateCannedResponse",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -1399,7 +1399,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationCatalogController renderCannedResponse",
+                "summary": "CatalogController renderCannedResponse",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -1436,7 +1436,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationAutomationController recipients",
+                "summary": "AutomationController recipients",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -1471,7 +1471,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationAutomationController updateRecipients",
+                "summary": "AutomationController updateRecipients",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -1508,7 +1508,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationContactController index",
+                "summary": "ContactController index",
                 "responses": {
                     "200": {
                         "description": "Resposta canônica.",
@@ -1532,7 +1532,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationContactController store",
+                "summary": "ContactController store",
                 "responses": {
                     "201": {
                         "description": "Resposta canônica.",
@@ -1558,7 +1558,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationContactController search",
+                "summary": "ContactController search",
                 "responses": {
                     "200": {
                         "description": "Resposta canônica.",
@@ -1594,7 +1594,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationContactController show",
+                "summary": "ContactController show",
                 "responses": {
                     "200": {
                         "description": "Resposta canônica.",
@@ -1629,7 +1629,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationContactController update",
+                "summary": "ContactController update",
                 "responses": {
                     "200": {
                         "description": "Resposta canônica.",
@@ -1666,7 +1666,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationDataController exportContact",
+                "summary": "DataController exportContact",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -1703,7 +1703,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationContactController addIdentity",
+                "summary": "ContactController addIdentity",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -1740,7 +1740,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationDataController purgeContact",
+                "summary": "DataController purgeContact",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -1777,7 +1777,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationContactController sharedContent",
+                "summary": "ContactController sharedContent",
                 "responses": {
                     "200": {
                         "description": "Resposta canônica.",
@@ -1797,7 +1797,7 @@
                                 }
                             },
                             "Pragma": {
-                                "description": "Compatibilidade com caches HTTP legados.",
+                                "description": "Compatibilidade com caches HTTP antigos.",
                                 "schema": {
                                     "type": "string",
                                     "const": "no-cache"
@@ -2107,7 +2107,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationConversationController index",
+                "summary": "ConversationController index",
                 "responses": {
                     "200": {
                         "description": "Resposta canônica.",
@@ -2142,7 +2142,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationConversationController store",
+                "summary": "ConversationController store",
                 "responses": {
                     "200": {
                         "description": "Resposta canônica.",
@@ -2221,7 +2221,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationConversationController show",
+                "summary": "ConversationController show",
                 "responses": {
                     "200": {
                         "description": "Resposta canônica.",
@@ -2256,7 +2256,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationConversationController update",
+                "summary": "ConversationController update",
                 "responses": {
                     "200": {
                         "description": "Resposta canônica.",
@@ -2293,7 +2293,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationConversationGatewayController disappearing",
+                "summary": "ConversationGatewayController disappearing",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -2330,7 +2330,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationConversationController removeLabel",
+                "summary": "ConversationController removeLabel",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -2374,7 +2374,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationConversationController addLabel",
+                "summary": "ConversationController addLabel",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -2420,7 +2420,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationConversationController messages",
+                "summary": "ConversationController messages",
                 "responses": {
                     "200": {
                         "description": "Resposta canônica.",
@@ -2477,7 +2477,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationConversationController send",
+                "summary": "ConversationController send",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -2514,7 +2514,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationConversationGatewayController revoke",
+                "summary": "ConversationGatewayController revoke",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -2560,7 +2560,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationConversationGatewayController edit",
+                "summary": "ConversationGatewayController edit",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -2606,7 +2606,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationConversationGatewayController history",
+                "summary": "ConversationGatewayController history",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -2652,7 +2652,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationConversationGatewayController votePoll",
+                "summary": "ConversationGatewayController votePoll",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -2698,7 +2698,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationConversationGatewayController react",
+                "summary": "ConversationGatewayController react",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -2744,7 +2744,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationConversationGatewayController receipt",
+                "summary": "ConversationGatewayController receipt",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -2790,7 +2790,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationConversationGatewayController recovery",
+                "summary": "ConversationGatewayController recovery",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -2836,7 +2836,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationConversationGatewayController chatPresence",
+                "summary": "ConversationGatewayController chatPresence",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -2873,7 +2873,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationConversationGatewayController subscribePresence",
+                "summary": "ConversationGatewayController subscribePresence",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -2910,7 +2910,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationConversationController updateReadState",
+                "summary": "ConversationController updateReadState",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -2947,7 +2947,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationConversationController sharedContent",
+                "summary": "ConversationController sharedContent",
                 "responses": {
                     "200": {
                         "description": "Resposta canônica.",
@@ -2967,7 +2967,7 @@
                                 }
                             },
                             "Pragma": {
-                                "description": "Compatibilidade com caches HTTP legados.",
+                                "description": "Compatibilidade com caches HTTP antigos.",
                                 "schema": {
                                     "type": "string",
                                     "const": "no-cache"
@@ -3028,7 +3028,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationConversationGatewayController state",
+                "summary": "ConversationGatewayController state",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -3065,7 +3065,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationDataController sync",
+                "summary": "DataController sync",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -3091,7 +3091,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationFlowController destroyBinding",
+                "summary": "FlowController destroyBinding",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -3126,7 +3126,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationFlowController updateBinding",
+                "summary": "FlowController updateBinding",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -3163,7 +3163,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationFlowController disableBinding",
+                "summary": "FlowController disableBinding",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -3200,7 +3200,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationFlowController enableBinding",
+                "summary": "FlowController enableBinding",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -3237,7 +3237,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationFlowRunController index",
+                "summary": "FlowRunController index",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -3263,7 +3263,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationFlowRunController show",
+                "summary": "FlowRunController show",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -3300,7 +3300,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationFlowRunController handoff",
+                "summary": "FlowRunController handoff",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -3337,7 +3337,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationFlowRunController pause",
+                "summary": "FlowRunController pause",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -3374,7 +3374,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationFlowRunController restart",
+                "summary": "FlowRunController restart",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -3411,7 +3411,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationFlowRunController resume",
+                "summary": "FlowRunController resume",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -3448,7 +3448,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationFlowRunController stop",
+                "summary": "FlowRunController stop",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -3485,7 +3485,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationFlowController index",
+                "summary": "FlowController index",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -3509,7 +3509,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationFlowController store",
+                "summary": "FlowController store",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -3535,7 +3535,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationFlowController destroy",
+                "summary": "FlowController destroy",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -3570,7 +3570,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationFlowController show",
+                "summary": "FlowController show",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -3605,7 +3605,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationFlowController update",
+                "summary": "FlowController update",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -3642,7 +3642,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationFlowController indexBindings",
+                "summary": "FlowController indexBindings",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -3677,7 +3677,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationFlowController storeBinding",
+                "summary": "FlowController storeBinding",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -3714,7 +3714,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationFlowController cloneFlow",
+                "summary": "FlowController cloneFlow",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -3751,7 +3751,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationFlowController showDraft",
+                "summary": "FlowController showDraft",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -3786,7 +3786,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationFlowController updateDraft",
+                "summary": "FlowController updateDraft",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -3823,7 +3823,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationFlowController dryRun",
+                "summary": "FlowController dryRun",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -3860,7 +3860,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationFlowController previewGraph",
+                "summary": "FlowController previewGraph",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -3897,7 +3897,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationFlowController publish",
+                "summary": "FlowController publish",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -3934,7 +3934,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationFlowController validateGraph",
+                "summary": "FlowController validateGraph",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -3971,7 +3971,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationFlowController cloneVersion",
+                "summary": "FlowController cloneVersion",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -4017,7 +4017,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationContactController linkIdentity",
+                "summary": "ContactController linkIdentity",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -4054,7 +4054,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationContactController unlinkIdentity",
+                "summary": "ContactController unlinkIdentity",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -4100,7 +4100,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationInboxController index",
+                "summary": "InboxController index",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -4124,7 +4124,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationInboxController store",
+                "summary": "InboxController store",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -4150,7 +4150,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationInboxController destroy",
+                "summary": "InboxController destroy",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -4185,7 +4185,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationInboxController update",
+                "summary": "InboxController update",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -4222,7 +4222,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationInboxGatewayController markStateClean",
+                "summary": "InboxGatewayController markStateClean",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -4259,7 +4259,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationInboxGatewayController syncState",
+                "summary": "InboxGatewayController syncState",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -4296,7 +4296,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationInboxGatewayController blocklist",
+                "summary": "InboxGatewayController blocklist",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -4331,7 +4331,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationInboxGatewayController updateBlocklist",
+                "summary": "InboxGatewayController updateBlocklist",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -4368,7 +4368,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationInboxGatewayController resolveBusinessLink",
+                "summary": "InboxGatewayController resolveBusinessLink",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -4405,7 +4405,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationInboxGatewayController businessProfiles",
+                "summary": "InboxGatewayController businessProfiles",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -4442,7 +4442,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationInboxGatewayController checkUsers",
+                "summary": "InboxGatewayController checkUsers",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -4479,7 +4479,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationInboxGatewayController userInfo",
+                "summary": "InboxGatewayController userInfo",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -4516,7 +4516,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationInboxGatewayController profilePicture",
+                "summary": "InboxGatewayController profilePicture",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -4553,7 +4553,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationInboxGatewayController contactQrLink",
+                "summary": "InboxGatewayController contactQrLink",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -4590,7 +4590,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationInboxGatewayController resolveContactQr",
+                "summary": "InboxGatewayController resolveContactQr",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -4627,7 +4627,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationInboxGatewayController defaultDisappearing",
+                "summary": "InboxGatewayController defaultDisappearing",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -4664,7 +4664,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationInboxController replaceMembers",
+                "summary": "InboxController replaceMembers",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -4701,7 +4701,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationInboxGatewayController globalPresence",
+                "summary": "InboxGatewayController globalPresence",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -4738,7 +4738,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationInboxGatewayController privacy",
+                "summary": "InboxGatewayController privacy",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -4773,7 +4773,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationInboxGatewayController updatePrivacy",
+                "summary": "InboxGatewayController updatePrivacy",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -4810,7 +4810,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationInboxController startPairing",
+                "summary": "InboxController startPairing",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -4847,7 +4847,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationInboxGatewayController disconnect",
+                "summary": "InboxGatewayController disconnect",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -4884,7 +4884,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationInboxController revoke",
+                "summary": "InboxController revoke",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -4921,7 +4921,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationInboxGatewayController pairPhone",
+                "summary": "InboxGatewayController pairPhone",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -4958,7 +4958,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationInboxGatewayController passive",
+                "summary": "InboxGatewayController passive",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -4995,7 +4995,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationInboxGatewayController confirmPasskey",
+                "summary": "InboxGatewayController confirmPasskey",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -5032,7 +5032,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationInboxGatewayController respondPasskey",
+                "summary": "InboxGatewayController respondPasskey",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -5069,7 +5069,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationInboxGatewayController sessionStatus",
+                "summary": "InboxGatewayController sessionStatus",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -5106,7 +5106,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationCatalogController labels",
+                "summary": "CatalogController labels",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -5130,7 +5130,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationCatalogController storeLabel",
+                "summary": "CatalogController storeLabel",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -5156,7 +5156,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationCatalogController deleteLabel",
+                "summary": "CatalogController deleteLabel",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -5193,7 +5193,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationCatalogController outboundCapabilities",
+                "summary": "CatalogController outboundCapabilities",
                 "responses": {
                     "200": {
                         "description": "Resposta canônica.",
@@ -5219,7 +5219,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationProfilePictureController show",
+                "summary": "ProfilePictureController show",
                 "responses": {
                     "200": {
                         "description": "Foto de perfil privada e autorizada.",
@@ -5315,7 +5315,7 @@
                 "tags": [
                     "communication"
                 ],
-                "summary": "CommunicationInboxController updateTenantSettings",
+                "summary": "InboxController updateTenantSettings",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -7905,7 +7905,7 @@
                 "tags": [
                     "fiscal"
                 ],
-                "summary": "PagtowebPaymentCountController consult",
+                "summary": "PagtoWebPaymentCountController consult",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -7942,7 +7942,7 @@
                 "tags": [
                     "fiscal"
                 ],
-                "summary": "PagtowebPaymentCountController history",
+                "summary": "PagtoWebPaymentCountController history",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -7979,7 +7979,7 @@
                 "tags": [
                     "fiscal"
                 ],
-                "summary": "PagtowebPaymentListController consult",
+                "summary": "PagtoWebPaymentListController consult",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -8016,7 +8016,7 @@
                 "tags": [
                     "fiscal"
                 ],
-                "summary": "PagtowebPaymentListController history",
+                "summary": "PagtoWebPaymentListController history",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -8079,7 +8079,7 @@
                 "tags": [
                     "fiscal"
                 ],
-                "summary": "PagtowebArrecadacaoReceiptController history",
+                "summary": "PagtoWebArrecadacaoReceiptController history",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -8116,7 +8116,7 @@
                 "tags": [
                     "fiscal"
                 ],
-                "summary": "PagtowebArrecadacaoReceiptController request",
+                "summary": "PagtoWebArrecadacaoReceiptController request",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -8153,7 +8153,7 @@
                 "tags": [
                     "fiscal"
                 ],
-                "summary": "PagtowebArrecadacaoReceiptController download",
+                "summary": "PagtoWebArrecadacaoReceiptController download",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -16351,7 +16351,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkDashboardController calendar",
+                "summary": "DashboardController calendar",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -16377,7 +16377,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkDashboardController calendarDay",
+                "summary": "DashboardController calendarDay",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -16403,7 +16403,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkDepartmentController index",
+                "summary": "DepartmentController index",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -16427,7 +16427,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkDepartmentController store",
+                "summary": "DepartmentController store",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -16453,7 +16453,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkDepartmentController update",
+                "summary": "DepartmentController update",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -16490,7 +16490,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkDepartmentController assignMembership",
+                "summary": "DepartmentController assignMembership",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -16527,7 +16527,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkDashboardController createExport",
+                "summary": "DashboardController createExport",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -16553,7 +16553,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkDashboardController showExport",
+                "summary": "DashboardController showExport",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -16590,7 +16590,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkDashboardController downloadExport",
+                "summary": "DashboardController downloadExport",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -16627,7 +16627,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkProcessGenerationController show",
+                "summary": "ProcessGenerationController show",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -16664,7 +16664,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkProcessGenerationController confirm",
+                "summary": "ProcessGenerationController confirm",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -16701,7 +16701,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkProcessGenerationController retry",
+                "summary": "ProcessGenerationController retry",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -16738,7 +16738,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkDashboardController kpis",
+                "summary": "DashboardController kpis",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -16764,7 +16764,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkProcessGroupController index",
+                "summary": "ProcessGroupController index",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -16790,7 +16790,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkProcessController index",
+                "summary": "ProcessController index",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -16814,7 +16814,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkProcessController store",
+                "summary": "ProcessController store",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -16840,7 +16840,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkProcessController bulk",
+                "summary": "ProcessController bulk",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -16866,7 +16866,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkProcessController show",
+                "summary": "ProcessController show",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -16901,7 +16901,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkProcessController update",
+                "summary": "ProcessController update",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -16938,7 +16938,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkProcessController archive",
+                "summary": "ProcessController archive",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -16975,7 +16975,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkProcessController comment",
+                "summary": "ProcessController comment",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -17012,7 +17012,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkTaskController storeOnProcess",
+                "summary": "TaskController storeOnProcess",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -17049,7 +17049,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkTaskController reorder",
+                "summary": "TaskController reorder",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -17086,7 +17086,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkProcessController timeline",
+                "summary": "ProcessController timeline",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -17123,7 +17123,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkTaskController queue",
+                "summary": "TaskController queue",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -17149,7 +17149,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkTaskController bulk",
+                "summary": "TaskController bulk",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -17175,7 +17175,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkTaskController show",
+                "summary": "TaskController show",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -17212,7 +17212,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkTaskController assign",
+                "summary": "TaskController assign",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -17249,7 +17249,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkTaskController block",
+                "summary": "TaskController block",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -17286,7 +17286,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkTaskController claim",
+                "summary": "TaskController claim",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -17323,7 +17323,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkTaskController comment",
+                "summary": "TaskController comment",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -17360,7 +17360,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkTaskController complete",
+                "summary": "TaskController complete",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -17397,7 +17397,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkTaskController dispense",
+                "summary": "TaskController dispense",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -17434,7 +17434,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkTaskController uploadEvidence",
+                "summary": "TaskController uploadEvidence",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -17471,7 +17471,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkTaskController removeEvidence",
+                "summary": "TaskController removeEvidence",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -17517,7 +17517,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkTaskController downloadEvidence",
+                "summary": "TaskController downloadEvidence",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -17563,7 +17563,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkTaskController reopen",
+                "summary": "TaskController reopen",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -17600,7 +17600,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkTaskController resume",
+                "summary": "TaskController resume",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -17637,7 +17637,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkTaskController start",
+                "summary": "TaskController start",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -17674,7 +17674,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkTaskController updateStructure",
+                "summary": "TaskController updateStructure",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -17711,7 +17711,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkProcessTemplateCatalogController index",
+                "summary": "ProcessTemplateCatalogController index",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -17737,7 +17737,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkProcessTemplateCatalogController install",
+                "summary": "ProcessTemplateCatalogController install",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -17774,7 +17774,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkProcessTemplateController index",
+                "summary": "ProcessTemplateController index",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -17798,7 +17798,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkProcessTemplateController store",
+                "summary": "ProcessTemplateController store",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -17824,7 +17824,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkProcessTemplateController show",
+                "summary": "ProcessTemplateController show",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -17859,7 +17859,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkProcessTemplateController update",
+                "summary": "ProcessTemplateController update",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -17896,7 +17896,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkProcessTemplateController generationBatches",
+                "summary": "ProcessTemplateController generationBatches",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -17933,7 +17933,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkProcessGenerationController preview",
+                "summary": "ProcessGenerationController preview",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -17970,7 +17970,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkProcessTemplateController showRecurrence",
+                "summary": "ProcessTemplateController showRecurrence",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -18005,7 +18005,7 @@
                 "tags": [
                     "work"
                 ],
-                "summary": "WorkProcessTemplateController updateRecurrence",
+                "summary": "ProcessTemplateController updateRecurrence",
                 "responses": {
                     "default": {
                         "description": "Resposta definida pela operação Laravel.",
@@ -18699,8 +18699,8 @@
                             "null"
                         ],
                         "pattern": "^\\+[1-9]\\d{7,14}$",
-                        "x-kontivehub-lifecycle": "legacy-alias",
-                        "description": "Alias legado de phone; nunca contém endereço técnico."
+                        "x-kontivehub-lifecycle": "alias",
+                        "description": "Alias de phone; nunca contém endereço técnico."
                     }
                 }
             },

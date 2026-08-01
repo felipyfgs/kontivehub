@@ -193,16 +193,16 @@ final class CommunicationSharedContentAndInitiationTest extends TestCase
             'sha256' => $stored['sha256'],
             'storage_context' => $metadata,
         ]);
-        $legacyMessage = $this->message($tenant, $inbox, $conversation, MessageKind::Image);
-        $legacyMessage->forceFill(['metadata' => ['view_once' => 'legacy-invalid-value']])->save();
-        $legacyAttachment = $this->attachment($tenant, $legacyMessage, 'legacy.jpg', 'image/jpeg');
-        $legacyLinkMessage = $this->message($tenant, $inbox, $conversation, MessageKind::Text);
-        $legacyLinkMessage->forceFill([
-            'metadata' => ['view_once' => 'legacy-invalid-value'],
+        $staleMessage = $this->message($tenant, $inbox, $conversation, MessageKind::Image);
+        $staleMessage->forceFill(['metadata' => ['view_once' => 'unrecognized-value']])->save();
+        $staleAttachment = $this->attachment($tenant, $staleMessage, 'stale.jpg', 'image/jpeg');
+        $staleLinkMessage = $this->message($tenant, $inbox, $conversation, MessageKind::Text);
+        $staleLinkMessage->forceFill([
+            'metadata' => ['view_once' => 'unrecognized-value'],
             'content_encrypted' => [
                 'link_preview' => [
-                    'url' => 'https://example.test/legacy',
-                    'title' => 'Link legado',
+                    'url' => 'https://example.test/stale',
+                    'title' => 'Link inválido',
                 ],
             ],
         ])->save();
@@ -245,13 +245,13 @@ final class CommunicationSharedContentAndInitiationTest extends TestCase
         $this->get('/api/v1/communication/attachments/'.$attachment->id.'/preview')
             ->assertNotFound();
 
-        $legacyResource = (new MessageResource(
-            $legacyMessage->load('attachments'),
+        $staleResource = (new MessageResource(
+            $staleMessage->load('attachments'),
         ))->resolve();
-        $this->assertSame('UNAVAILABLE', $legacyResource['availability']['state']);
-        $this->assertNull($legacyResource['body']);
-        $this->assertNull($legacyResource['content']);
-        $this->assertSame([], $legacyResource['attachments']);
+        $this->assertSame('UNAVAILABLE', $staleResource['availability']['state']);
+        $this->assertNull($staleResource['body']);
+        $this->assertNull($staleResource['content']);
+        $this->assertSame([], $staleResource['attachments']);
     }
 
     public function test_shared_content_excludes_purge_revoke_plain_url_and_cross_tenant(): void
@@ -481,7 +481,7 @@ final class CommunicationSharedContentAndInitiationTest extends TestCase
             ->count());
     }
 
-    public function test_composer_replays_the_legacy_idempotency_formula_after_deploy(): void
+    public function test_composer_replays_the_pre_rollout_idempotency_formula(): void
     {
         $tenant = Tenant::factory()->create(['communication_enabled' => true]);
         $operator = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
@@ -493,8 +493,8 @@ final class CommunicationSharedContentAndInitiationTest extends TestCase
             ->firstOrFail();
         [, $identity] = $this->contact($tenant, '+5511999990044');
         $conversation = $this->conversation($tenant, $inbox, $identity);
-        $key = 'legacy-composer-replay-0001';
-        $body = 'Mensagem aceita antes do deploy';
+        $key = 'composer-replay-0001';
+        $body = 'Mensagem aceita antes do rollout';
         $providerId = 'message-'.substr(hash('sha256', $key), 0, 40);
         $contentDigest = hash('sha256', implode('|', [
             MessageKind::Text->value,
@@ -524,7 +524,7 @@ final class CommunicationSharedContentAndInitiationTest extends TestCase
             'tenant_id' => $tenant->id,
             'inbox_id' => $inbox->id,
             'message_id' => $message->id,
-            'command_id' => 'legacy-command-0001',
+            'command_id' => 'pre-rollout-command-0001',
             'session_id' => $inbox->session_id,
             'type' => 'MESSAGE_SEND',
             'payload_encrypted' => ['provider_message_id' => $providerId],
@@ -544,7 +544,7 @@ final class CommunicationSharedContentAndInitiationTest extends TestCase
         $this->assertSame(1, CommunicationOutboxEntry::query()->withoutGlobalScopes()->count());
     }
 
-    public function test_initiation_namespace_cannot_collide_with_a_legacy_composer_key(): void
+    public function test_initiation_namespace_cannot_collide_with_composer_key(): void
     {
         $tenant = Tenant::factory()->create(['communication_enabled' => true]);
         $operator = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
@@ -555,31 +555,31 @@ final class CommunicationSharedContentAndInitiationTest extends TestCase
         $this->authenticate($operator);
 
         $directFirst = $this->postJson('/api/v1/communication/conversations/'.$conversation->id.'/messages', [
-            'body' => 'Colisão legada A',
-            'idempotency_key' => 'outbound-initiation:legacy-prefix-a',
+            'body' => 'Colisão canônica A',
+            'idempotency_key' => 'outbound-initiation:composer-prefix-a',
         ])->assertAccepted();
         $startAfterDirect = $this->post('/api/v1/communication/conversations', [
             'contact_id' => $contact->id,
             'identity_id' => $identity->id,
             'inbox_id' => $inbox->id,
-            'body' => 'Colisão legada A',
+            'body' => 'Colisão canônica A',
         ], [
             'Accept' => 'application/json',
-            'Idempotency-Key' => 'legacy-prefix-a',
+            'Idempotency-Key' => 'composer-prefix-a',
         ])->assertAccepted();
 
         $startFirst = $this->post('/api/v1/communication/conversations', [
             'contact_id' => $contact->id,
             'identity_id' => $identity->id,
             'inbox_id' => $inbox->id,
-            'body' => 'Colisão legada B',
+            'body' => 'Colisão canônica B',
         ], [
             'Accept' => 'application/json',
-            'Idempotency-Key' => 'legacy-prefix-b',
+            'Idempotency-Key' => 'composer-prefix-b',
         ])->assertAccepted();
         $directAfterStart = $this->postJson('/api/v1/communication/conversations/'.$conversation->id.'/messages', [
-            'body' => 'Colisão legada B',
-            'idempotency_key' => 'outbound-initiation:legacy-prefix-b',
+            'body' => 'Colisão canônica B',
+            'idempotency_key' => 'outbound-initiation:composer-prefix-b',
         ])->assertAccepted();
 
         $this->assertNotSame($directFirst->json('data.id'), $startAfterDirect->json('data.message.id'));

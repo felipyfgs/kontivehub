@@ -219,7 +219,7 @@ final class MonitorCommercialLedgerService
      *   balance: array<string, mixed>|null
      * }
      */
-    public function authorizeAndDebitBeforeRemoteDispatch(
+    public function authorizeAndDebit(
         int $tenantId,
         int $clientId,
         string $monitorKey,

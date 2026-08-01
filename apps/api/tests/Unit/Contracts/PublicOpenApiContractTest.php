@@ -82,7 +82,7 @@ class PublicOpenApiContractTest extends TestCase
             $schemas['CommunicationContactIdentity']['properties']['phone']['pattern'],
         );
         $this->assertSame(
-            'legacy-alias',
+            'alias',
             $schemas['CommunicationConversationContact']['properties']['address']['x-kontivehub-lifecycle'],
         );
         $this->assertSame(

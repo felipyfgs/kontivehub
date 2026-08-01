@@ -6,17 +6,17 @@ use App\Actions\Communication\ExecuteConversationGatewayAction;
 use App\DTO\Communication\GatewayOperationData;
 use App\Enums\Communication\GatewayCommandType;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Communication\CommunicationConversationGatewayRequest;
-use App\Http\Requests\Communication\EditCommunicationMessageRequest;
-use App\Http\Requests\Communication\OperateCommunicationConversationGatewayRequest;
-use App\Http\Requests\Communication\ReactToCommunicationMessageRequest;
-use App\Http\Requests\Communication\RecordCommunicationMessageReceiptRequest;
-use App\Http\Requests\Communication\RecoverCommunicationMessageRequest;
-use App\Http\Requests\Communication\RequestCommunicationConversationHistoryRequest;
-use App\Http\Requests\Communication\UpdateCommunicationConversationDisappearingRequest;
-use App\Http\Requests\Communication\UpdateCommunicationConversationPresenceRequest;
-use App\Http\Requests\Communication\UpdateCommunicationConversationStateRequest;
-use App\Http\Requests\Communication\VoteCommunicationPollRequest;
+use App\Http\Requests\Communication\ConversationGatewayRequest;
+use App\Http\Requests\Communication\EditMessageRequest;
+use App\Http\Requests\Communication\OperateConversationGatewayRequest;
+use App\Http\Requests\Communication\ReactToMessageRequest;
+use App\Http\Requests\Communication\RecordMessageReceiptRequest;
+use App\Http\Requests\Communication\RecoverMessageRequest;
+use App\Http\Requests\Communication\RequestConversationHistoryRequest;
+use App\Http\Requests\Communication\UpdateConversationDisappearingRequest;
+use App\Http\Requests\Communication\UpdateConversationPresenceRequest;
+use App\Http\Requests\Communication\UpdateConversationStateRequest;
+use App\Http\Requests\Communication\VotePollRequest;
 use App\Http\Resources\Communication\GatewayCommandResource;
 use App\Models\CommunicationConversation;
 use App\Models\CommunicationMessage;
@@ -34,7 +34,7 @@ final class ConversationGatewayController extends Controller
     ) {}
 
     public function edit(
-        EditCommunicationMessageRequest $request,
+        EditMessageRequest $request,
         CommunicationConversation $conversation,
         CommunicationMessage $message,
     ): JsonResponse {
@@ -48,7 +48,7 @@ final class ConversationGatewayController extends Controller
     }
 
     public function revoke(
-        OperateCommunicationConversationGatewayRequest $request,
+        OperateConversationGatewayRequest $request,
         CommunicationConversation $conversation,
         CommunicationMessage $message,
     ): JsonResponse {
@@ -62,7 +62,7 @@ final class ConversationGatewayController extends Controller
     }
 
     public function react(
-        ReactToCommunicationMessageRequest $request,
+        ReactToMessageRequest $request,
         CommunicationConversation $conversation,
         CommunicationMessage $message,
     ): JsonResponse {
@@ -76,7 +76,7 @@ final class ConversationGatewayController extends Controller
     }
 
     public function votePoll(
-        VoteCommunicationPollRequest $request,
+        VotePollRequest $request,
         CommunicationConversation $conversation,
         CommunicationMessage $message,
     ): JsonResponse {
@@ -90,7 +90,7 @@ final class ConversationGatewayController extends Controller
     }
 
     public function receipt(
-        RecordCommunicationMessageReceiptRequest $request,
+        RecordMessageReceiptRequest $request,
         CommunicationConversation $conversation,
         CommunicationMessage $message,
     ): JsonResponse {
@@ -104,7 +104,7 @@ final class ConversationGatewayController extends Controller
     }
 
     public function subscribePresence(
-        OperateCommunicationConversationGatewayRequest $request,
+        OperateConversationGatewayRequest $request,
         CommunicationConversation $conversation,
     ): JsonResponse {
         return $this->command(
@@ -116,7 +116,7 @@ final class ConversationGatewayController extends Controller
     }
 
     public function chatPresence(
-        UpdateCommunicationConversationPresenceRequest $request,
+        UpdateConversationPresenceRequest $request,
         CommunicationConversation $conversation,
     ): JsonResponse {
         return $this->command(
@@ -128,7 +128,7 @@ final class ConversationGatewayController extends Controller
     }
 
     public function disappearing(
-        UpdateCommunicationConversationDisappearingRequest $request,
+        UpdateConversationDisappearingRequest $request,
         CommunicationConversation $conversation,
     ): JsonResponse {
         return $this->command(
@@ -140,7 +140,7 @@ final class ConversationGatewayController extends Controller
     }
 
     public function history(
-        RequestCommunicationConversationHistoryRequest $request,
+        RequestConversationHistoryRequest $request,
         CommunicationConversation $conversation,
         CommunicationMessage $message,
     ): JsonResponse {
@@ -154,7 +154,7 @@ final class ConversationGatewayController extends Controller
     }
 
     public function recovery(
-        RecoverCommunicationMessageRequest $request,
+        RecoverMessageRequest $request,
         CommunicationConversation $conversation,
         CommunicationMessage $message,
     ): JsonResponse {
@@ -168,7 +168,7 @@ final class ConversationGatewayController extends Controller
     }
 
     public function state(
-        UpdateCommunicationConversationStateRequest $request,
+        UpdateConversationStateRequest $request,
         CommunicationConversation $conversation,
     ): JsonResponse {
         return $this->command(
@@ -180,7 +180,7 @@ final class ConversationGatewayController extends Controller
     }
 
     private function command(
-        CommunicationConversationGatewayRequest $request,
+        ConversationGatewayRequest $request,
         CommunicationConversation $conversation,
         GatewayCommandType $type,
         GatewayOperationData $data,

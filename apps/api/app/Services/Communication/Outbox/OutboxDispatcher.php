@@ -154,7 +154,7 @@ final readonly class OutboxDispatcher
         if ($entry->type === GatewayCommandType::RequestMediaRetry
             && ($message === null || (
                 ! $this->messageAvailability->isRecoverable($message)
-                && ! $this->isLegacyMediaRescue($entry, $message)
+                && ! $this->isMediaRescue($entry, $message)
             ))) {
             throw new CommunicationTransportException('MEDIA_RETRY_INVALID_REQUEST', false);
         }
@@ -307,7 +307,7 @@ final readonly class OutboxDispatcher
         ], true) ? $code : 'MEDIA_RETRY_REQUEST_FAILED';
     }
 
-    private function isLegacyMediaRescue(
+    private function isMediaRescue(
         CommunicationOutboxEntry $entry,
         CommunicationMessage $message,
     ): bool {

@@ -54,7 +54,7 @@ final readonly class WhatsAppPeerCorrelationService
             $aliases,
             $occurredAt,
         );
-        $this->closeLegacySelfConversations($inbox, $occurredAt);
+        $this->closeSelfConversations($inbox, $occurredAt);
         $conversation = $this->correlateConversation(
             $inbox,
             $identity,
@@ -569,7 +569,7 @@ final readonly class WhatsAppPeerCorrelationService
         }
     }
 
-    private function closeLegacySelfConversations(
+    private function closeSelfConversations(
         CommunicationInbox $inbox,
         DateTimeInterface $occurredAt,
     ): void {

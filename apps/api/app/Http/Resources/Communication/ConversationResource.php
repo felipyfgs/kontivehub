@@ -64,7 +64,7 @@ final class ConversationResource extends JsonResource
                         : null,
                     'address_masked' => $this->identity->address_masked,
                     'phone' => $phone,
-                    // Alias legado: preserva shape, mas nunca devolve o endereço técnico bruto.
+                    // Alias : preserva shape, mas nunca devolve o endereço técnico bruto.
                     'address' => $phone,
                     'profile_picture_url' => app(ProfilePictureUrlResolver::class)->forConversation($this->resource),
                     'profile_picture_state' => app(ProfilePictureUrlResolver::class)->stateForConversation($this->resource)

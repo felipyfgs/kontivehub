@@ -4,8 +4,8 @@ namespace App\Services\Fiscal\Guides;
 
 use App\Jobs\Fiscal\ExecuteFiscalMonitoringRunJob;
 use App\Models\Client;
-use App\Models\PagtowebPaymentCountObservation;
-use App\Models\PagtowebPaymentCountProjection;
+use App\Models\PagtoWebPaymentCountObservation;
+use App\Models\PagtoWebPaymentCountProjection;
 use App\Models\Tenant;
 use App\Services\FiscalMonitoring\FiscalMonitoringRunService;
 use Illuminate\Support\Str;
@@ -19,8 +19,8 @@ final class PagtoWebPaymentCountQueryService
     public function history(Tenant $tenant, Client $client): array
     {
         $this->assertClient($tenant, $client);
-        $projection = PagtowebPaymentCountProjection::query()->withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('client_id', $client->id)->first();
-        $history = PagtowebPaymentCountObservation::query()->withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('client_id', $client->id)->orderByDesc('observed_at')->orderByDesc('id')->limit(50)->get()->map(static fn (PagtowebPaymentCountObservation $item) => $item->toPublicArray())->values()->all();
+        $projection = PagtoWebPaymentCountProjection::query()->withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('client_id', $client->id)->first();
+        $history = PagtoWebPaymentCountObservation::query()->withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('client_id', $client->id)->orderByDesc('observed_at')->orderByDesc('id')->limit(50)->get()->map(static fn (PagtoWebPaymentCountObservation $item) => $item->toPublicArray())->values()->all();
 
         return ['client_id' => $client->id, 'current' => $projection?->toPublicArray(), 'history' => $history, 'provenance' => ['source' => 'local_projection', 'serpro_called' => false]];
     }

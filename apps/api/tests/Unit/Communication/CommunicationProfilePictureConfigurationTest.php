@@ -5,7 +5,7 @@ namespace Tests\Unit\Communication;
 use App\DTO\Communication\GatewayQueryData;
 use App\Enums\Communication\GatewayQueryType;
 use App\Enums\Communication\ProfilePictureState;
-use App\Jobs\Communication\RefreshCommunicationProfilePictureJob;
+use App\Jobs\Communication\RefreshProfilePictureJob;
 use App\Services\Communication\Transport\HttpTransport;
 use ReflectionMethod;
 use Tests\TestCase;
@@ -75,11 +75,11 @@ final class CommunicationProfilePictureConfigurationTest extends TestCase
 
         self::assertGreaterThan(
             $maximumGatewaySeconds + $maximumDownloadSeconds + $storageAndShutdownMarginSeconds,
-            RefreshCommunicationProfilePictureJob::TIMEOUT_SECONDS,
+            RefreshProfilePictureJob::TIMEOUT_SECONDS,
         );
         self::assertGreaterThan(
-            RefreshCommunicationProfilePictureJob::TIMEOUT_SECONDS,
-            RefreshCommunicationProfilePictureJob::LOCK_EXPIRES_SECONDS,
+            RefreshProfilePictureJob::TIMEOUT_SECONDS,
+            RefreshProfilePictureJob::LOCK_EXPIRES_SECONDS,
         );
     }
 }

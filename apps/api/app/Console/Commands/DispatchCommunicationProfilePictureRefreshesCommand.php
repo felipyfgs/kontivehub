@@ -6,7 +6,7 @@ use App\Enums\Communication\InboxStatus;
 use App\Enums\Communication\ProfilePictureState;
 use App\Enums\CommunicationChannel;
 use App\Enums\TenantLifecycleStatus;
-use App\Jobs\Communication\RefreshCommunicationProfilePictureJob;
+use App\Jobs\Communication\RefreshProfilePictureJob;
 use App\Models\CommunicationInboxIdentityProfile;
 use DateTimeInterface;
 use Illuminate\Console\Command;
@@ -209,7 +209,7 @@ final class DispatchCommunicationProfilePictureRefreshesCommand extends Command
                 continue;
             }
 
-            RefreshCommunicationProfilePictureJob::dispatch(
+            RefreshProfilePictureJob::dispatch(
                 (int) $profile->tenant_id,
                 (int) $profile->id,
                 (int) $profile->profile_picture_version,

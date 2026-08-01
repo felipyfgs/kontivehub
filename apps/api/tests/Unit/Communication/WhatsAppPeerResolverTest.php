@@ -118,7 +118,7 @@ class WhatsAppPeerResolverTest extends TestCase
         ], $inbox);
     }
 
-    public function test_legacy_from_is_used_when_source_identity_is_absent(): void
+    public function test_from_is_used_when_source_identity_is_absent(): void
     {
         $peer = app(WhatsAppPeerResolver::class)->resolve([
             'from' => '+5511999991234',
@@ -127,7 +127,7 @@ class WhatsAppPeerResolverTest extends TestCase
         $this->assertSame('+5511999991234', $peer);
     }
 
-    public function test_structured_primary_wins_over_legacy_from_without_remote_pn(): void
+    public function test_structured_primary_wins_over__from_without_remote_pn(): void
     {
         $peer = app(WhatsAppPeerResolver::class)->resolve([
             'from' => '+5511999991234',

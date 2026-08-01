@@ -481,7 +481,7 @@ function jsonResponseWithPrivateHeaders(string $schema): array
             'schema' => ['type' => 'string', 'const' => 'private, no-store, max-age=0'],
         ],
         'Pragma' => [
-            'description' => 'Compatibilidade com caches HTTP legados.',
+            'description' => 'Compatibilidade com caches HTTP antigos.',
             'schema' => ['type' => 'string', 'const' => 'no-cache'],
         ],
     ];
@@ -678,8 +678,8 @@ function schemas(): array
                 'address' => [
                     'type' => ['string', 'null'],
                     'pattern' => '^\\+[1-9]\\d{7,14}$',
-                    'x-kontivehub-lifecycle' => 'legacy-alias',
-                    'description' => 'Alias legado de phone; nunca contém endereço técnico.',
+                    'x-kontivehub-lifecycle' => 'alias',
+                    'description' => 'Alias de phone; nunca contém endereço técnico.',
                 ],
             ],
         ),

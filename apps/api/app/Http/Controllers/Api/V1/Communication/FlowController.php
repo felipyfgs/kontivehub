@@ -11,19 +11,19 @@ use App\Actions\Communication\PublishFlowAction;
 use App\Actions\Communication\UpdateFlowAction;
 use App\Actions\Communication\UpdateFlowDraftAction;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Communication\CloneCommunicationFlowRequest;
-use App\Http\Requests\Communication\CloneCommunicationFlowVersionRequest;
-use App\Http\Requests\Communication\DryRunCommunicationFlowRequest;
-use App\Http\Requests\Communication\InspectCommunicationFlowGraphRequest;
-use App\Http\Requests\Communication\ManageCommunicationFlowRequest;
-use App\Http\Requests\Communication\PublishCommunicationFlowRequest;
-use App\Http\Requests\Communication\SetCommunicationFlowBindingStateRequest;
-use App\Http\Requests\Communication\StoreCommunicationFlowBindingRequest;
-use App\Http\Requests\Communication\StoreCommunicationFlowRequest;
-use App\Http\Requests\Communication\UpdateCommunicationFlowBindingRequest;
-use App\Http\Requests\Communication\UpdateCommunicationFlowDraftRequest;
-use App\Http\Requests\Communication\UpdateCommunicationFlowRequest;
-use App\Http\Requests\Communication\ViewCommunicationFlowRequest;
+use App\Http\Requests\Communication\CloneFlowRequest;
+use App\Http\Requests\Communication\CloneFlowVersionRequest;
+use App\Http\Requests\Communication\DryRunFlowRequest;
+use App\Http\Requests\Communication\InspectFlowGraphRequest;
+use App\Http\Requests\Communication\ManageFlowRequest;
+use App\Http\Requests\Communication\PublishFlowRequest;
+use App\Http\Requests\Communication\SetFlowBindingStateRequest;
+use App\Http\Requests\Communication\StoreFlowBindingRequest;
+use App\Http\Requests\Communication\StoreFlowRequest;
+use App\Http\Requests\Communication\UpdateFlowBindingRequest;
+use App\Http\Requests\Communication\UpdateFlowDraftRequest;
+use App\Http\Requests\Communication\UpdateFlowRequest;
+use App\Http\Requests\Communication\ViewFlowRequest;
 use App\Http\Resources\Communication\FlowBindingResource;
 use App\Http\Resources\Communication\FlowDraftResource;
 use App\Http\Resources\Communication\FlowDryRunResource;
@@ -41,7 +41,7 @@ use Illuminate\Http\JsonResponse;
 final class FlowController extends Controller
 {
     public function index(
-        ViewCommunicationFlowRequest $request,
+        ViewFlowRequest $request,
         FlowQuery $query,
         FlowAvailability $availability,
     ): JsonResponse {
@@ -55,7 +55,7 @@ final class FlowController extends Controller
     }
 
     public function store(
-        StoreCommunicationFlowRequest $request,
+        StoreFlowRequest $request,
         CreateFlowAction $action,
     ): JsonResponse {
         return (new FlowResource(
@@ -64,7 +64,7 @@ final class FlowController extends Controller
     }
 
     public function show(
-        ViewCommunicationFlowRequest $request,
+        ViewFlowRequest $request,
         CommunicationFlow $flow,
         FlowQuery $query,
     ): JsonResponse {
@@ -75,7 +75,7 @@ final class FlowController extends Controller
     }
 
     public function update(
-        UpdateCommunicationFlowRequest $request,
+        UpdateFlowRequest $request,
         CommunicationFlow $flow,
         UpdateFlowAction $action,
     ): JsonResponse {
@@ -85,7 +85,7 @@ final class FlowController extends Controller
     }
 
     public function destroy(
-        ManageCommunicationFlowRequest $request,
+        ManageFlowRequest $request,
         CommunicationFlow $flow,
         DeleteFlowAction $action,
     ): JsonResponse {
@@ -95,7 +95,7 @@ final class FlowController extends Controller
     }
 
     public function showDraft(
-        ViewCommunicationFlowRequest $request,
+        ViewFlowRequest $request,
         CommunicationFlow $flow,
         FlowQuery $query,
     ): JsonResponse {
@@ -105,7 +105,7 @@ final class FlowController extends Controller
     }
 
     public function updateDraft(
-        UpdateCommunicationFlowDraftRequest $request,
+        UpdateFlowDraftRequest $request,
         CommunicationFlow $flow,
         UpdateFlowDraftAction $action,
     ): JsonResponse {
@@ -115,7 +115,7 @@ final class FlowController extends Controller
     }
 
     public function validateGraph(
-        InspectCommunicationFlowGraphRequest $request,
+        InspectFlowGraphRequest $request,
         CommunicationFlow $flow,
         InspectFlowGraphAction $action,
     ): JsonResponse {
@@ -125,7 +125,7 @@ final class FlowController extends Controller
     }
 
     public function dryRun(
-        DryRunCommunicationFlowRequest $request,
+        DryRunFlowRequest $request,
         CommunicationFlow $flow,
         InspectFlowGraphAction $action,
     ): JsonResponse {
@@ -135,7 +135,7 @@ final class FlowController extends Controller
     }
 
     public function previewGraph(
-        InspectCommunicationFlowGraphRequest $request,
+        InspectFlowGraphRequest $request,
         CommunicationFlow $flow,
         InspectFlowGraphAction $action,
     ): JsonResponse {
@@ -145,7 +145,7 @@ final class FlowController extends Controller
     }
 
     public function publish(
-        PublishCommunicationFlowRequest $request,
+        PublishFlowRequest $request,
         CommunicationFlow $flow,
         PublishFlowAction $action,
     ): JsonResponse {
@@ -155,7 +155,7 @@ final class FlowController extends Controller
     }
 
     public function cloneFlow(
-        CloneCommunicationFlowRequest $request,
+        CloneFlowRequest $request,
         CommunicationFlow $flow,
         CloneFlowAction $action,
     ): JsonResponse {
@@ -165,7 +165,7 @@ final class FlowController extends Controller
     }
 
     public function cloneVersion(
-        CloneCommunicationFlowVersionRequest $request,
+        CloneFlowVersionRequest $request,
         CommunicationFlow $flow,
         CommunicationFlowVersion $version,
         CloneFlowAction $action,
@@ -176,7 +176,7 @@ final class FlowController extends Controller
     }
 
     public function indexBindings(
-        ViewCommunicationFlowRequest $request,
+        ViewFlowRequest $request,
         CommunicationFlow $flow,
         FlowQuery $query,
     ): JsonResponse {
@@ -186,7 +186,7 @@ final class FlowController extends Controller
     }
 
     public function storeBinding(
-        StoreCommunicationFlowBindingRequest $request,
+        StoreFlowBindingRequest $request,
         CommunicationFlow $flow,
         ManageFlowBindingAction $action,
     ): JsonResponse {
@@ -196,7 +196,7 @@ final class FlowController extends Controller
     }
 
     public function updateBinding(
-        UpdateCommunicationFlowBindingRequest $request,
+        UpdateFlowBindingRequest $request,
         CommunicationFlowInboxBinding $binding,
         ManageFlowBindingAction $action,
     ): JsonResponse {
@@ -206,7 +206,7 @@ final class FlowController extends Controller
     }
 
     public function enableBinding(
-        SetCommunicationFlowBindingStateRequest $request,
+        SetFlowBindingStateRequest $request,
         CommunicationFlowInboxBinding $binding,
         ManageFlowBindingAction $action,
     ): JsonResponse {
@@ -216,7 +216,7 @@ final class FlowController extends Controller
     }
 
     public function disableBinding(
-        SetCommunicationFlowBindingStateRequest $request,
+        SetFlowBindingStateRequest $request,
         CommunicationFlowInboxBinding $binding,
         ManageFlowBindingAction $action,
     ): JsonResponse {
@@ -226,7 +226,7 @@ final class FlowController extends Controller
     }
 
     public function destroyBinding(
-        ManageCommunicationFlowRequest $request,
+        ManageFlowRequest $request,
         CommunicationFlowInboxBinding $binding,
         ManageFlowBindingAction $action,
     ): JsonResponse {

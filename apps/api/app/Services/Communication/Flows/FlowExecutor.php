@@ -12,7 +12,7 @@ use App\Enums\Communication\MessageKind;
 use App\Enums\Communication\MessageSource;
 use App\Enums\Communication\MessageStatus;
 use App\Enums\Communication\OutboxStatus;
-use App\Jobs\Communication\AdvanceCommunicationFlowRunJob;
+use App\Jobs\Communication\AdvanceFlowRunJob;
 use App\Models\CommunicationCannedResponse;
 use App\Models\CommunicationConversation;
 use App\Models\CommunicationFlow;
@@ -298,9 +298,9 @@ final class FlowExecutor
         });
 
         if ($followUpDelay !== null) {
-            AdvanceCommunicationFlowRunJob::dispatch($runId)->delay(now()->addSeconds((int) $followUpDelay));
+            AdvanceFlowRunJob::dispatch($runId)->delay(now()->addSeconds((int) $followUpDelay));
         } elseif ($shouldContinue) {
-            AdvanceCommunicationFlowRunJob::dispatch($runId);
+            AdvanceFlowRunJob::dispatch($runId);
         }
     }
 
@@ -336,7 +336,7 @@ final class FlowExecutor
             return;
         }
 
-        AdvanceCommunicationFlowRunJob::dispatch((int) $run->id);
+        AdvanceFlowRunJob::dispatch((int) $run->id);
     }
 
     private function resolveWaitingOutbox(CommunicationFlowRun $run): bool

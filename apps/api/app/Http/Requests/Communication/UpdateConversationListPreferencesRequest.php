@@ -10,7 +10,7 @@ use App\Services\Communication\Authorization\Access;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
-final class UpdateConversationListPreferencesRequest extends CommunicationRequest
+final class UpdateConversationListPreferencesRequest extends TenantScopedRequest
 {
     public function authorize(): bool
     {
@@ -20,7 +20,7 @@ final class UpdateConversationListPreferencesRequest extends CommunicationReques
             && app(Access::class)->canView($actor);
     }
 
-    protected function prepareCommunicationValidation(): void
+    protected function prepareScopedValidation(): void
     {
         if ($this->has('status') && is_string($this->input('status'))) {
             $this->merge(['status' => strtoupper(trim($this->string('status')->toString()))]);

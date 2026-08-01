@@ -5,7 +5,7 @@ namespace App\Http\Requests\Communication;
 use App\Models\User;
 use App\Services\Communication\Authorization\Access;
 
-final class ViewConversationBulkOperationRequest extends CommunicationRequest
+final class ViewConversationBulkOperationRequest extends TenantScopedRequest
 {
     public function authorize(): bool
     {

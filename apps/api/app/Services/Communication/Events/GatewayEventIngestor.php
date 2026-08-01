@@ -15,8 +15,8 @@ use App\Enums\Communication\MessageSource;
 use App\Enums\Communication\MessageStatus;
 use App\Enums\CommunicationChannel;
 use App\Exceptions\GatewayEventConflictException;
-use App\Jobs\Communication\CorrelateCommunicationFlowEventJob;
-use App\Jobs\Communication\DeleteCommunicationMediaObjectJob;
+use App\Jobs\Communication\CorrelateFlowEventJob;
+use App\Jobs\Communication\DeleteMediaObjectJob;
 use App\Models\CommunicationAttachment;
 use App\Models\CommunicationConversation;
 use App\Models\CommunicationEvent;
@@ -180,7 +180,7 @@ final readonly class GatewayEventIngestor
 
             if ($result === 'processed' && $flowCorrelation !== null
                 && app(FlowAvailability::class)->runtimeEnabled()) {
-                CorrelateCommunicationFlowEventJob::dispatch(
+                CorrelateFlowEventJob::dispatch(
                     $flowCorrelation['tenant_id'],
                     $flowCorrelation['conversation_id'],
                     $flowCorrelation['message_id'],
@@ -547,7 +547,7 @@ final readonly class GatewayEventIngestor
             || ($incomingGeneration === $currentGeneration && $incomingAttempt < $currentAttempt)
             || ($currentStatus === 'READY' && $status !== 'READY')) {
             if ($storedMedia !== null) {
-                DeleteCommunicationMediaObjectJob::dispatch($storedMedia['object_id'])->afterCommit();
+                DeleteMediaObjectJob::dispatch($storedMedia['object_id'])->afterCommit();
             }
 
             return [(int) $message->conversation_id, (int) $message->id, [
@@ -681,7 +681,7 @@ final readonly class GatewayEventIngestor
                         : ['push_name' => $display]
                 ),
             };
-            // Legacy Contact full-name events used display_name without source.
+            //  Contact full-name events used display_name without source.
             if ($source === '' && ! isset($safe['business_name']) && ! isset($safe['push_name'])) {
                 // Prefer address book when only display_name is present (Contact action).
                 $fields['address_book_full_name'] = $fields['address_book_full_name'] ?? $display;
@@ -897,7 +897,7 @@ final readonly class GatewayEventIngestor
 
         if ($message->purged_at !== null || $message->revoked_at !== null || $message->quarantined_at !== null) {
             if ($storedMedia !== null) {
-                DeleteCommunicationMediaObjectJob::dispatch($storedMedia['object_id'])->afterCommit();
+                DeleteMediaObjectJob::dispatch($storedMedia['object_id'])->afterCommit();
             }
 
             return false;
@@ -952,7 +952,7 @@ final readonly class GatewayEventIngestor
         }
 
         if ($storedMedia !== null && $this->hasPurgedAttachment($message)) {
-            DeleteCommunicationMediaObjectJob::dispatch($storedMedia['object_id'])->afterCommit();
+            DeleteMediaObjectJob::dispatch($storedMedia['object_id'])->afterCommit();
             $storedMedia = null;
             unset($incomingMetadata['media_error_code']);
             $incomingMetadata['media_state'] = 'UNAVAILABLE';
@@ -1123,7 +1123,7 @@ final readonly class GatewayEventIngestor
         if (hash_equals((string) $attachment->sha256, $storedMedia['sha256'])
             && (int) $attachment->size_bytes === $storedMedia['size_bytes']) {
             if (! hash_equals((string) $attachment->object_id, $storedMedia['object_id'])) {
-                DeleteCommunicationMediaObjectJob::dispatch($storedMedia['object_id'])->afterCommit();
+                DeleteMediaObjectJob::dispatch($storedMedia['object_id'])->afterCommit();
             }
 
             return false;
@@ -1135,7 +1135,7 @@ final readonly class GatewayEventIngestor
         $previousObjectId = (string) $attachment->object_id;
         $attachment->forceFill($attributes)->save();
         if ($previousObjectId !== '' && ! hash_equals($previousObjectId, $storedMedia['object_id'])) {
-            DeleteCommunicationMediaObjectJob::dispatch($previousObjectId)->afterCommit();
+            DeleteMediaObjectJob::dispatch($previousObjectId)->afterCommit();
         }
 
         return true;

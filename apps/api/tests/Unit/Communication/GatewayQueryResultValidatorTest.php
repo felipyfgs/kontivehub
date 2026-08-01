@@ -48,7 +48,7 @@ final class GatewayQueryResultValidatorTest extends TestCase
     {
         yield 'missing found' => [['profiles' => [['user' => '+5511999991234']]]];
         yield 'raw jid' => [['profiles' => [['user' => '5511999991234@s.whatsapp.net', 'found' => true]]]];
-        yield 'conflated legacy name' => [['profiles' => [[
+        yield 'conflated  name' => [['profiles' => [[
             'user' => '+5511999991234',
             'found' => true,
             'address_book_name' => 'Maria',

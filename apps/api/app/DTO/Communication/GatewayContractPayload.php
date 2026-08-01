@@ -346,16 +346,16 @@ final class GatewayContractPayload
     /** @param array<string, mixed> $payload */
     private static function assertMediaRetryCommand(array $payload): void
     {
-        $legacy = array_key_exists('sender', $payload) || array_key_exists('from_me', $payload);
+        $v1 = array_key_exists('sender', $payload) || array_key_exists('from_me', $payload);
         $v2 = array_key_exists('expected_direction', $payload);
-        if ($legacy === $v2) {
-            throw new InvalidArgumentException('MEDIA_RETRY_REQUEST exige shape legado ou v2 exclusivo.');
+        if ($v1 === $v2) {
+            throw new InvalidArgumentException('MEDIA_RETRY_REQUEST exige shape v1 ou v2 exclusivo.');
         }
-        if ($legacy) {
+        if ($v1) {
             if (trim((string) ($payload['sender'] ?? '')) === ''
                 || ! array_key_exists('from_me', $payload)
                 || $payload['from_me'] !== false) {
-                throw new InvalidArgumentException('MEDIA_RETRY_REQUEST legado aceita somente inbound válido.');
+                throw new InvalidArgumentException('MEDIA_RETRY_REQUEST v1 aceita somente inbound válido.');
             }
 
             return;

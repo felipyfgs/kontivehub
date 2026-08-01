@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Actions\Tenant\UploadTenantSerproTermAction;
+use App\Actions\Tenant\UploadSerproTermAction;
 use App\DTO\Tenant\SerproTermUploadData;
 use App\Enums\AuthorCertificateMode;
 use App\Enums\AuthorIdentityType;
@@ -41,7 +41,7 @@ final class TenantSerproAuthorizationApiTest extends TestCase
     public function test_term_upload_action_rejects_missing_xml_sources_before_service_call(): void
     {
         try {
-            app(UploadTenantSerproTermAction::class)(new SerproTermUploadData(
+            app(UploadSerproTermAction::class)(new SerproTermUploadData(
                 environment: SerproEnvironment::Trial,
                 xml: null,
                 filePath: null,

@@ -127,14 +127,14 @@ class PgdasdDasPaymentStateResolverTest extends TestCase
     }
 
     private function das(
-        ?string $pagtowebStatus,
+        ?string $pagtoWebStatus,
         mixed $verifiedAt,
         ?bool $paymentLocated = null,
     ): PgdasdOperation {
         $op = new PgdasdOperation;
         $op->forceFill([
             'kind' => PgdasdOperationKind::Das,
-            'pagtoweb_payment_status' => $pagtowebStatus,
+            'pagtoweb_payment_status' => $pagtoWebStatus,
             'pagtoweb_verified_at' => $verifiedAt,
             'payment_located' => $paymentLocated,
         ]);

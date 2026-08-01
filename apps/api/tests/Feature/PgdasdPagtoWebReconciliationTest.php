@@ -19,8 +19,8 @@ use App\Jobs\Fiscal\ExecuteFiscalMonitoringRunJob;
 use App\Models\Client;
 use App\Models\ClientProcuracaoSync;
 use App\Models\FiscalMonitoringRun;
-use App\Models\PagtowebPaymentListItem;
-use App\Models\PagtowebPaymentListObservation;
+use App\Models\PagtoWebPaymentListItem;
+use App\Models\PagtoWebPaymentListObservation;
 use App\Models\PgdasdOperation;
 use App\Models\TaxObligationDefinition;
 use App\Models\TaxObligationProjection;
@@ -177,15 +177,15 @@ class PgdasdPagtoWebReconciliationTest extends TestCase
     {
         $codec = app(PagtoWebPaymentListCodec::class);
         $localDas = '07202604328595614';
-        $pagtowebDocument = '7202604328595614';
+        $pagtoWebDocument = '7202604328595614';
 
         $this->assertSame(
             $codec->canonicalizeDocumentNumber($localDas),
-            $codec->canonicalizeDocumentNumber($pagtowebDocument),
+            $codec->canonicalizeDocumentNumber($pagtoWebDocument),
         );
         $this->assertSame(
             $codec->documentDigest($localDas),
-            $codec->documentDigest($pagtowebDocument),
+            $codec->documentDigest($pagtoWebDocument),
         );
 
         $tenant = Tenant::factory()->create();
@@ -206,7 +206,7 @@ class PgdasdPagtoWebReconciliationTest extends TestCase
         ]);
         $items = $codec->decodePayments([
             'pagamentos' => [[
-                'numeroDocumento' => $pagtowebDocument,
+                'numeroDocumento' => $pagtoWebDocument,
                 'dataArrecadacao' => '2026-02-18',
                 'valorTotal' => '420.00',
             ]],
@@ -232,7 +232,7 @@ class PgdasdPagtoWebReconciliationTest extends TestCase
         Http::fake();
         $codec = app(PagtoWebPaymentListCodec::class);
         $localDas = '07202604328595614';
-        $pagtowebDocument = '7202604328595614';
+        $pagtoWebDocument = '7202604328595614';
 
         $tenant = Tenant::factory()->create();
         $client = Client::factory()->for($tenant)->create(['is_active' => true]);
@@ -253,8 +253,8 @@ class PgdasdPagtoWebReconciliationTest extends TestCase
         ])->save();
 
         // Simula evidência já persistida com item (digest canônico da resposta) e DAS ainda NOT_FOUND.
-        $itemDigest = $codec->documentDigest($pagtowebDocument);
-        $observation = PagtowebPaymentListObservation::query()->withoutGlobalScopes()->create([
+        $itemDigest = $codec->documentDigest($pagtoWebDocument);
+        $observation = PagtoWebPaymentListObservation::query()->withoutGlobalScopes()->create([
             'tenant_id' => $tenant->id,
             'client_id' => $client->id,
             'filter_summary' => [
@@ -270,7 +270,7 @@ class PgdasdPagtoWebReconciliationTest extends TestCase
             'source_provenance' => FiscalSourceProvenance::SerproReal->value,
             'created_at' => CarbonImmutable::now(),
         ]);
-        PagtowebPaymentListItem::query()->create([
+        PagtoWebPaymentListItem::query()->create([
             'observation_id' => $observation->id,
             'tenant_id' => $tenant->id,
             'client_id' => $client->id,

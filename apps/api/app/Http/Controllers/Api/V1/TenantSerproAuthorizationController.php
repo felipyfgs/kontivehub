@@ -2,30 +2,30 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Actions\Tenant\ConfigureTenantSerproAuthorAction;
-use App\Actions\Tenant\DownloadTenantSerproTermDraftAction;
-use App\Actions\Tenant\EvaluateTenantSerproEligibilityAction;
-use App\Actions\Tenant\GenerateTenantSerproTermDraftAction;
-use App\Actions\Tenant\ListTenantProxyPowersAction;
-use App\Actions\Tenant\RefreshTenantSerproTokenAction;
-use App\Actions\Tenant\RejectManualTenantProxyPowerAction;
-use App\Actions\Tenant\ShowTenantSerproAuthorizationAction;
-use App\Actions\Tenant\ShowTenantSerproHealthAction;
-use App\Actions\Tenant\SignTenantSerproTermAction;
-use App\Actions\Tenant\SyncTenantProxyPowersAction;
-use App\Actions\Tenant\UploadTenantSerproTermAction;
+use App\Actions\Tenant\ConfigureSerproAuthorAction;
+use App\Actions\Tenant\DownloadSerproTermDraftAction;
+use App\Actions\Tenant\EvaluateSerproEligibilityAction;
+use App\Actions\Tenant\GenerateSerproTermDraftAction;
+use App\Actions\Tenant\ListProxyPowersAction;
+use App\Actions\Tenant\RefreshSerproTokenAction;
+use App\Actions\Tenant\RejectManualProxyPowerAction;
+use App\Actions\Tenant\ShowSerproAuthorizationAction;
+use App\Actions\Tenant\ShowSerproHealthAction;
+use App\Actions\Tenant\SignSerproTermAction;
+use App\Actions\Tenant\SyncProxyPowersAction;
+use App\Actions\Tenant\UploadSerproTermAction;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Tenant\ConfigureTenantSerproAuthorRequest;
-use App\Http\Requests\Tenant\DownloadTenantSerproTermDraftRequest;
-use App\Http\Requests\Tenant\EvaluateTenantSerproEligibilityRequest;
-use App\Http\Requests\Tenant\GenerateTenantSerproTermDraftRequest;
-use App\Http\Requests\Tenant\ListTenantProxyPowersRequest;
-use App\Http\Requests\Tenant\RefreshTenantSerproTokenRequest;
-use App\Http\Requests\Tenant\RejectManualTenantProxyPowerRequest;
-use App\Http\Requests\Tenant\SignTenantSerproTermRequest;
-use App\Http\Requests\Tenant\SyncTenantProxyPowersRequest;
-use App\Http\Requests\Tenant\UploadTenantSerproTermRequest;
-use App\Http\Requests\Tenant\ViewTenantSerproAuthorizationRequest;
+use App\Http\Requests\Tenant\ConfigureSerproAuthorRequest;
+use App\Http\Requests\Tenant\DownloadSerproTermDraftRequest;
+use App\Http\Requests\Tenant\EvaluateSerproEligibilityRequest;
+use App\Http\Requests\Tenant\GenerateSerproTermDraftRequest;
+use App\Http\Requests\Tenant\ListProxyPowersRequest;
+use App\Http\Requests\Tenant\RefreshSerproTokenRequest;
+use App\Http\Requests\Tenant\RejectManualProxyPowerRequest;
+use App\Http\Requests\Tenant\SignSerproTermRequest;
+use App\Http\Requests\Tenant\SyncProxyPowersRequest;
+use App\Http\Requests\Tenant\UploadSerproTermRequest;
+use App\Http\Requests\Tenant\ViewSerproAuthorizationRequest;
 use App\Http\Resources\TaxProxyPowerCollection;
 use App\Http\Resources\TenantProxyPowerSyncResource;
 use App\Http\Resources\TenantSerproAuthorizationOverviewResource;
@@ -44,8 +44,8 @@ use Symfony\Component\HttpFoundation\Response;
 final class TenantSerproAuthorizationController extends Controller
 {
     public function show(
-        ViewTenantSerproAuthorizationRequest $request,
-        ShowTenantSerproAuthorizationAction $showAuthorization,
+        ViewSerproAuthorizationRequest $request,
+        ShowSerproAuthorizationAction $showAuthorization,
     ): JsonResponse {
         return TenantSerproAuthorizationOverviewResource::make(
             $showAuthorization($request->environment()),
@@ -53,8 +53,8 @@ final class TenantSerproAuthorizationController extends Controller
     }
 
     public function configureAuthor(
-        ConfigureTenantSerproAuthorRequest $request,
-        ConfigureTenantSerproAuthorAction $configureAuthor,
+        ConfigureSerproAuthorRequest $request,
+        ConfigureSerproAuthorAction $configureAuthor,
     ): JsonResponse {
         return TenantSerproAuthorizationResource::make(
             $configureAuthor($request->toDto()),
@@ -62,8 +62,8 @@ final class TenantSerproAuthorizationController extends Controller
     }
 
     public function generateTermoDraft(
-        GenerateTenantSerproTermDraftRequest $request,
-        GenerateTenantSerproTermDraftAction $generateDraft,
+        GenerateSerproTermDraftRequest $request,
+        GenerateSerproTermDraftAction $generateDraft,
     ): JsonResponse {
         return TenantSerproTermDraftResource::make(
             $generateDraft($request->toDto()),
@@ -71,8 +71,8 @@ final class TenantSerproAuthorizationController extends Controller
     }
 
     public function downloadTermoDraft(
-        DownloadTenantSerproTermDraftRequest $request,
-        DownloadTenantSerproTermDraftAction $downloadDraft,
+        DownloadSerproTermDraftRequest $request,
+        DownloadSerproTermDraftAction $downloadDraft,
     ): Response {
         $xml = $downloadDraft(
             $request->environment(),
@@ -88,8 +88,8 @@ final class TenantSerproAuthorizationController extends Controller
     }
 
     public function uploadTermo(
-        UploadTenantSerproTermRequest $request,
-        UploadTenantSerproTermAction $uploadTerm,
+        UploadSerproTermRequest $request,
+        UploadSerproTermAction $uploadTerm,
     ): JsonResponse {
         return TenantSerproAuthorizationResource::make(
             $uploadTerm($request->toDto()),
@@ -97,8 +97,8 @@ final class TenantSerproAuthorizationController extends Controller
     }
 
     public function signTermoManagedCertificate(
-        SignTenantSerproTermRequest $request,
-        SignTenantSerproTermAction $signTerm,
+        SignSerproTermRequest $request,
+        SignSerproTermAction $signTerm,
     ): JsonResponse {
         return TenantSerproAuthorizationResource::make(
             $signTerm($request->environment(), $request->actor()->id),
@@ -108,8 +108,8 @@ final class TenantSerproAuthorizationController extends Controller
     }
 
     public function refreshToken(
-        RefreshTenantSerproTokenRequest $request,
-        RefreshTenantSerproTokenAction $refreshToken,
+        RefreshSerproTokenRequest $request,
+        RefreshSerproTokenAction $refreshToken,
     ): JsonResponse {
         return TenantSerproAuthorizationResource::make(
             $refreshToken($request->environment(), $request->actor()->id),
@@ -117,8 +117,8 @@ final class TenantSerproAuthorizationController extends Controller
     }
 
     public function listProxyPowers(
-        ListTenantProxyPowersRequest $request,
-        ListTenantProxyPowersAction $listProxyPowers,
+        ListProxyPowersRequest $request,
+        ListProxyPowersAction $listProxyPowers,
     ): JsonResponse {
         return (new TaxProxyPowerCollection(
             $listProxyPowers($request->toDto()),
@@ -126,15 +126,15 @@ final class TenantSerproAuthorizationController extends Controller
     }
 
     public function importProxyPower(
-        RejectManualTenantProxyPowerRequest $request,
-        RejectManualTenantProxyPowerAction $rejectManualPower,
+        RejectManualProxyPowerRequest $request,
+        RejectManualProxyPowerAction $rejectManualPower,
     ): never {
         $rejectManualPower();
     }
 
     public function syncProxyPowers(
-        SyncTenantProxyPowersRequest $request,
-        SyncTenantProxyPowersAction $syncProxyPowers,
+        SyncProxyPowersRequest $request,
+        SyncProxyPowersAction $syncProxyPowers,
     ): JsonResponse {
         return TenantProxyPowerSyncResource::make(
             $syncProxyPowers($request->toDto()),
@@ -142,8 +142,8 @@ final class TenantSerproAuthorizationController extends Controller
     }
 
     public function eligibility(
-        EvaluateTenantSerproEligibilityRequest $request,
-        EvaluateTenantSerproEligibilityAction $evaluateEligibility,
+        EvaluateSerproEligibilityRequest $request,
+        EvaluateSerproEligibilityAction $evaluateEligibility,
     ): JsonResponse {
         return TenantSerproEligibilityResource::make(
             $evaluateEligibility($request->toDto(), $request->actor()),
@@ -151,8 +151,8 @@ final class TenantSerproAuthorizationController extends Controller
     }
 
     public function platformHealth(
-        ViewTenantSerproAuthorizationRequest $request,
-        ShowTenantSerproHealthAction $showHealth,
+        ViewSerproAuthorizationRequest $request,
+        ShowSerproHealthAction $showHealth,
     ): JsonResponse {
         return TenantSerproHealthResource::make(
             $showHealth($request->environment()),

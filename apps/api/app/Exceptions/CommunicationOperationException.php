@@ -2,12 +2,12 @@
 
 namespace App\Exceptions;
 
-use App\Enums\Communication\CommunicationOperationFailure;
+use App\Enums\Communication\OperationFailure;
 use Illuminate\Contracts\Debug\ShouldntReport;
 
 final class CommunicationOperationException extends ApiDomainException implements ShouldntReport
 {
-    public function __construct(public readonly CommunicationOperationFailure $failure)
+    public function __construct(public readonly OperationFailure $failure)
     {
         parent::__construct(
             stableCode: $failure->value,

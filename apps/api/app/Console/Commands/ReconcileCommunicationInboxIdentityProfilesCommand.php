@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Jobs\Communication\ReconcileCommunicationInboxIdentityProfilesJob;
+use App\Jobs\Communication\ReconcileInboxIdentityProfilesJob;
 use App\Models\CommunicationInbox;
 use Illuminate\Console\Command;
 
@@ -23,7 +23,7 @@ final class ReconcileCommunicationInboxIdentityProfilesCommand extends Command
         }
         $inboxes = $query->get(['id', 'tenant_id']);
         foreach ($inboxes as $inbox) {
-            ReconcileCommunicationInboxIdentityProfilesJob::dispatch((int) $inbox->tenant_id, (int) $inbox->id);
+            ReconcileInboxIdentityProfilesJob::dispatch((int) $inbox->tenant_id, (int) $inbox->id);
         }
         $this->info($inboxes->count().' reconciliações de perfil agendadas.');
 

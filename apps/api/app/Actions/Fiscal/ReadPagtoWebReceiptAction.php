@@ -4,7 +4,7 @@ namespace App\Actions\Fiscal;
 
 use App\DTO\Fiscal\Monitoring\FiscalDownloadData;
 use App\Models\Client;
-use App\Models\PagtowebArrecadacaoReceipt;
+use App\Models\PagtoWebArrecadacaoReceipt;
 use App\Models\Tenant;
 use App\Services\Fiscal\Guides\PagtoWebArrecadacaoReceiptProjector;
 use Throwable;
@@ -20,7 +20,7 @@ final readonly class ReadPagtoWebReceiptAction
         Client $client,
         int $receiptId,
     ): ?FiscalDownloadData {
-        $receipt = PagtowebArrecadacaoReceipt::query()
+        $receipt = PagtoWebArrecadacaoReceipt::query()
             ->withoutGlobalScopes()
             ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)

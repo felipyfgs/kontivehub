@@ -7,7 +7,7 @@ use App\DTO\Fiscal\Guides\PagtoWebArrecadacaoReceiptDto;
 use App\Enums\FiscalSourceProvenance;
 use App\Enums\SecureObjectPurpose;
 use App\Models\Client;
-use App\Models\PagtowebArrecadacaoReceipt;
+use App\Models\PagtoWebArrecadacaoReceipt;
 use App\Models\Tenant;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -17,7 +17,7 @@ final class PagtoWebArrecadacaoReceiptProjector
 {
     public function __construct(private readonly SecureObjectStore $vault) {}
 
-    public function project(Tenant $tenant, Client $client, string $sourceProvenance, mixed $dados): PagtowebArrecadacaoReceipt
+    public function project(Tenant $tenant, Client $client, string $sourceProvenance, mixed $dados): PagtoWebArrecadacaoReceipt
     {
         if ((int) $client->tenant_id !== (int) $tenant->id) {
             throw new RuntimeException('Cliente não pertence ao escritório ativo.');
@@ -29,8 +29,8 @@ final class PagtoWebArrecadacaoReceiptProjector
 
         $receipt = PagtoWebArrecadacaoReceiptDto::fromDados($dados);
 
-        return DB::transaction(function () use ($tenant, $client, $provenance, $receipt): PagtowebArrecadacaoReceipt {
-            $existing = PagtowebArrecadacaoReceipt::query()
+        return DB::transaction(function () use ($tenant, $client, $provenance, $receipt): PagtoWebArrecadacaoReceipt {
+            $existing = PagtoWebArrecadacaoReceipt::query()
                 ->withoutGlobalScopes()
                 ->where('tenant_id', $tenant->id)
                 ->where('client_id', $client->id)
@@ -46,7 +46,7 @@ final class PagtoWebArrecadacaoReceiptProjector
                 self::receiptAad((int) $tenant->id, (int) $client->id, $receipt->sha256),
             );
 
-            return PagtowebArrecadacaoReceipt::query()->create([
+            return PagtoWebArrecadacaoReceipt::query()->create([
                 'tenant_id' => $tenant->id,
                 'client_id' => $client->id,
                 'receipt_vault_object_id' => $objectId,
@@ -70,7 +70,7 @@ final class PagtoWebArrecadacaoReceiptProjector
         ]);
     }
 
-    public function readAuthorized(PagtowebArrecadacaoReceipt $receipt, int $tenantId): string
+    public function readAuthorized(PagtoWebArrecadacaoReceipt $receipt, int $tenantId): string
     {
         if ((int) $receipt->tenant_id !== $tenantId) {
             throw new RuntimeException('Comprovante não pertence ao escritório ativo.');

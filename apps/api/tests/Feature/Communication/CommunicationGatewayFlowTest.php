@@ -23,7 +23,7 @@ use App\Enums\CommunicationDispatchStatus;
 use App\Enums\CommunicationExecutionMode;
 use App\Events\CommunicationEventCommitted;
 use App\Exceptions\CommunicationTransportException;
-use App\Jobs\Communication\DeleteCommunicationMediaObjectJob;
+use App\Jobs\Communication\DeleteMediaObjectJob;
 use App\Models\Client;
 use App\Models\ClientCommunicationDispatch;
 use App\Models\ClientCommunicationEvent;
@@ -287,8 +287,8 @@ final class CommunicationGatewayFlowTest extends TestCase
             $sessionPn,
             'session',
         );
-        $this->outboundMessage($tenant, $inbox, $lidIdentity, $lidConversation, 'legacy-lid');
-        $this->outboundMessage($tenant, $inbox, $remoteIdentity, $remoteConversation, 'legacy-remote');
+        $this->outboundMessage($tenant, $inbox, $lidIdentity, $lidConversation, '-lid');
+        $this->outboundMessage($tenant, $inbox, $remoteIdentity, $remoteConversation, '-remote');
         $client = Client::factory()->create(['tenant_id' => $tenant->id]);
         $label = CommunicationLabel::query()->withoutGlobalScopes()->create([
             'tenant_id' => $tenant->id,
@@ -343,8 +343,8 @@ final class CommunicationGatewayFlowTest extends TestCase
             ->sole();
         $messageConversationIds = CommunicationMessage::query()->withoutGlobalScopes()
             ->whereIn('provider_message_id', [
-                'provider-legacy-lid-0001',
-                'provider-legacy-remote-0001',
+                'provider-lid-0001',
+                'provider-remote-0001',
                 'provider-fragmented-0001',
             ])
             ->pluck('conversation_id')
@@ -1113,9 +1113,9 @@ final class CommunicationGatewayFlowTest extends TestCase
         $this->assertDatabaseCount('communication_messages', 1);
         $this->assertDatabaseCount('communication_attachments', 1);
         $this->assertTrue(app(MediaStore::class)->exists($old['object_id']));
-        Queue::assertPushed(DeleteCommunicationMediaObjectJob::class, fn ($job) => $job->objectId === $old['object_id']);
+        Queue::assertPushed(DeleteMediaObjectJob::class, fn ($job) => $job->objectId === $old['object_id']);
 
-        (new DeleteCommunicationMediaObjectJob($old['object_id']))->handle(app(MediaStore::class));
+        (new DeleteMediaObjectJob($old['object_id']))->handle(app(MediaStore::class));
         $this->assertFalse(app(MediaStore::class)->exists($old['object_id']));
     }
 

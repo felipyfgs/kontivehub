@@ -5,7 +5,7 @@ namespace App\Http\Requests\Communication;
 use App\Models\User;
 use App\Services\Communication\Authorization\Access;
 
-final class ShowConversationListPreferencesRequest extends CommunicationRequest
+final class ShowConversationListPreferencesRequest extends TenantScopedRequest
 {
     public function authorize(): bool
     {

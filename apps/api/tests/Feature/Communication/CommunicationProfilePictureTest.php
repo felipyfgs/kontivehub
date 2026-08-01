@@ -23,9 +23,9 @@ use App\Enums\TenantLifecycleStatus;
 use App\Enums\TenantRole;
 use App\Exceptions\CommunicationProfilePictureDownloadException;
 use App\Exceptions\CommunicationTransportException;
-use App\Jobs\Communication\DeleteCommunicationMediaObjectJob;
-use App\Jobs\Communication\ReconcileCommunicationInboxIdentityProfilesJob;
-use App\Jobs\Communication\RefreshCommunicationProfilePictureJob;
+use App\Jobs\Communication\DeleteMediaObjectJob;
+use App\Jobs\Communication\ReconcileInboxIdentityProfilesJob;
+use App\Jobs\Communication\RefreshProfilePictureJob;
 use App\Models\CommunicationAttachment;
 use App\Models\CommunicationContact;
 use App\Models\CommunicationConversation;
@@ -248,7 +248,7 @@ final class CommunicationProfilePictureTest extends TestCase
         ]]);
         $tenant->forceFill(['communication_enabled' => false])->save();
 
-        (new RefreshCommunicationProfilePictureJob($tenant->id, $profile->id, 1))->handle($transport, new ProfilePictureDownloaderFake, app(MediaStore::class), app(MediaDeletionService::class));
+        (new RefreshProfilePictureJob($tenant->id, $profile->id, 1))->handle($transport, new ProfilePictureDownloaderFake, app(MediaStore::class), app(MediaDeletionService::class));
 
         self::assertSame(0, $transport->queries);
         self::assertSame(ProfilePictureState::Pending, $profile->refresh()->profile_picture_state);
@@ -318,7 +318,7 @@ final class CommunicationProfilePictureTest extends TestCase
         $tenant = Tenant::factory()->create(['communication_enabled' => true]);
         $inbox = $this->inbox($tenant);
         $this->conversation($tenant, $inbox);
-        $job = new ReconcileCommunicationInboxIdentityProfilesJob($tenant->id, $inbox->id);
+        $job = new ReconcileInboxIdentityProfilesJob($tenant->id, $inbox->id);
         $inbox->forceFill(['status' => InboxStatus::Disconnected])->save();
         $transport = new ProfilePictureTransport(['profiles' => []]);
         $this->app->instance(CommunicationTransport::class, $transport);
@@ -345,7 +345,7 @@ final class CommunicationProfilePictureTest extends TestCase
             'id' => 'provider-picture-v1',
             'url' => 'https://cdn.example.test/picture.png',
         ]]);
-        (new RefreshCommunicationProfilePictureJob($tenant->id, $profile->id, 1))->handle($transport, new ProfilePictureDownloaderFake, app(MediaStore::class), app(MediaDeletionService::class));
+        (new RefreshProfilePictureJob($tenant->id, $profile->id, 1))->handle($transport, new ProfilePictureDownloaderFake, app(MediaStore::class), app(MediaDeletionService::class));
 
         $profile->refresh();
         self::assertSame(ProfilePictureState::Ready, $profile->profile_picture_state);
@@ -371,7 +371,7 @@ final class CommunicationProfilePictureTest extends TestCase
             'url' => 'https://cdn.example.test/picture.png',
         ]]);
 
-        (new RefreshCommunicationProfilePictureJob($tenant->id, $profile->id, 1))->handle(
+        (new RefreshProfilePictureJob($tenant->id, $profile->id, 1))->handle(
             $transport,
             new ProfilePictureDownloaderFake,
             app(MediaStore::class),
@@ -395,7 +395,7 @@ final class CommunicationProfilePictureTest extends TestCase
         ]);
         config(['communication.profile_pictures.negative_ttl_seconds' => 60]);
 
-        (new RefreshCommunicationProfilePictureJob($tenant->id, $profile->id, 1))->handle(new ProfilePictureTransport(['profile_picture' => null]), new ProfilePictureDownloaderFake, app(MediaStore::class), app(MediaDeletionService::class));
+        (new RefreshProfilePictureJob($tenant->id, $profile->id, 1))->handle(new ProfilePictureTransport(['profile_picture' => null]), new ProfilePictureDownloaderFake, app(MediaStore::class), app(MediaDeletionService::class));
 
         $profile->refresh();
         self::assertSame(ProfilePictureState::Unavailable, $profile->profile_picture_state);
@@ -414,7 +414,7 @@ final class CommunicationProfilePictureTest extends TestCase
             'profile_picture_state' => ProfilePictureState::Pending,
             'profile_picture_version' => 1,
         ]);
-        (new RefreshCommunicationProfilePictureJob($tenant->id, $profile->id, 1))->handle(
+        (new RefreshProfilePictureJob($tenant->id, $profile->id, 1))->handle(
             new ProfilePictureTransport(new CommunicationTransportException('PROFILE_PICTURE_PRIVACY', false, 403)),
             new ProfilePictureDownloaderFake,
             app(MediaStore::class),
@@ -448,7 +448,7 @@ final class CommunicationProfilePictureTest extends TestCase
         ]]);
         $tenant->forceFill(['communication_enabled' => false])->save();
         app(DispatchCommunicationProfilePictureRefreshesCommand::class)->handle();
-        (new RefreshCommunicationProfilePictureJob($tenant->id, $profile->id, 1))->handle(
+        (new RefreshProfilePictureJob($tenant->id, $profile->id, 1))->handle(
             $transport,
             new ProfilePictureDownloaderFake,
             app(MediaStore::class),
@@ -458,7 +458,7 @@ final class CommunicationProfilePictureTest extends TestCase
         $tenant->forceFill(['communication_enabled' => true])->save();
         $inbox->forceFill(['status' => InboxStatus::Disconnected])->save();
         app(DispatchCommunicationProfilePictureRefreshesCommand::class)->handle();
-        (new RefreshCommunicationProfilePictureJob($tenant->id, $profile->id, 1))->handle(
+        (new RefreshProfilePictureJob($tenant->id, $profile->id, 1))->handle(
             $transport,
             new ProfilePictureDownloaderFake,
             app(MediaStore::class),
@@ -467,7 +467,7 @@ final class CommunicationProfilePictureTest extends TestCase
 
         $inbox->forceFill(['status' => InboxStatus::Connected, 'is_enabled' => false])->save();
         app(DispatchCommunicationProfilePictureRefreshesCommand::class)->handle();
-        (new RefreshCommunicationProfilePictureJob($tenant->id, $profile->id, 1))->handle(
+        (new RefreshProfilePictureJob($tenant->id, $profile->id, 1))->handle(
             $transport,
             new ProfilePictureDownloaderFake,
             app(MediaStore::class),
@@ -477,7 +477,7 @@ final class CommunicationProfilePictureTest extends TestCase
         $inbox->forceFill(['is_enabled' => true])->save();
         $tenant->forceFill(['is_active' => false])->save();
         app(DispatchCommunicationProfilePictureRefreshesCommand::class)->handle();
-        (new RefreshCommunicationProfilePictureJob($tenant->id, $profile->id, 1))->handle(
+        (new RefreshProfilePictureJob($tenant->id, $profile->id, 1))->handle(
             $transport,
             new ProfilePictureDownloaderFake,
             app(MediaStore::class),
@@ -489,7 +489,7 @@ final class CommunicationProfilePictureTest extends TestCase
             'lifecycle_status' => TenantLifecycleStatus::Suspended,
         ])->save();
         app(DispatchCommunicationProfilePictureRefreshesCommand::class)->handle();
-        (new RefreshCommunicationProfilePictureJob($tenant->id, $profile->id, 1))->handle(
+        (new RefreshProfilePictureJob($tenant->id, $profile->id, 1))->handle(
             $transport,
             new ProfilePictureDownloaderFake,
             app(MediaStore::class),
@@ -517,12 +517,12 @@ final class CommunicationProfilePictureTest extends TestCase
         $profile = $scheduler->schedule($inbox, $identity);
 
         self::assertInstanceOf(CommunicationInboxIdentityProfile::class, $profile);
-        Queue::assertPushed(RefreshCommunicationProfilePictureJob::class);
-        $job = Queue::pushed(RefreshCommunicationProfilePictureJob::class)->first();
+        Queue::assertPushed(RefreshProfilePictureJob::class);
+        $job = Queue::pushed(RefreshProfilePictureJob::class)->first();
         self::assertInstanceOf(ShouldBeUnique::class, $job);
         self::assertNotSame(
             $job->middleware()[0]->key,
-            (new RefreshCommunicationProfilePictureJob($tenant->id, $profile->id, 2))->middleware()[0]->key,
+            (new RefreshProfilePictureJob($tenant->id, $profile->id, 2))->middleware()[0]->key,
         );
 
         $this->promoteProfile($profile);
@@ -674,12 +674,12 @@ final class CommunicationProfilePictureTest extends TestCase
         $this->seedBackfillCandidates($secondTenant, $fifthInbox, 26, now()->subMinutes(4));
 
         self::assertSame(0, app(DispatchCommunicationProfilePictureRefreshesCommand::class)->handle());
-        Queue::assertPushed(RefreshCommunicationProfilePictureJob::class, 100);
-        Queue::assertPushed(RefreshCommunicationProfilePictureJob::class, function (RefreshCommunicationProfilePictureJob $job): bool {
+        Queue::assertPushed(RefreshProfilePictureJob::class, 100);
+        Queue::assertPushed(RefreshProfilePictureJob::class, function (RefreshProfilePictureJob $job): bool {
             return $job->version === 1 && $job->uniqueId() === $job->tenantId.':'.$job->profileId.':1';
         });
 
-        $jobs = Queue::pushed(RefreshCommunicationProfilePictureJob::class);
+        $jobs = Queue::pushed(RefreshProfilePictureJob::class);
         $profiles = CommunicationInboxIdentityProfile::query()->withoutGlobalScopes()
             ->whereIn('id', $jobs->pluck('profileId')->all())
             ->get();
@@ -723,8 +723,8 @@ final class CommunicationProfilePictureTest extends TestCase
 
         app(DispatchCommunicationProfilePictureRefreshesCommand::class)->handle();
 
-        Queue::assertPushed(RefreshCommunicationProfilePictureJob::class, 2);
-        $profileIds = Queue::pushed(RefreshCommunicationProfilePictureJob::class)
+        Queue::assertPushed(RefreshProfilePictureJob::class, 2);
+        $profileIds = Queue::pushed(RefreshProfilePictureJob::class)
             ->pluck('profileId')
             ->sort()
             ->values()
@@ -748,7 +748,7 @@ final class CommunicationProfilePictureTest extends TestCase
             'profile_picture_version' => 1,
         ]);
         try {
-            (new RefreshCommunicationProfilePictureJob($tenant->id, $profile->id, 1))->handle(
+            (new RefreshProfilePictureJob($tenant->id, $profile->id, 1))->handle(
                 new ProfilePictureTransport(['profile_picture' => [
                     'user' => '+5511888888888',
                     'id' => 'provider-picture-v1',
@@ -783,7 +783,7 @@ final class CommunicationProfilePictureTest extends TestCase
 
         $failure = new CommunicationProfilePictureDownloadException('PROFILE_PICTURE_DOWNLOAD_TRANSIENT', true, 503);
         try {
-            (new RefreshCommunicationProfilePictureJob($tenant->id, $profile->id, 1))->handle(
+            (new RefreshProfilePictureJob($tenant->id, $profile->id, 1))->handle(
                 new ProfilePictureTransport(['profile_picture' => [
                     'user' => $identity->address_encrypted,
                     'id' => 'provider-picture-v1',
@@ -827,7 +827,7 @@ final class CommunicationProfilePictureTest extends TestCase
             ])->save();
         });
 
-        (new RefreshCommunicationProfilePictureJob($tenant->id, $profile->id, 1))->handle(
+        (new RefreshProfilePictureJob($tenant->id, $profile->id, 1))->handle(
             new ProfilePictureTransport(['profile_picture' => [
                 'user' => $identity->address_encrypted,
                 'id' => 'provider-picture-v1',
@@ -1000,7 +1000,7 @@ final class CommunicationProfilePictureTest extends TestCase
         self::assertTrue(app(MediaStore::class)->exists($objectId));
         $intent = CommunicationMediaDeletionIntent::query()->where('object_id', $objectId)->firstOrFail();
 
-        (new DeleteCommunicationMediaObjectJob($objectId, $intent->id))->handle(
+        (new DeleteMediaObjectJob($objectId, $intent->id))->handle(
             app(MediaStore::class),
             app(MediaDeletionService::class),
         );
@@ -1073,7 +1073,7 @@ final class CommunicationProfilePictureTest extends TestCase
 
         $intent->forceFill(['due_at' => now()->subMinute()])->save();
         self::assertSame(0, $service->dispatchDue());
-        Queue::assertNotPushed(DeleteCommunicationMediaObjectJob::class);
+        Queue::assertNotPushed(DeleteMediaObjectJob::class);
 
         $service->retry($intent->id, new \RuntimeException('terminal intent must stay terminal'));
         self::assertSame(8, $intent->refresh()->attempts);

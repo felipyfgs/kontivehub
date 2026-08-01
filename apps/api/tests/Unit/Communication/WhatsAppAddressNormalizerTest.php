@@ -70,7 +70,7 @@ class WhatsAppAddressNormalizerTest extends TestCase
         ]));
     }
 
-    public function test_resolve_peer_legacy_from_without_source_identity(): void
+    public function test_resolve_peer__from_without_source_identity(): void
     {
         $this->assertSame('+559981769536', app(WhatsAppAddressNormalizer::class)->resolvePeerAddress([
             'from' => '+559981769536',

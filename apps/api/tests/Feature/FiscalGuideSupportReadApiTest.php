@@ -7,12 +7,12 @@ use App\Contracts\SerproOperationExecutor;
 use App\Enums\FiscalSourceProvenance;
 use App\Enums\TenantRole;
 use App\Models\Client;
-use App\Models\PagtowebArrecadacaoReceipt;
-use App\Models\PagtowebPaymentCountObservation;
-use App\Models\PagtowebPaymentCountProjection;
-use App\Models\PagtowebPaymentListItem;
-use App\Models\PagtowebPaymentListObservation;
-use App\Models\PagtowebPaymentListProjection;
+use App\Models\PagtoWebArrecadacaoReceipt;
+use App\Models\PagtoWebPaymentCountObservation;
+use App\Models\PagtoWebPaymentCountProjection;
+use App\Models\PagtoWebPaymentListItem;
+use App\Models\PagtoWebPaymentListObservation;
+use App\Models\PagtoWebPaymentListProjection;
 use App\Models\SicalcRevenueSupportObservation;
 use App\Models\SicalcRevenueSupportProjection;
 use App\Models\Tenant;
@@ -225,8 +225,8 @@ class FiscalGuideSupportReadApiTest extends TestCase
         Tenant $tenant,
         Client $client,
         string $seed,
-    ): PagtowebArrecadacaoReceipt {
-        return PagtowebArrecadacaoReceipt::query()
+    ): PagtoWebArrecadacaoReceipt {
+        return PagtoWebArrecadacaoReceipt::query()
             ->withoutGlobalScopes()
             ->create([
                 'tenant_id' => $tenant->id,
@@ -248,7 +248,7 @@ class FiscalGuideSupportReadApiTest extends TestCase
         Tenant $tenant,
         Client $client,
     ): void {
-        $observation = PagtowebPaymentCountObservation::query()
+        $observation = PagtoWebPaymentCountObservation::query()
             ->withoutGlobalScopes()
             ->create([
                 'tenant_id' => $tenant->id,
@@ -261,7 +261,7 @@ class FiscalGuideSupportReadApiTest extends TestCase
                 'created_at' => now(),
             ]);
 
-        PagtowebPaymentCountProjection::query()
+        PagtoWebPaymentCountProjection::query()
             ->withoutGlobalScopes()
             ->create([
                 'tenant_id' => $tenant->id,
@@ -278,7 +278,7 @@ class FiscalGuideSupportReadApiTest extends TestCase
         Tenant $tenant,
         Client $client,
     ): void {
-        $observation = PagtowebPaymentListObservation::query()
+        $observation = PagtoWebPaymentListObservation::query()
             ->withoutGlobalScopes()
             ->create([
                 'tenant_id' => $tenant->id,
@@ -291,7 +291,7 @@ class FiscalGuideSupportReadApiTest extends TestCase
                 'created_at' => now(),
             ]);
 
-        PagtowebPaymentListProjection::query()
+        PagtoWebPaymentListProjection::query()
             ->withoutGlobalScopes()
             ->create([
                 'tenant_id' => $tenant->id,
@@ -302,7 +302,7 @@ class FiscalGuideSupportReadApiTest extends TestCase
             ]);
 
         foreach (['DARF-001', 'DARF-002'] as $index => $document) {
-            PagtowebPaymentListItem::query()
+            PagtoWebPaymentListItem::query()
                 ->withoutGlobalScopes()
                 ->create([
                     'observation_id' => $observation->id,

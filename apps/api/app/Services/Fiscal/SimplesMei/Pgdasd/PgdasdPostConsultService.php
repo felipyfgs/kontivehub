@@ -500,7 +500,7 @@ final class PgdasdPostConsultService
         FiscalAdapterResult $result,
         string $reason,
     ): array {
-        $this->markExistingExpectedProjectionUnverified($request, $reason);
+        $this->markExpectedProjectionUnverified($request, $reason);
         $normalized = is_array($result->normalized) ? $result->normalized : [];
         $normalized['pgdasd'] = [
             'declaration_state' => PgdasdDeclarationState::Unverified->value,
@@ -520,7 +520,7 @@ final class PgdasdPostConsultService
         ];
     }
 
-    private function markExistingExpectedProjectionUnverified(
+    private function markExpectedProjectionUnverified(
         FiscalAdapterRequest $request,
         string $reason,
     ): void {

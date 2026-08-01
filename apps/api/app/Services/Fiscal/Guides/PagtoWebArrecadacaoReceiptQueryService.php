@@ -4,7 +4,7 @@ namespace App\Services\Fiscal\Guides;
 
 use App\Models\Client;
 use App\Models\FiscalMonitoringRun;
-use App\Models\PagtowebArrecadacaoReceipt;
+use App\Models\PagtoWebArrecadacaoReceipt;
 use App\Models\Tenant;
 use App\Services\FiscalMonitoring\FiscalMonitoringRunService;
 use Illuminate\Support\Str;
@@ -19,9 +19,9 @@ final class PagtoWebArrecadacaoReceiptQueryService
     public function history(Tenant $tenant, Client $client): array
     {
         $this->assertClient($tenant, $client);
-        $items = PagtowebArrecadacaoReceipt::query()->withoutGlobalScopes()
+        $items = PagtoWebArrecadacaoReceipt::query()->withoutGlobalScopes()
             ->where('tenant_id', $tenant->id)->where('client_id', $client->id)
-            ->latest('observed_at')->get()->map(static fn (PagtowebArrecadacaoReceipt $item) => $item->toPublicArray())->all();
+            ->latest('observed_at')->get()->map(static fn (PagtoWebArrecadacaoReceipt $item) => $item->toPublicArray())->all();
 
         return ['client_id' => $client->id, 'items' => $items, 'provenance' => ['source' => 'local_projection', 'serpro_called' => false]];
     }

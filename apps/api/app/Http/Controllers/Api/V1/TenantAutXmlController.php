@@ -2,17 +2,17 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Actions\Tenant\ConfirmTenantAutXmlEnrollmentAction;
-use App\Actions\Tenant\EnrollTenantAutXmlAction;
-use App\Actions\Tenant\InactivateTenantAutXmlEnrollmentAction;
-use App\Actions\Tenant\ShowTenantAutXmlCursorAction;
-use App\Actions\Tenant\ShowTenantAutXmlOverviewAction;
+use App\Actions\Tenant\ConfirmAutXmlEnrollmentAction;
+use App\Actions\Tenant\EnrollAutXmlAction;
+use App\Actions\Tenant\InactivateAutXmlEnrollmentAction;
+use App\Actions\Tenant\ShowAutXmlCursorAction;
+use App\Actions\Tenant\ShowAutXmlOverviewAction;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Tenant\ConfirmTenantAutXmlEnrollmentRequest;
-use App\Http\Requests\Tenant\EnrollTenantAutXmlRequest;
-use App\Http\Requests\Tenant\InactivateTenantAutXmlEnrollmentRequest;
-use App\Http\Requests\Tenant\ViewTenantAutXmlCursorRequest;
-use App\Http\Requests\Tenant\ViewTenantAutXmlRequest;
+use App\Http\Requests\Tenant\ConfirmAutXmlEnrollmentRequest;
+use App\Http\Requests\Tenant\EnrollAutXmlRequest;
+use App\Http\Requests\Tenant\InactivateAutXmlEnrollmentRequest;
+use App\Http\Requests\Tenant\ViewAutXmlCursorRequest;
+use App\Http\Requests\Tenant\ViewAutXmlRequest;
 use App\Http\Resources\TenantAutXmlCursorOverviewResource;
 use App\Http\Resources\TenantAutXmlEnrollmentResource;
 use App\Http\Resources\TenantAutXmlOverviewResource;
@@ -22,8 +22,8 @@ use Illuminate\Http\JsonResponse;
 final class TenantAutXmlController extends Controller
 {
     public function overview(
-        ViewTenantAutXmlRequest $request,
-        ShowTenantAutXmlOverviewAction $action,
+        ViewAutXmlRequest $request,
+        ShowAutXmlOverviewAction $action,
     ): JsonResponse {
         return TenantAutXmlOverviewResource::make(
             $action($request->perPage()),
@@ -31,15 +31,15 @@ final class TenantAutXmlController extends Controller
     }
 
     public function cursor(
-        ViewTenantAutXmlCursorRequest $request,
-        ShowTenantAutXmlCursorAction $action,
+        ViewAutXmlCursorRequest $request,
+        ShowAutXmlCursorAction $action,
     ): JsonResponse {
         return TenantAutXmlCursorOverviewResource::make($action())->response();
     }
 
     public function enroll(
-        EnrollTenantAutXmlRequest $request,
-        EnrollTenantAutXmlAction $action,
+        EnrollAutXmlRequest $request,
+        EnrollAutXmlAction $action,
     ): JsonResponse {
         return TenantAutXmlEnrollmentResource::make(
             $action($request->establishmentId()),
@@ -47,9 +47,9 @@ final class TenantAutXmlController extends Controller
     }
 
     public function confirm(
-        ConfirmTenantAutXmlEnrollmentRequest $request,
+        ConfirmAutXmlEnrollmentRequest $request,
         TenantAutXmlEnrollment $enrollment,
-        ConfirmTenantAutXmlEnrollmentAction $action,
+        ConfirmAutXmlEnrollmentAction $action,
     ): JsonResponse {
         return TenantAutXmlEnrollmentResource::make(
             $action((int) $enrollment->id, $request->actor()),
@@ -57,9 +57,9 @@ final class TenantAutXmlController extends Controller
     }
 
     public function inactivate(
-        InactivateTenantAutXmlEnrollmentRequest $request,
+        InactivateAutXmlEnrollmentRequest $request,
         TenantAutXmlEnrollment $enrollment,
-        InactivateTenantAutXmlEnrollmentAction $action,
+        InactivateAutXmlEnrollmentAction $action,
     ): JsonResponse {
         return TenantAutXmlEnrollmentResource::make(
             $action((int) $enrollment->id),

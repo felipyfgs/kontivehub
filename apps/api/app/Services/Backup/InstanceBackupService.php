@@ -277,7 +277,7 @@ final class InstanceBackupService
                 }
 
                 if (($component['name'] ?? null) === 'database') {
-                    $this->assertDatabaseArtifactLooksRestorable($absolute, is_string($format) ? $format : null);
+                    $this->assertArtifactRestorable($absolute, is_string($format) ? $format : null);
                 }
 
                 if (($component['name'] ?? null) === 'package' && ($component['encrypted'] ?? false)) {
@@ -720,7 +720,7 @@ final class InstanceBackupService
         }
     }
 
-    private function assertDatabaseArtifactLooksRestorable(string $absoluteGzipPath, ?string $format): void
+    private function assertArtifactRestorable(string $absoluteGzipPath, ?string $format): void
     {
         if ($format === 'inventory' || $format === 'logical_inventory') {
             throw new RuntimeException('Artefato de inventário não é dump restaurável.');

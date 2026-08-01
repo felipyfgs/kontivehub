@@ -10,15 +10,15 @@ use App\Actions\Communication\StartConversationAction;
 use App\Actions\Communication\UpdateConversationAction;
 use App\Contracts\CommunicationOutboundMessageWriter;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Communication\ListCommunicationConversationMessagesRequest;
-use App\Http\Requests\Communication\ListCommunicationConversationsRequest;
-use App\Http\Requests\Communication\ListCommunicationSharedContentRequest;
-use App\Http\Requests\Communication\ManageCommunicationConversationLabelRequest;
+use App\Http\Requests\Communication\ListConversationMessagesRequest;
+use App\Http\Requests\Communication\ListConversationsRequest;
+use App\Http\Requests\Communication\ListSharedContentRequest;
+use App\Http\Requests\Communication\ManageConversationLabelRequest;
 use App\Http\Requests\Communication\SendMessageRequest;
-use App\Http\Requests\Communication\StoreCommunicationConversationRequest;
-use App\Http\Requests\Communication\UpdateCommunicationConversationReadStateRequest;
+use App\Http\Requests\Communication\StoreConversationRequest;
+use App\Http\Requests\Communication\UpdateConversationReadStateRequest;
 use App\Http\Requests\Communication\UpdateConversationRequest;
-use App\Http\Requests\Communication\ViewCommunicationConversationRequest;
+use App\Http\Requests\Communication\ViewConversationRequest;
 use App\Http\Resources\Communication\ConversationCollection;
 use App\Http\Resources\Communication\ConversationLabelAssignmentResource;
 use App\Http\Resources\Communication\ConversationResource;
@@ -37,7 +37,7 @@ use InvalidArgumentException;
 final class ConversationController extends Controller
 {
     public function index(
-        ListCommunicationConversationsRequest $request,
+        ListConversationsRequest $request,
         ConversationQuery $query,
     ): JsonResponse {
         return (new ConversationCollection(
@@ -46,7 +46,7 @@ final class ConversationController extends Controller
     }
 
     public function store(
-        StoreCommunicationConversationRequest $request,
+        StoreConversationRequest $request,
         StartConversationAction $action,
     ): JsonResponse {
         $result = $action->handle($request->contactId(), $request->identityId(), $request->inboxId(), $request->messageData());
@@ -61,7 +61,7 @@ final class ConversationController extends Controller
     }
 
     public function show(
-        ViewCommunicationConversationRequest $request,
+        ViewConversationRequest $request,
         CommunicationConversation $conversation,
         ConversationQuery $query,
     ): ConversationResource {
@@ -96,7 +96,7 @@ final class ConversationController extends Controller
     }
 
     public function messages(
-        ListCommunicationConversationMessagesRequest $request,
+        ListConversationMessagesRequest $request,
         CommunicationConversation $conversation,
         ConversationCanonicalizer $canonicalizer,
         ConversationMessageQuery $query,
@@ -124,7 +124,7 @@ final class ConversationController extends Controller
     }
 
     public function sharedContent(
-        ListCommunicationSharedContentRequest $request,
+        ListSharedContentRequest $request,
         CommunicationConversation $conversation,
         ConversationCanonicalizer $canonicalizer,
         Access $access,
@@ -155,7 +155,7 @@ final class ConversationController extends Controller
     }
 
     public function updateReadState(
-        UpdateCommunicationConversationReadStateRequest $request,
+        UpdateConversationReadStateRequest $request,
         CommunicationConversation $conversation,
         MarkConversationReadAction $markRead,
         MarkConversationUnreadAction $markUnread,
@@ -168,7 +168,7 @@ final class ConversationController extends Controller
     }
 
     public function addLabel(
-        ManageCommunicationConversationLabelRequest $request,
+        ManageConversationLabelRequest $request,
         CommunicationConversation $conversation,
         CommunicationLabel $label,
         AssignConversationLabelAction $action,
@@ -179,7 +179,7 @@ final class ConversationController extends Controller
     }
 
     public function removeLabel(
-        ManageCommunicationConversationLabelRequest $request,
+        ManageConversationLabelRequest $request,
         CommunicationConversation $conversation,
         CommunicationLabel $label,
         RemoveConversationLabelAction $action,

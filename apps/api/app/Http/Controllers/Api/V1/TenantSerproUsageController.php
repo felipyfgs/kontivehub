@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Actions\Tenant\QueryTenantUsageAction;
+use App\Actions\Tenant\QueryUsageAction;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Tenant\ViewTenantUsageRequest;
+use App\Http\Requests\Tenant\ViewUsageRequest;
 use App\Http\Resources\TenantUsageEntriesResource;
 use App\Http\Resources\TenantUsageSummaryResource;
 use Illuminate\Http\JsonResponse;
@@ -12,8 +12,8 @@ use Illuminate\Http\JsonResponse;
 final class TenantSerproUsageController extends Controller
 {
     public function summary(
-        ViewTenantUsageRequest $request,
-        QueryTenantUsageAction $action,
+        ViewUsageRequest $request,
+        QueryUsageAction $action,
     ): JsonResponse {
         return TenantUsageSummaryResource::make(
             $action->summary($request->year(), $request->month()),
@@ -21,8 +21,8 @@ final class TenantSerproUsageController extends Controller
     }
 
     public function entries(
-        ViewTenantUsageRequest $request,
-        QueryTenantUsageAction $action,
+        ViewUsageRequest $request,
+        QueryUsageAction $action,
     ): JsonResponse {
         $resource = TenantUsageEntriesResource::make(
             $action->entries(

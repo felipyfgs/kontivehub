@@ -3,7 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Enums\Communication\OutboxStatus;
-use App\Jobs\Communication\DispatchCommunicationOutboxJob;
+use App\Jobs\Communication\DispatchOutboxJob;
 use App\Models\CommunicationOutboxEntry;
 use Illuminate\Console\Command;
 
@@ -35,7 +35,7 @@ final class DispatchCommunicationOutboxCommand extends Command
             ->pluck('id');
 
         foreach ($ids as $id) {
-            DispatchCommunicationOutboxJob::dispatch((int) $id);
+            DispatchOutboxJob::dispatch((int) $id);
         }
 
         return self::SUCCESS;

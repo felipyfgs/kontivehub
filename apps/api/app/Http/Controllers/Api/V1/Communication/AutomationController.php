@@ -5,10 +5,10 @@ namespace App\Http\Controllers\Api\V1\Communication;
 use App\Actions\Communication\UpdateAutomationRecipientsAction;
 use App\Actions\Communication\UpsertAutomationPolicyAction;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Communication\ListCommunicationAutomationPoliciesRequest;
-use App\Http\Requests\Communication\UpdateCommunicationAutomationRecipientsRequest;
-use App\Http\Requests\Communication\UpsertCommunicationAutomationPolicyRequest;
-use App\Http\Requests\Communication\ViewCommunicationAutomationRecipientsRequest;
+use App\Http\Requests\Communication\ListAutomationPoliciesRequest;
+use App\Http\Requests\Communication\UpdateAutomationRecipientsRequest;
+use App\Http\Requests\Communication\UpsertAutomationPolicyRequest;
+use App\Http\Requests\Communication\ViewAutomationRecipientsRequest;
 use App\Http\Resources\Communication\AutomationPolicyCollection;
 use App\Http\Resources\Communication\AutomationPolicyResource;
 use App\Http\Resources\Communication\RecipientConfigurationResource;
@@ -24,13 +24,13 @@ final class AutomationController extends Controller
     ) {}
 
     public function index(
-        ListCommunicationAutomationPoliciesRequest $request,
+        ListAutomationPoliciesRequest $request,
     ): AutomationPolicyCollection {
         return new AutomationPolicyCollection($this->query->index());
     }
 
     public function upsert(
-        UpsertCommunicationAutomationPolicyRequest $request,
+        UpsertAutomationPolicyRequest $request,
     ): AutomationPolicyResource {
         return new AutomationPolicyResource(
             $this->upsertPolicy->handle($request->policyData()),
@@ -38,7 +38,7 @@ final class AutomationController extends Controller
     }
 
     public function recipients(
-        ViewCommunicationAutomationRecipientsRequest $request,
+        ViewAutomationRecipientsRequest $request,
         Client $client,
     ): RecipientConfigurationResource {
         return new RecipientConfigurationResource(
@@ -47,7 +47,7 @@ final class AutomationController extends Controller
     }
 
     public function updateRecipients(
-        UpdateCommunicationAutomationRecipientsRequest $request,
+        UpdateAutomationRecipientsRequest $request,
         Client $client,
     ): RecipientConfigurationResource {
         return new RecipientConfigurationResource(

@@ -224,7 +224,7 @@ final readonly class ConversationQuery
     /**
      * Ordenação allowlisted com colunas qualificadas e desempate por id.
      *
-     * - sort_by ausente: preserva o default legado (priority DESC → last_message_at → id).
+     * - sort_by ausente: preserva o default (priority DESC → last_message_at → id).
      * - Preferência da SPA: last_activity_desc (enviado explicitamente).
      * - unread_desc: ledger de não lidas (subquery), não coluna física.
      * - last_message_at: NULLS LAST para não empurrar filas sem mensagem ao topo em DESC.

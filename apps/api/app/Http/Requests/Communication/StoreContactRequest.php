@@ -8,7 +8,7 @@ use App\Rules\ValidWhatsAppAddress;
 use App\Services\Communication\Authorization\Access;
 use App\Services\Communication\WhatsAppAddressNormalizer;
 
-final class StoreContactRequest extends CommunicationRequest
+final class StoreContactRequest extends TenantScopedRequest
 {
     public function authorize(): bool
     {

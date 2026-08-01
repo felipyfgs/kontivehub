@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Actions\Platform\SwitchTenantAction;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Tenant\SwitchTenantRequest;
+use App\Http\Requests\Tenant\SwitchRequest;
 use App\Models\User;
 use App\Services\Platform\TenantSwitchService;
 use App\Support\CurrentTenant;
@@ -36,7 +36,7 @@ class TenantSwitchController extends Controller
         ]);
     }
 
-    public function switch(SwitchTenantRequest $request): JsonResponse
+    public function switch(SwitchRequest $request): JsonResponse
     {
         $tenant = ($this->switchTenant)(
             $request->actor(),

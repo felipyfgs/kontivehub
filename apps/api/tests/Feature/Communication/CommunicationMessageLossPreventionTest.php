@@ -334,7 +334,7 @@ final class CommunicationMessageLossPreventionTest extends TestCase
         $this->assertDatabaseCount('communication_outbox_entries', 3);
     }
 
-    public function test_legacy_history_media_without_state_is_inventory_only_until_privileged_execute(): void
+    public function test_history_media_without_state_is_inventory_only_until_privileged_execute(): void
     {
         [$tenant, $inbox, $identity, $conversation] = $this->contextWithConversation();
         $actor = User::factory()->asPlatformAdmin($tenant->id)->create();
@@ -343,7 +343,7 @@ final class CommunicationMessageLossPreventionTest extends TestCase
             $inbox,
             $identity,
             $conversation,
-            'provider-legacy-without-caption-0001',
+            'provider-history-without-caption-0001',
             MessageKind::Image,
             'imageMessage',
             null,
@@ -354,7 +354,7 @@ final class CommunicationMessageLossPreventionTest extends TestCase
             $inbox,
             $identity,
             $conversation,
-            'provider-legacy-with-caption-0001',
+            'provider-history-with-caption-0001',
             MessageKind::Document,
             'documentMessage',
             'Legenda preservada',
@@ -364,8 +364,8 @@ final class CommunicationMessageLossPreventionTest extends TestCase
             'content_encrypted' => ['caption' => 'Legenda preservada'],
             'metadata' => ['history' => true],
         ])->save();
-        foreach ([$withoutCaption, $withCaption] as $legacy) {
-            $availability = (new MessageResource($legacy->load('attachments')))->resolve()['availability'];
+        foreach ([$withoutCaption, $withCaption] as $historical) {
+            $availability = (new MessageResource($historical->load('attachments')))->resolve()['availability'];
             $this->assertSame('UNAVAILABLE', $availability['state']);
             $this->assertFalse($availability['recoverable']);
         }
@@ -374,7 +374,7 @@ final class CommunicationMessageLossPreventionTest extends TestCase
             '--tenant' => $tenant->id,
             '--inbox' => $inbox->id,
             '--limit' => 2,
-            '--operation' => 'media-rescue-legacy-0001',
+            '--operation' => 'media-rescue-history-0001',
         ];
         $this->assertSame(0, Artisan::call('communication:rescue-history-media', $options));
         $this->assertStringContainsString('"eligible_count":2', Artisan::output());

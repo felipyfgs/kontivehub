@@ -461,8 +461,8 @@ final class SerproOperationAttemptStore
      */
     private function sanitizeAttemptDados(?string $operationKey, mixed $dados): ?array
     {
-        if ($this->isPagtowebArrecadacaoReceiptKey($operationKey)) {
-            return $this->sanitizePagtowebReceiptDescriptor($dados);
+        if ($this->isPagtoWebArrecadacaoReceiptKey($operationKey)) {
+            return $this->sanitizePagtoWebReceiptDescriptor($dados);
         }
 
         if (! is_array($dados)) {
@@ -493,8 +493,8 @@ final class SerproOperationAttemptStore
     {
         $body = $this->sanitizeResponseArray($body, $operationKey);
 
-        if ($this->isPagtowebArrecadacaoReceiptKey($operationKey)) {
-            $body['dados'] = $this->sanitizePagtowebReceiptDescriptor($body['dados'] ?? null);
+        if ($this->isPagtoWebArrecadacaoReceiptKey($operationKey)) {
+            $body['dados'] = $this->sanitizePagtoWebReceiptDescriptor($body['dados'] ?? null);
 
             return $this->stripPdfBase64Fields($body);
         }
@@ -514,7 +514,7 @@ final class SerproOperationAttemptStore
         ], true);
     }
 
-    private function isPagtowebArrecadacaoReceiptKey(?string $operationKey): bool
+    private function isPagtoWebArrecadacaoReceiptKey(?string $operationKey): bool
     {
         return $operationKey === 'pagtoweb.comparrecadacao';
     }
@@ -525,7 +525,7 @@ final class SerproOperationAttemptStore
      *
      * @return array<string, mixed>
      */
-    private function sanitizePagtowebReceiptDescriptor(mixed $dados): array
+    private function sanitizePagtoWebReceiptDescriptor(mixed $dados): array
     {
         if (! is_array($dados) || ! isset($dados['receipt_id']) || ! is_int($dados['receipt_id']) || $dados['receipt_id'] < 1) {
             return $this->omittedDescriptor();

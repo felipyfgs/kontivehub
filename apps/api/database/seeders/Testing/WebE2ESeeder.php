@@ -34,7 +34,7 @@ use LogicException;
  *
  * Credenciais estáveis:
  * - admin@kontivehub.local / password (tenant_admin)
- * - operador@example.com / password (tenant_admin; specs legados)
+ * - operador@example.com / password (tenant_admin; specs estáveis)
  *
  * Dataset real e idempotente de Communication para os cenários Playwright.
  */

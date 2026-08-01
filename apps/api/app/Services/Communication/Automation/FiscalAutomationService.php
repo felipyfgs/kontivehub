@@ -2,13 +2,13 @@
 
 namespace App\Services\Communication\Automation;
 
-use App\Enums\Communication\CommunicationOperationFailure;
 use App\Enums\Communication\ConversationStatus;
 use App\Enums\Communication\GatewayCommandType;
 use App\Enums\Communication\MessageDirection;
 use App\Enums\Communication\MessageKind;
 use App\Enums\Communication\MessageSource;
 use App\Enums\Communication\MessageStatus;
+use App\Enums\Communication\OperationFailure;
 use App\Enums\Communication\RecipientMode;
 use App\Enums\CommunicationChannel;
 use App\Enums\CommunicationDispatchStatus;
@@ -161,11 +161,11 @@ final readonly class FiscalAutomationService
         ?int $actorUserId = null,
     ): Collection {
         if (! $this->globallyAvailable($tenant) || ! preg_match('/^\d{4}-\d{2}$/', $periodKey)) {
-            throw new CommunicationOperationException(CommunicationOperationFailure::DisabledOrPeriodInvalid);
+            throw new CommunicationOperationException(OperationFailure::DisabledOrPeriodInvalid);
         }
         $preference = $this->preference($tenant, $client, $moduleKey, $submoduleKey);
         if ($preference === null || ! $preference->whatsapp_enabled) {
-            throw new CommunicationOperationException(CommunicationOperationFailure::WhatsAppPreferenceDisabled);
+            throw new CommunicationOperationException(OperationFailure::WhatsAppPreferenceDisabled);
         }
         $policy = CommunicationAutomationPolicy::query()->withoutGlobalScopes()
             ->with(['inbox' => fn ($query) => $query->withoutGlobalScopes()])
@@ -179,12 +179,12 @@ final readonly class FiscalAutomationService
                 ->where('tenant_id', $tenant->id)->where('is_default', true)->first();
         }
         if (! $inbox instanceof CommunicationInbox) {
-            throw new CommunicationOperationException(CommunicationOperationFailure::DefaultInboxMissing);
+            throw new CommunicationOperationException(OperationFailure::DefaultInboxMissing);
         }
         $this->availability->assertEnabled($inbox, true);
         $identities = $this->recipients->resolve($preference, RecipientMode::Primary);
         if ($identities->isEmpty()) {
-            throw new CommunicationOperationException(CommunicationOperationFailure::EligibleRecipientMissing);
+            throw new CommunicationOperationException(OperationFailure::EligibleRecipientMissing);
         }
 
         $created = collect();

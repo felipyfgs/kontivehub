@@ -69,7 +69,7 @@ final class SerproOperationService implements SerproOperationExecutor
         private readonly SerproTechnicalParameterGuard $technicalParams,
         private readonly ClientProcuracaoSyncService $procuracaoGate,
         private readonly PreAckDocumentCaptureDispatcher $preAckDocuments,
-        private readonly PagtoWebEphemeralResponseRedactor $pagtowebResponseRedactor,
+        private readonly PagtoWebEphemeralResponseRedactor $pagtoWebResponseRedactor,
         private readonly FiscalModuleAvailabilityService $moduleAvailability,
         private readonly FixtureIntegraContadorClient $fixtureClient,
     ) {}

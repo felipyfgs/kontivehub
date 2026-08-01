@@ -8,9 +8,9 @@ use App\Models\User;
 use App\Rules\AllowedCommunicationCannedResponsePlaceholders;
 use App\Services\Communication\Authorization\Access;
 
-final class UpdateCannedResponseRequest extends CommunicationRequest
+final class UpdateCannedResponseRequest extends TenantScopedRequest
 {
-    protected function prepareCommunicationValidation(): void
+    protected function prepareScopedValidation(): void
     {
         foreach (['shortcut', 'title'] as $field) {
             if ($this->has($field) && is_string($this->input($field))) {

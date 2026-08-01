@@ -3,8 +3,8 @@
 namespace App\Services\Fiscal\SimplesMei\Pgdasd;
 
 use App\Models\Client;
-use App\Models\PagtowebPaymentListItem;
-use App\Models\PagtowebPaymentListObservation;
+use App\Models\PagtoWebPaymentListItem;
+use App\Models\PagtoWebPaymentListObservation;
 use App\Models\PgdasdOperation;
 use App\Models\Tenant;
 use App\Services\Fiscal\Guides\PagtoWebPaymentListCodec;
@@ -23,7 +23,7 @@ final class PgdasdPagtoWebEvidenceService
     public function apply(
         Tenant $tenant,
         Client $client,
-        PagtowebPaymentListObservation $observation,
+        PagtoWebPaymentListObservation $observation,
         array $consultedDigests,
         ?int $sourceRunId,
         CarbonImmutable $verifiedAt,
@@ -44,7 +44,7 @@ final class PgdasdPagtoWebEvidenceService
             return ['paid' => 0, 'not_found' => 0];
         }
 
-        $items = PagtowebPaymentListItem::query()
+        $items = PagtoWebPaymentListItem::query()
             ->withoutGlobalScopes()
             ->where('tenant_id', $tenant->id)
             ->where('client_id', $client->id)
@@ -70,7 +70,7 @@ final class PgdasdPagtoWebEvidenceService
                 continue;
             }
 
-            /** @var PagtowebPaymentListItem|null $item */
+            /** @var PagtoWebPaymentListItem|null $item */
             $item = $items->get($digest);
             if ($item !== null) {
                 $operation->forceFill([

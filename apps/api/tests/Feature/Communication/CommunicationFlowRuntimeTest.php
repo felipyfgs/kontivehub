@@ -16,8 +16,8 @@ use App\Enums\Communication\MessageSource;
 use App\Enums\Communication\OutboxStatus;
 use App\Enums\CommunicationChannel;
 use App\Exceptions\CommunicationTransportException;
-use App\Jobs\Communication\AdvanceCommunicationFlowRunJob;
-use App\Jobs\Communication\CorrelateCommunicationFlowEventJob;
+use App\Jobs\Communication\AdvanceFlowRunJob;
+use App\Jobs\Communication\CorrelateFlowEventJob;
 use App\Models\CommunicationContact;
 use App\Models\CommunicationConversation;
 use App\Models\CommunicationEvent;
@@ -88,7 +88,7 @@ final class CommunicationFlowRuntimeTest extends TestCase
 
         Queue::fake();
         $this->postLiveInbound($inbox, 'gw-flag-off-0001', 'provider-flag-off-0001', 'oi');
-        Queue::assertNotPushed(CorrelateCommunicationFlowEventJob::class);
+        Queue::assertNotPushed(CorrelateFlowEventJob::class);
         // Mesmo se correlacionar manualmente, no-op:
         app(FlowCorrelator::class)->correlateMessage(
             (int) $inbox->tenant_id,
@@ -147,7 +147,7 @@ final class CommunicationFlowRuntimeTest extends TestCase
 
     public function test_queued_correlation_follows_conversation_redirect_after_peer_merge(): void
     {
-        Queue::fake([AdvanceCommunicationFlowRunJob::class]);
+        Queue::fake([AdvanceFlowRunJob::class]);
         [$inbox, $donor] = $this->seedFlow(
             active: true,
             enabled: true,
@@ -200,7 +200,7 @@ final class CommunicationFlowRuntimeTest extends TestCase
             'event_key' => 'gw:flow-before-peer-merge-0001',
             'conversation_id' => $survivor->id,
         ]);
-        Queue::assertPushed(AdvanceCommunicationFlowRunJob::class);
+        Queue::assertPushed(AdvanceFlowRunJob::class);
     }
 
     public function test_flow_outbound_does_not_retrigger_runtime(): void
@@ -222,7 +222,7 @@ final class CommunicationFlowRuntimeTest extends TestCase
             'direction' => 'OUTBOUND',
             'kind' => 'TEXT',
         ])->assertNoContent();
-        Queue::assertNotPushed(CorrelateCommunicationFlowEventJob::class);
+        Queue::assertNotPushed(CorrelateFlowEventJob::class);
         $this->assertSame($before, CommunicationFlowRun::query()->withoutGlobalScopes()->count());
 
         // Mensagem FLOW_AUTOMATION inbound (defesa em profundidade)
@@ -351,8 +351,8 @@ final class CommunicationFlowRuntimeTest extends TestCase
 
     public function test_executor_jobs_are_registered(): void
     {
-        $this->assertTrue(class_exists(CorrelateCommunicationFlowEventJob::class));
-        $this->assertTrue(class_exists(AdvanceCommunicationFlowRunJob::class));
+        $this->assertTrue(class_exists(CorrelateFlowEventJob::class));
+        $this->assertTrue(class_exists(AdvanceFlowRunJob::class));
     }
 
     public function test_pause_flow_stops_active_run_and_blocks_advance(): void

@@ -115,7 +115,7 @@ final readonly class ExecuteInboxGatewayAction
 
         $this->profilePictures->schedule($inbox, $identity);
 
-        // Preserve the legacy envelope without exposing the upstream URL/JID.
+        // Preserve o envelope v1 sem expor URL/JID do upstream.
         return new GatewayQueryResult(['type' => GatewayQueryType::ProfilePicture->value]);
     }
 

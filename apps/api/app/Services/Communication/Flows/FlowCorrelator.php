@@ -6,7 +6,7 @@ use App\Enums\Communication\FlowRunStatus;
 use App\Enums\Communication\FlowStatus;
 use App\Enums\Communication\MessageDirection;
 use App\Enums\Communication\MessageSource;
-use App\Jobs\Communication\AdvanceCommunicationFlowRunJob;
+use App\Jobs\Communication\AdvanceFlowRunJob;
 use App\Models\CommunicationConversation;
 use App\Models\CommunicationFlow;
 use App\Models\CommunicationFlowInboxBinding;
@@ -112,7 +112,7 @@ final class FlowCorrelator
         });
 
         if ($advanceRunId !== null) {
-            AdvanceCommunicationFlowRunJob::dispatch($advanceRunId);
+            AdvanceFlowRunJob::dispatch($advanceRunId);
         }
     }
 

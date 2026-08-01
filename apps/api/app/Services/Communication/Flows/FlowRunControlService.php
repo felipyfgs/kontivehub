@@ -2,11 +2,11 @@
 
 namespace App\Services\Communication\Flows;
 
-use App\Enums\Communication\CommunicationFlowFailure;
+use App\Enums\Communication\FlowFailure;
 use App\Enums\Communication\FlowRunStatus;
 use App\Enums\Communication\FlowStatus;
 use App\Exceptions\CommunicationFlowException;
-use App\Jobs\Communication\AdvanceCommunicationFlowRunJob;
+use App\Jobs\Communication\AdvanceFlowRunJob;
 use App\Models\CommunicationFlowRun;
 use App\Models\TenantMembership;
 use App\Services\Communication\Events\EventRecorder;
@@ -37,14 +37,14 @@ final class FlowRunControlService
             }
             $locked = $this->locks->lockRun((int) $run->id);
             if ($locked->status !== FlowRunStatus::Paused) {
-                throw new CommunicationFlowException(CommunicationFlowFailure::RunNotPaused);
+                throw new CommunicationFlowException(FlowFailure::RunNotPaused);
             }
             $locked->loadMissing([
                 'flow' => fn ($query) => $query->withoutGlobalScopes(),
                 'binding' => fn ($query) => $query->withoutGlobalScopes(),
             ]);
             if ($locked->flow?->status === FlowStatus::Paused || $locked->binding?->enabled !== true) {
-                throw new CommunicationFlowException(CommunicationFlowFailure::RunNotEligible);
+                throw new CommunicationFlowException(FlowFailure::RunNotEligible);
             }
             $locked->forceFill(['status' => FlowRunStatus::Running])->save();
             $this->record($locked, 'COMMUNICATION_FLOW_RUN_RESUMED', $actor);
@@ -52,7 +52,7 @@ final class FlowRunControlService
             return $locked->fresh() ?? $locked;
         });
 
-        AdvanceCommunicationFlowRunJob::dispatch((int) $updated->id);
+        AdvanceFlowRunJob::dispatch((int) $updated->id);
 
         return $updated;
     }
@@ -99,10 +99,10 @@ final class FlowRunControlService
             ]);
             $binding = $locked->binding;
             if ($binding === null || ! $binding->enabled || $binding->published_version_id === null) {
-                throw new CommunicationFlowException(CommunicationFlowFailure::RestartWithoutBinding);
+                throw new CommunicationFlowException(FlowFailure::RestartWithoutBinding);
             }
             if ($binding->flow?->status === FlowStatus::Paused) {
-                throw new CommunicationFlowException(CommunicationFlowFailure::RestartFlowPaused);
+                throw new CommunicationFlowException(FlowFailure::RestartFlowPaused);
             }
 
             $version = $binding->publishedVersion ?? $locked->version;
@@ -115,7 +115,7 @@ final class FlowRunControlService
                 }
             }
             if ($startId === null || $locked->conversation_id === null || $version === null) {
-                throw new CommunicationFlowException(CommunicationFlowFailure::RestartInvalid);
+                throw new CommunicationFlowException(FlowFailure::RestartInvalid);
             }
 
             $created = CommunicationFlowRun::query()->withoutGlobalScopes()->create([
@@ -137,7 +137,7 @@ final class FlowRunControlService
             return (int) $created->id;
         });
 
-        AdvanceCommunicationFlowRunJob::dispatch($newRunId);
+        AdvanceFlowRunJob::dispatch($newRunId);
 
         return CommunicationFlowRun::query()->withoutGlobalScopes()->findOrFail($newRunId);
     }
@@ -268,7 +268,7 @@ final class FlowRunControlService
             }
             $locked = $this->locks->lockRun((int) $run->id);
             if ($requireNonTerminal && $locked->status->isTerminal()) {
-                throw new CommunicationFlowException(CommunicationFlowFailure::RunTerminal);
+                throw new CommunicationFlowException(FlowFailure::RunTerminal);
             }
             $payload = ['status' => $status];
             if ($finish) {

@@ -5,11 +5,11 @@ namespace App\Services\Communication\Outbox;
 use App\DTO\Communication\GatewayCommandData;
 use App\DTO\Communication\GatewayContractPayload;
 use App\DTO\Communication\PayloadDigest;
-use App\Enums\Communication\CommunicationOperationFailure;
 use App\Enums\Communication\GatewayCommandType;
+use App\Enums\Communication\OperationFailure;
 use App\Enums\Communication\OutboxStatus;
 use App\Exceptions\CommunicationOperationException;
-use App\Jobs\Communication\DispatchCommunicationOutboxJob;
+use App\Jobs\Communication\DispatchOutboxJob;
 use App\Models\CommunicationInbox;
 use App\Models\CommunicationMessage;
 use App\Models\CommunicationOutboxEntry;
@@ -125,7 +125,7 @@ final readonly class OutboxService
             ]);
         });
 
-        DB::afterCommit(static fn () => DispatchCommunicationOutboxJob::dispatch((int) $entry->id));
+        DB::afterCommit(static fn () => DispatchOutboxJob::dispatch((int) $entry->id));
 
         return $entry;
     }
@@ -135,7 +135,7 @@ final readonly class OutboxService
         ?CommunicationMessage $message,
     ): void {
         if (! $inbox->exists || trim((string) $inbox->session_id) === '') {
-            throw new CommunicationOperationException(CommunicationOperationFailure::InboxSessionInvalid);
+            throw new CommunicationOperationException(OperationFailure::InboxSessionInvalid);
         }
 
         if ($message !== null && (
@@ -143,7 +143,7 @@ final readonly class OutboxService
             || (int) $message->tenant_id !== (int) $inbox->tenant_id
             || (int) $message->inbox_id !== (int) $inbox->id
         )) {
-            throw new CommunicationOperationException(CommunicationOperationFailure::OutboxTenantScopeInvalid);
+            throw new CommunicationOperationException(OperationFailure::OutboxTenantScopeInvalid);
         }
     }
 }

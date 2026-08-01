@@ -7,21 +7,21 @@ use App\DTO\Communication\GatewayOperationData;
 use App\Enums\Communication\GatewayCommandType;
 use App\Enums\Communication\GatewayQueryType;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Communication\CommunicationRequest;
-use App\Http\Requests\Communication\ConfirmCommunicationInboxPasskeyRequest;
-use App\Http\Requests\Communication\ManageCommunicationInboxRequest;
-use App\Http\Requests\Communication\MarkCommunicationInboxStateCleanRequest;
-use App\Http\Requests\Communication\PairCommunicationInboxPhoneRequest;
-use App\Http\Requests\Communication\QueryCommunicationInboxProfilePictureRequest;
-use App\Http\Requests\Communication\QueryCommunicationInboxQrLinkRequest;
-use App\Http\Requests\Communication\QueryCommunicationInboxUsersRequest;
-use App\Http\Requests\Communication\ResolveCommunicationInboxLinkRequest;
-use App\Http\Requests\Communication\RespondCommunicationInboxPasskeyRequest;
-use App\Http\Requests\Communication\UpdateCommunicationInboxBlocklistRequest;
-use App\Http\Requests\Communication\UpdateCommunicationInboxDisappearingRequest;
-use App\Http\Requests\Communication\UpdateCommunicationInboxPassiveRequest;
-use App\Http\Requests\Communication\UpdateCommunicationInboxPresenceRequest;
-use App\Http\Requests\Communication\UpdateCommunicationInboxPrivacyRequest;
+use App\Http\Requests\Communication\ConfirmInboxPasskeyRequest;
+use App\Http\Requests\Communication\ManageInboxRequest;
+use App\Http\Requests\Communication\MarkInboxStateCleanRequest;
+use App\Http\Requests\Communication\PairInboxPhoneRequest;
+use App\Http\Requests\Communication\QueryInboxProfilePictureRequest;
+use App\Http\Requests\Communication\QueryInboxQrLinkRequest;
+use App\Http\Requests\Communication\QueryInboxUsersRequest;
+use App\Http\Requests\Communication\ResolveInboxLinkRequest;
+use App\Http\Requests\Communication\RespondInboxPasskeyRequest;
+use App\Http\Requests\Communication\TenantScopedRequest;
+use App\Http\Requests\Communication\UpdateInboxBlocklistRequest;
+use App\Http\Requests\Communication\UpdateInboxDisappearingRequest;
+use App\Http\Requests\Communication\UpdateInboxPassiveRequest;
+use App\Http\Requests\Communication\UpdateInboxPresenceRequest;
+use App\Http\Requests\Communication\UpdateInboxPrivacyRequest;
 use App\Http\Resources\Communication\GatewayCommandResource;
 use App\Http\Resources\Communication\GatewayQueryResource;
 use App\Models\CommunicationInbox;
@@ -35,7 +35,7 @@ final class InboxGatewayController extends Controller
     ) {}
 
     public function sessionStatus(
-        ManageCommunicationInboxRequest $request,
+        ManageInboxRequest $request,
         CommunicationInbox $inbox,
     ): JsonResponse {
         return (new GatewayQueryResource(
@@ -44,7 +44,7 @@ final class InboxGatewayController extends Controller
     }
 
     public function connect(
-        ManageCommunicationInboxRequest $request,
+        ManageInboxRequest $request,
         CommunicationInbox $inbox,
     ): JsonResponse {
         return $this->command(
@@ -55,7 +55,7 @@ final class InboxGatewayController extends Controller
     }
 
     public function disconnect(
-        ManageCommunicationInboxRequest $request,
+        ManageInboxRequest $request,
         CommunicationInbox $inbox,
     ): JsonResponse {
         return $this->command(
@@ -66,7 +66,7 @@ final class InboxGatewayController extends Controller
     }
 
     public function passive(
-        UpdateCommunicationInboxPassiveRequest $request,
+        UpdateInboxPassiveRequest $request,
         CommunicationInbox $inbox,
     ): JsonResponse {
         return $this->command(
@@ -78,7 +78,7 @@ final class InboxGatewayController extends Controller
     }
 
     public function pairPhone(
-        PairCommunicationInboxPhoneRequest $request,
+        PairInboxPhoneRequest $request,
         CommunicationInbox $inbox,
     ): JsonResponse {
         return $this->command(
@@ -90,7 +90,7 @@ final class InboxGatewayController extends Controller
     }
 
     public function respondPasskey(
-        RespondCommunicationInboxPasskeyRequest $request,
+        RespondInboxPasskeyRequest $request,
         CommunicationInbox $inbox,
     ): JsonResponse {
         return $this->command(
@@ -102,7 +102,7 @@ final class InboxGatewayController extends Controller
     }
 
     public function confirmPasskey(
-        ConfirmCommunicationInboxPasskeyRequest $request,
+        ConfirmInboxPasskeyRequest $request,
         CommunicationInbox $inbox,
     ): JsonResponse {
         return $this->command(
@@ -114,7 +114,7 @@ final class InboxGatewayController extends Controller
     }
 
     public function globalPresence(
-        UpdateCommunicationInboxPresenceRequest $request,
+        UpdateInboxPresenceRequest $request,
         CommunicationInbox $inbox,
     ): JsonResponse {
         return $this->command(
@@ -126,7 +126,7 @@ final class InboxGatewayController extends Controller
     }
 
     public function defaultDisappearing(
-        UpdateCommunicationInboxDisappearingRequest $request,
+        UpdateInboxDisappearingRequest $request,
         CommunicationInbox $inbox,
     ): JsonResponse {
         return $this->command(
@@ -138,7 +138,7 @@ final class InboxGatewayController extends Controller
     }
 
     public function syncState(
-        ManageCommunicationInboxRequest $request,
+        ManageInboxRequest $request,
         CommunicationInbox $inbox,
     ): JsonResponse {
         return $this->command(
@@ -150,7 +150,7 @@ final class InboxGatewayController extends Controller
     }
 
     public function markStateClean(
-        MarkCommunicationInboxStateCleanRequest $request,
+        MarkInboxStateCleanRequest $request,
         CommunicationInbox $inbox,
     ): JsonResponse {
         return $this->command(
@@ -162,7 +162,7 @@ final class InboxGatewayController extends Controller
     }
 
     public function updateBlocklist(
-        UpdateCommunicationInboxBlocklistRequest $request,
+        UpdateInboxBlocklistRequest $request,
         CommunicationInbox $inbox,
     ): JsonResponse {
         return $this->command(
@@ -174,7 +174,7 @@ final class InboxGatewayController extends Controller
     }
 
     public function updatePrivacy(
-        UpdateCommunicationInboxPrivacyRequest $request,
+        UpdateInboxPrivacyRequest $request,
         CommunicationInbox $inbox,
     ): JsonResponse {
         return $this->command(
@@ -186,7 +186,7 @@ final class InboxGatewayController extends Controller
     }
 
     public function checkUsers(
-        QueryCommunicationInboxUsersRequest $request,
+        QueryInboxUsersRequest $request,
         CommunicationInbox $inbox,
     ): JsonResponse {
         return $this->query(
@@ -198,7 +198,7 @@ final class InboxGatewayController extends Controller
     }
 
     public function userInfo(
-        QueryCommunicationInboxUsersRequest $request,
+        QueryInboxUsersRequest $request,
         CommunicationInbox $inbox,
     ): JsonResponse {
         return $this->query(
@@ -210,7 +210,7 @@ final class InboxGatewayController extends Controller
     }
 
     public function businessProfiles(
-        QueryCommunicationInboxUsersRequest $request,
+        QueryInboxUsersRequest $request,
         CommunicationInbox $inbox,
     ): JsonResponse {
         return $this->query(
@@ -222,7 +222,7 @@ final class InboxGatewayController extends Controller
     }
 
     public function profilePicture(
-        QueryCommunicationInboxProfilePictureRequest $request,
+        QueryInboxProfilePictureRequest $request,
         CommunicationInbox $inbox,
     ): JsonResponse {
         return (new GatewayQueryResource(
@@ -231,7 +231,7 @@ final class InboxGatewayController extends Controller
     }
 
     public function contactQrLink(
-        QueryCommunicationInboxQrLinkRequest $request,
+        QueryInboxQrLinkRequest $request,
         CommunicationInbox $inbox,
     ): JsonResponse {
         return $this->query(
@@ -243,7 +243,7 @@ final class InboxGatewayController extends Controller
     }
 
     public function resolveContactQr(
-        ResolveCommunicationInboxLinkRequest $request,
+        ResolveInboxLinkRequest $request,
         CommunicationInbox $inbox,
     ): JsonResponse {
         return $this->query(
@@ -255,7 +255,7 @@ final class InboxGatewayController extends Controller
     }
 
     public function resolveBusinessLink(
-        ResolveCommunicationInboxLinkRequest $request,
+        ResolveInboxLinkRequest $request,
         CommunicationInbox $inbox,
     ): JsonResponse {
         return $this->query(
@@ -267,7 +267,7 @@ final class InboxGatewayController extends Controller
     }
 
     public function blocklist(
-        ManageCommunicationInboxRequest $request,
+        ManageInboxRequest $request,
         CommunicationInbox $inbox,
     ): JsonResponse {
         return $this->query(
@@ -278,7 +278,7 @@ final class InboxGatewayController extends Controller
     }
 
     public function privacy(
-        ManageCommunicationInboxRequest $request,
+        ManageInboxRequest $request,
         CommunicationInbox $inbox,
     ): JsonResponse {
         return $this->query(
@@ -289,7 +289,7 @@ final class InboxGatewayController extends Controller
     }
 
     private function command(
-        CommunicationRequest $request,
+        TenantScopedRequest $request,
         CommunicationInbox $inbox,
         GatewayCommandType $type,
         ?GatewayOperationData $data = null,
@@ -305,7 +305,7 @@ final class InboxGatewayController extends Controller
     }
 
     private function query(
-        CommunicationRequest $request,
+        TenantScopedRequest $request,
         CommunicationInbox $inbox,
         GatewayQueryType $type,
         ?GatewayOperationData $data = null,
