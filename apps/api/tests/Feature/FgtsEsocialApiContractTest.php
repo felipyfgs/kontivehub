@@ -12,6 +12,7 @@ use App\Models\EsocialEventEvidence;
 use App\Models\FgtsCompetenceStatus;
 use App\Models\Tenant;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -23,11 +24,18 @@ final class FgtsEsocialApiContractTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        CarbonImmutable::setTestNow('2026-07-15 12:00:00-03:00');
         config()->set('fgts_esocial.driver', 'official_bx');
         config()->set('fgts_esocial.environment', 'restricted');
         config()->set('fgts_esocial.production_egress_enabled', false);
         config()->set('fgts_esocial.kill_switch', false);
         config()->set('fgts_esocial.official_bx.daily_access_limit', 10);
+    }
+
+    protected function tearDown(): void
+    {
+        CarbonImmutable::setTestNow();
+        parent::tearDown();
     }
 
     public function test_read_endpoints_preserve_resources_and_pagination_contracts(): void
