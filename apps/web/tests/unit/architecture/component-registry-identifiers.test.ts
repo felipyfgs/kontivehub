@@ -11,6 +11,7 @@ const communicationTypes = [
   'app/types/communication/automation.ts',
   'app/types/communication/contacts.ts',
   'app/types/communication/conversations.ts',
+  'app/types/communication/flows.ts',
   'app/types/communication/inboxes.ts',
   'app/types/communication/messages.ts',
   'app/types/communication/quick-responses.ts',
@@ -24,10 +25,22 @@ const forbiddenGeneratedNames = [
   'PgdasdPgdasd'
 ]
 const forbiddenSourcePaths = [
-  'components/communication/flows/Flow',
+  'components/communication/flows/FlowBindingsSection.vue',
+  'components/communication/flows/FlowCatalogModals.vue',
+  'components/communication/flows/FlowCatalogTable.vue',
+  'components/communication/flows/FlowDraftSection.vue',
+  'components/communication/flows/FlowEditorCanvas.client.vue',
+  'components/communication/flows/FlowEditorInspector.vue',
+  'components/communication/flows/FlowEditorListMode.vue',
+  'components/communication/flows/FlowEditorPalette.vue',
+  'components/communication/flows/FlowMetadataSection.vue',
+  'components/communication/flows/FlowRunsUnavailable.vue',
+  'components/communication/flows/FlowVersionsSection.vue',
   'components/communication/contacts/ContactActions.vue',
   'components/communication/contacts/ContactContext.vue',
-  'components/communication/quick-responses/QuickResponse',
+  'components/communication/quick-responses/QuickResponseEditorModal.vue',
+  'components/communication/quick-responses/QuickResponseDuplicateModal.vue',
+  'components/communication/quick-responses/QuickResponseDeactivateModal.vue',
   'components/monitoring/pgdasd/PgdasdHistoryPeriodGrid.vue',
   'components/communication/CommunicationWorkspacePage.vue'
 ]

@@ -60,6 +60,50 @@ final class IdentifierNamingIntegrityArchitectureTest extends TestCase
         }
     }
 
+    public function test_pagto_web_casing_is_canonical_in_api_code_and_filenames(): void
+    {
+        $apiRoot = dirname(__DIR__, 3);
+
+        foreach (['app', 'tests'] as $directory) {
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($apiRoot.'/'.$directory),
+            );
+            foreach ($iterator as $file) {
+                if (! $file->isFile()) {
+                    continue;
+                }
+
+                if (stripos($file->getFilename(), 'pagtoweb') !== false) {
+                    self::assertStringContainsString('PagtoWeb', $file->getFilename(), $file->getPathname());
+                }
+                if ($file->getExtension() !== 'php') {
+                    continue;
+                }
+
+                foreach (token_get_all((string) file_get_contents($file->getPathname())) as $token) {
+                    if (! is_array($token) || ! in_array($token[0], [T_VARIABLE, T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)) {
+                        continue;
+                    }
+
+                    $identifier = ltrim($token[1], '$\\');
+                    if (stripos($identifier, 'pagtoweb') === false) {
+                        continue;
+                    }
+
+                    $isDescriptiveTestMethod = str_starts_with($file->getPathname(), $apiRoot.'/tests/')
+                        && str_starts_with($identifier, 'test_');
+                    $canonical = $token[0] === T_VARIABLE
+                        ? str_starts_with($identifier, 'pagtoWeb')
+                        : (str_contains($identifier, 'PagtoWeb')
+                            || str_starts_with($identifier, 'pagtoWeb')
+                            || preg_match('/^pagtoweb_[a-z0-9_]+$/', $identifier) === 1
+                            || $isDescriptiveTestMethod);
+                    self::assertTrue($canonical, "Casing PagtoWeb inválido em {$file->getPathname()}: {$identifier}");
+                }
+            }
+        }
+    }
+
     public function test_renamed_enum_and_job_fqcns_are_the_only_api_symbols_used(): void
     {
         foreach ([
@@ -114,26 +158,51 @@ final class IdentifierNamingIntegrityArchitectureTest extends TestCase
     public function test_api_has_no_transitional_compatibility_terms_in_code_or_filenames(): void
     {
         $apiRoot = dirname(__DIR__, 3);
-        $forbidden = ['leg'.'acy', 'leg'.'ad'];
-        // Literal preservado por contrato observável (valor serializado em
-        // display_name_source); não é identificador nem comentário.
-        $preservedLiterals = ['legacy_provisional'];
+        $forbiddenTermStems = [
+            'english_compatibility_marker' => 'leg'.'acy',
+            'portuguese_compatibility_marker' => 'leg'.'ad',
+        ];
+        $textExtensions = ['css', 'go', 'js', 'json', 'md', 'mjs', 'php', 'sql', 'ts', 'txt', 'vue', 'yaml', 'yml'];
+        $preservedLiteral = 'leg'.'acy_provisional';
+        $preservedLiteral = strtoupper($preservedLiteral);
 
-        foreach (['app', 'database', 'tests'] as $directory) {
+        foreach ([
+            'app',
+            'config',
+            'database',
+            'routes',
+            'tests',
+        ] as $directory) {
             $iterator = new \RecursiveIteratorIterator(
                 new \RecursiveDirectoryIterator($apiRoot.'/'.$directory),
             );
             foreach ($iterator as $file) {
-                if (! $file->isFile()) {
+                if (! $file->isFile() || ! in_array(strtolower($file->getExtension()), $textExtensions, true)) {
                     continue;
                 }
 
-                $path = strtolower($file->getPathname());
-                $source = strtolower((string) file_get_contents($file->getPathname()));
-                foreach ($preservedLiterals as $literal) {
-                    $source = str_replace($literal, '', $source);
+                $relativePath = str_replace($apiRoot.'/', '', $file->getPathname());
+                $path = strtolower($relativePath);
+                $source = (string) file_get_contents($file->getPathname());
+
+                if ($file->getExtension() === 'php') {
+                    $source = collect(token_get_all($source))
+                        ->map(function (array|string $token) use ($preservedLiteral): string {
+                            if (! is_array($token)) {
+                                return $token;
+                            }
+
+                            if ($token[0] === T_CONSTANT_ENCAPSED_STRING
+                                && trim($token[1], "'\"") === $preservedLiteral) {
+                                return '';
+                            }
+
+                            return $token[1];
+                        })
+                        ->implode('');
                 }
-                foreach ($forbidden as $term) {
+                $source = strtolower($source);
+                foreach ($forbiddenTermStems as $term) {
                     self::assertStringNotContainsString($term, $path, $file->getPathname());
                     self::assertStringNotContainsString($term, $source, $file->getPathname());
                 }

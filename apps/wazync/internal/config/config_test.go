@@ -59,6 +59,36 @@ func TestLoadReportsEachMissingRequiredWazyncVariable(t *testing.T) {
 	}
 }
 
+func TestLoadRejectsRemovedEndpointVariables(t *testing.T) {
+	tests := []struct {
+		canonical string
+		removed   string
+		value     string
+	}{
+		{
+			canonical: "WAZYNC_EVENT_INGEST_URL",
+			removed:   "WAZYNC_EVENTS_URL",
+			value:     "http://php/api/internal/v1/whatsapp/events",
+		},
+		{
+			canonical: "WAZYNC_MEDIA_SOURCE_URL",
+			removed:   "WAZYNC_MEDIA_URL",
+			value:     "http://php/api/internal/v1/communication/gateway/media",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.removed, func(t *testing.T) {
+			setCompleteEnabledConfiguration(t)
+			t.Setenv(test.canonical, "")
+			t.Setenv(test.removed, test.value)
+
+			if _, err := Load(); err == nil || !strings.Contains(err.Error(), test.canonical) {
+				t.Fatalf("removed endpoint variable must fail closed, got %v", err)
+			}
+		})
+	}
+}
+
 func TestLoadRejectsWeakCurrentHMACSecret(t *testing.T) {
 	setCompleteEnabledConfiguration(t)
 	t.Setenv("WAZYNC_HMAC_SECRET", strings.Repeat("s", 31))

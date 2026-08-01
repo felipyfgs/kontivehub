@@ -1,5 +1,5 @@
 .PHONY: help init-env setup up dev down build logs shell migrate seed \
-	api-test composer-install frontend-generate wazync-test nginx-upstream-test \
+	api-test composer-install frontend-generate wazync-test nginx-upstream-test identifier-naming-test \
 	code-review \
 	prod-config prod-build prod-up prod-down \
 	backup restore prod-backup prod-restore \
@@ -32,6 +32,7 @@ help:
 	@echo "  make migrate            Migrations"
 	@echo "  make seed               Seed de desenvolvimento"
 	@echo "  make api-test           Suíte Laravel no PostgreSQL isolado"
+	@echo "  make identifier-naming-test Verifica terminologia de transição em arquivos ativos"
 	@echo "  make nginx-upstream-test Verifica recuperação do edge após recriar o PHP"
 	@echo "  make code-review        CodeRabbit no diff local (--agent; use ARGS='--base main')"
 	@echo ""
@@ -226,6 +227,9 @@ frontend-dev: dev
 wazync-test:
 	docker run --rm -v $(CURDIR):/workspace -w /workspace/apps/wazync golang:1.25-alpine go test ./...
 	docker run --rm -v $(CURDIR):/workspace -w /workspace/apps/wazync golang:1.25-alpine go vet ./...
+
+identifier-naming-test:
+	node scripts/check-identifier-naming.mjs
 
 seed-pilot:
 	docker compose exec php php artisan db:seed --class=PilotSeeder --force

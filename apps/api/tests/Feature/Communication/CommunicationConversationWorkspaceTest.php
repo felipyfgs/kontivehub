@@ -393,6 +393,25 @@ final class CommunicationConversationWorkspaceTest extends TestCase
             ->assertJsonPath('data.0.display_name_source', 'WHATSAPP_ADDRESS_BOOK');
     }
 
+    public function test_provisional_contact_name_preserves_its_public_display_name_source(): void
+    {
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $operator = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $inbox = $this->inbox($tenant, 'Atendimento');
+        $this->member($inbox, $operator);
+        $conversation = $this->conversation($tenant, $inbox, '+5511999992012', provisional: true);
+        $conversation->identity->contact->forceFill([
+            'name' => 'Nome importado',
+            'is_provisional' => true,
+        ])->save();
+
+        $this->authenticate($operator);
+        $this->getJson('/api/v1/communication/conversations?inbox_id='.$inbox->id)
+            ->assertOk()
+            ->assertJsonPath('data.0.display_name', 'Nome importado')
+            ->assertJsonPath('data.0.display_name_source', 'LEGACY_PROVISIONAL');
+    }
+
     public function test_profile_merge_preserves_missing_fields_orders_events_and_requires_explicit_clear(): void
     {
         $tenant = Tenant::factory()->create(['communication_enabled' => true]);
