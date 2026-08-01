@@ -26,7 +26,7 @@ func (s *recordingSpoolAck) Ack(id string) error {
 func TestDispatcherRetriesPersistedEventUntilLaravelAcknowledges(t *testing.T) {
 	t.Parallel()
 	var calls atomic.Int32
-	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+	eventIngestServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		body := make([]byte, request.ContentLength)
 		_, _ = request.Body.Read(body)
 		if request.Header.Get(security.HeaderSignature) == "" || request.Header.Get(security.HeaderNonce) == "" {
@@ -38,7 +38,7 @@ func TestDispatcherRetriesPersistedEventUntilLaravelAcknowledges(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	defer endpoint.Close()
+	defer eventIngestServer.Close()
 
 	persistence := store.NewMemory()
 	payload, _ := json.Marshal(map[string]string{"status": "CONNECTED"})
@@ -53,7 +53,7 @@ func TestDispatcherRetriesPersistedEventUntilLaravelAcknowledges(t *testing.T) {
 	}
 
 	now := time.Now().UTC()
-	dispatcher := New(persistence, endpoint.URL+"/api/internal/v1/whatsapp/events", "gateway-v1", "secret", endpoint.Client())
+	dispatcher := New(persistence, eventIngestServer.URL+"/api/internal/v1/whatsapp/events", "gateway-v1", "secret", eventIngestServer.Client())
 	dispatcher.now = func() time.Time { return now }
 	if err := dispatcher.DispatchOnce(t.Context()); err != nil {
 		t.Fatalf("first dispatch: %v", err)
@@ -75,10 +75,10 @@ func TestDispatcherRetriesPersistedEventUntilLaravelAcknowledges(t *testing.T) {
 
 func TestDispatcherRetainsRetryDescriptorUntilLaravelACKThenDeletesIt(t *testing.T) {
 	t.Parallel()
-	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	eventIngestServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	defer endpoint.Close()
+	defer eventIngestServer.Close()
 
 	persistence := store.NewMemory()
 	state := domain.MediaRetryState{
@@ -105,7 +105,7 @@ func TestDispatcherRetainsRetryDescriptorUntilLaravelACKThenDeletesIt(t *testing
 	}
 
 	spoolAck := &recordingSpoolAck{}
-	d := New(persistence, endpoint.URL, "gateway-v1", "secret", endpoint.Client()).WithSpool(spoolAck)
+	d := New(persistence, eventIngestServer.URL, "gateway-v1", "secret", eventIngestServer.Client()).WithSpool(spoolAck)
 	if err := d.DispatchOnce(t.Context()); err != nil {
 		t.Fatalf("dispatch retry event: %v", err)
 	}

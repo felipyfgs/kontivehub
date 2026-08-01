@@ -211,8 +211,8 @@ type MediaRetryPayload struct {
 	To                string `json:"to"`
 	TargetMessageID   string `json:"target_message_id"`
 	ExpectedDirection string `json:"expected_direction,omitempty"`
-	// Sender and FromMe are retained only for the inbound legacy rollout
-	// shape. New callers must use expected_direction and never learn the
+	// Sender and FromMe are accepted only for inbound payloads without
+	// expected_direction. Callers using expected_direction never learn the
 	// session identity kept in the encrypted descriptor.
 	Sender string `json:"sender,omitempty"`
 	FromMe bool   `json:"from_me,omitempty"`
@@ -370,11 +370,11 @@ func validateMediaRetryPayload(raw json.RawMessage, payload MediaRetryPayload) e
 	// The compatibility shape is deliberately inbound-only. Requiring both
 	// fields prevents a missing bool from silently becoming false.
 	if !hasSender || !hasFromMe || strings.TrimSpace(payload.Sender) == "" || payload.FromMe {
-		return errors.New("invalid legacy inbound media retry payload")
+		return errors.New("invalid inbound media retry payload")
 	}
 	var fromMe *bool
 	if err := json.Unmarshal(fields["from_me"], &fromMe); err != nil || fromMe == nil || *fromMe {
-		return errors.New("invalid legacy inbound media retry payload")
+		return errors.New("invalid inbound media retry payload")
 	}
 	return nil
 }

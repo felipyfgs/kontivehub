@@ -367,13 +367,13 @@ func (a *WhatsMeowAdapter) RetryMedia(
 		return ErrHistoryRecoveryInvalid
 	}
 	expectedDirection := strings.ToUpper(strings.TrimSpace(payload.ExpectedDirection))
-	legacyInbound := expectedDirection == ""
-	if (legacyInbound && strings.TrimSpace(payload.Sender) == "") ||
-		(!legacyInbound && expectedDirection != "INBOUND" && expectedDirection != "OUTBOUND") {
+	usesSenderAddress := expectedDirection == ""
+	if (usesSenderAddress && strings.TrimSpace(payload.Sender) == "") ||
+		(!usesSenderAddress && expectedDirection != "INBOUND" && expectedDirection != "OUTBOUND") {
 		return ErrHistoryRecoveryInvalid
 	}
 	var sender OneToOneAddress
-	if legacyInbound {
+	if usesSenderAddress {
 		sender, err = NormalizeOneToOneAddress(payload.Sender)
 		if err != nil {
 			return err
@@ -400,10 +400,10 @@ func (a *WhatsMeowAdapter) RetryMedia(
 			if envelope.Chat != chat.ToNonAD().String() {
 				return ErrMediaRetryStateMissing
 			}
-			if legacyInbound && (payload.FromMe || envelope.IsFromMe || envelope.Sender != sender.JID.ToNonAD().String()) {
+			if usesSenderAddress && (payload.FromMe || envelope.IsFromMe || envelope.Sender != sender.JID.ToNonAD().String()) {
 				return ErrMediaRetryStateMissing
 			}
-			if !legacyInbound && ((expectedDirection == "INBOUND" && envelope.IsFromMe) ||
+			if !usesSenderAddress && ((expectedDirection == "INBOUND" && envelope.IsFromMe) ||
 				(expectedDirection == "OUTBOUND" && !envelope.IsFromMe)) {
 				return ErrMediaRetryStateMissing
 			}
@@ -456,10 +456,10 @@ func (a *WhatsMeowAdapter) RetryMedia(
 		if !ok || secret.info.Chat.ToNonAD() != chat {
 			return ErrMediaRetryStateMissing
 		}
-		if legacyInbound && (payload.FromMe || secret.info.IsFromMe || secret.info.Sender.ToNonAD() != sender.JID) {
+		if usesSenderAddress && (payload.FromMe || secret.info.IsFromMe || secret.info.Sender.ToNonAD() != sender.JID) {
 			return ErrMediaRetryStateMissing
 		}
-		if !legacyInbound && ((expectedDirection == "INBOUND" && secret.info.IsFromMe) ||
+		if !usesSenderAddress && ((expectedDirection == "INBOUND" && secret.info.IsFromMe) ||
 			(expectedDirection == "OUTBOUND" && !secret.info.IsFromMe)) {
 			return ErrMediaRetryStateMissing
 		}

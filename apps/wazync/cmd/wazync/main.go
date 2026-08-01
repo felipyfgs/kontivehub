@@ -42,11 +42,11 @@ func main() {
 	var deviceResolver *protocol.DeviceResolver
 	var mediaSpool *spool.Store
 	clientSettings := protocol.ClientSettings{
-		ConnectTimeout:           cfg.WAConnectTimeout,
-		ReadyTimeout:             cfg.WAReadyTimeout,
-		HTTPTimeout:              cfg.WAHTTPTimeout,
-		ProxyAddress:             cfg.WAProxyURL,
-		MaxParallelRetryHandlers: cfg.WARetryHandlers,
+		ConnectTimeout:           cfg.WhatsAppConnectTimeout,
+		ReadyTimeout:             cfg.WhatsAppReadyTimeout,
+		HTTPTimeout:              cfg.WhatsAppHTTPTimeout,
+		ProxyAddress:             cfg.WhatsAppProxyURL,
+		MaxParallelRetryHandlers: cfg.WhatsAppRetryHandlers,
 	}
 	if cfg.Enabled {
 		mediaSpool, err = spool.Open(cfg.SpoolDirectory, dataBox)
@@ -84,11 +84,11 @@ func main() {
 		)
 		eventBridge.SetLifecycleObserver(sessionManager.NotifyLifecycle)
 		pairing := session.NewPairingCoordinator(persistence, adapter, deviceResolver)
-		mediaFetcher := media.NewFetcher(
+		mediaSource := media.NewFetcher(
 			cfg.LaravelMediaSourceURL, cfg.CurrentKeyID, cfg.CurrentSecret, cfg.MaxMediaBytes, nil,
 		)
 		worker := command.New(persistence, sessionManager, pairing, adapter, cfg.ReplicaID).
-			WithMediaFetcher(mediaFetcher)
+			WithMediaSource(mediaSource)
 		eventDispatcher := dispatcher.New(
 			persistence, cfg.LaravelEventIngestURL, cfg.CurrentKeyID, cfg.CurrentSecret, nil,
 		).WithSpool(mediaSpool)

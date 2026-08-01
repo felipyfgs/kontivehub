@@ -48,7 +48,7 @@ func (f *fakeTransport) SendTypedMessage(
 }
 func (f *fakeTransport) Logout(context.Context, string) error { f.connected = false; return nil }
 
-type fakeMediaFetcher struct{ content []byte }
+type fakeMediaSource struct{ content []byte }
 
 type terminalPairer struct{ calls int }
 
@@ -125,7 +125,7 @@ func (p *controllablePairer) StartPairing(ctx context.Context, _ string) (<-chan
 	return out, nil
 }
 
-func (f fakeMediaFetcher) Fetch(context.Context, string, string, int64) ([]byte, error) {
+func (f fakeMediaSource) Fetch(context.Context, string, string, int64) ([]byte, error) {
 	return append([]byte(nil), f.content...), nil
 }
 
@@ -486,8 +486,8 @@ func TestWorkerFetchesAndSendsDocumentForMediaCommand(t *testing.T) {
 	persistence := store.NewMemory()
 	transport := &fakeTransport{}
 	manager := session.NewManager(persistence, transport, "replica-media", 10, time.Minute, 10*time.Second)
-	worker := New(persistence, manager, nil, transport, "replica-media").WithMediaFetcher(
-		fakeMediaFetcher{content: []byte("%PDF-document")},
+	worker := New(persistence, manager, nil, transport, "replica-media").WithMediaSource(
+		fakeMediaSource{content: []byte("%PDF-document")},
 	)
 	now := time.Now().UTC()
 	worker.now = func() time.Time { return now }

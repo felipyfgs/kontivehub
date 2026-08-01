@@ -17,33 +17,33 @@ import (
 )
 
 type Fetcher struct {
-	baseURL  string
-	keyID    string
-	secret   string
-	maxBytes int64
-	client   *http.Client
-	now      func() time.Time
+	sourceURL string
+	keyID     string
+	secret    string
+	maxBytes  int64
+	client    *http.Client
+	now       func() time.Time
 }
 
-func NewFetcher(baseURL, keyID, secret string, maxBytes int64, client *http.Client) *Fetcher {
+func NewFetcher(sourceURL, keyID, secret string, maxBytes int64, client *http.Client) *Fetcher {
 	if client == nil {
 		client = &http.Client{Timeout: 45 * time.Second}
 	}
 	return &Fetcher{
-		baseURL: strings.TrimRight(baseURL, "/"), keyID: keyID, secret: secret,
+		sourceURL: strings.TrimRight(sourceURL, "/"), keyID: keyID, secret: secret,
 		maxBytes: maxBytes, client: client, now: time.Now,
 	}
 }
 
 func (f *Fetcher) Fetch(ctx context.Context, commandID, expectedSHA string, expectedSize int64) ([]byte, error) {
-	if f.baseURL == "" || f.keyID == "" || f.secret == "" || f.maxBytes < 1 {
+	if f.sourceURL == "" || f.keyID == "" || f.secret == "" || f.maxBytes < 1 {
 		return nil, errors.New("media fetcher is not configured")
 	}
 	if expectedSize < 1 || expectedSize > f.maxBytes || len(expectedSHA) != 64 {
 		return nil, errors.New("invalid media descriptor")
 	}
-	endpoint := f.baseURL + "/" + url.PathEscape(commandID)
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	mediaURL := f.sourceURL + "/" + url.PathEscape(commandID)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, mediaURL, nil)
 	if err != nil {
 		return nil, err
 	}

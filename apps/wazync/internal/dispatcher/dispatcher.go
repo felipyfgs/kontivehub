@@ -17,15 +17,15 @@ import (
 )
 
 type Dispatcher struct {
-	store       store.Store
-	client      *http.Client
-	endpoint    string
-	keyID       string
-	secret      string
-	batchSize   int
-	maxAttempts int
-	now         func() time.Time
-	spool       interface{ Ack(string) error }
+	store          store.Store
+	client         *http.Client
+	eventIngestURL string
+	keyID          string
+	secret         string
+	batchSize      int
+	maxAttempts    int
+	now            func() time.Time
+	spool          interface{ Ack(string) error }
 }
 
 func (d *Dispatcher) WithSpool(spool interface{ Ack(string) error }) *Dispatcher {
@@ -35,14 +35,14 @@ func (d *Dispatcher) WithSpool(spool interface{ Ack(string) error }) *Dispatcher
 
 func New(
 	persistence store.Store,
-	endpoint, keyID, secret string,
+	eventIngestURL, keyID, secret string,
 	client *http.Client,
 ) *Dispatcher {
 	if client == nil {
 		client = &http.Client{Timeout: 15 * time.Second}
 	}
 	return &Dispatcher{
-		store: persistence, client: client, endpoint: endpoint, keyID: keyID, secret: secret,
+		store: persistence, client: client, eventIngestURL: eventIngestURL, keyID: keyID, secret: secret,
 		batchSize: 50, maxAttempts: 10, now: time.Now,
 	}
 }
@@ -141,7 +141,7 @@ func (d *Dispatcher) deliver(ctx context.Context, event domain.Event, now time.T
 	if err != nil {
 		return err
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, d.endpoint, bytes.NewReader(body))
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, d.eventIngestURL, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}

@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestMediaRetryPayloadAcceptsOnlyLegacyInboundOrV2(t *testing.T) {
+func TestMediaRetryPayloadAcceptsOnlyInboundOrV2(t *testing.T) {
 	t.Parallel()
 	valid := []string{
 		`{"to":"+5511999991234","target_message_id":"provider-media-0001","sender":"+5511999991234","from_me":false}`,
@@ -36,19 +36,19 @@ func TestMediaRetryPayloadAcceptsOnlyLegacyInboundOrV2(t *testing.T) {
 	}
 }
 
-func TestMediaRetryPayloadMarshalPreservesLegacyFalseWithoutPollutingV2(t *testing.T) {
+func TestMediaRetryPayloadMarshalPreservesInboundFalseWithoutPollutingV2(t *testing.T) {
 	t.Parallel()
-	legacy, err := json.Marshal(MediaRetryPayload{
+	inboundPayload, err := json.Marshal(MediaRetryPayload{
 		To:              "+5511999991234",
 		TargetMessageID: "provider-media-0001",
 		Sender:          "+5511999991234",
 		FromMe:          false,
 	})
 	if err != nil {
-		t.Fatalf("marshal legacy payload: %v", err)
+		t.Fatalf("marshal inbound payload: %v", err)
 	}
-	if string(legacy) != `{"to":"+5511999991234","target_message_id":"provider-media-0001","sender":"+5511999991234","from_me":false}` {
-		t.Fatalf("legacy false was not preserved: %s", legacy)
+	if string(inboundPayload) != `{"to":"+5511999991234","target_message_id":"provider-media-0001","sender":"+5511999991234","from_me":false}` {
+		t.Fatalf("inbound false was not preserved: %s", inboundPayload)
 	}
 
 	v2, err := json.Marshal(MediaRetryPayload{
@@ -60,6 +60,6 @@ func TestMediaRetryPayloadMarshalPreservesLegacyFalseWithoutPollutingV2(t *testi
 		t.Fatalf("marshal v2 payload: %v", err)
 	}
 	if string(v2) != `{"to":"+5511999991234","target_message_id":"provider-media-0001","expected_direction":"OUTBOUND"}` {
-		t.Fatalf("v2 payload leaked legacy fields: %s", v2)
+		t.Fatalf("v2 payload leaked inbound fields: %s", v2)
 	}
 }

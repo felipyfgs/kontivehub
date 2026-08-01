@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLoadIsFailClosedByDefault(t *testing.T) {
@@ -113,35 +114,53 @@ func TestLoadAcceptsCompleteEnabledWazyncConfiguration(t *testing.T) {
 	}
 }
 
-func TestLoadAcceptsLegacyLaravelEndpointAliases(t *testing.T) {
-	setCompleteEnabledConfiguration(t)
-	t.Setenv("WAZYNC_EVENT_INGEST_URL", "")
-	t.Setenv("WAZYNC_MEDIA_SOURCE_URL", "")
-	t.Setenv("WAZYNC_EVENTS_URL", "http://php/api/internal/v1/whatsapp/events")
-	t.Setenv("WAZYNC_MEDIA_URL", "http://php/api/internal/v1/communication/gateway/media")
+func TestLoadUsesWhatsAppRuntimeVariables(t *testing.T) {
+	t.Setenv("WAZYNC_WHATSAPP_CONNECT_TIMEOUT", "21s")
+	t.Setenv("WAZYNC_WHATSAPP_READY_TIMEOUT", "31s")
+	t.Setenv("WAZYNC_WHATSAPP_HTTP_TIMEOUT", "46s")
+	t.Setenv("WAZYNC_WHATSAPP_PROXY_URL", "socks5://proxy.internal:1080")
+	t.Setenv("WAZYNC_WHATSAPP_RETRY_HANDLERS", "5")
+	t.Setenv("WAZYNC_WA_CONNECT_TIMEOUT", "0s")
+	t.Setenv("WAZYNC_WA_READY_TIMEOUT", "0s")
+	t.Setenv("WAZYNC_WA_HTTP_TIMEOUT", "0s")
+	t.Setenv("WAZYNC_WA_PROXY_URL", "http://.invalid")
+	t.Setenv("WAZYNC_WA_RETRY_HANDLERS", "0")
 
 	cfg, err := Load()
 	if err != nil {
-		t.Fatalf("load legacy endpoint aliases: %v", err)
+		t.Fatalf("load WhatsApp runtime configuration: %v", err)
 	}
-	if cfg.LaravelEventIngestURL != "http://php/api/internal/v1/whatsapp/events" ||
-		cfg.LaravelMediaSourceURL != "http://php/api/internal/v1/communication/gateway/media" {
-		t.Fatalf("legacy aliases were not applied: %+v", cfg)
+	if cfg.WhatsAppConnectTimeout != 21*time.Second ||
+		cfg.WhatsAppReadyTimeout != 31*time.Second ||
+		cfg.WhatsAppHTTPTimeout != 46*time.Second ||
+		cfg.WhatsAppProxyURL != "socks5://proxy.internal:1080" ||
+		cfg.WhatsAppRetryHandlers != 5 {
+		t.Fatalf("unexpected WhatsApp runtime configuration: %+v", cfg)
 	}
 }
 
-func TestLoadPrefersPreciseLaravelEndpointNamesOverLegacyAliases(t *testing.T) {
-	setCompleteEnabledConfiguration(t)
-	t.Setenv("WAZYNC_EVENTS_URL", "http://legacy/events")
-	t.Setenv("WAZYNC_MEDIA_URL", "http://legacy/media")
+func TestLoadRejectsRemovedWhatsAppRuntimeVariables(t *testing.T) {
+	t.Setenv("WAZYNC_WHATSAPP_CONNECT_TIMEOUT", "")
+	t.Setenv("WAZYNC_WHATSAPP_READY_TIMEOUT", "")
+	t.Setenv("WAZYNC_WHATSAPP_HTTP_TIMEOUT", "")
+	t.Setenv("WAZYNC_WHATSAPP_PROXY_URL", "")
+	t.Setenv("WAZYNC_WHATSAPP_RETRY_HANDLERS", "")
+	t.Setenv("WAZYNC_WA_CONNECT_TIMEOUT", "0s")
+	t.Setenv("WAZYNC_WA_READY_TIMEOUT", "0s")
+	t.Setenv("WAZYNC_WA_HTTP_TIMEOUT", "0s")
+	t.Setenv("WAZYNC_WA_PROXY_URL", "http://.invalid")
+	t.Setenv("WAZYNC_WA_RETRY_HANDLERS", "0")
 
 	cfg, err := Load()
 	if err != nil {
-		t.Fatalf("load endpoint names with legacy aliases: %v", err)
+		t.Fatalf("removed WhatsApp variables must not affect configuration: %v", err)
 	}
-	if cfg.LaravelEventIngestURL != "http://php/api/internal/v1/whatsapp/events" ||
-		cfg.LaravelMediaSourceURL != "http://php/api/internal/v1/communication/gateway/media" {
-		t.Fatalf("precise endpoint names did not take precedence: %+v", cfg)
+	if cfg.WhatsAppConnectTimeout != 20*time.Second ||
+		cfg.WhatsAppReadyTimeout != 30*time.Second ||
+		cfg.WhatsAppHTTPTimeout != 45*time.Second ||
+		cfg.WhatsAppProxyURL != "" ||
+		cfg.WhatsAppRetryHandlers != 4 {
+		t.Fatalf("removed WhatsApp variables were accepted: %+v", cfg)
 	}
 }
 
@@ -151,8 +170,6 @@ func setCompleteEnabledConfiguration(t *testing.T) {
 	t.Setenv("WAZYNC_DATABASE_URL", "postgres://wazync@postgres/nfse")
 	t.Setenv("WAZYNC_EVENT_INGEST_URL", "http://php/api/internal/v1/whatsapp/events")
 	t.Setenv("WAZYNC_MEDIA_SOURCE_URL", "http://php/api/internal/v1/communication/gateway/media")
-	t.Setenv("WAZYNC_EVENTS_URL", "")
-	t.Setenv("WAZYNC_MEDIA_URL", "")
 	t.Setenv("WAZYNC_HMAC_KEY_ID", "wazync-v1")
 	t.Setenv("WAZYNC_HMAC_SECRET", strings.Repeat("s", 32))
 	t.Setenv("WAZYNC_HMAC_PREVIOUS_KEY_ID", "")

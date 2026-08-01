@@ -18,9 +18,9 @@ import (
 	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/store"
 )
 
-type testMediaStore struct{ content string }
+type testSpoolStore struct{ content string }
 
-func (s testMediaStore) Reader(context.Context, string) (io.ReadCloser, error) {
+func (s testSpoolStore) Reader(context.Context, string) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader(s.content)), nil
 }
 
@@ -284,7 +284,7 @@ func TestSessionStatusTreatsAnUnprovisionedInboxAsDisconnectedWithoutCredentials
 func TestMediaEndpointRequiresSignatureAndStreamsPlaintextOnlyAfterAuthentication(t *testing.T) {
 	t.Parallel()
 	persistence := store.NewMemory()
-	server := newTestServer(persistence).WithSpoolStore(testMediaStore{content: "media-bytes"})
+	server := newTestServer(persistence).WithSpoolStore(testSpoolStore{content: "media-bytes"})
 
 	unsigned := httptest.NewRequest(http.MethodGet, "/internal/v1/media/media-0001", nil)
 	unsignedResponse := httptest.NewRecorder()

@@ -57,7 +57,7 @@ type RecoveryTransport interface {
 	RetryMedia(context.Context, string, domain.MediaRetryPayload) error
 }
 
-type MediaFetcher interface {
+type MediaSource interface {
 	Fetch(context.Context, string, string, int64) ([]byte, error)
 }
 
@@ -69,12 +69,12 @@ type Worker struct {
 	replicaID   string
 	batchSize   int
 	maxAttempts int
-	media       MediaFetcher
+	mediaSource MediaSource
 	now         func() time.Time
 }
 
-func (w *Worker) WithMediaFetcher(fetcher MediaFetcher) *Worker {
-	w.media = fetcher
+func (w *Worker) WithMediaSource(source MediaSource) *Worker {
+	w.mediaSource = source
 	return w
 }
 
@@ -279,10 +279,10 @@ func (w *Worker) process(ctx context.Context, command domain.Command) error {
 		}
 		var content []byte
 		if payload.Media != nil {
-			if w.media == nil || payload.Media.Filename == "" || payload.Media.MIMEType == "" {
+			if w.mediaSource == nil || payload.Media.Filename == "" || payload.Media.MIMEType == "" {
 				return errors.New("invalid media payload")
 			}
-			fetched, err := w.media.Fetch(ctx, command.CommandID, payload.Media.SHA256, payload.Media.SizeBytes)
+			fetched, err := w.mediaSource.Fetch(ctx, command.CommandID, payload.Media.SHA256, payload.Media.SizeBytes)
 			if err != nil {
 				return err
 			}
