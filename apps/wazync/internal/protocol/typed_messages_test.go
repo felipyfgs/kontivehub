@@ -27,15 +27,15 @@ func TestTypedMessageSenderBuildsEverySupportedOneToOneFamily(t *testing.T) {
 					URL: "https://example.test", Title: "Exemplo", Description: "Descrição",
 				},
 			},
-				assert: func(t *testing.T) {
-					t.Helper()
-					extended := client.message.GetExtendedTextMessage()
-					if extended == nil || extended.GetTitle() != "Exemplo" ||
-						extended.GetContextInfo().GetStanzaID() != "quoted-message-0001" ||
-						extended.GetContextInfo().GetRemoteJID() != to.String() ||
-						extended.GetContextInfo().GetParticipant() != "" {
-						t.Fatalf("unexpected extended text: %+v", extended)
-					}
+			assert: func(t *testing.T) {
+				t.Helper()
+				extended := client.message.GetExtendedTextMessage()
+				if extended == nil || extended.GetTitle() != "Exemplo" ||
+					extended.GetContextInfo().GetStanzaID() != "quoted-message-0001" ||
+					extended.GetContextInfo().GetRemoteJID() != to.String() ||
+					extended.GetContextInfo().GetParticipant() != "" {
+					t.Fatalf("unexpected extended text: %+v", extended)
+				}
 			},
 		},
 		{
