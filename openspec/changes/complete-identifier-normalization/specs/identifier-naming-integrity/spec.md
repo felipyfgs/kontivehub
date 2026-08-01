@@ -62,7 +62,7 @@ Os gates SHALL detectar as duplicações contextuais e casing obsoleto cobertos 
 
 ### Requirement: Somente interfaces canônicas são aceitas
 
-O sistema SHALL remover adaptadores, aliases e fallbacks destinados a formatos anteriores, e SHALL manter arquivos e identificadores livres dos termos `legacy` e `legado`.
+O sistema SHALL remover adaptadores, aliases e fallbacks destinados a formatos anteriores, e SHALL manter arquivos e identificadores livres dos dois marcadores linguísticos de compatibilidade enumerados no gate raiz.
 
 #### Scenario: Navegação Web não canônica
 - **WHEN** uma URL de browser antiga usar query para transportar estado de tela
@@ -78,4 +78,4 @@ O sistema SHALL remover adaptadores, aliases e fallbacks destinados a formatos a
 
 #### Scenario: Varredura textual e de filenames
 - **WHEN** os gates de naming inspecionarem código, testes, migrations e documentação versionada
-- **THEN** nenhuma ocorrência ou basename contém `legacy` ou `legado`, sem substituir palavras cegamente dentro de código
+- **THEN** nenhuma ocorrência ou basename contém os stems proibidos enumerados no gate raiz, sem substituir palavras cegamente dentro de código

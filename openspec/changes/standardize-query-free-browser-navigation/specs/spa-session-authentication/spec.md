@@ -16,15 +16,15 @@ Após um login aceito, a SPA SHALL carregar a identidade autenticada e consumir 
 
 ### Requirement: Redefinição de senha usa fragmento one-shot
 
-Laravel SHALL gerar o link de reset no frontend como `/reset-password#token=…&email=…`. A SPA SHALL consumir e remover o fragmento imediatamente, manter token/e-mail somente em memória e enviar o mesmo body ao endpoint Fortify. Durante a compatibilidade, a forma antiga em query SHALL ser convertida antes do mount.
+Laravel SHALL gerar o link de reset no frontend como `/reset-password#token=…&email=…`. A SPA SHALL consumir e remover o fragmento imediatamente, manter token/e-mail somente em memória e enviar o mesmo body ao endpoint Fortify. A forma anterior em query SHALL NOT ser convertida.
 
 #### Scenario: Usuário abre o e-mail de reset
 - **WHEN** o link novo é carregado no navegador
 - **THEN** token/e-mail são lidos do fragmento, a URL é limpa e nenhuma query ou fragmento sensível permanece antes do submit
 
-#### Scenario: Link legado é aberto
-- **WHEN** `/reset-password?token=…&email=…` é acessado durante o ciclo de compatibilidade
-- **THEN** a SPA converte os valores para o fluxo one-shot, limpa a URL e preserva o POST Fortify vigente
+#### Scenario: Link anterior é aberto
+- **WHEN** `/reset-password?token=…&email=…` é acessado após o ciclo de compatibilidade
+- **THEN** a SPA não consome as credenciais da query e apresenta o estado de link inválido
 
 #### Scenario: Fragmento é inválido
 - **WHEN** token ou e-mail está ausente ou malformado

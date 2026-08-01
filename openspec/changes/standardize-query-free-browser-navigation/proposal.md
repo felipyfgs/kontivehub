@@ -7,7 +7,7 @@ A SPA expõe filtros, paginação, comandos one-shot e até credenciais de redef
 - Tornar toda URL canônica interna da SPA livre de query string, sem alterar query parameters das requisições HTTP à API.
 - Manter IDs e contextos compartilháveis em paths tipados; mover filtros combináveis e paginação para estado de sessão isolado por usuário, tenant e superfície.
 - Preservar filtros salvos explícitos e transformar atalhos filtrados em intenções de navegação one-shot.
-- Adicionar compatibilidade centralizada e allowlisted para URLs legadas, canonicalizando-as imediatamente sem registrar valores sensíveis.
+- Usar compatibilidade centralizada e allowlisted somente durante a migração; o follow-up `complete-identifier-normalization` encerra a janela e remove o adaptador.
 - Migrar âncoras de mensagem, contexto de contato, seções de processo, calendário, documentos, Saúde e ações de criação para paths canônicos.
 - Migrar o link público de redefinição de senha para fragmento consumido e removido imediatamente, mantendo endpoints e body Fortify.
 - Proibir novos produtores de query no navegador por gate estático, preservando clientes HTTP, OpenAPI e links externos.
@@ -16,7 +16,7 @@ A SPA expõe filtros, paginação, comandos one-shot e até credenciais de redef
 
 ### New Capabilities
 
-- `query-free-browser-navigation`: política canônica de paths, estado de sessão, intenções de navegação e compatibilidade temporária para URLs legadas em toda a SPA.
+- `query-free-browser-navigation`: política canônica de paths, estado de sessão e intenções de navegação; a compatibilidade temporária de migração já foi encerrada.
 
 ### Modified Capabilities
 
@@ -32,4 +32,4 @@ A SPA expõe filtros, paginação, comandos one-shot e até credenciais de redef
 - Afeta `apps/web` transversalmente: middleware, helpers de rota, estado de listas e superfícies de Communication, Work, documentos, clientes, fechamento, Saúde, templates, exportações e autenticação.
 - Afeta `apps/api` na forma do link de reset, dos links de navegação para Saúde e pela adição compatível do recorte `tab=sem_responsavel` à fila de Work; endpoints, bodies e paginação existentes permanecem compatíveis.
 - Não altera banco, migrations, filas, Wazync, SSR, Pinia, permissões ou tenancy; o contrato HTTP recebe apenas um valor aditivo e opcional.
-- URLs legadas conhecidas permanecem compatíveis por um ciclo através de um único adaptador; URLs novas e toda navegação emitida pela SPA usam somente paths e fragmentos one-shot.
+- URLs anteriores conhecidas foram compatíveis por um ciclo através de um único adaptador. Após `complete-identifier-normalization`, somente paths e fragmentos one-shot canônicos são aceitos.

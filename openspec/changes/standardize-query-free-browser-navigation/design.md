@@ -9,7 +9,7 @@ A SPA possui dois padrões concorrentes: algumas listas mantêm estado local e r
 - Garantir que toda URL interna canônica exibida no navegador seja livre de query string.
 - Preservar deep-links de recursos e contextos estáveis, master–detail, foco, teclado e filtros salvos.
 - Manter filtros, paginação e ordenação transitórios durante a navegação da sessão sem persistência implícita.
-- Canonicalizar URLs antigas de forma segura e preservar compatibilidade do contrato HTTP `/api/v1`.
+- Emitir apenas URLs canônicas e preservar compatibilidade do contrato HTTP `/api/v1`.
 - Remover token/e-mail de reset da query antes do primeiro request da página.
 
 **Non-Goals:**
@@ -17,7 +17,7 @@ A SPA possui dois padrões concorrentes: algumas listas mantêm estado local e r
 - Remover query parameters de requests HTTP, OpenAPI, paginação ou filtros Laravel.
 - Tornar todo filtro compartilhável, salvar automaticamente o último estado ou adicionar Pinia/localStorage.
 - Alterar banco, migrations, tenancy, autorização, Wazync ou o layout visual dos painéis.
-- Manter para sempre o adaptador de URLs legadas.
+- Reintroduzir um adaptador de URLs anteriores após o encerramento da janela de migração.
 
 ## Decisions
 
@@ -40,15 +40,15 @@ Permanecem canônicos `/communication/conversations/:id` e `/work/tasks/:id`. Se
 
 Filtros combináveis, tabs operacionais, paginação e ordenação permanecem fora do path. Atalhos que hoje fabricam query aplicam uma `SurfaceNavigationIntent` validada e navegam ao path base; a intenção é consumida uma vez. Abrir recurso em nova aba preserva somente o contexto expresso no path, não filtros efêmeros.
 
-### Compatibilidade fica concentrada em um adaptador allowlisted
+### Somente entradas canônicas permanecem aceitas
 
-Um middleware global anterior ao auth reconhecerá apenas chaves legadas conhecidas. Ele normaliza dados, aplica estado/intenção ou converte para o novo path e retorna `replace` sem query. Valores desconhecidos são descartados. `message_id`, `contact_id`, seção, calendário e comandos one-shot viram paths; filtros viram estado de superfície; `redirect` vira retorno de autenticação; reset antigo entra no mesmo fluxo one-shot em memória. Nenhum valor é logado.
+Durante a migração, um middleware global anterior ao auth reconheceu somente chaves anteriores allowlisted e as converteu para paths, estado ou intenções. Essa janela encerrou no follow-up `complete-identifier-normalization`: o middleware e seus testes foram removidos, e queries de navegador anteriores não são mais convertidas em estado, intenção ou path.
 
-O gate permitirá leitura de `to.query` somente nesse adaptador e proibirá novos produtores de query interna. `{ query }` dos clientes HTTP e URLs externas permanecem fora do gate.
+O gate proíbe leitores e produtores de query interna em páginas, middleware e navegação. `{ query }` dos clientes HTTP e URLs externas permanecem fora do gate.
 
 ### Reset reutiliza o padrão seguro de ativação
 
-Laravel gerará `/reset-password#token=…&email=…`. O middleware anterior ao auth consumirá o fragmento ou a query legada antes do mount, manterá as credenciais somente em memória e navegará com `replace` para o path limpo. A página consumirá esse estado uma vez e manterá o POST Fortify atual. Ativação continuará em `/activate#token=…`.
+Laravel gerará `/reset-password#token=…&email=…`. A página consumirá o fragmento antes do mount, manterá as credenciais somente em memória e navegará com `replace` para o path limpo, preservando o POST Fortify atual. A forma anterior em query não é convertida; o usuário precisa abrir um link canônico emitido pelo Laravel. Ativação continuará em `/activate#token=…`.
 
 ### Migração ocorre por domínio com evolução aditiva mínima da fila
 
@@ -58,8 +58,7 @@ Communication, Work, documentos/clientes/fechamento e catálogos trocarão parse
 
 - **[Reload perde filtro transitório]** → comportamento assumido; deep-links estáveis usam path e filtros duráveis exigem preset explícito.
 - **[Estado vaza entre tenants]** → chave por identidade/tenant, limpeza por `sessionEpoch` e testes cross-tenant.
-- **[Middleware aplica query inválida]** → allowlist e normalizadores de domínio; desconhecidos são descartados.
-- **[Links antigos quebram]** → adaptador por um ciclo, testes table-driven e canonicalização imediata.
+- **[Query anterior é aberta após a janela]** → nenhuma conversão client-side; a SPA permanece no estado canônico e o usuário solicita um link atual quando necessário.
 - **[Fragmento de reset permanece no histórico]** → consumo e `replaceState` no primeiro mount; nenhum log/telemetria inclui segredo.
 - **[Rotas novas desmontam master–detail]** → wrappers mínimos reutilizam os componentes existentes e mantêm a matriz/paridade.
 - **[Gate confunde query HTTP com browser]** → escopo explícito em navegação/middleware/pages e exclusão de `composables/api`/tipos gerados.
@@ -69,8 +68,8 @@ Communication, Work, documentos/clientes/fechamento e catálogos trocarão parse
 1. Adicionar fundação, rotas/helpers e testes de compatibilidade sem remover produtores antigos.
 2. Migrar Communication e Work, depois listas/documentos e autenticação/API.
 3. Remover produtores/consumidores de query nas superfícies e ativar o gate estático.
-4. Publicar com middleware legado por um ciclo; rollback reverte os novos paths/estado e a forma dos links, sem migração de dados.
-5. Remover o adaptador em change separado após o primeiro release estável desta mudança.
+4. Publicar com middleware transitório por um ciclo; rollback reverte os novos paths/estado e a forma dos links, sem migração de dados. Etapa concluída.
+5. Remover o adaptador após o primeiro release estável, por `complete-identifier-normalization`. Etapa concluída; somente entradas canônicas permanecem aceitas.
 
 ## Open Questions
 

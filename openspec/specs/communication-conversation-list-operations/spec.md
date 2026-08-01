@@ -20,7 +20,7 @@ Os filtros disponíveis na SPA SHALL cobrir busca, inbox, status, não lidas, re
 - **WHEN** várias conversas empatam no campo escolhido em `sort_by`
 - **THEN** a paginação mantém ordem determinística por ID sem duplicar nem omitir linhas
 
-#### Scenario: Cliente legado não informa sort
+#### Scenario: Cliente anterior não informa sort
 - **WHEN** a listagem é chamada sem `label_ids` e sem `sort_by`
 - **THEN** o contrato e a ordenação default anteriores permanecem compatíveis
 

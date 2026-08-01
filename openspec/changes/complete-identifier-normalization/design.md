@@ -47,7 +47,7 @@ O OpenAPI público pode registrar novos FQCNs em metadados textuais gerados; pat
 
 ### Compatibilidade anterior é removida, não renomeada
 
-O middleware que converte queries de navegador antigas é excluído, assim como os aliases de endpoint `WAZYNC_EVENTS_URL` e `WAZYNC_MEDIA_URL`. Fotos de perfil exigem `profile_picture_state = READY`; a ausência do estado não é mais interpretada como pronta. Arquivos, símbolos, comentários e testes não usam `legacy` nem `legado`. A migration de remoção de colunas recebe basename canônico e operações idempotentes para não falhar quando o nome novo for observado por um banco que já executou o conteúdo sob o basename anterior.
+O middleware que converte queries de navegador antigas é excluído, assim como os aliases de endpoint `WAZYNC_EVENTS_URL` e `WAZYNC_MEDIA_URL`. Fotos de perfil exigem `profile_picture_state = READY`; a ausência do estado não é mais interpretada como pronta. Arquivos, símbolos, comentários e testes não usam terminologia de compatibilidade anterior. A migration de remoção de colunas recebe basename canônico e operações idempotentes para não falhar quando o nome novo for observado por um banco que já executou o conteúdo sob o basename anterior. O rename só é permitido porque o basename anterior ainda não foi publicado no branch remoto; se já tivesse sido compartilhado, uma migration corretiva nova seria obrigatória.
 
 ## Risks / Trade-offs
 

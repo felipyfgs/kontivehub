@@ -1,6 +1,6 @@
 ## Why
 
-O monorepo acumulou identificadores que repetem o contexto já expresso por namespaces e diretórios, além de nomes enganosos, casing inconsistente e resíduos de branding legado. Isso torna leitura, navegação e auto-imports desnecessariamente ruidosos e aumenta o custo de manutenção entre API, Web e Wazync.
+O monorepo acumulou identificadores que repetem o contexto já expresso por namespaces e diretórios, além de nomes enganosos, casing inconsistente e resíduos de branding anterior. Isso torna leitura, navegação e auto-imports desnecessariamente ruidosos e aumenta o custo de manutenção entre API, Web e Wazync.
 
 ## What Changes
 

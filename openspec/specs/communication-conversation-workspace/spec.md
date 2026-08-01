@@ -7,7 +7,7 @@ Definir o workspace de conversas de Communication, incluindo listagem, timeline 
 ## Requirements
 
 ### Requirement: Listagem expõe contrato aditivo e filtro unread
-`GET /api/v1/communication/conversations` SHALL aceitar `unread` e adicionar `display_name`, `display_name_source`, `unread_count` e `read_state.version/last_read_through_message_id`, preservando campos legados durante o rollout.
+`GET /api/v1/communication/conversations` SHALL aceitar `unread` e adicionar `display_name`, `display_name_source`, `unread_count` e `read_state.version/last_read_through_message_id`, preservando campos anteriores durante o rollout.
 
 Cada linha SHALL incluir contexto empresarial secundário e preview semântico por tipo. Logs SHALL NOT registrar corpo de mensagem.
 
@@ -23,7 +23,7 @@ Cada linha SHALL incluir contexto empresarial secundário e preview semântico p
 - **WHEN** a última mensagem é imagem, áudio, vídeo, documento, localização, contato ou revogada
 - **THEN** a lista recebe um preview textual sem card/fetch remoto de imagem
 
-### Requirement: Detalhe legado e timeline cursorizada coexistem
+### Requirement: Detalhe anterior e timeline cursorizada coexistem
 `GET /conversations/{id}` SHALL preservar mensagens por padrão e aceitar `include_messages=false`. `GET /conversations/{id}/messages` SHALL usar cursor opaco keyset sobre `(occurred_at,id)`, limite 1..100 e `anchor=latest|first_unread`.
 
 A resposta SHALL manter ordem cronológica e fornecer `older_cursor`, `newer_cursor`, `first_unread_message_id`, `snapshot_through_message_id` e `read_state_version`.

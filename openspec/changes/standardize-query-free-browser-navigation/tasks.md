@@ -1,8 +1,8 @@
 ## 1. Fundação e compatibilidade Web
 
-- [x] 1.1 Adicionar testes para estado de superfície isolado, intenções one-shot, canonicalização legada e gate que separa query de navegador de query HTTP.
+- [x] 1.1 Adicionar testes para estado de superfície isolado, intenções one-shot, canonicalização anterior e gate que separa query de navegador de query HTTP.
 - [x] 1.2 Implementar `useSurfaceNavigationState`, intenções tipadas e limpeza por sessão/tenant sem Pinia ou storage persistente.
-- [x] 1.3 Implementar middleware legado allowlisted e helpers de paths canônicos, descartando queries desconhecidas sem logs.
+- [x] 1.3 Implementar middleware transitório allowlisted e helpers de paths canônicos durante a migração; removido no follow-up `complete-identifier-normalization`.
 
 ## 2. Communication sem query
 
@@ -29,7 +29,7 @@
 
 - [x] 5.1 Migrar retorno pós-login para sessionStorage one-shot seguro e reset Web para fragmento consumido imediatamente.
 - [x] 5.2 Alterar a notificação Laravel de reset e links operacionais de Saúde para paths sem query, preservando endpoints públicos.
-- [x] 5.3 Cobrir reset novo/legado, ativação, redirect autorizado, links de Saúde e compatibilidade Fortify em Web/API.
+- [x] 5.3 Cobrir reset canônico, ativação, redirect autorizado, links de Saúde e compatibilidade Fortify em Web/API; a cobertura da forma anterior foi removida com o adaptador.
 
 ## 6. Validação final
 

@@ -4,7 +4,7 @@
 
 Garantir integridade da projeção de mensagens WhatsApp: frames técnicos fora do
 ledger conversacional, MESSAGE_RECEIVED coerente, reentrega enriquecedora sem
-duplicar, timeline pública sem balão vazio e quarentena de legado determinística
+duplicar, timeline pública sem balão vazio e quarentena anterior determinística
 e auditável.
 
 ## Requirements
@@ -77,7 +77,7 @@ A API pública SHALL expor estado aditivo de disponibilidade e a SPA SHALL rende
 - **WHEN** a API retorna `UNSUPPORTED` ou `UNAVAILABLE`
 - **THEN** a SPA mostra um placeholder específico e nunca apenas o cabeçalho “Enviada/Recebida · WhatsApp” com horário
 
-#### Scenario: Controle legado quarentenado
+#### Scenario: Controle anterior quarentenado
 - **WHEN** uma row do gateway é marcada com razão `WHATSAPP_PROTOCOL_CONTROL`
 - **THEN** lista, preview, timeline, cursores e contagem ignoram a row sem apagá-la fisicamente
 
@@ -85,7 +85,7 @@ A API pública SHALL expor estado aditivo de disponibilidade e a SPA SHALL rende
 - **WHEN** sync/realtime entrega a mesma mensagem sem body/content/attachments já conhecidos
 - **THEN** o merge do cliente preserva os valores existentes e não transforma o balão em vazio
 
-### Requirement: Quarentena de legado é determinística e auditável
+### Requirement: Quarentena anterior é determinística e auditável
 O sistema SHALL oferecer auditoria dry-run e quarentena reversível, tenant-safe e não destrutiva para rows técnicas já materializadas, sem executar a operação automaticamente em migration, deploy ou schedule.
 
 #### Scenario: Auditoria sem execução

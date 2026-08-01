@@ -8,7 +8,7 @@ TBD — experiência operacional do catálogo e detalhe de contatos de comunica�
 
 ### Requirement: Telefone completo é apresentado somente como E.164 seguro
 
-A API SHALL adicionar `phone: string|null` a cada item de `identities` do contato e SHALL preencher o campo somente com um número E.164 que corresponda a `^\+[1-9]\d{7,14}$`. A API MUST retornar `null` para LID, JID não telefônico, identidade ou contato expurgado e valor inválido, e MUST NOT expor JID, LID, hash, ciphertext ou endereço técnico. O campo legado `address_masked` SHALL permanecer compatível.
+A API SHALL adicionar `phone: string|null` a cada item de `identities` do contato e SHALL preencher o campo somente com um número E.164 que corresponda a `^\+[1-9]\d{7,14}$`. A API MUST retornar `null` para LID, JID não telefônico, identidade ou contato expurgado e valor inválido, e MUST NOT expor JID, LID, hash, ciphertext ou endereço técnico. O campo anterior `address_masked` SHALL permanecer compatível.
 
 #### Scenario: Usuário autorizado consulta identidade telefônica
 

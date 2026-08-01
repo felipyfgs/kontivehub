@@ -25,7 +25,7 @@ O Wazync SHALL usar o `MessageSource.Chat` normalizado como identidade primária
 - **THEN** sua projeção de primary e alternate é igual à projeção de uma mensagem live
 
 ### Requirement: A API resolve somente aliases remotos comprovados
-A API SHALL aceitar `from` legado, SHALL preferir `source_identity` válido quando presente e SHALL remover o endereço da inbox de todo conjunto de aliases antes de persistir.
+A API SHALL aceitar o `from` anterior, SHALL preferir `source_identity` válido quando presente e SHALL remover o endereço da inbox de todo conjunto de aliases antes de persistir.
 
 #### Scenario: `from` LID com PN remota estruturada
 - **WHEN** um evento contém `from=LID`, primary LID e alternate PN diferente da sessão
@@ -35,9 +35,9 @@ A API SHALL aceitar `from` legado, SHALL preferir `source_identity` válido quan
 - **WHEN** um evento contém primary LID e alternate igual ao endereço da inbox
 - **THEN** a API mantém o LID como peer e não cria nem religa a identity da sessão ao contato remoto
 
-#### Scenario: Evento legado sem identidade estruturada
+#### Scenario: Evento anterior sem identidade estruturada
 - **WHEN** um evento válido contém apenas `from` remoto
-- **THEN** a API continua resolvendo o peer pelo endereço legado sem alterar o contrato público
+- **THEN** a API continua resolvendo o peer pelo endereço anterior sem alterar o contrato público
 
 #### Scenario: Evidência estrutural incoerente
 - **WHEN** `source_identity` tenta associar PN↔PN, LID↔LID, PN→LID, endereços iguais ou evidence diferente de `MESSAGE_SOURCE_ALT`
@@ -116,7 +116,7 @@ A API SHALL NOT criar ou reabrir uma conversation cujo único peer seja o endere
 - **WHEN** o único endereço remoto resolvível coincide com a sessão da inbox
 - **THEN** a ingestão rejeita o peer como self-chat e não cria contato, identity ou conversation
 
-#### Scenario: Self-chat legado é encontrado
+#### Scenario: Self-chat anterior é encontrado
 - **WHEN** uma correlação confiável encontra uma conversation ativa ligada à identity da própria sessão
 - **THEN** essa conversation não é usada como peer remoto nem recebe novas mensagens
 ### Requirement: Merge PN↔LID consolida perfil e ledger exatamente

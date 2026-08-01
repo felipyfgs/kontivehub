@@ -7,7 +7,7 @@ Definir a preservação e resolução segura de perfis de identidade por inbox p
 ## Requirements
 
 ### Requirement: Perfis preservam fontes por inbox e identidade
-O sistema SHALL persistir `address_book_first_name`, `address_book_full_name`, `verified_name`, `business_name`, `push_name`, `picture_id`, `about` e o nome legado separadamente em `communication_inbox_identity_profiles`, com unicidade por `(tenant_id, inbox_id, identity_id)`.
+O sistema SHALL persistir `address_book_first_name`, `address_book_full_name`, `verified_name`, `business_name`, `push_name`, `picture_id` e `about` separadamente em `communication_inbox_identity_profiles`, com unicidade por `(tenant_id, inbox_id, identity_id)`.
 
 Cada fonte SHALL manter sua ordenação por `(observed_at, event_id)`. Campos ausentes SHALL preservar o valor anterior; somente `cleared_fields` SHALL remover um campo, e uma observação anterior SHALL ser ignorada.
 
@@ -40,11 +40,13 @@ A API SHALL resolver `display_name` exclusivamente no Laravel, sem replicar a pr
 4. `verified_name` já observado por `USER_INFO`;
 5. `business_name`;
 6. `push_name`;
-7. nome provisório legado;
+7. `CommunicationContact.name` quando `is_provisional = true`;
 8. telefone/endereço mascarado;
 9. identificador interno opaco.
 
 `display_name_source` SHALL indicar a fonte vencedora. Empresas fiscais SHALL permanecer contexto secundário e SHALL NOT substituir a pessoa no título.
+
+Para o item 7, `display_name_source` SHALL preservar o backing value observável `LEGACY_PROVISIONAL`; esse literal contratual não autoriza o termo em outros identificadores, comentários ou arquivos.
 
 #### Scenario: Nome manual vence todos os observados
 - **WHEN** uma conversa possui nome manual, ClientContact, agenda, verified, business e push
@@ -61,6 +63,10 @@ A API SHALL resolver `display_name` exclusivamente no Laravel, sem replicar a pr
 #### Scenario: Agenda vence verified
 - **WHEN** há nome de agenda e verified name, mas não há manual ou ClientContact único
 - **THEN** o nome de agenda é usado
+
+#### Scenario: Nome do contato provisório é o fallback disponível
+- **WHEN** `CommunicationContact.name` está preenchido, `is_provisional = true` e nenhuma fonte de maior precedência existe
+- **THEN** a API usa esse nome e retorna `display_name_source = LEGACY_PROVISIONAL`
 
 #### Scenario: Fallback sem PII crua
 - **WHEN** nenhuma fonte de nome existe

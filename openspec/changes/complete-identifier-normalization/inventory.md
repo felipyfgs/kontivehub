@@ -70,4 +70,4 @@ Exceções: JSON, comandos, queries, eventos, rotas, HMAC, métricas, SQL, `Medi
 | `WAZYNC_EVENTS_URL` | `WAZYNC_EVENT_INGEST_URL` |
 | `WAZYNC_MEDIA_URL` | `WAZYNC_MEDIA_SOURCE_URL` |
 | foto com URL e estado ausente | URL utilizável somente com `profile_picture_state = READY` |
-| filenames e textos `legacy`/`legado` | nomes canônicos sem terminologia de transição |
+| marcadores de compatibilidade anterior em inglês e pt-BR | nomes canônicos sem terminologia de transição; os dois stems determinísticos vivem no gate raiz |

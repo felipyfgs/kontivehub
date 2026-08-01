@@ -39,8 +39,8 @@ O contrato privado SHALL permitir retry de mídia inbound e outbound usando chat
 - **WHEN** direção esperada, session, chat ou target não coincide com o descriptor cifrado
 - **THEN** o gateway falha fechado com código sanitizado e não emite receipt
 
-#### Scenario: Rollout com payload legado
-- **WHEN** uma API ainda envia o shape inbound legado durante a janela de compatibilidade
+#### Scenario: Rollout com payload anterior
+- **WHEN** uma API ainda envia o shape inbound anterior durante a janela de compatibilidade
 - **THEN** o Wazync novo continua validando e processando esse shape sem aceitar campos desconhecidos ou fallback permissivo
 
 ### Requirement: Solicitação de recuperação é autorizada, explícita e idempotente

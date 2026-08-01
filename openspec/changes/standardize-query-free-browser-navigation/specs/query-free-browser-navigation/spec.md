@@ -52,13 +52,13 @@ Atalhos internos que aplicam filtros SHALL publicar uma intenção tipada antes 
 - **WHEN** o usuário aciona o KPI `Sem responsável`
 - **THEN** a SPA publica a intenção de lista com `tab=sem_responsavel`, a API retorna somente tarefas abertas não atribuídas do tenant corrente e a URL permanece `/work/tasks`
 
-### Requirement: URLs legadas são canonicalizadas temporariamente
+### Requirement: Somente URLs canônicas são aceitas após a migração
 
-Durante o ciclo de compatibilidade, um único adaptador SHALL aceitar apenas queries legadas conhecidas, normalizá-las, transferir o estado e substituir a URL por sua forma canônica. Queries desconhecidas SHALL ser descartadas e valores SHALL NOT ser registrados.
+Após o ciclo de compatibilidade, a SPA SHALL NOT converter queries de navegador anteriores em estado, intenção ou path. A navegação interna SHALL emitir somente paths canônicos e fragmentos one-shot previstos.
 
-#### Scenario: Bookmark legado é aberto
+#### Scenario: Bookmark anterior é aberto
 - **WHEN** uma URL antiga contém chaves válidas da superfície
-- **THEN** o estado ou path equivalente é aplicado e a navegação termina sem `location.search`
+- **THEN** a SPA não aplica estado, intenção ou path equivalente a partir da query
 
 #### Scenario: Query desconhecida é recebida
 - **WHEN** uma URL interna contém chave não allowlisted
@@ -66,8 +66,8 @@ Durante o ciclo de compatibilidade, um único adaptador SHALL aceitar apenas que
 
 ### Requirement: Novos produtores de query são bloqueados
 
-O gate Web SHALL reprovar leitura/escrita de query de navegador e URLs internas literais com `?` fora do adaptador legado. Clientes HTTP, tipos gerados, fragmentos one-shot e URLs externas SHALL permanecer permitidos.
+O gate Web SHALL reprovar leitura/escrita de query de navegador e URLs internas literais com `?`. Clientes HTTP, tipos gerados, fragmentos one-shot e URLs externas SHALL permanecer permitidos.
 
 #### Scenario: Gate de navegação é executado
 - **WHEN** testes estáticos analisam páginas, componentes, middleware, composables e helpers de navegação
-- **THEN** somente o adaptador legado contém acesso allowlisted à query do navegador
+- **THEN** nenhum middleware, página, componente ou helper de navegação consome query do navegador
