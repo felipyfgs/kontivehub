@@ -1,17 +1,13 @@
 <script setup lang="ts">
 import { canReplyCommunication } from '~/utils/permissions'
 import type { Contact } from '~/types/communication/contacts'
-import type { Inbox } from '~/types/communication/inboxes'
-import { apiErrorMessage } from '~/utils/api-error'
 import { communicationConversationPath } from '~/utils/communication-routes'
 
 const { sessionEpoch, me } = useDashboard()
 const catalog = useCommunicationContactsCatalog()
-const api = useApi()
 const toast = useToast()
 const selectedContact = ref<Contact | null>(null)
 const newConversationOpen = ref(false)
-const conversationInboxes = ref<Inbox[]>([])
 let conversationRequestSequence = 0
 
 async function saveContact(
@@ -26,33 +22,30 @@ async function openNewConversation(contact: Contact) {
   const sequence = ++conversationRequestSequence
   const epoch = sessionEpoch.value
   selectedContact.value = contact
-  if (conversationInboxes.value.length) {
+  if (catalog.inboxesLoaded.value && !catalog.inboxesError.value) {
     newConversationOpen.value = true
     return
   }
-  try {
-    const inboxes = (await api.communication.inboxes.list()).data
-    if (
-      sequence !== conversationRequestSequence
-      || epoch !== sessionEpoch.value
-      || selectedContact.value?.id !== contact.id
-    ) return
-    conversationInboxes.value = inboxes
-    newConversationOpen.value = true
-  } catch (caught) {
-    if (sequence !== conversationRequestSequence || epoch !== sessionEpoch.value) return
+  const loaded = await catalog.loadInboxes()
+  if (
+    sequence !== conversationRequestSequence
+    || epoch !== sessionEpoch.value
+    || selectedContact.value?.id !== contact.id
+  ) return
+  if (!loaded) {
     toast.add({
-      title: apiErrorMessage(caught, 'Não foi possível carregar as inboxes disponíveis.'),
+      title: catalog.inboxesError.value || 'Não foi possível carregar as inboxes disponíveis.',
       color: 'error'
     })
+    return
   }
+  newConversationOpen.value = true
 }
 
 watch(sessionEpoch, () => {
   ++conversationRequestSequence
   newConversationOpen.value = false
   selectedContact.value = null
-  conversationInboxes.value = []
 })
 </script>
 
@@ -68,6 +61,10 @@ watch(sessionEpoch, () => {
           <CommunicationContactsCatalogToolbar
             class="hidden md:flex"
             :q="catalog.q.value"
+            :inbox-id="catalog.inboxId.value"
+            :inboxes="catalog.inboxes.value"
+            :inboxes-loading="catalog.inboxesLoading.value"
+            :inboxes-error="catalog.inboxesError.value"
             :definitions="catalog.filterDefinitions"
             :models="catalog.chipModels.value"
             :loading="catalog.loading.value"
@@ -76,10 +73,12 @@ watch(sessionEpoch, () => {
             :sort-direction="catalog.sortDirection.value"
             :can-manage="catalog.canManage.value"
             @update:q="catalog.onSearch"
+            @update:inbox-id="catalog.setInboxId"
             @update:models="catalog.onStructuredFilters"
             @update:sorting="catalog.onSortingUpdate"
             @clear="catalog.clearFilters"
             @create="catalog.createOpen.value = true"
+            @retry-inboxes="catalog.loadInboxes"
           />
         </template>
       </ShellPageNavbar>
@@ -87,6 +86,10 @@ watch(sessionEpoch, () => {
       <UDashboardToolbar class="md:hidden">
         <CommunicationContactsCatalogToolbar
           :q="catalog.q.value"
+          :inbox-id="catalog.inboxId.value"
+          :inboxes="catalog.inboxes.value"
+          :inboxes-loading="catalog.inboxesLoading.value"
+          :inboxes-error="catalog.inboxesError.value"
           :definitions="catalog.filterDefinitions"
           :models="catalog.chipModels.value"
           :loading="catalog.loading.value"
@@ -95,10 +98,12 @@ watch(sessionEpoch, () => {
           :sort-direction="catalog.sortDirection.value"
           :can-manage="catalog.canManage.value"
           @update:q="catalog.onSearch"
+          @update:inbox-id="catalog.setInboxId"
           @update:models="catalog.onStructuredFilters"
           @update:sorting="catalog.onSortingUpdate"
           @clear="catalog.clearFilters"
           @create="catalog.createOpen.value = true"
+          @retry-inboxes="catalog.loadInboxes"
         />
       </UDashboardToolbar>
     </template>
@@ -141,7 +146,7 @@ watch(sessionEpoch, () => {
       <CommunicationNewConversationModal
         v-model:open="newConversationOpen"
         :contact="selectedContact"
-        :inboxes="conversationInboxes"
+        :inboxes="catalog.inboxes.value"
         :can-reply="canReplyCommunication(me)"
         @created="id => navigateTo(communicationConversationPath(id))"
       />

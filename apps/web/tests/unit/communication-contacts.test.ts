@@ -4,8 +4,10 @@ import { nextTick, ref } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
 import type { MeUser } from '~/types/api'
 import type { Contact } from '~/types/communication/contacts'
+import { createCommunicationApi } from '~/composables/api/createCommunicationApi'
 import { createCommunicationContactDetail } from '~/composables/useCommunicationContactDetail'
 import { createCommunicationContactsCatalog } from '~/composables/useCommunicationContactsCatalog'
+import { isCommunicationContactProjectionEvent } from '~/composables/useCommunicationProfilePictureRealtime'
 import {
   COMMUNICATION_CONTACT_ACTION_LABELS,
   COMMUNICATION_CONTACT_DANGER_SOFT_CLASS,
@@ -13,6 +15,8 @@ import {
   buildCommunicationContactListQuery,
   communicationContactActions,
   communicationContactDisplayName,
+  communicationContactDisplaySourceColor,
+  communicationContactDisplaySourceLabel,
   communicationContactEmptyKind,
   communicationContactIdentityCount,
   communicationContactInitials,
@@ -81,6 +85,7 @@ describe('communication contacts — rotas e helpers', () => {
     expect(isCommunicationContactSortField('priority')).toBe(false)
 
     expect(buildCommunicationContactListQuery({
+      inboxId: 17,
       q: ' ana ',
       isActive: 'false',
       isProvisional: 'true',
@@ -92,6 +97,7 @@ describe('communication contacts — rotas e helpers', () => {
     })).toEqual({
       page: 2,
       per_page: 50,
+      inbox_id: 17,
       q: 'ana',
       is_active: false,
       include_inactive: true,
@@ -125,6 +131,13 @@ describe('communication contacts — rotas e helpers', () => {
       linked: 'all'
     })).toBe(false)
     expect(communicationContactEmptyKind({
+      inboxId: 9,
+      q: '',
+      isActive: 'true',
+      isProvisional: 'all',
+      linked: 'all'
+    })).toBe('filtered')
+    expect(communicationContactEmptyKind({
       q: 'x',
       isActive: 'all',
       isProvisional: 'all',
@@ -137,6 +150,30 @@ describe('communication contacts — rotas e helpers', () => {
       is_provisional: true,
       is_active: true
     })).toBe('Provisório #2')
+    const observed = {
+      id: 3,
+      name: null,
+      display_name: 'Nome do WhatsApp',
+      display_name_source: 'WHATSAPP_PUSH_NAME' as const,
+      display_name_state: 'OBSERVED' as const,
+      is_provisional: true,
+      is_active: true
+    }
+    expect(communicationContactDisplayName(observed)).toBe('Nome do WhatsApp')
+    expect(communicationContactDisplaySourceLabel(observed)).toBe('Nome no WhatsApp')
+    expect(communicationContactDisplaySourceColor(observed)).toBe('info')
+    expect(communicationContactInitials(observed)).toBe('ND')
+    const fallback = {
+      id: 4,
+      name: null,
+      display_name: 'Provisório #4',
+      display_name_source: 'OPAQUE_ID' as const,
+      display_name_state: 'FALLBACK' as const,
+      is_provisional: true,
+      is_active: true
+    }
+    expect(communicationContactDisplayName(fallback)).toBe('Provisório #4')
+    expect(communicationContactInitials(fallback)).toBe('?')
     expect(communicationContactPrimaryPhone(sampleContact)).toBe('+5511999998888')
     expect(communicationContactLinkedClientNames(sampleContact)).toEqual(['Cliente Alpha'])
   })
@@ -205,6 +242,42 @@ describe('communication contacts — rotas e helpers', () => {
     expect(isSensitiveCommunicationContactSearch('12345678')).toBe(true)
     expect(isSensitiveCommunicationContactSearch('1234567')).toBe(false)
     expect(isSensitiveCommunicationContactSearch('Cliente 123')).toBe(false)
+  })
+
+  it('reconhece eventos realtime que alteram a projeção do contato', () => {
+    const event = {
+      cursor: 1,
+      type: 'CONTACT_PROFILE_CHANGED',
+      inbox_id: 2,
+      payload: { identity_id: 3 },
+      occurred_at: '2026-08-02T12:00:00Z'
+    }
+    expect(isCommunicationContactProjectionEvent(event)).toBe(true)
+    expect(isCommunicationContactProjectionEvent({
+      ...event,
+      type: 'contact.profile_picture.updated'
+    })).toBe(true)
+    expect(isCommunicationContactProjectionEvent({
+      ...event,
+      type: 'contact.profile.updated'
+    })).toBe(true)
+    expect(isCommunicationContactProjectionEvent({ ...event, type: 'MESSAGE_RECEIVED' })).toBe(false)
+  })
+
+  it('mantém inbox_id em GET e no body da busca telefônica', () => {
+    const client = vi.fn().mockResolvedValue({ data: [], meta: {} })
+    const api = createCommunicationApi(client, value => value)
+
+    void api.communication.contacts.list({ inbox_id: 12, q: 'Ana' })
+    expect(client).toHaveBeenLastCalledWith('/api/v1/communication/contacts', {
+      query: { inbox_id: 12, q: 'Ana' }
+    })
+
+    void api.communication.contacts.list({ inbox_id: 12, q: '(11) 99999-8888' })
+    expect(client).toHaveBeenLastCalledWith('/api/v1/communication/contacts/search', {
+      method: 'POST',
+      body: { inbox_id: 12, q: '(11) 99999-8888' }
+    })
   })
 
   it('monta ações de contato conforme permissão e expurgo', () => {
@@ -305,15 +378,20 @@ describe('communication contacts — superfícies e contrato Shell', () => {
     expect(catalog).toContain('ShellPagePanel')
     expect(catalog).toContain('ShellPageNavbar')
     expect(catalog).toContain('CommunicationContactsCatalogToolbar')
+    expect(catalog.match(/<CommunicationContactsCatalogToolbar/g)).toHaveLength(2)
     expect(catalog).toContain('CommunicationContactsCatalogTable')
     expect(catalog).toContain('CommunicationContactsCreateModal')
     expect(catalog).toContain('CommunicationNewConversationModal')
     expect(catalog).toContain('openNewConversation')
     expect(catalog).toContain('canReply')
     expect(catalog).toContain('conversationRequestSequence')
-    expect(catalog.indexOf('const inboxes = (await api.communication.inboxes.list()).data'))
-      .toBeLessThan(catalog.indexOf('conversationInboxes.value = inboxes'))
+    expect(catalog).toContain('catalog.loadInboxes()')
+    expect(catalog).toContain(':inbox-id="catalog.inboxId.value"')
+    expect(catalog).toContain('@update:inbox-id="catalog.setInboxId"')
     expect(toolbar).toContain('DataTableFilterRoot')
+    expect(toolbar).toContain('communication-contacts-inbox')
+    expect(toolbar).toContain('Filtrar contatos por inbox')
+    expect(toolbar).toContain('Recarregar inboxes')
     expect(toolbar).toContain('Ordenar contatos')
     expect(toolbar).toContain('Mais ações de contatos')
     expect(table).toContain('communication-contacts-list')
@@ -331,6 +409,8 @@ describe('communication contacts — superfícies e contrato Shell', () => {
     expect(table).toContain('gap-4')
     expect(table).toContain('space-y-4')
     expect(table).toContain('communicationContactIdentityCount')
+    expect(table).toContain('communicationContactDisplaySourceLabel')
+    expect(table).toContain('Nome observado nesta inbox; cadastro ainda provisório')
     expect(table).not.toContain('max-w-5xl')
     expect(table).toContain('min-h-0 w-full flex-1 space-y-4 overflow-y-auto')
     expect(table).toContain('md:grid-cols-[minmax(11rem,1fr)_minmax(10rem,1fr)]')
@@ -356,6 +436,8 @@ describe('communication contacts — superfícies e contrato Shell', () => {
     expect(composable).toContain('contactPageSize(initialQuery.per_page)')
     expect(composable).toContain('response.meta.current_page')
     expect(composable).toContain('response.meta.last_page')
+    expect(composable).toContain('inbox_id: catalog.inboxId.value')
+    expect(composable).toContain('listInboxes: () => api.communication.inboxes.list()')
     expect(table).not.toContain('ShellDataTable')
 
     expect(api).toContain('ContactListParams')
@@ -434,9 +516,13 @@ describe('communication contacts — superfícies e contrato Shell', () => {
 describe('communication contacts — composable de catálogo', () => {
   function makeCatalog(options: {
     list?: ReturnType<typeof vi.fn>
+    listInboxes?: ReturnType<typeof vi.fn>
     create?: ReturnType<typeof vi.fn>
     update?: ReturnType<typeof vi.fn>
     canManage?: boolean
+    sessionEpoch?: ReturnType<typeof ref<number>>
+    initialQuery?: Record<string, unknown>
+    openDetail?: ReturnType<typeof vi.fn>
   } = {}) {
     const pushRoute = vi.fn()
     const notify = vi.fn()
@@ -448,13 +534,16 @@ describe('communication contacts — composable de catálogo', () => {
     const update = options.update ?? vi.fn().mockResolvedValue({ data: sampleContact })
     const catalog = createCommunicationContactsCatalog({
       list,
+      listInboxes: options.listInboxes,
       create,
       update,
       pushRoute,
+      openDetail: options.openDetail,
       notify,
-      sessionEpoch: ref(3),
+      sessionEpoch: options.sessionEpoch ?? ref(3),
       canManage: ref(options.canManage ?? true),
-      initialQuery: {
+      initialQuery: options.initialQuery ?? {
+        inbox_id: '5',
         page: '2',
         per_page: '50',
         q: ' ana ',
@@ -476,6 +565,7 @@ describe('communication contacts — composable de catálogo', () => {
     await pending
 
     expect(list).toHaveBeenCalledWith({
+      inbox_id: 5,
       page: 2,
       per_page: 50,
       q: 'ana',
@@ -529,6 +619,62 @@ describe('communication contacts — composable de catálogo', () => {
         q: '(11) 99999-8888'
       }))
     })
+    catalog.dispose()
+  })
+
+  it('abre detalhe com contexto somente quando a navegação parte da linha filtrada', async () => {
+    const openDetail = vi.fn()
+    const { catalog, pushRoute } = makeCatalog({ openDetail })
+
+    catalog.openContact(sampleContact)
+
+    expect(openDetail).toHaveBeenCalledWith(sampleContact, 5)
+    expect(pushRoute).not.toHaveBeenCalled()
+    catalog.dispose()
+  })
+
+  it('troca e limpa inbox, descarta resposta antiga de sessão e não bloqueia a lista em erro', async () => {
+    let resolveOldInboxes: ((value: { data: Array<{ id: number, name: string }> }) => void) | undefined
+    const sessionEpoch = ref(3)
+    const listInboxes = vi.fn()
+      .mockImplementationOnce(() => new Promise((resolve) => {
+        resolveOldInboxes = resolve
+      }))
+      .mockResolvedValueOnce({
+        data: [{ id: 8, name: 'Inbox atual', status: 'CONNECTED', is_enabled: true, is_default: false }]
+      })
+    const { catalog, list } = makeCatalog({
+      listInboxes,
+      sessionEpoch,
+      initialQuery: { page: 3, inbox_id: 5 }
+    })
+    await catalog.load()
+    const oldLoad = catalog.loadInboxes()
+
+    catalog.setInboxId(9)
+    await vi.waitFor(() => {
+      expect(list).toHaveBeenLastCalledWith(expect.objectContaining({ inbox_id: 9, page: 1 }))
+    })
+    catalog.clearFilters()
+    await vi.waitFor(() => {
+      expect(list).toHaveBeenLastCalledWith(expect.not.objectContaining({ inbox_id: expect.anything() }))
+    })
+
+    sessionEpoch.value += 1
+    await vi.waitFor(() => {
+      expect(catalog.inboxes.value.map(inbox => inbox.id)).toEqual([8])
+    })
+    resolveOldInboxes?.({ data: [{ id: 5, name: 'Inbox antiga' }] })
+    await oldLoad
+    expect(catalog.inboxes.value.map(inbox => inbox.id)).toEqual([8])
+
+    const failedInboxes = vi.fn().mockRejectedValue(new Error('offline'))
+    const isolated = makeCatalog({ listInboxes: failedInboxes, initialQuery: {} })
+    await Promise.all([isolated.catalog.load(), isolated.catalog.loadInboxes()])
+    expect(isolated.catalog.items.value).toEqual([sampleContact])
+    expect(isolated.catalog.loadError.value).toBeNull()
+    expect(isolated.catalog.inboxesError.value).toBeTruthy()
+    isolated.catalog.dispose()
     catalog.dispose()
   })
 
@@ -646,6 +792,9 @@ describe('communication contacts — composable de detalhe', () => {
 
   it('carrega perfil, salva via DI e respeita o gate de mutação', async () => {
     const { detail, get, update, canManage } = makeDetail()
+    get
+      .mockResolvedValueOnce({ data: sampleContact })
+      .mockResolvedValueOnce({ data: { ...sampleContact, name: 'Ana Souza', is_active: false } })
     await detail.load()
 
     expect(get).toHaveBeenCalledWith(7)
@@ -665,6 +814,54 @@ describe('communication contacts — composable de detalhe', () => {
     canManage.value = false
     await detail.saveProfile()
     expect(update).toHaveBeenCalledTimes(1)
+    detail.dispose()
+  })
+
+  it('carrega o detalhe no contexto transitório da inbox', async () => {
+    const observed = {
+      ...sampleContact,
+      display_name: 'Nome observado',
+      display_name_source: 'WHATSAPP_ADDRESS_BOOK' as const,
+      display_name_state: 'OBSERVED' as const
+    }
+    const get = vi.fn()
+      .mockResolvedValueOnce({ data: observed })
+      .mockResolvedValueOnce({ data: { ...observed, is_active: false } })
+    const inboxId = ref<number | null>(14)
+    const fixture = makeDetail()
+    fixture.detail.dispose()
+    const detail = createCommunicationContactDetail({
+      api: {
+        get,
+        update: fixture.update,
+        addIdentity: fixture.addIdentity,
+        linkIdentity: fixture.linkIdentity,
+        unlinkIdentity: fixture.unlinkIdentity,
+        exportUrl: id => `/api/v1/communication/contacts/${id}/export`,
+        purge: fixture.purge,
+        listClientContacts: vi.fn().mockResolvedValue({ data: [] })
+      },
+      canManage: fixture.canManage,
+      contactId: fixture.contactId,
+      inboxId,
+      sessionEpoch: fixture.sessionEpoch,
+      toast: fixture.toast,
+      download: fixture.download
+    })
+
+    await detail.load()
+    expect(get).toHaveBeenCalledWith(7, 14)
+    expect(detail.displayName.value).toBe('Nome observado')
+    expect(detail.editName.value).toBe('Ana Silva')
+    detail.editActive.value = false
+    await detail.saveProfile()
+    expect(fixture.update).toHaveBeenCalledWith(7, {
+      name: 'Ana Silva',
+      is_active: false
+    })
+    expect(get).toHaveBeenCalledTimes(2)
+    expect(detail.displayName.value).toBe('Nome observado')
+    expect(detail.contact.value?.display_name_source).toBe('WHATSAPP_ADDRESS_BOOK')
     detail.dispose()
   })
 

@@ -71,6 +71,8 @@ export interface ConversationListMeta {
   last_page: number
   per_page: number
   total: number
+  snapshot_token?: string
+  snapshot_expires_at?: string
 }
 
 export type ConversationSortBy

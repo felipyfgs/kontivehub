@@ -57,8 +57,14 @@ final class ContactController extends Controller
         ContactQuery $query,
     ): JsonResponse {
         $contact = $canonicalizer->contact($contact);
-        $contact = $query->withProfilePictureProjection(CommunicationContact::query()->whereKey($contact->id), $request->actor())
-            ->firstOrFail();
+        $builder = CommunicationContact::query()->whereKey($contact->id);
+        $contact = $request->inboxId() === null
+            ? $query->withProfilePictureProjection($builder, $request->actor())->firstOrFail()
+            : $query->withInboxContextProjection(
+                $builder,
+                $request->actor(),
+                $request->inboxId(),
+            )->firstOrFail();
 
         return (new ContactResource(
             $contact->load([

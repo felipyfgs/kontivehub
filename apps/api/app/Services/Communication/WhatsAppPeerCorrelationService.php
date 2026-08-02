@@ -12,6 +12,7 @@ use App\Models\CommunicationFlowRun;
 use App\Models\CommunicationIdentity;
 use App\Models\CommunicationInbox;
 use App\Models\CommunicationMessage;
+use App\Services\Communication\Contact\InboxIdentityProfileReconciliationScheduler;
 use App\Services\Communication\ProfilePicture\ProfilePictureRefreshScheduler;
 use DateTimeInterface;
 use Illuminate\Support\Collection;
@@ -30,6 +31,7 @@ final readonly class WhatsAppPeerCorrelationService
         private Contact\InboxIdentityProfileMerger $identityProfiles,
         private Conversation\ConversationReadStateService $readState,
         private ProfilePictureRefreshScheduler $profilePictures,
+        private InboxIdentityProfileReconciliationScheduler $identityProfileReconciliation,
     ) {}
 
     /**
@@ -64,6 +66,7 @@ final readonly class WhatsAppPeerCorrelationService
             $existingMessage,
         );
         $this->profilePictures->schedule($inbox, $identity);
+        $this->identityProfileReconciliation->schedule($inbox, $identity);
 
         return [$identity, $conversation];
     }

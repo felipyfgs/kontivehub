@@ -8,17 +8,13 @@ Nuxt 4 SPA (`ssr: false`, `nuxt generate`). Nuxt UI 4. Sanctum cookie. Sem Pinia
 
 ## Agente preferido
 
-`nuxt_panel` / `nuxt-panel`. UI: skill `ui-archetype` obrigatória.
+Exploração: `explorer`; implementação: `worker`; review: `reviewer`. UI: skill
+`ui-archetypes` obrigatória.
 
 ## Gates
 
 ```bash
-pnpm run lint
-pnpm run typecheck
-pnpm run generate
-pnpm run test
-pnpm run test:fidelity
-pnpm run test:artifacts
+make verify-web
 ```
 
 Playwright E2E é local, não gate de CI.
@@ -53,5 +49,5 @@ Auth: login real no app (`operador@example.com` / seed local) ou `state-save` / 
 ## Never
 
 - Chamar sidecar MEI direto do frontend
-- Redesenhar shell fora do arquétipo (`.local/reference/nuxt-dashboard-template`)
+- Redesenhar shell fora dos arquétipos (`.local/references/dashboard`)
 - Inventar fallbacks sintéticos de monitoramento em erro de API

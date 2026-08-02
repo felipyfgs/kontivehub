@@ -21,6 +21,15 @@ final class ViewContactRequest extends TenantScopedRequest
     /** @return array<string, list<mixed>> */
     public function rules(): array
     {
-        return [];
+        return [
+            'inbox_id' => ['sometimes', 'integer', 'min:1'],
+        ];
+    }
+
+    public function inboxId(): ?int
+    {
+        $validated = $this->validated();
+
+        return isset($validated['inbox_id']) ? (int) $validated['inbox_id'] : null;
     }
 }

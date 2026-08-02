@@ -8,7 +8,8 @@ import type { ComposerPayload, Message } from '~/types/communication/messages'
 import type { FeatureMeta, Inbox, PairingState, SessionStatus } from '~/types/communication/inboxes'
 import type { Label } from '~/types/communication/contacts'
 import type { WorkDepartment } from '~/types/work'
-import { apiErrorCode, apiErrorMessage } from '~/utils/api-error'
+import type { ConversationSavedViewPayload } from '~/types/saved-list-filters'
+import { apiErrorCode, apiErrorMessage, apiErrorStatus } from '~/utils/api-error'
 import {
   buildConversationBulkItems,
   communicationSelectionQueryKey,
@@ -176,6 +177,30 @@ export function isConversationRequestCurrent(
     && request.sessionEpoch === current.sessionEpoch
 }
 
+export function communicationConversationListQueryKey(
+  filters: ConversationFilters
+): string {
+  return JSON.stringify({
+    q: filters.q ?? null,
+    inbox_id: filters.inbox_id ?? null,
+    status: filters.status ?? null,
+    assignee_membership_id: filters.assignee_membership_id ?? null,
+    work_department_id: filters.work_department_id ?? null,
+    unassigned: filters.unassigned === true,
+    unread: filters.unread === true,
+    label_ids: [...new Set(filters.label_ids ?? [])].sort((left, right) => left - right),
+    contact_id: filters.contact_id ?? null,
+    sort_by: filters.sort_by ?? COMMUNICATION_DEFAULT_SORT_BY,
+    per_page: filters.per_page ?? COMMUNICATION_CONVERSATION_PAGE_SIZE
+  })
+}
+
+type ConversationListSnapshotSession = {
+  token: string
+  expiresAt: string
+  queryKey: string
+}
+
 const _useCommunicationWorkspace = () => {
   const api = useApi()
   const toast = useToast()
@@ -224,6 +249,8 @@ const _useCommunicationWorkspace = () => {
   const conversationsLastPage = ref(1)
   const conversationsTotal = ref(0)
   const conversationsLoadMoreError = ref<string | null>(null)
+  const unreadSnapshot = ref<ConversationListSnapshotSession | null>(null)
+  const unreadSnapshotBlockedQueryKey = ref<string | null>(null)
   const sending = ref(false)
   const syncing = ref(false)
   const adminLoading = ref(false)
@@ -273,6 +300,7 @@ const _useCommunicationWorkspace = () => {
     set: (value: ConversationSortBy) => navigationState.patch({ sortBy: value })
   })
   let preferencesSaveGeneration = 0
+  let preferencePersistIntentGeneration = 0
   let bulkPollTimer: ReturnType<typeof setTimeout> | null = null
   let lastSelectionQueryKey = ''
   let bulkIdempotency: { fingerprint: string, key: string } | null = null
@@ -396,7 +424,7 @@ const _useCommunicationWorkspace = () => {
       && request.sessionEpoch === sessionEpoch.value
   }
 
-  function listFilters(page = 1): ConversationFilters {
+  function baseListFilters(page = 1): ConversationFilters {
     return {
       q: search.value || undefined,
       inbox_id: inboxFilter.value || undefined,
@@ -413,6 +441,41 @@ const _useCommunicationWorkspace = () => {
     }
   }
 
+  function currentConversationListQueryKey(): string {
+    return communicationConversationListQueryKey(baseListFilters())
+  }
+
+  function listFilters(page = 1): ConversationFilters {
+    const filters = baseListFilters(page)
+    if (!filters.unread) return filters
+
+    const queryKey = communicationConversationListQueryKey(filters)
+    const currentSnapshot = unreadSnapshot.value
+    if (currentSnapshot?.queryKey === queryKey) {
+      return { ...filters, snapshot_token: currentSnapshot.token }
+    }
+
+    return { ...filters, snapshot: true }
+  }
+
+  function clearUnreadSnapshotSession(): void {
+    unreadSnapshot.value = null
+    unreadSnapshotBlockedQueryKey.value = null
+  }
+
+  function reconcileUnreadSnapshotQuery(): void {
+    const queryKey = currentConversationListQueryKey()
+    if (unreadSnapshot.value?.queryKey !== queryKey) unreadSnapshot.value = null
+    if (unreadSnapshotBlockedQueryKey.value !== null
+      && unreadSnapshotBlockedQueryKey.value !== queryKey) {
+      unreadSnapshotBlockedQueryKey.value = null
+      error.value = null
+    }
+  }
+
+  const unreadSnapshotExpired = computed(() => unreadOnly.value
+    && unreadSnapshotBlockedQueryKey.value === currentConversationListQueryKey())
+
   function preferenceStatusValue(): ListPreferenceStatus {
     return statusFilter.value ?? 'ALL'
   }
@@ -421,6 +484,36 @@ const _useCommunicationWorkspace = () => {
     if (selectedConversationIds.value.size === 0) return
     selectedConversationIds.value = new Set()
     bulkIdempotency = null
+  }
+
+  async function applyConversationSavedView(
+    payload: ConversationSavedViewPayload
+  ): Promise<void> {
+    preferencePersistIntentGeneration += 1
+    suppressPreferenceSave = true
+    clearOperationalSelection()
+    navigationState.patch({
+      search: '',
+      contactIdFilter: null,
+      statusFilter: payload.status === 'ALL' ? null : payload.status,
+      sortBy: normalizeCommunicationConversationSortBy(payload.sort_by),
+      inboxFilter: payload.inbox_id ?? null,
+      assigneeFilter: payload.unassigned
+        ? null
+        : payload.assignee_membership_id ?? null,
+      departmentFilter: payload.work_department_id ?? null,
+      labelIdsFilter: payload.label_ids ?? [],
+      unreadOnly: payload.unread === true,
+      unassignedOnly: payload.unassigned === true
+    })
+
+    try {
+      // Os watchers de filtro e preferências observam o mesmo snapshot. Manter
+      // a supressão até o próximo flush evita transformar a visão em default.
+      await nextTick()
+    } finally {
+      suppressPreferenceSave = false
+    }
   }
 
   function setConversationSelected(conversationId: number, selected: boolean): void {
@@ -640,9 +733,10 @@ const _useCommunicationWorkspace = () => {
     })
   }
 
-  const persistListPreferences = useDebounceFn(async () => {
+  const persistListPreferences = useDebounceFn(async (intentGeneration: number) => {
     if (
-      !initialized.value
+      intentGeneration !== preferencePersistIntentGeneration
+      || !initialized.value
       || !preferencesLoaded.value
       || preferencesUnavailable.value
       || suppressPreferenceSave
@@ -818,8 +912,13 @@ const _useCommunicationWorkspace = () => {
     conversationsLoadMoreError.value = null
   }
 
-  function applyConversationMeta(meta: ConversationListMeta): void {
-    conversationsPage.value = meta.current_page
+  function applyConversationMeta(
+    meta: ConversationListMeta,
+    options?: { preserveCurrentPage?: boolean }
+  ): void {
+    conversationsPage.value = options?.preserveCurrentPage
+      ? Math.max(conversationsPage.value, meta.current_page)
+      : meta.current_page
     conversationsLastPage.value = Math.max(meta.current_page, meta.last_page)
     conversationsTotal.value = meta.total
   }
@@ -829,17 +928,25 @@ const _useCommunicationWorkspace = () => {
     append?: boolean
   }): Promise<void> {
     const append = options?.append === true
+    reconcileUnreadSnapshotQuery()
     if (append && (
       !conversationsHasMore.value
       || conversationsLoading.value
       || conversationsLoadingMore.value
     )) return
 
+    const queryKey = currentConversationListQueryKey()
+    if (unreadSnapshotBlockedQueryKey.value === queryKey) return
+    if (append && unreadOnly.value && unreadSnapshot.value?.queryKey !== queryKey) return
     const page = append ? conversationsPage.value + 1 : 1
+    const filters = listFilters(page)
+    const expectsSnapshot = filters.snapshot === true || Boolean(filters.snapshot_token)
+    const reusesSnapshot = Boolean(filters.snapshot_token)
     if (!append) conversationQueryGeneration++
     const request = {
       generation: conversationQueryGeneration,
-      sessionEpoch: sessionEpoch.value
+      sessionEpoch: sessionEpoch.value,
+      queryKey
     }
     conversationQueryController?.abort()
     const controller = new AbortController()
@@ -854,13 +961,23 @@ const _useCommunicationWorkspace = () => {
     }
     try {
       const response = await api.communication.conversations.list(
-        listFilters(page),
+        filters,
         { signal: controller.signal }
       )
       if (!isConversationRequestCurrent(request, {
         generation: conversationQueryGeneration,
         sessionEpoch: sessionEpoch.value
-      })) return
+      }) || request.queryKey !== currentConversationListQueryKey()) return
+      if (expectsSnapshot) {
+        const token = response.meta.snapshot_token
+        const expiresAt = response.meta.snapshot_expires_at
+        if (typeof token !== 'string' || token.length === 0
+          || typeof expiresAt !== 'string' || expiresAt.length === 0) {
+          throw new Error('A API não devolveu a foto estável da visão de não lidas.')
+        }
+        unreadSnapshot.value = { token, expiresAt, queryKey: request.queryKey }
+        unreadSnapshotBlockedQueryKey.value = null
+      }
       const nextDetails = { ...conversationDetails.value }
       const visible = response.data.map((summary) => {
         const cached = nextDetails[summary.id]
@@ -869,7 +986,9 @@ const _useCommunicationWorkspace = () => {
         nextDetails[summary.id] = merged
         return merged
       })
-      const pinnedId = !append && unreadOnly.value ? selectedConversationId.value : null
+      const pinnedId = !append && unreadOnly.value && !expectsSnapshot
+        ? selectedConversationId.value
+        : null
       const pinned = pinnedId !== null ? nextDetails[pinnedId] : null
       if (pinned && !visible.some(item => item.id === pinned.id)) {
         visible.unshift(pinned)
@@ -878,7 +997,7 @@ const _useCommunicationWorkspace = () => {
       conversations.value = mergeCommunicationConversationPage(
         conversations.value,
         visible,
-        append
+        append || (!append && reusesSnapshot)
       )
       // Load more / refresh: preserva IDs ainda presentes; não auto-seleciona novos.
       const prunedSelection = pruneConversationSelection(
@@ -889,14 +1008,28 @@ const _useCommunicationWorkspace = () => {
         bulkIdempotency = null
       }
       selectedConversationIds.value = prunedSelection
-      applyConversationMeta(response.meta)
+      applyConversationMeta(response.meta, {
+        preserveCurrentPage: !append && reusesSnapshot
+      })
       conversationsLoaded.value = true
     } catch (caught) {
       if (controller.signal.aborted) return
+      if (request.queryKey !== currentConversationListQueryKey()) return
       const message = apiErrorMessage(
         caught,
         append ? 'Falha ao carregar mais conversas.' : 'Falha ao carregar conversas.'
       )
+      if (expectsSnapshot && (
+        apiErrorStatus(caught) === 410
+        || apiErrorCode(caught) === 'CONVERSATION_LIST_SNAPSHOT_EXPIRED'
+      )) {
+        unreadSnapshot.value = null
+        unreadSnapshotBlockedQueryKey.value = request.queryKey
+        error.value = message
+        conversationsLoadMoreError.value = null
+        if (!options?.silent) toast.add({ title: message, color: 'error' })
+        return
+      }
       if (append) {
         conversationsLoadMoreError.value = message
         return
@@ -928,6 +1061,17 @@ const _useCommunicationWorkspace = () => {
   }
 
   async function reloadConversations(): Promise<void> {
+    await loadConversations()
+  }
+
+  async function refreshUnreadSnapshot(): Promise<void> {
+    if (!unreadOnly.value) {
+      await reloadConversations()
+      return
+    }
+    unreadSnapshot.value = null
+    unreadSnapshotBlockedQueryKey.value = null
+    error.value = null
     await loadConversations()
   }
 
@@ -1398,6 +1542,13 @@ const _useCommunicationWorkspace = () => {
       const timelineError = conversationTimelines.value[id]?.error
       if (timelineError) toast.add({ title: timelineError, color: 'error' })
       return false
+    }
+    const timeline = conversationTimelines.value[id]
+    if (timeline?.manual_unread) {
+      updateConversationTimeline(id, {
+        manual_unread: false,
+        initial_read_pending: timeline.meta.unread_count > 0
+      })
     }
     selectedConversationId.value = id
     openingConversationId.value = null
@@ -2142,6 +2293,11 @@ const _useCommunicationWorkspace = () => {
     ],
     () => {
       if (!initialized.value) return
+      reconcileUnreadSnapshotQuery()
+      conversationQueryGeneration++
+      conversationQueryController?.abort()
+      conversationsLoadingMore.value = false
+      conversationsLoadMoreError.value = null
       const nextKey = communicationSelectionQueryKey(selectionQueryContext())
       if (nextKey !== lastSelectionQueryKey) {
         lastSelectionQueryKey = nextKey
@@ -2153,7 +2309,8 @@ const _useCommunicationWorkspace = () => {
   )
   watch([statusFilter, sortBy], () => {
     if (!initialized.value || !preferencesLoaded.value || suppressPreferenceSave) return
-    void persistListPreferences()
+    const intentGeneration = ++preferencePersistIntentGeneration
+    void persistListPreferences(intentGeneration)
   })
   watch(realtime.state, (next, previous) => {
     // Transporte voltou: re-assina canais (subscriptions Map podia estar stale).
@@ -2176,6 +2333,7 @@ const _useCommunicationWorkspace = () => {
     ensureCursorPoll()
   })
   watch(sessionEpoch, () => {
+    preferencePersistIntentGeneration += 1
     navigationState.reset()
     dispose()
     inboxes.value = []
@@ -2217,6 +2375,7 @@ const _useCommunicationWorkspace = () => {
     conversationQueryGeneration++
     conversationQueryController?.abort()
     conversationQueryController = null
+    clearUnreadSnapshotSession()
     stopCursorPoll()
     stopBulkPoll()
     for (const unsubscribe of subscriptions.values()) unsubscribe()
@@ -2237,6 +2396,7 @@ const _useCommunicationWorkspace = () => {
   return {
     adminLoading: readonly(adminLoading),
     acknowledgeConversationTimeline,
+    applyConversationSavedView,
     allLoadedSelected,
     assigneeFilter,
     automationMeta,
@@ -2301,6 +2461,7 @@ const _useCommunicationWorkspace = () => {
     queueConversationPrefetch,
     preferencesLoaded: readonly(preferencesLoaded),
     realtimeState: realtime.state,
+    refreshUnreadSnapshot,
     reloadConversations,
     reactMessage,
     recoverMessage,
@@ -2337,6 +2498,7 @@ const _useCommunicationWorkspace = () => {
     toggleSelectAllLoaded,
     unassignedOnly,
     unreadOnly,
+    unreadSnapshotExpired,
     markConversationRead,
     markConversationUnread,
     updateConversation,

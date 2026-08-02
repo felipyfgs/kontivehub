@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Enums\Communication\ConversationListSort;
+use App\Enums\Communication\ConversationStatus;
 use App\Models\SavedListFilter;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Routing\Route;
@@ -167,6 +169,7 @@ function applyKnownContract(array &$operation, string $method, string $path): vo
 
     if ($path === '/api/v1/communication/contacts') {
         if ($method === 'get') {
+            $operation['parameters'][] = inboxContextParameter();
             $operation['responses'] = jsonResponse(
                 '#/components/schemas/CommunicationContactCollection',
             );
@@ -198,6 +201,9 @@ function applyKnownContract(array &$operation, string $method, string $path): vo
 
     if ($path === '/api/v1/communication/contacts/{contact}'
         && in_array($method, ['get', 'patch'], true)) {
+        if ($method === 'get') {
+            $operation['parameters'][] = inboxContextParameter();
+        }
         $operation['responses'] = jsonResponse(
             '#/components/schemas/CommunicationContactResponse',
         );
@@ -266,9 +272,26 @@ function applyKnownContract(array &$operation, string $method, string $path): vo
                 'required' => false,
                 'schema' => ['type' => 'integer', 'minimum' => 1],
             ];
+            $operation['parameters'][] = [
+                'name' => 'snapshot',
+                'in' => 'query',
+                'required' => false,
+                'description' => 'Cria uma foto estável na primeira página de uma consulta unread=true.',
+                'schema' => ['type' => 'boolean'],
+            ];
+            $operation['parameters'][] = [
+                'name' => 'snapshot_token',
+                'in' => 'query',
+                'required' => false,
+                'description' => 'Token opaco devolvido pela primeira página para paginação e reconciliação da mesma foto.',
+                'schema' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 128],
+            ];
             $operation['responses'] = jsonResponse(
                 '#/components/schemas/CommunicationConversationCollection',
-            );
+            )
+                + jsonResponse('#/components/schemas/JsonResponse', '410')
+                + jsonResponse('#/components/schemas/JsonResponse', '422')
+                + jsonResponse('#/components/schemas/JsonResponse', '503');
         } elseif ($method === 'post') {
             $operation['parameters'][] = [
                 'name' => 'Idempotency-Key',
@@ -454,6 +477,18 @@ function applyKnownContract(array &$operation, string $method, string $path): vo
     );
 }
 
+/** @return array<string, mixed> */
+function inboxContextParameter(): array
+{
+    return [
+        'name' => 'inbox_id',
+        'in' => 'query',
+        'required' => false,
+        'schema' => ['type' => 'integer', 'minimum' => 1],
+        'description' => 'Contexto autorizado de inbox para nome e foto observados.',
+    ];
+}
+
 /**
  * @return array<string, array<string, mixed>>
  */
@@ -607,6 +642,20 @@ function schemas(): array
             [
                 'id' => ['type' => 'integer'],
                 'name' => nullableString(),
+                'display_name' => nullableString(),
+                'display_name_source' => [
+                    'type' => ['string', 'null'],
+                    'enum' => [
+                        'MANUAL_CONTACT', 'CLIENT_CONTACT', 'WHATSAPP_ADDRESS_BOOK',
+                        'WHATSAPP_USER_INFO', 'WHATSAPP_BUSINESS', 'WHATSAPP_PUSH_NAME',
+                        'LEGACY_PROVISIONAL', 'MASKED_ADDRESS', 'OPAQUE_ID', null,
+                    ],
+                ],
+                'display_name_state' => [
+                    'type' => ['string', 'null'],
+                    'enum' => ['CURATED', 'OBSERVED', 'FALLBACK', null],
+                ],
+                'display_name_inbox_id' => ['type' => ['integer', 'null'], 'minimum' => 1],
                 'is_provisional' => ['type' => 'boolean'],
                 'is_active' => ['type' => 'boolean'],
                 'profile_picture_url' => [
@@ -615,6 +664,7 @@ function schemas(): array
                     'description' => 'URL Laravel same-origin; null enquanto o asset privado não estiver pronto.',
                 ],
                 'profile_picture_state' => ['type' => 'string', 'enum' => ['UNKNOWN', 'PENDING', 'READY', 'UNAVAILABLE', 'FAILED']],
+                'profile_picture_inbox_id' => ['type' => ['integer', 'null'], 'minimum' => 1],
                 'identities' => [
                     'type' => 'array',
                     'items' => ['$ref' => '#/components/schemas/CommunicationContactIdentity'],
@@ -628,6 +678,25 @@ function schemas(): array
                 'current_page' => ['type' => 'integer', 'minimum' => 1],
                 'last_page' => ['type' => 'integer', 'minimum' => 1],
                 'total' => ['type' => 'integer', 'minimum' => 0],
+            ],
+        ),
+        'CommunicationConversationPaginationMeta' => closedObject(
+            ['current_page', 'last_page', 'total'],
+            [
+                'current_page' => ['type' => 'integer', 'minimum' => 1],
+                'last_page' => ['type' => 'integer', 'minimum' => 1],
+                'total' => ['type' => 'integer', 'minimum' => 0],
+                'snapshot_token' => [
+                    'type' => 'string',
+                    'minLength' => 1,
+                    'maxLength' => 128,
+                    'description' => 'Presente somente na paginação por snapshot unread.',
+                ],
+                'snapshot_expires_at' => [
+                    'type' => 'string',
+                    'format' => 'date-time',
+                    'description' => 'Expiração absoluta do snapshot; acessos não renovam este instante.',
+                ],
             ],
         ),
         'CommunicationContactResponse' => closedObject(
@@ -648,6 +717,7 @@ function schemas(): array
             ['q'],
             [
                 'q' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 200],
+                'inbox_id' => ['type' => 'integer', 'minimum' => 1],
                 'is_active' => ['type' => 'boolean'],
                 'include_inactive' => ['type' => 'boolean'],
                 'is_provisional' => ['type' => 'boolean'],
@@ -758,7 +828,7 @@ function schemas(): array
                     'type' => 'array',
                     'items' => ['$ref' => '#/components/schemas/CommunicationConversation'],
                 ],
-                'meta' => ['$ref' => '#/components/schemas/CommunicationPaginationMeta'],
+                'meta' => ['$ref' => '#/components/schemas/CommunicationConversationPaginationMeta'],
             ],
         ),
         'StartCommunicationConversationBody' => [
@@ -945,6 +1015,30 @@ function schemas(): array
         'ClosingSavedFilterPayload' => closedStringObject([
             'competence', 'band', 'model', 'root', 'source', 'client_id',
         ]),
+        'ConversationSavedViewPayload' => closedObject(
+            ['status', 'sort_by'],
+            [
+                'status' => [
+                    'type' => 'string',
+                    'enum' => ['ALL', ...array_column(ConversationStatus::cases(), 'value')],
+                ],
+                'sort_by' => [
+                    'type' => 'string',
+                    'enum' => ConversationListSort::values(),
+                ],
+                'inbox_id' => ['type' => 'integer', 'minimum' => 1],
+                'assignee_membership_id' => ['type' => 'integer', 'minimum' => 1],
+                'work_department_id' => ['type' => 'integer', 'minimum' => 1],
+                'label_ids' => [
+                    'type' => 'array',
+                    'items' => ['type' => 'integer', 'minimum' => 1],
+                    'maxItems' => 50,
+                    'uniqueItems' => true,
+                ],
+                'unread' => ['type' => 'boolean'],
+                'unassigned' => ['type' => 'boolean'],
+            ],
+        ),
         'SavedListFilterPayload' => [
             'oneOf' => array_map(
                 static fn (string $name): array => ['$ref' => '#/components/schemas/'.$name],
@@ -955,6 +1049,7 @@ function schemas(): array
                     'WorkQueueSavedFilterPayload',
                     'WorkProcessesSavedFilterPayload',
                     'ClosingSavedFilterPayload',
+                    'ConversationSavedViewPayload',
                 ],
             ),
         ],

@@ -57,7 +57,12 @@ final class ContactQuery
             'identities.clientLinks.client',
             'identities.clientLinks.clientContact',
         ])->whereNull('merged_into_contact_id');
-        $this->withProfilePictureProjection($query, $actor);
+        $inboxScoped = $filters->inboxId !== null;
+        if ($inboxScoped) {
+            $this->withInboxContextProjection($query, $actor, $filters->inboxId);
+        } else {
+            $this->withProfilePictureProjection($query, $actor);
+        }
 
         if ($filters->search !== null && $filters->search !== '') {
             $needle = '%'.mb_strtolower($filters->search).'%';
@@ -65,7 +70,12 @@ final class ContactQuery
                 ? $this->normalizedAddressHash($filters->search)
                 : null;
             $query->where(fn ($builder) => $builder
-                ->whereRaw("LOWER(COALESCE(name, '')) LIKE ?", [$needle])
+                ->whereRaw(
+                    $inboxScoped
+                        ? 'LOWER('.$this->displayNameSql().') LIKE ?'
+                        : "LOWER(COALESCE(communication_contacts.name, '')) LIKE ?",
+                    [$needle],
+                )
                 ->orWhereHas(
                     'identities',
                     fn ($identities) => $identities
@@ -92,7 +102,7 @@ final class ContactQuery
                 : $query->whereDoesntHave('identities.clientLinks');
         }
 
-        $this->applySort($query, $filters->sort, $filters->direction);
+        $this->applySort($query, $filters->sort, $filters->direction, $inboxScoped);
 
         return $query->paginate(
             perPage: $filters->perPage,
@@ -153,6 +163,98 @@ final class ContactQuery
             ]);
     }
 
+    /**
+     * Apply one deterministic, inbox-scoped projection before pagination.
+     *
+     * @param  Builder<CommunicationContact>  $query
+     */
+    public function withInboxContextProjection(
+        Builder $query,
+        User $actor,
+        int $inboxId,
+    ): Builder {
+        if (! in_array($inboxId, $this->access->visibleInboxIds($actor), true)) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        $context = DB::table('communication_conversations as context_conversation')
+            ->select([
+                'context_conversation.inbox_id as display_name_inbox_id',
+                'context_conversation.id as representative_conversation_id',
+                'context_identity.address_masked as representative_address_masked',
+                'context_canonical_identity.id as canonical_identity_id',
+                'context_profile.id as profile_picture_profile_id',
+                'context_profile.profile_picture_version',
+                'context_profile.profile_picture_state',
+                'context_profile.inbox_id as profile_picture_inbox_id',
+                'context_profile.address_book_first_name',
+                'context_profile.address_book_full_name',
+                'context_profile.verified_name',
+                'context_profile.business_name',
+                'context_profile.push_name',
+            ])
+            ->selectRaw('(
+                SELECT CASE
+                    WHEN COUNT(DISTINCT LOWER(BTRIM(context_client_contact.name))) = 1
+                    THEN MIN(BTRIM(context_client_contact.name))
+                    ELSE NULL
+                END
+                FROM communication_identity_links AS context_link
+                INNER JOIN client_contacts AS context_client_contact
+                    ON context_client_contact.id = context_link.client_contact_id
+                   AND context_client_contact.tenant_id = context_link.tenant_id
+                WHERE context_link.tenant_id = context_conversation.tenant_id
+                  AND context_link.identity_id = context_canonical_identity.id
+                  AND context_client_contact.is_active = TRUE
+                  AND NULLIF(BTRIM(context_client_contact.name), \'\') IS NOT NULL
+            ) AS linked_client_contact_name')
+            ->join('communication_identities as context_identity', function ($join): void {
+                $join->on('context_identity.id', '=', 'context_conversation.identity_id')
+                    ->on('context_identity.tenant_id', '=', 'context_conversation.tenant_id');
+            })
+            ->join('communication_identities as context_canonical_identity', function ($join): void {
+                $join->on(
+                    'context_canonical_identity.id',
+                    '=',
+                    DB::raw('COALESCE(context_identity.canonical_identity_id, context_identity.id)'),
+                )->on('context_canonical_identity.tenant_id', '=', 'context_conversation.tenant_id');
+            })
+            ->leftJoin('communication_inbox_identity_profiles as context_profile', function ($join) use ($inboxId): void {
+                $join->on('context_profile.identity_id', '=', 'context_canonical_identity.id')
+                    ->on('context_profile.tenant_id', '=', 'context_conversation.tenant_id')
+                    ->where('context_profile.inbox_id', '=', $inboxId);
+            })
+            ->whereColumn('context_conversation.tenant_id', 'communication_contacts.tenant_id')
+            ->whereColumn('context_canonical_identity.contact_id', 'communication_contacts.id')
+            ->where('context_conversation.inbox_id', $inboxId)
+            ->whereNull('context_conversation.purged_at')
+            ->whereNull('context_conversation.merged_into_conversation_id')
+            ->where('context_canonical_identity.is_active', true)
+            ->whereNull('context_canonical_identity.purged_at')
+            ->orderByRaw('context_conversation.last_message_at DESC NULLS LAST')
+            ->orderByDesc('context_conversation.id')
+            ->limit(1);
+
+        $displayName = $this->displayNameSql();
+
+        return $query
+            ->select('communication_contacts.*')
+            ->joinLateral($context, 'contact_context')
+            ->addSelect([
+                'contact_context.display_name_inbox_id',
+                'contact_context.profile_picture_profile_id',
+                'contact_context.profile_picture_version',
+                'contact_context.profile_picture_state',
+                'contact_context.profile_picture_inbox_id',
+            ])
+            ->selectRaw($displayName.' AS display_name')
+            ->selectRaw(
+                $this->displayNameSourceSql().' AS display_name_source',
+                ['LEGACY_PROVISIONAL'],
+            )
+            ->selectRaw($this->displayNameStateSql().' AS display_name_state');
+    }
+
     private function normalizedAddressHash(string $search): ?string
     {
         try {
@@ -170,24 +272,110 @@ final class ContactQuery
         Builder $query,
         string $sort,
         string $direction,
+        bool $inboxScoped,
     ): void {
+        $name = $inboxScoped ? $this->displayNameSql() : 'communication_contacts.name';
         if (! in_array($sort, ['name', 'id', 'created_at'], true)) {
-            $query->orderByRaw('name IS NULL')->orderBy('name')->orderBy('id');
+            $query->orderByRaw("({$name}) IS NULL")
+                ->orderByRaw("{$name} ASC")
+                ->orderBy('communication_contacts.id');
 
             return;
         }
 
         if ($sort === 'name') {
-            $query->orderByRaw('name IS NULL')
-                ->orderBy('name', $direction)
-                ->orderBy('id', $direction);
+            $query->orderByRaw("({$name}) IS NULL")
+                ->orderByRaw("{$name} {$direction}")
+                ->orderBy('communication_contacts.id', $direction);
 
             return;
         }
 
-        $query->orderBy($sort, $direction);
+        $query->orderBy('communication_contacts.'.$sort, $direction);
         if ($sort !== 'id') {
-            $query->orderBy('id', $direction);
+            $query->orderBy('communication_contacts.id', $direction);
         }
+    }
+
+    private function displayNameSql(): string
+    {
+        return <<<'SQL'
+COALESCE(
+    CASE
+        WHEN communication_contacts.is_provisional = FALSE
+        THEN NULLIF(BTRIM(communication_contacts.name), '')
+        ELSE NULL
+    END,
+    NULLIF(BTRIM(contact_context.linked_client_contact_name), ''),
+    NULLIF(BTRIM(contact_context.address_book_full_name), ''),
+    NULLIF(BTRIM(contact_context.address_book_first_name), ''),
+    NULLIF(BTRIM(contact_context.verified_name), ''),
+    NULLIF(BTRIM(contact_context.business_name), ''),
+    NULLIF(BTRIM(contact_context.push_name), ''),
+    CASE
+        WHEN communication_contacts.is_provisional = TRUE
+        THEN NULLIF(BTRIM(communication_contacts.name), '')
+        ELSE NULL
+    END,
+    NULLIF(BTRIM(contact_context.representative_address_masked), ''),
+    CASE
+        WHEN communication_contacts.is_provisional = TRUE
+        THEN CONCAT('Provisório #', communication_contacts.id)
+        ELSE CONCAT('Contato #', communication_contacts.id)
+    END
+)
+SQL;
+    }
+
+    private function displayNameSourceSql(): string
+    {
+        return <<<'SQL'
+CASE
+    WHEN communication_contacts.is_provisional = FALSE
+         AND NULLIF(BTRIM(communication_contacts.name), '') IS NOT NULL
+        THEN 'MANUAL_CONTACT'
+    WHEN NULLIF(BTRIM(contact_context.linked_client_contact_name), '') IS NOT NULL
+        THEN 'CLIENT_CONTACT'
+    WHEN NULLIF(BTRIM(contact_context.address_book_full_name), '') IS NOT NULL
+         OR NULLIF(BTRIM(contact_context.address_book_first_name), '') IS NOT NULL
+        THEN 'WHATSAPP_ADDRESS_BOOK'
+    WHEN NULLIF(BTRIM(contact_context.verified_name), '') IS NOT NULL
+        THEN 'WHATSAPP_USER_INFO'
+    WHEN NULLIF(BTRIM(contact_context.business_name), '') IS NOT NULL
+        THEN 'WHATSAPP_BUSINESS'
+    WHEN NULLIF(BTRIM(contact_context.push_name), '') IS NOT NULL
+        THEN 'WHATSAPP_PUSH_NAME'
+    WHEN communication_contacts.is_provisional = TRUE
+         AND NULLIF(BTRIM(communication_contacts.name), '') IS NOT NULL
+        THEN ?
+    WHEN NULLIF(BTRIM(contact_context.representative_address_masked), '') IS NOT NULL
+        THEN 'MASKED_ADDRESS'
+    ELSE 'OPAQUE_ID'
+END
+SQL;
+    }
+
+    private function displayNameStateSql(): string
+    {
+        return <<<'SQL'
+CASE
+    WHEN communication_contacts.is_provisional = FALSE
+         AND NULLIF(BTRIM(communication_contacts.name), '') IS NOT NULL
+        THEN 'CURATED'
+    WHEN NULLIF(BTRIM(contact_context.linked_client_contact_name), '') IS NOT NULL
+        THEN 'CURATED'
+    WHEN NULLIF(BTRIM(contact_context.address_book_full_name), '') IS NOT NULL
+         OR NULLIF(BTRIM(contact_context.address_book_first_name), '') IS NOT NULL
+         OR NULLIF(BTRIM(contact_context.verified_name), '') IS NOT NULL
+         OR NULLIF(BTRIM(contact_context.business_name), '') IS NOT NULL
+         OR NULLIF(BTRIM(contact_context.push_name), '') IS NOT NULL
+         OR (
+             communication_contacts.is_provisional = TRUE
+             AND NULLIF(BTRIM(communication_contacts.name), '') IS NOT NULL
+         )
+        THEN 'OBSERVED'
+    ELSE 'FALLBACK'
+END
+SQL;
     }
 }

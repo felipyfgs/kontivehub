@@ -23,6 +23,7 @@ use App\Services\Communication\Pairing\PairingStateStore;
 use App\Services\Communication\Security\HmacSigner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 final class CommunicationGatewayProjectionTest extends TestCase
@@ -32,6 +33,7 @@ final class CommunicationGatewayProjectionTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        Queue::fake();
         config([
             'communication.enabled' => true,
             'communication.gateway.enabled' => true,

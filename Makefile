@@ -1,6 +1,6 @@
 .PHONY: help init-env setup up dev down build logs shell migrate seed \
 	api-test composer-install frontend-generate wazync-test nginx-upstream-test identifier-naming-test \
-	code-review \
+	code-review verify-api verify-web verify-wazync verify-harness verify \
 	prod-config prod-build prod-up prod-down \
 	backup restore prod-backup prod-restore \
 	frontend-prepare-generated frontend-install frontend-dev seed-dev seed-pilot \
@@ -35,6 +35,11 @@ help:
 	@echo "  make identifier-naming-test Verifica terminologia de transição em arquivos ativos"
 	@echo "  make nginx-upstream-test Verifica recuperação do edge após recriar o PHP"
 	@echo "  make code-review        CodeRabbit no diff local (--agent; use ARGS='--base main')"
+	@echo "  make verify-harness     Valida configuração, skills, review e OpenSpec"
+	@echo "  make verify-api         Gates completos da API"
+	@echo "  make verify-web         Gates completos do Web"
+	@echo "  make verify-wazync      Gates completos do Wazync"
+	@echo "  make verify             Todos os gates do monorepo"
 	@echo ""
 	@echo "Produção"
 	@echo "  make prod-config        Valida .env + compose prod"
@@ -101,6 +106,25 @@ api-test:
 		-e SESSION_DRIVER=array \
 		-e QUEUE_CONNECTION=sync \
 		php php artisan test
+
+verify-api:
+	docker compose exec php composer validate --strict --no-check-publish
+	docker compose exec php vendor/bin/pint --test
+	docker compose exec php php artisan test
+
+verify-web:
+	docker compose --profile dev exec frontend-dev corepack pnpm run test:gate
+
+verify-wazync: wazync-test
+
+verify-harness:
+	bash -n scripts/code-review.sh scripts/test-code-review-preflight.sh
+	./scripts/test-code-review-preflight.sh
+	node scripts/check-harness-integrity.mjs
+	node scripts/check-identifier-naming.mjs
+	openspec validate --all
+
+verify: verify-harness verify-api verify-web verify-wazync
 
 nginx-upstream-test:
 	./infra/docker/nginx/verify-upstream-recovery.sh

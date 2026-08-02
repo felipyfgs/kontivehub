@@ -3,12 +3,13 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\SavedListFilters\IndexSavedListFiltersRequest;
+use App\Http\Requests\SavedListFilters\StoreSavedListFilterRequest;
+use App\Http\Requests\SavedListFilters\UpdateSavedListFilterRequest;
 use App\Models\SavedListFilter;
 use App\Support\CurrentTenant;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -17,17 +18,15 @@ use Illuminate\Validation\ValidationException;
  */
 class SavedListFilterController extends Controller
 {
-    public function index(Request $request, CurrentTenant $currentTenant): JsonResponse
-    {
-        $this->authorize('viewAny', SavedListFilter::class);
-
-        $data = $request->validate([
-            'surface' => ['required', 'string', Rule::in(SavedListFilter::SURFACES)],
-        ]);
+    public function index(
+        IndexSavedListFiltersRequest $request,
+        CurrentTenant $currentTenant,
+    ): JsonResponse {
+        $surface = $request->surface();
+        $this->authorize('viewAny', [SavedListFilter::class, $surface]);
 
         $tenantId = $currentTenant->tenant()->id;
         $userId = (int) $request->user()->id;
-        $surface = $data['surface'];
 
         $items = SavedListFilter::query()
             ->with('user:id,name')
@@ -48,11 +47,12 @@ class SavedListFilterController extends Controller
         return response()->json(['data' => $items]);
     }
 
-    public function store(Request $request, CurrentTenant $currentTenant): JsonResponse
-    {
-        $this->authorize('create', SavedListFilter::class);
-
-        $data = $this->validatePayload($request);
+    public function store(
+        StoreSavedListFilterRequest $request,
+        CurrentTenant $currentTenant,
+    ): JsonResponse {
+        $data = $request->validated();
+        $this->authorize('create', [SavedListFilter::class, $data['surface']]);
         $visibility = $data['visibility'] ?? SavedListFilter::VISIBILITY_PERSONAL;
 
         if ($visibility === SavedListFilter::VISIBILITY_TENANT) {
@@ -77,14 +77,14 @@ class SavedListFilterController extends Controller
             'name' => $data['name'],
             'visibility' => $visibility,
             'schema_version' => SavedListFilter::SCHEMA_VERSION,
-            'payload' => $this->normalizePayload($data['payload'] ?? []),
+            'payload' => $request->normalizedPayload(),
         ]);
 
         return response()->json(['data' => $this->public($filter->load('user:id,name'))], 201);
     }
 
     public function update(
-        Request $request,
+        UpdateSavedListFilterRequest $request,
         SavedListFilter $listFilter,
         CurrentTenant $currentTenant,
     ): JsonResponse {
@@ -95,7 +95,7 @@ class SavedListFilterController extends Controller
             abort(404);
         }
 
-        $data = $this->validatePayload($request, partial: true);
+        $data = $request->validated();
 
         $visibility = array_key_exists('visibility', $data)
             ? $data['visibility']
@@ -133,7 +133,7 @@ class SavedListFilterController extends Controller
             $updates['visibility'] = $data['visibility'];
         }
         if (array_key_exists('payload', $data)) {
-            $updates['payload'] = $this->normalizePayload($data['payload'] ?? []);
+            $updates['payload'] = $request->normalizedPayload();
         }
 
         if ($updates !== []) {
@@ -157,40 +157,6 @@ class SavedListFilterController extends Controller
         $listFilter->delete();
 
         return response()->json(null, 204);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function validatePayload(Request $request, bool $partial = false): array
-    {
-        $required = $partial ? 'sometimes' : 'required';
-
-        return $request->validate([
-            'surface' => $partial
-                ? ['prohibited']
-                : ['required', 'string', Rule::in(SavedListFilter::SURFACES)],
-            'name' => [$required, 'string', 'max:120'],
-            'visibility' => [
-                $partial ? 'sometimes' : 'nullable',
-                'string',
-                Rule::in([SavedListFilter::VISIBILITY_PERSONAL, SavedListFilter::VISIBILITY_TENANT]),
-            ],
-            'tenant_id' => ['prohibited'],
-            'schema_version' => ['prohibited'],
-            'payload' => [$partial ? 'sometimes' : 'required', 'array'],
-            'payload.schema_version' => ['prohibited'],
-            'payload.tenant_id' => ['prohibited'],
-        ]);
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     * @return array<string, mixed>
-     */
-    private function normalizePayload(array $payload): array
-    {
-        return $payload;
     }
 
     private function assertUniqueName(

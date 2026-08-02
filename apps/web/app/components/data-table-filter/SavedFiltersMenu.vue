@@ -10,6 +10,7 @@ const props = withDefaults(defineProps<{
   items: SavedListFilter[]
   loading?: boolean
   disabled?: boolean
+  unavailableReason?: (filter: SavedListFilter) => string | null
 }>(), {
   loading: false,
   disabled: false
@@ -32,26 +33,40 @@ function itemLabel(filter: SavedListFilter): string {
   return filter.name
 }
 
+function getUnavailableReason(filter: SavedListFilter): string | null {
+  return props.unavailableReason?.(filter) ?? null
+}
+
 const menuItems = computed<DropdownMenuItem[][]>(() => {
   const groups: DropdownMenuItem[][] = []
 
   const mine: DropdownMenuItem[] = personal.value.length
-    ? personal.value.map(filter => ({
-        label: itemLabel(filter),
-        icon: 'i-lucide-user',
-        onSelect: () => emit('apply', filter)
-      }))
+    ? personal.value.map((filter) => {
+        const reason = getUnavailableReason(filter)
+        return {
+          label: itemLabel(filter),
+          description: reason ?? undefined,
+          icon: reason ? 'i-lucide-triangle-alert' : 'i-lucide-user',
+          disabled: Boolean(reason),
+          onSelect: () => emit('apply', filter)
+        }
+      })
     : [{
         label: 'Nenhum filtro pessoal',
         disabled: true
       }]
 
   const tenant: DropdownMenuItem[] = team.value.length
-    ? team.value.map(filter => ({
-        label: itemLabel(filter),
-        icon: 'i-lucide-users',
-        onSelect: () => emit('apply', filter)
-      }))
+    ? team.value.map((filter) => {
+        const reason = getUnavailableReason(filter)
+        return {
+          label: itemLabel(filter),
+          description: reason ?? undefined,
+          icon: reason ? 'i-lucide-triangle-alert' : 'i-lucide-users',
+          disabled: Boolean(reason),
+          onSelect: () => emit('apply', filter)
+        }
+      })
     : [{
         label: 'Nenhum filtro da equipe',
         disabled: true

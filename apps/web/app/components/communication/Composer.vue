@@ -55,6 +55,7 @@ const cursor = ref(0)
 const composingIme = ref(false)
 const autocompleteOpen = ref(false)
 const autocompleteIndex = ref(0)
+const composerRoot = ref<HTMLElement | null>(null)
 const autocompleteToken = ref<CannedSlashTokenMatch | null>(null)
 const insertingCanned = ref(false)
 const listboxId = 'communication-composer-canned-listbox'
@@ -402,10 +403,28 @@ onBeforeUnmount(() => {
   clearRecordingTimer()
   stopMediaTracks()
 })
+
+async function focusInput(): Promise<boolean> {
+  await nextTick()
+  const markedElement = composerRoot.value?.querySelector('[data-communication-message-input]')
+  const input = markedElement instanceof HTMLTextAreaElement
+    ? markedElement
+    : markedElement?.querySelector('textarea')
+  if (!(input instanceof HTMLTextAreaElement)
+    || markedElement?.getAttribute('aria-disabled') === 'true'
+    || markedElement?.hasAttribute('disabled')
+    || input.getAttribute('aria-disabled') === 'true'
+    || input.hasAttribute('disabled')) return false
+  input.focus({ preventScroll: true })
+  return document.activeElement === input
+}
+
+defineExpose({ focusInput })
 </script>
 
 <template>
   <div
+    ref="composerRoot"
     data-testid="communication-composer"
     class="shrink-0 border-t border-default bg-default/95 p-3 backdrop-blur sm:px-5 sm:py-4"
   >
@@ -466,6 +485,7 @@ onBeforeUnmount(() => {
       <div class="relative">
         <UTextarea
           v-model="body"
+          data-communication-message-input
           :placeholder="internalNote ? 'Nota visível apenas para a equipe…' : 'Digite uma mensagem ou /atalho'"
           :rows="2"
           autoresize

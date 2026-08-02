@@ -26,6 +26,7 @@ use App\Models\CommunicationMessage;
 use App\Models\PgdasdArtifact;
 use App\Models\Tenant;
 use App\Services\Communication\Availability;
+use App\Services\Communication\Contact\InboxIdentityProfileReconciliationScheduler;
 use App\Services\Communication\ConversationCanonicalizer;
 use App\Services\Communication\Events\EventRecorder;
 use App\Services\Communication\Media\MediaStore;
@@ -50,6 +51,7 @@ final readonly class FiscalAutomationService
         private OutboxService $outbox,
         private EventRecorder $events,
         private ProfilePictureRefreshScheduler $profilePictures,
+        private InboxIdentityProfileReconciliationScheduler $identityProfileReconciliation,
     ) {}
 
     /**
@@ -347,6 +349,7 @@ final readonly class FiscalAutomationService
                     ])->save();
                 }
                 $this->profilePictures->schedule($inbox, $canonicalIdentity);
+                $this->identityProfileReconciliation->schedule($inbox, $canonicalIdentity);
                 DB::table('communication_conversation_clients')->insertOrIgnore([
                     'tenant_id' => $tenant->id,
                     'conversation_id' => $conversation->id,

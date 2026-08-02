@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Conversation } from '~/types/communication/conversations'
 import {
+  communicationConversationListQueryKey,
   isConversationRequestCurrent,
   mergeCommunicationConversationPage
 } from '~/composables/useCommunicationWorkspace'
@@ -49,5 +50,44 @@ describe('paginação do workspace de comunicação', () => {
       { generation: 8, sessionEpoch: 11 },
       active
     )).toBe(false)
+  })
+
+  it('vincula snapshot às dimensões da consulta e ignora somente paginação e token', () => {
+    const base = {
+      q: 'fiscal',
+      status: 'OPEN' as const,
+      unread: true,
+      label_ids: [9, 3, 9],
+      sort_by: 'last_activity_desc' as const,
+      per_page: 50
+    }
+    const first = communicationConversationListQueryKey({
+      ...base,
+      page: 1,
+      snapshot: true
+    })
+    const next = communicationConversationListQueryKey({
+      ...base,
+      label_ids: [3, 9],
+      page: 4,
+      snapshot_token: 'opaco'
+    })
+
+    expect(next).toBe(first)
+    for (const changed of [
+      { ...base, q: 'outro' },
+      { ...base, inbox_id: 7 },
+      { ...base, status: 'PENDING' as const },
+      { ...base, assignee_membership_id: 4 },
+      { ...base, work_department_id: 3 },
+      { ...base, unassigned: true },
+      { ...base, unread: false },
+      { ...base, label_ids: [3] },
+      { ...base, contact_id: 42 },
+      { ...base, sort_by: 'priority_desc' as const },
+      { ...base, per_page: 100 }
+    ]) {
+      expect(communicationConversationListQueryKey(changed)).not.toBe(first)
+    }
   })
 })

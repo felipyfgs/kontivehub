@@ -77,6 +77,7 @@ const emit = defineEmits<{
   'update:unassignedOnly': [value: boolean]
   'update:unreadOnly': [value: boolean]
   'apply-quick-view': [view: ConversationQuickView]
+  'refresh-unread-snapshot': []
   'clear-contact': []
 }>()
 
@@ -103,6 +104,7 @@ const advancedFilterFieldItems: Array<{
 
 const statusOptionsOpen = ref(false)
 const advancedOpen = ref(false)
+const filtersRoot = ref<HTMLElement | null>(null)
 const advancedRules = ref<AdvancedFilterRule[]>([])
 let nextAdvancedRuleId = 0
 
@@ -201,7 +203,29 @@ function applyQuickView(view: ConversationQuickView): void {
 function onQuickViewChange(value: string | number): void {
   if (typeof value !== 'string') return
   if (!COMMUNICATION_CONVERSATION_QUICK_VIEW_TABS.some(item => item.value === value)) return
+  if (value === 'UNREAD' && activeQuickView.value === 'UNREAD') return
   applyQuickView(value as ConversationQuickView)
+}
+
+function quickViewFromActivationEvent(event: Event): ConversationQuickView | null {
+  if (!(event.target instanceof Element)) return null
+  const marker = event.target.closest<HTMLElement>('[data-quick-view]')
+    ?? event.target.querySelector<HTMLElement>('[data-quick-view]')
+  const value = marker?.dataset.quickView
+  return COMMUNICATION_CONVERSATION_QUICK_VIEW_TABS.some(item => item.value === value)
+    ? value as ConversationQuickView
+    : null
+}
+
+function onQuickViewActivation(event: MouseEvent | KeyboardEvent): void {
+  if (event.defaultPrevented) return
+  if (event instanceof KeyboardEvent
+    && !['Enter', ' ', 'Spacebar'].includes(event.key)) return
+  if (quickViewFromActivationEvent(event) !== 'UNREAD'
+    || activeQuickView.value !== 'UNREAD') return
+
+  if (event instanceof KeyboardEvent) event.preventDefault()
+  emit('refresh-unread-snapshot')
 }
 
 function updateSort(value: unknown): void {
@@ -420,10 +444,24 @@ function applyAdvancedFilters(): void {
 }
 
 resetAdvancedDraft()
+
+async function focusSearch(): Promise<boolean> {
+  await nextTick()
+  const target = filtersRoot.value?.querySelector('[data-testid="communication-search"]')
+  const input = target instanceof HTMLInputElement
+    ? target
+    : target?.querySelector('input')
+  if (!(input instanceof HTMLInputElement) || input.disabled) return false
+  input.focus({ preventScroll: true })
+  return document.activeElement === input
+}
+
+defineExpose({ focusSearch })
 </script>
 
 <template>
   <div
+    ref="filtersRoot"
     class="flex w-full min-w-0 max-w-full flex-col gap-1.5 overflow-x-hidden px-2 py-2"
     data-testid="communication-list-filters"
   >
@@ -484,6 +522,8 @@ resetAdvancedDraft()
         <div
           class="relative h-7 w-full min-w-0 [@media(pointer:coarse)]:h-11"
           data-testid="communication-filter-views"
+          @click.capture="onQuickViewActivation"
+          @keydown.capture="onQuickViewActivation"
         >
           <UPopover
             :open="statusOptionsOpen"
@@ -609,16 +649,21 @@ resetAdvancedDraft()
                 data-testid="communication-filter-advanced-panel"
                 aria-labelledby="communication-filter-advanced-title"
               >
-                <header class="border-b border-default px-3 py-2.5">
-                  <h2
-                    id="communication-filter-advanced-title"
-                    class="text-sm font-semibold text-highlighted"
-                  >
-                    Filtrar conversas
-                  </h2>
-                  <p class="mt-0.5 text-[11px] text-muted">
-                    Todas as regras são combinadas com “E”.
-                  </p>
+                <header class="flex min-w-0 items-start justify-between gap-2 border-b border-default px-3 py-2.5">
+                  <div class="min-w-0">
+                    <h2
+                      id="communication-filter-advanced-title"
+                      class="text-sm font-semibold text-highlighted"
+                    >
+                      Filtrar conversas
+                    </h2>
+                    <p class="mt-0.5 text-[11px] text-muted">
+                      Todas as regras são combinadas com “E”.
+                    </p>
+                  </div>
+                  <div class="flex shrink-0 items-center gap-1">
+                    <slot name="saved-views" />
+                  </div>
                 </header>
 
                 <div class="min-w-0 overflow-y-auto overflow-x-hidden p-2.5">
@@ -850,6 +895,7 @@ resetAdvancedDraft()
             <template #default="{ item }">
               <span
                 :data-testid="item.testId"
+                :data-quick-view="item.value"
                 class="min-w-0 truncate"
               >
                 <template v-if="item.compactLabel">

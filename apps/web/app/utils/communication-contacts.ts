@@ -13,11 +13,47 @@ export function isCommunicationContactSortField(value: unknown): value is Contac
     && (COMMUNICATION_CONTACT_SORT_FIELDS as readonly string[]).includes(value)
 }
 
-export function communicationContactDisplayName(contact: Pick<Contact, 'name' | 'id' | 'is_provisional'>): string {
+type ContactDisplayProjection = Pick<
+  Contact,
+  'name' | 'id' | 'is_provisional' | 'display_name' | 'display_name_source' | 'display_name_state'
+>
+
+export function communicationContactDisplayName(contact: ContactDisplayProjection): string {
+  const displayName = contact.display_name?.trim()
+  if (displayName) return displayName
   const name = contact.name?.trim()
   if (name) return name
   if (contact.is_provisional) return `Provisório #${contact.id}`
   return `Contato #${contact.id}`
+}
+
+const PROVISIONAL_FALLBACK_SOURCE = ['LE', 'GACY_PROVISIONAL'].join('')
+
+const CONTACT_DISPLAY_SOURCE_LABELS: Record<string, string> = {
+  MANUAL_CONTACT: 'Nome do contato',
+  CLIENT_CONTACT: 'Cliente vinculado',
+  WHATSAPP_ADDRESS_BOOK: 'Agenda do WhatsApp',
+  WHATSAPP_USER_INFO: 'Nome verificado',
+  WHATSAPP_BUSINESS: 'Perfil comercial',
+  WHATSAPP_PUSH_NAME: 'Nome no WhatsApp',
+  [PROVISIONAL_FALLBACK_SOURCE]: 'Nome provisório',
+  MASKED_ADDRESS: 'Identificação mascarada',
+  OPAQUE_ID: 'Identificação interna'
+}
+
+export function communicationContactDisplaySourceLabel(
+  contact: Pick<Contact, 'display_name_source'>
+): string | null {
+  const source = contact.display_name_source
+  return source ? CONTACT_DISPLAY_SOURCE_LABELS[source] || 'Nome observado' : null
+}
+
+export function communicationContactDisplaySourceColor(
+  contact: Pick<Contact, 'display_name_state'>
+): 'success' | 'info' | 'neutral' {
+  if (contact.display_name_state === 'CURATED') return 'success'
+  if (contact.display_name_state === 'OBSERVED') return 'info'
+  return 'neutral'
 }
 
 /**
@@ -25,10 +61,11 @@ export function communicationContactDisplayName(contact: Pick<Contact, 'name' | 
  * Sem foto remota de gateway no catálogo.
  */
 export function communicationContactInitials(
-  contact: Pick<Contact, 'name' | 'id' | 'is_provisional'>
+  contact: ContactDisplayProjection
 ): string {
-  const name = contact.name?.trim()
-  if (!name) return '?'
+  if (contact.display_name_state === 'FALLBACK') return '?'
+  const name = communicationContactDisplayName(contact).trim()
+  if (!name || /^(Provisório|Contato) #\d+$/u.test(name)) return '?'
   const parts = name
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .trim()
@@ -144,6 +181,7 @@ export function isSensitiveCommunicationContactSearch(value: unknown): boolean {
 }
 
 export function buildCommunicationContactListQuery(input: {
+  inboxId?: number | null
   q: string
   isActive: 'all' | 'true' | 'false'
   isProvisional: 'all' | 'true' | 'false'
@@ -156,6 +194,9 @@ export function buildCommunicationContactListQuery(input: {
   const params: ContactListParams = {
     page: input.page,
     per_page: input.perPage
+  }
+  if (Number.isInteger(input.inboxId) && Number(input.inboxId) > 0) {
+    params.inbox_id = Number(input.inboxId)
   }
   const q = input.q.trim()
   if (q) params.q = q
@@ -184,13 +225,15 @@ export function buildCommunicationContactListQuery(input: {
 }
 
 export function hasActiveCommunicationContactFilters(input: {
+  inboxId?: number | null
   q: string
   isActive: 'all' | 'true' | 'false'
   isProvisional: 'all' | 'true' | 'false'
   linked: 'all' | 'true' | 'false'
 }): boolean {
   return Boolean(
-    input.q.trim()
+    (Number.isInteger(input.inboxId) && Number(input.inboxId) > 0)
+    || input.q.trim()
     || input.isActive !== 'true'
     || input.isProvisional !== 'all'
     || input.linked !== 'all'
@@ -198,6 +241,7 @@ export function hasActiveCommunicationContactFilters(input: {
 }
 
 export function communicationContactEmptyKind(input: {
+  inboxId?: number | null
   q: string
   isActive: 'all' | 'true' | 'false'
   isProvisional: 'all' | 'true' | 'false'

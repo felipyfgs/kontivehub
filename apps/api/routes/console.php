@@ -32,6 +32,7 @@ $lock(Schedule::command('communication:dispatch-fiscal')->everyMinute());
 $lock(Schedule::command('communication:wake-snoozed')->everyMinute());
 $lock(Schedule::command('communication:reconcile-flow-runs')->everyMinute());
 $lock(Schedule::command('communication:dispatch-profile-picture-refreshes')->everyFifteenMinutes(), 14);
+$lock(Schedule::command('communication:reconcile-inbox-contact-profiles')->hourly(), 55);
 $lock(Schedule::command('communication:dispatch-media-deletions')->everyFiveMinutes(), 4);
 $lock(Schedule::command('communication:dispatch-media-deletions --sweep')->hourly(), 55);
 $lock(Schedule::command('work:dispatch-due-recurrence')->everyMinute());

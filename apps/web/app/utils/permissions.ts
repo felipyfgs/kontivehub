@@ -74,6 +74,10 @@ export function canCreateExport(user?: MeUser | null): boolean {
   return hasEffectivePermission(user, 'exports.create')
 }
 
+export function canShareListFilters(user?: MeUser | null): boolean {
+  return hasEffectivePermission(user, 'filters.share')
+}
+
 export function canImportDocuments(user?: MeUser | null): boolean {
   return hasEffectivePermission(user, 'documents.import')
 }

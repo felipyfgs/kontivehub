@@ -59,6 +59,10 @@ final class ApiRateLimitServiceProvider extends ServiceProvider
             fn (Request $request): Limit => $this->perMinuteForUserOrIp($request, 120),
         );
         RateLimiter::for(
+            ApiRateLimit::CommunicationConversationListSnapshot,
+            fn (Request $request): Limit => $this->conversationListSnapshotLimit($request),
+        );
+        RateLimiter::for(
             ApiRateLimit::CommunicationProfilePicture,
             fn (Request $request): array => $this->profilePictureLimits($request),
         );
@@ -109,6 +113,24 @@ final class ApiRateLimitServiceProvider extends ServiceProvider
             Limit::perMinute(max(1, (int) config('communication.profile_pictures.stream_ip_rate_limit_per_minute', 1_200)))
                 ->by('communication-profile-picture:ip:'.$request->ip()),
         ];
+    }
+
+    private function conversationListSnapshotLimit(Request $request): Limit
+    {
+        if (! $request->boolean('snapshot')) {
+            return Limit::none();
+        }
+
+        $userId = $request->user()?->getAuthIdentifier();
+        $tenantId = app(CurrentTenant::class)->id();
+        $actorKey = $userId === null
+            ? 'ip:'.$request->ip()
+            : 'user:'.$userId;
+
+        return Limit::perMinute(max(1, (int) config(
+            'communication.conversation_list_snapshot.rate_limit_per_minute',
+            10,
+        )))->by('communication-conversation-list-snapshot:'.$actorKey.':tenant:'.($tenantId ?? 'none'));
     }
 
     /**

@@ -1525,6 +1525,18 @@
                     {
                         "sanctumCookie": []
                     }
+                ],
+                "parameters": [
+                    {
+                        "name": "inbox_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "description": "Contexto autorizado de inbox para nome e foto observados."
+                    }
                 ]
             },
             "post": {
@@ -1616,6 +1628,16 @@
                             "type": "string",
                             "minLength": 1
                         }
+                    },
+                    {
+                        "name": "inbox_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "description": "Contexto autorizado de inbox para nome e foto observados."
                     }
                 ],
                 "security": [
@@ -2118,6 +2140,36 @@
                                 }
                             }
                         }
+                    },
+                    "410": {
+                        "description": "Resposta canônica.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/JsonResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Resposta canônica.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/JsonResponse"
+                                }
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "Resposta canônica.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/JsonResponse"
+                                }
+                            }
+                        }
                     }
                 },
                 "security": [
@@ -2133,6 +2185,26 @@
                         "schema": {
                             "type": "integer",
                             "minimum": 1
+                        }
+                    },
+                    {
+                        "name": "snapshot",
+                        "in": "query",
+                        "required": false,
+                        "description": "Cria uma foto estável na primeira página de uma consulta unread=true.",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "name": "snapshot_token",
+                        "in": "query",
+                        "required": false,
+                        "description": "Token opaco devolvido pela primeira página para paginação e reconciliação da mesma foto.",
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 128
                         }
                     }
                 ]
@@ -18493,6 +18565,49 @@
                             "null"
                         ]
                     },
+                    "display_name": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "display_name_source": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "enum": [
+                            "MANUAL_CONTACT",
+                            "CLIENT_CONTACT",
+                            "WHATSAPP_ADDRESS_BOOK",
+                            "WHATSAPP_USER_INFO",
+                            "WHATSAPP_BUSINESS",
+                            "WHATSAPP_PUSH_NAME",
+                            "LEGACY_PROVISIONAL",
+                            "MASKED_ADDRESS",
+                            "OPAQUE_ID",
+                            null
+                        ]
+                    },
+                    "display_name_state": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "enum": [
+                            "CURATED",
+                            "OBSERVED",
+                            "FALLBACK",
+                            null
+                        ]
+                    },
+                    "display_name_inbox_id": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ],
+                        "minimum": 1
+                    },
                     "is_provisional": {
                         "type": "boolean"
                     },
@@ -18516,6 +18631,13 @@
                             "UNAVAILABLE",
                             "FAILED"
                         ]
+                    },
+                    "profile_picture_inbox_id": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ],
+                        "minimum": 1
                     },
                     "identities": {
                         "type": "array",
@@ -18552,6 +18674,40 @@
                     "total": {
                         "type": "integer",
                         "minimum": 0
+                    }
+                }
+            },
+            "CommunicationConversationPaginationMeta": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "current_page",
+                    "last_page",
+                    "total"
+                ],
+                "properties": {
+                    "current_page": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "last_page": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "total": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "snapshot_token": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128,
+                        "description": "Presente somente na paginação por snapshot unread."
+                    },
+                    "snapshot_expires_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Expiração absoluta do snapshot; acessos não renovam este instante."
                     }
                 }
             },
@@ -18597,6 +18753,10 @@
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 200
+                    },
+                    "inbox_id": {
+                        "type": "integer",
+                        "minimum": 1
                     },
                     "is_active": {
                         "type": "boolean"
@@ -18881,7 +19041,7 @@
                         }
                     },
                     "meta": {
-                        "$ref": "#/components/schemas/CommunicationPaginationMeta"
+                        "$ref": "#/components/schemas/CommunicationConversationPaginationMeta"
                     }
                 }
             },
@@ -19264,7 +19424,8 @@
                     "docs.catalog",
                     "work.queue",
                     "work.processes",
-                    "closing.list"
+                    "closing.list",
+                    "communication.conversations"
                 ]
             },
             "SavedFilterVisibility": {
@@ -19530,6 +19691,65 @@
                     }
                 }
             },
+            "ConversationSavedViewPayload": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "status",
+                    "sort_by"
+                ],
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "ALL",
+                            "OPEN",
+                            "PENDING",
+                            "RESOLVED",
+                            "SNOOZED"
+                        ]
+                    },
+                    "sort_by": {
+                        "type": "string",
+                        "enum": [
+                            "last_activity_desc",
+                            "last_activity_asc",
+                            "created_desc",
+                            "created_asc",
+                            "unread_desc",
+                            "priority_desc",
+                            "priority_asc"
+                        ]
+                    },
+                    "inbox_id": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "assignee_membership_id": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "work_department_id": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "label_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "maxItems": 50,
+                        "uniqueItems": true
+                    },
+                    "unread": {
+                        "type": "boolean"
+                    },
+                    "unassigned": {
+                        "type": "boolean"
+                    }
+                }
+            },
             "SavedListFilterPayload": {
                 "oneOf": [
                     {
@@ -19549,6 +19769,9 @@
                     },
                     {
                         "$ref": "#/components/schemas/ClosingSavedFilterPayload"
+                    },
+                    {
+                        "$ref": "#/components/schemas/ConversationSavedViewPayload"
                     }
                 ]
             },

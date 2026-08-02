@@ -223,6 +223,7 @@ const baseProps = {
 
 async function mountFilters(props: Partial<typeof baseProps> = {}) {
   wrapper = await mountSuspended(ConversationListFilters, {
+    attachTo: document.body,
     props: { ...baseProps, ...props },
     slots: {
       selection: '<div data-testid="communication-selection-slot">Seleção contextual</div>'
@@ -266,6 +267,16 @@ afterEach(() => {
 })
 
 describe('ConversationListFilters — hierarquia compacta', () => {
+  it('expõe foco acessível para a busca contextual', async () => {
+    const view = await mountFilters()
+    const focused = await (view.vm as unknown as {
+      focusSearch: () => Promise<boolean>
+    }).focusSearch()
+
+    expect(focused).toBe(true)
+    expect(document.activeElement?.getAttribute('data-testid')).toBe('communication-search')
+  })
+
   it('mantém busca, três tabs pill fixas e status/ordenação no primeiro popover', async () => {
     const view = await mountFilters()
 
@@ -317,6 +328,19 @@ describe('ConversationListFilters — hierarquia compacta', () => {
     expect(view.findComponent(ChipStub).props('show')).toBe(false)
     expect(view.findComponent(ChipStub).props('text')).toBe(0)
     expect(view.find('[data-testid="communication-filter-active-summary"]').exists()).toBe(false)
+  })
+
+  it('renova Não lidas por clique, Enter e Espaço quando a tab já está ativa', async () => {
+    const view = await mountFilters({ status: 'OPEN', unreadOnly: true })
+    const unreadTab = view.findAll('[role="tab"]')[1]
+    if (!unreadTab) throw new Error('A tab Não lidas não foi renderizada.')
+
+    await unreadTab.trigger('click')
+    await unreadTab.trigger('keydown', { key: 'Enter' })
+    await unreadTab.trigger('keydown', { key: ' ' })
+
+    expect(view.emitted('refresh-unread-snapshot')).toHaveLength(3)
+    expect(view.emitted('apply-quick-view')).toBeUndefined()
   })
 
   it('contabiliza somente o filtro avançado adicional à visão rápida', async () => {

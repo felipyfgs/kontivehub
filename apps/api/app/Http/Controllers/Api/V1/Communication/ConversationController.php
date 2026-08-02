@@ -40,9 +40,15 @@ final class ConversationController extends Controller
         ListConversationsRequest $request,
         ConversationQuery $query,
     ): JsonResponse {
-        return (new ConversationCollection(
-            $query->paginate($request->actor(), $request->filters()),
-        ))->response();
+        $page = $query->paginate($request->actor(), $request->filters());
+        $response = (new ConversationCollection($page))->response();
+        if ($page->snapshotToken !== null) {
+            $response
+                ->header('Cache-Control', 'private, no-store, max-age=0')
+                ->header('Pragma', 'no-cache');
+        }
+
+        return $response;
     }
 
     public function store(

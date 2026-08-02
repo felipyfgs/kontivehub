@@ -9,6 +9,8 @@ import { apiErrorMessage } from '~/utils/api-error'
 import {
   COMMUNICATION_CONTACT_DANGER_SOFT_CLASS,
   COMMUNICATION_CONTACT_SOLID_ACTION_CLASS,
+  communicationContactDisplaySourceColor,
+  communicationContactDisplaySourceLabel,
   communicationContactStatusColor,
   communicationContactStatusContrastClass,
   communicationContactStatusLabel
@@ -169,6 +171,15 @@ const headerMoreActions = computed<DropdownMenuItem[]>(() => {
         </template>
         <template #right>
           <div class="flex min-w-0 items-center justify-end gap-2">
+            <UBadge
+              v-if="contact && communicationContactDisplaySourceLabel(contact)"
+              class="hidden sm:inline-flex"
+              size="md"
+              variant="subtle"
+              :color="communicationContactDisplaySourceColor(contact)"
+              :label="communicationContactDisplaySourceLabel(contact)!"
+              data-testid="communication-contact-header-name-source"
+            />
             <UBadge
               v-if="contact"
               class="hidden sm:inline-flex"

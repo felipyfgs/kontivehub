@@ -12,6 +12,7 @@ const props = withDefaults(defineProps<{
   loading?: boolean
   actingId?: number | null
   error?: string | null
+  unavailableReason?: (filter: SavedListFilter) => string | null
 }>(), {
   canShare: false,
   loading: false,
@@ -79,6 +80,10 @@ function canEdit(filter: SavedListFilter): boolean {
 
 function canDelete(filter: SavedListFilter): boolean {
   return filter.permissions.delete
+}
+
+function getUnavailableReason(filter: SavedListFilter): string | null {
+  return props.unavailableReason?.(filter) ?? null
 }
 </script>
 
@@ -173,6 +178,14 @@ function canDelete(filter: SavedListFilter): boolean {
                 :label="filter.visibility === 'tenant' ? 'Equipe' : 'Pessoal'"
               />
             </div>
+
+            <p
+              v-if="getUnavailableReason(filter)"
+              class="flex items-start gap-1.5 text-xs text-warning"
+            >
+              <UIcon name="i-lucide-triangle-alert" class="mt-0.5 size-3.5 shrink-0" />
+              <span>{{ getUnavailableReason(filter) }}</span>
+            </p>
 
             <div
               v-if="confirmDeleteId === filter.id"

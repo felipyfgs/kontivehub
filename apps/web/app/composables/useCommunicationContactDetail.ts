@@ -16,9 +16,10 @@ import {
 } from '~/utils/communication-contacts'
 import { parseCommunicationContactId } from '~/utils/communication-routes'
 import { canManageCommunicationContacts } from '~/utils/permissions'
+import { COMMUNICATION_SURFACES, consumeSurfaceNavigationIntent } from './useSurfaceNavigationState'
 
 export type ContactDetailApi = {
-  get: (id: number) => Promise<{ data: Contact }>
+  get: (id: number, inboxId?: number) => Promise<{ data: Contact }>
   update: (
     id: number,
     body: { name?: string | null, is_active?: boolean }
@@ -43,6 +44,7 @@ export type ContactDetailDependencies = {
   api: ContactDetailApi
   canManage: ComputedRef<boolean> | Ref<boolean>
   contactId: ComputedRef<number | null> | Ref<number | null>
+  inboxId?: ComputedRef<number | null> | Ref<number | null>
   sessionEpoch: Ref<number>
   toast: (
     title: string,
@@ -152,6 +154,7 @@ export function createCommunicationContactDetail(
     const sequence = ++loadSequence
     const epoch = dependencies.sessionEpoch.value
     const id = dependencies.contactId.value
+    const inboxId = dependencies.inboxId?.value ?? null
     loading.value = true
     loadError.value = null
     if (!id) {
@@ -161,11 +164,12 @@ export function createCommunicationContactDetail(
       return
     }
     try {
-      const res = await dependencies.api.get(id)
+      const res = inboxId ? await dependencies.api.get(id, inboxId) : await dependencies.api.get(id)
       if (
         sequence !== loadSequence
         || epoch !== dependencies.sessionEpoch.value
         || id !== dependencies.contactId.value
+        || inboxId !== (dependencies.inboxId?.value ?? null)
       ) return
       contact.value = res.data
       editName.value = res.data.name || ''
@@ -175,6 +179,7 @@ export function createCommunicationContactDetail(
         sequence !== loadSequence
         || epoch !== dependencies.sessionEpoch.value
         || id !== dependencies.contactId.value
+        || inboxId !== (dependencies.inboxId?.value ?? null)
       ) return
       contact.value = null
       loadError.value = apiErrorMessage(caught, 'Falha ao carregar o contato.')
@@ -194,14 +199,13 @@ export function createCommunicationContactDetail(
     const context = captureContext(contact.value.id)
     saving.value = true
     try {
-      const res = await dependencies.api.update(contact.value.id, {
+      await dependencies.api.update(contact.value.id, {
         name: editName.value.trim() || null,
         is_active: editActive.value
       })
       if (!isCurrentContext(context)) return
-      contact.value = res.data
-      editName.value = res.data.name || ''
-      editActive.value = res.data.is_active
+      await load()
+      if (!isCurrentContext(context)) return
       dependencies.toast('Contato atualizado.', 'success')
     } catch (caught) {
       if (!isCurrentContext(context)) return
@@ -385,6 +389,14 @@ export function createCommunicationContactDetail(
     void load()
   })
 
+  const stopInboxWatch = dependencies.inboxId
+    ? watch(dependencies.inboxId, () => {
+        contact.value = null
+        resetTransientState()
+        void load()
+      })
+    : () => {}
+
   const stopLinkClientWatch = watch(linkClientId, (id) => {
     linkClientContactId.value = undefined
     if (id) void loadClientContacts(id)
@@ -397,6 +409,7 @@ export function createCommunicationContactDetail(
   function dispose() {
     stopContactWatch()
     stopSessionWatch()
+    stopInboxWatch()
     stopLinkClientWatch()
     ++loadSequence
     ++contextSequence
@@ -454,10 +467,17 @@ export function useCommunicationContactDetail() {
 
   const canManage = computed(() => canManageCommunicationContacts(me.value))
   const contactId = computed(() => parseCommunicationContactId(route.params.id))
+  const detailIntent = consumeSurfaceNavigationIntent<{ detail_inbox_id?: unknown }>(
+    COMMUNICATION_SURFACES.contacts
+  )
+  const parsedInboxId = Number(detailIntent?.detail_inbox_id)
+  const inboxId = ref<number | null>(
+    Number.isInteger(parsedInboxId) && parsedInboxId > 0 ? parsedInboxId : null
+  )
 
   const detail = createCommunicationContactDetail({
     api: {
-      get: id => api.communication.contacts.get(id),
+      get: (id, selectedInboxId) => api.communication.contacts.get(id, selectedInboxId),
       update: (id, body) => api.communication.contacts.update(id, body),
       addIdentity: (contactId, phone) => api.communication.contacts.addIdentity(contactId, phone),
       linkIdentity: (identityId, body) => api.communication.contacts.linkIdentity(identityId, body),
@@ -469,6 +489,7 @@ export function useCommunicationContactDetail() {
     },
     canManage,
     contactId,
+    inboxId,
     sessionEpoch,
     toast: (title, color, description) => toast.add({ title, color, description }),
     download: (url, filename) => download.download(url, filename)
@@ -476,7 +497,9 @@ export function useCommunicationContactDetail() {
 
   useCommunicationProfilePictureRealtime(detail.load, (event) => {
     const identityId = Number(event.payload.identity_id)
-    return Number.isInteger(identityId)
+    const matchesInbox = inboxId.value === null || Number(event.inbox_id) === inboxId.value
+    return matchesInbox
+      && Number.isInteger(identityId)
       && Boolean(detail.contact.value?.identities?.some(identity => identity.id === identityId))
   })
 
@@ -488,6 +511,7 @@ export function useCommunicationContactDetail() {
   return {
     ...detail,
     canManage,
-    contactId
+    contactId,
+    inboxId
   }
 }

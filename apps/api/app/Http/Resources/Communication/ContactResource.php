@@ -14,6 +14,8 @@ final class ContactResource extends JsonResource
     {
         $phonePresenter = app(IdentityPhonePresenter::class);
         $actor = $request->user();
+        $attributes = $this->resource->getAttributes();
+        $hasInboxDisplay = array_key_exists('display_name', $attributes);
         $rawProfilePictureState = $this->resource->profile_picture_state ?? null;
         $profilePictureState = $rawProfilePictureState instanceof ProfilePictureState
             ? $rawProfilePictureState->value
@@ -24,6 +26,13 @@ final class ContactResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
+            'display_name' => $this->when($hasInboxDisplay, $attributes['display_name'] ?? null),
+            'display_name_source' => $this->when($hasInboxDisplay, $attributes['display_name_source'] ?? null),
+            'display_name_state' => $this->when($hasInboxDisplay, $attributes['display_name_state'] ?? null),
+            'display_name_inbox_id' => $this->when(
+                $hasInboxDisplay,
+                isset($attributes['display_name_inbox_id']) ? (int) $attributes['display_name_inbox_id'] : null,
+            ),
             'is_provisional' => (bool) $this->is_provisional,
             'is_active' => (bool) $this->is_active,
             'profile_picture_url' => $this->resource->profile_picture_url
@@ -35,6 +44,10 @@ final class ContactResource extends JsonResource
                     ], false)
                     : null),
             'profile_picture_state' => $profilePictureState,
+            'profile_picture_inbox_id' => $this->when(
+                $hasInboxDisplay,
+                isset($attributes['profile_picture_inbox_id']) ? (int) $attributes['profile_picture_inbox_id'] : null,
+            ),
             'identities' => $this->whenLoaded('identities', fn () => $this->identities->map(fn ($identity) => [
                 'id' => $identity->id,
                 'channel' => $identity->channel?->value ?? $identity->channel,

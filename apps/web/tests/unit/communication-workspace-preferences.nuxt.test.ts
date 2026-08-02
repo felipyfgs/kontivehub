@@ -12,10 +12,21 @@ describe('preferências da lista de conversas', () => {
     const sessionEpoch = ref(1)
     const preferencesGet = vi.fn().mockRejectedValueOnce(new Error('ausente'))
     const preferencesUpdate = vi.fn().mockRejectedValue(new Error('offline'))
-    const conversationsList = vi.fn().mockResolvedValue({
+    const conversationsList = vi.fn().mockImplementation((params?: { unread?: boolean }) => Promise.resolve({
       data: [],
-      meta: { current_page: 1, last_page: 1, per_page: 50, total: 0 }
-    })
+      meta: {
+        current_page: 1,
+        last_page: 1,
+        per_page: 50,
+        total: 0,
+        ...(params?.unread
+          ? {
+              snapshot_token: 'snapshot-preferences',
+              snapshot_expires_at: '2026-08-02T20:00:00Z'
+            }
+          : {})
+      }
+    }))
     const addToast = vi.fn()
     const realtime = {
       enabled: false,
@@ -96,21 +107,80 @@ describe('preferências da lista de conversas', () => {
     await new Promise(resolve => setTimeout(resolve, 500))
     expect(preferencesUpdate).not.toHaveBeenCalled()
 
-    preferencesGet.mockResolvedValueOnce({
+    preferencesGet.mockResolvedValue({
       data: { status: 'OPEN', sort_by: 'last_activity_desc' }
     })
     sessionEpoch.value += 1
     await vi.waitFor(() => expect(preferencesGet).toHaveBeenCalledTimes(2))
-    await vi.waitFor(() => expect(workspace.initialized.value).toBe(true))
+    await vi.waitFor(() => {
+      expect(workspace.initialized.value).toBe(true)
+      expect(workspace.statusFilter.value).toBe('OPEN')
+      expect(workspace.sortBy.value).toBe('last_activity_desc')
+    })
 
-    workspace.statusFilter.value = 'PENDING'
-    workspace.sortBy.value = 'priority_desc'
-    await vi.waitFor(() => expect(preferencesUpdate).toHaveBeenCalledWith({
+    preferencesUpdate.mockClear()
+    workspace.statusFilter.value = 'RESOLVED'
+    workspace.sortBy.value = 'created_desc'
+    await new Promise(resolve => setTimeout(resolve, 50))
+    sessionEpoch.value += 1
+    await vi.waitFor(() => expect(preferencesGet).toHaveBeenCalledTimes(3))
+    await vi.waitFor(() => {
+      expect(workspace.initialized.value).toBe(true)
+      expect(workspace.statusFilter.value).toBe('OPEN')
+      expect(workspace.sortBy.value).toBe('last_activity_desc')
+    })
+    await new Promise(resolve => setTimeout(resolve, 500))
+    expect(preferencesUpdate).not.toHaveBeenCalled()
+
+    workspace.search.value = 'texto transitório'
+    workspace.contactIdFilter.value = 42
+    workspace.inboxFilter.value = 7
+    await vi.waitFor(() => expect(conversationsList).toHaveBeenCalled())
+    conversationsList.mockClear()
+    preferencesUpdate.mockClear()
+
+    workspace.statusFilter.value = 'RESOLVED'
+    workspace.sortBy.value = 'created_desc'
+    await new Promise(resolve => setTimeout(resolve, 50))
+
+    await workspace.applyConversationSavedView({
       status: 'PENDING',
+      sort_by: 'priority_desc',
+      work_department_id: 3,
+      label_ids: [9],
+      unread: true
+    })
+    await vi.waitFor(() => expect(conversationsList).toHaveBeenCalledTimes(1), { timeout: 1_000 })
+    expect(conversationsList.mock.calls.at(-1)?.[0]).toEqual(expect.objectContaining({
+      q: undefined,
+      inbox_id: undefined,
+      status: 'PENDING',
+      work_department_id: 3,
+      unread: true,
+      label_ids: [9],
+      contact_id: undefined,
       sort_by: 'priority_desc'
     }))
+    expect(workspace.search.value).toBe('')
+    expect(workspace.contactIdFilter.value).toBeNull()
+    expect(workspace.inboxFilter.value).toBeNull()
+    expect(workspace.assigneeFilter.value).toBeNull()
+    expect(workspace.departmentFilter.value).toBe(3)
+    expect(workspace.labelIdsFilter.value).toEqual([9])
+    expect(workspace.unreadOnly.value).toBe(true)
     expect(workspace.statusFilter.value).toBe('PENDING')
     expect(workspace.sortBy.value).toBe('priority_desc')
+    await new Promise(resolve => setTimeout(resolve, 500))
+    expect(preferencesUpdate).not.toHaveBeenCalled()
+
+    workspace.statusFilter.value = 'RESOLVED'
+    workspace.sortBy.value = 'created_desc'
+    await vi.waitFor(() => expect(preferencesUpdate).toHaveBeenCalledWith({
+      status: 'RESOLVED',
+      sort_by: 'created_desc'
+    }))
+    expect(workspace.statusFilter.value).toBe('RESOLVED')
+    expect(workspace.sortBy.value).toBe('created_desc')
     expect(addToast).toHaveBeenCalledWith(expect.objectContaining({
       description: 'Os filtros da sessão permanecem; a preferência não foi persistida.',
       color: 'error'

@@ -17,15 +17,15 @@ class SavedListFilterPolicy
 {
     use AuthorizesTenantPermission;
 
-    public function viewAny(User $user): bool
+    public function viewAny(User $user, string $surface): bool
     {
-        return $this->allows($user, TenantPermission::ClientsView);
+        return $this->allows($user, $this->permissionFor($surface));
     }
 
     public function view(User $user, SavedListFilter $filter): bool
     {
         if (! $this->sameTenant($user, $filter)
-            || ! $this->allows($user, TenantPermission::ClientsView, $filter)) {
+            || ! $this->allows($user, $this->permissionFor($filter->surface), $filter)) {
             return false;
         }
 
@@ -36,9 +36,9 @@ class SavedListFilterPolicy
         return (int) $filter->user_id === (int) $user->id;
     }
 
-    public function create(User $user): bool
+    public function create(User $user, string $surface): bool
     {
-        return $this->allows($user, TenantPermission::ClientsView);
+        return $this->allows($user, $this->permissionFor($surface));
     }
 
     public function shareTenant(User $user): bool
@@ -49,7 +49,7 @@ class SavedListFilterPolicy
     public function update(User $user, SavedListFilter $filter): bool
     {
         if (! $this->sameTenant($user, $filter)
-            || ! $this->allows($user, TenantPermission::ClientsView, $filter)) {
+            || ! $this->allows($user, $this->permissionFor($filter->surface), $filter)) {
             return false;
         }
 
@@ -64,5 +64,12 @@ class SavedListFilterPolicy
     public function delete(User $user, SavedListFilter $filter): bool
     {
         return $this->update($user, $filter);
+    }
+
+    private function permissionFor(string $surface): TenantPermission
+    {
+        return $surface === SavedListFilter::SURFACE_COMMUNICATION_CONVERSATIONS
+            ? TenantPermission::CommunicationView
+            : TenantPermission::ClientsView;
     }
 }

@@ -27,6 +27,12 @@ final class InboxIdentityProfileMerger
         'business_name', 'push_name', 'picture_id', 'about',
     ];
 
+    /** @var list<string> */
+    private const PRESENTATION_FIELDS = [
+        'address_book_first_name', 'address_book_full_name', 'verified_name',
+        'business_name', 'push_name',
+    ];
+
     /**
      * @param  array<string, mixed>  $fields  Partial provider payload. Missing keys are preserved.
      * @param  list<string>  $clearedFields  Explicit removals from the provider.
@@ -98,6 +104,7 @@ final class InboxIdentityProfileMerger
             }
             $profile->field_versions = $versions;
             $profile->cleared_fields = array_values(array_keys($cleared));
+            $presentationChangedFields = $this->presentationChangedFields($profile);
             if ($pictureChanged) {
                 $abandonedObjectId = $profile->profile_picture_object_id;
                 $profile->profile_picture_state = $profile->picture_id === null ? ProfilePictureState::Unavailable : ProfilePictureState::Pending;
@@ -112,6 +119,9 @@ final class InboxIdentityProfileMerger
                 $profile->profile_picture_retry_at = null;
             }
             $profile->save();
+            if ($presentationChangedFields !== []) {
+                $this->recordProfileUpdate($profile, $presentationChangedFields);
+            }
             if ($pictureChanged) {
                 $this->recordPictureUpdate($profile);
             }
@@ -234,7 +244,11 @@ final class InboxIdentityProfileMerger
                     $target->profile_picture_retry_at = null;
                     $target->profile_picture_version = (int) $target->profile_picture_version + 1;
                 }
+                $presentationChangedFields = $this->presentationChangedFields($target);
                 $target->save();
+                if ($presentationChangedFields !== []) {
+                    $this->recordProfileUpdate($target, $presentationChangedFields);
+                }
                 if ($sourceWinsPicture) {
                     $this->recordPictureUpdate($target);
                 }
@@ -267,6 +281,33 @@ final class InboxIdentityProfileMerger
             ],
             (int) $profile->inbox_id,
         );
+    }
+
+    /** @param list<string> $changedFields */
+    private function recordProfileUpdate(
+        CommunicationInboxIdentityProfile $profile,
+        array $changedFields,
+    ): void {
+        $this->events->record(
+            (int) $profile->tenant_id,
+            'contact.profile.updated',
+            [
+                'inbox_id' => (int) $profile->inbox_id,
+                'identity_id' => (int) $profile->identity_id,
+                'changed_fields' => $changedFields,
+            ],
+            (int) $profile->inbox_id,
+        );
+    }
+
+    /** @return list<string> */
+    private function presentationChangedFields(
+        CommunicationInboxIdentityProfile $profile,
+    ): array {
+        return array_values(array_filter(
+            self::PRESENTATION_FIELDS,
+            static fn (string $field): bool => $profile->isDirty($field),
+        ));
     }
 
     /** @param array<string, mixed>|mixed $current */

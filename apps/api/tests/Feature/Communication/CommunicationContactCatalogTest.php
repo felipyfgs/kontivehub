@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Communication;
 
+use App\Enums\Communication\ConversationStatus;
+use App\Enums\Communication\InboxStatus;
 use App\Enums\CommunicationChannel;
 use App\Enums\SubscriptionStatus;
 use App\Enums\TenantPermission;
@@ -10,8 +12,11 @@ use App\Events\CommunicationEventCommitted;
 use App\Models\Client;
 use App\Models\ClientContact;
 use App\Models\CommunicationContact;
+use App\Models\CommunicationConversation;
 use App\Models\CommunicationIdentity;
 use App\Models\CommunicationIdentityLink;
+use App\Models\CommunicationInbox;
+use App\Models\CommunicationInboxIdentityProfile;
 use App\Models\Tenant;
 use App\Models\TenantMembership;
 use App\Models\TenantPermissionProfile;
@@ -21,6 +26,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -157,6 +163,120 @@ final class CommunicationContactCatalogTest extends TestCase
                     'total' => 2,
                 ],
             ]);
+    }
+
+    public function test_inbox_context_resolves_filters_searches_and_sorts_names_without_cross_inbox_leak(): void
+    {
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $foreignTenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $firstInbox = $this->inbox($tenant, 'Primeira');
+        $secondInbox = $this->inbox($tenant, 'Segunda');
+        $foreignInbox = $this->inbox($foreignTenant, 'Estrangeira');
+
+        $first = $this->contact($tenant, null, provisional: true, active: true);
+        $firstIdentity = $this->identity($tenant, $first, '+5511999900201');
+        $this->conversation($tenant, $firstInbox, $firstIdentity, now()->subMinute());
+        $this->conversation($tenant, $secondInbox, $firstIdentity, now());
+        CommunicationInboxIdentityProfile::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'inbox_id' => $firstInbox->id,
+            'identity_id' => $firstIdentity->id,
+            'business_name' => 'Empresa da primeira inbox',
+        ]);
+        CommunicationInboxIdentityProfile::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'inbox_id' => $secondInbox->id,
+            'identity_id' => $firstIdentity->id,
+            'address_book_full_name' => 'Agenda da segunda inbox',
+        ]);
+
+        $second = $this->contact($tenant, null, provisional: true, active: true);
+        $secondIdentity = $this->identity($tenant, $second, '+5511999900202');
+        $this->conversation($tenant, $firstInbox, $secondIdentity, now()->subSecond());
+        CommunicationInboxIdentityProfile::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'inbox_id' => $firstInbox->id,
+            'identity_id' => $secondIdentity->id,
+            'push_name' => 'Alpha observado',
+        ]);
+
+        $outside = $this->contact($tenant, 'Sem conversa nesta inbox', provisional: false, active: true);
+        $this->identity($tenant, $outside, '+5511999900203');
+
+        $this->authenticate($admin);
+
+        $firstResponse = $this->getJson('/api/v1/communication/contacts?inbox_id='.$firstInbox->id.'&sort=name')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 2)
+            ->assertJsonPath('data.0.id', $second->id)
+            ->assertJsonPath('data.0.display_name', 'Alpha observado')
+            ->assertJsonPath('data.0.display_name_source', 'WHATSAPP_PUSH_NAME')
+            ->assertJsonPath('data.0.display_name_state', 'OBSERVED')
+            ->assertJsonPath('data.0.display_name_inbox_id', $firstInbox->id)
+            ->assertJsonPath('data.1.id', $first->id)
+            ->assertJsonPath('data.1.display_name', 'Empresa da primeira inbox')
+            ->assertJsonPath('data.1.display_name_source', 'WHATSAPP_BUSINESS');
+        $this->assertNotContains($outside->id, $firstResponse->json('data.*.id'));
+
+        $this->getJson('/api/v1/communication/contacts?inbox_id='.$firstInbox->id.'&q=empresa%20da%20primeira')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.id', $first->id);
+        $this->postJson('/api/v1/communication/contacts/search', [
+            'q' => '+5511999900201',
+            'inbox_id' => $firstInbox->id,
+        ])->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.id', $first->id);
+
+        $this->getJson('/api/v1/communication/contacts?inbox_id='.$secondInbox->id)
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.id', $first->id)
+            ->assertJsonPath('data.0.display_name', 'Agenda da segunda inbox')
+            ->assertJsonPath('data.0.display_name_source', 'WHATSAPP_ADDRESS_BOOK')
+            ->assertJsonPath('data.0.profile_picture_inbox_id', $secondInbox->id);
+
+        $this->getJson('/api/v1/communication/contacts/'.$first->id.'?inbox_id='.$firstInbox->id)
+            ->assertOk()
+            ->assertJsonPath('data.display_name', 'Empresa da primeira inbox')
+            ->assertJsonPath('data.display_name_inbox_id', $firstInbox->id);
+
+        $first->forceFill(['name' => 'Nome manual', 'is_provisional' => false])->save();
+        $this->getJson('/api/v1/communication/contacts?inbox_id='.$firstInbox->id)
+            ->assertOk()
+            ->assertJsonPath('data.1.display_name', 'Nome manual')
+            ->assertJsonPath('data.1.display_name_source', 'MANUAL_CONTACT')
+            ->assertJsonPath('data.1.display_name_state', 'CURATED');
+
+        $this->getJson('/api/v1/communication/contacts?inbox_id='.$foreignInbox->id)
+            ->assertOk()
+            ->assertJsonPath('meta.total', 0)
+            ->assertJsonCount(0, 'data');
+        $this->getJson('/api/v1/communication/contacts/'.$first->id.'?inbox_id='.$foreignInbox->id)
+            ->assertNotFound();
+    }
+
+    public function test_inbox_context_uses_the_canonical_provisional_fallback(): void
+    {
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $inbox = $this->inbox($tenant, 'Fallback');
+        $contact = $this->contact($tenant, null, provisional: true, active: true);
+        $identity = $this->identity($tenant, $contact, '+5511999900299');
+        $identity->forceFill(['address_masked' => ''])->save();
+        $this->conversation($tenant, $inbox, $identity, now());
+
+        $this->authenticate($admin);
+
+        $this->getJson('/api/v1/communication/contacts?inbox_id='.$inbox->id)
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.id', $contact->id)
+            ->assertJsonPath('data.0.display_name', 'Provisório #'.$contact->id)
+            ->assertJsonPath('data.0.display_name_source', 'OPAQUE_ID')
+            ->assertJsonPath('data.0.display_name_state', 'FALLBACK');
     }
 
     public function test_contact_reads_and_mutations_follow_merge_redirect(): void
@@ -457,6 +577,32 @@ final class CommunicationContactCatalogTest extends TestCase
             'address_hash' => hash('sha256', $address),
             'address_masked' => substr($address, 0, min(3, strlen($address))).'•••••'.substr($address, -4),
             'is_active' => true,
+        ]);
+    }
+
+    private function inbox(Tenant $tenant, string $name): CommunicationInbox
+    {
+        return CommunicationInbox::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'name' => $name,
+            'session_id' => 'session-'.Str::lower((string) Str::ulid()),
+            'status' => InboxStatus::Connected,
+            'is_enabled' => true,
+        ]);
+    }
+
+    private function conversation(
+        Tenant $tenant,
+        CommunicationInbox $inbox,
+        CommunicationIdentity $identity,
+        mixed $lastMessageAt,
+    ): CommunicationConversation {
+        return CommunicationConversation::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'inbox_id' => $inbox->id,
+            'identity_id' => $identity->id,
+            'status' => ConversationStatus::Open,
+            'last_message_at' => $lastMessageAt,
         ]);
     }
 }

@@ -37,6 +37,8 @@ export interface ConversationFilters {
   sort_by?: ConversationSortBy
   page?: number
   per_page?: number
+  snapshot?: boolean
+  snapshot_token?: string
 }
 
 export interface BulkOperationCreateBody {
@@ -114,7 +116,10 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
               : { query: params }
           )
         },
-        get: (id: number) => client<{ data: Contact }>(`${base}/contacts/${id}`),
+        get: (id: number, inboxId?: number) => client<{ data: Contact }>(
+          `${base}/contacts/${id}`,
+          inboxId ? { query: { inbox_id: inboxId } } : undefined
+        ),
         create: (body: {
           name?: string | null
           phone: string

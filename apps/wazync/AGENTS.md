@@ -6,14 +6,15 @@ Deltas locais. Raiz: `/AGENTS.md`. ADR: `openspec/adr/0001-separar-atendimento-l
 
 Go 1.25, WhatsMeow. Sessões/pareamento/spool. Atendimento de negócio permanece na API Laravel.
 
-## Agente preferido
+## Agentes preferidos
 
-`wazync`. Mudanças de contrato com API → orquestrar também `laravel_api`.
+Exploração: `explorer`; implementação: `worker`; review: `reviewer`. Mudanças
+críticas de contrato com API → escalar para `expert`.
 
 ## Gates
 
 ```bash
-make wazync-test
+make verify-wazync
 # equivalente: go test ./... && go vet ./... (via Docker no Make)
 ```
 

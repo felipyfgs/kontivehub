@@ -111,6 +111,7 @@ const {
   saveError,
   manageError,
   actingId,
+  unavailableReason,
   onSavedMenuOpen,
   applyPreset,
   onSaveConfirm,
@@ -208,6 +209,7 @@ const compactLabelUi = COMPACT_BUTTON_LABEL_UI
             <DataTableFilterSavedFiltersMenu
               :items="presets"
               :loading="presetsLoading"
+              :unavailable-reason="unavailableReason"
               @apply="applyPreset"
               @manage="openManage"
               @open="onSavedMenuOpen"
@@ -268,6 +270,7 @@ const compactLabelUi = COMPACT_BUTTON_LABEL_UI
       :loading="presetsLoading"
       :acting-id="actingId"
       :error="manageError"
+      :unavailable-reason="unavailableReason"
       @rename="onRename"
       @toggle-share="onToggleShare"
       @delete="onDeletePreset"

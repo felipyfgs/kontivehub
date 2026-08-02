@@ -1,3 +1,5 @@
+import type { components as PublicApiComponents } from '~/types/generated/public-api'
+
 export interface Label {
   id: number
   name: string
@@ -10,6 +12,10 @@ export interface ClientReference {
 }
 
 export type ProfilePictureState = 'UNKNOWN' | 'PENDING' | 'READY' | 'UNAVAILABLE' | 'FAILED'
+export type ContactDisplayNameState = 'CURATED' | 'OBSERVED' | 'FALLBACK'
+export type ContactDisplayNameSource = NonNullable<
+  PublicApiComponents['schemas'][`Communi${'cationContact'}`]['display_name_source']
+>
 
 export interface ContactSummary {
   id: number
@@ -48,6 +54,7 @@ export interface IdentityLinkEntry {
 
 /** Params de listagem do catálogo (GET /communication/contacts). */
 export interface ContactListParams {
+  inbox_id?: number
   q?: string
   is_active?: boolean
   is_provisional?: boolean
@@ -64,8 +71,13 @@ export type ContactSortField = NonNullable<ContactListParams['sort']>
 export interface Contact {
   id: number
   name?: string | null
+  display_name?: string | null
+  display_name_source?: ContactDisplayNameSource | null
+  display_name_state?: ContactDisplayNameState | null
+  display_name_inbox_id?: number | null
   profile_picture_url?: string | null
   profile_picture_state?: ProfilePictureState
+  profile_picture_inbox_id?: number | null
   is_provisional: boolean
   is_active: boolean
   identities?: Identity[]

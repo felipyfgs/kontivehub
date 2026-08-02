@@ -19,6 +19,7 @@ import type { MeIdentity } from '~/utils/permissions'
 import { canUseAssistant } from '~/utils/assistant'
 import { clearSurfaceNavigationState } from '~/composables/useSurfaceNavigationState'
 import { EXPORT_CREATE_PATH } from '~/utils/export-routes'
+import { createDashboardContextualCommandRegistry } from '~/utils/dashboard-contextual-command-registry'
 
 const _useDashboard = () => {
   const route = useRoute()
@@ -31,6 +32,7 @@ const _useDashboard = () => {
   /** Incrementado a cada "Novo cliente" global — força modo create na lista. */
   const clientFormCreateNonce = ref(0)
   const sessionEpoch = ref(0)
+  const contextualCommands = createDashboardContextualCommandRegistry()
 
   const me = computed(() => unwrapMeUser(user.value as MeIdentity))
   const assistantAvailable = computed(() => canUseAssistant(me.value))
@@ -159,6 +161,10 @@ const _useDashboard = () => {
     }
   )
 
+  watch(sessionEpoch, () => {
+    contextualCommands.clear()
+  })
+
   return {
     assistantAvailable,
     bumpSessionEpoch,
@@ -183,9 +189,11 @@ const _useDashboard = () => {
     isNotificationsSlideoverOpen,
     isPlatformPrivileged,
     me,
+    contextualCommandGroups: contextualCommands.groups,
     openAssistantSlideover,
     openClientCreate,
     openExportCreate,
+    registerContextualCommandGroups: contextualCommands.register,
     sessionEpoch,
     toggleAssistantSlideover
   }

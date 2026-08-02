@@ -3,7 +3,10 @@
 namespace App\Services\Communication\Conversation;
 
 use App\DTO\Communication\ConversationFiltersData;
+use App\DTO\Communication\ConversationListPageData;
+use App\DTO\Communication\ConversationListSnapshotData;
 use App\Enums\Communication\ConversationListSort;
+use App\Exceptions\CommunicationConversationListSnapshotApiException;
 use App\Models\CommunicationContact;
 use App\Models\CommunicationConversation;
 use App\Models\CommunicationLabel;
@@ -14,6 +17,7 @@ use App\Services\Communication\ConversationCanonicalizer;
 use App\Support\CurrentTenant;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Pagination\LengthAwarePaginator as EloquentLengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
 final readonly class ConversationQuery
@@ -21,21 +25,164 @@ final readonly class ConversationQuery
     public function __construct(
         private Access $access,
         private ConversationCanonicalizer $canonicalizer,
+        private ConversationListSnapshotStore $snapshots,
         private CurrentTenant $currentTenant,
     ) {}
 
-    /** @return LengthAwarePaginator<int, CommunicationConversation> */
     public function paginate(
         User $actor,
         ConversationFiltersData $filters,
-    ): LengthAwarePaginator {
+    ): ConversationListPageData {
         $inboxIds = $this->access->visibleInboxIds($actor);
-        $query = $this->withUnreadProjection(CommunicationConversation::query())
+
+        if ($filters->createSnapshot) {
+            $snapshot = $this->snapshots->create(
+                actor: $actor,
+                filters: $filters,
+                visibleInboxIds: $inboxIds,
+                conversationIds: $this->captureIds($filters, $inboxIds),
+            );
+
+            return $this->snapshotPage($snapshot, $filters, $inboxIds);
+        }
+        if ($filters->snapshotToken !== null) {
+            $snapshot = $this->snapshots->read(
+                token: $filters->snapshotToken,
+                actor: $actor,
+                filters: $filters,
+                visibleInboxIds: $inboxIds,
+            );
+
+            return $this->snapshotPage($snapshot, $filters, $inboxIds);
+        }
+
+        return new ConversationListPageData(
+            paginator: $this->filteredQuery($filters, $inboxIds)->paginate(
+                perPage: $filters->perPage,
+                page: $filters->page,
+            ),
+        );
+    }
+
+    /**
+     * @param  list<int>  $inboxIds
+     * @return list<int>
+     */
+    private function captureIds(ConversationFiltersData $filters, array $inboxIds): array
+    {
+        $table = (new CommunicationConversation)->getTable();
+
+        return $this->filteredQuery($filters, $inboxIds, false)
+            ->limit($this->snapshots->maximumConversationIds() + 1)
+            ->pluck("{$table}.id")
+            ->map(static fn ($id): int => (int) $id)
+            ->all();
+    }
+
+    /**
+     * @param  list<int>  $inboxIds
+     */
+    private function snapshotPage(
+        ConversationListSnapshotData $snapshot,
+        ConversationFiltersData $filters,
+        array $inboxIds,
+    ): ConversationListPageData {
+        $offset = ($filters->page - 1) * $filters->perPage;
+        $pageIds = array_slice($snapshot->conversationIds, $offset, $filters->perPage);
+        $items = collect();
+        $tenantId = $this->currentTenant->id();
+        if ($tenantId === null) {
+            throw CommunicationConversationListSnapshotApiException::expired();
+        }
+
+        $authorizedCount = CommunicationConversation::query()
+            ->where('tenant_id', $tenantId)
+            ->whereIn('inbox_id', $inboxIds)
+            ->whereIn('id', $snapshot->conversationIds)
+            ->whereNull('merged_into_conversation_id')
+            ->count();
+        if ($authorizedCount !== count($snapshot->conversationIds)) {
+            throw CommunicationConversationListSnapshotApiException::expired();
+        }
+
+        if ($pageIds !== []) {
+            $byId = $this->workspaceQuery($inboxIds)
+                ->where('tenant_id', $tenantId)
+                ->whereIn('id', $pageIds)
+                ->get()
+                ->keyBy(static fn (CommunicationConversation $conversation): int => (int) $conversation->id);
+
+            if ($byId->count() !== count($pageIds)) {
+                throw CommunicationConversationListSnapshotApiException::expired();
+            }
+
+            $items = collect($pageIds)->map(
+                static fn (int $id): CommunicationConversation => $byId->get($id),
+            );
+        }
+
+        /** @var LengthAwarePaginator<int, CommunicationConversation> $paginator */
+        $paginator = new EloquentLengthAwarePaginator(
+            items: $items,
+            total: count($snapshot->conversationIds),
+            perPage: $filters->perPage,
+            currentPage: $filters->page,
+            options: [
+                'path' => EloquentLengthAwarePaginator::resolveCurrentPath(),
+                'pageName' => 'page',
+            ],
+        );
+
+        return new ConversationListPageData(
+            paginator: $paginator,
+            snapshotToken: $snapshot->token,
+            snapshotExpiresAt: $snapshot->expiresAt,
+        );
+    }
+
+    /**
+     * @param  list<int>  $inboxIds
+     * @return Builder<CommunicationConversation>
+     */
+    private function filteredQuery(
+        ConversationFiltersData $filters,
+        array $inboxIds,
+        bool $withWorkspaceProjection = true,
+    ): Builder {
+        $query = $withWorkspaceProjection
+            ? $this->workspaceQuery($inboxIds)
+            : CommunicationConversation::query()
+                ->whereIn('inbox_id', $inboxIds)
+                ->whereNull('merged_into_conversation_id');
+
+        $this->applyFilters($query, $filters, $inboxIds);
+        $this->applySort($query, $filters->sortBy);
+
+        return $query;
+    }
+
+    /**
+     * @param  list<int>  $inboxIds
+     * @return Builder<CommunicationConversation>
+     */
+    private function workspaceQuery(array $inboxIds): Builder
+    {
+        return $this->withUnreadProjection(CommunicationConversation::query())
             ->whereIn('inbox_id', $inboxIds)
             ->whereNull('merged_into_conversation_id')
             ->with($this->workspaceRelations())
             ->withCount('messages');
+    }
 
+    /**
+     * @param  Builder<CommunicationConversation>  $query
+     * @param  list<int>  $inboxIds
+     */
+    private function applyFilters(
+        Builder $query,
+        ConversationFiltersData $filters,
+        array $inboxIds,
+    ): void {
         if ($filters->inboxId !== null) {
             $query->where('inbox_id', $filters->inboxId);
         }
@@ -63,13 +210,6 @@ final readonly class ConversationQuery
         if ($filters->labelIds !== []) {
             $this->applyLabelFilter($query, $filters->labelIds);
         }
-
-        $this->applySort($query, $filters->sortBy);
-
-        return $query->paginate(
-            perPage: $filters->perPage,
-            page: $filters->page,
-        );
     }
 
     /** @param Builder<CommunicationConversation> $query */

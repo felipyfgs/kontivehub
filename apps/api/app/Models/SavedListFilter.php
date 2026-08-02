@@ -31,6 +31,8 @@ class SavedListFilter extends Model
 
     public const SCHEMA_VERSION = 1;
 
+    public const SURFACE_COMMUNICATION_CONVERSATIONS = 'communication.conversations';
+
     /** @var list<string> */
     public const SURFACES = [
         'monitoring.simples_mei',
@@ -48,6 +50,7 @@ class SavedListFilter extends Model
         'work.queue',
         'work.processes',
         'closing.list',
+        self::SURFACE_COMMUNICATION_CONVERSATIONS,
     ];
 
     protected function casts(): array

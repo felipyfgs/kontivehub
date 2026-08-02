@@ -41,6 +41,7 @@ final class ListContactsRequest extends TenantScopedRequest
             'include_inactive' => ['sometimes', 'boolean'],
             'is_provisional' => ['sometimes', 'boolean'],
             'linked' => ['sometimes', 'boolean'],
+            'inbox_id' => ['sometimes', 'integer', 'min:1'],
             'sort' => ['sometimes', 'string', 'max:40'],
             'sort_direction' => ['sometimes', 'string', 'max:8'],
             'per_page' => ['sometimes', 'integer', 'between:1,100'],
@@ -71,6 +72,7 @@ final class ListContactsRequest extends TenantScopedRequest
                 : 'asc',
             perPage: (int) ($validated['per_page'] ?? 30),
             page: (int) ($validated['page'] ?? 1),
+            inboxId: isset($validated['inbox_id']) ? (int) $validated['inbox_id'] : null,
         );
     }
 }

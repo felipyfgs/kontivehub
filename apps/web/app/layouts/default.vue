@@ -29,7 +29,12 @@ import {
  */
 const route = useRoute()
 const open = ref(false)
-const { me, openClientCreate, openExportCreate } = useDashboard()
+const {
+  contextualCommandGroups,
+  me,
+  openClientCreate,
+  openExportCreate
+} = useDashboard()
 
 const closeSidebar = () => {
   open.value = false
@@ -105,7 +110,7 @@ const groups = computed(() => {
           ? openExportCreate
           : undefined
     }))
-  }]
+  }, ...contextualCommandGroups.value]
 })
 </script>
 
@@ -158,7 +163,10 @@ const groups = computed(() => {
       </template>
     </UDashboardSidebar>
 
-    <UDashboardSearch :groups="groups" />
+    <UDashboardSearch
+      :groups="groups"
+      :ui="{ modal: 'dashboard-search-layer' }"
+    />
 
     <slot />
 

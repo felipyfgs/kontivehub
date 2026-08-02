@@ -124,10 +124,10 @@ const disappearingItems = [[
     :id="`communication-context-${conversation.id}`"
     data-testid="communication-context-panel"
     class="min-w-0"
-    :default-size="24"
-    :min-size="20"
-    :max-size="32"
-    resizable
+    :default-size="mobile ? undefined : 24"
+    :min-size="mobile ? undefined : 20"
+    :max-size="mobile ? undefined : 32"
+    :resizable="!mobile"
   >
     <UDashboardNavbar
       title="Contexto"
@@ -274,6 +274,16 @@ const disappearingItems = [[
       </section>
 
       <USeparator class="my-5" />
+
+      <CommunicationContactsConversationHistory
+        v-if="conversation.contact?.id"
+        compact
+        :contact-id="conversation.contact.id"
+        :exclude-conversation-id="conversation.id"
+        :limit="3"
+      />
+
+      <USeparator v-if="conversation.contact?.id" class="my-5" />
 
       <CommunicationSharedContent
         compact

@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type { ContactSortField } from '~/types/communication/contacts'
+import type { Inbox } from '~/types/communication/inboxes'
 import type { DataTableFilterDefinition, DataTableFilterModel } from '~/types/data-table-filter'
 
 const props = defineProps<{
   q: string
+  inboxId: number | null
+  inboxes: readonly Inbox[]
+  inboxesLoading: boolean
+  inboxesError: string | null
   definitions: readonly DataTableFilterDefinition[]
   models: readonly DataTableFilterModel[]
   loading: boolean
@@ -16,10 +21,12 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:q': [value: string]
+  'update:inboxId': [value: number | null]
   'update:models': [models: DataTableFilterModel[]]
   'update:sorting': [sorting: { id: string, desc: boolean }[]]
   'clear': []
   'create': []
+  'retryInboxes': []
 }>()
 
 const qDraft = ref(props.q)
@@ -80,18 +87,34 @@ const sortItems = computed<DropdownMenuItem[][]>(() => [
 const moreItems = computed<DropdownMenuItem[]>(() => props.canManage
   ? [{ label: 'Novo contato', icon: 'i-lucide-user-plus', onSelect: () => emit('create') }]
   : [])
+
+const inboxItems = computed(() => {
+  const items = [
+    { label: 'Todas as inboxes', value: 0 },
+    ...props.inboxes.map(inbox => ({ label: inbox.name, value: inbox.id }))
+  ]
+  if (props.inboxId && !props.inboxes.some(inbox => inbox.id === props.inboxId)) {
+    items.push({ label: `Inbox #${props.inboxId}`, value: props.inboxId })
+  }
+  return items
+})
+
+function updateInbox(value: unknown) {
+  const parsed = Number(value)
+  emit('update:inboxId', Number.isInteger(parsed) && parsed > 0 ? parsed : null)
+}
 </script>
 
 <template>
   <div
-    class="flex w-full min-w-0 items-center gap-1.5"
+    class="flex w-full min-w-0 flex-wrap items-center gap-1.5 md:flex-nowrap"
     data-testid="communication-contacts-toolbar"
   >
     <UInput
       :model-value="qDraft"
       icon="i-lucide-search"
       placeholder="Buscar contatos"
-      class="min-w-0 flex-1 md:w-56 md:flex-none"
+      class="min-w-40 flex-[1_1_11rem] md:w-52 md:flex-none"
       size="sm"
       aria-label="Buscar contatos por nome ou telefone"
       data-testid="communication-contacts-q"
@@ -99,8 +122,33 @@ const moreItems = computed<DropdownMenuItem[]>(() => props.canManage
       @keyup.enter="submitSearch"
     />
 
+    <USelect
+      :model-value="inboxId ?? 0"
+      :items="inboxItems"
+      :loading="inboxesLoading"
+      icon="i-lucide-inbox"
+      size="sm"
+      class="min-w-40 flex-[1_1_10rem] md:w-44 md:flex-none"
+      aria-label="Filtrar contatos por inbox"
+      data-testid="communication-contacts-inbox"
+      :ui="{ trailingIcon: 'group-data-[state=open]:rotate-180 transition-transform duration-200' }"
+      @update:model-value="updateInbox"
+    />
+
+    <UTooltip v-if="inboxesError" :text="inboxesError">
+      <UButton
+        color="warning"
+        variant="ghost"
+        icon="i-lucide-triangle-alert"
+        square
+        aria-label="Recarregar inboxes"
+        data-testid="communication-contacts-inbox-retry"
+        @click="emit('retryInboxes')"
+      />
+    </UTooltip>
+
     <DataTableFilterRoot
-      class="min-w-0 flex-1 md:max-w-72"
+      class="min-w-40 flex-[1_1_10rem] md:max-w-72"
       :definitions="[...definitions]"
       :model-value="[...models]"
       :reset-key="resetKey"
@@ -136,6 +184,8 @@ const moreItems = computed<DropdownMenuItem[]>(() => props.canManage
       </UTooltip>
     </UDropdownMenu>
 
-    <span class="sr-only" role="status" aria-live="polite">{{ loading ? 'Atualizando contatos' : '' }}</span>
+    <span class="sr-only" role="status" aria-live="polite">
+      {{ loading ? 'Atualizando contatos' : (inboxesLoading ? 'Carregando inboxes' : '') }}
+    </span>
   </div>
 </template>

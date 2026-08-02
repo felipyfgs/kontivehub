@@ -35,7 +35,9 @@ final readonly class ConversationListPreferenceService
 
         return [
             'status' => (string) $preference->status,
-            'sort_by' => $preference->sort_by->value,
+            'sort_by' => $preference->sort_by instanceof ConversationListSort
+                ? $preference->sort_by->value
+                : ConversationListSort::defaultPreference()->value,
             'is_default' => false,
         ];
     }

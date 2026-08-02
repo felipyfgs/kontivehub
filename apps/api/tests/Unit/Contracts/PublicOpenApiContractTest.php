@@ -2,6 +2,7 @@
 
 namespace Tests\Unit\Contracts;
 
+use App\Enums\Communication\ConversationStatus;
 use App\Enums\PlatformRole;
 use App\Enums\TenantRole;
 use Illuminate\Routing\Route;
@@ -70,6 +71,23 @@ class PublicOpenApiContractTest extends TestCase
 
         $this->assertArrayHasKey('kind', $schemas['DocsSavedFilterPayload']['properties']);
         $this->assertSame(1, $schemas['SavedListFilter']['properties']['schema_version']['const']);
+        $this->assertContains(
+            'communication.conversations',
+            $schemas['SavedListSurface']['enum'],
+        );
+        $this->assertFalse($schemas['ConversationSavedViewPayload']['additionalProperties']);
+        $this->assertSame(
+            ['status', 'sort_by'],
+            $schemas['ConversationSavedViewPayload']['required'],
+        );
+        $this->assertSame(
+            ['ALL', ...array_column(ConversationStatus::cases(), 'value')],
+            $schemas['ConversationSavedViewPayload']['properties']['status']['enum'],
+        );
+        $this->assertContains(
+            '#/components/schemas/ConversationSavedViewPayload',
+            array_column($schemas['SavedListFilterPayload']['oneOf'], '$ref'),
+        );
     }
 
     public function test_communication_contact_phone_contract_is_machine_readable(): void
@@ -100,6 +118,44 @@ class PublicOpenApiContractTest extends TestCase
                 'name',
             ),
         );
+    }
+
+    public function test_communication_contact_inbox_projection_contract_is_additive(): void
+    {
+        $document = $this->document();
+        $schema = $document['components']['schemas']['CommunicationContact'];
+        $search = $document['components']['schemas']['CommunicationContactSearchBody'];
+
+        foreach ([
+            'display_name',
+            'display_name_source',
+            'display_name_state',
+            'display_name_inbox_id',
+            'profile_picture_inbox_id',
+        ] as $property) {
+            $this->assertArrayHasKey($property, $schema['properties']);
+            $this->assertNotContains($property, $schema['required']);
+        }
+        $this->assertSame(
+            ['CURATED', 'OBSERVED', 'FALLBACK', null],
+            $schema['properties']['display_name_state']['enum'],
+        );
+        $this->assertSame(1, $search['properties']['inbox_id']['minimum']);
+
+        $listParameters = collect(
+            $document['paths']['/api/v1/communication/contacts']['get']['parameters'],
+        )->keyBy('name');
+        $detailParameters = collect(
+            $document['paths']['/api/v1/communication/contacts/{contact}']['get']['parameters'],
+        )->keyBy('name');
+        $patchParameters = collect(
+            $document['paths']['/api/v1/communication/contacts/{contact}']['patch']['parameters'],
+        )->keyBy('name');
+
+        $this->assertSame('integer', $listParameters['inbox_id']['schema']['type']);
+        $this->assertSame(1, $detailParameters['inbox_id']['schema']['minimum']);
+        $this->assertFalse($listParameters['inbox_id']['required']);
+        $this->assertFalse($patchParameters->has('inbox_id'));
     }
 
     public function test_communication_profile_picture_contract_is_additive_and_private(): void
@@ -137,6 +193,39 @@ class PublicOpenApiContractTest extends TestCase
         $json = json_encode($operation, JSON_THROW_ON_ERROR);
         $this->assertStringNotContainsString('picture_id', $json);
         $this->assertStringNotContainsString('profile_picture_object_id', $json);
+    }
+
+    public function test_communication_conversation_snapshot_contract_is_additive(): void
+    {
+        $document = $this->document();
+        $operation = $document['paths']['/api/v1/communication/conversations']['get'];
+        $parameters = collect($operation['parameters'])->keyBy('name');
+
+        $this->assertSame('boolean', $parameters['snapshot']['schema']['type']);
+        $this->assertSame('string', $parameters['snapshot_token']['schema']['type']);
+        foreach (['410', '422', '503'] as $status) {
+            $this->assertSame(
+                '#/components/schemas/JsonResponse',
+                $operation['responses'][$status]['content']['application/json']['schema']['$ref'],
+            );
+        }
+
+        $meta = $document['components']['schemas']['CommunicationConversationPaginationMeta'];
+        $this->assertFalse($meta['additionalProperties']);
+        $this->assertSame(
+            ['current_page', 'last_page', 'total'],
+            $meta['required'],
+        );
+        $this->assertSame('date-time', $meta['properties']['snapshot_expires_at']['format']);
+        $this->assertArrayHasKey('snapshot_token', $meta['properties']);
+        $this->assertSame(
+            '#/components/schemas/CommunicationConversationPaginationMeta',
+            $document['components']['schemas']['CommunicationConversationCollection']['properties']['meta']['$ref'],
+        );
+        $this->assertSame(
+            '#/components/schemas/CommunicationPaginationMeta',
+            $document['components']['schemas']['CommunicationContactCollection']['properties']['meta']['$ref'],
+        );
     }
 
     public function test_communication_message_availability_is_additive_and_allowlisted(): void

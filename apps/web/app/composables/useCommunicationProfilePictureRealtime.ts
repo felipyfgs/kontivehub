@@ -1,6 +1,16 @@
 import { useDebounceFn } from '@vueuse/core'
 import type { RealtimeEvent } from '~/types/communication/realtime'
 
+const CONTACT_PROJECTION_EVENT_TYPES = new Set([
+  'contact.profile.updated',
+  'contact.profile_picture.updated',
+  'CONTACT_PROFILE_CHANGED'
+])
+
+export function isCommunicationContactProjectionEvent(event: RealtimeEvent): boolean {
+  return CONTACT_PROJECTION_EVENT_TYPES.has(event.type)
+}
+
 export function useCommunicationProfilePictureRealtime(
   refresh: () => void | Promise<void>,
   shouldRefresh: (event: RealtimeEvent) => boolean = () => true
@@ -23,7 +33,7 @@ export function useCommunicationProfilePictureRealtime(
   }
 
   function onEvent(event: RealtimeEvent): void {
-    if (event.type !== 'contact.profile_picture.updated' || !shouldRefresh(event)) return
+    if (!isCommunicationContactProjectionEvent(event) || !shouldRefresh(event)) return
     refreshDebounced()
   }
 

@@ -4,6 +4,7 @@ namespace Tests\Feature\Communication;
 
 use App\Enums\Communication\InboxStatus;
 use App\Enums\CommunicationChannel;
+use App\Jobs\Communication\ReconcileInboxIdentityProfileJob;
 use App\Models\CommunicationContact;
 use App\Models\CommunicationIdentity;
 use App\Models\CommunicationInbox;
@@ -15,6 +16,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -24,6 +26,7 @@ final class WhatsAppPeerCorrelationLockTest extends TestCase
 
     public function test_aliases_acquire_transaction_locks_in_deterministic_order(): void
     {
+        Queue::fake();
         $tenant = Tenant::factory()->create(['communication_enabled' => true]);
         $inbox = CommunicationInbox::query()->withoutGlobalScopes()->create([
             'tenant_id' => $tenant->id,
@@ -57,6 +60,12 @@ final class WhatsAppPeerCorrelationLockTest extends TestCase
         $this->assertDatabaseCount('communication_contacts', 1);
         $this->assertDatabaseCount('communication_identities', 2);
         $this->assertDatabaseCount('communication_conversations', 1);
+        Queue::assertPushedOn(
+            'communication',
+            ReconcileInboxIdentityProfileJob::class,
+            fn ($job): bool => $job->tenantId === $tenant->id
+                && $job->inboxId === $inbox->id,
+        );
     }
 
     public function test_existing_equivalence_classes_lock_every_member_in_id_order(): void

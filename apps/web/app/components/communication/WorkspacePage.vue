@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { breakpointsTailwind, useBreakpoints } from '@vueuse/core'
-import type { DropdownMenuItem } from '@nuxt/ui'
+import { breakpointsTailwind, useBreakpoints, useEventListener } from '@vueuse/core'
+import type { CommandPaletteGroup, CommandPaletteItem, DropdownMenuItem } from '@nuxt/ui'
 import type { ComposerPayload, Message } from '~/types/communication/messages'
 import type { Contact } from '~/types/communication/contacts'
 import type { Conversation, ConversationActionPayload, ConversationQuickView, ConversationStatus } from '~/types/communication/conversations'
+import type { ConversationSavedViewPayload, SavedListFilter } from '~/types/saved-list-filters'
 import { apiErrorMessage } from '~/utils/api-error'
 import {
   COMMUNICATION_REALTIME_META,
@@ -15,12 +16,23 @@ import {
   communicationContactConversationsPath,
   communicationConversationMessagePath,
   communicationConversationPath,
+  isCommunicationWorkspacePath,
   parseCommunicationContactId,
   parseCommunicationConversationId,
   parseCommunicationMessageId
 } from '~/utils/communication-routes'
 import { normalizeCommunicationConversationSortBy } from '~/utils/communication-conversation-sort'
 import { communicationQuickViewState } from '~/utils/communication-conversation-quick-views'
+import { canShareListFilters } from '~/utils/permissions'
+import {
+  asConversationSavedViewPayload,
+  buildConversationSavedViewPayload,
+  conversationSavedViewUnavailableReason as resolveConversationSavedViewUnavailableReason
+} from '~/utils/communication-conversation-saved-views'
+import { useSavedListPresets } from '~/composables/useSavedListPresets'
+import DataTableFilterSaveFilterModal from '~/components/data-table-filter/SaveFilterModal.vue'
+import DataTableFilterSavedFiltersMenu from '~/components/data-table-filter/SavedFiltersMenu.vue'
+import DataTableFilterManageSavedFiltersModal from '~/components/data-table-filter/ManageSavedFiltersModal.vue'
 
 type BulkActionMenu = {
   key: 'more' | 'read' | 'status'
@@ -31,6 +43,11 @@ type BulkActionMenu = {
 }
 
 const workspace = useCommunicationWorkspace()
+const {
+  me: dashboardMe,
+  registerContextualCommandGroups,
+  sessionEpoch
+} = useDashboard()
 const api = useApi()
 const toast = useToast()
 const download = useAuthenticatedDownload()
@@ -38,11 +55,14 @@ const route = useRoute()
 const router = useRouter()
 const breakpoints = useBreakpoints(breakpointsTailwind)
 const isMobile = breakpoints.smaller('lg')
-const usesContextSlideover = breakpoints.smaller('2xl')
+const usesContextSlideover = breakpoints.smaller('xl')
+const conversationFiltersRef = ref<{ focusSearch: () => Promise<boolean> } | null>(null)
 const conversationListRef = ref<{
   focusConversation: (conversationId: number) => Promise<boolean>
   focusList: () => Promise<boolean>
 } | null>(null)
+const timelinePanelRef = ref<{ focusComposer: () => Promise<boolean> } | null>(null)
+const mobileTimelinePanelRef = ref<{ focusComposer: () => Promise<boolean> } | null>(null)
 const administrationOpen = ref(false)
 const contextOpen = ref(false)
 const purgeOpen = ref(false)
@@ -62,6 +82,7 @@ let contactFilterRequestSequence = 0
 const routeConversationId = computed(() => parseCommunicationConversationId(route.params.id))
 const routeMessageId = computed(() => parseCommunicationMessageId(route.params.messageId))
 const routeContactId = computed(() => parseCommunicationContactId(route.params.contactId))
+const canShareSavedViews = computed(() => canShareListFilters(dashboardMe.value))
 
 const mobileConversationOpen = computed({
   get: () => isMobile.value && workspace.selectedConversation.value !== null,
@@ -137,6 +158,61 @@ const sortSelection = computed({
   }
 })
 
+const {
+  canShare: canShareConversationSavedViews,
+  presets: conversationSavedViews,
+  presetsLoading: conversationSavedViewsLoading,
+  saveOpen: conversationSavedViewSaveOpen,
+  manageOpen: conversationSavedViewManageOpen,
+  saveLoading: conversationSavedViewSaveLoading,
+  saveError: conversationSavedViewSaveError,
+  manageError: conversationSavedViewManageError,
+  actingId: conversationSavedViewActingId,
+  unavailableReason: conversationSavedViewUnavailableReasonForFilter,
+  onSavedMenuOpen: onConversationSavedViewMenuOpen,
+  applyPreset: applyConversationSavedViewPreset,
+  onSaveConfirm: onConversationSavedViewConfirm,
+  onRename: onConversationSavedViewRename,
+  onToggleShare: onConversationSavedViewToggleShare,
+  onDeletePreset: onConversationSavedViewDelete,
+  openManage: openConversationSavedViewManager,
+  openSave: openConversationSavedViewSave
+} = useSavedListPresets({
+  surface: 'communication.conversations',
+  canShare: canShareSavedViews,
+  resetKey: sessionEpoch,
+  getPayload: currentConversationSavedViewPayload,
+  canSave: () => true,
+  unavailableReason: conversationSavedViewUnavailableReason,
+  onApply: (_payload, filter) => {
+    const payload = asConversationSavedViewPayload(filter.payload)
+    if (!payload) throw new Error('Visão salva incompatível com a lista de conversas.')
+    return applySavedView(payload, filter)
+  }
+})
+
+function currentConversationSavedViewPayload(): ConversationSavedViewPayload {
+  return buildConversationSavedViewPayload({
+    status: statusSelection.value,
+    sortBy: normalizeCommunicationConversationSortBy(sortSelection.value),
+    inboxId: inboxSelection.value,
+    assigneeMembershipId: assigneeSelection.value,
+    workDepartmentId: departmentSelection.value,
+    labelIds: labelSelection.value,
+    unread: workspace.unreadOnly.value,
+    unassigned: unassignedOnlySelection.value
+  })
+}
+
+function conversationSavedViewUnavailableReason(filter: SavedListFilter): string | null {
+  return resolveConversationSavedViewUnavailableReason(filter.payload, {
+    inboxIds: workspace.inboxes.value.map(item => item.id),
+    assigneeMembershipIds: workspace.tenantMembers.value.map(item => item.id),
+    workDepartmentIds: workspace.departments.value.map(item => item.id),
+    labelIds: workspace.labels.value.map(item => item.id)
+  })
+}
+
 function applyQuickView(view: ConversationQuickView): void {
   const next = communicationQuickViewState(view)
   workspace.clearOperationalSelection()
@@ -144,6 +220,198 @@ function applyQuickView(view: ConversationQuickView): void {
   workspace.unreadOnly.value = next.unreadOnly
   workspace.unassignedOnly.value = next.unassignedOnly
   if (next.unassignedOnly) workspace.assigneeFilter.value = null
+}
+
+function reapplyUnreadSnapshot(): void {
+  void workspace.refreshUnreadSnapshot().catch(() => undefined)
+}
+
+const conversationListErrorActions = computed(() => [{
+  label: workspace.unreadSnapshotExpired.value
+    ? 'Reaplicar Não lidas'
+    : 'Tentar novamente',
+  color: 'neutral' as const,
+  variant: 'subtle' as const,
+  onClick: () => {
+    if (workspace.unreadSnapshotExpired.value) {
+      reapplyUnreadSnapshot()
+      return
+    }
+    void workspace.initialize()
+  }
+}])
+
+function adjacentConversation(delta: -1 | 1): Conversation | null {
+  const items = workspace.conversations.value
+  const current = items.findIndex(item => item.id === workspace.selectedConversationId.value)
+  if (current < 0) return null
+  return items[current + delta] ?? null
+}
+
+async function focusConversationSearch(): Promise<void> {
+  if (!workspace.canView.value) return
+  await conversationFiltersRef.value?.focusSearch()
+}
+
+async function focusConversationList(): Promise<void> {
+  if (!workspace.canView.value) return
+  const selectedId = workspace.selectedConversationId.value
+  if (selectedId !== null
+    && await conversationListRef.value?.focusConversation(selectedId)) return
+  await conversationListRef.value?.focusList()
+}
+
+async function focusConversationComposer(): Promise<void> {
+  if (!workspace.selectedConversation.value
+    || !workspace.canReply.value
+    || !workspace.outboundOperational.value) return
+  const target = isMobile.value ? mobileTimelinePanelRef.value : timelinePanelRef.value
+  await target?.focusComposer()
+}
+
+async function runAfterDashboardSearchClose(
+  action: () => void | Promise<void>
+): Promise<void> {
+  const searchDialog = document.activeElement?.closest('[role="dialog"]')
+  await nextTick()
+  if (searchDialog?.isConnected) {
+    await new Promise<void>((resolve) => {
+      let settled = false
+      const observer = new MutationObserver(() => {
+        if (!searchDialog.isConnected) finish()
+      })
+      const fallback = setTimeout(finish, 500)
+
+      function finish(): void {
+        if (settled) return
+        settled = true
+        clearTimeout(fallback)
+        observer.disconnect()
+        resolve()
+      }
+
+      observer.observe(document.body, { childList: true, subtree: true })
+    })
+  }
+  await new Promise<void>((resolve) => {
+    if (typeof requestAnimationFrame !== 'function') {
+      resolve()
+      return
+    }
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+  })
+  if (!isCommunicationWorkspacePath(route.path)) return
+  await action()
+}
+
+function command(action: () => void | Promise<void>): () => void {
+  return () => {
+    void runAfterDashboardSearchClose(action)
+  }
+}
+
+const communicationCommandGroups = computed<CommandPaletteGroup[]>(() => {
+  if (!workspace.canView.value) return []
+  const items: CommandPaletteItem[] = [{
+    id: 'communication-focus-search',
+    label: 'Focar busca de conversas',
+    icon: 'i-lucide-search',
+    onSelect: command(focusConversationSearch)
+  }, {
+    id: 'communication-focus-list',
+    label: 'Focar lista de conversas',
+    icon: 'i-lucide-list',
+    onSelect: command(focusConversationList)
+  }]
+
+  if (adjacentConversation(-1)) {
+    items.push({
+      id: 'communication-previous-conversation',
+      label: 'Selecionar conversa anterior',
+      icon: 'i-lucide-arrow-up',
+      kbds: ['↑'],
+      onSelect: command(async () => {
+        const target = adjacentConversation(-1)
+        if (target) await openConversation(target.id)
+      })
+    })
+  }
+  if (adjacentConversation(1)) {
+    items.push({
+      id: 'communication-next-conversation',
+      label: 'Selecionar próxima conversa',
+      icon: 'i-lucide-arrow-down',
+      kbds: ['↓'],
+      onSelect: command(async () => {
+        const target = adjacentConversation(1)
+        if (target) await openConversation(target.id)
+      })
+    })
+  }
+
+  if (workspace.selectedConversation.value) {
+    items.push({
+      id: 'communication-toggle-context',
+      label: contextOpen.value ? 'Fechar contexto da conversa' : 'Abrir contexto da conversa',
+      icon: contextOpen.value ? 'i-lucide-panel-right-close' : 'i-lucide-panel-right-open',
+      onSelect: command(() => {
+        if (workspace.selectedConversation.value) toggleContext()
+      })
+    })
+  }
+
+  if (workspace.selectedConversation.value
+    && workspace.canReply.value
+    && workspace.outboundOperational.value) {
+    items.push({
+      id: 'communication-focus-composer',
+      label: 'Focar resposta da conversa',
+      icon: 'i-lucide-message-square-reply',
+      onSelect: command(focusConversationComposer)
+    })
+  }
+
+  for (const view of [
+    { id: 'communication-view-open', value: 'OPEN' as const, label: 'Aplicar visão Em aberto', icon: 'i-lucide-inbox' },
+    { id: 'communication-view-unread', value: 'UNREAD' as const, label: 'Aplicar visão Não lidas', icon: 'i-lucide-mail' },
+    { id: 'communication-view-unassigned', value: 'UNASSIGNED' as const, label: 'Aplicar visão Não atribuídas', icon: 'i-lucide-user-round-x' }
+  ]) {
+    items.push({
+      id: view.id,
+      label: view.label,
+      icon: view.icon,
+      onSelect: command(() => {
+        if (workspace.canView.value) applyQuickView(view.value)
+      })
+    })
+  }
+
+  if (workspace.canReply.value && !newConversationLoading.value) {
+    items.push({
+      id: 'communication-new-conversation',
+      label: 'Iniciar nova conversa',
+      icon: 'i-lucide-message-circle-plus',
+      onSelect: command(() => openNewConversation())
+    })
+  }
+
+  return [{
+    id: 'communication-operator',
+    label: 'Atendimento',
+    items
+  }]
+})
+
+async function applySavedView(
+  payload: ConversationSavedViewPayload,
+  _filter: SavedListFilter
+): Promise<void> {
+  if (routeContactId.value !== null) {
+    await router.replace(COMMUNICATION_INDEX_PATH)
+  }
+  ++contactFilterRequestSequence
+  contactFilterName.value = null
+  await workspace.applyConversationSavedView(payload)
 }
 
 async function loadContactFilterName(): Promise<void> {
@@ -787,6 +1055,44 @@ function selectRelativeOutsideEditor(delta: number, event?: KeyboardEvent): void
   selectRelative(delta)
 }
 
+const interactionOverlaySelector = [
+  '[role="dialog"]',
+  '[role="alertdialog"]',
+  '[role="menu"]',
+  '[role="listbox"]'
+].join(',')
+
+function isInteractionOverlayEvent(event: KeyboardEvent): boolean {
+  return event.composedPath().some(target => (
+    target instanceof Element && target.matches(interactionOverlaySelector)
+  ))
+}
+
+function hasOpenInteractionOverlay(): boolean {
+  return Boolean(document.querySelector(
+    interactionOverlaySelector
+      .split(',')
+      .map(selector => `${selector}[data-state="open"]`)
+      .join(',')
+  ))
+}
+
+function handleWorkspaceEscape(event: KeyboardEvent): void {
+  if (event.key !== 'Escape'
+    || event.defaultPrevented
+    || isEditableShortcutTarget(event)
+    || isInteractionOverlayEvent(event)
+    || hasOpenInteractionOverlay()) return
+
+  if (contextOpen.value) {
+    event.preventDefault()
+    contextOpen.value = false
+  } else if (isMobile.value) {
+    event.preventDefault()
+    void clearConversationSelection()
+  }
+}
+
 defineShortcuts({
   arrowdown: {
     usingInput: false,
@@ -795,12 +1101,10 @@ defineShortcuts({
   arrowup: {
     usingInput: false,
     handler: event => selectRelativeOutsideEditor(-1, event)
-  },
-  escape: () => {
-    if (contextOpen.value) contextOpen.value = false
-    else if (isMobile.value) void clearConversationSelection()
   }
 })
+
+useEventListener(window, 'keydown', handleWorkspaceEscape)
 
 watch(
   () => [
@@ -815,6 +1119,16 @@ watch(
   },
   { immediate: true }
 )
+
+watchEffect((onCleanup) => {
+  void sessionEpoch.value
+  if (!isCommunicationWorkspacePath(route.path)) return
+  const cleanup = registerContextualCommandGroups(
+    'communication.workspace',
+    communicationCommandGroups
+  )
+  onCleanup(cleanup)
+})
 
 watch(routeContactId, (contactId) => {
   workspace.contactIdFilter.value = contactId
@@ -910,6 +1224,7 @@ onBeforeUnmount(() => {
         class="min-h-0 flex-col items-stretch justify-start gap-0 overflow-x-hidden border-b border-default px-0 sm:px-0"
       >
         <CommunicationConversationListFilters
+          ref="conversationFiltersRef"
           v-model:search="workspace.search.value"
           v-model:status="statusSelection"
           v-model:inbox-id="inboxSelection"
@@ -928,8 +1243,31 @@ onBeforeUnmount(() => {
           :label-items="labelItems"
           :selection-active="workspace.selectedConversationCount.value > 0"
           @apply-quick-view="applyQuickView"
+          @refresh-unread-snapshot="reapplyUnreadSnapshot"
           @clear-contact="clearContactFilter"
         >
+          <template #saved-views>
+            <UTooltip text="Salvar visão atual">
+              <UButton
+                icon="i-lucide-save"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                square
+                aria-label="Salvar visão atual"
+                data-testid="communication-saved-view-save"
+                @click="openConversationSavedViewSave"
+              />
+            </UTooltip>
+            <DataTableFilterSavedFiltersMenu
+              :items="conversationSavedViews"
+              :loading="conversationSavedViewsLoading"
+              :unavailable-reason="conversationSavedViewUnavailableReasonForFilter"
+              @apply="applyConversationSavedViewPreset"
+              @manage="openConversationSavedViewManager"
+              @open="onConversationSavedViewMenuOpen"
+            />
+          </template>
           <template #selection>
             <div
               class="flex h-10 w-full min-w-0 items-center gap-1 bg-elevated/30 px-2 [@media(pointer:coarse)]:h-12"
@@ -1020,15 +1358,31 @@ onBeforeUnmount(() => {
         </span>
       </UDashboardToolbar>
 
+      <DataTableFilterSaveFilterModal
+        v-model:open="conversationSavedViewSaveOpen"
+        :can-share="canShareConversationSavedViews"
+        :loading="conversationSavedViewSaveLoading"
+        :error="conversationSavedViewSaveError"
+        @confirm="onConversationSavedViewConfirm"
+      />
+
+      <DataTableFilterManageSavedFiltersModal
+        v-model:open="conversationSavedViewManageOpen"
+        :items="conversationSavedViews"
+        :can-share="canShareConversationSavedViews"
+        :loading="conversationSavedViewsLoading"
+        :acting-id="conversationSavedViewActingId"
+        :error="conversationSavedViewManageError"
+        :unavailable-reason="conversationSavedViewUnavailableReasonForFilter"
+        @rename="onConversationSavedViewRename"
+        @toggle-share="onConversationSavedViewToggleShare"
+        @delete="onConversationSavedViewDelete"
+      />
+
       <UAlert
         v-if="workspace.error.value"
         :title="workspace.error.value"
-        :actions="[{
-          label: 'Tentar novamente',
-          color: 'neutral',
-          variant: 'subtle',
-          onClick: () => workspace.initialize()
-        }]"
+        :actions="conversationListErrorActions"
         color="error"
         variant="subtle"
         class="m-3"
@@ -1077,6 +1431,7 @@ onBeforeUnmount(() => {
 
     <CommunicationTimelinePanel
       v-if="workspace.selectedConversation.value"
+      ref="timelinePanelRef"
       class="hidden lg:flex"
       :conversation="workspace.selectedConversation.value"
       :inbox="workspace.selectedInbox.value"
@@ -1114,7 +1469,7 @@ onBeforeUnmount(() => {
 
     <CommunicationContextPanel
       v-if="workspace.selectedConversation.value && contextOpen"
-      class="hidden 2xl:flex"
+      class="hidden xl:flex"
       :conversation="workspace.selectedConversation.value"
       :inbox="workspace.selectedInbox.value"
       :labels="workspace.labels.value"
@@ -1163,6 +1518,7 @@ onBeforeUnmount(() => {
         <template #content>
           <CommunicationTimelinePanel
             v-if="workspace.selectedConversation.value"
+            ref="mobileTimelinePanelRef"
             mobile
             :conversation="workspace.selectedConversation.value"
             :inbox="workspace.selectedInbox.value"

@@ -16,7 +16,8 @@ export const SAVED_LIST_SURFACES = [
   'docs.catalog',
   'work.queue',
   'work.processes',
-  'closing.list'
+  'closing.list',
+  'communication.conversations'
 ] as const
 
 export type SavedListSurface = PublicApiComponents['schemas']['SavedListSurface']
@@ -30,6 +31,7 @@ export type DocsSavedFilterPayload = PublicApiComponents['schemas']['DocsSavedFi
 export type WorkQueueSavedFilterPayload = PublicApiComponents['schemas']['WorkQueueSavedFilterPayload']
 export type WorkProcessesSavedFilterPayload = PublicApiComponents['schemas']['WorkProcessesSavedFilterPayload']
 export type ClosingSavedFilterPayload = PublicApiComponents['schemas']['ClosingSavedFilterPayload']
+export type ConversationSavedViewPayload = PublicApiComponents['schemas']['ConversationSavedViewPayload']
 export type SavedListFilterPayload = PublicApiComponents['schemas']['SavedListFilterPayload']
 export type SavedListFilter = PublicApiComponents['schemas']['SavedListFilter']
 export type CreateSavedListFilterBody = PublicApiComponents['schemas']['CreateSavedListFilterBody']

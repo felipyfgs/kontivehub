@@ -22,6 +22,7 @@ use App\Enums\TaxGuideEmissionStatus;
 use App\Enums\TaxObligationApplicability;
 use App\Enums\TenantRole;
 use App\Events\CommunicationEventCommitted;
+use App\Jobs\Communication\ReconcileInboxIdentityProfileJob;
 use App\Models\Client;
 use App\Models\ClientCommunicationDispatch;
 use App\Models\ClientCommunicationPreference;
@@ -116,6 +117,15 @@ final class FiscalCommunicationAutomationTest extends TestCase
             'inbox_id' => $inbox->id,
             'status' => CommunicationDispatchStatus::Queued->value,
         ]);
+        foreach ([$first, $second] as $identity) {
+            Queue::assertPushedOn(
+                'communication',
+                ReconcileInboxIdentityProfileJob::class,
+                fn ($job): bool => $job->tenantId === $tenant->id
+                    && $job->inboxId === $inbox->id
+                    && $job->identityId === $identity->id,
+            );
+        }
     }
 
     public function test_fake_end_to_end_runs_inbound_reply_receipt_and_automation_without_live_egress(): void

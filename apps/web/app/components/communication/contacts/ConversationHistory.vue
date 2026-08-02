@@ -7,9 +7,16 @@ import {
 } from '~/utils/communication'
 import { communicationContactConversationsPath, communicationConversationPath } from '~/utils/communication-routes'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   contactId: number
-}>()
+  compact?: boolean
+  excludeConversationId?: number | null
+  limit?: number
+}>(), {
+  compact: false,
+  excludeConversationId: null,
+  limit: 10
+})
 
 const api = useApi()
 const loading = ref(false)
@@ -18,9 +25,23 @@ const conversations = ref<Conversation[]>([])
 const inboxes = ref<Record<number, string>>({})
 let loadSequence = 0
 
+const visibleConversations = computed(() => conversations.value
+  .filter(conversation => conversation.id !== props.excludeConversationId)
+  .slice(0, Math.max(1, props.limit)))
+
+function requestLimit(): number {
+  const presentationLimit = Math.max(1, Math.min(50, props.limit))
+  return Math.min(100, presentationLimit + (props.excludeConversationId ? 1 : 0))
+}
+
+function requestIdentity(): string {
+  return `${props.contactId}:${requestLimit()}`
+}
+
 async function load() {
   const sequence = ++loadSequence
   const contactId = props.contactId
+  const identity = requestIdentity()
   loading.value = true
   error.value = null
   try {
@@ -28,22 +49,22 @@ async function load() {
       api.communication.conversations.list({
         contact_id: contactId,
         page: 1,
-        per_page: 10,
+        per_page: requestLimit(),
         sort_by: 'last_activity_desc'
       }),
       api.communication.inboxes.list()
     ])
-    if (sequence !== loadSequence || contactId !== props.contactId) return
+    if (sequence !== loadSequence || identity !== requestIdentity()) return
     if (conversationResult.status === 'rejected') throw conversationResult.reason
     conversations.value = conversationResult.value.data
     inboxes.value = inboxResult.status === 'fulfilled'
       ? Object.fromEntries(inboxResult.value.data.map(inbox => [inbox.id, inbox.name]))
       : {}
   } catch {
-    if (sequence !== loadSequence || contactId !== props.contactId) return
+    if (sequence !== loadSequence || identity !== requestIdentity()) return
     error.value = 'Não foi possível carregar as conversas deste contato.'
   } finally {
-    if (sequence === loadSequence && contactId === props.contactId) loading.value = false
+    if (sequence === loadSequence && identity === requestIdentity()) loading.value = false
   }
 }
 
@@ -54,26 +75,34 @@ function conversationStatus(status: Conversation['status']) {
   }
 }
 
-watch(() => props.contactId, () => {
+watch(() => [props.contactId, props.excludeConversationId, props.limit] as const, () => {
   void load()
 }, { immediate: true })
 </script>
 
 <template>
-  <section class="flex h-full min-h-0 flex-col" data-testid="communication-contact-conversations-tab">
+  <section
+    class="flex min-h-0 flex-col"
+    :class="compact ? null : 'h-full'"
+    :data-testid="compact
+      ? 'communication-context-conversation-history'
+      : 'communication-contact-conversations-tab'"
+  >
     <div class="mb-3 flex shrink-0 items-center justify-between gap-2">
       <div>
         <h2 class="font-medium text-highlighted">
-          Conversas recentes
+          {{ compact ? 'Histórico recente' : 'Conversas recentes' }}
         </h2>
         <p class="text-sm text-muted">
-          As dez últimas conversas visíveis deste contato.
+          {{ compact
+            ? 'Outras conversas visíveis deste contato.'
+            : 'As últimas conversas visíveis deste contato.' }}
         </p>
       </div>
       <UButton
         color="neutral"
         variant="ghost"
-        size="sm"
+        :size="compact ? 'xs' : 'sm'"
         label="Ver todas"
         icon="i-lucide-arrow-up-right"
         :to="communicationContactConversationsPath(contactId)"
@@ -85,7 +114,11 @@ watch(() => props.contactId, () => {
       role="status"
       aria-label="Carregando conversas"
     >
-      <USkeleton v-for="item in 4" :key="item" class="h-14 w-full" />
+      <USkeleton
+        v-for="item in (compact ? Math.min(limit, 3) : 4)"
+        :key="item"
+        class="h-14 w-full"
+      />
     </div>
     <ShellLoadError
       v-else-if="error"
@@ -95,20 +128,34 @@ watch(() => props.contactId, () => {
       @retry="load"
     />
     <UEmpty
-      v-else-if="!conversations.length"
+      v-else-if="!visibleConversations.length"
       icon="i-lucide-messages-square"
-      title="Ainda não há conversas"
-      description="Quando houver atendimento para este contato, ele aparecerá aqui."
-      class="min-h-64 flex-1"
+      :title="compact ? 'Nenhuma conversa anterior' : 'Ainda não há conversas'"
+      :description="compact
+        ? 'Este contato não possui outro atendimento visível.'
+        : 'Quando houver atendimento para este contato, ele aparecerá aqui.'"
+      class="flex-1"
+      :class="compact ? 'min-h-32' : 'min-h-64'"
     />
-    <ul v-else class="min-h-0 flex-1 divide-y divide-default overflow-y-auto rounded-md border border-default">
-      <li v-for="conversation in conversations" :key="conversation.id">
+    <ul
+      v-else
+      class="min-h-0 flex-1 divide-y divide-default overflow-y-auto rounded-md border border-default"
+      :class="compact ? 'max-h-72' : null"
+    >
+      <li
+        v-for="conversation in visibleConversations"
+        :key="conversation.id"
+        :data-testid="`communication-contact-conversation-${conversation.id}`"
+      >
         <NuxtLink
           :to="communicationConversationPath(conversation.id)"
-          class="block px-3 py-3 hover:bg-elevated focus-visible:outline-2 focus-visible:outline-primary"
+          class="block px-3 hover:bg-elevated focus-visible:outline-2 focus-visible:outline-primary"
+          :class="compact ? 'py-2.5' : 'py-3'"
         >
           <div class="flex items-center justify-between gap-2">
-            <span class="truncate text-sm font-medium text-highlighted">{{ communicationDisplayName(conversation) }}</span>
+            <span class="truncate text-sm font-medium text-highlighted">
+              {{ compact ? `Conversa #${conversation.id}` : communicationDisplayName(conversation) }}
+            </span>
             <UBadge
               size="sm"
               variant="subtle"

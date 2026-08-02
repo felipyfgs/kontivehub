@@ -14,6 +14,7 @@ enum ApiRateLimit: string
     case AuthenticatedSensitive = 'authenticated-sensitive';
     case AuthenticatedCritical = 'authenticated-critical';
     case CommunicationMessageSend = 'communication-message-send';
+    case CommunicationConversationListSnapshot = 'communication-conversation-list-snapshot';
     case CommunicationProfilePicture = 'communication-profile-picture';
     case AssistantAccess = 'assistant-access';
     case AssistantChat = 'assistant-chat';

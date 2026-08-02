@@ -367,7 +367,8 @@ Route::prefix('v1')->group(function (): void {
                 Route::post('/identities/{identity}/links', [ContactController::class, 'linkIdentity']);
                 Route::delete('/identities/{identity}/links/{link}', [ContactController::class, 'unlinkIdentity']);
 
-                Route::get('/conversations', [ConversationController::class, 'index']);
+                Route::get('/conversations', [ConversationController::class, 'index'])
+                    ->middleware(ThrottleRequests::using(ApiRateLimit::CommunicationConversationListSnapshot));
                 Route::post('/conversations', [ConversationController::class, 'store'])
                     ->middleware(ThrottleRequests::using(ApiRateLimit::CommunicationMessageSend));
                 Route::get('/conversation-list-preferences', [ConversationListPreferenceController::class, 'show']);

@@ -40,6 +40,12 @@ return [
         'stream_rate_limit_per_minute' => max(1, (int) env('COMMUNICATION_PROFILE_PICTURES_STREAM_RATE_LIMIT_PER_MINUTE', 600)),
         'stream_ip_rate_limit_per_minute' => max(1, (int) env('COMMUNICATION_PROFILE_PICTURES_STREAM_IP_RATE_LIMIT_PER_MINUTE', 1_200)),
     ],
+    'conversation_list_snapshot' => [
+        'cache_store' => 'redis',
+        'ttl_seconds' => 28_800,
+        'max_ids' => 10_000,
+        'rate_limit_per_minute' => 10,
+    ],
     'outbound_conversation' => [
         'enabled' => filter_var(env('COMMUNICATION_OUTBOUND_CONVERSATION_ENABLED', false), FILTER_VALIDATE_BOOL),
         'kill_switch' => filter_var(env('COMMUNICATION_OUTBOUND_CONVERSATION_KILL_SWITCH', true), FILTER_VALIDATE_BOOL),

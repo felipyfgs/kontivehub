@@ -11,6 +11,7 @@ use App\Enums\Communication\MessageStatus;
 use App\Enums\CommunicationChannel;
 use App\Enums\TenantRole;
 use App\Http\Resources\Communication\MessageResource;
+use App\Jobs\Communication\ReconcileInboxIdentityProfileJob;
 use App\Models\CommunicationAttachment;
 use App\Models\CommunicationContact;
 use App\Models\CommunicationConversation;
@@ -399,6 +400,13 @@ final class CommunicationSharedContentAndInitiationTest extends TestCase
             ->assertJsonPath('data.reused_conversation', false);
         $conversationId = $created->json('data.conversation.id');
         $messageId = $created->json('data.message.id');
+        Queue::assertPushedOn(
+            'communication',
+            ReconcileInboxIdentityProfileJob::class,
+            fn ($job): bool => $job->tenantId === $tenant->id
+                && $job->inboxId === $firstInbox->id
+                && $job->identityId === $identity->id,
+        );
 
         config(['communication.outbound_conversation.kill_switch' => true]);
         $this->post('/api/v1/communication/conversations', $payload, $headers)

@@ -8353,6 +8353,12 @@ export interface components {
         CommunicationContact: {
             id: number;
             name: string | null;
+            display_name?: string | null;
+            /** @enum {string|null} */
+            display_name_source?: "MANUAL_CONTACT" | "CLIENT_CONTACT" | "WHATSAPP_ADDRESS_BOOK" | "WHATSAPP_USER_INFO" | "WHATSAPP_BUSINESS" | "WHATSAPP_PUSH_NAME" | "LEGACY_PROVISIONAL" | "MASKED_ADDRESS" | "OPAQUE_ID" | null;
+            /** @enum {string|null} */
+            display_name_state?: "CURATED" | "OBSERVED" | "FALLBACK" | null;
+            display_name_inbox_id?: number | null;
             is_provisional: boolean;
             is_active: boolean;
             /**
@@ -8362,6 +8368,7 @@ export interface components {
             profile_picture_url: string | null;
             /** @enum {string} */
             profile_picture_state: "UNKNOWN" | "PENDING" | "READY" | "UNAVAILABLE" | "FAILED";
+            profile_picture_inbox_id?: number | null;
             identities: components["schemas"]["CommunicationContactIdentity"][];
             /** Format: date-time */
             purged_at: string | null;
@@ -8370,6 +8377,18 @@ export interface components {
             current_page: number;
             last_page: number;
             total: number;
+        };
+        CommunicationConversationPaginationMeta: {
+            current_page: number;
+            last_page: number;
+            total: number;
+            /** @description Presente somente na paginação por snapshot unread. */
+            snapshot_token?: string;
+            /**
+             * Format: date-time
+             * @description Expiração absoluta do snapshot; acessos não renovam este instante.
+             */
+            snapshot_expires_at?: string;
         };
         CommunicationContactResponse: {
             data: components["schemas"]["CommunicationContact"];
@@ -8380,6 +8399,7 @@ export interface components {
         };
         CommunicationContactSearchBody: {
             q: string;
+            inbox_id?: number;
             is_active?: boolean;
             include_inactive?: boolean;
             is_provisional?: boolean;
@@ -8404,7 +8424,7 @@ export interface components {
             /** @enum {string} */
             profile_picture_state: "UNKNOWN" | "PENDING" | "READY" | "UNAVAILABLE" | "FAILED";
             phone: string | null;
-            /** @description Alias  de phone; nunca contém endereço técnico. */
+            /** @description Alias de phone; nunca contém endereço técnico. */
             address: string | null;
         };
         /** @enum {string} */
@@ -8451,7 +8471,7 @@ export interface components {
         };
         CommunicationConversationCollection: {
             data: components["schemas"]["CommunicationConversation"][];
-            meta: components["schemas"]["CommunicationPaginationMeta"];
+            meta: components["schemas"]["CommunicationConversationPaginationMeta"];
         };
         StartCommunicationConversationBody: {
             contact_id: number;
@@ -8533,7 +8553,7 @@ export interface components {
             data: components["schemas"]["CommunicationOutboundCapabilities"];
         };
         /** @enum {string} */
-        SavedListSurface: "monitoring.simples_mei" | "monitoring.dctfweb" | "monitoring.installments" | "monitoring.sitfis" | "monitoring.declarations" | "monitoring.fgts" | "monitoring.guides" | "monitoring.registrations" | "monitoring.tax_processes" | "monitoring.mailbox" | "clients.index" | "docs.catalog" | "work.queue" | "work.processes" | "closing.list";
+        SavedListSurface: "monitoring.simples_mei" | "monitoring.dctfweb" | "monitoring.installments" | "monitoring.sitfis" | "monitoring.declarations" | "monitoring.fgts" | "monitoring.guides" | "monitoring.registrations" | "monitoring.tax_processes" | "monitoring.mailbox" | "clients.index" | "docs.catalog" | "work.queue" | "work.processes" | "closing.list" | "communication.conversations";
         /** @enum {string} */
         SavedFilterVisibility: "personal" | "tenant";
         DataTableFilterModel: {
@@ -8599,7 +8619,19 @@ export interface components {
             source: string;
             client_id: string;
         };
-        SavedListFilterPayload: components["schemas"]["MonitoringSavedFilterPayload"] | components["schemas"]["ClientsSavedFilterPayload"] | components["schemas"]["DocsSavedFilterPayload"] | components["schemas"]["WorkQueueSavedFilterPayload"] | components["schemas"]["WorkProcessesSavedFilterPayload"] | components["schemas"]["ClosingSavedFilterPayload"];
+        ConversationSavedViewPayload: {
+            /** @enum {string} */
+            status: "ALL" | "OPEN" | "PENDING" | "RESOLVED" | "SNOOZED";
+            /** @enum {string} */
+            sort_by: "last_activity_desc" | "last_activity_asc" | "created_desc" | "created_asc" | "unread_desc" | "priority_desc" | "priority_asc";
+            inbox_id?: number;
+            assignee_membership_id?: number;
+            work_department_id?: number;
+            label_ids?: number[];
+            unread?: boolean;
+            unassigned?: boolean;
+        };
+        SavedListFilterPayload: components["schemas"]["MonitoringSavedFilterPayload"] | components["schemas"]["ClientsSavedFilterPayload"] | components["schemas"]["DocsSavedFilterPayload"] | components["schemas"]["WorkQueueSavedFilterPayload"] | components["schemas"]["WorkProcessesSavedFilterPayload"] | components["schemas"]["ClosingSavedFilterPayload"] | components["schemas"]["ConversationSavedViewPayload"];
         SavedListFilterAuthor: {
             id: number;
             name: string | null;
@@ -9569,7 +9601,10 @@ export interface operations {
     };
     getCommunicationContacts: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Contexto autorizado de inbox para nome e foto observados. */
+                inbox_id?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -9633,7 +9668,10 @@ export interface operations {
     };
     getCommunicationContactsContact: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Contexto autorizado de inbox para nome e foto observados. */
+                inbox_id?: number;
+            };
             header?: never;
             path: {
                 contact: string;
@@ -9762,7 +9800,7 @@ export interface operations {
                 headers: {
                     /** @description Resposta privada e não armazenável. */
                     "Cache-Control"?: "private, no-store, max-age=0";
-                    /** @description Compatibilidade com caches HTTP s. */
+                    /** @description Compatibilidade com caches HTTP antigos. */
                     Pragma?: "no-cache";
                     [name: string]: unknown;
                 };
@@ -9921,6 +9959,10 @@ export interface operations {
         parameters: {
             query?: {
                 contact_id?: number;
+                /** @description Cria uma foto estável na primeira página de uma consulta unread=true. */
+                snapshot?: boolean;
+                /** @description Token opaco devolvido pela primeira página para paginação e reconciliação da mesma foto. */
+                snapshot_token?: string;
             };
             header?: never;
             path?: never;
@@ -9935,6 +9977,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CommunicationConversationCollection"];
+                };
+            };
+            /** @description Resposta canônica. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JsonResponse"];
+                };
+            };
+            /** @description Resposta canônica. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JsonResponse"];
+                };
+            };
+            /** @description Resposta canônica. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JsonResponse"];
                 };
             };
         };
@@ -10398,7 +10467,7 @@ export interface operations {
                 headers: {
                     /** @description Resposta privada e não armazenável. */
                     "Cache-Control"?: "private, no-store, max-age=0";
-                    /** @description Compatibilidade com caches HTTP s. */
+                    /** @description Compatibilidade com caches HTTP antigos. */
                     Pragma?: "no-cache";
                     [name: string]: unknown;
                 };

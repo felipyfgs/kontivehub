@@ -13,12 +13,12 @@ import { isSavedListSurface } from '~/types/saved-list-filters'
 import { useApi } from '~/composables/useApi'
 import { useDashboard } from '~/composables/useDashboard'
 import { apiErrorMessage } from '~/utils/api-error'
-import { canCreateExport } from '~/utils/permissions'
+import { canShareListFilters } from '~/utils/permissions'
 
 export interface UseSavedListPresetsOptions {
   /** Surface estável (ex. clients.index). Vazio desliga. */
   surface: MaybeRefOrGetter<SavedListSurface | null | undefined>
-  /** Compartilhamento exige a permissão efetiva de exportação por padrão. */
+  /** Compartilhamento exige a capability efetiva `filters.share` por padrão. */
   canShare?: MaybeRefOrGetter<boolean | undefined>
   /** sessionEpoch / troca de lista — limpa cache de presets. */
   resetKey?: MaybeRefOrGetter<string | number | null | undefined>
@@ -27,7 +27,12 @@ export interface UseSavedListPresetsOptions {
   /** True se o recorte atual tem conteúdo útil para salvar. */
   canSave: () => boolean
   /** Aplica payload do preset (host hidrata estado + recarrega). */
-  onApply: (payload: SavedListFilterPayload, filter: SavedListFilter) => void
+  onApply: (
+    payload: SavedListFilterPayload,
+    filter: SavedListFilter
+  ) => void | Promise<void>
+  /** Motivo fail-closed para manter um preset visível, porém inaplicável. */
+  unavailableReason?: (filter: SavedListFilter) => string | null
 }
 
 export function useSavedListPresets(options: UseSavedListPresetsOptions) {
@@ -45,7 +50,7 @@ export function useSavedListPresets(options: UseSavedListPresetsOptions) {
   const canShare = computed(() => {
     const override = toValue(options.canShare)
     if (typeof override === 'boolean') return override
-    return canCreateExport(me.value)
+    return canShareListFilters(me.value)
   })
 
   const presets = ref<SavedListFilter[]>([])
@@ -109,7 +114,7 @@ export function useSavedListPresets(options: UseSavedListPresetsOptions) {
     void loadPresets()
   }
 
-  function applyPreset(filter: SavedListFilter) {
+  async function applyPreset(filter: SavedListFilter): Promise<void> {
     if (!surfaceValue.value || filter.surface !== surfaceValue.value) {
       toast.add({
         title: 'Filtro incompatível',
@@ -118,7 +123,27 @@ export function useSavedListPresets(options: UseSavedListPresetsOptions) {
       })
       return
     }
-    options.onApply(filter.payload, filter)
+    const reason = unavailableReason(filter)
+    if (reason) {
+      toast.add({
+        title: 'Visão indisponível',
+        description: reason,
+        color: 'warning'
+      })
+      return
+    }
+    try {
+      await options.onApply(filter.payload, filter)
+    } catch (error) {
+      toast.add({
+        title: apiErrorMessage(error, 'Não foi possível aplicar a visão.'),
+        color: 'error'
+      })
+    }
+  }
+
+  function unavailableReason(filter: SavedListFilter): string | null {
+    return options.unavailableReason?.(filter) ?? null
   }
 
   async function onSaveConfirm(payload: { name: string, share: boolean }) {
@@ -227,6 +252,7 @@ export function useSavedListPresets(options: UseSavedListPresetsOptions) {
     saveError,
     manageError,
     actingId,
+    unavailableReason,
     clearPresetCache,
     loadPresets,
     onSavedMenuOpen,

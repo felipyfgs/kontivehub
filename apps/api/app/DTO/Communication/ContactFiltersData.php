@@ -15,5 +15,6 @@ final readonly class ContactFiltersData
         public string $direction,
         public int $perPage,
         public int $page,
+        public ?int $inboxId = null,
     ) {}
 }

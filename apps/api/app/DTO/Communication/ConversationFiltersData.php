@@ -23,5 +23,7 @@ final readonly class ConversationFiltersData
         public ?ConversationListSort $sortBy,
         public int $perPage,
         public int $page,
+        public bool $createSnapshot = false,
+        public ?string $snapshotToken = null,
     ) {}
 }

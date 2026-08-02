@@ -11,6 +11,7 @@ use App\Models\CommunicationConversation;
 use App\Models\CommunicationIdentity;
 use App\Models\CommunicationInbox;
 use App\Models\CommunicationMessage;
+use App\Services\Communication\Contact\InboxIdentityProfileReconciliationScheduler;
 use App\Services\Communication\ContactCanonicalizer;
 use App\Services\Communication\Conversation\MessageIdempotency;
 use App\Services\Communication\Conversation\OutboundConversationGate;
@@ -30,6 +31,7 @@ final readonly class StartConversationAction
         private CommunicationOutboundMessageWriter $messages,
         private MediaStore $media,
         private ProfilePictureRefreshScheduler $profilePictures,
+        private InboxIdentityProfileReconciliationScheduler $identityProfileReconciliation,
     ) {}
 
     /** @return array{conversation:CommunicationConversation,message:CommunicationMessage,reused:bool,status:int} */
@@ -115,6 +117,7 @@ final readonly class StartConversationAction
                     $conversation->forceFill(['status' => ConversationStatus::Open, 'resolved_at' => null, 'lock_version' => (int) $conversation->lock_version + 1])->save();
                 }
                 $this->profilePictures->schedule($inbox, $identity);
+                $this->identityProfileReconciliation->schedule($inbox, $identity);
                 $result = $this->messages->handle($conversation, $data);
                 if ($result->httpStatus !== 200) {
                     $stagedObjectId = $result->message->attachments->first()?->object_id;

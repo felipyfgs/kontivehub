@@ -32,6 +32,9 @@ class ApiRateLimitingTest extends TestCase
             ApiRateLimit::AuthenticatedSensitive->value => [10],
             ApiRateLimit::AuthenticatedCritical->value => [5],
             ApiRateLimit::CommunicationMessageSend->value => [120],
+            ApiRateLimit::CommunicationConversationListSnapshot->value => [
+                max(1, (int) config('communication.conversation_list_snapshot.rate_limit_per_minute', 10)),
+            ],
             ApiRateLimit::CommunicationProfilePicture->value => [
                 max(1, (int) config('communication.profile_pictures.stream_rate_limit_per_minute', 600)),
                 max(1, (int) config('communication.profile_pictures.stream_ip_rate_limit_per_minute', 1_200)),
@@ -47,10 +50,13 @@ class ApiRateLimitingTest extends TestCase
 
         foreach (ApiRateLimit::cases() as $rateLimit) {
             $resolver = RateLimiter::limiter($rateLimit);
+            $limiterRequest = $rateLimit === ApiRateLimit::CommunicationConversationListSnapshot
+                ? Request::create('/api/v1/test?snapshot=true', 'GET', server: ['REMOTE_ADDR' => '203.0.113.10'])
+                : $request;
 
             $this->assertNotNull($resolver, "Limiter {$rateLimit->value} não registrado.");
 
-            $resolved = $resolver($request);
+            $resolved = $resolver($limiterRequest);
             $limits = is_array($resolved) ? $resolved : [$resolved];
             $this->assertCount(count($expectedAttempts[$rateLimit->value]), $limits);
 

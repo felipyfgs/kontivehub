@@ -78,6 +78,7 @@ const emit = defineEmits<{
 }>()
 
 const messagesContainer = ref<HTMLElement | null>(null)
+const composerRef = ref<{ focusInput: () => Promise<boolean> } | null>(null)
 const messagesContent = ref<HTMLElement | null>(null)
 const replyTo = ref<Message | null>(null)
 const editTarget = ref<Message | null>(null)
@@ -119,6 +120,12 @@ const revokeOpen = computed({
     if (!open) closeRevoke()
   }
 })
+
+async function focusComposer(): Promise<boolean> {
+  return await composerRef.value?.focusInput() ?? false
+}
+
+defineExpose({ focusComposer })
 
 function quotedMessage(message: Message): Message | undefined {
   return props.conversation.messages?.find(item => item.id === message.reply_to_message_id)
@@ -675,7 +682,7 @@ watch(
                         </p>
                       </button>
 
-                      <MessageContent
+                      <CommunicationMessageContent
                         class="relative"
                         :message="message"
                         :can-reply="canReply && outboundOperational"
@@ -803,6 +810,7 @@ watch(
     </div>
 
     <CommunicationComposer
+      ref="composerRef"
       :can-reply="canReply"
       :operational="operational"
       :outbound-operational="outboundOperational"

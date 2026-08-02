@@ -16,6 +16,7 @@ use App\Enums\TenantLifecycleStatus;
 use App\Enums\TenantRole;
 use App\Models\CommunicationContact;
 use App\Models\CommunicationConversation;
+use App\Models\CommunicationConversationUnreadMessage;
 use App\Models\CommunicationIdentity;
 use App\Models\CommunicationInbox;
 use App\Models\CommunicationInboxIdentityProfile;
@@ -182,7 +183,7 @@ final class WebE2ESeeder extends Seeder
                 'lock_version' => 1,
             ],
         );
-        CommunicationMessage::query()->withoutGlobalScopes()->updateOrCreate(
+        $storedMessage = CommunicationMessage::query()->withoutGlobalScopes()->updateOrCreate(
             ['tenant_id' => $tenant->id, 'inbox_id' => $inbox->id, 'provider_message_id' => 'web-e2e-'.hash('sha256', $phone)],
             [
                 'tenant_id' => $tenant->id,
@@ -197,6 +198,14 @@ final class WebE2ESeeder extends Seeder
                 'occurred_at' => now(),
                 'delivered_at' => now(),
             ],
+        );
+        CommunicationConversationUnreadMessage::query()->withoutGlobalScopes()->updateOrCreate(
+            [
+                'tenant_id' => $tenant->id,
+                'conversation_id' => $conversation->id,
+                'message_id' => $storedMessage->id,
+            ],
+            ['inbox_id' => $inbox->id],
         );
 
         $profile = CommunicationInboxIdentityProfile::query()->withoutGlobalScopes()->firstOrCreate(

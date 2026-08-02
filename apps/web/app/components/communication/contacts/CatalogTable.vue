@@ -3,6 +3,8 @@ import type { Contact } from '~/types/communication/contacts'
 import { communicationProfilePictureSrc } from '~/utils/communication'
 import {
   communicationContactDisplayName,
+  communicationContactDisplaySourceColor,
+  communicationContactDisplaySourceLabel,
   communicationContactIdentityCount,
   communicationContactInitials,
   communicationContactLinkedClientNames,
@@ -218,6 +220,15 @@ watch(discardOpen, (open) => {
               <div class="flex min-w-0 flex-wrap items-center gap-2">
                 <span class="truncate font-medium text-highlighted">{{ communicationContactDisplayName(contact) }}</span>
                 <UBadge
+                  v-if="communicationContactDisplaySourceLabel(contact)"
+                  class="shrink-0"
+                  size="sm"
+                  variant="subtle"
+                  :color="communicationContactDisplaySourceColor(contact)"
+                  :label="communicationContactDisplaySourceLabel(contact)!"
+                  :data-testid="`communication-contact-name-source-${contact.id}`"
+                />
+                <UBadge
                   v-if="communicationContactIdentityCount(contact) > 1"
                   size="sm"
                   color="neutral"
@@ -234,7 +245,9 @@ watch(discardOpen, (open) => {
                 />
               </div>
               <p v-if="contact.is_provisional" class="text-xs text-muted">
-                Sem nome definitivo
+                {{ contact.display_name_state === 'OBSERVED'
+                  ? 'Nome observado nesta inbox; cadastro ainda provisório'
+                  : 'Sem nome definitivo' }}
               </p>
             </div>
             <span class="flex min-w-0 items-center gap-1 font-mono text-sm tabular-nums text-toned">

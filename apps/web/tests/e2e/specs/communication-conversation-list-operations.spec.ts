@@ -6,17 +6,22 @@ const readyConversation = 'Cliente E2E com foto'
 const unavailableConversation = 'Cliente E2E sem foto'
 
 async function gotoDevRoute(page: Page, path: string, ready: Locator) {
-  await page.goto(path, { waitUntil: 'commit', timeout: 30_000 })
-  await expect(ready).toBeVisible({ timeout: 45_000 })
+  await page.goto(path, { waitUntil: 'commit', timeout: 120_000 })
+  await expect(ready).toBeVisible({ timeout: 120_000 })
 }
 
 async function login(page: Page) {
-  const emailInput = page.getByLabel('E-mail')
+  const emailInput = page.getByRole('textbox', { name: /E-mail/ })
   await gotoDevRoute(page, '/login', emailInput)
   await emailInput.fill(email)
   await page.locator('input[name="password"]').fill(password)
-  await page.getByRole('button', { name: 'Entrar' }).click()
-  await expect(page).not.toHaveURL(/\/login/)
+  await Promise.all([
+    page.waitForURL(url => url.pathname !== '/login', {
+      waitUntil: 'domcontentloaded',
+      timeout: 120_000
+    }),
+    page.getByRole('button', { name: 'Entrar' }).click()
+  ])
 }
 
 async function openWorkspace(page: Page) {
@@ -105,8 +110,104 @@ async function expectSelectionControlCentered(row: Locator) {
   expect(Math.abs(checkboxCenter.y - avatarCenter.y)).toBeLessThanOrEqual(1)
 }
 
+function conversationRow(page: Page, name: string) {
+  return page.locator('[data-testid^="communication-conversation-row-"]').filter({ hasText: name })
+}
+
+test('Não lidas mantém a foto ao ler e só recompõe ao reativar a tab', async ({ page }) => {
+  test.setTimeout(300_000)
+  await page.setViewportSize({ width: 1366, height: 800 })
+  const snapshotCreations: string[] = []
+  page.on('response', (response) => {
+    const url = new URL(response.url())
+    const snapshot = url.searchParams.get('snapshot')
+    if (response.ok()
+      && url.pathname.endsWith('/api/v1/communication/conversations')
+      && (snapshot === 'true' || snapshot === '1')) {
+      snapshotCreations.push(response.url())
+    }
+  })
+  await login(page)
+  await openWorkspace(page)
+
+  const tabs = page.getByRole('tablist')
+  const unreadTab = tabs.getByRole('tab', { name: 'Não lidas' })
+  await unreadTab.click()
+  await expect.poll(() => snapshotCreations.length).toBe(1)
+  await expect(conversationRow(page, readyConversation)).toBeVisible()
+  await expect(conversationRow(page, unavailableConversation)).toBeVisible()
+
+  await unreadTab.focus()
+  await unreadTab.press('Enter')
+  await expect.poll(() => snapshotCreations.length).toBe(2)
+  await unreadTab.press('Space')
+  await expect.poll(() => snapshotCreations.length).toBe(3)
+
+  const readyRow = conversationRow(page, readyConversation)
+  const unavailableRow = conversationRow(page, unavailableConversation)
+  await readyRow.locator('[id^="communication-conversation-"]').click()
+  await expect(page.locator('[data-testid="communication-timeline-panel"]:visible')).toBeVisible()
+  await expect(readyRow).toBeVisible()
+  await expect(readyRow.getByTestId('communication-conversation-unread')).toHaveCount(0)
+
+  const rows = page.locator('[data-testid^="communication-conversation-row-"]')
+  const rowNames = await rows.allTextContents()
+  const readyIndex = rowNames.findIndex(text => text.includes(readyConversation))
+  expect(readyIndex).toBeGreaterThanOrEqual(0)
+  const direction = readyIndex > 0 ? 'ArrowUp' : 'ArrowDown'
+  const targetRow = readyIndex > 0 ? rows.nth(readyIndex - 1) : rows.nth(readyIndex + 1)
+  await readyRow.locator('[id^="communication-conversation-"]').focus()
+  await page.keyboard.press(direction)
+  await expect(targetRow.locator('[id^="communication-conversation-"]')).toHaveAttribute('aria-current', 'true')
+  await expect(unavailableRow).toBeVisible()
+  await expect(unavailableRow.getByTestId('communication-conversation-unread')).toHaveCount(0)
+  await expect(readyRow).toBeVisible()
+
+  const detailUrl = page.url()
+  await unreadTab.click()
+  await expect.poll(() => snapshotCreations.length).toBe(4)
+  await expect(readyRow).toHaveCount(0)
+  await expect(unavailableRow).toHaveCount(0)
+  await expect(page).toHaveURL(detailUrl)
+  await expect(page.locator('[data-testid="communication-timeline-panel"]:visible')).toBeVisible()
+
+  await tabs.getByRole('tab', { name: 'Em aberto' }).click()
+  for (const name of [readyConversation, unavailableConversation]) {
+    const row = conversationRow(page, name)
+    await row.getByTestId(/^communication-conversation-menu-/).click()
+    await page.getByRole('menuitem', { name: 'Marcar como não lida' }).click()
+    await expect(row.getByTestId('communication-conversation-unread')).toBeVisible()
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  const back = page.getByRole('button', { name: 'Voltar à lista' })
+  await expect(back).toBeVisible()
+  await back.click()
+  await unreadTab.click()
+  const mobileReadyRow = conversationRow(page, readyConversation)
+  await mobileReadyRow.locator('[id^="communication-conversation-"]').click()
+  await expect(page.locator('[data-testid="communication-timeline-panel"]:visible')).toBeVisible()
+  await expect(mobileReadyRow.getByTestId('communication-conversation-unread')).toHaveCount(0)
+  await expect(back).toBeVisible()
+  await back.click()
+  await expect(mobileReadyRow).toBeVisible()
+
+  const mobileUnavailableRow = conversationRow(page, unavailableConversation)
+  await mobileUnavailableRow.locator('[id^="communication-conversation-"]').click()
+  await expect(page.locator('[data-testid="communication-timeline-panel"]:visible')).toBeVisible()
+  await expect(mobileUnavailableRow.getByTestId('communication-conversation-unread')).toHaveCount(0)
+  await expect(back).toBeVisible()
+  await back.click()
+  await expect(mobileUnavailableRow).toBeVisible()
+  await unreadTab.focus()
+  await unreadTab.press('Space')
+  await expect(mobileReadyRow).toHaveCount(0)
+  await expect(mobileUnavailableRow).toHaveCount(0)
+  await expectNoHorizontalOverflow(page)
+})
+
 test('desktop: lista, timeline e contexto consomem a foto real', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.setViewportSize({ width: 1366, height: 639 })
   await login(page)
   await openWorkspace(page)
 
@@ -131,8 +232,25 @@ test('desktop: lista, timeline e contexto consomem a foto real', async ({ page }
     .toBeGreaterThan(0)
 
   await page.getByTestId('communication-context-toggle').click()
+  const timeline = page.getByTestId('communication-timeline-panel')
+  const context = page.getByTestId('communication-context-panel')
+  const composer = page.getByTestId('communication-composer')
   const contextAvatar = page.locator('[data-testid="communication-context-avatar"]:visible')
+  await expect(timeline).toBeVisible()
+  await expect(context).toBeVisible()
+  await expect(composer).toBeVisible()
+  await expect(page.getByTestId('communication-context-slideover')).toHaveCount(0)
   await expect(contextAvatar).toHaveAttribute('src', /\/api\/v1\/communication\/profile-pictures\/\d+\/\d+$/)
+  await expect.poll(async () => {
+    const composerBox = await composer.boundingBox()
+    const contextBox = await context.boundingBox()
+    if (!composerBox || !contextBox) return Number.POSITIVE_INFINITY
+    return Math.abs(composerBox.x + composerBox.width - contextBox.x)
+  }).toBeLessThanOrEqual(1)
+
+  const messageInput = composer.getByRole('combobox')
+  await messageInput.fill('Rascunho com o contexto aberto')
+  await expect(messageInput).toHaveValue('Rascunho com o contexto aberto')
   await expectNoHorizontalOverflow(page)
 })
 
