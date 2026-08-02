@@ -7,12 +7,24 @@
 
 **/.env
 **/.env.*
-!**/.env.example
+!.env.example
+!apps/api/.env.example
 **/auth.json
 
 **/node_modules
 **/.pnpm-store
 apps/api/vendor
+apps/api/storage/app/backups
+apps/api/storage/app/certs
+apps/api/storage/app/private
+apps/api/storage/app/tmp-manual-nfce
+apps/api/storage/app/vault
+apps/api/storage/framework/cache/data
+apps/api/storage/framework/sessions
+apps/api/storage/framework/testing
+apps/api/storage/framework/views
+apps/api/storage/logs
+apps/api/bootstrap/cache/*.php
 apps/web/.nuxt
 apps/web/.output
 apps/web/.data

@@ -27,6 +27,9 @@ apps/api/auth.json
 # Chaves e segredos soltos.
 # Evitar **/*secret* amplo: bloqueava infra/docker/ops/secret-scan.sh e classes *Secret*.
 **/secrets/
+!infra/swarm/secrets/
+infra/swarm/secrets/*
+!infra/swarm/secrets/*.example
 **/.secrets/
 **/*credentials*
 !apps/api/database/migrations/*_create_tenant_credentials_table.php
