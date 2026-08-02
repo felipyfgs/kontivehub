@@ -32,7 +32,7 @@ Instrução real da documentação Playwright (2026):
 Para agentes de código no KontiveHub, preferir **CLI** (oficial: “best for coding agents”). MCP pode coexistir, mas não é o default para UI do monorepo.
 
 ```bash
-# a partir de apps/web (ou container frontend-dev)
+# a partir de apps/web (ou container frontend)
 corepack pnpm exec playwright-cli --help
 corepack pnpm run pw:open            # abre http://127.0.0.1:3000 headed
 corepack pnpm run pw:cli -- snapshot
