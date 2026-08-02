@@ -90,7 +90,6 @@ jobs:
       - name: Generate ephemeral application keys
         run: |
           echo "APP_KEY=base64:$(php -r 'echo base64_encode(random_bytes(32));')" >> "$GITHUB_ENV"
-          echo "VAULT_MASTER_KEY=$(php -r 'echo base64_encode(random_bytes(32));')" >> "$GITHUB_ENV"
 
       - name: Cache Composer packages
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
