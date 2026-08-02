@@ -1,18 +1,10 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { consumeResetPasswordCredentials } from '../../app/utils/reset-password'
 
 const root = (path: string) => resolve(process.cwd(), path)
 const read = (path: string) => readFileSync(root(path), 'utf8')
-const repositoryFile = (mountedPath: string, repositoryPath: string) =>
-  readFileSync(
-    existsSync(mountedPath)
-      ? mountedPath
-      : resolve(process.cwd(), '../..', repositoryPath),
-    'utf8'
-  )
-
 describe('identidade pública KontiveHub', () => {
   it('usa a marca canônica nos metadados globais e no manifesto PWA', () => {
     const app = read('app/app.vue')
@@ -95,16 +87,13 @@ describe('identidade pública KontiveHub', () => {
     expect(appSources).not.toMatch(/window\.location\.hostname|location\.host/)
   })
 
-  it('integra o build produtivo às origens públicas KontiveHub', () => {
-    const compose = repositoryFile('/workspace/docker-compose.prod.yml', 'docker-compose.prod.yml')
-    const dockerfile = repositoryFile('/workspace/nginx/Dockerfile', 'infra/docker/nginx/Dockerfile')
-    const nginx = repositoryFile('/workspace/nginx/conf/prod.conf', 'infra/docker/nginx/conf/prod.conf')
+  it('mantém o build público configurável por ambiente', () => {
+    const nuxt = read('nuxt.config.ts')
+    const envExample = read('.env.example')
 
-    expect(compose).toContain('NUXT_PUBLIC_API_BASE: https://api.kontivehub.com.br')
-    expect(compose).toContain('NUXT_PUBLIC_REVERB_HOST: api.kontivehub.com.br')
-    expect(dockerfile).toContain('ARG NUXT_PUBLIC_API_BASE=https://api.kontivehub.com.br')
-    expect(nginx).toContain('server_name app.kontivehub.com.br portal.kontivehub.com.br')
-    expect(nginx).toContain('server_name api.kontivehub.com.br')
-    expect(nginx).not.toContain('inovaicontabil.com.br')
+    expect(nuxt).toContain('process.env.NUXT_PUBLIC_API_BASE || \'\'')
+    expect(nuxt).toContain('process.env.NUXT_PUBLIC_REVERB_HOST || \'\'')
+    expect(envExample).toContain('produção usa https://api.kontivehub.com.br')
+    expect(`${nuxt}\n${envExample}`).not.toContain('inovaicontabil.com.br')
   })
 })

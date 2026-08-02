@@ -210,11 +210,17 @@ final class WhatsAppPeerCorrelationLockTest extends TestCase
         mkdir($temporaryDirectory, 0700);
         $startFile = $temporaryDirectory.'/start';
         $processes = [];
-        $database = config('database.connections.'.config('database.default'));
+        $database = config('database.connections.pgsql');
         $workerEnvironment = [
             'PATH' => (string) getenv('PATH'),
             'APP_ENV' => 'testing',
             'APP_KEY' => (string) config('app.key'),
+            'DB_CONNECTION' => 'pgsql',
+            'DB_HOST' => (string) $database['host'],
+            'DB_PORT' => (string) $database['port'],
+            'DB_DATABASE' => (string) $database['database'],
+            'DB_USERNAME' => (string) $database['username'],
+            'DB_PASSWORD' => (string) $database['password'],
             'KH_DB_HOST' => (string) $database['host'],
             'KH_DB_PORT' => (string) $database['port'],
             'KH_DB_DATABASE' => (string) $database['database'],
