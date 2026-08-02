@@ -7,8 +7,8 @@ readonly RUNTIME_HOME=/tmp/frontend-home
 readonly COREPACK_HOME_DIR=/tmp/corepack
 readonly task="${1:-dev}"
 
-if [[ ! "${LOCAL_UID:-}" =~ ^[0-9]+$ ]] || [[ ! "${LOCAL_GID:-}" =~ ^[0-9]+$ ]]; then
-    echo "LOCAL_UID e LOCAL_GID devem ser inteiros positivos." >&2
+if [[ ! "${LOCAL_UID:-}" =~ ^[1-9][0-9]*$ ]] || [[ ! "${LOCAL_GID:-}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "LOCAL_UID e LOCAL_GID devem ser inteiros maiores que zero." >&2
     exit 64
 fi
 

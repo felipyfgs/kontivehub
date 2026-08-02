@@ -46,6 +46,7 @@ LABEL org.opencontainers.image.revision="${RELEASE_SHA}" \
       org.opencontainers.image.title="kontivehub-wazync"
 
 COPY --from=builder --chown=wazync:wazync /out/wazync /usr/local/bin/wazync
+COPY --chmod=755 infra/docker/common/load-env-secret.sh /usr/local/lib/load-env-secret.sh
 COPY --chmod=755 infra/docker/wazync/entrypoint.sh /usr/local/bin/app-entrypoint
 
 ENV WAZYNC_HTTP_ADDRESS=:8080 \

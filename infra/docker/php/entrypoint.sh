@@ -11,6 +11,10 @@ if [ "$(id -u)" = "0" ]; then
 
     target_uid=${LOCAL_UID:-1000}
     target_gid=${LOCAL_GID:-1000}
+    if [ "$target_uid" -eq 0 ] || [ "$target_gid" -eq 0 ]; then
+        echo "LOCAL_UID e LOCAL_GID devem ser maiores que zero." >&2
+        exit 64
+    fi
     if [ "$(id -g www-data)" != "$target_gid" ]; then
         groupmod -o -g "$target_gid" www-data
     fi

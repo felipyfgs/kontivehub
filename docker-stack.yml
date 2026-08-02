@@ -92,7 +92,7 @@ services:
       - app
       - egress
     healthcheck:
-      test: ["CMD-SHELL", "set -a; . /run/secrets/api_runtime_env; set +a; gosu www-data php artisan about --only=environment >/dev/null 2>&1"]
+      test: ["CMD", "php", "-r", "$$s=@fsockopen('127.0.0.1',9000); exit($$s ? 0 : 1);"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -294,18 +294,22 @@ services:
     entrypoint: ["/bin/sh", "-ec"]
     command:
       - |
-        set -a
-        . /run/secrets/postgres_runtime_env
-        set +a
+        POSTGRES_DB=$$(tr -d '\r\n' < /run/secrets/postgres_db)
+        POSTGRES_USER=$$(tr -d '\r\n' < /run/secrets/postgres_user)
+        POSTGRES_PASSWORD=$$(tr -d '\r\n' < /run/secrets/postgres_password)
+        test -n "$$POSTGRES_DB" && test -n "$$POSTGRES_USER" && test -n "$$POSTGRES_PASSWORD"
+        export POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD
         exec /usr/local/bin/docker-entrypoint.sh postgres
     secrets:
-      - postgres_runtime_env
+      - postgres_db
+      - postgres_user
+      - postgres_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - app
     healthcheck:
-      test: ["CMD-SHELL", "set -a; . /run/secrets/postgres_runtime_env; set +a; pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      test: ["CMD-SHELL", "pg_isready -U \"$$(tr -d '\\r\\n' < /run/secrets/postgres_user)\" -d \"$$(tr -d '\\r\\n' < /run/secrets/postgres_db)\""]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -394,7 +398,11 @@ secrets:
     external: true
   wazync_runtime_env:
     external: true
-  postgres_runtime_env:
+  postgres_db:
+    external: true
+  postgres_user:
+    external: true
+  postgres_password:
     external: true
   redis_conf:
     external: true

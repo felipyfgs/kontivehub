@@ -20,8 +20,9 @@ redes publica portas diretamente; o único ponto de entrada é o Nginx.
 ## Preparação
 
 Crie arquivos reais fora do repositório a partir dos exemplos em `secrets/`.
-Os arquivos `*-runtime.env` são scripts POSIX de pares `CHAVE=valor`; valores
-com espaços ou caracteres do shell devem ser colocados entre aspas simples.
+Os arquivos `*-runtime.env` contêm apenas dados no formato `CHAVE=valor`; o
+runtime usa um parser que não avalia construções de shell. Valores podem ser
+colocados entre aspas simples ou duplas, que são removidas como delimitadores.
 Não versione os arquivos preenchidos.
 
 Crie os secrets uma única vez:
@@ -29,7 +30,9 @@ Crie os secrets uma única vez:
 ```bash
 docker secret create api_runtime_env /caminho-seguro/api-runtime.env
 docker secret create wazync_runtime_env /caminho-seguro/wazync-runtime.env
-docker secret create postgres_runtime_env /caminho-seguro/postgres-runtime.env
+docker secret create postgres_db /caminho-seguro/postgres-db
+docker secret create postgres_user /caminho-seguro/postgres-user
+docker secret create postgres_password /caminho-seguro/postgres-password
 docker secret create redis_conf /caminho-seguro/redis.conf
 openssl rand -hex 32 | docker secret create nginx_edge_token -
 ```

@@ -125,6 +125,8 @@ ENV APP_ENV=production \
     APP_DEBUG=false
 
 COPY --from=vendor-builder --chown=www-data:www-data /build/app /var/www/html
+COPY --chmod=755 infra/docker/common/load-env-secret.sh /usr/local/lib/load-env-secret.sh
+COPY --chmod=644 infra/docker/php/conf.d/opcache.production.ini /usr/local/etc/php/conf.d/zz-opcache-production.ini
 COPY --chmod=755 infra/docker/php/production-entrypoint.sh /usr/local/bin/app-entrypoint
 
 RUN mkdir -p \

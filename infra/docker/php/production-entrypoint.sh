@@ -8,10 +8,9 @@ if [ ! -r "$readonly_runtime_secret" ]; then
     exit 78
 fi
 
-set -a
-# O secret é um arquivo POSIX com pares CHAVE=valor e permissões controladas pelo Swarm.
-. "$readonly_runtime_secret"
-set +a
+# Parser data-only incorporado à imagem; o conteúdo do secret nunca é executado.
+. /usr/local/lib/load-env-secret.sh
+load_env_secret "$readonly_runtime_secret"
 
 if [ "${APP_ENV:-}" != "production" ] || [ "${APP_DEBUG:-true}" != "false" ]; then
     echo "A imagem de produção exige APP_ENV=production e APP_DEBUG=false." >&2
