@@ -11,7 +11,9 @@
  *   apps/web/tests/fixtures/template-parity-matrix.md
  *
  * Cascas de produto permitidas (embutem o template):
- *   MonitoringModuleTable, DocsWorkspace, WorkQueueWorkspace, DASHBOARD_TABLE_UI
+ *   ShellPagePanel, ShellSettingsShell, MonitoringModuleTable,
+ *   MonitoringSimplesMeiPortfolio, DocsWorkspace, WorkQueueWorkspace,
+ *   NotesWorkspace, CommunicationWorkspacePage, DASHBOARD_TABLE_UI
  */
 import fs from 'node:fs'
 import path from 'node:path'

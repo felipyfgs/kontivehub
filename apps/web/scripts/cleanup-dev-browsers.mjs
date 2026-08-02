@@ -97,8 +97,10 @@ for (const pid of victims.keys()) {
 }
 
 // grace + SIGKILL residual
-execFileSync('sleep', ['1'])
-for (const pid of victims.keys()) {
+await new Promise(resolve => setTimeout(resolve, 1000))
+const stillRunning = new Map(listAll().map(proc => [proc.pid, proc.cmd]))
+for (const [pid, victim] of victims) {
+  if (stillRunning.get(pid) !== victim.cmd) continue
   try {
     process.kill(pid, 0)
     process.kill(pid, 'SIGKILL')

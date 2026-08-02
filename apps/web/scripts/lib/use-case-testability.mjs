@@ -164,20 +164,20 @@ export function buildGraph({ catalog, apiRoutes, pages, webRoot }) {
   const routeNodes = apiRoutes.map((route) => {
     const journey = assignedJourney(catalog.journeys, 'route', route)
     return {
+      ...route,
       id: `api:${route.method}:${route.uri}`,
       type: 'api-route',
-      journeyId: journey.id,
-      ...route
+      journeyId: journey.id
     }
   })
   const pageNodes = pages.map((page) => {
     const journey = assignedJourney(catalog.journeys, 'page', page)
     return {
+      ...page,
       id: `page:${page.file}`,
       type: 'page',
       journeyId: journey.id,
-      redirectOnly: isRedirect(page),
-      ...page
+      redirectOnly: isRedirect(page)
     }
   })
 
