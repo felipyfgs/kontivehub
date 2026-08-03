@@ -10,7 +10,10 @@ PostgreSQL e Redis continuam serviços independentes usando imagens oficiais.
 Os volumes declarados na stack são externos para impedir que a remoção da
 stack apague dados. Em um Swarm com mais de um nó, eles devem usar um driver de
 volume compartilhado ou restrições de posicionamento compatíveis com a
-infraestrutura escolhida.
+infraestrutura escolhida. A stack exige o label de nó
+`kontivehub.persistence=true` em todo serviço que monta estado persistente.
+Marque exatamente um nó quando usar volumes locais; com NFS/CSI ou outro
+driver compartilhado, marque todos os nós configurados para esse driver.
 
 A rede `app` é interna e mantém PostgreSQL e Redis sem saída externa. Somente
 API, Horizon, scheduler e Wazync também entram na rede `egress`, necessária
@@ -23,6 +26,7 @@ Crie arquivos reais fora do repositório a partir dos exemplos em `secrets/`.
 Os arquivos `*-runtime.env` contêm apenas dados no formato `CHAVE=valor`; o
 runtime usa um parser que não avalia construções de shell. Valores podem ser
 colocados entre aspas simples ou duplas, que são removidas como delimitadores.
+O secret `redis_password` contém somente a senha em uma única linha, sem aspas.
 Não versione os arquivos preenchidos.
 
 Crie os secrets uma única vez:
@@ -34,6 +38,7 @@ docker secret create postgres_db /caminho-seguro/postgres-db
 docker secret create postgres_user /caminho-seguro/postgres-user
 docker secret create postgres_password /caminho-seguro/postgres-password
 docker secret create redis_conf /caminho-seguro/redis.conf
+docker secret create redis_password /caminho-seguro/redis-password
 openssl rand -hex 32 | docker secret create nginx_edge_token -
 ```
 
@@ -45,6 +50,14 @@ docker volume create redis_data
 docker volume create vault_data
 docker volume create private_storage
 docker volume create wazync_spool
+```
+
+Autorize os nós que podem montar esses volumes. Para volumes locais, execute o
+comando abaixo em exatamente um nó; para volumes compartilhados, repita para
+cada nó preparado com o mesmo driver:
+
+```bash
+docker node update --label-add kontivehub.persistence=true NOME_DO_NO
 ```
 
 O usuário e o schema exclusivos do Wazync devem ser provisionados no

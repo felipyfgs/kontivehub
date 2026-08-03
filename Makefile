@@ -37,7 +37,7 @@ init-env:
 	fi
 
 setup: init-env build composer-install frontend-install
-	docker compose up -d postgres redis
+	docker compose up -d --wait --wait-timeout "$${COMPOSE_WAIT_TIMEOUT:-60}" postgres redis
 	docker compose run --rm php php artisan migrate --force
 	$(MAKE) up
 

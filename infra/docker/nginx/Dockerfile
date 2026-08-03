@@ -21,4 +21,4 @@ COPY infra/docker/nginx/conf/production.conf /etc/nginx/kontivehub.conf.template
 COPY --chmod=755 infra/docker/nginx/render-production-config.sh /docker-entrypoint.d/05-render-kontivehub-config.sh
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=5 \
-    CMD wget --header='Accept: application/json' -qO- http://127.0.0.1:8080/up | grep -q '"status":"up"' || exit 1
+    CMD wget -qO- http://127.0.0.1:8080/nginx-health >/dev/null || exit 1

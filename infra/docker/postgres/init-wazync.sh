@@ -23,7 +23,14 @@ esac
 
 export PGPASSWORD="$POSTGRES_PASSWORD"
 
+max_attempts=60
+attempt=0
 until pg_isready -q -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do
+    attempt=$((attempt + 1))
+    if [ "$attempt" -ge "$max_attempts" ]; then
+        echo "Timeout aguardando PostgreSQL ficar disponível." >&2
+        exit 1
+    fi
     sleep 1
 done
 

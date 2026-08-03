@@ -52,13 +52,24 @@ container_id()
     compose ps -q "$1"
 }
 
+assert_single_network()
+{
+    network_count=$(docker inspect --format '{{len .NetworkSettings.Networks}}' "$1")
+    if [ "$network_count" -ne 1 ]; then
+        echo "O container $1 deve estar conectado a exatamente uma rede; encontrado: $network_count." >&2
+        return 1
+    fi
+}
+
 container_ip()
 {
+    assert_single_network "$1"
     docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$1"
 }
 
 container_network()
 {
+    assert_single_network "$1"
     docker inspect --format '{{range $name, $settings := .NetworkSettings.Networks}}{{$name}}{{end}}' "$1"
 }
 
@@ -94,6 +105,8 @@ if [ -z "$nginx_id" ] || [ -z "$php_id" ]; then
     echo "Os serviços nginx e php precisam estar em execução." >&2
     exit 1
 fi
+
+assert_single_network "$nginx_id"
 
 if ! nginx_reaches_application; then
     echo "A verificação exige /up saudável antes da recriação." >&2
