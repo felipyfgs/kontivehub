@@ -440,11 +440,8 @@ networks:
       encrypted: "true"
     attachable: false
   app:
-    driver: overlay
-    driver_opts:
-      encrypted: "true"
-    internal: true
-    attachable: false
+    name: kontivehub_app
+    external: true
   egress:
     driver: overlay
     driver_opts:
