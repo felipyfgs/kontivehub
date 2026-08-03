@@ -2,6 +2,7 @@
 
 load_env_secret() {
     secret_path=$1
+    carriage_return=$(printf '\r')
 
     if [ ! -r "$secret_path" ]; then
         echo "Docker Secret não legível: $secret_path" >&2
@@ -11,6 +12,12 @@ load_env_secret() {
     line_number=0
     while IFS= read -r secret_line || [ -n "$secret_line" ]; do
         line_number=$((line_number + 1))
+
+        case "$secret_line" in
+            *"$carriage_return")
+                secret_line=${secret_line%"$carriage_return"}
+                ;;
+        esac
 
         case "$secret_line" in
             ''|'#'*)

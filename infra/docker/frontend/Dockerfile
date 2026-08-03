@@ -48,6 +48,7 @@ LABEL org.opencontainers.image.revision="${RELEASE_SHA}" \
       org.opencontainers.image.title="kontivehub-web"
 
 COPY infra/docker/frontend/nginx.conf /etc/nginx/conf.d/default.conf
+COPY infra/docker/frontend/security-headers.conf /etc/nginx/security-headers.conf
 COPY --from=web-builder /workspace/apps/web/.output/public /usr/share/nginx/html
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=5 \

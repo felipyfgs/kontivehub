@@ -14,7 +14,7 @@ services:
     secrets:
       - nginx_edge_token
     healthcheck:
-      test: ["CMD-SHELL", "wget --header='Accept: application/json' -qO- http://127.0.0.1:8080/up | grep -q '\"status\":\"up\"'"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/nginx-health"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -99,6 +99,9 @@ services:
       start_period: 30s
     stop_grace_period: 30s
     deploy:
+      placement:
+        constraints:
+          - "node.labels.kontivehub.persistence == true"
       replicas: 2
       restart_policy:
         condition: any
@@ -136,13 +139,16 @@ services:
       - app
       - egress
     healthcheck:
-      test: ["CMD", "php", "-r", "exit(0);"]
+      test: ["CMD", "php", "artisan", "horizon:status"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 30s
     stop_grace_period: 60s
     deploy:
+      placement:
+        constraints:
+          - "node.labels.kontivehub.persistence == true"
       replicas: 1
       restart_policy:
         condition: any
@@ -178,13 +184,16 @@ services:
       - app
       - egress
     healthcheck:
-      test: ["CMD", "php", "-r", "exit(0);"]
+      test: ["CMD", "php", "-r", "$$path='/tmp/kontivehub-scheduler-heartbeat'; $$now=time(); $$mtime=@filemtime($$path); exit($$mtime !== false && $$mtime <= $$now && $$now - $$mtime <= 180 ? 0 : 1);"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 30s
     stop_grace_period: 30s
     deploy:
+      placement:
+        constraints:
+          - "node.labels.kontivehub.persistence == true"
       replicas: 1
       restart_policy:
         condition: any
@@ -226,6 +235,9 @@ services:
       start_period: 30s
     stop_grace_period: 30s
     deploy:
+      placement:
+        constraints:
+          - "node.labels.kontivehub.persistence == true"
       replicas: 1
       restart_policy:
         condition: any
@@ -266,6 +278,9 @@ services:
       start_period: 20s
     stop_grace_period: 30s
     deploy:
+      placement:
+        constraints:
+          - "node.labels.kontivehub.persistence == true"
       replicas: 1
       restart_policy:
         condition: any
@@ -316,6 +331,9 @@ services:
       start_period: 20s
     stop_grace_period: 60s
     deploy:
+      placement:
+        constraints:
+          - "node.labels.kontivehub.persistence == true"
       replicas: 1
       restart_policy:
         condition: any
@@ -341,21 +359,43 @@ services:
 
   redis:
     image: redis:8-alpine
-    command: ["redis-server", "/run/secrets/redis_conf"]
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        REDIS_PASSWORD=$$(tr -d '\r\n' < /run/secrets/redis_password)
+        test -n "$$REDIS_PASSWORD"
+        if grep -Eq '^[[:space:]]*requirepass[[:space:]]' /run/secrets/redis_conf; then
+          echo 'redis_conf não deve declarar requirepass; use redis_password.' >&2
+          exit 78
+        fi
+        ESCAPED_PASSWORD=$$(printf '%s' "$$REDIS_PASSWORD" | sed 's/\\/\\\\/g; s/"/\\"/g')
+        RUNTIME_CONFIG=/tmp/redis-runtime.conf
+        umask 077
+        {
+          cat /run/secrets/redis_conf
+          printf '\nrequirepass "%s"\n' "$$ESCAPED_PASSWORD"
+        } > "$$RUNTIME_CONFIG"
+        chown redis:redis "$$RUNTIME_CONFIG"
+        unset REDIS_PASSWORD ESCAPED_PASSWORD
+        exec /usr/local/bin/docker-entrypoint.sh redis-server "$$RUNTIME_CONFIG"
     secrets:
       - redis_conf
+      - redis_password
     volumes:
       - redis_data:/data
     networks:
       - app
     healthcheck:
-      test: ["CMD-SHELL", "REDISCLI_AUTH=$$(sed -n 's/^requirepass[[:space:]]\\+//p' /run/secrets/redis_conf | head -n 1) redis-cli ping | grep -q PONG"]
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$(tr -d '\\r\\n' < /run/secrets/redis_password)\" redis-cli ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 10s
     stop_grace_period: 30s
     deploy:
+      placement:
+        constraints:
+          - "node.labels.kontivehub.persistence == true"
       replicas: 1
       restart_policy:
         condition: any
@@ -405,6 +445,8 @@ secrets:
   postgres_password:
     external: true
   redis_conf:
+    external: true
+  redis_password:
     external: true
 
 volumes:
