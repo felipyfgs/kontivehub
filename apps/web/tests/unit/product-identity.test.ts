@@ -1,9 +1,11 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { consumeResetPasswordCredentials } from '../../app/utils/reset-password'
 
-const root = (path: string) => resolve(process.cwd(), path)
+const webRoot = fileURLToPath(new URL('../..', import.meta.url))
+const root = (path: string) => resolve(webRoot, path)
 const read = (path: string) => readFileSync(root(path), 'utf8')
 describe('identidade pública KontiveHub', () => {
   it('usa a marca canônica nos metadados globais e no manifesto PWA', () => {

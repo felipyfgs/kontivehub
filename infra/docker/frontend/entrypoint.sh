@@ -16,9 +16,24 @@ install -d -o "$LOCAL_UID" -g "$LOCAL_GID" \
     "$APP_DIR/node_modules" "$APP_DIR/node_modules/.cache" \
     "$RUNTIME_HOME" "$COREPACK_HOME_DIR"
 
-# O volume pode ter sido usado por uma imagem/UID anterior. Nuxt reescreve
-# somente esta árvore durante prepare, typecheck e generate.
-chown -R "$LOCAL_UID:$LOCAL_GID" "$APP_DIR/node_modules/.cache"
+readonly ownership_marker="$APP_DIR/node_modules/.kontivehub-ownership"
+readonly expected_ownership="$LOCAL_UID:$LOCAL_GID"
+marker_value=""
+marker_ownership=""
+if [[ -r "$ownership_marker" ]]; then
+    IFS= read -r marker_value < "$ownership_marker" || true
+    marker_ownership=$(stat -c '%u:%g' "$ownership_marker" 2>/dev/null || true)
+fi
+
+# Volumes anteriores não possuem marcador ou registram outro UID/GID. O
+# marcador é gravado somente depois do chown completo, evitando um scan O(n)
+# em todo start sem mascarar uma correção interrompida.
+if [[ "$marker_value" != "$expected_ownership" || "$marker_ownership" != "$expected_ownership" ]]; then
+    chown -R "$LOCAL_UID:$LOCAL_GID" "$APP_DIR/node_modules"
+    printf '%s\n' "$expected_ownership" > "$ownership_marker"
+    chown "$LOCAL_UID:$LOCAL_GID" "$ownership_marker"
+    chmod 0644 "$ownership_marker"
+fi
 
 # Esses caminhos são artefatos ignorados e podem ter sido criados por uma
 # imagem/UID anterior. Dev, generate e test-gate precisam reescrevê-los.
