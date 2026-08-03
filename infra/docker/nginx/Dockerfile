@@ -11,7 +11,6 @@ ARG BUILD_DATE=
 
 LABEL org.opencontainers.image.revision="${RELEASE_SHA}" \
       org.opencontainers.image.created="${BUILD_DATE}" \
-      org.opencontainers.image.source="https://github.com/inovaicontabil/kontivehub" \
       org.opencontainers.image.title="kontivehub-nginx"
 
 RUN mkdir -p /var/empty \

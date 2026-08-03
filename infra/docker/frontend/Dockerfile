@@ -44,7 +44,6 @@ ARG BUILD_DATE=
 
 LABEL org.opencontainers.image.revision="${RELEASE_SHA}" \
       org.opencontainers.image.created="${BUILD_DATE}" \
-      org.opencontainers.image.source="https://github.com/inovaicontabil/kontivehub" \
       org.opencontainers.image.title="kontivehub-web"
 
 COPY infra/docker/frontend/nginx.conf /etc/nginx/conf.d/default.conf
