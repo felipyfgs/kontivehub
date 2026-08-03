@@ -69,7 +69,7 @@ async function waitFor(url, timeoutMs = 120_000) {
 try {
   await run('docker', [
     ...composeArgs,
-    'run', '--rm', '--no-deps', 'frontend', 'prepare'
+    'run', '--rm', '--no-deps', '--build', 'frontend', 'prepare'
   ])
   await run('docker', [
     ...composeArgs,
