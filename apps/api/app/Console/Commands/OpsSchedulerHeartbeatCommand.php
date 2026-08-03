@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Cache;
  */
 class OpsSchedulerHeartbeatCommand extends Command
 {
+    public const HEALTHCHECK_FILE = '/tmp/kontivehub-scheduler-heartbeat';
+
     protected $signature = 'ops:scheduler-heartbeat';
 
     protected $description = 'Registra heartbeat do scheduler para o gate de readiness';
@@ -23,6 +25,17 @@ class OpsSchedulerHeartbeatCommand extends Command
         );
 
         $stamp = now()->utc()->toIso8601String();
+        $payload = $stamp."\n";
+        $temporaryFile = self::HEALTHCHECK_FILE.'.tmp.'.getmypid();
+        $written = @file_put_contents($temporaryFile, $payload, LOCK_EX);
+
+        if ($written !== strlen($payload) || ! @rename($temporaryFile, self::HEALTHCHECK_FILE)) {
+            @unlink($temporaryFile);
+            $this->error('Não foi possível atualizar o heartbeat local do scheduler.');
+
+            return self::FAILURE;
+        }
+
         Cache::put($key, $stamp, now()->addDay());
 
         if ($this->output->isVerbose()) {

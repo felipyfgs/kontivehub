@@ -1,0 +1,479 @@
+version: "3.9"
+
+services:
+  nginx:
+    image: ${KONTIVEHUB_REGISTRY:?defina KONTIVEHUB_REGISTRY}/nginx:${KONTIVEHUB_VERSION:?defina KONTIVEHUB_VERSION}
+    ports:
+      - target: 80
+        published: 80
+        protocol: tcp
+        mode: ingress
+    networks:
+      - edge
+      - app
+    secrets:
+      - nginx_edge_token
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/nginx-health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+        failure_action: rollback
+        monitor: 30s
+      rollback_config:
+        parallelism: 1
+        delay: 5s
+        order: stop-first
+        monitor: 30s
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+        reservations:
+          cpus: "0.10"
+          memory: 64M
+
+  web:
+    image: ${KONTIVEHUB_REGISTRY:?defina KONTIVEHUB_REGISTRY}/web:${KONTIVEHUB_VERSION:?defina KONTIVEHUB_VERSION}
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+        failure_action: rollback
+        monitor: 30s
+      rollback_config:
+        parallelism: 1
+        delay: 5s
+        order: stop-first
+        monitor: 30s
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+        reservations:
+          cpus: "0.10"
+          memory: 64M
+
+  php:
+    image: ${KONTIVEHUB_REGISTRY:?defina KONTIVEHUB_REGISTRY}/api:${KONTIVEHUB_VERSION:?defina KONTIVEHUB_VERSION}
+    secrets:
+      - api_runtime_env
+    volumes:
+      - vault_data:/var/vault
+      - private_storage:/var/www/html/storage/app/private
+    networks:
+      - app
+      - egress
+    healthcheck:
+      test: ["CMD", "php", "-r", "$$s=@fsockopen('127.0.0.1',9000); exit($$s ? 0 : 1);"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    stop_grace_period: 30s
+    deploy:
+      placement:
+        constraints:
+          - "node.labels.kontivehub.persistence == true"
+      replicas: 2
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+      update_config:
+        parallelism: 1
+        delay: 15s
+        order: start-first
+        failure_action: rollback
+        monitor: 45s
+      rollback_config:
+        parallelism: 1
+        delay: 5s
+        order: stop-first
+        monitor: 45s
+      resources:
+        limits:
+          cpus: "1.50"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+
+  horizon:
+    image: ${KONTIVEHUB_REGISTRY:?defina KONTIVEHUB_REGISTRY}/api-rpa:${KONTIVEHUB_VERSION:?defina KONTIVEHUB_VERSION}
+    command: ["php", "artisan", "horizon"]
+    secrets:
+      - api_runtime_env
+    volumes:
+      - vault_data:/var/vault
+      - private_storage:/var/www/html/storage/app/private
+    networks:
+      - app
+      - egress
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - . /usr/local/lib/load-env-secret.sh && load_env_secret /run/secrets/api_runtime_env && exec gosu www-data php artisan horizon:status
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    stop_grace_period: 60s
+    deploy:
+      placement:
+        constraints:
+          - "node.labels.kontivehub.persistence == true"
+      replicas: 1
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+      update_config:
+        parallelism: 1
+        order: stop-first
+        failure_action: rollback
+        monitor: 45s
+      rollback_config:
+        parallelism: 1
+        order: stop-first
+        monitor: 45s
+      resources:
+        limits:
+          cpus: "2.00"
+          memory: 3G
+        reservations:
+          cpus: "0.50"
+          memory: 512M
+
+  scheduler:
+    image: ${KONTIVEHUB_REGISTRY:?defina KONTIVEHUB_REGISTRY}/api:${KONTIVEHUB_VERSION:?defina KONTIVEHUB_VERSION}
+    command: ["php", "artisan", "schedule:work"]
+    secrets:
+      - api_runtime_env
+    volumes:
+      - vault_data:/var/vault
+      - private_storage:/var/www/html/storage/app/private
+    networks:
+      - app
+      - egress
+    healthcheck:
+      test: ["CMD", "php", "-r", "$$path='/tmp/kontivehub-scheduler-heartbeat'; $$now=time(); $$mtime=@filemtime($$path); exit($$mtime !== false && $$mtime <= $$now && $$now - $$mtime <= 180 ? 0 : 1);"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    stop_grace_period: 30s
+    deploy:
+      placement:
+        constraints:
+          - "node.labels.kontivehub.persistence == true"
+      replicas: 1
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+      update_config:
+        parallelism: 1
+        order: stop-first
+        failure_action: rollback
+        monitor: 45s
+      rollback_config:
+        parallelism: 1
+        order: stop-first
+        monitor: 45s
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 768M
+        reservations:
+          cpus: "0.20"
+          memory: 192M
+
+  reverb:
+    image: ${KONTIVEHUB_REGISTRY:?defina KONTIVEHUB_REGISTRY}/api:${KONTIVEHUB_VERSION:?defina KONTIVEHUB_VERSION}
+    command: ["php", "artisan", "reverb:start", "--host=0.0.0.0", "--port=8081"]
+    secrets:
+      - api_runtime_env
+    volumes:
+      - vault_data:/var/vault
+      - private_storage:/var/www/html/storage/app/private
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD", "php", "-r", "$$s=@fsockopen('127.0.0.1',8081); exit($$s ? 0 : 1);"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    stop_grace_period: 30s
+    deploy:
+      placement:
+        constraints:
+          - "node.labels.kontivehub.persistence == true"
+      replicas: 1
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+      update_config:
+        parallelism: 1
+        order: stop-first
+        failure_action: rollback
+        monitor: 45s
+      rollback_config:
+        parallelism: 1
+        order: stop-first
+        monitor: 45s
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 512M
+        reservations:
+          cpus: "0.20"
+          memory: 128M
+
+  wazync:
+    image: ${KONTIVEHUB_REGISTRY:?defina KONTIVEHUB_REGISTRY}/wazync:${KONTIVEHUB_VERSION:?defina KONTIVEHUB_VERSION}
+    secrets:
+      - wazync_runtime_env
+    volumes:
+      - wazync_spool:/var/lib/wazync/spool
+    networks:
+      - app
+      - egress
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    stop_grace_period: 30s
+    deploy:
+      placement:
+        constraints:
+          - "node.labels.kontivehub.persistence == true"
+      replicas: 1
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+      update_config:
+        parallelism: 1
+        order: stop-first
+        failure_action: rollback
+        monitor: 45s
+      rollback_config:
+        parallelism: 1
+        order: stop-first
+        monitor: 45s
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 768M
+        reservations:
+          cpus: "0.20"
+          memory: 128M
+
+  postgres:
+    image: postgres:17-alpine
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        POSTGRES_DB=$$(tr -d '\r\n' < /run/secrets/postgres_db)
+        POSTGRES_USER=$$(tr -d '\r\n' < /run/secrets/postgres_user)
+        POSTGRES_PASSWORD=$$(tr -d '\r\n' < /run/secrets/postgres_password)
+        test -n "$$POSTGRES_DB" && test -n "$$POSTGRES_USER" && test -n "$$POSTGRES_PASSWORD"
+        case "$$POSTGRES_PASSWORD" in
+          [Ss][Uu][Bb][Ss][Tt][Ii][Tt][Uu][Aa]|[Ss][Uu][Bb][Ss][Tt][Ii][Tt][Uu][Aa][_:-]*)
+            echo 'postgres_password ainda contém placeholder.' >&2
+            exit 78
+            ;;
+        esac
+        export POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD
+        exec /usr/local/bin/docker-entrypoint.sh postgres
+    secrets:
+      - postgres_db
+      - postgres_user
+      - postgres_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$(tr -d '\\r\\n' < /run/secrets/postgres_user)\" -d \"$$(tr -d '\\r\\n' < /run/secrets/postgres_db)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    stop_grace_period: 60s
+    deploy:
+      placement:
+        constraints:
+          - "node.labels.kontivehub.persistence == true"
+      replicas: 1
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 5
+        window: 180s
+      update_config:
+        parallelism: 1
+        order: stop-first
+        failure_action: rollback
+        monitor: 60s
+      rollback_config:
+        parallelism: 1
+        order: stop-first
+        monitor: 60s
+      resources:
+        limits:
+          cpus: "2.00"
+          memory: 2G
+        reservations:
+          cpus: "0.50"
+          memory: 512M
+
+  redis:
+    image: redis:8-alpine
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        REDIS_PASSWORD=$$(tr -d '\r\n' < /run/secrets/redis_password)
+        test -n "$$REDIS_PASSWORD"
+        case "$$REDIS_PASSWORD" in
+          [Ss][Uu][Bb][Ss][Tt][Ii][Tt][Uu][Aa]|[Ss][Uu][Bb][Ss][Tt][Ii][Tt][Uu][Aa][_:-]*)
+            echo 'redis_password ainda contém placeholder.' >&2
+            exit 78
+            ;;
+        esac
+        if grep -Eq '^[[:space:]]*requirepass[[:space:]]' /run/secrets/redis_conf; then
+          echo 'redis_conf não deve declarar requirepass; use redis_password.' >&2
+          exit 78
+        fi
+        ESCAPED_PASSWORD=$$(printf '%s' "$$REDIS_PASSWORD" | sed 's/\\/\\\\/g; s/"/\\"/g')
+        RUNTIME_CONFIG=/tmp/redis-runtime.conf
+        umask 077
+        {
+          cat /run/secrets/redis_conf
+          printf '\ndir /data\nrequirepass "%s"\n' "$$ESCAPED_PASSWORD"
+        } > "$$RUNTIME_CONFIG"
+        chown redis:redis "$$RUNTIME_CONFIG"
+        unset REDIS_PASSWORD ESCAPED_PASSWORD
+        exec /usr/local/bin/docker-entrypoint.sh redis-server "$$RUNTIME_CONFIG"
+    secrets:
+      - redis_conf
+      - redis_password
+    volumes:
+      - redis_data:/data
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$(tr -d '\\r\\n' < /run/secrets/redis_password)\" redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    stop_grace_period: 30s
+    deploy:
+      placement:
+        constraints:
+          - "node.labels.kontivehub.persistence == true"
+      replicas: 1
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+      update_config:
+        parallelism: 1
+        order: stop-first
+        failure_action: rollback
+        monitor: 45s
+      rollback_config:
+        parallelism: 1
+        order: stop-first
+        monitor: 45s
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 768M
+        reservations:
+          cpus: "0.20"
+          memory: 128M
+
+networks:
+  edge:
+    driver: overlay
+    driver_opts:
+      encrypted: "true"
+    attachable: false
+  app:
+    name: kontivehub_app
+    external: true
+  egress:
+    driver: overlay
+    driver_opts:
+      encrypted: "true"
+    attachable: false
+
+secrets:
+  nginx_edge_token:
+    external: true
+  api_runtime_env:
+    external: true
+  wazync_runtime_env:
+    external: true
+  postgres_db:
+    external: true
+  postgres_user:
+    external: true
+  postgres_password:
+    external: true
+  redis_conf:
+    external: true
+  redis_password:
+    external: true
+
+volumes:
+  postgres_data:
+    external: true
+  redis_data:
+    external: true
+  vault_data:
+    external: true
+  private_storage:
+    external: true
+  wazync_spool:
+    external: true

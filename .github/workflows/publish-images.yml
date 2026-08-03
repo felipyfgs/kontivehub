@@ -1,0 +1,189 @@
+name: Publish production images
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    branches:
+      - main
+    types:
+      - completed
+  workflow_dispatch:
+
+concurrency:
+  group: publish-production-${{ github.event.workflow_run.head_sha || github.sha }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_ROOT: ghcr.io/${{ github.repository }}
+  RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+jobs:
+  publish:
+    name: Publish ${{ matrix.image }}
+    if: >-
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.repository.full_name == github.repository) ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: api
+            dockerfile: infra/docker/php/Dockerfile
+            target: production
+          - image: api-rpa
+            dockerfile: infra/docker/php/Dockerfile
+            target: rpa-production
+          - image: web
+            dockerfile: infra/docker/frontend/Dockerfile
+            target: production
+          - image: nginx
+            dockerfile: infra/docker/nginx/Dockerfile
+            target: production
+          - image: wazync
+            dockerfile: infra/docker/wazync/Dockerfile
+            target: runtime
+    steps:
+      - name: Checkout approved revision
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+          persist-credentials: false
+
+      - name: Set build date
+        id: build
+        run: echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve immutable release identity
+        id: release
+        env:
+          IMAGE_NAME: ${{ matrix.image }}
+          NUXT_PUBLIC_COMMUNICATION_ENABLED: ${{ vars.NUXT_PUBLIC_COMMUNICATION_ENABLED || 'false' }}
+          NUXT_PUBLIC_REVERB_APP_KEY: ${{ vars.NUXT_PUBLIC_REVERB_APP_KEY || 'communication-disabled' }}
+          NUXT_PUBLIC_REVERB_HOST: ${{ vars.NUXT_PUBLIC_REVERB_HOST || '' }}
+          NUXT_PUBLIC_REVERB_PORT: ${{ vars.NUXT_PUBLIC_REVERB_PORT || '0' }}
+          NUXT_PUBLIC_REVERB_SCHEME: ${{ vars.NUXT_PUBLIC_REVERB_SCHEME || 'https' }}
+        run: |
+          communication_enabled=$NUXT_PUBLIC_COMMUNICATION_ENABLED
+          reverb_app_key=$NUXT_PUBLIC_REVERB_APP_KEY
+          reverb_host=$NUXT_PUBLIC_REVERB_HOST
+          reverb_port=$NUXT_PUBLIC_REVERB_PORT
+          reverb_scheme=$NUXT_PUBLIC_REVERB_SCHEME
+
+          case "$communication_enabled" in
+            true|false) ;;
+            *) echo "NUXT_PUBLIC_COMMUNICATION_ENABLED deve ser true ou false." >&2; exit 64 ;;
+          esac
+          [[ "$reverb_app_key" =~ ^[A-Za-z0-9._:-]+$ ]] || {
+            echo "NUXT_PUBLIC_REVERB_APP_KEY possui formato inválido." >&2
+            exit 64
+          }
+          if [ -n "$reverb_host" ] \
+            && ! [[ "$reverb_host" =~ ^\[[0-9A-Fa-f:.]+\]$ ]] \
+            && ! [[ "$reverb_host" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]]; then
+            echo "NUXT_PUBLIC_REVERB_HOST possui formato inválido." >&2
+            exit 64
+          fi
+          if ! [[ "$reverb_port" =~ ^[0-9]+$ ]] \
+            || (( 10#$reverb_port > 65535 )); then
+            echo "NUXT_PUBLIC_REVERB_PORT deve estar entre 0 e 65535." >&2
+            exit 64
+          fi
+          case "$reverb_scheme" in
+            http|https) ;;
+            *) echo "NUXT_PUBLIC_REVERB_SCHEME deve ser http ou https." >&2; exit 64 ;;
+          esac
+          if [ "$communication_enabled" = true ]; then
+            if [ -z "$reverb_host" ] || (( 10#$reverb_port == 0 )); then
+              echo "Reverb habilitado exige host não vazio e porta diferente de zero." >&2
+              exit 64
+            fi
+          fi
+
+          public_config_digest=$(
+            printf '%s\0' \
+              "NUXT_PUBLIC_COMMUNICATION_ENABLED=$communication_enabled" \
+              "NUXT_PUBLIC_REVERB_APP_KEY=$reverb_app_key" \
+              "NUXT_PUBLIC_REVERB_HOST=$reverb_host" \
+              "NUXT_PUBLIC_REVERB_PORT=$reverb_port" \
+              "NUXT_PUBLIC_REVERB_SCHEME=$reverb_scheme" \
+              | sha256sum | cut -c1-12
+          )
+          echo "tag=sha-${RELEASE_SHA}-cfg-${public_config_digest}" >> "$GITHUB_OUTPUT"
+
+          {
+            echo 'build_args<<KONTIVEHUB_BUILD_ARGS'
+            if [ "$IMAGE_NAME" = web ]; then
+              printf '%s\n' \
+                "NUXT_PUBLIC_COMMUNICATION_ENABLED=$communication_enabled" \
+                "NUXT_PUBLIC_REVERB_APP_KEY=$reverb_app_key" \
+                "NUXT_PUBLIC_REVERB_HOST=$reverb_host" \
+                "NUXT_PUBLIC_REVERB_PORT=$reverb_port" \
+                "NUXT_PUBLIC_REVERB_SCHEME=$reverb_scheme"
+            fi
+            echo 'KONTIVEHUB_BUILD_ARGS'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check immutable release tag
+        id: existing
+        env:
+          IMAGE: ${{ env.IMAGE_ROOT }}/${{ matrix.image }}:${{ steps.release.outputs.tag }}
+        run: |
+          if docker buildx imagetools inspect "$IMAGE" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate image metadata
+        id: meta
+        if: steps.existing.outputs.exists != 'true'
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ${{ env.IMAGE_ROOT }}/${{ matrix.image }}
+          tags: |
+            type=raw,value=${{ steps.release.outputs.tag }}
+          labels: |
+            org.opencontainers.image.revision=${{ env.RELEASE_SHA }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+      - name: Build and publish immutable image
+        if: steps.existing.outputs.exists != 'true'
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          target: ${{ matrix.target }}
+          push: true
+          pull: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            RELEASE_SHA=${{ env.RELEASE_SHA }}
+            BUILD_DATE=${{ steps.build.outputs.date }}
+            ${{ steps.release.outputs.build_args }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+          provenance: mode=max
+          sbom: true

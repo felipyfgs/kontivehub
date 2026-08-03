@@ -69,9 +69,12 @@ async function waitFor(url, timeoutMs = 120_000) {
 try {
   await run('docker', [
     ...composeArgs,
-    '--profile', 'dev',
+    'run', '--rm', '--no-deps', '--build', 'frontend', 'prepare'
+  ])
+  await run('docker', [
+    ...composeArgs,
     'up', '-d', '--build',
-    'postgres', 'redis', 'php', 'nginx', 'frontend-dev'
+    'postgres', 'redis', 'php', 'nginx', 'frontend'
   ])
   await run('docker', [
     ...composeArgs,
@@ -89,17 +92,11 @@ try {
   ])
   await waitFor(`http://127.0.0.1:${env.E2E_API_PORT}/up`)
   await waitFor(`http://127.0.0.1:${env.E2E_WEB_PORT}/login`)
-  await run('docker', [
-    ...composeArgs,
-    'exec', '-T', 'frontend-dev',
-    'app-entrypoint', 'prepare'
-  ])
   await run(resolve(webRoot, 'node_modules/.bin/playwright'), ['test', ...playwrightArgs], { cwd: webRoot })
 } finally {
   if (process.env.E2E_KEEP_STACK !== 'true') {
     await run('docker', [
       ...composeArgs,
-      '--profile', 'dev',
       'down', '--volumes', '--remove-orphans'
     ])
       .catch(error => console.error(`Falha na limpeza E2E: ${error.message}`))

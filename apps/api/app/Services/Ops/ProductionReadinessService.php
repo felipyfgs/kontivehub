@@ -18,6 +18,8 @@ final class ProductionReadinessService
 {
     public const HEARTBEAT_CACHE_KEY = 'ops:scheduler:heartbeat';
 
+    public const SCHEDULER_HEARTBEAT_MAX_AGE_SECONDS = 180;
+
     public function __construct(
         private readonly HorizonReadinessProbe $horizon,
     ) {}
@@ -162,10 +164,15 @@ final class ProductionReadinessService
     /**
      * @return array{id: string, ok: bool, detail: string}
      */
-    private function checkSchedulerHeartbeat(): array
+    public function checkSchedulerHeartbeat(): array
     {
         $key = (string) config('ops.scheduler_heartbeat.cache_key', self::HEARTBEAT_CACHE_KEY);
-        $maxAge = (int) config('ops.scheduler_heartbeat.max_age_seconds', 180);
+        $configuredMaxAge = (int) config(
+            'ops.scheduler_heartbeat.max_age_seconds',
+            self::SCHEDULER_HEARTBEAT_MAX_AGE_SECONDS,
+        );
+        $maxAge = max(1, min($configuredMaxAge, self::SCHEDULER_HEARTBEAT_MAX_AGE_SECONDS));
+        $now = now();
         $raw = Cache::get($key);
 
         if ($raw === null || $raw === '') {
@@ -178,7 +185,11 @@ final class ProductionReadinessService
             return ['id' => 'scheduler_heartbeat', 'ok' => false, 'detail' => 'invalid'];
         }
 
-        $age = $at->diffInSeconds(now());
+        if ($at->isAfter($now)) {
+            return ['id' => 'scheduler_heartbeat', 'ok' => false, 'detail' => 'future_timestamp'];
+        }
+
+        $age = $at->diffInSeconds($now);
         if ($age > $maxAge) {
             return ['id' => 'scheduler_heartbeat', 'ok' => false, 'detail' => 'stale_age_seconds='.$age];
         }
