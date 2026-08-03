@@ -72,7 +72,10 @@ load_env_secret() {
         esac
 
         case "$secret_value" in
-            *[Ss][Uu][Bb][Ss][Tt][Ii][Tt][Uu][Aa]*)
+            [Ss][Uu][Bb][Ss][Tt][Ii][Tt][Uu][Aa]|\
+            [Ss][Uu][Bb][Ss][Tt][Ii][Tt][Uu][Aa][_:-]*|\
+            [Bb][Aa][Ss][Ee]64:[Ss][Uu][Bb][Ss][Tt][Ii][Tt][Uu][Aa][_:-]*|\
+            *:[Ss][Uu][Bb][Ss][Tt][Ii][Tt][Uu][Aa]@*)
                 echo "Placeholder não substituído no Docker Secret $secret_path:$line_number" >&2
                 return 78
                 ;;
