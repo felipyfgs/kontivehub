@@ -1,3 +1,5 @@
+name: ${COMPOSE_PROJECT_NAME:-kontivehub}
+
 x-api-environment: &api-environment
   APP_NAME: ${APP_NAME:-KontiveHub}
   APP_ENV: production
@@ -59,6 +61,20 @@ x-api-environment: &api-environment
   VAULT_DISK_ROOT: /var/vault
   RELEASE_SHA: ${KONTIVEHUB_VERSION:?defina KONTIVEHUB_VERSION no .env}
 
+x-api-service: &api-service
+  image: ${KONTIVEHUB_REGISTRY:-ghcr.io/felipyfgs/kontivehub}/api:${KONTIVEHUB_VERSION:?defina KONTIVEHUB_VERSION no .env}
+  environment: *api-environment
+  volumes:
+    - vault_data:/var/vault
+    - private_storage:/var/www/html/storage/app/private
+  restart: unless-stopped
+  stop_grace_period: 30s
+  security_opt:
+    - no-new-privileges:true
+  networks:
+    - app
+    - egress
+
 x-wazync-environment: &wazync-environment
   WAZYNC_ENABLED: ${WAZYNC_ENABLED:-false}
   WAZYNC_HTTP_ADDRESS: :8080
@@ -82,233 +98,145 @@ x-wazync-environment: &wazync-environment
   WAZYNC_WHATSAPP_PROXY_URL: ${WAZYNC_WHATSAPP_PROXY_URL:-}
   WAZYNC_WHATSAPP_RETRY_HANDLERS: ${WAZYNC_WHATSAPP_RETRY_HANDLERS:-4}
 
-x-stateless-deploy: &stateless-deploy
-  replicas: 1
-  restart_policy:
-    condition: any
-    delay: 5s
-    max_attempts: 5
-    window: 120s
-  update_config:
-    parallelism: 1
-    delay: 10s
-    order: start-first
-    failure_action: rollback
-    monitor: 30s
-  rollback_config:
-    parallelism: 1
-    delay: 5s
-    order: stop-first
-    monitor: 30s
-
-x-singleton-deploy: &singleton-deploy
-  replicas: 1
-  placement:
-    constraints:
-      - node.labels.kontivehub-data == true
-  restart_policy:
-    condition: any
-    delay: 5s
-    max_attempts: 5
-    window: 120s
-  update_config:
-    parallelism: 1
-    order: stop-first
-    failure_action: rollback
-    monitor: 45s
-  rollback_config:
-    parallelism: 1
-    order: stop-first
-    monitor: 45s
-
 services:
   nginx:
     image: ${KONTIVEHUB_REGISTRY:-ghcr.io/felipyfgs/kontivehub}/nginx:${KONTIVEHUB_VERSION:?defina KONTIVEHUB_VERSION no .env}
     environment:
       NGINX_EDGE_TOKEN: ${NGINX_EDGE_TOKEN:?defina NGINX_EDGE_TOKEN no .env}
     ports:
-      - target: 80
-        published: ${APP_PORT:-8080}
-        protocol: tcp
-        mode: ingress
-    networks:
-      - edge
-      - app
+      - "${APP_BIND_ADDRESS:-127.0.0.1}:${APP_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+      reverb:
+        condition: service_healthy
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/nginx-health"]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 30s
-    deploy:
-      <<: *stateless-deploy
-      resources:
-        limits:
-          cpus: "0.50"
-          memory: 256M
-        reservations:
-          cpus: "0.10"
-          memory: 64M
+    mem_limit: 256m
+    cpus: 0.50
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - edge
+      - app
 
   web:
     image: ${KONTIVEHUB_REGISTRY:-ghcr.io/felipyfgs/kontivehub}/web:${KONTIVEHUB_VERSION:?defina KONTIVEHUB_VERSION no .env}
-    networks:
-      - app
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 10s
-    deploy:
-      <<: *stateless-deploy
-      resources:
-        limits:
-          cpus: "0.50"
-          memory: 256M
-        reservations:
-          cpus: "0.10"
-          memory: 64M
-
-  api:
-    image: ${KONTIVEHUB_REGISTRY:-ghcr.io/felipyfgs/kontivehub}/api:${KONTIVEHUB_VERSION:?defina KONTIVEHUB_VERSION no .env}
-    environment: *api-environment
-    volumes:
-      - vault_data:/var/vault
-      - private_storage:/var/www/html/storage/app/private
+    mem_limit: 256m
+    cpus: 0.50
+    security_opt:
+      - no-new-privileges:true
     networks:
       - app
-      - egress
+
+  api:
+    <<: *api-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "php", "-r", "$$s=@fsockopen('127.0.0.1',9000); exit($$s ? 0 : 1);"]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 30s
-    stop_grace_period: 30s
-    deploy:
-      <<: *stateless-deploy
-      update_config:
-        parallelism: 1
-        delay: 10s
-        order: stop-first
-        failure_action: rollback
-        monitor: 30s
-      placement:
-        constraints:
-          - node.labels.kontivehub-data == true
-      resources:
-        limits:
-          cpus: "1.50"
-          memory: 1G
-        reservations:
-          cpus: "0.25"
-          memory: 256M
+    mem_limit: 1g
+    cpus: 1.50
 
   horizon:
+    <<: *api-service
     image: ${KONTIVEHUB_REGISTRY:-ghcr.io/felipyfgs/kontivehub}/api-rpa:${KONTIVEHUB_VERSION:?defina KONTIVEHUB_VERSION no .env}
     command: ["php", "artisan", "horizon"]
-    environment: *api-environment
-    volumes:
-      - vault_data:/var/vault
-      - private_storage:/var/www/html/storage/app/private
-    networks:
-      - app
-      - egress
+    stop_grace_period: 60s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "gosu www-data php artisan horizon:status"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 30s
-    stop_grace_period: 60s
-    deploy:
-      <<: *singleton-deploy
-      resources:
-        limits:
-          cpus: "2.00"
-          memory: 3G
-        reservations:
-          cpus: "0.50"
-          memory: 512M
+    mem_limit: 3g
+    cpus: 2.00
 
   scheduler:
-    image: ${KONTIVEHUB_REGISTRY:-ghcr.io/felipyfgs/kontivehub}/api:${KONTIVEHUB_VERSION:?defina KONTIVEHUB_VERSION no .env}
+    <<: *api-service
     command: ["php", "artisan", "schedule:work"]
-    environment: *api-environment
-    volumes:
-      - vault_data:/var/vault
-      - private_storage:/var/www/html/storage/app/private
-    networks:
-      - app
-      - egress
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "php", "-r", "$$path='/tmp/kontivehub-scheduler-heartbeat'; $$now=time(); $$mtime=@filemtime($$path); exit($$mtime !== false && $$mtime <= $$now && $$now - $$mtime <= 180 ? 0 : 1);"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 30s
-    stop_grace_period: 30s
-    deploy:
-      <<: *singleton-deploy
-      resources:
-        limits:
-          cpus: "1.00"
-          memory: 768M
-        reservations:
-          cpus: "0.20"
-          memory: 192M
+    mem_limit: 768m
+    cpus: 1.00
 
   reverb:
-    image: ${KONTIVEHUB_REGISTRY:-ghcr.io/felipyfgs/kontivehub}/api:${KONTIVEHUB_VERSION:?defina KONTIVEHUB_VERSION no .env}
+    <<: *api-service
     command: ["php", "artisan", "reverb:start", "--host=0.0.0.0", "--port=8081"]
-    environment: *api-environment
-    volumes:
-      - vault_data:/var/vault
-      - private_storage:/var/www/html/storage/app/private
-    networks:
-      - app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "php", "-r", "$$s=@fsockopen('127.0.0.1',8081); exit($$s ? 0 : 1);"]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 30s
-    stop_grace_period: 30s
-    deploy:
-      <<: *singleton-deploy
-      resources:
-        limits:
-          cpus: "1.00"
-          memory: 512M
-        reservations:
-          cpus: "0.20"
-          memory: 128M
+    mem_limit: 512m
+    cpus: 1.00
 
   wazync:
     image: ${KONTIVEHUB_REGISTRY:-ghcr.io/felipyfgs/kontivehub}/wazync:${KONTIVEHUB_VERSION:?defina KONTIVEHUB_VERSION no .env}
     environment: *wazync-environment
     volumes:
       - wazync_spool:/var/lib/wazync/spool
-    networks:
-      - app
-      - egress
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nginx:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 30s
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 20s
-    stop_grace_period: 30s
-    deploy:
-      <<: *singleton-deploy
-      resources:
-        limits:
-          cpus: "1.00"
-          memory: 768M
-        reservations:
-          cpus: "0.20"
-          memory: 128M
+    mem_limit: 768m
+    cpus: 1.00
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - app
+      - egress
 
   postgres:
     image: postgres:17-alpine
@@ -318,29 +246,20 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:?defina DB_PASSWORD no .env}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    networks:
-      - app
+    restart: unless-stopped
+    stop_grace_period: 60s
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 20s
-    stop_grace_period: 60s
-    deploy:
-      <<: *singleton-deploy
-      restart_policy:
-        condition: any
-        delay: 10s
-        max_attempts: 5
-        window: 180s
-      resources:
-        limits:
-          cpus: "2.00"
-          memory: 2G
-        reservations:
-          cpus: "0.50"
-          memory: 512M
+    mem_limit: 2g
+    cpus: 2.00
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - app
 
   redis:
     image: redis:8-alpine
@@ -355,38 +274,20 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?defina REDIS_PASSWORD no .env}
     volumes:
       - redis_data:/data
-    networks:
-      - app
+    restart: unless-stopped
+    stop_grace_period: 30s
     healthcheck:
       test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 10s
-    stop_grace_period: 30s
-    deploy:
-      <<: *singleton-deploy
-      resources:
-        limits:
-          cpus: "1.00"
-          memory: 768M
-        reservations:
-          cpus: "0.20"
-          memory: 128M
-
-networks:
-  edge:
-    driver: overlay
-    attachable: false
-  app:
-    driver: overlay
-    internal: true
-    attachable: false
-    driver_opts:
-      encrypted: "true"
-  egress:
-    driver: overlay
-    attachable: false
+    mem_limit: 768m
+    cpus: 1.00
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - app
 
 volumes:
   postgres_data:
@@ -394,3 +295,12 @@ volumes:
   vault_data:
   private_storage:
   wazync_spool:
+
+networks:
+  edge:
+    driver: bridge
+  app:
+    driver: bridge
+    internal: true
+  egress:
+    driver: bridge
