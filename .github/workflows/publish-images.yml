@@ -40,19 +40,19 @@ jobs:
       matrix:
         include:
           - image: api
-            dockerfile: infra/docker/php/Dockerfile
+            dockerfile: apps/api/Dockerfile
             target: production
           - image: api-rpa
-            dockerfile: infra/docker/php/Dockerfile
+            dockerfile: apps/api/Dockerfile
             target: rpa-production
           - image: web
-            dockerfile: infra/docker/frontend/Dockerfile
+            dockerfile: apps/web/Dockerfile
             target: production
           - image: nginx
-            dockerfile: infra/docker/nginx/Dockerfile
+            dockerfile: docker/nginx/Dockerfile
             target: production
           - image: wazync
-            dockerfile: infra/docker/wazync/Dockerfile
+            dockerfile: apps/wazync/Dockerfile
             target: runtime
     steps:
       - name: Checkout approved revision

@@ -3,7 +3,7 @@
  * Encerra processos de browser/MCP de dev que costumam ficar órfãos no VPS
  * (playwright-mcp, chrome headless do Playwright, vite preview de e2e).
  *
- * Não mexe em: Docker stack (nginx/php/postgres), Nuxt dev do compose, VS Code.
+ * Não mexe em: Docker stack (nginx/api/postgres), Nuxt dev do Compose, VS Code.
  *
  * Uso: pnpm run cleanup:browsers
  *      CLEANUP_DRY_RUN=1 pnpm run cleanup:browsers

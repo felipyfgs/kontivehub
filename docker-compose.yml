@@ -1,61 +1,74 @@
-name: ${COMPOSE_PROJECT_NAME:-app}
+name: ${COMPOSE_PROJECT_NAME:-kontivehub}
 
-x-php: &php
-  image: ${COMPOSE_PROJECT_NAME:-app}-php:latest
+x-api-environment: &api-environment
+  APP_NAME: ${APP_NAME:-KontiveHub}
+  APP_ENV: ${APP_ENV:-local}
+  APP_KEY: ${APP_KEY:?copie .env.example para .env e defina APP_KEY}
+  APP_DEBUG: ${APP_DEBUG:-true}
+  APP_URL: ${APP_URL:-http://localhost:8080}
+  FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+  PORTAL_URL: ${PORTAL_URL:-http://localhost:3000}
+  LOG_CHANNEL: ${LOG_CHANNEL:-stack}
+  LOG_LEVEL: ${LOG_LEVEL:-debug}
+  FISCAL_PROFILE: ${FISCAL_PROFILE:-dev}
+  FISCAL_KILL_SWITCH: ${FISCAL_KILL_SWITCH:-false}
+  DB_CONNECTION: pgsql
+  DB_HOST: postgres
+  DB_PORT: 5432
+  DB_DATABASE: ${DB_DATABASE:-kontivehub}
+  DB_USERNAME: ${DB_USERNAME:-kontivehub}
+  DB_PASSWORD: ${DB_PASSWORD:-kontivehub-local}
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  CACHE_STORE: redis
+  SESSION_DRIVER: redis
+  SESSION_ENCRYPT: ${SESSION_ENCRYPT:-true}
+  QUEUE_CONNECTION: redis
+  BROADCAST_CONNECTION: ${BROADCAST_CONNECTION:-log}
+  REVERB_APP_ID: ${REVERB_APP_ID:-communication-disabled}
+  REVERB_APP_KEY: ${REVERB_APP_KEY:-communication-disabled}
+  REVERB_APP_SECRET: ${REVERB_APP_SECRET:-communication-disabled}
+  REVERB_HOST: reverb
+  REVERB_PORT: 8081
+  REVERB_SCHEME: http
+  REVERB_SERVER_PORT: 8081
+  REVERB_SCALING_ENABLED: "true"
+  REVERB_ALLOWED_ORIGINS: ${REVERB_ALLOWED_ORIGINS:-http://localhost:8080,http://localhost:3000}
+  SANCTUM_STATEFUL_DOMAINS: ${SANCTUM_STATEFUL_DOMAINS:-localhost,localhost:8080,localhost:3000,127.0.0.1,127.0.0.1:8080,127.0.0.1:3000}
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8080,http://localhost:3000}
+  COMMUNICATION_ENABLED: ${COMMUNICATION_ENABLED:-false}
+  COMMUNICATION_FLOWS_ENABLED: ${COMMUNICATION_FLOWS_ENABLED:-false}
+  COMMUNICATION_FLOWS_RUNTIME_ENABLED: ${COMMUNICATION_FLOWS_RUNTIME_ENABLED:-false}
+  COMMUNICATION_OUTBOUND_CONVERSATION_ENABLED: ${COMMUNICATION_OUTBOUND_CONVERSATION_ENABLED:-false}
+  COMMUNICATION_OUTBOUND_CONVERSATION_KILL_SWITCH: ${COMMUNICATION_OUTBOUND_CONVERSATION_KILL_SWITCH:-true}
+  ASSISTANT_ENABLED: ${ASSISTANT_ENABLED:-false}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  ASSISTANT_MODEL: ${ASSISTANT_MODEL:-gpt-4o-mini}
+  WAZYNC_ENABLED: ${WAZYNC_ENABLED:-false}
+  WAZYNC_URL: http://wazync:8080
+  WAZYNC_HMAC_KEY_ID: ${WAZYNC_HMAC_KEY_ID:-}
+  WAZYNC_HMAC_SECRET: ${WAZYNC_HMAC_SECRET:-}
+  WAZYNC_HMAC_PREVIOUS_KEY_ID: ${WAZYNC_HMAC_PREVIOUS_KEY_ID:-}
+  WAZYNC_HMAC_PREVIOUS_SECRET: ${WAZYNC_HMAC_PREVIOUS_SECRET:-}
+  VAULT_MASTER_KEY: ${VAULT_MASTER_KEY:?defina VAULT_MASTER_KEY no .env}
+  VAULT_MASTER_KEY_VERSION: ${VAULT_MASTER_KEY_VERSION:-1}
+  VAULT_DISK_ROOT: /var/vault
+  DEVELOPMENT_DATA_PATH: /var/www/html/.local/dados
+  DEVELOPMENT_PLATFORM_ADMIN_EMAIL: ${DEVELOPMENT_PLATFORM_ADMIN_EMAIL:-platform@example.com}
+  DEVELOPMENT_PLATFORM_ADMIN_PASSWORD: ${DEVELOPMENT_PLATFORM_ADMIN_PASSWORD:-password}
+  DEVELOPMENT_TENANT_ADMIN_EMAIL: ${DEVELOPMENT_TENANT_ADMIN_EMAIL:-admin@example.com}
+  DEVELOPMENT_TENANT_ADMIN_PASSWORD: ${DEVELOPMENT_TENANT_ADMIN_PASSWORD:-password}
+  LOCAL_UID: ${LOCAL_UID:-1000}
+  LOCAL_GID: ${LOCAL_GID:-1000}
+  COMPOSER_HOME: /tmp/composer
+
+x-api-service: &api-service
+  image: ${COMPOSE_PROJECT_NAME:-kontivehub}-api:dev
   build:
     context: .
-    dockerfile: infra/docker/php/Dockerfile
+    dockerfile: apps/api/Dockerfile
     target: runtime
-  env_file:
-    - path: ./apps/api/.env
-      required: false
-  environment:
-    LOCAL_UID: ${LOCAL_UID:-1000}
-    LOCAL_GID: ${LOCAL_GID:-1000}
-    COMPOSER_HOME: /tmp/composer
-    APP_ENV: ${APP_ENV:-local}
-    FISCAL_PROFILE: ${FISCAL_PROFILE:-dev}
-    FISCAL_KILL_SWITCH: ${FISCAL_KILL_SWITCH:-false}
-    DB_CONNECTION: pgsql
-    DB_HOST: postgres
-    DB_PORT: 5432
-    DB_DATABASE: ${DB_DATABASE:-nfse}
-    DB_USERNAME: ${DB_USERNAME:-nfse}
-    DB_PASSWORD: ${DB_PASSWORD:-nfse}
-    REDIS_HOST: redis
-    REDIS_PORT: 6379
-    QUEUE_CONNECTION: redis
-    CACHE_STORE: redis
-    SESSION_DRIVER: redis
-    BROADCAST_CONNECTION: ${BROADCAST_CONNECTION:-log}
-    REVERB_APP_ID: ${REVERB_APP_ID:-communication-disabled}
-    REVERB_APP_KEY: ${REVERB_APP_KEY:-communication-disabled}
-    REVERB_APP_SECRET: ${REVERB_APP_SECRET:-communication-disabled}
-    REVERB_HOST: reverb
-    REVERB_PORT: 8081
-    REVERB_SCHEME: http
-    REVERB_SERVER_PORT: 8081
-    REVERB_SCALING_ENABLED: "true"
-    REVERB_ALLOWED_ORIGINS: ${REVERB_ALLOWED_ORIGINS:-http://localhost:8080,http://localhost:3000}
-    CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8080,http://localhost:3000}
-    COMMUNICATION_ENABLED: ${COMMUNICATION_ENABLED:-false}
-    # Flows: fail-closed por default; mesmo padrão FPM/www-data do assistente.
-    COMMUNICATION_FLOWS_ENABLED: ${COMMUNICATION_FLOWS_ENABLED:-false}
-    COMMUNICATION_FLOWS_RUNTIME_ENABLED: ${COMMUNICATION_FLOWS_RUNTIME_ENABLED:-false}
-    # Assistente: injeta no process env do FPM (www-data). Requer vars no .env da raiz
-    # (Compose interpola). Após alterar: docker compose up -d --force-recreate php horizon scheduler reverb
-    ASSISTANT_ENABLED: ${ASSISTANT_ENABLED:-false}
-    OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-    ASSISTANT_MODEL: ${ASSISTANT_MODEL:-gpt-4o-mini}
-    WAZYNC_ENABLED: ${WAZYNC_ENABLED:-false}
-    WAZYNC_URL: http://wazync:8080
-    WAZYNC_HMAC_KEY_ID: ${WAZYNC_HMAC_KEY_ID:-}
-    WAZYNC_HMAC_SECRET: ${WAZYNC_HMAC_SECRET:-}
-    WAZYNC_HMAC_PREVIOUS_KEY_ID: ${WAZYNC_HMAC_PREVIOUS_KEY_ID:-}
-    WAZYNC_HMAC_PREVIOUS_SECRET: ${WAZYNC_HMAC_PREVIOUS_SECRET:-}
-    SANCTUM_STATEFUL_DOMAINS: ${SANCTUM_STATEFUL_DOMAINS:-localhost,localhost:3000,127.0.0.1,127.0.0.1:3000}
-    VAULT_DISK_ROOT: /var/vault
-    DEVELOPMENT_DATA_PATH: /var/www/html/.local/dados
+  environment: *api-environment
   volumes:
     - ./apps/api:/var/www/html
     - ./.local/dados:/var/www/html/.local/dados:ro
@@ -67,10 +80,10 @@ x-php: &php
 
 services:
   nginx:
-    image: ${COMPOSE_PROJECT_NAME:-app}-nginx:latest
+    image: ${COMPOSE_PROJECT_NAME:-kontivehub}-nginx:dev
     build:
       context: .
-      dockerfile: infra/docker/nginx/Dockerfile
+      dockerfile: docker/nginx/Dockerfile
       target: development
     ports:
       - "${APP_BIND_ADDRESS:-127.0.0.1}:${APP_PORT:-8080}:80"
@@ -78,7 +91,7 @@ services:
       - ./apps/api:/var/www/html:ro
       - ./apps/web/.output/public:/var/www/frontend:ro
     depends_on:
-      php:
+      api:
         condition: service_healthy
       postgres:
         condition: service_healthy
@@ -96,9 +109,21 @@ services:
     networks:
       - app
 
-  php:
-    <<: *php
+  api-prepare:
+    <<: *api-service
+    command: ["true"]
+    restart: "no"
     depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  api:
+    <<: *api-service
+    depends_on:
+      api-prepare:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -111,35 +136,35 @@ services:
       start_period: 20s
 
   horizon:
-    <<: *php
-    image: ${COMPOSE_PROJECT_NAME:-app}-php-rpa:latest
+    <<: *api-service
+    image: ${COMPOSE_PROJECT_NAME:-kontivehub}-api-rpa:dev
     build:
       context: .
-      dockerfile: infra/docker/php/Dockerfile
+      dockerfile: apps/api/Dockerfile
       target: rpa-runtime
     command: ["php", "artisan", "horizon"]
     depends_on:
-      php:
+      api:
         condition: service_healthy
       redis:
         condition: service_healthy
 
   scheduler:
-    <<: *php
+    <<: *api-service
     command: ["php", "artisan", "schedule:work"]
     depends_on:
-      php:
+      api:
         condition: service_healthy
       redis:
         condition: service_healthy
 
   reverb:
-    <<: *php
+    <<: *api-service
     command: ["php", "artisan", "reverb:start", "--host=0.0.0.0", "--port=8081"]
     expose:
       - "8081"
     depends_on:
-      postgres:
+      api:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -150,19 +175,19 @@ services:
       retries: 5
       start_period: 20s
 
-  frontend:
-    image: ${COMPOSE_PROJECT_NAME:-app}-frontend:latest
+  web:
+    image: ${COMPOSE_PROJECT_NAME:-kontivehub}-web:dev
     build:
       context: .
-      dockerfile: infra/docker/frontend/Dockerfile
+      dockerfile: apps/web/Dockerfile
       target: development
     working_dir: /app
     volumes:
       - ./apps/web:/app
       - ./apps/api/resources/contracts:/workspace/api-contracts:ro
       - ./apps/api/app/Services/FiscalMonitoring/Surfaces:/workspace/api-monitoring-surfaces:ro
-      - ./infra/docker/nginx:/workspace/nginx:ro
-      - frontend_node_modules:/app/node_modules
+      - ./docker/nginx:/workspace/nginx:ro
+      - web_node_modules:/app/node_modules
     ports:
       - "${FRONTEND_BIND_ADDRESS:-127.0.0.1}:${FRONTEND_DEV_PORT:-3000}:3000"
     environment:
@@ -175,7 +200,6 @@ services:
       CHOKIDAR_USEPOLLING: ${CHOKIDAR_USEPOLLING:-true}
       HOST: 0.0.0.0
       FRONTEND_DEV_PORT: ${FRONTEND_DEV_PORT:-3000}
-      # IP/host visto pelo browser remoto (HMR WebSocket). Ex.: PUBLIC_HOST=74.x.x.x
       NUXT_DEV_HMR_HOST: ${PUBLIC_HOST:-}
       PUBLIC_HOST: ${PUBLIC_HOST:-}
       NUXT_PUBLIC_COMMUNICATION_ENABLED: ${COMMUNICATION_ENABLED:-false}
@@ -194,9 +218,9 @@ services:
   postgres:
     image: postgres:17-alpine
     environment:
-      POSTGRES_DB: ${DB_DATABASE:-nfse}
-      POSTGRES_USER: ${DB_USERNAME:-nfse}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-nfse}
+      POSTGRES_DB: ${DB_DATABASE:-kontivehub}
+      POSTGRES_USER: ${DB_USERNAME:-kontivehub}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-kontivehub-local}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -232,17 +256,17 @@ services:
 
   wazync-db-init:
     image: postgres:17-alpine
-    entrypoint: ["/bin/sh", "/opt/fiscal-hub/init-wazync.sh"]
+    entrypoint: ["/bin/sh", "/opt/kontivehub/init-wazync.sh"]
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
-      POSTGRES_DB: ${DB_DATABASE:-nfse}
-      POSTGRES_USER: ${DB_USERNAME:-nfse}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-nfse}
+      POSTGRES_DB: ${DB_DATABASE:-kontivehub}
+      POSTGRES_USER: ${DB_USERNAME:-kontivehub}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-kontivehub-local}
       WAZYNC_DB_USER: ${WAZYNC_DB_USER:-wazync}
-      WAZYNC_DB_PASSWORD: ${WAZYNC_DB_PASSWORD:-wazync-local-only}
+      WAZYNC_DB_PASSWORD: ${WAZYNC_DB_PASSWORD:-wazync-local}
     volumes:
-      - ./infra/docker/postgres/init-wazync.sh:/opt/fiscal-hub/init-wazync.sh:ro
+      - ./apps/wazync/docker/init-db.sh:/opt/kontivehub/init-wazync.sh:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -251,15 +275,14 @@ services:
       - app
 
   wazync:
-    image: ${COMPOSE_PROJECT_NAME:-app}-wazync:latest
+    image: ${COMPOSE_PROJECT_NAME:-kontivehub}-wazync:dev
     build:
       context: .
-      dockerfile: infra/docker/wazync/Dockerfile
+      dockerfile: apps/wazync/Dockerfile
       target: development
     environment:
       WAZYNC_ENABLED: ${WAZYNC_ENABLED:-false}
-      WAZYNC_DATABASE_URL: ${WAZYNC_DATABASE_URL:-postgres://${WAZYNC_DB_USER:-wazync}@postgres:5432/${DB_DATABASE:-nfse}?search_path=wazync}
-      PGPASSWORD: ${WAZYNC_DB_PASSWORD:-wazync-local-only}
+      WAZYNC_DATABASE_URL: ${WAZYNC_DATABASE_URL:-postgres://wazync:wazync-local@postgres:5432/kontivehub?search_path=wazync&sslmode=disable}
       WAZYNC_EVENT_INGEST_URL: http://nginx/api/internal/v1/communication/gateway/events
       WAZYNC_MEDIA_SOURCE_URL: http://nginx/api/internal/v1/communication/gateway/media
       WAZYNC_HMAC_KEY_ID: ${WAZYNC_HMAC_KEY_ID:-}
@@ -314,7 +337,7 @@ volumes:
   redis_data:
   vault_data:
   private_storage:
-  frontend_node_modules:
+  web_node_modules:
   wazync_spool:
 
 networks:

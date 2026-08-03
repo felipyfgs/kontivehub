@@ -16,6 +16,8 @@ const env = {
   LOCAL_GID: String(process.getgid?.() || 1000),
   PNPM_CONFIG_STORE_DIR: '/tmp/frontend-home/.local/share/pnpm/store',
   APP_ENV: 'testing',
+  APP_KEY: process.env.APP_KEY || `base64:${Buffer.alloc(32, 1).toString('base64')}`,
+  VAULT_MASTER_KEY: process.env.VAULT_MASTER_KEY || Buffer.alloc(32, 2).toString('base64'),
   DB_DATABASE: 'nfse_e2e',
   E2E_API_PORT: process.env.E2E_API_PORT || '18080',
   E2E_WEB_PORT: e2eWebPort,
@@ -69,12 +71,12 @@ async function waitFor(url, timeoutMs = 120_000) {
 try {
   await run('docker', [
     ...composeArgs,
-    'run', '--rm', '--no-deps', '--build', 'frontend', 'prepare'
+    'run', '--rm', '--no-deps', '--build', 'web', 'prepare'
   ])
   await run('docker', [
     ...composeArgs,
     'up', '-d', '--build',
-    'postgres', 'redis', 'php', 'nginx', 'frontend'
+    'postgres', 'redis', 'api', 'nginx', 'web'
   ])
   await run('docker', [
     ...composeArgs,
@@ -86,7 +88,7 @@ try {
     '-e', 'WORK_DEMO_TENANT_SLUG=contador',
     '-e', 'WORK_DEMO_SENTINEL_SLUG=plataforma',
     '-e', 'FISCAL_MONITORING_MUTATING_ENABLED=false',
-    'php',
+    'api',
     'php', 'artisan', 'migrate:fresh', '--force', '--seed',
     '--seeder=Database\\Seeders\\Testing\\WebE2ESeeder'
   ])

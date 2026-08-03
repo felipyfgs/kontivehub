@@ -86,7 +86,7 @@ export function usePlatformTenantSelect() {
     } catch (caught) {
       const code = (caught as { data?: { code?: string } })?.data?.code
       const msg = code === 'privileged_context_disabled'
-        ? 'Contexto privilegiado desligado (PLATFORM_PRIVILEGED_CONTEXT). Habilite no apps/api/.env e reinicie o PHP.'
+        ? 'Contexto privilegiado desligado (PLATFORM_PRIVILEGED_CONTEXT). Habilite no .env da raiz e reinicie a API.'
         : apiErrorMessage(caught, 'Falha ao selecionar escritório.')
       toast.add({
         title: msg,
