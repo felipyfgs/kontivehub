@@ -33,6 +33,62 @@ jobs:
             exit 1
           fi
 
+  infrastructure:
+    name: Docker manifests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      APP_KEY: base64:QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=
+      DB_PASSWORD: ci-database-password
+      REDIS_PASSWORD: ci-redis-password
+      VAULT_MASTER_KEY: QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=
+      WAZYNC_DATABASE_URL: postgres://wazync:ci@postgres:5432/kontivehub?search_path=wazync&sslmode=disable
+      NGINX_EDGE_TOKEN: 1111111111111111111111111111111111111111111111111111111111111111
+      KONTIVEHUB_VERSION: sha-ci
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Validate development Compose
+        run: docker compose -f docker-compose.yml config --quiet
+
+      - name: Validate production manifests
+        run: |
+          docker compose -f docker-compose.prod.yml config --format json > /tmp/compose-prod.json
+          docker compose -f docker-stack.yml config --format json > /tmp/stack.json
+          docker stack config -c docker-stack.yml >/dev/null
+
+          jq -e '[.services[].build?] | all(. == null)' /tmp/compose-prod.json >/dev/null
+          jq -e '[.services[].volumes[]? | select(.type == "bind")] | length == 0' /tmp/compose-prod.json >/dev/null
+          jq -e '[.services[].build?] | all(. == null)' /tmp/stack.json >/dev/null
+          jq -e '[.services[].volumes[]? | select(.type == "bind")] | length == 0' /tmp/stack.json >/dev/null
+          jq -S '.services | with_entries(.value = .value.image)' /tmp/compose-prod.json > /tmp/compose-images.json
+          jq -S '.services | with_entries(.value = .value.image)' /tmp/stack.json > /tmp/stack-images.json
+          diff -u /tmp/compose-images.json /tmp/stack-images.json
+
+      - name: Require production credentials
+        run: |
+          for manifest in docker-compose.prod.yml docker-stack.yml; do
+            for variable in \
+              APP_KEY DB_PASSWORD REDIS_PASSWORD VAULT_MASTER_KEY \
+              WAZYNC_DATABASE_URL NGINX_EDGE_TOKEN KONTIVEHUB_VERSION
+            do
+              if env "$variable=" docker compose -f "$manifest" config --quiet 2>/dev/null; then
+                echo "$manifest aceitou $variable vazia." >&2
+                exit 1
+              fi
+            done
+          done
+
+      - name: Reject legacy infrastructure paths
+        run: |
+          test ! -e Makefile
+          test ! -e infra/swarm
+          test ! -e infra/docker
+          ! git grep -nE 'infra/(docker|swarm)|(^[[:space:]]*(\$[[:space:]]+|[-*][[:space:]]+)?make([[:space:]]|$))|([;&|][[:space:]]*make([[:space:]]|$))|(`make([[:space:]]|$))' -- ':!.github/workflows/ci.yml'
+
   api:
     name: API (Laravel)
     runs-on: ubuntu-latest

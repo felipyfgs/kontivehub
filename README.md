@@ -1,142 +1,148 @@
 # KontiveHub
 
-Plataforma de gestão fiscal, documentos, comunicação e trabalho para escritórios contábeis.
-
-O KontiveHub reúne a operação diária do escritório em uma aplicação multiempresa: cadastro de clientes, monitoramento de obrigações fiscais, documentos, guias, processos e tarefas, além de atendimento integrado por WhatsApp. Integrações externas e operações sensíveis são protegidas por feature flags e permanecem desativadas por padrão.
-
-> O projeto está em desenvolvimento ativo. Não habilite integrações reais nem use credenciais de produção sem revisar as flags e os controles de segurança do ambiente.
-
-## Principais recursos
-
-- gestão de escritórios, equipes, departamentos e clientes;
-- monitoramento fiscal de declarações, guias, parcelamentos, caixa postal e regularidade;
-- importação, catalogação e exportação de documentos fiscais;
-- processos, tarefas, calendário, recorrências e evidências de trabalho;
-- atendimento e automações de comunicação via WhatsApp;
-- integrações fiscais com SERPRO, SEFAZ, ADN, eSocial e portais governamentais;
-- auditoria, filas, agendamentos, métricas operacionais e backups.
+Plataforma multi-tenant de gestão fiscal, documentos, comunicação e trabalho
+para escritórios contábeis. Integrações externas e operações sensíveis usam
+flags fail-closed e permanecem desativadas por padrão.
 
 ## Tecnologias
 
 | Camada | Tecnologias principais |
 | --- | --- |
-| API | PHP 8.4, Laravel 13, Sanctum, Horizon e Reverb |
-| Web | Nuxt 4, Vue 3, Nuxt UI, TypeScript e Tailwind CSS |
+| API | PHP 8.4, Laravel 13, Horizon e Reverb |
+| Web | Nuxt 4, Vue 3, Nuxt UI e TypeScript |
 | Comunicação | Go 1.25 e whatsmeow |
-| Dados | PostgreSQL 17 e Redis |
-| Infraestrutura | Docker Compose, Docker Swarm, Nginx e Make |
+| Dados | PostgreSQL 17 e Redis 8 |
+| Infraestrutura | Docker Compose, Docker Swarm e Nginx |
 | Testes | PHPUnit, Vitest e Playwright |
 
-## Estrutura do repositório
+## Estrutura
 
 ```text
 .
 ├── apps/
-│   ├── api/       # API Laravel, filas, schedules e contratos OpenAPI
-│   ├── web/       # aplicação Nuxt
-│   └── wazync/    # gateway de comunicação WhatsApp em Go
-├── infra/docker/  # imagens de desenvolvimento e produção
-├── infra/swarm/   # operação e exemplos de Docker Secrets
-├── Makefile       # comandos de desenvolvimento e operação
-├── docker-compose.yml # ambiente local com hot reload
-└── docker-stack.yml   # runtime imutável para Docker Swarm
+│   ├── api/                 # Laravel e Dockerfile da API/API-RPA
+│   ├── web/                 # Nuxt e Dockerfile do frontend
+│   └── wazync/              # gateway Go e seu Dockerfile
+├── docker/nginx/            # imagem do proxy interno
+├── docker-compose.yml       # desenvolvimento com hot reload
+├── docker-compose.prod.yml  # produção Docker Compose
+└── docker-stack.yml         # produção Docker Swarm
 ```
 
-## Executando localmente
+Cada aplicação possui sua própria imagem. PostgreSQL e Redis são serviços
+separados baseados nas imagens oficiais; eles nunca são incorporados às imagens
+da API, Web ou Wazync.
 
-### Pré-requisitos
+## Desenvolvimento local
 
-- Git;
-- Docker com o plugin Docker Compose;
-- GNU Make;
-- OpenSSL.
-
-As dependências de PHP, Node.js e Go são executadas nos containers, portanto não precisam ser instaladas diretamente na máquina.
-
-### Instalação
+Pré-requisitos: Git, Docker com o plugin Compose v2.20 ou superior (necessário
+para `docker compose up --wait`) e OpenSSL.
 
 ```bash
 git clone https://github.com/felipyfgs/kontivehub.git
 cd kontivehub
-make setup
+cp .env.example .env
+chmod 600 .env
 ```
 
-O `make setup` cria os arquivos `.env` a partir dos exemplos, gera chaves locais, constrói as imagens, instala as dependências, executa as migrations e inicia a stack.
-
-Nas próximas execuções, suba toda a stack com:
+Edite `LOCAL_UID` e `LOCAL_GID` conforme `id -u` e `id -g`. Gere as duas chaves
+locais obrigatórias; os comandos abaixo apenas imprimem os valores, então copie
+cada linha para a chave correspondente no `.env`:
 
 ```bash
-make up
+printf 'APP_KEY=base64:%s\n' "$(openssl rand -base64 32)"
+printf 'VAULT_MASTER_KEY=%s\n' "$(openssl rand -base64 32)"
 ```
 
-Depois que os serviços estiverem saudáveis, acesse:
-
-- aplicação Nuxt: [http://localhost:3000](http://localhost:3000);
-- API e edge Nginx: [http://localhost:8080](http://localhost:8080);
-- health check: [http://localhost:8080/up](http://localhost:8080/up).
-
-Se quiser carregar os dados de desenvolvimento:
+Depois suba o ambiente:
 
 ```bash
-make seed
+docker compose up -d --build --wait
+docker compose exec api php artisan migrate --force
 ```
 
-As credenciais locais padrão estão documentadas no arquivo [`.env.example`](.env.example). Altere-as se o ambiente puder ser acessado por outras pessoas e nunca versione os arquivos `.env` reais.
+O entrypoint instala Composer e pnpm na primeira execução. Nuxt usa HMR,
+Laravel lê o código montado e Air recompila o Wazync após mudanças em arquivos
+Go.
 
-## Comandos úteis
+- Web/HMR: [http://localhost:3000](http://localhost:3000)
+- API/Nginx: [http://localhost:8080](http://localhost:8080)
+- Healthcheck: [http://localhost:8080/up](http://localhost:8080/up)
 
-| Comando | Descrição |
-| --- | --- |
-| `make help` | Lista os principais comandos disponíveis |
-| `make up` | Inicia toda a stack com Nuxt HMR |
-| `make down` | Encerra os serviços locais |
-| `make logs` | Acompanha os logs dos containers |
-| `make shell` | Abre um shell no container PHP |
-| `make migrate` | Executa as migrations pendentes |
-| `make seed` | Carrega os dados de desenvolvimento |
-| `make build` | Reconstrói as imagens locais |
+Comandos comuns:
+
+```bash
+docker compose logs -f
+docker compose exec api sh
+docker compose exec api php artisan db:seed --force
+docker compose down --remove-orphans
+```
 
 ## Testes e qualidade
 
-Execute todos os gates do monorepo com:
-
 ```bash
-make verify
+docker compose exec api composer validate --strict --no-check-publish
+docker compose exec api vendor/bin/pint --test
+docker compose exec api php artisan test
+docker compose exec web app-entrypoint test-gate
+docker run --rm -v "$PWD:/workspace" -w /workspace/apps/wazync golang:1.25-alpine go test ./...
+docker run --rm -v "$PWD:/workspace" -w /workspace/apps/wazync golang:1.25-alpine go vet ./...
+./docker/nginx/verify-upstream-recovery.sh
 ```
 
-Também é possível validar cada aplicação separadamente:
+## Configuração
+
+O `.env` da raiz é a fonte de valores dos três manifestos Docker. Os YAMLs
+declaram explicitamente as variáveis entregues a cada serviço e usam referências
+`${VAR}`. Domínios públicos possuem defaults reservados como
+`app.example.com`; senhas, tokens e chaves obrigatórias não têm default de
+produção.
+
+O arquivo `.env.example` é seguro para versionamento, mas não é implantável em
+produção. O Dockerfile nunca copia o `.env` para as imagens.
+
+## Produção com Docker Compose
+
+Configure no `.env` as URLs reais, credenciais, tag imutável e token do proxy.
+O manifesto produtivo apenas baixa imagens do registry:
 
 ```bash
-make verify-api
-make verify-web
-make verify-wazync
+docker compose --env-file .env -f docker-compose.prod.yml config --quiet
+docker compose --env-file .env -f docker-compose.prod.yml \
+  up -d --pull always --wait --remove-orphans
 ```
 
-A suíte isolada da API pode ser executada com `make api-test`. Os testes end-to-end do frontend ficam disponíveis em `apps/web` pelo script `pnpm test:e2e`.
+## Produção com Docker Swarm
 
-## Configuração e segurança
+O Swarm não lê `.env` automaticamente. Exporte o arquivo no shell antes do
+deploy (mantenha o `.env` compatível com a sintaxe `CHAVE=valor` do POSIX).
+Antes do primeiro deploy, rotule exatamente o nó que manterá os volumes locais:
 
-- `.env` concentra as variáveis usadas pelo Docker Compose;
-- `apps/api/.env` contém a configuração específica do Laravel no ambiente local;
-- integrações externas, comunicação, automações e mutações fiscais usam defaults *fail-closed*;
-- segredos, certificados, tokens e chaves privadas não devem ser enviados ao Git;
-- o contrato público da API está em [`apps/api/resources/contracts/public.openapi.json`](apps/api/resources/contracts/public.openapi.json).
+```bash
+docker node update --label-add kontivehub-data=true NOME_DO_NO
+set -a
+. ./.env
+set +a
+docker stack deploy --with-registry-auth -c docker-stack.yml kontivehub
+```
 
-Consulte os comentários de [`.env.example`](.env.example) para conhecer as
-variáveis exclusivamente locais. O `docker-compose.yml` usa bind mounts: Nuxt
-executa com HMR, Laravel lê o código montado diretamente e Wazync recompila com
-Air quando arquivos Go mudam.
+O `docker-stack.yml` mantém os serviços que usam volumes no nó rotulado, define
+overlay interno criptografado, healthchecks, limites, atualização e rollback.
+Faça backup dos volumes desse nó. Para reverter, ajuste `KONTIVEHUB_VERSION`
+para uma tag anterior e repita o deploy. TLS deve terminar no ingress externo.
+Esse ingress deve remover qualquer `X-KontiveHub-Edge-Token` enviado pelo
+cliente e redefini-lo exclusivamente com `NGINX_EDGE_TOKEN`. Bloqueie por
+firewall ou rede privada todo acesso direto à porta publicada pelo Nginx da
+stack; somente o ingress confiável pode alcançá-la.
 
-Produção usa outro caminho. Após o CI da branch `main`, a pipeline constrói e
-publica imagens multi-stage versionadas para API, Web, Wazync e Nginx. O
-[`docker-stack.yml`](docker-stack.yml) apenas referencia essas imagens e
-serviços oficiais de PostgreSQL/Redis; ele não compila nem monta o repositório
-no servidor. Configuração e material sensível são fornecidos por Docker
-Secrets. O procedimento completo está em
-[`infra/swarm/README.md`](infra/swarm/README.md).
+Variáveis de ambiente são visíveis a administradores por `docker inspect` e
+`docker service inspect`; não coloque o `.env` no Git nem em artefatos da CI.
 
-## Contribuindo
+## Entrega contínua
 
-O projeto usa `develop` como branch de integração e `main` como branch estável. Antes de abrir um pull request, execute os gates relacionados às áreas alteradas.
+Pull requests entram em `develop`; somente `develop` promove para `main`. Após
+o CI verde na `main`, a pipeline constrói os targets finais multi-stage e
+publica `api`, `api-rpa`, `web`, `nginx` e `wazync` no GHCR com uma tag
+imutável. Os manifestos de produção nunca compilam ou montam o código-fonte.
 
-Leia o [guia de contribuição](CONTRIBUTING.md) para conhecer o fluxo de branches e as verificações obrigatórias.
+Consulte [CONTRIBUTING.md](CONTRIBUTING.md) antes de abrir um pull request.

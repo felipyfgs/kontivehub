@@ -1,6 +1,6 @@
 /**
  * Normaliza URL/path de download para o path canônico do cliente Sanctum.
- * Em `make up`, `apiBase` é `/api/sanctum`; o client já usa esse baseUrl.
+ * No Compose local, `apiBase` é `/api/sanctum`; o client já usa esse baseUrl.
  */
 export function toSanctumApiPath(urlOrPath: string, apiBase = ''): string {
   const trimmed = String(urlOrPath || '').trim()

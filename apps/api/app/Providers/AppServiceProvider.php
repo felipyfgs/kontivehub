@@ -224,7 +224,7 @@ class AppServiceProvider extends ServiceProvider
             // Fail-fast fora de testing: sem chave efêmera (FPM/Horizon precisam da mesma master key)
             if ($masterKey === '' && ! $this->app->environment('testing')) {
                 throw new \RuntimeException(
-                    'VAULT_MASTER_KEY não configurada. Defina em apps/api/.env (32 bytes em base64).'
+                    'VAULT_MASTER_KEY não configurada. Defina no ambiente (32 bytes em base64).'
                 );
             }
 

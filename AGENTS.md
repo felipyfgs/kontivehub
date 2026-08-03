@@ -7,7 +7,7 @@ KontiveHub is a multi-tenant accounting platform. Keep changes within the owning
 - `apps/api/`: Laravel 13 API; domain code is in `app/`, migrations in `database/`, contracts in `resources/contracts/`, and tests in `tests/`.
 - `apps/web/`: Nuxt 4/Vue 3 UI; application code is in `app/` and tests in `tests/`. Follow `apps/web/AGENTS.md`.
 - `apps/wazync/`: Go WhatsApp gateway, with entrypoints in `cmd/` and packages in `internal/`.
-- `infra/docker/`, `docker-compose.yml`, `.github/workflows/`, and `Makefile` contain infrastructure and tooling.
+- Application Dockerfiles live with their owners; `docker/nginx/`, the three root Docker manifests, and `.github/workflows/` contain infrastructure and delivery tooling.
 
 ## Build, Test, and Development Commands
 
@@ -17,7 +17,7 @@ KontiveHub is a multi-tenant accounting platform. Keep changes within the owning
 - `cd apps/api && vendor/bin/pint --test`: check PHP formatting.
 - `cd apps/web && corepack pnpm install --frozen-lockfile`: install exact frontend dependencies.
 - `cd apps/web && pnpm dev`: start Nuxt locally.
-- `make verify-web`: run the complete web gate in the `frontend` container.
+- `docker compose exec web app-entrypoint test-gate`: run the complete web gate in the Web container.
 - `cd apps/wazync && go test ./... && go vet ./...`: validate Go code.
 
 ## Coding Style & Naming Conventions

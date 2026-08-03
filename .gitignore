@@ -24,12 +24,9 @@ apps/web/.env.*
 !**/.env.example
 apps/api/auth.json
 **/auth.json
-# Chaves e segredos soltos.
-# Evitar **/*secret* amplo: bloqueava infra/docker/ops/secret-scan.sh e classes *Secret*.
+# Chaves e segredos soltos. Evitar **/*secret* amplo porque também bloquearia
+# classes de domínio que usam "Secret" no nome.
 **/secrets/
-!infra/swarm/secrets/
-infra/swarm/secrets/*
-!infra/swarm/secrets/*.example
 **/.secrets/
 **/*credentials*
 !apps/api/database/migrations/*_create_tenant_credentials_table.php
