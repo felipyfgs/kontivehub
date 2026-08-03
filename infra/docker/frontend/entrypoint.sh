@@ -12,13 +12,21 @@ if [[ ! "${LOCAL_UID:-}" =~ ^[1-9][0-9]*$ ]] || [[ ! "${LOCAL_GID:-}" =~ ^[1-9][
     exit 64
 fi
 
+node_modules_needs_chown=false
+if [[ -d "$APP_DIR/node_modules" ]] \
+    && find "$APP_DIR/node_modules" \( ! -uid "$LOCAL_UID" -o ! -gid "$LOCAL_GID" \) -print -quit | grep -q .; then
+    node_modules_needs_chown=true
+fi
+
 install -d -o "$LOCAL_UID" -g "$LOCAL_GID" \
     "$APP_DIR/node_modules" "$APP_DIR/node_modules/.cache" \
     "$RUNTIME_HOME" "$COREPACK_HOME_DIR"
 
-# O volume pode ter sido usado por uma imagem/UID anterior. Nuxt reescreve
-# somente esta árvore durante prepare, typecheck e generate.
-chown -R "$LOCAL_UID:$LOCAL_GID" "$APP_DIR/node_modules/.cache"
+# O volume pode ter sido usado por uma imagem/UID anterior. Corrige toda a
+# árvore somente quando encontra ownership divergente.
+if [[ "$node_modules_needs_chown" == true ]]; then
+    chown -R "$LOCAL_UID:$LOCAL_GID" "$APP_DIR/node_modules"
+fi
 
 # Esses caminhos são artefatos ignorados e podem ter sido criados por uma
 # imagem/UID anterior. Dev, generate e test-gate precisam reescrevê-los.

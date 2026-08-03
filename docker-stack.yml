@@ -139,7 +139,9 @@ services:
       - app
       - egress
     healthcheck:
-      test: ["CMD", "php", "artisan", "horizon:status"]
+      test:
+        - CMD-SHELL
+        - . /usr/local/lib/load-env-secret.sh && load_env_secret /run/secrets/api_runtime_env && exec gosu www-data php artisan horizon:status
       interval: 30s
       timeout: 5s
       retries: 3
@@ -313,6 +315,12 @@ services:
         POSTGRES_USER=$$(tr -d '\r\n' < /run/secrets/postgres_user)
         POSTGRES_PASSWORD=$$(tr -d '\r\n' < /run/secrets/postgres_password)
         test -n "$$POSTGRES_DB" && test -n "$$POSTGRES_USER" && test -n "$$POSTGRES_PASSWORD"
+        case "$$POSTGRES_PASSWORD" in
+          *[Ss][Uu][Bb][Ss][Tt][Ii][Tt][Uu][Aa]*)
+            echo 'postgres_password ainda contém placeholder.' >&2
+            exit 78
+            ;;
+        esac
         export POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD
         exec /usr/local/bin/docker-entrypoint.sh postgres
     secrets:
@@ -364,6 +372,12 @@ services:
       - |
         REDIS_PASSWORD=$$(tr -d '\r\n' < /run/secrets/redis_password)
         test -n "$$REDIS_PASSWORD"
+        case "$$REDIS_PASSWORD" in
+          *[Ss][Uu][Bb][Ss][Tt][Ii][Tt][Uu][Aa]*)
+            echo 'redis_password ainda contém placeholder.' >&2
+            exit 78
+            ;;
+        esac
         if grep -Eq '^[[:space:]]*requirepass[[:space:]]' /run/secrets/redis_conf; then
           echo 'redis_conf não deve declarar requirepass; use redis_password.' >&2
           exit 78
@@ -373,7 +387,7 @@ services:
         umask 077
         {
           cat /run/secrets/redis_conf
-          printf '\nrequirepass "%s"\n' "$$ESCAPED_PASSWORD"
+          printf '\ndir /data\nrequirepass "%s"\n' "$$ESCAPED_PASSWORD"
         } > "$$RUNTIME_CONFIG"
         chown redis:redis "$$RUNTIME_CONFIG"
         unset REDIS_PASSWORD ESCAPED_PASSWORD
@@ -422,13 +436,19 @@ services:
 networks:
   edge:
     driver: overlay
+    driver_opts:
+      encrypted: "true"
     attachable: false
   app:
     driver: overlay
+    driver_opts:
+      encrypted: "true"
     internal: true
     attachable: false
   egress:
     driver: overlay
+    driver_opts:
+      encrypted: "true"
     attachable: false
 
 secrets:

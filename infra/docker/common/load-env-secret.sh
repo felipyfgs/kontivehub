@@ -71,6 +71,13 @@ load_env_secret() {
                 ;;
         esac
 
+        case "$secret_value" in
+            *[Ss][Uu][Bb][Ss][Tt][Ii][Tt][Uu][Aa]*)
+                echo "Placeholder não substituído no Docker Secret $secret_path:$line_number" >&2
+                return 78
+                ;;
+        esac
+
         # export recebe um único argumento já expandido; o valor nunca é avaliado
         # como código de shell.
         export "$secret_key=$secret_value"

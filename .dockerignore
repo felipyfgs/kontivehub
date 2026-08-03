@@ -11,6 +11,9 @@
 !apps/api/.env.example
 **/auth.json
 
+infra/swarm/secrets/*
+!infra/swarm/secrets/*.example
+
 **/node_modules
 **/.pnpm-store
 apps/api/vendor

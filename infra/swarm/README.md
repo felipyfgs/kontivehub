@@ -15,10 +15,13 @@ infraestrutura escolhida. A stack exige o label de nó
 Marque exatamente um nó quando usar volumes locais; com NFS/CSI ou outro
 driver compartilhado, marque todos os nós configurados para esse driver.
 
-A rede `app` é interna e mantém PostgreSQL e Redis sem saída externa. Somente
-API, Horizon, scheduler e Wazync também entram na rede `egress`, necessária
-para integrações como SEFAZ, WhatsApp e provedores externos. Nenhuma dessas
-redes publica portas diretamente; o único ponto de entrada é o Nginx.
+A rede `app` é interna e mantém PostgreSQL e Redis sem saída externa. Todas as
+redes overlay usam criptografia do Swarm, inclusive o tráfego PostgreSQL entre
+nós; por isso os clientes internos podem usar `sslmode=disable` sem expor o
+tráfego na rede física. API, Horizon, scheduler e Wazync também entram na rede
+`egress`, necessária para integrações como SEFAZ, WhatsApp e provedores
+externos. Nenhuma dessas redes publica portas diretamente; o único ponto de
+entrada é o Nginx.
 
 ## Preparação
 
@@ -66,12 +69,13 @@ somente no secret `wazync_runtime_env`.
 
 ## Implantação
 
-Autentique cada nó do Swarm no registry e use a tag `sha-*` publicada uma única
-vez pela pipeline. O workflow não sobrescreve uma tag de revisão existente:
+Autentique cada nó do Swarm no registry e use a tag imutável `sha-*-cfg-*`
+publicada pela pipeline. O sufixo `cfg` identifica também a configuração pública
+incorporada à imagem Web; o workflow não sobrescreve uma tag existente:
 
 ```bash
 export KONTIVEHUB_REGISTRY=ghcr.io/organizacao/repositorio
-export KONTIVEHUB_VERSION=sha-COMMIT_COMPLETO
+export KONTIVEHUB_VERSION=sha-COMMIT_COMPLETO-cfg-DIGEST12
 docker stack config -c docker-stack.yml >/dev/null
 docker stack deploy --with-registry-auth -c docker-stack.yml kontivehub
 ```
@@ -94,23 +98,82 @@ Antes de atualizar serviços, execute migrations com a mesma imagem e o mesmo
 secret da versão que será implantada. Em clusters compatíveis com jobs:
 
 ```bash
-docker service create \
-  --name kontivehub-migrate-KONTIVEHUB_VERSION \
-  --mode replicated-job \
-  --restart-condition none \
-  --network kontivehub_app \
-  --secret source=api_runtime_env,target=api_runtime_env \
-  ghcr.io/organizacao/repositorio/api:sha-COMMIT_COMPLETO \
-  php artisan migrate --force
+run_kontivehub_migrations() (
+  set -eu
+  MIGRATION_SERVICE="kontivehub-migrate-$(date -u +%Y%m%d%H%M%S)-$$"
+  MIGRATION_DEADLINE=$(( $(date +%s) + 900 ))
+
+  docker service create \
+    --detach=true \
+    --name "$MIGRATION_SERVICE" \
+    --mode replicated-job \
+    --restart-condition none \
+    --network kontivehub_app \
+    --secret source=api_runtime_env,target=api_runtime_env \
+    "${KONTIVEHUB_REGISTRY}/api:${KONTIVEHUB_VERSION}" \
+    php artisan migrate --force
+
+  trap 'echo "Interrompido; preserve $MIGRATION_SERVICE para diagnóstico." >&2; exit 130' INT
+  trap 'echo "Encerrado; preserve $MIGRATION_SERVICE para diagnóstico." >&2; exit 143' TERM
+
+  while :; do
+    if ! MIGRATION_TASKS=$(docker service ps --no-trunc \
+      --format '{{.ID}}' "$MIGRATION_SERVICE"); then
+      echo "Não foi possível consultar $MIGRATION_SERVICE; serviço preservado." >&2
+      exit 1
+    fi
+    MIGRATION_TASK=$(printf '%s\n' "$MIGRATION_TASKS" | awk 'NR == 1 { print $1 }')
+
+    if [ -n "$MIGRATION_TASK" ]; then
+      if ! MIGRATION_STATE=$(docker inspect \
+        --format '{{.Status.State}}' "$MIGRATION_TASK"); then
+        echo "Não foi possível inspecionar $MIGRATION_TASK; serviço preservado." >&2
+        exit 1
+      fi
+
+      case "$MIGRATION_STATE" in
+        complete)
+          trap - INT TERM
+          docker service rm "$MIGRATION_SERVICE"
+          echo "Migration concluída com sucesso."
+          exit 0
+          ;;
+        failed|rejected|shutdown|orphaned|remove)
+          docker service ps --no-trunc "$MIGRATION_SERVICE" >&2 || true
+          docker service logs --tail 100 "$MIGRATION_SERVICE" >&2 || true
+          echo "Migration terminou em $MIGRATION_STATE; serviço preservado." >&2
+          exit 1
+          ;;
+        new|pending|assigned|accepted|preparing|ready|starting|running)
+          ;;
+        *)
+          echo "Estado inesperado '$MIGRATION_STATE'; serviço preservado." >&2
+          exit 1
+          ;;
+      esac
+    fi
+
+    if [ "$(date +%s)" -ge "$MIGRATION_DEADLINE" ]; then
+      echo "Timeout aguardando migrations; serviço preservado." >&2
+      exit 124
+    fi
+    sleep 2
+  done
+)
+
+run_kontivehub_migrations
 ```
 
-Só prossiga com `docker stack deploy` depois que o job terminar com sucesso.
+O polling aguarda no máximo 15 minutos e remove o serviço somente após o estado
+`complete`. Falha, timeout ou interrupção retornam código diferente de zero e
+preservam o job para diagnóstico. Só prossiga com `docker stack deploy` depois
+que a função terminar com sucesso.
 O Swarm aplica healthchecks, limites de recursos, reinício e atualização gradual
 definidos na stack. `failure_action: rollback` reverte falhas de tasks durante a
 janela de monitoramento; o estado `unhealthy`, isoladamente, não substitui a
 verificação do deploy. A automação operacional deve aguardar a convergência,
 validar os healthchecks e o readiness ponta a ponta em `/up`, e reimplantar uma
-tag `sha-*` anterior se algum serviço permanecer indisponível. O healthcheck
+tag `sha-*-cfg-*` anterior se algum serviço permanecer indisponível. O healthcheck
 `/nginx-health` valida somente o processo do proxy; indisponibilidade do PHP é
 tratada pelo probe próprio do serviço e aparece no readiness `/up`, sem provocar
 reinícios inúteis de tasks saudáveis do Nginx. Não reutilize tags mutáveis em

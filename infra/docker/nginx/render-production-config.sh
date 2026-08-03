@@ -22,5 +22,17 @@ case "$edge_token" in
         ;;
 esac
 
+cleanup_temporary_config() {
+    rm -f "$temporary_config"
+}
+
 umask 077
-sed "s/__KONTIVEHUB_EDGE_TOKEN__/$edge_token/g" "$readonly_template" > "$readonly_config"
+temporary_config=$(mktemp "${readonly_config}.tmp.XXXXXX")
+trap cleanup_temporary_config EXIT
+trap 'cleanup_temporary_config; exit 130' INT
+trap 'cleanup_temporary_config; exit 143' TERM
+
+sed "s/__KONTIVEHUB_EDGE_TOKEN__/$edge_token/g" "$readonly_template" > "$temporary_config"
+chmod 0600 "$temporary_config"
+mv -f "$temporary_config" "$readonly_config"
+trap - EXIT INT TERM
