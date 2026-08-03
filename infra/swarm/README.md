@@ -126,7 +126,6 @@ incorporada à imagem Web; o workflow não sobrescreve uma tag existente:
 export KONTIVEHUB_REGISTRY=ghcr.io/organizacao/repositorio
 export KONTIVEHUB_VERSION=sha-COMMIT_COMPLETO-cfg-DIGEST12
 docker stack config -c docker-stack.yml >/dev/null
-docker stack deploy --with-registry-auth -c docker-stack.yml kontivehub
 ```
 
 As duas variáveis acima identificam o endereço e a versão das imagens; a
@@ -152,6 +151,28 @@ run_kontivehub_migrations() (
   MIGRATION_SERVICE="kontivehub-migrate-$(date -u +%Y%m%d%H%M%S)-$$"
   MIGRATION_DEADLINE=$(( $(date +%s) + 900 ))
 
+  validate_migration_network() {
+    if ! docker network inspect kontivehub_app >/dev/null 2>&1; then
+      echo "Rede externa kontivehub_app não encontrada; execute a preparação." >&2
+      return 1
+    fi
+    MIGRATION_NETWORK_PROPERTIES=$(docker network inspect \
+      --format '{{.Driver}} {{.Internal}}' kontivehub_app)
+    MIGRATION_NETWORK_OPTIONS=$(docker network inspect \
+      --format '{{json .Options}}' kontivehub_app)
+    case "$MIGRATION_NETWORK_OPTIONS" in
+      *'"encrypted":""'*|*'"encrypted":"true"'*) ;;
+      *)
+        echo "kontivehub_app não possui a opção encrypted." >&2
+        return 1
+        ;;
+    esac
+    if [ "$MIGRATION_NETWORK_PROPERTIES" != "overlay true" ]; then
+      echo "kontivehub_app deve ser overlay internal criptografada." >&2
+      return 1
+    fi
+  }
+
   migration_diagnostics() {
     docker service ps --no-trunc "$MIGRATION_SERVICE" >&2 || true
     docker service logs --tail 100 "$MIGRATION_SERVICE" >&2 || true
@@ -165,8 +186,19 @@ run_kontivehub_migrations() (
     fi
   }
 
-  trap 'cancel_migration || true; echo "Interrompido; job cancelado após diagnóstico." >&2; exit 130' INT
-  trap 'cancel_migration || true; echo "Encerrado; job cancelado após diagnóstico." >&2; exit 143' TERM
+  report_cancellation() {
+    INTERRUPTION_MESSAGE=$1
+    if cancel_migration; then
+      echo "$INTERRUPTION_MESSAGE; job cancelado após diagnóstico." >&2
+    else
+      echo "$INTERRUPTION_MESSAGE; cancelamento falhou, intervenha imediatamente." >&2
+    fi
+  }
+
+  trap 'report_cancellation "Interrompido"; exit 130' INT
+  trap 'report_cancellation "Encerrado"; exit 143' TERM
+
+  validate_migration_network
 
   docker service create \
     --detach=true \
@@ -218,8 +250,11 @@ run_kontivehub_migrations() (
     fi
 
     if [ "$(date +%s)" -ge "$MIGRATION_DEADLINE" ]; then
-      cancel_migration
-      echo "Timeout aguardando migrations; job cancelado após diagnóstico." >&2
+      if cancel_migration; then
+        echo "Timeout aguardando migrations; job cancelado após diagnóstico." >&2
+      else
+        echo "Timeout aguardando migrations; cancelamento falhou, intervenha imediatamente." >&2
+      fi
       exit 124
     fi
     sleep 2
@@ -227,6 +262,7 @@ run_kontivehub_migrations() (
 )
 
 run_kontivehub_migrations
+docker stack deploy --with-registry-auth -c docker-stack.yml kontivehub
 ```
 
 O polling aguarda no máximo 15 minutos e remove o serviço somente após o estado
