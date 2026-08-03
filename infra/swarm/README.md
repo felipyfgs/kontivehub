@@ -109,5 +109,9 @@ O Swarm aplica healthchecks, limites de recursos, reinício e atualização grad
 definidos na stack. `failure_action: rollback` reverte falhas de tasks durante a
 janela de monitoramento; o estado `unhealthy`, isoladamente, não substitui a
 verificação do deploy. A automação operacional deve aguardar a convergência,
-validar os healthchecks e reimplantar uma tag `sha-*` anterior se algum serviço
-permanecer indisponível. Não reutilize tags mutáveis em produção.
+validar os healthchecks e o readiness ponta a ponta em `/up`, e reimplantar uma
+tag `sha-*` anterior se algum serviço permanecer indisponível. O healthcheck
+`/nginx-health` valida somente o processo do proxy; indisponibilidade do PHP é
+tratada pelo probe próprio do serviço e aparece no readiness `/up`, sem provocar
+reinícios inúteis de tasks saudáveis do Nginx. Não reutilize tags mutáveis em
+produção.

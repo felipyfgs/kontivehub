@@ -10,11 +10,12 @@ return [
     | Heartbeat do scheduler
     |--------------------------------------------------------------------------
     | O comando ops:scheduler-heartbeat grava um timestamp; o readiness falha
-    | se o valor estiver ausente ou mais antigo que a janela abaixo.
+    | se o valor estiver ausente ou tiver mais de 180 segundos. A janela é fixa
+    | para permanecer idêntica ao healthcheck do scheduler no Docker Swarm.
     */
     'scheduler_heartbeat' => [
         'cache_key' => 'ops:scheduler:heartbeat',
-        'max_age_seconds' => (int) env('OPS_SCHEDULER_HEARTBEAT_MAX_AGE', 180),
+        'max_age_seconds' => 180,
     ],
 
     /*
