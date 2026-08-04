@@ -66,6 +66,30 @@ CMD ["php-fpm"]
 # Compatibilidade com os nomes usados pelo Compose local.
 FROM development AS runtime
 
+FROM development AS test
+
+ENV APP_ENV=testing \
+    APP_DEBUG=false \
+    COMPOSER_HOME=/tmp/composer
+
+COPY apps/api/composer.json apps/api/composer.lock ./
+RUN --mount=type=cache,target=/tmp/composer-cache \
+    COMPOSER_CACHE_DIR=/tmp/composer-cache composer install \
+      --no-interaction \
+      --no-progress \
+      --no-scripts \
+      --prefer-dist
+
+COPY --chown=www-data:www-data apps/api/ ./
+
+RUN install -o www-data -g www-data -m 0600 /dev/null .env \
+  && composer dump-autoload \
+      --no-interaction \
+      --no-scripts \
+      --optimize
+
+CMD ["sh", "-ec", "composer validate --strict --no-check-publish && vendor/bin/pint --test && php -d memory_limit=512M artisan test"]
+
 FROM development AS vendor-builder
 
 WORKDIR /build/app

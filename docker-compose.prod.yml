@@ -56,6 +56,23 @@ x-api-environment: &api-environment
   WAZYNC_HMAC_SECRET: ${WAZYNC_HMAC_SECRET:-communication-disabled}
   WAZYNC_HMAC_PREVIOUS_KEY_ID: ${WAZYNC_HMAC_PREVIOUS_KEY_ID:-}
   WAZYNC_HMAC_PREVIOUS_SECRET: ${WAZYNC_HMAC_PREVIOUS_SECRET:-}
+  COMMUNICATION_WHATSAPP_TRANSPORT: ${COMMUNICATION_WHATSAPP_TRANSPORT:-jetstream}
+  COMMUNICATION_NATS_URL: ${COMMUNICATION_NATS_URL:-nats://wzap_nats:4222}
+  COMMUNICATION_NATS_USER: ${COMMUNICATION_NATS_USER:?defina COMMUNICATION_NATS_USER no .env}
+  COMMUNICATION_NATS_PASSWORD: ${COMMUNICATION_NATS_PASSWORD:?defina COMMUNICATION_NATS_PASSWORD no .env}
+  COMMUNICATION_NATS_STREAM: ${COMMUNICATION_NATS_STREAM:-KONTIVEHUB_WHATSAPP}
+  COMMUNICATION_NATS_EVENT_SUBJECT: ${COMMUNICATION_NATS_EVENT_SUBJECT:-kontivehub.whatsapp.events}
+  COMMUNICATION_NATS_COMMAND_SUBJECT: ${COMMUNICATION_NATS_COMMAND_SUBJECT:-kontivehub.whatsapp.commands}
+  COMMUNICATION_NATS_EVENT_CONSUMER: ${COMMUNICATION_NATS_EVENT_CONSUMER:-communication-events}
+  COMMUNICATION_MEDIA_DISK: communication_media
+  COMMUNICATION_MEDIA_DRIVER: ${COMMUNICATION_MEDIA_DRIVER:-local}
+  COMMUNICATION_MEDIA_DISK_ROOT: /var/vault/communication
+  COMMUNICATION_MEDIA_ENDPOINT: ${COMMUNICATION_MEDIA_ENDPOINT:-http://wzap_minio:9000}
+  COMMUNICATION_MEDIA_ACCESS_KEY_ID: ${COMMUNICATION_MEDIA_ACCESS_KEY_ID:-}
+  COMMUNICATION_MEDIA_SECRET_ACCESS_KEY: ${COMMUNICATION_MEDIA_SECRET_ACCESS_KEY:-}
+  COMMUNICATION_MEDIA_REGION: ${COMMUNICATION_MEDIA_REGION:-us-east-1}
+  COMMUNICATION_MEDIA_BUCKET: ${COMMUNICATION_MEDIA_BUCKET:-kontivehub-communication}
+  COMMUNICATION_MEDIA_USE_PATH_STYLE_ENDPOINT: "true"
   VAULT_MASTER_KEY: ${VAULT_MASTER_KEY:?defina VAULT_MASTER_KEY no .env}
   VAULT_MASTER_KEY_VERSION: ${VAULT_MASTER_KEY_VERSION:-1}
   VAULT_DISK_ROOT: /var/vault
@@ -74,6 +91,7 @@ x-api-service: &api-service
   networks:
     - app
     - egress
+    - gacont
 
 x-wazync-environment: &wazync-environment
   WAZYNC_ENABLED: ${WAZYNC_ENABLED:-false}
@@ -97,6 +115,13 @@ x-wazync-environment: &wazync-environment
   WAZYNC_WHATSAPP_HTTP_TIMEOUT: ${WAZYNC_WHATSAPP_HTTP_TIMEOUT:-45s}
   WAZYNC_WHATSAPP_PROXY_URL: ${WAZYNC_WHATSAPP_PROXY_URL:-}
   WAZYNC_WHATSAPP_RETRY_HANDLERS: ${WAZYNC_WHATSAPP_RETRY_HANDLERS:-4}
+  WAZYNC_NATS_URL: ${COMMUNICATION_NATS_URL:-nats://wzap_nats:4222}
+  WAZYNC_NATS_USER: ${COMMUNICATION_NATS_USER:?defina COMMUNICATION_NATS_USER no .env}
+  WAZYNC_NATS_PASSWORD: ${COMMUNICATION_NATS_PASSWORD:?defina COMMUNICATION_NATS_PASSWORD no .env}
+  WAZYNC_NATS_STREAM: ${COMMUNICATION_NATS_STREAM:-KONTIVEHUB_WHATSAPP}
+  WAZYNC_NATS_EVENT_SUBJECT: ${COMMUNICATION_NATS_EVENT_SUBJECT:-kontivehub.whatsapp.events}
+  WAZYNC_NATS_COMMAND_SUBJECT: ${COMMUNICATION_NATS_COMMAND_SUBJECT:-kontivehub.whatsapp.commands}
+  WAZYNC_NATS_COMMAND_CONSUMER: ${COMMUNICATION_NATS_COMMAND_CONSUMER:-wazync-commands}
 
 services:
   nginx:
@@ -195,6 +220,23 @@ services:
     mem_limit: 768m
     cpus: 1.00
 
+  communication-events:
+    <<: *api-service
+    command: ["php", "artisan", "communication:consume-gateway-events"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php", "-r", "$$path='/tmp/kontivehub-communication-events-heartbeat'; $$now=time(); $$mtime=@filemtime($$path); exit($$mtime !== false && $$mtime <= $$now && $$now - $$mtime <= 90 ? 0 : 1);"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    mem_limit: 512m
+    cpus: 0.50
+
   reverb:
     <<: *api-service
     command: ["php", "artisan", "reverb:start", "--host=0.0.0.0", "--port=8081"]
@@ -237,6 +279,7 @@ services:
     networks:
       - app
       - egress
+      - gacont
 
   postgres:
     image: postgres:17-alpine
@@ -304,3 +347,6 @@ networks:
     internal: true
   egress:
     driver: bridge
+  gacont:
+    external: true
+    name: ${GACONT_NETWORK:-Gacont}

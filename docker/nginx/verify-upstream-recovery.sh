@@ -31,12 +31,19 @@ compose()
 validate_configuration()
 {
     configuration=$1
+    api_route=$(sed -n '/^[[:space:]]*location \^~ \/api\/ {/,/^[[:space:]]*}/p' "$configuration")
 
     if ! grep -Fq 'resolver 127.0.0.11 valid=10s ipv6=off;' "$configuration" \
         || ! grep -Fq 'set $php_upstream api:9000;' "$configuration" \
         || ! grep -Fq 'fastcgi_pass $php_upstream;' "$configuration" \
         || grep -Fq 'fastcgi_pass php:9000;' "$configuration"; then
         echo "Política de resolução dinâmica ausente em $configuration." >&2
+        return 1
+    fi
+    if ! printf '%s\n' "$api_route" | grep -Fq 'error_page 418 = @laravel;' \
+        || ! printf '%s\n' "$api_route" | grep -Fq 'return 418;' \
+        || printf '%s\n' "$api_route" | grep -Fq 'try_files'; then
+        echo "Rota /api deve encaminhar diretamente ao Laravel em $configuration." >&2
         return 1
     fi
 
