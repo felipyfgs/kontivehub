@@ -237,6 +237,7 @@ Thumbs.db
 !.codex/agents/
 !.codex/agents/**
 !.codex/config.toml
+!.codex/ORCHESTRATION.md
 !.codex/skills/
 !.codex/skills/**
 .opencode/
