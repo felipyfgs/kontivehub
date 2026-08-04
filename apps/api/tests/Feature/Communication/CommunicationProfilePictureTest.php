@@ -51,6 +51,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Psr\Http\Message\StreamInterface;
@@ -64,11 +65,14 @@ final class CommunicationProfilePictureTest extends TestCase
     {
         parent::setUp();
 
+        $mediaRoot = sys_get_temp_dir().'/communication-profile-picture-tests-'.Str::ulid();
         config([
             'communication.enabled' => true,
             'communication.gateway.enabled' => true,
-            'communication.media.disk_root' => sys_get_temp_dir().'/communication-profile-picture-tests-'.Str::ulid(),
+            'communication.media.disk_root' => $mediaRoot,
+            'filesystems.disks.communication_media.root' => $mediaRoot,
         ]);
+        Storage::forgetDisk('communication_media');
     }
 
     public function test_ready_picture_is_private_revalidatable_and_never_served_after_access_is_lost(): void

@@ -264,12 +264,12 @@ describe('projeção local da comunicação', () => {
       direction: 'INBOUND' as const,
       kind: 'POLL' as const,
       body: null,
-      metadata: {
-        poll: { name: 'Escolha', options: ['A', 'B'], selectable_options: 1 },
-        poll_votes: {
-          actor_a: { option_names: ['A'], option_hashes: ['a'.repeat(64)] },
-          actor_b: { option_names: ['A', 'B'], option_hashes: ['b'.repeat(64)] }
-        }
+      content: {
+        poll: { name: 'Escolha', options: ['A', 'B'], selectable_options: 2 },
+        poll_votes: [
+          { option_names: ['A'], option_hashes: ['a'.repeat(64)] },
+          { option_names: ['A', 'B'], option_hashes: ['b'.repeat(64)] }
+        ]
       }
     }
 

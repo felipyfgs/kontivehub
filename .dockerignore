@@ -9,6 +9,7 @@
 **/.env.*
 !.env.example
 !apps/api/.env.example
+!apps/web/.env.example
 **/auth.json
 
 **/node_modules

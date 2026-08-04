@@ -3,6 +3,7 @@ import { usePreferredReducedMotion } from '@vueuse/core'
 import CommunicationConversationActions from './ConversationActions.vue'
 import type { CannedResponse } from '~/types/communication/quick-responses'
 import type { ComposerPayload, Message } from '~/types/communication/messages'
+import type { MediaViewerItem } from '~/types/communication/media'
 import type { Conversation, ConversationActionPayload, ConversationTimelineState } from '~/types/communication/conversations'
 import type { ConversationSignals } from '~/types/communication/realtime'
 import type { Inbox } from '~/types/communication/inboxes'
@@ -38,6 +39,7 @@ const props = defineProps<{
   labels: Label[]
   canView: boolean
   canReply: boolean
+  canManageContacts?: boolean
   operational: boolean
   outboundOperational: boolean
   unavailableReason?: string
@@ -86,6 +88,8 @@ const editDraft = ref('')
 const revokeTarget = ref<Message | null>(null)
 const activeHighlightedMessageId = ref<number | null>(null)
 const pendingNewMessages = ref(0)
+const mediaViewerOpen = ref(false)
+const mediaViewerIndex = ref(0)
 const followingLatest = ref(true)
 const paginationDirection = ref<'older' | 'newer' | null>(null)
 const preferredReducedMotion = usePreferredReducedMotion()
@@ -93,11 +97,49 @@ let highlightTimer: ReturnType<typeof setTimeout> | null = null
 let messagesResizeObserver: ResizeObserver | null = null
 let renderedConversationId: number | null = null
 let renderedMessageIds = new Set<number>()
+const playedReceiptMessageIds = new Set<number>()
 let messagesWatchEpoch = 0
 let paginationScrollHeight = 0
 let paginationScrollTop = 0
 let paginationRequestEpoch = 0
 let paginationResetTimer: ReturnType<typeof setTimeout> | null = null
+
+const mediaViewerItems = computed<MediaViewerItem[]>(() => (
+  props.conversation.messages ?? []
+).flatMap(message => (message.attachments ?? []).flatMap((attachment) => {
+  if (attachment.purged_at || !['image/', 'audio/', 'video/'].some(prefix => attachment.mime_type.startsWith(prefix))) {
+    return []
+  }
+  return [{
+    id: `${message.id}:${attachment.id}`,
+    conversationId: message.conversation_id,
+    messageId: message.id,
+    attachment
+  }]
+})))
+
+function openMedia(message: Message, attachmentId: number): void {
+  const index = mediaViewerItems.value.findIndex(item => (
+    item.messageId === message.id && item.attachment.id === attachmentId
+  ))
+  if (index < 0) return
+  mediaViewerIndex.value = index
+  mediaViewerOpen.value = true
+}
+
+function downloadViewerItem(item: MediaViewerItem): void {
+  const message = props.conversation.messages?.find(candidate => candidate.id === item.messageId)
+  if (!message) return
+  emit('download', message, item.attachment.id, item.attachment.filename)
+}
+
+function markViewerItemPlayed(item: MediaViewerItem): void {
+  const message = props.conversation.messages?.find(candidate => candidate.id === item.messageId)
+  if (!message || message.direction !== 'INBOUND' || !props.canReply || !props.outboundOperational) return
+  if (playedReceiptMessageIds.has(message.id)) return
+  playedReceiptMessageIds.add(message.id)
+  emit('receipt', message, 'PLAYED')
+}
 
 const chatPresenceLabel = computed(() => {
   const signal = props.signals?.chat
@@ -686,16 +728,18 @@ watch(
                         class="relative"
                         :message="message"
                         :can-reply="canReply && outboundOperational"
+                        :can-manage-contacts="canManageContacts"
                         :action-loading="actionLoadingId === message.id"
                         @download="(target: Message, attachmentId: number, filename: string) => emit('download', target, attachmentId, filename)"
+                        @open-media="openMedia"
                         @vote="(target: Message, options: string[]) => emit('vote', target, options)"
                         @receipt="(target: Message, receipt: 'READ' | 'PLAYED') => emit('receipt', target, receipt)"
                         @recover="(target: Message, operation: 'UNAVAILABLE' | 'MEDIA_RETRY') => emit('recover', target, operation)"
                       />
 
-                      <div v-if="message.metadata?.reactions?.length" class="relative mt-2 flex flex-wrap gap-1">
+                      <div v-if="message.content?.reactions?.length" class="relative mt-2 flex flex-wrap gap-1">
                         <UButton
-                          v-for="(emoji, index) in message.metadata.reactions"
+                          v-for="(emoji, index) in message.content.reactions"
                           :key="`${emoji}-${index}`"
                           :label="emoji"
                           color="neutral"
@@ -865,4 +909,13 @@ watch(
       @confirm="confirmRevoke"
     />
   </UDashboardPanel>
+
+  <CommunicationMediaViewer
+    v-model:open="mediaViewerOpen"
+    v-model:index="mediaViewerIndex"
+    :items="mediaViewerItems"
+    :show-jump="false"
+    @download="downloadViewerItem"
+    @played="markViewerItemPlayed"
+  />
 </template>

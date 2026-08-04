@@ -7,6 +7,17 @@ return [
         'base_url' => env('WAZYNC_URL', 'http://wazync:8080'),
         'timeout_seconds' => (int) env('WAZYNC_TIMEOUT_SECONDS', 10),
     ],
+    'transport' => env('COMMUNICATION_WHATSAPP_TRANSPORT', 'http'),
+    'nats' => [
+        'url' => env('COMMUNICATION_NATS_URL', 'nats://nats:4222'),
+        'user' => env('COMMUNICATION_NATS_USER'),
+        'password' => env('COMMUNICATION_NATS_PASSWORD'),
+        'stream' => env('COMMUNICATION_NATS_STREAM', 'KONTIVEHUB_WHATSAPP'),
+        'event_subject' => env('COMMUNICATION_NATS_EVENT_SUBJECT', 'kontivehub.whatsapp.events'),
+        'command_subject' => env('COMMUNICATION_NATS_COMMAND_SUBJECT', 'kontivehub.whatsapp.commands'),
+        'event_consumer' => env('COMMUNICATION_NATS_EVENT_CONSUMER', 'communication-events'),
+        'max_message_bytes' => (int) env('COMMUNICATION_NATS_MAX_MESSAGE_BYTES', 1_048_576),
+    ],
     'flows' => [
         // Fail-closed: modelagem/publish/enable de fluxos permanece OFF por default.
         'enabled' => filter_var(env('COMMUNICATION_FLOWS_ENABLED', false), FILTER_VALIDATE_BOOL),
@@ -25,6 +36,7 @@ return [
     ],
     'media' => [
         'max_bytes' => (int) env('COMMUNICATION_MEDIA_MAX_BYTES', 20_971_520),
+        'disk' => env('COMMUNICATION_MEDIA_DISK', 'communication_media'),
         'disk_root' => env('COMMUNICATION_MEDIA_DISK_ROOT', '/var/vault/communication'),
     ],
     'profile_pictures' => [

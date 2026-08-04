@@ -146,21 +146,35 @@ func decideMessageField(number protoreflect.FieldNumber, name protoreflect.Name)
 	case "templateButtonReplyMessage", "listResponseMessage", "buttonsResponseMessage",
 		"interactiveResponseMessage":
 		return project("INTERACTIVE", "extractInteractiveResponse", false)
+	case "productMessage", "orderMessage", "sendPaymentMessage", "requestPaymentMessage",
+		"declinePaymentRequestMessage", "cancelPaymentRequestMessage", "invoiceMessage",
+		"paymentInviteMessage", "paymentReminderMessage", "splitPaymentMessage",
+		"splitPaymentUpdateMessage", "groupInviteMessage", "eventMessage", "eventInviteMessage",
+		"call", "scheduledCallCreationMessage", "scheduledCallEditMessage", "callLogMesssage":
+		return project("INTERACTIVE", "extractRichCard", false)
 	case "protocolMessage", "reactionMessage", "pollUpdateMessage":
 		return MessageEntry{
 			Family: "ACTION", Disposition: MessageAction, Extractor: "extractAction",
 			Owner: "2.2", Evidence: "internal/protocol/event_bridge.go; internal/protocol/event_bridge_test.go",
 		}
-	case "secretEncryptedMessage", "viewOnceMessage", "ephemeralMessage", "viewOnceMessageV2",
-		"viewOnceMessageV2Extension", "documentWithCaptionMessage", "editedMessage",
-		"deviceSentMessage":
+	case "secretEncryptedMessage", "ephemeralMessage", "documentWithCaptionMessage", "editedMessage",
+		"deviceSentMessage", "associatedChildMessage", "pollCreationMessageV4":
 		return MessageEntry{
 			Family: "CONTROL", Disposition: MessageControl, Extractor: "unwrapMessage",
 			Owner: "2.1/2.2", Evidence: "internal/protocol/message_normalizer.go; internal/protocol/message_normalizer_test.go",
 		}
+	case "albumMessage", "placeholderMessage":
+		return MessageEntry{
+			Family: "CONTROL", Disposition: MessageControl, Extractor: "consumeStructuralMarker",
+			Owner: "2.1/2.2", Evidence: "internal/protocol/message_normalizer.go; internal/protocol/message_normalizer_test.go",
+		}
+	case "viewOnceMessage", "viewOnceMessageV2", "viewOnceMessageV2Extension":
+		return MessageEntry{
+			Family: "UNSUPPORTED", Disposition: MessageUnsupported, Extractor: "extractViewOnceUnavailable",
+			Owner: "privacy-policy", Evidence: "internal/protocol/message_normalizer.go; internal/protocol/message_normalizer_test.go",
+		}
 	case "senderKeyDistributionMessage", "fastRatchetKeySenderKeyDistributionMessage",
-		"call", "groupInviteMessage", "scheduledCallCreationMessage", "scheduledCallEditMessage",
-		"callLogMesssage", "bcallMessage", "groupMentionedMessage", "newsletterAdminInviteMessage",
+		"bcallMessage", "groupMentionedMessage", "newsletterAdminInviteMessage",
 		"statusMentionMessage", "groupStatusMentionMessage", "statusAddYours", "groupStatusMessage",
 		"statusNotificationMessage", "groupStatusMessageV2", "statusQuestionAnswerMessage",
 		"statusQuotedMessage", "statusStickerInteractionMessage", "newsletterFollowerInviteMessageV2",

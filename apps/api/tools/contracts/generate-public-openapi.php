@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 use App\Enums\Communication\ConversationListSort;
 use App\Enums\Communication\ConversationStatus;
+use App\Enums\Communication\MessageKind;
+use App\Enums\Communication\MessageSource;
+use App\Enums\Communication\MessageStatus;
 use App\Models\SavedListFilter;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Routing\Route;
@@ -440,6 +443,54 @@ function applyKnownContract(array &$operation, string $method, string $path): vo
         return;
     }
 
+    if ($path === '/api/v1/communication/conversations/{conversation}/messages/{message}/contacts/{contactIndex}/save'
+        && $method === 'post') {
+        $operation['requestBody'] = [
+            'required' => true,
+            'content' => [
+                'application/json' => [
+                    'schema' => ['$ref' => '#/components/schemas/CommunicationSaveSharedContactBody'],
+                ],
+            ],
+        ];
+        $operation['responses'] = jsonResponse('#/components/schemas/CommunicationSaveSharedContactResponse', '200')
+            + jsonResponse('#/components/schemas/CommunicationSaveSharedContactResponse', '201')
+            + jsonResponse('#/components/schemas/JsonResponse', '403')
+            + jsonResponse('#/components/schemas/JsonResponse', '404')
+            + jsonResponse('#/components/schemas/JsonResponse', '422');
+
+        return;
+    }
+
+    if ($method === 'get' && in_array($path, [
+        '/api/v1/communication/attachments/{attachment}/download',
+        '/api/v1/communication/attachments/{attachment}/preview',
+    ], true)) {
+        $operation['parameters'][] = [
+            'name' => 'Range',
+            'in' => 'header',
+            'required' => false,
+            'schema' => ['type' => 'string', 'pattern' => '^bytes=(?:\\d+-\\d*|-\\d+)$'],
+            'description' => 'Um único intervalo de bytes para reprodução privada de áudio/vídeo.',
+        ];
+        $binary = ['content' => ['application/octet-stream' => ['schema' => ['type' => 'string', 'format' => 'binary']]]];
+        $operation['responses'] = [
+            '200' => ['description' => 'Objeto privado completo.', ...$binary],
+            '206' => [
+                'description' => 'Intervalo privado autorizado.',
+                'headers' => [
+                    'Accept-Ranges' => ['schema' => ['type' => 'string', 'const' => 'bytes']],
+                    'Content-Range' => ['schema' => ['type' => 'string']],
+                ],
+                ...$binary,
+            ],
+            '404' => ['description' => 'Objeto ausente ou não autorizado.'],
+            '416' => ['description' => 'Intervalo de bytes inválido.'],
+        ];
+
+        return;
+    }
+
     if ($path !== '/api/v1/list-filters' && $path !== '/api/v1/list-filters/{listFilter}') {
         return;
     }
@@ -771,30 +822,178 @@ function schemas(): array
                 'recoverable' => ['type' => 'boolean'],
             ],
         ),
+        'CommunicationMessageLinkPreview' => closedObject(
+            ['url'],
+            [
+                'url' => ['type' => 'string', 'format' => 'uri', 'pattern' => '^https?://'],
+                'title' => ['type' => 'string', 'maxLength' => 4096],
+                'description' => ['type' => 'string', 'maxLength' => 8192],
+            ],
+        ),
+        'CommunicationMessageLocation' => closedObject(
+            ['latitude', 'longitude'],
+            [
+                'latitude' => ['type' => 'number', 'minimum' => -90, 'maximum' => 90],
+                'longitude' => ['type' => 'number', 'minimum' => -180, 'maximum' => 180],
+                'name' => ['type' => 'string'],
+                'address' => ['type' => 'string'],
+                'caption' => ['type' => 'string'],
+                'live' => ['type' => 'boolean'],
+                'accuracy_meters' => ['type' => 'integer', 'minimum' => 0],
+                'sequence' => ['type' => 'integer', 'minimum' => 0],
+            ],
+        ),
+        'CommunicationSharedPhone' => closedObject(
+            ['label', 'phone'],
+            [
+                'label' => ['type' => 'string', 'maxLength' => 40],
+                'phone' => ['type' => 'string', 'pattern' => '^\\+[1-9]\\d{7,14}$'],
+            ],
+        ),
+        'CommunicationSharedContact' => closedObject(
+            ['display_name', 'vcard', 'phones'],
+            [
+                'display_name' => ['type' => 'string', 'maxLength' => 1024],
+                'vcard' => ['type' => 'string', 'maxLength' => 65_536],
+                'phones' => ['type' => 'array', 'maxItems' => 10, 'items' => ['$ref' => '#/components/schemas/CommunicationSharedPhone']],
+            ],
+        ),
+        'CommunicationMessagePoll' => closedObject(
+            ['name', 'options'],
+            [
+                'name' => ['type' => 'string', 'maxLength' => 4096],
+                'options' => ['type' => 'array', 'minItems' => 1, 'maxItems' => 12, 'items' => ['type' => 'string', 'maxLength' => 1024]],
+                'selectable_options' => ['type' => 'integer', 'minimum' => 0, 'maximum' => 12],
+            ],
+        ),
+        'CommunicationMessageInteractive' => closedObject(
+            ['mode'],
+            [
+                'mode' => ['type' => 'string', 'pattern' => '^[A-Z][A-Z0-9_]{1,63}$'],
+                'title' => ['type' => 'string'],
+                'description' => ['type' => 'string'],
+                'selected_id' => ['type' => 'string'],
+                'display_text' => ['type' => 'string'],
+                'name' => ['type' => 'string'],
+            ],
+        ),
+        'CommunicationRichCardFact' => closedObject(
+            ['label', 'value'],
+            ['label' => ['type' => 'string', 'maxLength' => 64], 'value' => ['type' => 'string', 'maxLength' => 1024]],
+        ),
+        'CommunicationRichCard' => closedObject(
+            ['category', 'title'],
+            [
+                'category' => ['type' => 'string', 'enum' => ['PRODUCT', 'ORDER', 'PAYMENT', 'EVENT', 'CALL', 'INVITE', 'SYSTEM']],
+                'title' => ['type' => 'string', 'maxLength' => 4096],
+                'description' => ['type' => 'string', 'maxLength' => 8192],
+                'facts' => ['type' => 'array', 'maxItems' => 12, 'items' => ['$ref' => '#/components/schemas/CommunicationRichCardFact']],
+            ],
+        ),
+        'CommunicationPollVote' => closedObject(
+            ['option_names', 'option_hashes'],
+            [
+                'option_names' => ['type' => 'array', 'items' => ['type' => 'string']],
+                'option_hashes' => ['type' => 'array', 'items' => ['type' => 'string', 'pattern' => '^[a-f0-9]{64}$']],
+            ],
+        ),
+        'CommunicationInteractiveResponse' => closedObject(
+            [],
+            ['text' => ['type' => 'string'], 'selected_id' => ['type' => 'string']],
+        ),
         'CommunicationMessageContent' => [
             'type' => ['object', 'null'],
-            'additionalProperties' => true,
+            'additionalProperties' => false,
             'properties' => [
-                'text' => nullableString(),
-                'caption' => nullableString(),
+                'text' => ['type' => 'string'],
+                'caption' => ['type' => 'string'],
+                'link_preview' => ['$ref' => '#/components/schemas/CommunicationMessageLinkPreview'],
+                'location' => ['$ref' => '#/components/schemas/CommunicationMessageLocation'],
+                'contacts' => ['type' => 'array', 'maxItems' => 50, 'items' => ['$ref' => '#/components/schemas/CommunicationSharedContact']],
+                'poll' => ['$ref' => '#/components/schemas/CommunicationMessagePoll'],
+                'interactive' => ['$ref' => '#/components/schemas/CommunicationMessageInteractive'],
+                'rich_card' => ['$ref' => '#/components/schemas/CommunicationRichCard'],
+                'ptt' => ['type' => 'boolean'],
+                'gif' => ['type' => 'boolean'],
+                'animated' => ['type' => 'boolean'],
+                'duration_seconds' => ['type' => 'integer', 'minimum' => 0],
+                'reactions' => ['type' => 'array', 'items' => ['type' => 'string', 'maxLength' => 32]],
+                'poll_votes' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/CommunicationPollVote']],
+                'interactive_response' => ['$ref' => '#/components/schemas/CommunicationInteractiveResponse'],
+                'content_present' => ['type' => 'boolean'],
+                'variants' => ['type' => 'array', 'maxItems' => 16, 'items' => ['type' => 'string']],
             ],
         ],
-        'CommunicationMessage' => [
-            'type' => 'object',
-            'additionalProperties' => true,
-            'required' => ['id', 'conversation_id', 'direction', 'kind', 'source', 'status', 'availability'],
-            'properties' => [
+        'CommunicationMessageMetadata' => closedObject(
+            [],
+            [
+                'edited_at' => ['type' => 'string', 'format' => 'date-time'],
+                'revoked' => ['type' => 'boolean'],
+                'history' => ['type' => 'boolean'],
+                'ephemeral' => ['type' => 'boolean'],
+                'view_once' => ['type' => 'boolean'],
+                'media_state' => ['type' => 'string', 'enum' => ['READY', 'UNAVAILABLE', 'RETRY_AVAILABLE', 'REQUESTED', 'FAILED']],
+                'media_error_code' => ['type' => 'string'],
+            ],
+        ),
+        'CommunicationMessageAttachment' => closedObject(
+            ['id', 'filename', 'mime_type', 'size_bytes', 'sha256', 'download_url', 'preview_url', 'purged_at'],
+            [
+                'id' => ['type' => 'integer', 'minimum' => 1],
+                'filename' => ['type' => 'string'],
+                'mime_type' => ['type' => 'string'],
+                'size_bytes' => ['type' => 'integer', 'minimum' => 0],
+                'sha256' => ['type' => 'string', 'pattern' => '^[a-f0-9]{64}$'],
+                'download_url' => ['type' => 'string', 'format' => 'uri-reference'],
+                'preview_url' => nullableString(),
+                'purged_at' => nullableString('date-time'),
+            ],
+        ),
+        'CommunicationMessage' => closedObject(
+            [
+                'id', 'conversation_id', 'direction', 'kind', 'provider_type', 'source', 'status',
+                'body', 'content', 'availability', 'reply_to_message_id', 'author_membership_id',
+                'occurred_at', 'sent_at', 'delivered_at', 'read_at', 'played_at', 'revoked_at',
+                'metadata', 'attachments',
+            ],
+            [
                 'id' => ['type' => 'integer'],
                 'conversation_id' => ['type' => 'integer'],
                 'direction' => ['type' => 'string', 'enum' => ['INBOUND', 'OUTBOUND', 'INTERNAL']],
-                'kind' => ['type' => 'string'],
-                'source' => ['type' => 'string'],
-                'status' => ['type' => 'string'],
+                'kind' => ['type' => 'string', 'enum' => array_column(MessageKind::cases(), 'value')],
+                'provider_type' => ['type' => ['string', 'null']],
+                'source' => ['type' => 'string', 'enum' => array_column(MessageSource::cases(), 'value')],
+                'status' => ['type' => 'string', 'enum' => array_column(MessageStatus::cases(), 'value')],
                 'body' => nullableString(),
                 'content' => ['$ref' => '#/components/schemas/CommunicationMessageContent'],
                 'availability' => ['$ref' => '#/components/schemas/CommunicationMessageAvailability'],
+                'reply_to_message_id' => ['type' => ['integer', 'null']],
+                'author_membership_id' => ['type' => ['integer', 'null']],
+                'occurred_at' => nullableString('date-time'),
+                'sent_at' => nullableString('date-time'),
+                'delivered_at' => nullableString('date-time'),
+                'read_at' => nullableString('date-time'),
+                'played_at' => nullableString('date-time'),
+                'revoked_at' => nullableString('date-time'),
+                'metadata' => ['$ref' => '#/components/schemas/CommunicationMessageMetadata'],
+                'attachments' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/CommunicationMessageAttachment']],
             ],
-        ],
+        ),
+        'CommunicationSaveSharedContactBody' => closedObject(
+            ['phone_index'],
+            ['phone_index' => ['type' => 'integer', 'minimum' => 0, 'maximum' => 9]],
+        ),
+        'CommunicationSaveSharedContactData' => closedObject(
+            ['outcome', 'contact'],
+            [
+                'outcome' => ['type' => 'string', 'enum' => ['created', 'existing']],
+                'contact' => ['$ref' => '#/components/schemas/CommunicationContact'],
+            ],
+        ),
+        'CommunicationSaveSharedContactResponse' => closedObject(
+            ['data'],
+            ['data' => ['$ref' => '#/components/schemas/CommunicationSaveSharedContactData']],
+        ),
         'CommunicationMessageCollection' => closedObject(
             ['data', 'meta'],
             [

@@ -1,0 +1,125 @@
+x-test-service: &test-service
+  init: true
+  restart: "no"
+  security_opt:
+    - no-new-privileges:true
+  networks:
+    - test
+
+services:
+  postgres-test:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: kontivehub_test
+      POSTGRES_USER: kontivehub_test
+      POSTGRES_PASSWORD: kontivehub_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kontivehub_test -d kontivehub_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+      start_period: 5s
+    restart: "no"
+    networks:
+      - test
+
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 3s
+    restart: "no"
+    networks:
+      - test
+
+  nats:
+    image: nats:2-alpine
+    command: ["--http_port=8222", "--js", "--store_dir=/data"]
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8222/healthz"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 3s
+    restart: "no"
+    networks:
+      - test
+
+  api-test:
+    <<: *test-service
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: test
+    environment:
+      APP_ENV: testing
+      APP_DEBUG: "false"
+      APP_KEY: base64:QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres-test
+      DB_PORT: 5432
+      DB_DATABASE: kontivehub_test
+      DB_USERNAME: kontivehub_test
+      DB_PASSWORD: kontivehub_test
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      FISCAL_PROFILE: dev
+      FISCAL_KILL_SWITCH: "true"
+      COMMUNICATION_ENABLED: "false"
+      WAZYNC_ENABLED: "false"
+      VAULT_MASTER_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      VAULT_MASTER_KEY_VERSION: 1
+      VAULT_DISK_ROOT: /tmp/nfse-vault-test
+      LOG_CHANNEL: stderr
+    tmpfs:
+      - /tmp
+      - /var/vault
+      - /var/www/html/storage/framework/cache
+      - /var/www/html/storage/framework/sessions
+      - /var/www/html/storage/framework/testing
+      - /var/www/html/storage/framework/views
+      - /var/www/html/storage/logs
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web-test:
+    <<: *test-service
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: test
+    environment:
+      CI: "true"
+      NODE_ENV: test
+      NUXT_DEVTOOLS: "false"
+      NUXT_UI_FONTS: "false"
+
+  wazync-test:
+    <<: *test-service
+    build:
+      context: .
+      dockerfile: apps/wazync/Dockerfile
+      target: test
+    environment:
+      CGO_ENABLED: "0"
+      WAZYNC_TEST_NATS_URL: nats://nats:4222
+    depends_on:
+      nats:
+        condition: service_healthy
+
+networks:
+  test:
+    internal: true

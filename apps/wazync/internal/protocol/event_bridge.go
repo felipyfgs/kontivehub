@@ -51,6 +51,7 @@ type EventBridge struct {
 	maxMediaBytes           int64
 	rejectedScope           atomic.Uint64
 	protocolControlRejected atomic.Uint64
+	unsupportedMessages     atomic.Uint64
 	lifecycle               atomic.Pointer[lifecycleObserver]
 	deviceRecorder          pairedDeviceRecorder
 }
@@ -335,6 +336,13 @@ func (b *EventBridge) handleMessage(
 		b.rejectedScope.Add(1)
 		return
 	}
+	if normalized.Family == "CONTROL" || normalized.Family == "ACTION" {
+		b.protocolControlRejected.Add(1)
+		return
+	}
+	if normalized.Kind == domain.MessageUnsupported {
+		b.unsupportedMessages.Add(1)
+	}
 	payload := normalizedMessagePayload(normalized)
 	payload["provider_message_id"] = event.Info.ID
 	// Peer = Chat (GOWA/Chatwoot). Nunca SenderAlt da sessão.
@@ -400,11 +408,16 @@ func (b *EventBridge) prepareMessage(
 		message = decrypted
 	}
 
-	if pollUpdate := message.GetPollUpdateMessage(); pollUpdate != nil {
+	actionMessage, _ := unwrapCatalogedMessage(message, 0, nil)
+	if actionMessage == nil {
+		b.protocolControlRejected.Add(1)
+		return nil, true
+	}
+	if pollUpdate := actionMessage.GetPollUpdateMessage(); pollUpdate != nil {
 		b.handlePollVote(ctx, sessionID, client, event, peer, pollUpdate, history)
 		return nil, true
 	}
-	if protocolMessage := message.GetProtocolMessage(); protocolMessage != nil {
+	if protocolMessage := actionMessage.GetProtocolMessage(); protocolMessage != nil {
 		switch protocolMessage.GetType() {
 		case waE2E.ProtocolMessage_REVOKE:
 			details := map[string]any{}
@@ -426,7 +439,7 @@ func (b *EventBridge) prepareMessage(
 			return nil, true
 		}
 	}
-	if reaction := message.GetReactionMessage(); reaction != nil {
+	if reaction := actionMessage.GetReactionMessage(); reaction != nil {
 		details := map[string]any{"emoji": reaction.GetText()}
 		if history {
 			details["history"] = true
@@ -676,7 +689,7 @@ func (b *EventBridge) handleHistorySync(
 
 func normalizedHistoryMessage(event *events.Message, peer OneToOneAddress) map[string]any {
 	normalized := normalizeCatalogedMessage(event.Message)
-	if normalized.Family == "OUT_OF_SCOPE" {
+	if normalized.Family == "OUT_OF_SCOPE" || normalized.Family == "CONTROL" {
 		return nil
 	}
 	payload := normalizedMessagePayload(normalized)
@@ -1115,6 +1128,10 @@ func (b *EventBridge) ProtocolControlRejectedCount() uint64 {
 	return b.protocolControlRejected.Load()
 }
 
+func (b *EventBridge) UnsupportedMessageCount() uint64 {
+	return b.unsupportedMessages.Load()
+}
+
 func (b *EventBridge) rejectScope(err error) {
 	if errors.Is(err, ErrRecipientScopeNotAllowed) || errors.Is(err, ErrRecipientInvalid) {
 		b.rejectedScope.Add(1)
@@ -1239,6 +1256,10 @@ func normalizedMessagePayload(message normalizedMessage) map[string]any {
 }
 
 func addPoll(payload map[string]any, poll *waE2E.PollCreationMessage) {
+	if poll == nil {
+		payload["content_present"] = false
+		return
+	}
 	options := make([]string, 0, len(poll.GetOptions()))
 	for _, option := range poll.GetOptions() {
 		options = append(options, option.GetOptionName())
@@ -1342,6 +1363,13 @@ func mediaFilename(media whatsmeow.DownloadableMessage) string {
 }
 
 func pollCreation(message *waE2E.Message) *waE2E.PollCreationMessage {
+	return pollCreationAtDepth(message, 0)
+}
+
+func pollCreationAtDepth(message *waE2E.Message, depth int) *waE2E.PollCreationMessage {
+	if message == nil || depth >= 8 {
+		return nil
+	}
 	if message.GetPollCreationMessage() != nil {
 		return message.GetPollCreationMessage()
 	}
@@ -1350,6 +1378,9 @@ func pollCreation(message *waE2E.Message) *waE2E.PollCreationMessage {
 	}
 	if message.GetPollCreationMessageV3() != nil {
 		return message.GetPollCreationMessageV3()
+	}
+	if message.GetPollCreationMessageV4() != nil {
+		return pollCreationAtDepth(message.GetPollCreationMessageV4().GetMessage(), depth+1)
 	}
 	if message.GetPollCreationMessageV5() != nil {
 		return message.GetPollCreationMessageV5()

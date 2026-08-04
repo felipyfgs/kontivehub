@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\V1\Communication\FlowRunController;
 use App\Http\Controllers\Api\V1\Communication\InboxController;
 use App\Http\Controllers\Api\V1\Communication\InboxGatewayController;
 use App\Http\Controllers\Api\V1\Communication\ProfilePictureController;
+use App\Http\Controllers\Api\V1\Communication\SharedContactController;
 use App\Http\Controllers\Api\V1\CteEmitterPushController;
 use App\Http\Controllers\Api\V1\CteOperationsController;
 use App\Http\Controllers\Api\V1\DocumentImportBatchController;
@@ -389,6 +390,8 @@ Route::prefix('v1')->group(function (): void {
                 Route::put('/conversations/{conversation}/messages/{message}/reaction', [ConversationGatewayController::class, 'react']);
                 Route::post('/conversations/{conversation}/messages/{message}/poll-votes', [ConversationGatewayController::class, 'votePoll']);
                 Route::post('/conversations/{conversation}/messages/{message}/receipts', [ConversationGatewayController::class, 'receipt']);
+                Route::post('/conversations/{conversation}/messages/{message}/contacts/{contactIndex}/save', [SharedContactController::class, 'save'])
+                    ->whereNumber('contactIndex');
                 Route::post('/conversations/{conversation}/messages/{message}/history', [ConversationGatewayController::class, 'history'])
                     ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive));
                 Route::post('/conversations/{conversation}/messages/{message}/recovery', [ConversationGatewayController::class, 'recovery'])

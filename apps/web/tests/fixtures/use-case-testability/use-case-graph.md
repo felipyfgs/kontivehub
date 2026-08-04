@@ -1,8 +1,8 @@
 # Grafo de testabilidade dos casos de uso
 
-Snapshot: `f423493efa5da44f1c93420f6f688ec744eff1704a640080bc059409054dd9be`
+Snapshot: `94eecf324004ab8aed14d4d5bf1d32a1c1170cdf1544d9546607f0062302b4f3`
 
-O levantamento classifica **584 rotas API**, **83 páginas Nuxt** e **15 clientes HTTP** em **11 jornadas**. 4 jornadas são críticas e exigem evidência L1–L3.
+O levantamento classifica **585 rotas API**, **83 páginas Nuxt** e **15 clientes HTTP** em **11 jornadas**. 4 jornadas são críticas e exigem evidência L1–L3.
 
 | Jornada | Crítica | Rotas | Páginas | Clientes HTTP | L0 | L1 | L2 | L3 | Lacunas |
 |---|:---:|---:|---:|---:|:---:|:---:|:---:|:---:|---|
@@ -12,7 +12,7 @@ O levantamento classifica **584 rotas API**, **83 páginas Nuxt** e **15 cliente
 | Configuração e onboarding do escritório (`tenant-operations`) | não | 31 | 0 | 1 | ✓ | ✓ | ✓ | — | L3 |
 | Catálogo e ciclo de vida de clientes (`client-lifecycle`) | sim | 21 | 10 | 1 | ✓ | ✓ | ✓ | ✓ | nenhuma |
 | Documentos, notas e exportações (`documents-notes`) | não | 18 | 9 | 1 | ✓ | — | — | — | L1, L2, L3 |
-| Atendimento WhatsApp compartilhado (`communication-inbox`) | não | 114 | 12 | 1 | ✓ | ✓ | ✓ | — | L3 |
+| Atendimento WhatsApp compartilhado (`communication-inbox`) | não | 115 | 12 | 1 | ✓ | ✓ | ✓ | — | L3 |
 | Monitoramento fiscal e consultas (`fiscal-monitoring`) | sim | 199 | 17 | 3 | ✓ | ✓ | ✓ | ✓ | nenhuma |
 | Fila e processos operacionais (`operational-work`) | sim | 64 | 10 | 3 | ✓ | ✓ | ✓ | ✓ | nenhuma |
 | Captura, integrações e documentos de saída (`outbound-capture`) | não | 42 | 1 | 1 | ✓ | — | — | — | L1, L2, L3 |

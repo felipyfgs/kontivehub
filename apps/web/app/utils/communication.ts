@@ -90,6 +90,7 @@ export const COMMUNICATION_MESSAGE_KIND: Record<Message['kind'], StatusMeta> = {
   CONTACT: { label: 'Contato', color: 'primary', icon: 'i-lucide-contact' },
   POLL: { label: 'Enquete', color: 'primary', icon: 'i-lucide-list-checks' },
   INTERACTIVE: { label: 'Interação', color: 'primary', icon: 'i-lucide-mouse-pointer-click' },
+  UNSUPPORTED: { label: 'Não compatível', color: 'warning', icon: 'i-lucide-circle-alert' },
   NOTE: { label: 'Nota interna', color: 'warning', icon: 'i-lucide-sticky-note' }
 }
 
@@ -163,7 +164,12 @@ function mergeCommunicationMessageContent(
   if (!incoming) return current
   const text = incoming.text?.trim() || current?.text?.trim() || null
   const caption = incoming.caption?.trim() || current?.caption?.trim() || null
-  return text || caption ? { ...current, ...incoming, text, caption } : current
+  return {
+    ...current,
+    ...incoming,
+    ...(text ? { text } : {}),
+    ...(caption ? { caption } : {})
+  }
 }
 
 /** Texto compatível para recursos antigos e a projeção pública aditiva. */
@@ -184,6 +190,11 @@ export function communicationAvailabilityPlaceholder(message: Message): string |
     default: {
       const hasContent = Boolean(communicationMessageBody(message))
         || Boolean(message.attachments?.length)
+        || Boolean(message.content?.location)
+        || Boolean(message.content?.contacts?.length)
+        || Boolean(message.content?.poll)
+        || Boolean(message.content?.interactive)
+        || Boolean(message.content?.rich_card)
       return hasContent ? null : 'Conteúdo indisponível.'
     }
   }
@@ -299,10 +310,14 @@ export function communicationMessageSummary(message?: Message | null): string {
   if (message.metadata?.revoked) return 'Mensagem apagada'
   const body = communicationMessageBody(message)
   if (body) return body
-  if (message.kind === 'LOCATION') return message.metadata?.location?.name || 'Localização compartilhada'
-  if (message.kind === 'CONTACT') return message.metadata?.contact?.display_name || 'Contato compartilhado'
-  if (message.kind === 'POLL') return message.metadata?.poll?.name || 'Enquete'
-  if (message.kind === 'INTERACTIVE') return message.metadata?.interactive?.title || 'Mensagem interativa'
+  if (message.kind === 'LOCATION') return message.content?.location?.name || 'Localização compartilhada'
+  if (message.kind === 'CONTACT') {
+    const contacts = message.content?.contacts ?? []
+    if (contacts.length > 1) return `${contacts.length} contatos compartilhados`
+    return contacts[0]?.display_name || 'Contato compartilhado'
+  }
+  if (message.kind === 'POLL') return message.content?.poll?.name || 'Enquete'
+  if (message.kind === 'INTERACTIVE') return message.content?.rich_card?.title || message.content?.interactive?.title || 'Mensagem interativa'
   return COMMUNICATION_MESSAGE_KIND[message.kind].label
 }
 
@@ -329,9 +344,7 @@ export function communicationConversationImageEvidence(
 }
 
 export function communicationPollVotes(message: Message): MessagePollVote[] {
-  const votes = message.metadata?.poll_votes
-  if (!votes) return []
-  return Array.isArray(votes) ? votes : Object.values(votes)
+  return message.content?.poll_votes ?? []
 }
 
 export function communicationPollVoteCount(message: Message, option: string): number {

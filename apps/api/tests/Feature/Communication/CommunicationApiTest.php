@@ -360,7 +360,8 @@ final class CommunicationApiTest extends TestCase
             'internal_note' => true,
         ])->assertCreated()
             ->assertJsonPath('data.kind', MessageKind::Note->value)
-            ->assertJsonPath('data.direction', MessageDirection::Internal->value);
+            ->assertJsonPath('data.direction', MessageDirection::Internal->value)
+            ->assertJsonCount(0, 'data.attachments');
         $this->assertDatabaseCount('communication_outbox_entries', 0);
         Event::assertDispatched(CommunicationEventCommitted::class, static function (CommunicationEventCommitted $event) use ($inbox, $conversation): bool {
             return $event->inboxId === (int) $inbox->id
@@ -658,6 +659,34 @@ final class CommunicationApiTest extends TestCase
         $this->assertStringContainsString('no-store', (string) $preview->headers->get('Cache-Control'));
         $this->assertStringStartsWith('inline;', (string) $preview->headers->get('Content-Disposition'));
         $this->assertSame($imageBytes, $preview->streamedContent());
+
+        $head = $this->call('HEAD', '/api/v1/communication/attachments/'.$imageAttachment->id.'/preview')
+            ->assertOk()
+            ->assertHeader('Accept-Ranges', 'bytes')
+            ->assertHeader('Content-Length', (string) strlen($imageBytes));
+        $this->assertSame('', $head->getContent());
+
+        $range = $this->get(
+            '/api/v1/communication/attachments/'.$imageAttachment->id.'/preview',
+            ['Range' => 'bytes=2-7'],
+        )->assertStatus(206)
+            ->assertHeader('Accept-Ranges', 'bytes')
+            ->assertHeader('Content-Range', 'bytes 2-7/'.strlen($imageBytes))
+            ->assertHeader('Content-Length', '6');
+        $this->assertSame(substr($imageBytes, 2, 6), $range->streamedContent());
+
+        $multipleRanges = $this->get(
+            '/api/v1/communication/attachments/'.$imageAttachment->id.'/preview',
+            ['Range' => 'bytes=0-1,4-5'],
+        )->assertOk()
+            ->assertHeader('Content-Length', (string) strlen($imageBytes));
+        $this->assertSame($imageBytes, $multipleRanges->streamedContent());
+
+        $this->get(
+            '/api/v1/communication/attachments/'.$imageAttachment->id.'/preview',
+            ['Range' => 'bytes=999-1000'],
+        )->assertStatus(416)
+            ->assertHeader('Content-Range', 'bytes */'.strlen($imageBytes));
         $channel = Broadcast::connection('reverb')->getChannels()['communication.inbox.{inboxId}'];
         $this->assertTrue($channel($operator, (int) $visible->id));
         $this->assertFalse($channel($operator, (int) $restricted->id));
@@ -733,6 +762,77 @@ final class CommunicationApiTest extends TestCase
             'socket_id' => '321.102',
             'channel_name' => 'private-communication.inbox.'.$otherInbox->id,
         ])->assertForbidden();
+    }
+
+    public function test_shared_contact_import_is_server_resolved_authorized_and_idempotent(): void
+    {
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $foreignTenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $admin = User::factory()->forTenant($tenant, TenantRole::TenantAdmin)->create();
+        $viewer = User::factory()->forTenant($tenant, TenantRole::TenantUser, 'viewer')->create();
+        $foreignAdmin = User::factory()->forTenant($foreignTenant, TenantRole::TenantAdmin)->create();
+        $inbox = $this->inbox($tenant, 'Contatos compartilhados');
+        $this->member($inbox, $viewer);
+        $conversation = $this->conversation($tenant, $inbox, '+5511999995001');
+        $message = $this->message($tenant, $inbox, $conversation, '');
+        $sharedPhoneLines = collect(range(5002, 5012))
+            ->map(fn (int $suffix): string => "TEL;TYPE=CELL;WAID=551199999{$suffix}:+551199999{$suffix}")
+            ->implode("\r\n");
+        $message->forceFill([
+            'kind' => MessageKind::Contact,
+            'body_encrypted' => null,
+            'content_encrypted' => [
+                'contacts' => [[
+                    'display_name' => 'Contato compartilhado',
+                    'vcard' => "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Contato compartilhado\r\n{$sharedPhoneLines}\r\nEND:VCARD",
+                    'provider_secret' => 'não pode sair na API',
+                ]],
+            ],
+        ])->save();
+        $path = '/api/v1/communication/conversations/'.$conversation->id
+            .'/messages/'.$message->id.'/contacts/0/save';
+
+        $this->authenticate($viewer);
+        $this->postJson($path, ['phone_index' => 0])->assertForbidden();
+
+        $this->authenticate($foreignAdmin);
+        $this->postJson($path, ['phone_index' => 0])->assertNotFound();
+
+        $this->authenticate($admin);
+        $this->getJson('/api/v1/communication/conversations/'.$conversation->id)
+            ->assertOk()
+            ->assertJsonPath('data.messages.0.content.contacts.0.display_name', 'Contato compartilhado')
+            ->assertJsonPath('data.messages.0.content.contacts.0.phones.0.phone', '+5511999995002')
+            ->assertJsonCount(10, 'data.messages.0.content.contacts.0.phones')
+            ->assertJsonMissingPath('data.messages.0.content.contacts.0.provider_secret');
+        $this->postJson($path, [
+            'phone_index' => 0,
+            'name' => 'Valor do cliente não pode ser aceito',
+            'phone' => '+5511888888888',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['name', 'phone']);
+
+        $this->postJson($path, ['phone_index' => 0])
+            ->assertCreated()
+            ->assertJsonPath('data.outcome', 'created')
+            ->assertJsonPath('data.contact.name', 'Contato compartilhado');
+        $this->postJson($path, ['phone_index' => 0])
+            ->assertOk()
+            ->assertJsonPath('data.outcome', 'existing');
+        $this->postJson($path, ['phone_index' => 9])
+            ->assertCreated()
+            ->assertJsonPath('data.outcome', 'created');
+        $this->postJson($path, ['phone_index' => 10])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['phone_index']);
+        $this->assertSame(1, CommunicationIdentity::query()->withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('address_hash', hash('sha256', '+5511999995002'))
+            ->count());
+        $this->assertSame(1, CommunicationIdentity::query()->withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('address_hash', hash('sha256', '+5511999995011'))
+            ->count());
     }
 
     public function test_admin_export_and_purge_remove_recoverable_content_and_keep_tombstone(): void

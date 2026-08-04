@@ -35,6 +35,13 @@ type Config struct {
 	WhatsAppHTTPTimeout    time.Duration
 	WhatsAppProxyURL       string
 	WhatsAppRetryHandlers  int64
+	NATSURL                string
+	NATSUser               string
+	NATSPassword           string
+	NATSStream             string
+	NATSEventSubject       string
+	NATSCommandSubject     string
+	NATSCommandConsumer    string
 }
 
 func Load() (Config, error) {
@@ -62,6 +69,13 @@ func Load() (Config, error) {
 		WhatsAppHTTPTimeout:    envDuration("WAZYNC_WHATSAPP_HTTP_TIMEOUT", 45*time.Second),
 		WhatsAppProxyURL:       strings.TrimSpace(os.Getenv("WAZYNC_WHATSAPP_PROXY_URL")),
 		WhatsAppRetryHandlers:  envInt64("WAZYNC_WHATSAPP_RETRY_HANDLERS", 4),
+		NATSURL:                strings.TrimSpace(os.Getenv("WAZYNC_NATS_URL")),
+		NATSUser:               strings.TrimSpace(os.Getenv("WAZYNC_NATS_USER")),
+		NATSPassword:           os.Getenv("WAZYNC_NATS_PASSWORD"),
+		NATSStream:             env("WAZYNC_NATS_STREAM", "KONTIVEHUB_WHATSAPP"),
+		NATSEventSubject:       env("WAZYNC_NATS_EVENT_SUBJECT", "kontivehub.whatsapp.events"),
+		NATSCommandSubject:     env("WAZYNC_NATS_COMMAND_SUBJECT", "kontivehub.whatsapp.commands"),
+		NATSCommandConsumer:    env("WAZYNC_NATS_COMMAND_CONSUMER", "wazync-commands"),
 	}
 
 	if raw := strings.TrimSpace(os.Getenv("WAZYNC_DATA_KEY")); raw != "" {
@@ -106,6 +120,13 @@ func Load() (Config, error) {
 		cfg.WhatsAppHTTPTimeout <= 0 || cfg.WhatsAppHTTPTimeout > 5*time.Minute ||
 		cfg.WhatsAppRetryHandlers < 1 || cfg.WhatsAppRetryHandlers > 32 {
 		return Config{}, errors.New("invalid WhatsApp runtime limits")
+	}
+	if (cfg.NATSUser == "") != (cfg.NATSPassword == "") {
+		return Config{}, errors.New("WAZYNC_NATS_USER and WAZYNC_NATS_PASSWORD must be set together")
+	}
+	if cfg.NATSURL != "" && (cfg.NATSStream == "" || cfg.NATSEventSubject == "" ||
+		cfg.NATSCommandSubject == "" || cfg.NATSCommandConsumer == "") {
+		return Config{}, errors.New("invalid NATS stream, subject or consumer configuration")
 	}
 
 	return cfg, nil

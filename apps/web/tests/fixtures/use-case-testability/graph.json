@@ -1,5 +1,5 @@
 {
-  "digest": "f423493efa5da44f1c93420f6f688ec744eff1704a640080bc059409054dd9be",
+  "digest": "94eecf324004ab8aed14d4d5bf1d32a1c1170cdf1544d9546607f0062302b4f3",
   "schemaVersion": 1,
   "source": {
     "catalog": "apps/web/tests/fixtures/use-case-testability/catalog.json",
@@ -9,9 +9,9 @@
   "summary": {
     "journeys": 11,
     "criticalJourneys": 4,
-    "apiRoutes": 584,
+    "apiRoutes": 585,
     "pages": 83,
-    "handlers": 582,
+    "handlers": 583,
     "apiClients": 15,
     "tests": 12,
     "unmatchedApiClientEndpoints": 0
@@ -123,7 +123,7 @@
       "journeyId": "communication-inbox",
       "title": "Atendimento WhatsApp compartilhado",
       "critical": false,
-      "apiRoutes": 114,
+      "apiRoutes": 115,
       "pages": 12,
       "apiClients": 1,
       "levels": {
@@ -1413,6 +1413,7 @@
         "api/v1/communication/conversations/:param/labels/:param",
         "api/v1/communication/conversations/:param/messages",
         "api/v1/communication/conversations/:param/messages/:param",
+        "api/v1/communication/conversations/:param/messages/:param/contacts/:param/save",
         "api/v1/communication/conversations/:param/messages/:param/edit",
         "api/v1/communication/conversations/:param/messages/:param/poll-votes",
         "api/v1/communication/conversations/:param/messages/:param/reaction",
@@ -2498,6 +2499,15 @@
       "group": "communication",
       "action": "ConversationGatewayController@revoke",
       "id": "api:DELETE:api/v1/communication/conversations/{conversation}/messages/{message}",
+      "type": "api-route",
+      "journeyId": "communication-inbox"
+    },
+    {
+      "method": "POST",
+      "uri": "api/v1/communication/conversations/{conversation}/messages/{message}/contacts/{contactIndex}/save",
+      "group": "communication",
+      "action": "SharedContactController@save",
+      "id": "api:POST:api/v1/communication/conversations/{conversation}/messages/{message}/contacts/{contactIndex}/save",
       "type": "api-route",
       "journeyId": "communication-inbox"
     },
@@ -6375,7 +6385,7 @@
       "method": "GET",
       "uri": "api/v1/work/calendar",
       "group": "work",
-      "action": "WorkDashboardController@calendar",
+      "action": "DashboardController@calendar",
       "id": "api:GET:api/v1/work/calendar",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6384,7 +6394,7 @@
       "method": "GET",
       "uri": "api/v1/work/calendar/day",
       "group": "work",
-      "action": "WorkDashboardController@calendarDay",
+      "action": "DashboardController@calendarDay",
       "id": "api:GET:api/v1/work/calendar/day",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6393,7 +6403,7 @@
       "method": "GET",
       "uri": "api/v1/work/departments",
       "group": "work",
-      "action": "WorkDepartmentController@index",
+      "action": "DepartmentController@index",
       "id": "api:GET:api/v1/work/departments",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6402,7 +6412,7 @@
       "method": "POST",
       "uri": "api/v1/work/departments",
       "group": "work",
-      "action": "WorkDepartmentController@store",
+      "action": "DepartmentController@store",
       "id": "api:POST:api/v1/work/departments",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6411,7 +6421,7 @@
       "method": "PATCH",
       "uri": "api/v1/work/departments/{department}",
       "group": "work",
-      "action": "WorkDepartmentController@update",
+      "action": "DepartmentController@update",
       "id": "api:PATCH:api/v1/work/departments/{department}",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6420,7 +6430,7 @@
       "method": "POST",
       "uri": "api/v1/work/departments/{department}/assign-membership",
       "group": "work",
-      "action": "WorkDepartmentController@assignMembership",
+      "action": "DepartmentController@assignMembership",
       "id": "api:POST:api/v1/work/departments/{department}/assign-membership",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6429,7 +6439,7 @@
       "method": "POST",
       "uri": "api/v1/work/exports",
       "group": "work",
-      "action": "WorkDashboardController@createExport",
+      "action": "DashboardController@createExport",
       "id": "api:POST:api/v1/work/exports",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6438,7 +6448,7 @@
       "method": "GET",
       "uri": "api/v1/work/exports/{export}",
       "group": "work",
-      "action": "WorkDashboardController@showExport",
+      "action": "DashboardController@showExport",
       "id": "api:GET:api/v1/work/exports/{export}",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6447,7 +6457,7 @@
       "method": "GET",
       "uri": "api/v1/work/exports/{export}/download",
       "group": "work",
-      "action": "WorkDashboardController@downloadExport",
+      "action": "DashboardController@downloadExport",
       "id": "api:GET:api/v1/work/exports/{export}/download",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6456,7 +6466,7 @@
       "method": "GET",
       "uri": "api/v1/work/generation-batches/{batch}",
       "group": "work",
-      "action": "WorkProcessGenerationController@show",
+      "action": "ProcessGenerationController@show",
       "id": "api:GET:api/v1/work/generation-batches/{batch}",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6465,7 +6475,7 @@
       "method": "POST",
       "uri": "api/v1/work/generation-batches/{batch}/confirm",
       "group": "work",
-      "action": "WorkProcessGenerationController@confirm",
+      "action": "ProcessGenerationController@confirm",
       "id": "api:POST:api/v1/work/generation-batches/{batch}/confirm",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6474,7 +6484,7 @@
       "method": "POST",
       "uri": "api/v1/work/generation-batches/{batch}/retry",
       "group": "work",
-      "action": "WorkProcessGenerationController@retry",
+      "action": "ProcessGenerationController@retry",
       "id": "api:POST:api/v1/work/generation-batches/{batch}/retry",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6483,7 +6493,7 @@
       "method": "GET",
       "uri": "api/v1/work/kpis",
       "group": "work",
-      "action": "WorkDashboardController@kpis",
+      "action": "DashboardController@kpis",
       "id": "api:GET:api/v1/work/kpis",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6492,7 +6502,7 @@
       "method": "GET",
       "uri": "api/v1/work/process-groups",
       "group": "work",
-      "action": "WorkProcessGroupController@index",
+      "action": "ProcessGroupController@index",
       "id": "api:GET:api/v1/work/process-groups",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6501,7 +6511,7 @@
       "method": "GET",
       "uri": "api/v1/work/processes",
       "group": "work",
-      "action": "WorkProcessController@index",
+      "action": "ProcessController@index",
       "id": "api:GET:api/v1/work/processes",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6510,7 +6520,7 @@
       "method": "POST",
       "uri": "api/v1/work/processes",
       "group": "work",
-      "action": "WorkProcessController@store",
+      "action": "ProcessController@store",
       "id": "api:POST:api/v1/work/processes",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6519,7 +6529,7 @@
       "method": "POST",
       "uri": "api/v1/work/processes/bulk",
       "group": "work",
-      "action": "WorkProcessController@bulk",
+      "action": "ProcessController@bulk",
       "id": "api:POST:api/v1/work/processes/bulk",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6528,7 +6538,7 @@
       "method": "GET",
       "uri": "api/v1/work/processes/{process}",
       "group": "work",
-      "action": "WorkProcessController@show",
+      "action": "ProcessController@show",
       "id": "api:GET:api/v1/work/processes/{process}",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6537,7 +6547,7 @@
       "method": "PATCH",
       "uri": "api/v1/work/processes/{process}",
       "group": "work",
-      "action": "WorkProcessController@update",
+      "action": "ProcessController@update",
       "id": "api:PATCH:api/v1/work/processes/{process}",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6546,7 +6556,7 @@
       "method": "POST",
       "uri": "api/v1/work/processes/{process}/archive",
       "group": "work",
-      "action": "WorkProcessController@archive",
+      "action": "ProcessController@archive",
       "id": "api:POST:api/v1/work/processes/{process}/archive",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6555,7 +6565,7 @@
       "method": "POST",
       "uri": "api/v1/work/processes/{process}/comments",
       "group": "work",
-      "action": "WorkProcessController@comment",
+      "action": "ProcessController@comment",
       "id": "api:POST:api/v1/work/processes/{process}/comments",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6564,7 +6574,7 @@
       "method": "POST",
       "uri": "api/v1/work/processes/{process}/tasks",
       "group": "work",
-      "action": "WorkTaskController@storeOnProcess",
+      "action": "TaskController@storeOnProcess",
       "id": "api:POST:api/v1/work/processes/{process}/tasks",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6573,7 +6583,7 @@
       "method": "POST",
       "uri": "api/v1/work/processes/{process}/tasks/reorder",
       "group": "work",
-      "action": "WorkTaskController@reorder",
+      "action": "TaskController@reorder",
       "id": "api:POST:api/v1/work/processes/{process}/tasks/reorder",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6582,7 +6592,7 @@
       "method": "GET",
       "uri": "api/v1/work/processes/{process}/timeline",
       "group": "work",
-      "action": "WorkProcessController@timeline",
+      "action": "ProcessController@timeline",
       "id": "api:GET:api/v1/work/processes/{process}/timeline",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6591,7 +6601,7 @@
       "method": "GET",
       "uri": "api/v1/work/queue",
       "group": "work",
-      "action": "WorkTaskController@queue",
+      "action": "TaskController@queue",
       "id": "api:GET:api/v1/work/queue",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6600,7 +6610,7 @@
       "method": "POST",
       "uri": "api/v1/work/tasks/bulk",
       "group": "work",
-      "action": "WorkTaskController@bulk",
+      "action": "TaskController@bulk",
       "id": "api:POST:api/v1/work/tasks/bulk",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6609,7 +6619,7 @@
       "method": "GET",
       "uri": "api/v1/work/tasks/{task}",
       "group": "work",
-      "action": "WorkTaskController@show",
+      "action": "TaskController@show",
       "id": "api:GET:api/v1/work/tasks/{task}",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6618,7 +6628,7 @@
       "method": "POST",
       "uri": "api/v1/work/tasks/{task}/assign",
       "group": "work",
-      "action": "WorkTaskController@assign",
+      "action": "TaskController@assign",
       "id": "api:POST:api/v1/work/tasks/{task}/assign",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6627,7 +6637,7 @@
       "method": "POST",
       "uri": "api/v1/work/tasks/{task}/block",
       "group": "work",
-      "action": "WorkTaskController@block",
+      "action": "TaskController@block",
       "id": "api:POST:api/v1/work/tasks/{task}/block",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6636,7 +6646,7 @@
       "method": "POST",
       "uri": "api/v1/work/tasks/{task}/claim",
       "group": "work",
-      "action": "WorkTaskController@claim",
+      "action": "TaskController@claim",
       "id": "api:POST:api/v1/work/tasks/{task}/claim",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6645,7 +6655,7 @@
       "method": "POST",
       "uri": "api/v1/work/tasks/{task}/comments",
       "group": "work",
-      "action": "WorkTaskController@comment",
+      "action": "TaskController@comment",
       "id": "api:POST:api/v1/work/tasks/{task}/comments",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6654,7 +6664,7 @@
       "method": "POST",
       "uri": "api/v1/work/tasks/{task}/complete",
       "group": "work",
-      "action": "WorkTaskController@complete",
+      "action": "TaskController@complete",
       "id": "api:POST:api/v1/work/tasks/{task}/complete",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6663,7 +6673,7 @@
       "method": "POST",
       "uri": "api/v1/work/tasks/{task}/dispense",
       "group": "work",
-      "action": "WorkTaskController@dispense",
+      "action": "TaskController@dispense",
       "id": "api:POST:api/v1/work/tasks/{task}/dispense",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6672,7 +6682,7 @@
       "method": "POST",
       "uri": "api/v1/work/tasks/{task}/evidences",
       "group": "work",
-      "action": "WorkTaskController@uploadEvidence",
+      "action": "TaskController@uploadEvidence",
       "id": "api:POST:api/v1/work/tasks/{task}/evidences",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6681,7 +6691,7 @@
       "method": "DELETE",
       "uri": "api/v1/work/tasks/{task}/evidences/{evidence}",
       "group": "work",
-      "action": "WorkTaskController@removeEvidence",
+      "action": "TaskController@removeEvidence",
       "id": "api:DELETE:api/v1/work/tasks/{task}/evidences/{evidence}",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6690,7 +6700,7 @@
       "method": "GET",
       "uri": "api/v1/work/tasks/{task}/evidences/{evidence}/download",
       "group": "work",
-      "action": "WorkTaskController@downloadEvidence",
+      "action": "TaskController@downloadEvidence",
       "id": "api:GET:api/v1/work/tasks/{task}/evidences/{evidence}/download",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6699,7 +6709,7 @@
       "method": "POST",
       "uri": "api/v1/work/tasks/{task}/reopen",
       "group": "work",
-      "action": "WorkTaskController@reopen",
+      "action": "TaskController@reopen",
       "id": "api:POST:api/v1/work/tasks/{task}/reopen",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6708,7 +6718,7 @@
       "method": "POST",
       "uri": "api/v1/work/tasks/{task}/resume",
       "group": "work",
-      "action": "WorkTaskController@resume",
+      "action": "TaskController@resume",
       "id": "api:POST:api/v1/work/tasks/{task}/resume",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6717,7 +6727,7 @@
       "method": "POST",
       "uri": "api/v1/work/tasks/{task}/start",
       "group": "work",
-      "action": "WorkTaskController@start",
+      "action": "TaskController@start",
       "id": "api:POST:api/v1/work/tasks/{task}/start",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6726,7 +6736,7 @@
       "method": "PATCH",
       "uri": "api/v1/work/tasks/{task}/structure",
       "group": "work",
-      "action": "WorkTaskController@updateStructure",
+      "action": "TaskController@updateStructure",
       "id": "api:PATCH:api/v1/work/tasks/{task}/structure",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6735,7 +6745,7 @@
       "method": "GET",
       "uri": "api/v1/work/template-catalog",
       "group": "work",
-      "action": "WorkProcessTemplateCatalogController@index",
+      "action": "ProcessTemplateCatalogController@index",
       "id": "api:GET:api/v1/work/template-catalog",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6744,7 +6754,7 @@
       "method": "POST",
       "uri": "api/v1/work/template-catalog/{catalogKey}/install",
       "group": "work",
-      "action": "WorkProcessTemplateCatalogController@install",
+      "action": "ProcessTemplateCatalogController@install",
       "id": "api:POST:api/v1/work/template-catalog/{catalogKey}/install",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6753,7 +6763,7 @@
       "method": "GET",
       "uri": "api/v1/work/templates",
       "group": "work",
-      "action": "WorkProcessTemplateController@index",
+      "action": "ProcessTemplateController@index",
       "id": "api:GET:api/v1/work/templates",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6762,7 +6772,7 @@
       "method": "POST",
       "uri": "api/v1/work/templates",
       "group": "work",
-      "action": "WorkProcessTemplateController@store",
+      "action": "ProcessTemplateController@store",
       "id": "api:POST:api/v1/work/templates",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6771,7 +6781,7 @@
       "method": "GET",
       "uri": "api/v1/work/templates/{template}",
       "group": "work",
-      "action": "WorkProcessTemplateController@show",
+      "action": "ProcessTemplateController@show",
       "id": "api:GET:api/v1/work/templates/{template}",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6780,7 +6790,7 @@
       "method": "PATCH",
       "uri": "api/v1/work/templates/{template}",
       "group": "work",
-      "action": "WorkProcessTemplateController@update",
+      "action": "ProcessTemplateController@update",
       "id": "api:PATCH:api/v1/work/templates/{template}",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6789,7 +6799,7 @@
       "method": "GET",
       "uri": "api/v1/work/templates/{template}/generation-batches",
       "group": "work",
-      "action": "WorkProcessTemplateController@generationBatches",
+      "action": "ProcessTemplateController@generationBatches",
       "id": "api:GET:api/v1/work/templates/{template}/generation-batches",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6798,7 +6808,7 @@
       "method": "POST",
       "uri": "api/v1/work/templates/{template}/preview",
       "group": "work",
-      "action": "WorkProcessGenerationController@preview",
+      "action": "ProcessGenerationController@preview",
       "id": "api:POST:api/v1/work/templates/{template}/preview",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6807,7 +6817,7 @@
       "method": "GET",
       "uri": "api/v1/work/templates/{template}/recurrence",
       "group": "work",
-      "action": "WorkProcessTemplateController@showRecurrence",
+      "action": "ProcessTemplateController@showRecurrence",
       "id": "api:GET:api/v1/work/templates/{template}/recurrence",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -6816,7 +6826,7 @@
       "method": "PATCH",
       "uri": "api/v1/work/templates/{template}/recurrence",
       "group": "work",
-      "action": "WorkProcessTemplateController@updateRecurrence",
+      "action": "ProcessTemplateController@updateRecurrence",
       "id": "api:PATCH:api/v1/work/templates/{template}/recurrence",
       "type": "api-route",
       "journeyId": "operational-work"
@@ -7653,6 +7663,36 @@
       "action": "CteOperationsController@repairKnownNsu"
     },
     {
+      "id": "handler:DashboardController@calendar",
+      "type": "handler",
+      "action": "DashboardController@calendar"
+    },
+    {
+      "id": "handler:DashboardController@calendarDay",
+      "type": "handler",
+      "action": "DashboardController@calendarDay"
+    },
+    {
+      "id": "handler:DashboardController@createExport",
+      "type": "handler",
+      "action": "DashboardController@createExport"
+    },
+    {
+      "id": "handler:DashboardController@downloadExport",
+      "type": "handler",
+      "action": "DashboardController@downloadExport"
+    },
+    {
+      "id": "handler:DashboardController@kpis",
+      "type": "handler",
+      "action": "DashboardController@kpis"
+    },
+    {
+      "id": "handler:DashboardController@showExport",
+      "type": "handler",
+      "action": "DashboardController@showExport"
+    },
+    {
       "id": "handler:DashboardStatsController@index",
       "type": "handler",
       "action": "DashboardStatsController@index"
@@ -7861,6 +7901,26 @@
       "id": "handler:DefisSpecificDeclarationMonitoringController@history",
       "type": "handler",
       "action": "DefisSpecificDeclarationMonitoringController@history"
+    },
+    {
+      "id": "handler:DepartmentController@assignMembership",
+      "type": "handler",
+      "action": "DepartmentController@assignMembership"
+    },
+    {
+      "id": "handler:DepartmentController@index",
+      "type": "handler",
+      "action": "DepartmentController@index"
+    },
+    {
+      "id": "handler:DepartmentController@store",
+      "type": "handler",
+      "action": "DepartmentController@store"
+    },
+    {
+      "id": "handler:DepartmentController@update",
+      "type": "handler",
+      "action": "DepartmentController@update"
     },
     {
       "id": "handler:DocumentImportBatchController@exportCsv",
@@ -9008,6 +9068,116 @@
       "action": "PnrRenunciationController@status"
     },
     {
+      "id": "handler:ProcessController@archive",
+      "type": "handler",
+      "action": "ProcessController@archive"
+    },
+    {
+      "id": "handler:ProcessController@bulk",
+      "type": "handler",
+      "action": "ProcessController@bulk"
+    },
+    {
+      "id": "handler:ProcessController@comment",
+      "type": "handler",
+      "action": "ProcessController@comment"
+    },
+    {
+      "id": "handler:ProcessController@index",
+      "type": "handler",
+      "action": "ProcessController@index"
+    },
+    {
+      "id": "handler:ProcessController@show",
+      "type": "handler",
+      "action": "ProcessController@show"
+    },
+    {
+      "id": "handler:ProcessController@store",
+      "type": "handler",
+      "action": "ProcessController@store"
+    },
+    {
+      "id": "handler:ProcessController@timeline",
+      "type": "handler",
+      "action": "ProcessController@timeline"
+    },
+    {
+      "id": "handler:ProcessController@update",
+      "type": "handler",
+      "action": "ProcessController@update"
+    },
+    {
+      "id": "handler:ProcessGenerationController@confirm",
+      "type": "handler",
+      "action": "ProcessGenerationController@confirm"
+    },
+    {
+      "id": "handler:ProcessGenerationController@preview",
+      "type": "handler",
+      "action": "ProcessGenerationController@preview"
+    },
+    {
+      "id": "handler:ProcessGenerationController@retry",
+      "type": "handler",
+      "action": "ProcessGenerationController@retry"
+    },
+    {
+      "id": "handler:ProcessGenerationController@show",
+      "type": "handler",
+      "action": "ProcessGenerationController@show"
+    },
+    {
+      "id": "handler:ProcessGroupController@index",
+      "type": "handler",
+      "action": "ProcessGroupController@index"
+    },
+    {
+      "id": "handler:ProcessTemplateCatalogController@index",
+      "type": "handler",
+      "action": "ProcessTemplateCatalogController@index"
+    },
+    {
+      "id": "handler:ProcessTemplateCatalogController@install",
+      "type": "handler",
+      "action": "ProcessTemplateCatalogController@install"
+    },
+    {
+      "id": "handler:ProcessTemplateController@generationBatches",
+      "type": "handler",
+      "action": "ProcessTemplateController@generationBatches"
+    },
+    {
+      "id": "handler:ProcessTemplateController@index",
+      "type": "handler",
+      "action": "ProcessTemplateController@index"
+    },
+    {
+      "id": "handler:ProcessTemplateController@show",
+      "type": "handler",
+      "action": "ProcessTemplateController@show"
+    },
+    {
+      "id": "handler:ProcessTemplateController@showRecurrence",
+      "type": "handler",
+      "action": "ProcessTemplateController@showRecurrence"
+    },
+    {
+      "id": "handler:ProcessTemplateController@store",
+      "type": "handler",
+      "action": "ProcessTemplateController@store"
+    },
+    {
+      "id": "handler:ProcessTemplateController@update",
+      "type": "handler",
+      "action": "ProcessTemplateController@update"
+    },
+    {
+      "id": "handler:ProcessTemplateController@updateRecurrence",
+      "type": "handler",
+      "action": "ProcessTemplateController@updateRecurrence"
+    },
+    {
       "id": "handler:ProfileInformationController@update",
       "type": "handler",
       "action": "ProfileInformationController@update"
@@ -9293,6 +9463,11 @@
       "action": "SerproUsageAdminController@registerReconciliation"
     },
     {
+      "id": "handler:SharedContactController@save",
+      "type": "handler",
+      "action": "SharedContactController@save"
+    },
+    {
       "id": "handler:SicalcRevenueSupportController@consult",
       "type": "handler",
       "action": "SicalcRevenueSupportController@consult"
@@ -9451,6 +9626,96 @@
       "id": "handler:SyncController@trigger",
       "type": "handler",
       "action": "SyncController@trigger"
+    },
+    {
+      "id": "handler:TaskController@assign",
+      "type": "handler",
+      "action": "TaskController@assign"
+    },
+    {
+      "id": "handler:TaskController@block",
+      "type": "handler",
+      "action": "TaskController@block"
+    },
+    {
+      "id": "handler:TaskController@bulk",
+      "type": "handler",
+      "action": "TaskController@bulk"
+    },
+    {
+      "id": "handler:TaskController@claim",
+      "type": "handler",
+      "action": "TaskController@claim"
+    },
+    {
+      "id": "handler:TaskController@comment",
+      "type": "handler",
+      "action": "TaskController@comment"
+    },
+    {
+      "id": "handler:TaskController@complete",
+      "type": "handler",
+      "action": "TaskController@complete"
+    },
+    {
+      "id": "handler:TaskController@dispense",
+      "type": "handler",
+      "action": "TaskController@dispense"
+    },
+    {
+      "id": "handler:TaskController@downloadEvidence",
+      "type": "handler",
+      "action": "TaskController@downloadEvidence"
+    },
+    {
+      "id": "handler:TaskController@queue",
+      "type": "handler",
+      "action": "TaskController@queue"
+    },
+    {
+      "id": "handler:TaskController@removeEvidence",
+      "type": "handler",
+      "action": "TaskController@removeEvidence"
+    },
+    {
+      "id": "handler:TaskController@reopen",
+      "type": "handler",
+      "action": "TaskController@reopen"
+    },
+    {
+      "id": "handler:TaskController@reorder",
+      "type": "handler",
+      "action": "TaskController@reorder"
+    },
+    {
+      "id": "handler:TaskController@resume",
+      "type": "handler",
+      "action": "TaskController@resume"
+    },
+    {
+      "id": "handler:TaskController@show",
+      "type": "handler",
+      "action": "TaskController@show"
+    },
+    {
+      "id": "handler:TaskController@start",
+      "type": "handler",
+      "action": "TaskController@start"
+    },
+    {
+      "id": "handler:TaskController@storeOnProcess",
+      "type": "handler",
+      "action": "TaskController@storeOnProcess"
+    },
+    {
+      "id": "handler:TaskController@updateStructure",
+      "type": "handler",
+      "action": "TaskController@updateStructure"
+    },
+    {
+      "id": "handler:TaskController@uploadEvidence",
+      "type": "handler",
+      "action": "TaskController@uploadEvidence"
     },
     {
       "id": "handler:TaxGuideController@confirmPayment",
@@ -9781,256 +10046,6 @@
       "id": "handler:UpdateAccountController",
       "type": "handler",
       "action": "UpdateAccountController"
-    },
-    {
-      "id": "handler:WorkDashboardController@calendar",
-      "type": "handler",
-      "action": "WorkDashboardController@calendar"
-    },
-    {
-      "id": "handler:WorkDashboardController@calendarDay",
-      "type": "handler",
-      "action": "WorkDashboardController@calendarDay"
-    },
-    {
-      "id": "handler:WorkDashboardController@createExport",
-      "type": "handler",
-      "action": "WorkDashboardController@createExport"
-    },
-    {
-      "id": "handler:WorkDashboardController@downloadExport",
-      "type": "handler",
-      "action": "WorkDashboardController@downloadExport"
-    },
-    {
-      "id": "handler:WorkDashboardController@kpis",
-      "type": "handler",
-      "action": "WorkDashboardController@kpis"
-    },
-    {
-      "id": "handler:WorkDashboardController@showExport",
-      "type": "handler",
-      "action": "WorkDashboardController@showExport"
-    },
-    {
-      "id": "handler:WorkDepartmentController@assignMembership",
-      "type": "handler",
-      "action": "WorkDepartmentController@assignMembership"
-    },
-    {
-      "id": "handler:WorkDepartmentController@index",
-      "type": "handler",
-      "action": "WorkDepartmentController@index"
-    },
-    {
-      "id": "handler:WorkDepartmentController@store",
-      "type": "handler",
-      "action": "WorkDepartmentController@store"
-    },
-    {
-      "id": "handler:WorkDepartmentController@update",
-      "type": "handler",
-      "action": "WorkDepartmentController@update"
-    },
-    {
-      "id": "handler:WorkProcessController@archive",
-      "type": "handler",
-      "action": "WorkProcessController@archive"
-    },
-    {
-      "id": "handler:WorkProcessController@bulk",
-      "type": "handler",
-      "action": "WorkProcessController@bulk"
-    },
-    {
-      "id": "handler:WorkProcessController@comment",
-      "type": "handler",
-      "action": "WorkProcessController@comment"
-    },
-    {
-      "id": "handler:WorkProcessController@index",
-      "type": "handler",
-      "action": "WorkProcessController@index"
-    },
-    {
-      "id": "handler:WorkProcessController@show",
-      "type": "handler",
-      "action": "WorkProcessController@show"
-    },
-    {
-      "id": "handler:WorkProcessController@store",
-      "type": "handler",
-      "action": "WorkProcessController@store"
-    },
-    {
-      "id": "handler:WorkProcessController@timeline",
-      "type": "handler",
-      "action": "WorkProcessController@timeline"
-    },
-    {
-      "id": "handler:WorkProcessController@update",
-      "type": "handler",
-      "action": "WorkProcessController@update"
-    },
-    {
-      "id": "handler:WorkProcessGenerationController@confirm",
-      "type": "handler",
-      "action": "WorkProcessGenerationController@confirm"
-    },
-    {
-      "id": "handler:WorkProcessGenerationController@preview",
-      "type": "handler",
-      "action": "WorkProcessGenerationController@preview"
-    },
-    {
-      "id": "handler:WorkProcessGenerationController@retry",
-      "type": "handler",
-      "action": "WorkProcessGenerationController@retry"
-    },
-    {
-      "id": "handler:WorkProcessGenerationController@show",
-      "type": "handler",
-      "action": "WorkProcessGenerationController@show"
-    },
-    {
-      "id": "handler:WorkProcessGroupController@index",
-      "type": "handler",
-      "action": "WorkProcessGroupController@index"
-    },
-    {
-      "id": "handler:WorkProcessTemplateCatalogController@index",
-      "type": "handler",
-      "action": "WorkProcessTemplateCatalogController@index"
-    },
-    {
-      "id": "handler:WorkProcessTemplateCatalogController@install",
-      "type": "handler",
-      "action": "WorkProcessTemplateCatalogController@install"
-    },
-    {
-      "id": "handler:WorkProcessTemplateController@generationBatches",
-      "type": "handler",
-      "action": "WorkProcessTemplateController@generationBatches"
-    },
-    {
-      "id": "handler:WorkProcessTemplateController@index",
-      "type": "handler",
-      "action": "WorkProcessTemplateController@index"
-    },
-    {
-      "id": "handler:WorkProcessTemplateController@show",
-      "type": "handler",
-      "action": "WorkProcessTemplateController@show"
-    },
-    {
-      "id": "handler:WorkProcessTemplateController@showRecurrence",
-      "type": "handler",
-      "action": "WorkProcessTemplateController@showRecurrence"
-    },
-    {
-      "id": "handler:WorkProcessTemplateController@store",
-      "type": "handler",
-      "action": "WorkProcessTemplateController@store"
-    },
-    {
-      "id": "handler:WorkProcessTemplateController@update",
-      "type": "handler",
-      "action": "WorkProcessTemplateController@update"
-    },
-    {
-      "id": "handler:WorkProcessTemplateController@updateRecurrence",
-      "type": "handler",
-      "action": "WorkProcessTemplateController@updateRecurrence"
-    },
-    {
-      "id": "handler:WorkTaskController@assign",
-      "type": "handler",
-      "action": "WorkTaskController@assign"
-    },
-    {
-      "id": "handler:WorkTaskController@block",
-      "type": "handler",
-      "action": "WorkTaskController@block"
-    },
-    {
-      "id": "handler:WorkTaskController@bulk",
-      "type": "handler",
-      "action": "WorkTaskController@bulk"
-    },
-    {
-      "id": "handler:WorkTaskController@claim",
-      "type": "handler",
-      "action": "WorkTaskController@claim"
-    },
-    {
-      "id": "handler:WorkTaskController@comment",
-      "type": "handler",
-      "action": "WorkTaskController@comment"
-    },
-    {
-      "id": "handler:WorkTaskController@complete",
-      "type": "handler",
-      "action": "WorkTaskController@complete"
-    },
-    {
-      "id": "handler:WorkTaskController@dispense",
-      "type": "handler",
-      "action": "WorkTaskController@dispense"
-    },
-    {
-      "id": "handler:WorkTaskController@downloadEvidence",
-      "type": "handler",
-      "action": "WorkTaskController@downloadEvidence"
-    },
-    {
-      "id": "handler:WorkTaskController@queue",
-      "type": "handler",
-      "action": "WorkTaskController@queue"
-    },
-    {
-      "id": "handler:WorkTaskController@removeEvidence",
-      "type": "handler",
-      "action": "WorkTaskController@removeEvidence"
-    },
-    {
-      "id": "handler:WorkTaskController@reopen",
-      "type": "handler",
-      "action": "WorkTaskController@reopen"
-    },
-    {
-      "id": "handler:WorkTaskController@reorder",
-      "type": "handler",
-      "action": "WorkTaskController@reorder"
-    },
-    {
-      "id": "handler:WorkTaskController@resume",
-      "type": "handler",
-      "action": "WorkTaskController@resume"
-    },
-    {
-      "id": "handler:WorkTaskController@show",
-      "type": "handler",
-      "action": "WorkTaskController@show"
-    },
-    {
-      "id": "handler:WorkTaskController@start",
-      "type": "handler",
-      "action": "WorkTaskController@start"
-    },
-    {
-      "id": "handler:WorkTaskController@storeOnProcess",
-      "type": "handler",
-      "action": "WorkTaskController@storeOnProcess"
-    },
-    {
-      "id": "handler:WorkTaskController@updateStructure",
-      "type": "handler",
-      "action": "WorkTaskController@updateStructure"
-    },
-    {
-      "id": "handler:WorkTaskController@uploadEvidence",
-      "type": "handler",
-      "action": "WorkTaskController@uploadEvidence"
     },
     {
       "id": "handler:WorkloadController@index",
@@ -10821,6 +10836,16 @@
     {
       "from": "api:DELETE:api/v1/communication/conversations/{conversation}/messages/{message}",
       "to": "handler:ConversationGatewayController@revoke",
+      "type": "handled-by"
+    },
+    {
+      "from": "journey:communication-inbox",
+      "to": "api:POST:api/v1/communication/conversations/{conversation}/messages/{message}/contacts/{contactIndex}/save",
+      "type": "exposes"
+    },
+    {
+      "from": "api:POST:api/v1/communication/conversations/{conversation}/messages/{message}/contacts/{contactIndex}/save",
+      "to": "handler:SharedContactController@save",
       "type": "handled-by"
     },
     {
@@ -15130,7 +15155,7 @@
     },
     {
       "from": "api:GET:api/v1/work/calendar",
-      "to": "handler:WorkDashboardController@calendar",
+      "to": "handler:DashboardController@calendar",
       "type": "handled-by"
     },
     {
@@ -15140,7 +15165,7 @@
     },
     {
       "from": "api:GET:api/v1/work/calendar/day",
-      "to": "handler:WorkDashboardController@calendarDay",
+      "to": "handler:DashboardController@calendarDay",
       "type": "handled-by"
     },
     {
@@ -15150,7 +15175,7 @@
     },
     {
       "from": "api:GET:api/v1/work/departments",
-      "to": "handler:WorkDepartmentController@index",
+      "to": "handler:DepartmentController@index",
       "type": "handled-by"
     },
     {
@@ -15160,7 +15185,7 @@
     },
     {
       "from": "api:POST:api/v1/work/departments",
-      "to": "handler:WorkDepartmentController@store",
+      "to": "handler:DepartmentController@store",
       "type": "handled-by"
     },
     {
@@ -15170,7 +15195,7 @@
     },
     {
       "from": "api:PATCH:api/v1/work/departments/{department}",
-      "to": "handler:WorkDepartmentController@update",
+      "to": "handler:DepartmentController@update",
       "type": "handled-by"
     },
     {
@@ -15180,7 +15205,7 @@
     },
     {
       "from": "api:POST:api/v1/work/departments/{department}/assign-membership",
-      "to": "handler:WorkDepartmentController@assignMembership",
+      "to": "handler:DepartmentController@assignMembership",
       "type": "handled-by"
     },
     {
@@ -15190,7 +15215,7 @@
     },
     {
       "from": "api:POST:api/v1/work/exports",
-      "to": "handler:WorkDashboardController@createExport",
+      "to": "handler:DashboardController@createExport",
       "type": "handled-by"
     },
     {
@@ -15200,7 +15225,7 @@
     },
     {
       "from": "api:GET:api/v1/work/exports/{export}",
-      "to": "handler:WorkDashboardController@showExport",
+      "to": "handler:DashboardController@showExport",
       "type": "handled-by"
     },
     {
@@ -15210,7 +15235,7 @@
     },
     {
       "from": "api:GET:api/v1/work/exports/{export}/download",
-      "to": "handler:WorkDashboardController@downloadExport",
+      "to": "handler:DashboardController@downloadExport",
       "type": "handled-by"
     },
     {
@@ -15220,7 +15245,7 @@
     },
     {
       "from": "api:GET:api/v1/work/generation-batches/{batch}",
-      "to": "handler:WorkProcessGenerationController@show",
+      "to": "handler:ProcessGenerationController@show",
       "type": "handled-by"
     },
     {
@@ -15230,7 +15255,7 @@
     },
     {
       "from": "api:POST:api/v1/work/generation-batches/{batch}/confirm",
-      "to": "handler:WorkProcessGenerationController@confirm",
+      "to": "handler:ProcessGenerationController@confirm",
       "type": "handled-by"
     },
     {
@@ -15240,7 +15265,7 @@
     },
     {
       "from": "api:POST:api/v1/work/generation-batches/{batch}/retry",
-      "to": "handler:WorkProcessGenerationController@retry",
+      "to": "handler:ProcessGenerationController@retry",
       "type": "handled-by"
     },
     {
@@ -15250,7 +15275,7 @@
     },
     {
       "from": "api:GET:api/v1/work/kpis",
-      "to": "handler:WorkDashboardController@kpis",
+      "to": "handler:DashboardController@kpis",
       "type": "handled-by"
     },
     {
@@ -15260,7 +15285,7 @@
     },
     {
       "from": "api:GET:api/v1/work/process-groups",
-      "to": "handler:WorkProcessGroupController@index",
+      "to": "handler:ProcessGroupController@index",
       "type": "handled-by"
     },
     {
@@ -15270,7 +15295,7 @@
     },
     {
       "from": "api:GET:api/v1/work/processes",
-      "to": "handler:WorkProcessController@index",
+      "to": "handler:ProcessController@index",
       "type": "handled-by"
     },
     {
@@ -15280,7 +15305,7 @@
     },
     {
       "from": "api:POST:api/v1/work/processes",
-      "to": "handler:WorkProcessController@store",
+      "to": "handler:ProcessController@store",
       "type": "handled-by"
     },
     {
@@ -15290,7 +15315,7 @@
     },
     {
       "from": "api:POST:api/v1/work/processes/bulk",
-      "to": "handler:WorkProcessController@bulk",
+      "to": "handler:ProcessController@bulk",
       "type": "handled-by"
     },
     {
@@ -15300,7 +15325,7 @@
     },
     {
       "from": "api:GET:api/v1/work/processes/{process}",
-      "to": "handler:WorkProcessController@show",
+      "to": "handler:ProcessController@show",
       "type": "handled-by"
     },
     {
@@ -15310,7 +15335,7 @@
     },
     {
       "from": "api:PATCH:api/v1/work/processes/{process}",
-      "to": "handler:WorkProcessController@update",
+      "to": "handler:ProcessController@update",
       "type": "handled-by"
     },
     {
@@ -15320,7 +15345,7 @@
     },
     {
       "from": "api:POST:api/v1/work/processes/{process}/archive",
-      "to": "handler:WorkProcessController@archive",
+      "to": "handler:ProcessController@archive",
       "type": "handled-by"
     },
     {
@@ -15330,7 +15355,7 @@
     },
     {
       "from": "api:POST:api/v1/work/processes/{process}/comments",
-      "to": "handler:WorkProcessController@comment",
+      "to": "handler:ProcessController@comment",
       "type": "handled-by"
     },
     {
@@ -15340,7 +15365,7 @@
     },
     {
       "from": "api:POST:api/v1/work/processes/{process}/tasks",
-      "to": "handler:WorkTaskController@storeOnProcess",
+      "to": "handler:TaskController@storeOnProcess",
       "type": "handled-by"
     },
     {
@@ -15350,7 +15375,7 @@
     },
     {
       "from": "api:POST:api/v1/work/processes/{process}/tasks/reorder",
-      "to": "handler:WorkTaskController@reorder",
+      "to": "handler:TaskController@reorder",
       "type": "handled-by"
     },
     {
@@ -15360,7 +15385,7 @@
     },
     {
       "from": "api:GET:api/v1/work/processes/{process}/timeline",
-      "to": "handler:WorkProcessController@timeline",
+      "to": "handler:ProcessController@timeline",
       "type": "handled-by"
     },
     {
@@ -15370,7 +15395,7 @@
     },
     {
       "from": "api:GET:api/v1/work/queue",
-      "to": "handler:WorkTaskController@queue",
+      "to": "handler:TaskController@queue",
       "type": "handled-by"
     },
     {
@@ -15380,7 +15405,7 @@
     },
     {
       "from": "api:POST:api/v1/work/tasks/bulk",
-      "to": "handler:WorkTaskController@bulk",
+      "to": "handler:TaskController@bulk",
       "type": "handled-by"
     },
     {
@@ -15390,7 +15415,7 @@
     },
     {
       "from": "api:GET:api/v1/work/tasks/{task}",
-      "to": "handler:WorkTaskController@show",
+      "to": "handler:TaskController@show",
       "type": "handled-by"
     },
     {
@@ -15400,7 +15425,7 @@
     },
     {
       "from": "api:POST:api/v1/work/tasks/{task}/assign",
-      "to": "handler:WorkTaskController@assign",
+      "to": "handler:TaskController@assign",
       "type": "handled-by"
     },
     {
@@ -15410,7 +15435,7 @@
     },
     {
       "from": "api:POST:api/v1/work/tasks/{task}/block",
-      "to": "handler:WorkTaskController@block",
+      "to": "handler:TaskController@block",
       "type": "handled-by"
     },
     {
@@ -15420,7 +15445,7 @@
     },
     {
       "from": "api:POST:api/v1/work/tasks/{task}/claim",
-      "to": "handler:WorkTaskController@claim",
+      "to": "handler:TaskController@claim",
       "type": "handled-by"
     },
     {
@@ -15430,7 +15455,7 @@
     },
     {
       "from": "api:POST:api/v1/work/tasks/{task}/comments",
-      "to": "handler:WorkTaskController@comment",
+      "to": "handler:TaskController@comment",
       "type": "handled-by"
     },
     {
@@ -15440,7 +15465,7 @@
     },
     {
       "from": "api:POST:api/v1/work/tasks/{task}/complete",
-      "to": "handler:WorkTaskController@complete",
+      "to": "handler:TaskController@complete",
       "type": "handled-by"
     },
     {
@@ -15450,7 +15475,7 @@
     },
     {
       "from": "api:POST:api/v1/work/tasks/{task}/dispense",
-      "to": "handler:WorkTaskController@dispense",
+      "to": "handler:TaskController@dispense",
       "type": "handled-by"
     },
     {
@@ -15460,7 +15485,7 @@
     },
     {
       "from": "api:POST:api/v1/work/tasks/{task}/evidences",
-      "to": "handler:WorkTaskController@uploadEvidence",
+      "to": "handler:TaskController@uploadEvidence",
       "type": "handled-by"
     },
     {
@@ -15470,7 +15495,7 @@
     },
     {
       "from": "api:DELETE:api/v1/work/tasks/{task}/evidences/{evidence}",
-      "to": "handler:WorkTaskController@removeEvidence",
+      "to": "handler:TaskController@removeEvidence",
       "type": "handled-by"
     },
     {
@@ -15480,7 +15505,7 @@
     },
     {
       "from": "api:GET:api/v1/work/tasks/{task}/evidences/{evidence}/download",
-      "to": "handler:WorkTaskController@downloadEvidence",
+      "to": "handler:TaskController@downloadEvidence",
       "type": "handled-by"
     },
     {
@@ -15490,7 +15515,7 @@
     },
     {
       "from": "api:POST:api/v1/work/tasks/{task}/reopen",
-      "to": "handler:WorkTaskController@reopen",
+      "to": "handler:TaskController@reopen",
       "type": "handled-by"
     },
     {
@@ -15500,7 +15525,7 @@
     },
     {
       "from": "api:POST:api/v1/work/tasks/{task}/resume",
-      "to": "handler:WorkTaskController@resume",
+      "to": "handler:TaskController@resume",
       "type": "handled-by"
     },
     {
@@ -15510,7 +15535,7 @@
     },
     {
       "from": "api:POST:api/v1/work/tasks/{task}/start",
-      "to": "handler:WorkTaskController@start",
+      "to": "handler:TaskController@start",
       "type": "handled-by"
     },
     {
@@ -15520,7 +15545,7 @@
     },
     {
       "from": "api:PATCH:api/v1/work/tasks/{task}/structure",
-      "to": "handler:WorkTaskController@updateStructure",
+      "to": "handler:TaskController@updateStructure",
       "type": "handled-by"
     },
     {
@@ -15530,7 +15555,7 @@
     },
     {
       "from": "api:GET:api/v1/work/template-catalog",
-      "to": "handler:WorkProcessTemplateCatalogController@index",
+      "to": "handler:ProcessTemplateCatalogController@index",
       "type": "handled-by"
     },
     {
@@ -15540,7 +15565,7 @@
     },
     {
       "from": "api:POST:api/v1/work/template-catalog/{catalogKey}/install",
-      "to": "handler:WorkProcessTemplateCatalogController@install",
+      "to": "handler:ProcessTemplateCatalogController@install",
       "type": "handled-by"
     },
     {
@@ -15550,7 +15575,7 @@
     },
     {
       "from": "api:GET:api/v1/work/templates",
-      "to": "handler:WorkProcessTemplateController@index",
+      "to": "handler:ProcessTemplateController@index",
       "type": "handled-by"
     },
     {
@@ -15560,7 +15585,7 @@
     },
     {
       "from": "api:POST:api/v1/work/templates",
-      "to": "handler:WorkProcessTemplateController@store",
+      "to": "handler:ProcessTemplateController@store",
       "type": "handled-by"
     },
     {
@@ -15570,7 +15595,7 @@
     },
     {
       "from": "api:GET:api/v1/work/templates/{template}",
-      "to": "handler:WorkProcessTemplateController@show",
+      "to": "handler:ProcessTemplateController@show",
       "type": "handled-by"
     },
     {
@@ -15580,7 +15605,7 @@
     },
     {
       "from": "api:PATCH:api/v1/work/templates/{template}",
-      "to": "handler:WorkProcessTemplateController@update",
+      "to": "handler:ProcessTemplateController@update",
       "type": "handled-by"
     },
     {
@@ -15590,7 +15615,7 @@
     },
     {
       "from": "api:GET:api/v1/work/templates/{template}/generation-batches",
-      "to": "handler:WorkProcessTemplateController@generationBatches",
+      "to": "handler:ProcessTemplateController@generationBatches",
       "type": "handled-by"
     },
     {
@@ -15600,7 +15625,7 @@
     },
     {
       "from": "api:POST:api/v1/work/templates/{template}/preview",
-      "to": "handler:WorkProcessGenerationController@preview",
+      "to": "handler:ProcessGenerationController@preview",
       "type": "handled-by"
     },
     {
@@ -15610,7 +15635,7 @@
     },
     {
       "from": "api:GET:api/v1/work/templates/{template}/recurrence",
-      "to": "handler:WorkProcessTemplateController@showRecurrence",
+      "to": "handler:ProcessTemplateController@showRecurrence",
       "type": "handled-by"
     },
     {
@@ -15620,7 +15645,7 @@
     },
     {
       "from": "api:PATCH:api/v1/work/templates/{template}/recurrence",
-      "to": "handler:WorkProcessTemplateController@updateRecurrence",
+      "to": "handler:ProcessTemplateController@updateRecurrence",
       "type": "handled-by"
     },
     {
@@ -17661,6 +17686,11 @@
     {
       "from": "api-client:app/composables/api/createCommunicationApi.ts",
       "to": "api:DELETE:api/v1/communication/conversations/{conversation}/messages/{message}",
+      "type": "calls"
+    },
+    {
+      "from": "api-client:app/composables/api/createCommunicationApi.ts",
+      "to": "api:POST:api/v1/communication/conversations/{conversation}/messages/{message}/contacts/{contactIndex}/save",
       "type": "calls"
     },
     {

@@ -456,6 +456,7 @@ final readonly class GatewayEventIngestor
                 break;
         }
         $metadata['last_action_event_id'] = $incoming->gatewayEventId;
+        MessageSemanticContent::assertShape($content, $message->kind);
         $message->metadata = $metadata;
         $message->content_encrypted = $content;
         $message->save();

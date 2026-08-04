@@ -1081,15 +1081,46 @@
                 ],
                 "summary": "DataController downloadAttachment",
                 "responses": {
-                    "default": {
-                        "description": "Resposta definida pela operação Laravel.",
+                    "200": {
+                        "description": "Objeto privado completo.",
                         "content": {
-                            "application/json": {
+                            "application/octet-stream": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/JsonResponse"
+                                    "type": "string",
+                                    "format": "binary"
                                 }
                             }
                         }
+                    },
+                    "206": {
+                        "description": "Intervalo privado autorizado.",
+                        "headers": {
+                            "Accept-Ranges": {
+                                "schema": {
+                                    "type": "string",
+                                    "const": "bytes"
+                                }
+                            },
+                            "Content-Range": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "content": {
+                            "application/octet-stream": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Objeto ausente ou não autorizado."
+                    },
+                    "416": {
+                        "description": "Intervalo de bytes inválido."
                     }
                 },
                 "parameters": [
@@ -1101,6 +1132,16 @@
                             "type": "string",
                             "minLength": 1
                         }
+                    },
+                    {
+                        "name": "Range",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^bytes=(?:\\d+-\\d*|-\\d+)$"
+                        },
+                        "description": "Um único intervalo de bytes para reprodução privada de áudio/vídeo."
                     }
                 ],
                 "security": [
@@ -1118,15 +1159,46 @@
                 ],
                 "summary": "DataController previewAttachment",
                 "responses": {
-                    "default": {
-                        "description": "Resposta definida pela operação Laravel.",
+                    "200": {
+                        "description": "Objeto privado completo.",
                         "content": {
-                            "application/json": {
+                            "application/octet-stream": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/JsonResponse"
+                                    "type": "string",
+                                    "format": "binary"
                                 }
                             }
                         }
+                    },
+                    "206": {
+                        "description": "Intervalo privado autorizado.",
+                        "headers": {
+                            "Accept-Ranges": {
+                                "schema": {
+                                    "type": "string",
+                                    "const": "bytes"
+                                }
+                            },
+                            "Content-Range": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "content": {
+                            "application/octet-stream": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Objeto ausente ou não autorizado."
+                    },
+                    "416": {
+                        "description": "Intervalo de bytes inválido."
                     }
                 },
                 "parameters": [
@@ -1138,6 +1210,16 @@
                             "type": "string",
                             "minLength": 1
                         }
+                    },
+                    {
+                        "name": "Range",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^bytes=(?:\\d+-\\d*|-\\d+)$"
+                        },
+                        "description": "Um único intervalo de bytes para reprodução privada de áudio/vídeo."
                     }
                 ],
                 "security": [
@@ -2624,6 +2706,111 @@
                         "sanctumCookie": []
                     }
                 ]
+            }
+        },
+        "/api/v1/communication/conversations/{conversation}/messages/{message}/contacts/{contactIndex}/save": {
+            "post": {
+                "operationId": "postCommunicationConversationsConversationMessagesMessageContactsContactIndexSave",
+                "tags": [
+                    "communication"
+                ],
+                "summary": "SharedContactController save",
+                "responses": {
+                    "200": {
+                        "description": "Resposta canônica.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CommunicationSaveSharedContactResponse"
+                                }
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "Resposta canônica.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CommunicationSaveSharedContactResponse"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Resposta canônica.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/JsonResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Resposta canônica.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/JsonResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Resposta canônica.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/JsonResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "conversation",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    },
+                    {
+                        "name": "message",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    },
+                    {
+                        "name": "contactIndex",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "sanctumCookie": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CommunicationSaveSharedContactBody"
+                            }
+                        }
+                    }
+                }
             }
         },
         "/api/v1/communication/conversations/{conversation}/messages/{message}/edit": {
@@ -18891,38 +19078,446 @@
                     }
                 }
             },
+            "CommunicationMessageLinkPreview": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "url"
+                ],
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "format": "uri",
+                        "pattern": "^https?://"
+                    },
+                    "title": {
+                        "type": "string",
+                        "maxLength": 4096
+                    },
+                    "description": {
+                        "type": "string",
+                        "maxLength": 8192
+                    }
+                }
+            },
+            "CommunicationMessageLocation": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "latitude",
+                    "longitude"
+                ],
+                "properties": {
+                    "latitude": {
+                        "type": "number",
+                        "minimum": -90,
+                        "maximum": 90
+                    },
+                    "longitude": {
+                        "type": "number",
+                        "minimum": -180,
+                        "maximum": 180
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "address": {
+                        "type": "string"
+                    },
+                    "caption": {
+                        "type": "string"
+                    },
+                    "live": {
+                        "type": "boolean"
+                    },
+                    "accuracy_meters": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "sequence": {
+                        "type": "integer",
+                        "minimum": 0
+                    }
+                }
+            },
+            "CommunicationSharedPhone": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "label",
+                    "phone"
+                ],
+                "properties": {
+                    "label": {
+                        "type": "string",
+                        "maxLength": 40
+                    },
+                    "phone": {
+                        "type": "string",
+                        "pattern": "^\\+[1-9]\\d{7,14}$"
+                    }
+                }
+            },
+            "CommunicationSharedContact": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "display_name",
+                    "vcard",
+                    "phones"
+                ],
+                "properties": {
+                    "display_name": {
+                        "type": "string",
+                        "maxLength": 1024
+                    },
+                    "vcard": {
+                        "type": "string",
+                        "maxLength": 65536
+                    },
+                    "phones": {
+                        "type": "array",
+                        "maxItems": 10,
+                        "items": {
+                            "$ref": "#/components/schemas/CommunicationSharedPhone"
+                        }
+                    }
+                }
+            },
+            "CommunicationMessagePoll": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "name",
+                    "options"
+                ],
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "maxLength": 4096
+                    },
+                    "options": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 12,
+                        "items": {
+                            "type": "string",
+                            "maxLength": 1024
+                        }
+                    },
+                    "selectable_options": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 12
+                    }
+                }
+            },
+            "CommunicationMessageInteractive": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "mode"
+                ],
+                "properties": {
+                    "mode": {
+                        "type": "string",
+                        "pattern": "^[A-Z][A-Z0-9_]{1,63}$"
+                    },
+                    "title": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "selected_id": {
+                        "type": "string"
+                    },
+                    "display_text": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    }
+                }
+            },
+            "CommunicationRichCardFact": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "label",
+                    "value"
+                ],
+                "properties": {
+                    "label": {
+                        "type": "string",
+                        "maxLength": 64
+                    },
+                    "value": {
+                        "type": "string",
+                        "maxLength": 1024
+                    }
+                }
+            },
+            "CommunicationRichCard": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "category",
+                    "title"
+                ],
+                "properties": {
+                    "category": {
+                        "type": "string",
+                        "enum": [
+                            "PRODUCT",
+                            "ORDER",
+                            "PAYMENT",
+                            "EVENT",
+                            "CALL",
+                            "INVITE",
+                            "SYSTEM"
+                        ]
+                    },
+                    "title": {
+                        "type": "string",
+                        "maxLength": 4096
+                    },
+                    "description": {
+                        "type": "string",
+                        "maxLength": 8192
+                    },
+                    "facts": {
+                        "type": "array",
+                        "maxItems": 12,
+                        "items": {
+                            "$ref": "#/components/schemas/CommunicationRichCardFact"
+                        }
+                    }
+                }
+            },
+            "CommunicationPollVote": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "option_names",
+                    "option_hashes"
+                ],
+                "properties": {
+                    "option_names": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "option_hashes": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$"
+                        }
+                    }
+                }
+            },
+            "CommunicationInteractiveResponse": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [],
+                "properties": {
+                    "text": {
+                        "type": "string"
+                    },
+                    "selected_id": {
+                        "type": "string"
+                    }
+                }
+            },
             "CommunicationMessageContent": {
                 "type": [
                     "object",
                     "null"
                 ],
-                "additionalProperties": true,
+                "additionalProperties": false,
                 "properties": {
                     "text": {
+                        "type": "string"
+                    },
+                    "caption": {
+                        "type": "string"
+                    },
+                    "link_preview": {
+                        "$ref": "#/components/schemas/CommunicationMessageLinkPreview"
+                    },
+                    "location": {
+                        "$ref": "#/components/schemas/CommunicationMessageLocation"
+                    },
+                    "contacts": {
+                        "type": "array",
+                        "maxItems": 50,
+                        "items": {
+                            "$ref": "#/components/schemas/CommunicationSharedContact"
+                        }
+                    },
+                    "poll": {
+                        "$ref": "#/components/schemas/CommunicationMessagePoll"
+                    },
+                    "interactive": {
+                        "$ref": "#/components/schemas/CommunicationMessageInteractive"
+                    },
+                    "rich_card": {
+                        "$ref": "#/components/schemas/CommunicationRichCard"
+                    },
+                    "ptt": {
+                        "type": "boolean"
+                    },
+                    "gif": {
+                        "type": "boolean"
+                    },
+                    "animated": {
+                        "type": "boolean"
+                    },
+                    "duration_seconds": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "reactions": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "maxLength": 32
+                        }
+                    },
+                    "poll_votes": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/CommunicationPollVote"
+                        }
+                    },
+                    "interactive_response": {
+                        "$ref": "#/components/schemas/CommunicationInteractiveResponse"
+                    },
+                    "content_present": {
+                        "type": "boolean"
+                    },
+                    "variants": {
+                        "type": "array",
+                        "maxItems": 16,
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "CommunicationMessageMetadata": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [],
+                "properties": {
+                    "edited_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "revoked": {
+                        "type": "boolean"
+                    },
+                    "history": {
+                        "type": "boolean"
+                    },
+                    "ephemeral": {
+                        "type": "boolean"
+                    },
+                    "view_once": {
+                        "type": "boolean"
+                    },
+                    "media_state": {
+                        "type": "string",
+                        "enum": [
+                            "READY",
+                            "UNAVAILABLE",
+                            "RETRY_AVAILABLE",
+                            "REQUESTED",
+                            "FAILED"
+                        ]
+                    },
+                    "media_error_code": {
+                        "type": "string"
+                    }
+                }
+            },
+            "CommunicationMessageAttachment": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "id",
+                    "filename",
+                    "mime_type",
+                    "size_bytes",
+                    "sha256",
+                    "download_url",
+                    "preview_url",
+                    "purged_at"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "filename": {
+                        "type": "string"
+                    },
+                    "mime_type": {
+                        "type": "string"
+                    },
+                    "size_bytes": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "sha256": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                    },
+                    "download_url": {
+                        "type": "string",
+                        "format": "uri-reference"
+                    },
+                    "preview_url": {
                         "type": [
                             "string",
                             "null"
                         ]
                     },
-                    "caption": {
+                    "purged_at": {
                         "type": [
                             "string",
                             "null"
-                        ]
+                        ],
+                        "format": "date-time"
                     }
                 }
             },
             "CommunicationMessage": {
                 "type": "object",
-                "additionalProperties": true,
+                "additionalProperties": false,
                 "required": [
                     "id",
                     "conversation_id",
                     "direction",
                     "kind",
+                    "provider_type",
                     "source",
                     "status",
-                    "availability"
+                    "body",
+                    "content",
+                    "availability",
+                    "reply_to_message_id",
+                    "author_membership_id",
+                    "occurred_at",
+                    "sent_at",
+                    "delivered_at",
+                    "read_at",
+                    "played_at",
+                    "revoked_at",
+                    "metadata",
+                    "attachments"
                 ],
                 "properties": {
                     "id": {
@@ -18940,13 +19535,50 @@
                         ]
                     },
                     "kind": {
-                        "type": "string"
+                        "type": "string",
+                        "enum": [
+                            "TEXT",
+                            "IMAGE",
+                            "AUDIO",
+                            "VIDEO",
+                            "DOCUMENT",
+                            "STICKER",
+                            "LOCATION",
+                            "CONTACT",
+                            "POLL",
+                            "INTERACTIVE",
+                            "UNSUPPORTED",
+                            "NOTE"
+                        ]
+                    },
+                    "provider_type": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
                     },
                     "source": {
-                        "type": "string"
+                        "type": "string",
+                        "enum": [
+                            "HUMAN",
+                            "FISCAL_AUTOMATION",
+                            "GATEWAY",
+                            "FLOW_AUTOMATION"
+                        ]
                     },
                     "status": {
-                        "type": "string"
+                        "type": "string",
+                        "enum": [
+                            "QUEUED",
+                            "ACCEPTED",
+                            "SENT",
+                            "DELIVERED",
+                            "READ",
+                            "PLAYED",
+                            "FAILED",
+                            "UNKNOWN",
+                            "CANCELED"
+                        ]
                     },
                     "body": {
                         "type": [
@@ -18959,6 +19591,115 @@
                     },
                     "availability": {
                         "$ref": "#/components/schemas/CommunicationMessageAvailability"
+                    },
+                    "reply_to_message_id": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ]
+                    },
+                    "author_membership_id": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ]
+                    },
+                    "occurred_at": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date-time"
+                    },
+                    "sent_at": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date-time"
+                    },
+                    "delivered_at": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date-time"
+                    },
+                    "read_at": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date-time"
+                    },
+                    "played_at": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date-time"
+                    },
+                    "revoked_at": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date-time"
+                    },
+                    "metadata": {
+                        "$ref": "#/components/schemas/CommunicationMessageMetadata"
+                    },
+                    "attachments": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/CommunicationMessageAttachment"
+                        }
+                    }
+                }
+            },
+            "CommunicationSaveSharedContactBody": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "phone_index"
+                ],
+                "properties": {
+                    "phone_index": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9
+                    }
+                }
+            },
+            "CommunicationSaveSharedContactData": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "outcome",
+                    "contact"
+                ],
+                "properties": {
+                    "outcome": {
+                        "type": "string",
+                        "enum": [
+                            "created",
+                            "existing"
+                        ]
+                    },
+                    "contact": {
+                        "$ref": "#/components/schemas/CommunicationContact"
+                    }
+                }
+            },
+            "CommunicationSaveSharedContactResponse": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "data"
+                ],
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/CommunicationSaveSharedContactData"
                     }
                 }
             },
