@@ -855,6 +855,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/communication/conversations/{conversation}/messages/{message}/contacts/{contactIndex}/save": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** SharedContactController save */
+        post: operations["postCommunicationConversationsConversationMessagesMessageContactsContactIndexSave"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/communication/conversations/{conversation}/messages/{message}/edit": {
         parameters: {
             query?: never;
@@ -8433,25 +8450,147 @@ export interface components {
             state: components["schemas"]["CommunicationMessageAvailabilityState"];
             recoverable: boolean;
         };
-        CommunicationMessageContent: ({
-            text?: string | null;
-            caption?: string | null;
-        } & {
-            [key: string]: unknown;
-        }) | null;
+        CommunicationMessageLinkPreview: {
+            /** Format: uri */
+            url: string;
+            title?: string;
+            description?: string;
+        };
+        CommunicationMessageLocation: {
+            latitude: number;
+            longitude: number;
+            name?: string;
+            address?: string;
+            caption?: string;
+            live?: boolean;
+            accuracy_meters?: number;
+            sequence?: number;
+        };
+        CommunicationSharedPhone: {
+            label: string;
+            phone: string;
+        };
+        CommunicationSharedContact: {
+            display_name: string;
+            vcard: string;
+            phones: components["schemas"]["CommunicationSharedPhone"][];
+        };
+        CommunicationMessagePoll: {
+            name: string;
+            options: string[];
+            selectable_options?: number;
+        };
+        CommunicationMessageInteractive: {
+            mode: string;
+            title?: string;
+            description?: string;
+            selected_id?: string;
+            display_text?: string;
+            name?: string;
+        };
+        CommunicationRichCardFact: {
+            label: string;
+            value: string;
+        };
+        CommunicationRichCard: {
+            /** @enum {string} */
+            category: "PRODUCT" | "ORDER" | "PAYMENT" | "EVENT" | "CALL" | "INVITE" | "SYSTEM";
+            title: string;
+            description?: string;
+            facts?: components["schemas"]["CommunicationRichCardFact"][];
+        };
+        CommunicationPollVote: {
+            option_names: string[];
+            option_hashes: string[];
+        };
+        CommunicationInteractiveResponse: {
+            text?: string;
+            selected_id?: string;
+        };
+        CommunicationMessageContent: {
+            text?: string;
+            caption?: string;
+            link_preview?: components["schemas"]["CommunicationMessageLinkPreview"];
+            location?: components["schemas"]["CommunicationMessageLocation"];
+            contacts?: components["schemas"]["CommunicationSharedContact"][];
+            poll?: components["schemas"]["CommunicationMessagePoll"];
+            interactive?: components["schemas"]["CommunicationMessageInteractive"];
+            rich_card?: components["schemas"]["CommunicationRichCard"];
+            ptt?: boolean;
+            gif?: boolean;
+            animated?: boolean;
+            duration_seconds?: number;
+            reactions?: string[];
+            poll_votes?: components["schemas"]["CommunicationPollVote"][];
+            interactive_response?: components["schemas"]["CommunicationInteractiveResponse"];
+            content_present?: boolean;
+            variants?: string[];
+        } | null;
+        CommunicationMessageMetadata: {
+            /** Format: date-time */
+            edited_at?: string;
+            revoked?: boolean;
+            history?: boolean;
+            ephemeral?: boolean;
+            view_once?: boolean;
+            /** @enum {string} */
+            media_state?: "READY" | "UNAVAILABLE" | "RETRY_AVAILABLE" | "REQUESTED" | "FAILED";
+            media_error_code?: string;
+        };
+        CommunicationMessageAttachment: {
+            id: number;
+            filename: string;
+            mime_type: string;
+            size_bytes: number;
+            sha256: string;
+            /** Format: uri-reference */
+            download_url: string;
+            preview_url: string | null;
+            /** Format: date-time */
+            purged_at: string | null;
+        };
         CommunicationMessage: {
             id: number;
             conversation_id: number;
             /** @enum {string} */
             direction: "INBOUND" | "OUTBOUND" | "INTERNAL";
-            kind: string;
-            source: string;
-            status: string;
-            body?: string | null;
-            content?: components["schemas"]["CommunicationMessageContent"];
+            /** @enum {string} */
+            kind: "TEXT" | "IMAGE" | "AUDIO" | "VIDEO" | "DOCUMENT" | "STICKER" | "LOCATION" | "CONTACT" | "POLL" | "INTERACTIVE" | "UNSUPPORTED" | "NOTE";
+            provider_type: string | null;
+            /** @enum {string} */
+            source: "HUMAN" | "FISCAL_AUTOMATION" | "GATEWAY" | "FLOW_AUTOMATION";
+            /** @enum {string} */
+            status: "QUEUED" | "ACCEPTED" | "SENT" | "DELIVERED" | "READ" | "PLAYED" | "FAILED" | "UNKNOWN" | "CANCELED";
+            body: string | null;
+            content: components["schemas"]["CommunicationMessageContent"];
             availability: components["schemas"]["CommunicationMessageAvailability"];
-        } & {
-            [key: string]: unknown;
+            reply_to_message_id: number | null;
+            author_membership_id: number | null;
+            /** Format: date-time */
+            occurred_at: string | null;
+            /** Format: date-time */
+            sent_at: string | null;
+            /** Format: date-time */
+            delivered_at: string | null;
+            /** Format: date-time */
+            read_at: string | null;
+            /** Format: date-time */
+            played_at: string | null;
+            /** Format: date-time */
+            revoked_at: string | null;
+            metadata: components["schemas"]["CommunicationMessageMetadata"];
+            attachments: components["schemas"]["CommunicationMessageAttachment"][];
+        };
+        CommunicationSaveSharedContactBody: {
+            phone_index: number;
+        };
+        CommunicationSaveSharedContactData: {
+            /** @enum {string} */
+            outcome: "created" | "existing";
+            contact: components["schemas"]["CommunicationContact"];
+        };
+        CommunicationSaveSharedContactResponse: {
+            data: components["schemas"]["CommunicationSaveSharedContactData"];
         };
         CommunicationMessageCollection: {
             data: components["schemas"]["CommunicationMessage"][];
@@ -9324,7 +9463,10 @@ export interface operations {
     getCommunicationAttachmentsAttachmentDownload: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Um único intervalo de bytes para reprodução privada de áudio/vídeo. */
+                Range?: string;
+            };
             path: {
                 attachment: string;
             };
@@ -9332,21 +9474,49 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Resposta definida pela operação Laravel. */
-            default: {
+            /** @description Objeto privado completo. */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JsonResponse"];
+                    "application/octet-stream": string;
                 };
+            };
+            /** @description Intervalo privado autorizado. */
+            206: {
+                headers: {
+                    "Accept-Ranges"?: "bytes";
+                    "Content-Range"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description Objeto ausente ou não autorizado. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Intervalo de bytes inválido. */
+            416: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
     getCommunicationAttachmentsAttachmentPreview: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Um único intervalo de bytes para reprodução privada de áudio/vídeo. */
+                Range?: string;
+            };
             path: {
                 attachment: string;
             };
@@ -9354,14 +9524,39 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Resposta definida pela operação Laravel. */
-            default: {
+            /** @description Objeto privado completo. */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JsonResponse"];
+                    "application/octet-stream": string;
                 };
+            };
+            /** @description Intervalo privado autorizado. */
+            206: {
+                headers: {
+                    "Accept-Ranges"?: "bytes";
+                    "Content-Range"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description Objeto ausente ou não autorizado. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Intervalo de bytes inválido. */
+            416: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -10234,6 +10429,70 @@ export interface operations {
         responses: {
             /** @description Resposta definida pela operação Laravel. */
             default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JsonResponse"];
+                };
+            };
+        };
+    };
+    postCommunicationConversationsConversationMessagesMessageContactsContactIndexSave: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation: string;
+                message: string;
+                contactIndex: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommunicationSaveSharedContactBody"];
+            };
+        };
+        responses: {
+            /** @description Resposta canônica. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunicationSaveSharedContactResponse"];
+                };
+            };
+            /** @description Resposta canônica. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunicationSaveSharedContactResponse"];
+                };
+            };
+            /** @description Resposta canônica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JsonResponse"];
+                };
+            };
+            /** @description Resposta canônica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JsonResponse"];
+                };
+            };
+            /** @description Resposta canônica. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

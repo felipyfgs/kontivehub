@@ -268,6 +268,15 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
         }) => client<{ data: SharedContentItem[], meta: SharedContentMeta }>(
           `${base}/conversations/${id}/shared-content`, { query: params }
         ),
+        saveSharedContact: (
+          conversationId: number,
+          messageId: number,
+          contactIndex: number,
+          phoneIndex: number
+        ) => client<{ data: { outcome: 'created' | 'existing', contact: Contact } }>(
+          `${base}/conversations/${conversationId}/messages/${messageId}/contacts/${contactIndex}/save`,
+          { method: 'POST', body: { phone_index: phoneIndex } }
+        ),
         updateReadState: (id: number, body:
           | { state: 'READ', through_message_id: number }
           | { state: 'UNREAD', expected_version: number }

@@ -1,9 +1,11 @@
 package protocol
 
 import (
+	"fmt"
 	"net/url"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/domain"
@@ -28,7 +30,7 @@ type normalizedMessage struct {
 }
 
 func normalizeCatalogedMessage(message *waE2E.Message) normalizedMessage {
-	message = unwrapCatalogedMessage(message, 0)
+	message, wrapperFlags := unwrapCatalogedMessage(message, 0, nil)
 	if message == nil {
 		return unsupportedMessage("empty", "UNSUPPORTED", nil)
 	}
@@ -47,13 +49,30 @@ func normalizeCatalogedMessage(message *waE2E.Message) normalizedMessage {
 	if !ok || entry.Name != field.Name() {
 		return unsupportedMessage(string(field.Name()), "UNSUPPORTED", nil)
 	}
+	if entry.Disposition == catalog.MessageControl {
+		return normalizedMessage{Kind: domain.MessageUnsupported, ProviderType: entry.ProviderType, Family: "CONTROL"}
+	}
+	if entry.Disposition == catalog.MessageAction {
+		return normalizedMessage{Kind: domain.MessageUnsupported, ProviderType: entry.ProviderType, Family: entry.Family}
+	}
+	if entry.Disposition == catalog.MessageOutOfScope {
+		return normalizedMessage{Kind: domain.MessageUnsupported, ProviderType: entry.ProviderType, Family: "OUT_OF_SCOPE"}
+	}
 	if entry.Disposition != catalog.MessageProjected {
-		return unsupportedMessage(entry.ProviderType, entry.Family, map[string]any{"content_present": true})
+		content := map[string]any{"content_present": true}
+		if strings.HasPrefix(entry.ProviderType, "viewOnceMessage") {
+			content["content_present"] = false
+			content["view_once"] = true
+		}
+		return unsupportedMessage(entry.ProviderType, entry.Family, content)
 	}
 	result := normalizedMessage{
 		Kind: domain.MessageKind(entry.Family), ProviderType: entry.ProviderType,
 		Family: entry.Family, Content: make(map[string]any), Message: message,
 		Context: inboundMessageContext(message),
+	}
+	for key, value := range wrapperFlags {
+		result.Content[key] = value
 	}
 	extractCatalogedContent(&result)
 	return result
@@ -84,31 +103,33 @@ func activeMessageFields(message *waE2E.Message) []protoreflect.FieldDescriptor 
 	return active
 }
 
-func unwrapCatalogedMessage(message *waE2E.Message, depth int) *waE2E.Message {
+func unwrapCatalogedMessage(message *waE2E.Message, depth int, flags map[string]any) (*waE2E.Message, map[string]any) {
 	if message == nil || depth >= 8 {
-		return message
+		return message, flags
+	}
+	if flags == nil {
+		flags = make(map[string]any)
 	}
 	var nested *waE2E.Message
 	switch {
-	case message.GetViewOnceMessage() != nil:
-		nested = message.GetViewOnceMessage().GetMessage()
 	case message.GetEphemeralMessage() != nil:
 		nested = message.GetEphemeralMessage().GetMessage()
-	case message.GetViewOnceMessageV2() != nil:
-		nested = message.GetViewOnceMessageV2().GetMessage()
-	case message.GetViewOnceMessageV2Extension() != nil:
-		nested = message.GetViewOnceMessageV2Extension().GetMessage()
+		flags["ephemeral"] = true
 	case message.GetDocumentWithCaptionMessage() != nil:
 		nested = message.GetDocumentWithCaptionMessage().GetMessage()
 	case message.GetEditedMessage() != nil:
 		nested = message.GetEditedMessage().GetMessage()
 	case message.GetDeviceSentMessage() != nil:
 		nested = message.GetDeviceSentMessage().GetMessage()
+	case message.GetAssociatedChildMessage() != nil:
+		nested = message.GetAssociatedChildMessage().GetMessage()
+	case message.GetPollCreationMessageV4() != nil:
+		nested = message.GetPollCreationMessageV4().GetMessage()
 	}
 	if nested == nil {
-		return message
+		return message, flags
 	}
-	return unwrapCatalogedMessage(nested, depth+1)
+	return unwrapCatalogedMessage(nested, depth+1, flags)
 }
 
 func unsupportedMessage(providerType, family string, content map[string]any) normalizedMessage {
@@ -225,7 +246,198 @@ func extractCatalogedContent(result *normalizedMessage) {
 		}
 	case "templateMessage":
 		content["interactive"] = map[string]any{"mode": "TEMPLATE"}
+	case "productMessage":
+		product := message.GetProductMessage()
+		snapshot := product.GetProduct()
+		facts := richFacts()
+		facts.add("Moeda", snapshot.GetCurrencyCode())
+		facts.add("Preço", amount1000(snapshot.GetCurrencyCode(), snapshot.GetPriceAmount1000()))
+		facts.addCount("Imagens", int64(snapshot.GetProductImageCount()))
+		addRichCard(content, "PRODUCT", firstText(snapshot.GetTitle(), "Produto compartilhado"),
+			firstText(snapshot.GetDescription(), product.GetBody()), facts)
+	case "orderMessage":
+		order := message.GetOrderMessage()
+		facts := richFacts()
+		facts.addCount("Itens", int64(order.GetItemCount()))
+		facts.add("Status", order.GetStatus().String())
+		facts.add("Total", amount1000(order.GetTotalCurrencyCode(), order.GetTotalAmount1000()))
+		addRichCard(content, "ORDER", firstText(order.GetOrderTitle(), "Pedido compartilhado"), order.GetMessage(), facts)
+	case "invoiceMessage":
+		invoice := message.GetInvoiceMessage()
+		facts := richFacts()
+		facts.add("Anexo", invoice.GetAttachmentType().String())
+		addRichCard(content, "PAYMENT", "Fatura compartilhada", invoice.GetNote(), facts)
+	case "requestPaymentMessage":
+		payment := message.GetRequestPaymentMessage()
+		facts := richFacts()
+		facts.add("Valor", amount1000(payment.GetCurrencyCodeIso4217(), int64(payment.GetAmount1000())))
+		facts.addTime("Expira em", payment.GetExpiryTimestamp(), false)
+		addRichCard(content, "PAYMENT", "Solicitação de pagamento", "Conteúdo somente leitura", facts)
+	case "sendPaymentMessage":
+		addRichCard(content, "PAYMENT", "Pagamento compartilhado", "Conteúdo somente leitura", richFacts())
+	case "declinePaymentRequestMessage":
+		addRichCard(content, "PAYMENT", "Pagamento recusado", "Conteúdo somente leitura", richFacts())
+	case "cancelPaymentRequestMessage":
+		addRichCard(content, "PAYMENT", "Solicitação de pagamento cancelada", "Conteúdo somente leitura", richFacts())
+	case "paymentInviteMessage":
+		invite := message.GetPaymentInviteMessage()
+		facts := richFacts()
+		facts.add("Serviço", invite.GetServiceType().String())
+		facts.add("Tipo", invite.GetInviteType().String())
+		facts.addTime("Expira em", invite.GetExpiryTimestamp(), false)
+		addRichCard(content, "PAYMENT", "Convite de pagamento", "Conteúdo somente leitura", facts)
+	case "paymentReminderMessage":
+		reminder := message.GetPaymentReminderMessage()
+		facts := richFacts()
+		facts.add("Frequência", reminder.GetFrequency().String())
+		facts.add("Status", reminder.GetStatus().String())
+		facts.add("Valor", semanticMoney(reminder.GetAmount()))
+		addRichCard(content, "PAYMENT", "Lembrete de pagamento", reminder.GetDescription(), facts)
+	case "splitPaymentMessage":
+		split := message.GetSplitPaymentMessage()
+		facts := richFacts()
+		facts.add("Valor", semanticMoney(split.GetTotalAmount()))
+		facts.addCount("Participantes", int64(len(split.GetParticipants())))
+		facts.addTime("Criado em", split.GetCreatedAtMS(), true)
+		addRichCard(content, "PAYMENT", "Divisão de pagamento", split.GetDescription(), facts)
+	case "splitPaymentUpdateMessage":
+		addRichCard(content, "PAYMENT", "Atualização de divisão de pagamento", "Conteúdo somente leitura", richFacts())
+	case "groupInviteMessage":
+		invite := message.GetGroupInviteMessage()
+		facts := richFacts()
+		facts.add("Tipo", invite.GetGroupType().String())
+		facts.addTime("Expira em", invite.GetInviteExpiration(), false)
+		addRichCard(content, "INVITE", firstText(invite.GetGroupName(), "Convite para grupo"), invite.GetCaption(), facts)
+	case "eventMessage":
+		event := message.GetEventMessage()
+		facts := richFacts()
+		facts.addTime("Início", event.GetStartTime(), false)
+		facts.addTime("Fim", event.GetEndTime(), false)
+		facts.addBool("Cancelado", event.GetIsCanceled())
+		if event.GetLocation() != nil {
+			facts.add("Local", event.GetLocation().GetName())
+		}
+		addRichCard(content, "EVENT", firstText(event.GetName(), "Evento compartilhado"), event.GetDescription(), facts)
+	case "eventInviteMessage":
+		invite := message.GetEventInviteMessage()
+		facts := richFacts()
+		facts.addTime("Início", invite.GetStartTime(), false)
+		facts.addTime("Fim", invite.GetEndTime(), false)
+		facts.addBool("Cancelado", invite.GetIsCanceled())
+		addRichCard(content, "EVENT", firstText(invite.GetEventTitle(), "Convite para evento"), invite.GetCaption(), facts)
+	case "scheduledCallCreationMessage":
+		call := message.GetScheduledCallCreationMessage()
+		facts := richFacts()
+		facts.add("Tipo", call.GetCallType().String())
+		facts.addTime("Agendada para", call.GetScheduledTimestampMS(), true)
+		addRichCard(content, "CALL", firstText(call.GetTitle(), "Chamada agendada"), "Conteúdo somente leitura", facts)
+	case "scheduledCallEditMessage":
+		facts := richFacts()
+		facts.add("Alteração", message.GetScheduledCallEditMessage().GetEditType().String())
+		addRichCard(content, "CALL", "Chamada agendada atualizada", "Conteúdo somente leitura", facts)
+	case "callLogMesssage":
+		call := message.GetCallLogMesssage()
+		facts := richFacts()
+		facts.add("Tipo", call.GetCallType().String())
+		facts.add("Resultado", call.GetCallOutcome().String())
+		facts.addCount("Duração (s)", call.GetDurationSecs())
+		facts.addCount("Participantes", int64(len(call.GetParticipants())))
+		addRichCard(content, "CALL", "Registro de chamada", "Conteúdo somente leitura", facts)
+	case "call":
+		call := message.GetCall()
+		facts := richFacts()
+		facts.addCount("Ponto de entrada", int64(call.GetCallEntryPoint()))
+		addRichCard(content, "CALL", "Chamada do WhatsApp", call.GetCallReason(), facts)
 	}
+}
+
+type richCardFacts []map[string]string
+
+func richFacts() *richCardFacts {
+	facts := richCardFacts{}
+	return &facts
+}
+
+func (facts *richCardFacts) add(label, value string) {
+	label = boundedText(strings.TrimSpace(label), 64)
+	value = boundedText(strings.TrimSpace(value), 1024)
+	if label == "" || value == "" || len(*facts) >= 12 {
+		return
+	}
+	*facts = append(*facts, map[string]string{"label": label, "value": value})
+}
+
+func (facts *richCardFacts) addCount(label string, value int64) {
+	if value > 0 {
+		facts.add(label, fmt.Sprintf("%d", value))
+	}
+}
+
+func (facts *richCardFacts) addBool(label string, value bool) {
+	if value {
+		facts.add(label, "Sim")
+	}
+}
+
+func (facts *richCardFacts) addTime(label string, value int64, milliseconds bool) {
+	if value <= 0 {
+		return
+	}
+	if milliseconds {
+		value /= 1000
+	}
+	if value <= 0 || value > 253402300799 {
+		return
+	}
+	facts.add(label, time.Unix(value, 0).UTC().Format(time.RFC3339))
+}
+
+func addRichCard(content map[string]any, category, title, description string, facts *richCardFacts) {
+	card := map[string]any{
+		"category": category,
+		"title":    boundedText(firstText(title, "Conteúdo do WhatsApp"), 4096),
+	}
+	if description = boundedText(strings.TrimSpace(description), 8192); description != "" {
+		card["description"] = description
+	}
+	if facts != nil && len(*facts) > 0 {
+		card["facts"] = *facts
+	}
+	content["rich_card"] = card
+}
+
+func firstText(values ...string) string {
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func amount1000(currency string, value int64) string {
+	if value == 0 {
+		return ""
+	}
+	currency = boundedText(strings.ToUpper(strings.TrimSpace(currency)), 12)
+	amount := fmt.Sprintf("%.3f", float64(value)/1000)
+	return strings.TrimSpace(currency + " " + amount)
+}
+
+func semanticMoney(money *waE2E.Money) string {
+	if money == nil || money.GetValue() == 0 {
+		return ""
+	}
+	offset := money.GetOffset()
+	if offset > 6 {
+		offset = 6
+	}
+	divisor := int64(1)
+	for range offset {
+		divisor *= 10
+	}
+	format := fmt.Sprintf("%%.%df", offset)
+	return strings.TrimSpace(strings.ToUpper(money.GetCurrencyCode()) + " " + fmt.Sprintf(format, float64(money.GetValue())/float64(divisor)))
 }
 
 func semanticLinkPreview(message *waE2E.ExtendedTextMessage) map[string]any {

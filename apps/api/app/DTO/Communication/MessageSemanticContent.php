@@ -9,7 +9,7 @@ final class MessageSemanticContent
 {
     /** @var list<string> */
     public const KEYS = [
-        'text', 'caption', 'link_preview', 'location', 'contacts', 'poll', 'interactive',
+        'text', 'caption', 'link_preview', 'location', 'contacts', 'poll', 'interactive', 'rich_card',
         'ptt', 'gif', 'animated', 'duration_seconds', 'content_present', 'variants',
     ];
 
@@ -76,12 +76,24 @@ final class MessageSemanticContent
             throw new InvalidArgumentException('contacts inválido.');
         }
         foreach (is_array($content['contacts'] ?? null) ? $content['contacts'] : [] as $contact) {
-            self::assertObject($contact, ['display_name', 'vcard'], 'contact');
-            self::assertStrings($contact, ['display_name' => 1024, 'vcard' => 65_536], 'contact');
+            self::assertObject($contact, ['display_name', 'vcard', 'phones'], 'contact');
+            self::assertRequiredStrings($contact, ['display_name' => 1024, 'vcard' => 65_536], 'contact');
+            if (isset($contact['phones'])) {
+                if (! is_array($contact['phones']) || count($contact['phones']) > 10) {
+                    throw new InvalidArgumentException('contact.phones inválido.');
+                }
+                foreach ($contact['phones'] as $phone) {
+                    self::assertObject($phone, ['label', 'phone'], 'contact.phone');
+                    self::assertStrings($phone, ['label' => 40, 'phone' => 20], 'contact.phone');
+                    if (! preg_match('/^\+[1-9][0-9]{7,14}$/', (string) ($phone['phone'] ?? ''))) {
+                        throw new InvalidArgumentException('contact.phone inválido.');
+                    }
+                }
+            }
         }
         if (isset($content['poll'])) {
             self::assertObject($content['poll'], ['name', 'options', 'selectable_options'], 'poll');
-            self::assertStrings($content['poll'], ['name' => 4096], 'poll');
+            self::assertRequiredStrings($content['poll'], ['name' => 4096], 'poll');
             $options = $content['poll']['options'] ?? null;
             if (! is_array($options) || count($options) < 1 || count($options) > 12
                 || array_filter($options, static fn (mixed $value): bool => is_string($value) && strlen($value) <= 1024) !== $options) {
@@ -105,6 +117,24 @@ final class MessageSemanticContent
                 throw new InvalidArgumentException('interactive.mode inválido.');
             }
         }
+        if (isset($content['rich_card'])) {
+            self::assertObject($content['rich_card'], ['category', 'title', 'description', 'facts'], 'rich_card');
+            self::assertRequiredStrings($content['rich_card'], ['category' => 16, 'title' => 4096], 'rich_card');
+            self::assertStrings($content['rich_card'], ['description' => 8192], 'rich_card');
+            if (! in_array($content['rich_card']['category'] ?? null, [
+                'PRODUCT', 'ORDER', 'PAYMENT', 'EVENT', 'CALL', 'INVITE', 'SYSTEM',
+            ], true)) {
+                throw new InvalidArgumentException('rich_card.category inválido.');
+            }
+            $facts = $content['rich_card']['facts'] ?? [];
+            if (! is_array($facts) || count($facts) > 12) {
+                throw new InvalidArgumentException('rich_card.facts inválido.');
+            }
+            foreach ($facts as $fact) {
+                self::assertObject($fact, ['label', 'value'], 'rich_card.fact');
+                self::assertRequiredStrings($fact, ['label' => 64, 'value' => 1024], 'rich_card.fact');
+            }
+        }
         if (isset($content['reactions'])) {
             if (! is_array($content['reactions'])) {
                 throw new InvalidArgumentException('reactions inválido.');
@@ -115,8 +145,24 @@ final class MessageSemanticContent
                 }
             }
         }
-        if (isset($content['poll_votes']) && ! is_array($content['poll_votes'])) {
-            throw new InvalidArgumentException('poll_votes inválido.');
+        if (isset($content['poll_votes'])) {
+            if (! is_array($content['poll_votes'])) {
+                throw new InvalidArgumentException('poll_votes inválido.');
+            }
+            foreach ($content['poll_votes'] as $vote) {
+                self::assertObject($vote, ['option_names', 'option_hashes'], 'poll_vote');
+                foreach (['option_names', 'option_hashes'] as $field) {
+                    if (! isset($vote[$field]) || ! is_array($vote[$field]) || ! array_is_list($vote[$field]) || count($vote[$field]) > 12) {
+                        throw new InvalidArgumentException("poll_vote.{$field} inválido.");
+                    }
+                }
+                if (array_filter($vote['option_names'], static fn (mixed $value): bool => is_string($value) && strlen($value) <= 1024) !== $vote['option_names']) {
+                    throw new InvalidArgumentException('poll_vote.option_names inválido.');
+                }
+                if (array_filter($vote['option_hashes'], static fn (mixed $value): bool => is_string($value) && preg_match('/^[a-f0-9]{64}$/', $value) === 1) !== $vote['option_hashes']) {
+                    throw new InvalidArgumentException('poll_vote.option_hashes inválido.');
+                }
+            }
         }
         if (isset($content['interactive_response'])) {
             self::assertObject($content['interactive_response'], ['text', 'selected_id'], 'interactive_response');
@@ -150,6 +196,16 @@ final class MessageSemanticContent
     {
         foreach ($fields as $field => $limit) {
             if (isset($value[$field]) && (! is_string($value[$field]) || strlen($value[$field]) > $limit)) {
+                throw new InvalidArgumentException("{$context}.{$field} inválido.");
+            }
+        }
+    }
+
+    /** @param array<string, mixed> $value @param array<string, int> $fields */
+    private static function assertRequiredStrings(array $value, array $fields, string $context): void
+    {
+        foreach ($fields as $field => $limit) {
+            if (! array_key_exists($field, $value) || ! is_string($value[$field]) || strlen($value[$field]) > $limit) {
                 throw new InvalidArgumentException("{$context}.{$field} inválido.");
             }
         }

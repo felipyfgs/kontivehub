@@ -296,6 +296,8 @@ function onCheckboxChange(conversationId: number, value: boolean | 'indeterminat
               <UAvatar
                 :src="communicationProfilePictureSrc(conversation.contact, apiBase)"
                 :alt="communicationDisplayName(conversation)"
+                loading="lazy"
+                decoding="async"
                 size="md"
                 class="size-8"
                 :data-testid="`communication-conversation-avatar-${conversation.id}`"

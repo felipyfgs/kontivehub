@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Communication;
 
+use App\Services\Communication\Contact\SharedVCardParser;
 use App\Services\Communication\MessageAvailability;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -10,8 +11,10 @@ final class MessageResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $this->resource->loadMissing('attachments');
         $availability = app(MessageAvailability::class)->forMessage($this->resource);
         $available = $availability->state->value === 'AVAILABLE';
+        $contentVisible = $available || $availability->state->value === 'UNSUPPORTED';
 
         return [
             'id' => $this->id,
@@ -22,7 +25,7 @@ final class MessageResource extends JsonResource
             'source' => $this->source?->value ?? $this->source,
             'status' => $this->status?->value ?? $this->status,
             'body' => $available ? $this->body_encrypted : null,
-            'content' => $available ? $this->safeContent() : null,
+            'content' => $contentVisible ? $this->safeContent() : null,
             'availability' => $availability->toArray(),
             'reply_to_message_id' => $this->reply_to_message_id,
             'author_membership_id' => $this->author_membership_id,
@@ -33,7 +36,7 @@ final class MessageResource extends JsonResource
             'played_at' => $this->played_at?->toIso8601String(),
             'revoked_at' => $this->revoked_at?->toIso8601String(),
             'metadata' => $this->safeMetadata(),
-            'attachments' => $this->whenLoaded('attachments', fn () => ! $available ? [] : $this->attachments->map(fn ($attachment) => [
+            'attachments' => ! $available ? [] : $this->attachments->map(fn ($attachment) => [
                 'id' => $attachment->id,
                 'filename' => $attachment->original_name_encrypted ?: 'anexo-'.$attachment->id,
                 'mime_type' => $attachment->mime_type,
@@ -44,7 +47,7 @@ final class MessageResource extends JsonResource
                     ? '/api/v1/communication/attachments/'.$attachment->id.'/preview'
                     : null,
                 'purged_at' => $attachment->purged_at?->toIso8601String(),
-            ])->values()),
+            ])->values(),
         ];
     }
 
@@ -65,24 +68,57 @@ final class MessageResource extends JsonResource
         return array_filter($allowed, static fn (mixed $value): bool => $value !== null && $value !== []);
     }
 
-    /** @return array<string,mixed> */
-    private function safeContent(): array
+    /** @return array<string,mixed>|null */
+    private function safeContent(): ?array
     {
         $content = is_array($this->content_encrypted) ? $this->content_encrypted : [];
         $allowed = array_intersect_key($content, array_flip([
-            'text', 'caption', 'link_preview', 'location', 'contacts', 'poll', 'interactive',
+            'text', 'caption', 'link_preview', 'location', 'contacts', 'poll', 'interactive', 'rich_card',
             'ptt', 'gif', 'animated', 'duration_seconds', 'content_present', 'variants',
             'interactive_response',
         ]));
+        if (is_array($allowed['contacts'] ?? null)) {
+            $parser = app(SharedVCardParser::class);
+            $allowed['contacts'] = array_map(static function (mixed $contact) use ($parser): mixed {
+                if (! is_array($contact)) {
+                    return $contact;
+                }
+                $presented = $parser->parse(
+                    (string) ($contact['vcard'] ?? ''),
+                    is_string($contact['display_name'] ?? null) ? $contact['display_name'] : null,
+                );
+
+                return [
+                    'display_name' => $presented['display_name'],
+                    'vcard' => substr((string) ($contact['vcard'] ?? ''), 0, 65_536),
+                    'phones' => $presented['phones'],
+                ];
+            }, $allowed['contacts']);
+        }
         $allowed['reactions'] = array_values(array_filter(
             is_array($content['reactions'] ?? null) ? $content['reactions'] : [],
             'is_string',
         ));
         if (is_array($content['poll_votes'] ?? null)) {
-            $allowed['poll_votes'] = array_values($content['poll_votes']);
+            $allowed['poll_votes'] = array_values(array_map(static function (mixed $vote): array {
+                $vote = is_array($vote) ? $vote : [];
+
+                return [
+                    'option_names' => array_slice(array_values(array_filter(
+                        is_array($vote['option_names'] ?? null) ? $vote['option_names'] : [],
+                        static fn (mixed $value): bool => is_string($value) && strlen($value) <= 1024,
+                    )), 0, 12),
+                    'option_hashes' => array_slice(array_values(array_filter(
+                        is_array($vote['option_hashes'] ?? null) ? $vote['option_hashes'] : [],
+                        static fn (mixed $value): bool => is_string($value) && preg_match('/^[a-f0-9]{64}$/', $value) === 1,
+                    )), 0, 12),
+                ];
+            }, $content['poll_votes']));
         }
 
-        return array_filter($allowed, static fn (mixed $value): bool => $value !== null && $value !== []);
+        $filtered = array_filter($allowed, static fn (mixed $value): bool => $value !== null && $value !== []);
+
+        return $filtered === [] ? null : $filtered;
     }
 
     private function supportsInlinePreview(string $mime): bool

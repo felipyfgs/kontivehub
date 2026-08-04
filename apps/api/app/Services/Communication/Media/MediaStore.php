@@ -4,6 +4,7 @@ namespace App\Services\Communication\Media;
 
 use App\Services\Vault\EnvelopeCrypto;
 use Generator;
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Psr\Http\Message\StreamInterface;
 use RuntimeException;
 use Throwable;
@@ -16,7 +17,7 @@ final readonly class MediaStore
 
     public function __construct(
         private EnvelopeCrypto $crypto,
-        private string $root,
+        private Filesystem $disk,
     ) {}
 
     /**
@@ -32,17 +33,10 @@ final readonly class MediaStore
 
         $objectId = (string) str()->ulid();
         $path = $this->path($objectId);
-        $directory = dirname($path);
-        if (! is_dir($directory) && ! mkdir($directory, 0700, true) && ! is_dir($directory)) {
-            throw new RuntimeException('Não foi possível criar o diretório de mídia.');
-        }
-
-        $temporary = $path.'.incoming-'.bin2hex(random_bytes(6));
-        $output = fopen($temporary, 'x+b');
+        $output = tmpfile();
         if (! is_resource($output)) {
             throw new RuntimeException('Não foi possível criar o spool cifrado de mídia.');
         }
-        chmod($temporary, 0600);
 
         $streamKey = sodium_crypto_secretstream_xchacha20poly1305_keygen();
         [$state, $streamHeader] = sodium_crypto_secretstream_xchacha20poly1305_init_push($streamKey);
@@ -107,12 +101,9 @@ final readonly class MediaStore
             if (function_exists('fsync')) {
                 fsync($output);
             }
-            fclose($output);
-            $output = null;
-            if (! rename($temporary, $path)) {
-                throw new RuntimeException('Não foi possível promover a mídia cifrada.');
+            if (fseek($output, 0) !== 0 || ! $this->disk->writeStream($path, $output, ['visibility' => 'private'])) {
+                throw new RuntimeException('Não foi possível armazenar a mídia cifrada.');
             }
-            chmod($path, 0600);
 
             return [
                 'object_id' => $objectId,
@@ -120,12 +111,14 @@ final readonly class MediaStore
                 'sha256' => hash_final($hasher),
             ];
         } catch (Throwable $error) {
+            if ($this->disk->exists($path)) {
+                $this->disk->delete($path);
+            }
+            throw $error;
+        } finally {
             if (is_resource($output)) {
                 fclose($output);
             }
-            @unlink($temporary);
-            @unlink($path);
-            throw $error;
         }
     }
 
@@ -135,7 +128,7 @@ final readonly class MediaStore
      */
     public function readChunks(string $objectId, array $metadata): Generator
     {
-        $input = fopen($this->path($objectId), 'rb');
+        $input = $this->disk->readStream($this->path($objectId));
         if (! is_resource($input)) {
             throw new RuntimeException('Mídia não encontrada.');
         }
@@ -217,17 +210,46 @@ final readonly class MediaStore
         }
     }
 
+    /**
+     * @param  array<string, scalar|null>  $metadata
+     * @return Generator<int, string>
+     */
+    public function readRangeChunks(string $objectId, array $metadata, int $start, int $end): Generator
+    {
+        if ($start < 0 || $end < $start) {
+            throw new RuntimeException('Intervalo de mídia inválido.');
+        }
+        $offset = 0;
+        foreach ($this->readChunks($objectId, $metadata) as $chunk) {
+            $chunkEnd = $offset + strlen($chunk) - 1;
+            if ($chunkEnd < $start) {
+                $offset += strlen($chunk);
+
+                continue;
+            }
+            $sliceStart = max(0, $start - $offset);
+            $sliceEnd = min(strlen($chunk) - 1, $end - $offset);
+            if ($sliceEnd >= $sliceStart) {
+                yield substr($chunk, $sliceStart, $sliceEnd - $sliceStart + 1);
+            }
+            $offset += strlen($chunk);
+            if ($offset > $end) {
+                break;
+            }
+        }
+    }
+
     public function delete(string $objectId): void
     {
         $path = $this->path($objectId);
-        if (is_file($path) && ! unlink($path)) {
+        if ($this->disk->exists($path) && ! $this->disk->delete($path)) {
             throw new RuntimeException('Não foi possível excluir a mídia.');
         }
     }
 
     public function exists(string $objectId): bool
     {
-        return is_file($this->path($objectId));
+        return $this->disk->exists($this->path($objectId));
     }
 
     /** @return Generator<int, string> Object ids older than the supplied cutoff; never returns paths. */
@@ -238,14 +260,11 @@ final readonly class MediaStore
         }
 
         $remaining = min($limit, 500);
-        $root = rtrim($this->root, '/');
-        if (! is_dir($root)) {
-            return;
-        }
         $directories = [];
-        foreach (new \DirectoryIterator($root) as $directory) {
-            if ($directory->isDir() && ! $directory->isDot()) {
-                $directories[$directory->getFilename()] = $directory->getPathname();
+        foreach ($this->disk->directories() as $directory) {
+            $directoryName = basename($directory);
+            if (preg_match('/^[0-9a-hjkmnp-tv-z]{2}$/i', $directoryName)) {
+                $directories[$directoryName] = $directory;
             }
         }
         ksort($directories, SORT_STRING);
@@ -263,10 +282,10 @@ final readonly class MediaStore
                 continue;
             }
             $files = [];
-            foreach (new \DirectoryIterator($directory) as $file) {
-                $name = pathinfo($file->getFilename(), PATHINFO_FILENAME);
-                if ($file->isFile() && $file->getExtension() === 'media'
-                    && $file->getMTime() <= $cutoff->getTimestamp()
+            foreach ($this->disk->files($directory) as $file) {
+                $name = pathinfo($file, PATHINFO_FILENAME);
+                if (pathinfo($file, PATHINFO_EXTENSION) === 'media'
+                    && $this->disk->lastModified($file) <= $cutoff->getTimestamp()
                     && preg_match('/^[0-9A-HJKMNP-TV-Z]{26}$/i', $name)) {
                     if ($afterObjectId !== null && strcmp($name, $afterObjectId) <= 0) {
                         continue;
@@ -296,7 +315,7 @@ final readonly class MediaStore
             throw new RuntimeException('Identificador de mídia inválido.');
         }
 
-        return rtrim($this->root, '/').'/'.strtolower(substr($objectId, 0, 2)).'/'.$objectId.'.media';
+        return strtolower(substr($objectId, 0, 2)).'/'.$objectId.'.media';
     }
 
     /** @param resource $output */

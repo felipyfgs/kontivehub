@@ -15,6 +15,7 @@ use App\Models\CommunicationAttachment;
 use App\Models\CommunicationContact;
 use App\Services\Communication\Events\EventSyncQuery;
 use Illuminate\Http\JsonResponse;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 final class DataController extends Controller
@@ -32,16 +33,16 @@ final class DataController extends Controller
         ViewAttachmentRequest $request,
         CommunicationAttachment $attachment,
         StreamAttachmentAction $action,
-    ): StreamedResponse {
-        return $action->download($attachment);
+    ): Response {
+        return $action->download($attachment, $request);
     }
 
     public function previewAttachment(
         ViewAttachmentRequest $request,
         CommunicationAttachment $attachment,
         StreamAttachmentAction $action,
-    ): StreamedResponse {
-        return $action->preview($attachment);
+    ): Response {
+        return $action->preview($attachment, $request);
     }
 
     public function exportContact(
