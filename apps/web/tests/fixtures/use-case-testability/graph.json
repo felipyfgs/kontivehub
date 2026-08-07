@@ -1,5 +1,5 @@
 {
-  "digest": "7686ad2b9c1e5600938e97974dfd65375706134bf3c67a7e998ee01641e123da",
+  "digest": "83f7427d10f251129d8080df8e83deac2a0bc41ff774950a7ff7bd7a6e3759cc",
   "schemaVersion": 1,
   "source": {
     "catalog": "apps/web/tests/fixtures/use-case-testability/catalog.json",
@@ -14,7 +14,7 @@
     "handlers": 587,
     "apiClients": 15,
     "tests": 12,
-    "unmatchedApiClientEndpoints": 0
+    "unmatchedApiClientEndpoints": 5
   },
   "matrix": [
     {
@@ -205,7 +205,28 @@
       ]
     }
   ],
-  "unmatchedApiClientEndpoints": [],
+  "unmatchedApiClientEndpoints": [
+    {
+      "file": "app/composables/api/createCommunicationApi.ts",
+      "endpoint": "api/v1/communication/inboxes/:param/stickers"
+    },
+    {
+      "file": "app/composables/api/createCommunicationApi.ts",
+      "endpoint": "api/v1/communication/inboxes/:param/stickers/import"
+    },
+    {
+      "file": "app/composables/api/createCommunicationApi.ts",
+      "endpoint": "api/v1/communication/stickers/:param"
+    },
+    {
+      "file": "app/composables/api/createCommunicationApi.ts",
+      "endpoint": "api/v1/communication/stickers/:param/favorite"
+    },
+    {
+      "file": "app/composables/api/createCommunicationApi.ts",
+      "endpoint": "api/v1/communication/stickers/:param/preview"
+    }
+  ],
   "evidence": [
     {
       "level": "L1",
@@ -1455,10 +1476,15 @@
         "api/v1/communication/inboxes/:param/session/disconnect",
         "api/v1/communication/inboxes/:param/session/logout",
         "api/v1/communication/inboxes/:param/session/status",
+        "api/v1/communication/inboxes/:param/stickers",
+        "api/v1/communication/inboxes/:param/stickers/import",
         "api/v1/communication/labels",
         "api/v1/communication/labels/:param",
         "api/v1/communication/outbound-capabilities",
-        "api/v1/communication/settings"
+        "api/v1/communication/settings",
+        "api/v1/communication/stickers/:param",
+        "api/v1/communication/stickers/:param/favorite",
+        "api/v1/communication/stickers/:param/preview"
       ]
     },
     {

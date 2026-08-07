@@ -560,7 +560,7 @@ defineExpose({
               class="size-6 motion-reduce:animate-none"
               :class="selectionLoadingId === sticker.id && 'animate-spin'"
             />
-            <span class="line-clamp-2 text-[11px] text-muted">{{ stickerSourceLabel(sticker) }}</span>
+            <span class="line-clamp-2 text-xs text-muted">{{ stickerSourceLabel(sticker) }}</span>
           </button>
           <UButton
             :icon="sticker.app_favorite ? 'i-lucide-heart-off' : 'i-lucide-heart'"
@@ -576,7 +576,7 @@ defineExpose({
           />
           <span
             v-if="sticker.device_favorite"
-            class="absolute bottom-1 left-1 rounded bg-elevated px-1 text-[10px] text-muted"
+            class="absolute bottom-1 left-1 rounded bg-elevated px-1 text-xs text-muted"
           >
             No dispositivo
           </span>

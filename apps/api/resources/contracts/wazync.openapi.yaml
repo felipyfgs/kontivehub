@@ -328,6 +328,7 @@ components:
         - PRIVACY_UPDATE
         - DEFAULT_DISAPPEARING_SET
         - HISTORY_SYNC_REQUEST
+        - STICKER_MATERIALIZE
     GatewayQueryType:
       type: string
       enum:
@@ -361,6 +362,9 @@ components:
         - HISTORY_SYNCED
         - SYNC_STATUS_CHANGED
         - MEDIA_RETRY_UPDATED
+        - STICKER_OBSERVED
+        - STICKER_FAVORITE_CHANGED
+        - STICKER_MATERIALIZED
         - GATEWAY_ALERT
     MessageKind:
       type: string
@@ -527,6 +531,11 @@ components:
             required: [type]
           then:
             properties: {payload: {$ref: '#/components/schemas/HistoryPayload'}}
+        - if:
+            properties: {type: {const: STICKER_MATERIALIZE}}
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/StickerMaterializationPayload'}}
     EmptyPayload:
       type: object
       additionalProperties: false
@@ -1178,6 +1187,23 @@ components:
           type: integer
           minimum: 1
           maximum: 50
+    StickerMaterializationPayload:
+      type: object
+      additionalProperties: false
+      required: [observation_id, expected_sha256, expected_mime_type, max_bytes]
+      properties:
+        observation_id:
+          $ref: '#/components/schemas/Identifier'
+        expected_sha256:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+        expected_mime_type:
+          type: string
+          enum: [image/webp]
+        max_bytes:
+          type: integer
+          minimum: 1
+          maximum: 1048576
     GatewayQuery:
       type: object
       additionalProperties: false

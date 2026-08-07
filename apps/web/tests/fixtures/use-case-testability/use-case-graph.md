@@ -1,6 +1,6 @@
 # Grafo de testabilidade dos casos de uso
 
-Snapshot: `7686ad2b9c1e5600938e97974dfd65375706134bf3c67a7e998ee01641e123da`
+Snapshot: `83f7427d10f251129d8080df8e83deac2a0bc41ff774950a7ff7bd7a6e3759cc`
 
 O levantamento classifica **589 rotas API**, **83 páginas Nuxt** e **15 clientes HTTP** em **11 jornadas**. 4 jornadas são críticas e exigem evidência L1–L3.
 
@@ -30,4 +30,4 @@ O levantamento classifica **589 rotas API**, **83 páginas Nuxt** e **15 cliente
 - Lacunas não críticas permanecem explícitas; referência textual não conta como cobertura behavioral.
 - Playwright permanece fora do CI e bloqueia hosts externos.
 - SERPRO, Integra, SEFAZ, portal MEI e comunicação permanecem fail-closed nos testes.
-- Endpoints de clientes HTTP sem correspondência estrutural: **0**.
+- Endpoints de clientes HTTP sem correspondência estrutural: **5**.
