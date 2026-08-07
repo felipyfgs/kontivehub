@@ -1337,7 +1337,7 @@ function lifecycleForDraft(
   const labels: Record<Exclude<ComposerDraftFamily, 'MEDIA_BATCH'>, string> = {
     TEXT: 'Mensagem de texto',
     AUDIO: draft.family === 'AUDIO' ? draft.file.name : 'Áudio',
-    STICKER: draft.family === 'STICKER' ? draft.file.name : 'Figurinha',
+    STICKER: draft.family === 'STICKER' ? (draft.file?.name ?? 'Figurinha da biblioteca') : 'Figurinha',
     LOCATION: 'Localização',
     CONTACTS: 'Contatos',
     POLL: 'Enquete',

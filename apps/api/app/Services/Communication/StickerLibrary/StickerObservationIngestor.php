@@ -11,7 +11,6 @@ use App\Models\CommunicationInbox;
 use App\Models\CommunicationStickerContent;
 use App\Models\CommunicationStickerObservation;
 use App\Models\CommunicationStickerSyncWatermark;
-use App\Services\Communication\StickerLibrary\StickerMaterializationService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 

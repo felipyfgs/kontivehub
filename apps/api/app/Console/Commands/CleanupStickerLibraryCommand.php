@@ -33,6 +33,7 @@ final class CleanupStickerLibraryCommand extends Command
                 foreach ($rows as $observation) {
                     if ($dryRun) {
                         $removedObservations++;
+
                         continue;
                     }
                     $observation->forceFill(['removed_at' => now(), 'app_favorite' => false])->save();
@@ -55,6 +56,7 @@ final class CleanupStickerLibraryCommand extends Command
                 foreach ($rows as $content) {
                     if ($dryRun) {
                         $removedContents++;
+
                         continue;
                     }
                     DB::transaction(function () use ($content, $media): void {

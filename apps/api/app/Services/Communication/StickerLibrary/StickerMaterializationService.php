@@ -2,17 +2,17 @@
 
 namespace App\Services\Communication\StickerLibrary;
 
+use App\Contracts\CommunicationTransport;
 use App\DTO\Communication\GatewayEventData;
 use App\Enums\Communication\GatewayCommandType;
 use App\Enums\Communication\StickerAvailability;
 use App\Enums\Communication\StickerSource;
+use App\Exceptions\CommunicationTransportException;
 use App\Models\CommunicationInbox;
 use App\Models\CommunicationStickerContent;
 use App\Models\CommunicationStickerObservation;
 use App\Services\Communication\Media\MediaStore;
 use App\Services\Communication\Outbox\OutboxService;
-use App\Exceptions\CommunicationTransportException;
-use App\Contracts\CommunicationTransport;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
