@@ -117,6 +117,10 @@ produção.
 O arquivo `.env.example` é seguro para versionamento, mas não é implantável em
 produção. O Dockerfile nunca copia o `.env` para as imagens.
 
+Para os contratos outbound de comunicação, limites, motivos de capability e a
+configuração opcional de GIF, consulte
+[docs/communication.md](docs/communication.md).
+
 O NATS externo de produção deve exigir usuário e senha e limitar os subjects de
 eventos e comandos aos workloads autorizados. Os manifests recusam
 `COMMUNICATION_NATS_USER` ou `COMMUNICATION_NATS_PASSWORD` vazios; configure a

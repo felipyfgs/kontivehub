@@ -42,6 +42,6 @@
 ## 6. Live observation
 
 - [x] 6.1 Start the local stack and record privacy-safe database, JetStream and Wazync watermarks
-- [ ] 6.2 Keep the test conversation open and correlate only post-watermark Wazync, JetStream, database, API, realtime and DOM evidence
-- [ ] 6.3 Verify desktop and mobile rendering, decoded/playable media and viewer controls for newly received messages
-- [ ] 6.4 Record the per-type live, fixture-only or failed evidence matrix and request any missing user sends
+- [x] 6.2 Keep the test conversation open and correlate only post-watermark Wazync, JetStream, database, API, realtime and DOM evidence
+- [x] 6.3 Verify desktop and mobile rendering, decoded/playable media and viewer controls for newly received messages
+- [x] 6.4 Record the per-type live, fixture-only or failed evidence matrix and request any missing user sends

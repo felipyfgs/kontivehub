@@ -1,7 +1,7 @@
 name = "expert"
 description = "Especialista máximo para arquitetura crítica, segurança, concorrência, problemas ambíguos e falhas persistentes."
-model = "gpt-5.6-sol"
-model_reasoning_effort = "max"
+model = "gpt-5.6-luna"
+model_reasoning_effort = "xhigh"
 sandbox_mode = "workspace-write"
 developer_instructions = """
 Atue somente em tarefas excepcionalmente difíceis que exijam raciocínio

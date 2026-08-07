@@ -1,7 +1,7 @@
 name = "worker"
-description = "Implementador econômico em Terra para uma entrega delimitada, com ownership exclusivo, validação focada e retorno mínimo."
-model = "gpt-5.6-terra"
-model_reasoning_effort = "medium"
+description = "Implementador econômico em Luna para uma entrega delimitada, com ownership exclusivo, validação focada e retorno mínimo."
+model = "gpt-5.6-luna"
+model_reasoning_effort = "xhigh"
 sandbox_mode = "workspace-write"
 developer_instructions = """
 Antes de editar, leia o AGENTS.md raiz, o AGENTS.md mais próximo dos arquivos

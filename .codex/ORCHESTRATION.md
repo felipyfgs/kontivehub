@@ -5,16 +5,15 @@ Evite fan-out em tarefas pequenas, sequenciais ou com ownership sobreposto.
 
 ## Roteamento
 
-| Agente | Modelo | Uso |
-|---|---|---|
-| `explorer` | Luna/medium | investigação e documentação delimitadas |
-| `reviewer` | Luna/high | review de diff estável e delimitado |
-| `worker` | Terra/medium | implementação e testes focados |
-| `expert` | Sol/max | arquitetura, segurança, concorrência e impasses |
+| Agente | Modelo | Esforço | Uso |
+|---|---|---|---|
+| `explorer` | `gpt-5.6-luna` | xhigh | investigação e documentação delimitadas |
+| `reviewer` | `gpt-5.6-luna` | xhigh | review de diff estável e delimitado |
+| `worker` | `gpt-5.6-luna` | xhigh | implementação e testes focados |
+| `expert` | `gpt-5.6-luna` | xhigh | arquitetura, segurança, concorrência e impasses |
 
-Prefira Luna em leitura/review estreitos, Terra para execução e Sol apenas para
-alto risco ou ambiguidade. Se Luna não estiver disponível, use Terra e informe
-o fallback uma vez; não repita tentativas em loop.
+Todos os subagentes usam `gpt-5.6-luna` com esforço `xhigh`; cada perfil
+especializa permissões, instruções e responsabilidade.
 
 ## Contrato da subtarefa
 

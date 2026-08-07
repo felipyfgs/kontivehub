@@ -1,9 +1,8 @@
-# O principal herda modelo/esforço da sessão. Terra é o fallback nativo
-# compatível; Luna atende exploração/review pelo perfil ou leaf-agent.
+# Luna como modelo padrão dos subagentes; os perfis especializam o papel.
 
 [agents]
 enabled = true
 max_concurrent_threads_per_session = 6
-default_subagent_model = "gpt-5.6-terra"
-default_subagent_reasoning_effort = "medium"
+default_subagent_model = "gpt-5.6-luna"
+default_subagent_reasoning_effort = "xhigh"
 interrupt_message = true

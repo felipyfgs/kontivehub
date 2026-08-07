@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-07-29T03:16:51Z",
+  "generatedAt": "2026-08-04T13:06:14Z",
   "title": "Design System: KontiveHub",
   "extensions": {
     "colorMeta": {
@@ -8,260 +8,274 @@
         "role": "primary",
         "displayName": "Verde Kontive",
         "canonical": "#00C16A",
-        "tonalRamp": [
-          "#052E16",
-          "#0A5331",
-          "#016538",
-          "#007F45",
-          "#00C16A",
-          "#75EDAE",
-          "#D9FBE8",
-          "#EFFDF5"
-        ]
+        "tonalRamp": ["#052E16", "#016538", "#007F45", "#00A155", "#00C16A", "#75EDAE", "#D9FBE8", "#EFFDF5"]
       },
-      "surface": {
-        "role": "neutral",
-        "displayName": "Grafite de Trabalho",
-        "canonical": "var(--ui-bg)",
-        "tonalRamp": [
-          "oklch(14.1% 0.005 285.823)",
-          "oklch(21% 0.006 285.885)",
-          "oklch(27.4% 0.006 286.033)",
-          "oklch(37% 0.013 285.805)",
-          "oklch(55.2% 0.016 285.938)",
-          "oklch(87.1% 0.006 286.286)",
-          "oklch(96.7% 0.001 286.375)",
-          "oklch(98.5% 0 0)"
-        ]
+      "primary-hover": {
+        "role": "primary",
+        "displayName": "Verde Kontive Ativo",
+        "canonical": "#00A155",
+        "tonalRamp": ["#052E16", "#016538", "#007F45", "#00A155", "#00C16A", "#75EDAE", "#D9FBE8", "#EFFDF5"]
+      },
+      "primary-strong": {
+        "role": "primary",
+        "displayName": "Verde Kontive Profundo",
+        "canonical": "#007F45",
+        "tonalRamp": ["#052E16", "#016538", "#007F45", "#00A155", "#00C16A", "#75EDAE", "#D9FBE8", "#EFFDF5"]
+      },
+      "primary-soft": {
+        "role": "primary",
+        "displayName": "Névoa Kontive",
+        "canonical": "#EFFDF5",
+        "tonalRamp": ["#052E16", "#016538", "#007F45", "#00A155", "#00C16A", "#75EDAE", "#D9FBE8", "#EFFDF5"]
+      },
+      "success": {
+        "role": "success",
+        "displayName": "Confirmação",
+        "canonical": "var(--ui-success)",
+        "tonalRamp": ["#052E16", "#016538", "#007F45", "#00A155", "#00C16A", "#75EDAE", "#D9FBE8", "#EFFDF5"]
       },
       "info": {
         "role": "info",
         "displayName": "Informação",
         "canonical": "var(--ui-info)",
-        "tonalRamp": [
-          "oklch(28.2% 0.091 267.935)",
-          "oklch(37.9% 0.146 265.522)",
-          "oklch(42.4% 0.199 265.638)",
-          "oklch(48.8% 0.243 264.376)",
-          "oklch(62.3% 0.214 259.815)",
-          "oklch(80.9% 0.105 251.813)",
-          "oklch(93.2% 0.032 255.585)",
-          "oklch(97% 0.014 254.604)"
-        ]
+        "tonalRamp": ["oklch(28.2% 0.091 267.935)", "oklch(37.9% 0.146 265.522)", "oklch(42.4% 0.199 265.638)", "oklch(48.8% 0.243 264.376)", "oklch(62.3% 0.214 259.815)", "oklch(80.9% 0.105 251.813)", "oklch(93.2% 0.032 255.585)", "oklch(97% 0.014 254.604)"]
       },
       "warning": {
         "role": "warning",
         "displayName": "Atenção",
         "canonical": "var(--ui-warning)",
-        "tonalRamp": [
-          "oklch(28.6% 0.066 53.813)",
-          "oklch(42.1% 0.095 57.708)",
-          "oklch(47.6% 0.114 61.907)",
-          "oklch(55.4% 0.135 66.442)",
-          "oklch(79.5% 0.184 86.047)",
-          "oklch(90.5% 0.182 98.111)",
-          "oklch(97.3% 0.071 103.193)",
-          "oklch(98.7% 0.026 102.212)"
-        ]
+        "tonalRamp": ["oklch(28.6% 0.066 53.813)", "oklch(42.1% 0.095 57.708)", "oklch(47.6% 0.114 61.907)", "oklch(55.4% 0.135 66.442)", "oklch(79.5% 0.184 86.047)", "oklch(90.5% 0.182 98.111)", "oklch(97.3% 0.071 103.193)", "oklch(98.7% 0.026 102.212)"]
       },
       "error": {
         "role": "error",
         "displayName": "Erro",
         "canonical": "var(--ui-error)",
-        "tonalRamp": [
-          "oklch(25.8% 0.092 26.042)",
-          "oklch(39.6% 0.141 25.723)",
-          "oklch(44.4% 0.177 26.899)",
-          "oklch(50.5% 0.213 27.518)",
-          "oklch(63.7% 0.237 25.331)",
-          "oklch(80.8% 0.114 19.571)",
-          "oklch(93.6% 0.032 17.717)",
-          "oklch(97.1% 0.013 17.38)"
-        ]
+        "tonalRamp": ["oklch(25.8% 0.092 26.042)", "oklch(39.6% 0.141 25.723)", "oklch(44.4% 0.177 26.899)", "oklch(50.5% 0.213 27.518)", "oklch(63.7% 0.237 25.331)", "oklch(80.8% 0.114 19.571)", "oklch(93.6% 0.032 17.717)", "oklch(97.1% 0.013 17.38)"]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Canvas de Trabalho",
+        "canonical": "#FFFFFF",
+        "tonalRamp": ["#09090B", "#18181B", "#27272A", "#3F3F46", "#71717A", "#D4D4D8", "#F4F4F5", "#FFFFFF"]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Superfície de Apoio",
+        "canonical": "#FAFAFA",
+        "tonalRamp": ["#09090B", "#18181B", "#27272A", "#3F3F46", "#71717A", "#D4D4D8", "#F4F4F5", "#FAFAFA"]
+      },
+      "surface-elevated": {
+        "role": "neutral",
+        "displayName": "Plano Elevado",
+        "canonical": "#F4F4F5",
+        "tonalRamp": ["#09090B", "#18181B", "#27272A", "#3F3F46", "#71717A", "#D4D4D8", "#F4F4F5", "#FAFAFA"]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Linha Estrutural",
+        "canonical": "#E4E4E7",
+        "tonalRamp": ["#09090B", "#18181B", "#27272A", "#3F3F46", "#71717A", "#D4D4D8", "#E4E4E7", "#FAFAFA"]
+      },
+      "text-muted": {
+        "role": "neutral",
+        "displayName": "Texto de Contexto",
+        "canonical": "#71717A",
+        "tonalRamp": ["#09090B", "#18181B", "#27272A", "#3F3F46", "#71717A", "#D4D4D8", "#F4F4F5", "#FAFAFA"]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Texto Operacional",
+        "canonical": "#3F3F46",
+        "tonalRamp": ["#09090B", "#18181B", "#27272A", "#3F3F46", "#71717A", "#D4D4D8", "#F4F4F5", "#FAFAFA"]
+      },
+      "text-strong": {
+        "role": "neutral",
+        "displayName": "Texto de Decisão",
+        "canonical": "#18181B",
+        "tonalRamp": ["#09090B", "#18181B", "#27272A", "#3F3F46", "#71717A", "#D4D4D8", "#F4F4F5", "#FAFAFA"]
+      },
+      "canvas-dark": {
+        "role": "neutral",
+        "displayName": "Canvas Noturno",
+        "canonical": "#09090B",
+        "tonalRamp": ["#09090B", "#18181B", "#27272A", "#3F3F46", "#71717A", "#D4D4D8", "#F4F4F5", "#FAFAFA"]
       }
     },
     "typographyMeta": {
+      "display": {
+        "displayName": "Display institucional",
+        "purpose": "Títulos de autenticação e momentos institucionais, sem linguagem promocional."
+      },
       "headline": {
-        "displayName": "Headline",
-        "purpose": "Valores de KPI e títulos de maior prioridade operacional."
+        "displayName": "Cabeçalho operacional",
+        "purpose": "Título principal de página, painel ou área de trabalho."
       },
       "title": {
-        "displayName": "Title",
-        "purpose": "Títulos de cards, seções, modais e navegação."
+        "displayName": "Título de seção",
+        "purpose": "Cards, seções e identidade de registros."
       },
       "body": {
-        "displayName": "Body",
-        "purpose": "Texto principal de tabelas, filtros, campos e descrições."
+        "displayName": "Corpo operacional",
+        "purpose": "Conteúdo, formulários, navegação e tabelas."
+      },
+      "control": {
+        "displayName": "Controle operacional",
+        "purpose": "Botões, navegação e comandos compactos com peso médio."
       },
       "label": {
-        "displayName": "Label",
-        "purpose": "Metadados, legendas, badges e pequenos agrupadores."
+        "displayName": "Rótulo compacto",
+        "purpose": "Metadados, badges, KPIs e cabeçalhos densos."
       }
     },
     "shadows": [
       {
-        "name": "contato-interativo",
-        "value": "0 1px 2px 0 #0000000d",
-        "purpose": "Separação mínima de itens interativos ou arrastáveis."
+        "name": "contato-sutil",
+        "value": "0 1px 2px rgb(0 0 0 / 0.05)",
+        "purpose": "Destaque mínimo de controles compactos quando borda e tonalidade não bastam."
       },
       {
-        "name": "plano-flutuante",
-        "value": "0 10px 15px -3px #0000001a, 0 4px 6px -4px #0000001a",
-        "purpose": "Modais, popovers, menus e rails sobrepostos."
+        "name": "overlay-operacional",
+        "value": "0 10px 15px -3px rgb(0 0 0 / 0.10), 0 4px 6px -4px rgb(0 0 0 / 0.10)",
+        "purpose": "Menus, popovers, modais, slideovers e painéis temporariamente elevados."
       }
     ],
     "motion": [
       {
-        "name": "disclosure",
-        "value": "200ms ease-out",
-        "purpose": "Abrir e fechar menus, accordions e indicadores direcionais."
+        "name": "estado-rapido",
+        "value": "150ms cubic-bezier(0.4, 0, 0.2, 1)",
+        "purpose": "Hover, foco, seleção e mudanças compactas de cor ou transform."
       },
       {
-        "name": "rail",
+        "name": "entrada-operacional",
         "value": "150ms ease-out",
-        "purpose": "Mudanças compactas de largura em rails e painéis."
+        "purpose": "Entrada de filtros, painéis e feedback sem atrasar a tarefa."
+      },
+      {
+        "name": "saida-operacional",
+        "value": "100ms ease-in",
+        "purpose": "Saída rápida de controles transitórios."
+      },
+      {
+        "name": "movimento-reduzido",
+        "value": "0ms",
+        "purpose": "Desativa transições não essenciais quando prefers-reduced-motion está ativo."
       }
     ],
     "breakpoints": [
-      {
-        "name": "sm",
-        "value": "640px"
-      },
-      {
-        "name": "md",
-        "value": "768px"
-      },
-      {
-        "name": "lg",
-        "value": "1024px"
-      },
-      {
-        "name": "xl",
-        "value": "1280px"
-      }
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
     ]
   },
   "components": [
     {
-      "name": "Botão primário",
+      "name": "Primary Button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "A ação principal e confirmatória do contexto.",
-      "html": "<button class=\"ds-btn-primary\" type=\"button\">Salvar</button>",
-      "css": ".ds-btn-primary { border: 0; border-radius: 6px; background: var(--ui-primary, #00C16A); color: var(--ui-text-inverted, #fff); padding: 6px 10px; font: 500 14px/20px 'Public Sans', sans-serif; transition: background-color 150ms ease; cursor: pointer; } .ds-btn-primary:hover { background: color-mix(in srgb, var(--ui-primary, #00C16A) 75%, transparent); } .ds-btn-primary:focus-visible { outline: 3px solid color-mix(in srgb, var(--ui-primary, #00C16A) 25%, transparent); outline-offset: 2px; } .ds-btn-primary:active { background: color-mix(in srgb, var(--ui-primary, #00C16A) 75%, transparent); }"
+      "description": "Ação primária compacta; apenas uma por agrupamento de decisão.",
+      "html": "<button class=\"ds-btn-primary\">Salvar alterações</button>",
+      "css": ".ds-btn-primary { display:inline-flex; align-items:center; justify-content:center; gap:6px; height:36px; padding:8px 12px; border:0; border-radius:6px; background:var(--ui-primary,#00C16A); color:#fff; font:500 14px/20px 'Public Sans',sans-serif; transition:background-color 150ms cubic-bezier(0.4,0,0.2,1); cursor:pointer; } .ds-btn-primary:hover { background:#00A155; } .ds-btn-primary:focus-visible { outline:2px solid var(--ui-primary,#00C16A); outline-offset:2px; } .ds-btn-primary:active { background:#007F45; }"
     },
     {
-      "name": "Botão neutro outline",
+      "name": "Neutral Ghost Button",
       "kind": "button",
-      "refersTo": "button-neutral-outline",
-      "description": "Ação secundária, paralela ou de cancelamento.",
-      "html": "<button class=\"ds-btn-neutral\" type=\"button\">Cancelar</button>",
-      "css": ".ds-btn-neutral { border: 1px solid var(--ui-border-accented, #d4d4d8); border-radius: 6px; background: var(--ui-bg, #fff); color: var(--ui-text, #3f3f46); padding: 6px 10px; font: 500 14px/20px 'Public Sans', sans-serif; transition: background-color 150ms ease, border-color 150ms ease; cursor: pointer; } .ds-btn-neutral:hover, .ds-btn-neutral:active { background: var(--ui-bg-elevated, #f4f4f5); } .ds-btn-neutral:focus-visible { outline: 3px solid color-mix(in srgb, var(--ui-primary, #00C16A) 25%, transparent); outline-offset: 2px; border-color: var(--ui-primary, #00C16A); }"
+      "refersTo": "button-ghost",
+      "description": "Ação secundária ou contextual que não compete com a decisão principal.",
+      "html": "<button class=\"ds-btn-ghost\">Cancelar</button>",
+      "css": ".ds-btn-ghost { display:inline-flex; align-items:center; justify-content:center; gap:6px; height:36px; padding:8px 12px; border:0; border-radius:6px; background:transparent; color:var(--ui-text,#3F3F46); font:500 14px/20px 'Public Sans',sans-serif; transition:background-color 150ms cubic-bezier(0.4,0,0.2,1); cursor:pointer; } .ds-btn-ghost:hover { background:var(--ui-bg-elevated,#F4F4F5); } .ds-btn-ghost:focus-visible { outline:2px solid var(--ui-primary,#00C16A); outline-offset:2px; }"
     },
     {
-      "name": "Campo de busca",
+      "name": "Text Input",
       "kind": "input",
-      "refersTo": "input-outline",
-      "description": "Busca compacta com superfície default e foco explícito.",
-      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">Buscar</span><input class=\"ds-input\" type=\"search\" placeholder=\"Cliente, CNPJ ou categoria\"></label>",
-      "css": ".ds-field { display: grid; gap: 6px; color: var(--ui-text, #3f3f46); font: 500 12px/16px 'Public Sans', sans-serif; } .ds-input { width: 100%; box-sizing: border-box; border: 1px solid var(--ui-border-accented, #d4d4d8); border-radius: 6px; background: var(--ui-bg, #fff); color: var(--ui-text-highlighted, #18181b); padding: 6px 10px; font: 400 14px/20px 'Public Sans', sans-serif; transition: border-color 150ms ease, outline-color 150ms ease; } .ds-input::placeholder { color: var(--ui-text-dimmed, #a1a1aa); } .ds-input:hover { border-color: var(--ui-border, #e4e4e7); } .ds-input:focus-visible { outline: 3px solid color-mix(in srgb, var(--ui-primary, #00C16A) 25%, transparent); outline-offset: 1px; border-color: var(--ui-primary, #00C16A); }"
+      "refersTo": "input-default",
+      "description": "Campo operacional claro, compacto e com foco inequívoco.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">E-mail</span><input class=\"ds-input\" placeholder=\"voce@escritorio.com.br\"></label>",
+      "css": ".ds-field { display:grid; gap:6px; color:var(--ui-text,#3F3F46); font-family:'Public Sans',sans-serif; } .ds-field-label { font-size:14px; line-height:20px; font-weight:500; } .ds-input { height:36px; width:100%; padding:8px 12px; border:0; border-radius:6px; background:var(--ui-bg,#FFFFFF); color:var(--ui-text-highlighted,#18181B); box-shadow:inset 0 0 0 1px var(--ui-border,#E4E4E7); font:400 14px/20px 'Public Sans',sans-serif; outline:none; } .ds-input::placeholder { color:var(--ui-text-muted,#71717A); } .ds-input:hover { box-shadow:inset 0 0 0 1px var(--ui-border-accented,#D4D4D8); } .ds-input:focus-visible { box-shadow:inset 0 0 0 1px var(--ui-primary,#00C16A),0 0 0 2px color-mix(in srgb,var(--ui-primary,#00C16A) 25%,transparent); }"
     },
     {
-      "name": "Badge de atenção",
-      "kind": "chip",
-      "refersTo": "badge-subtle",
-      "description": "Estado semântico compacto com fundo tonal e contorno inset.",
-      "html": "<span class=\"ds-badge-warning\">Requer atenção</span>",
-      "css": ".ds-badge-warning { display: inline-flex; align-items: center; border-radius: 6px; padding: 4px 8px; background: color-mix(in srgb, var(--ui-warning, #eab308) 10%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-warning, #eab308) 25%, transparent); color: var(--ui-warning, #a16207); font: 500 12px/16px 'Public Sans', sans-serif; }"
-    },
-    {
-      "name": "Card de seção",
+      "name": "Subtle Section Card",
       "kind": "card",
       "refersTo": "card-subtle",
-      "description": "Contêiner de seção breve, plano e delimitado por camada tonal.",
-      "html": "<section class=\"ds-section-card\"><h3>Monitoramento fiscal</h3><p>Acompanhe a carteira sem disparar consultas externas.</p></section>",
-      "css": ".ds-section-card { border-radius: 8px; background: color-mix(in srgb, var(--ui-bg-elevated, #f4f4f5) 50%, transparent); box-shadow: inset 0 0 0 1px var(--ui-border, #e4e4e7); padding: 16px 24px; color: var(--ui-text, #3f3f46); font-family: 'Public Sans', sans-serif; } .ds-section-card h3 { margin: 0; color: var(--ui-text-highlighted, #18181b); font-size: 16px; line-height: 24px; font-weight: 600; } .ds-section-card p { margin: 4px 0 0; color: var(--ui-text-muted, #71717a); font-size: 14px; line-height: 20px; } .ds-section-card:focus-within { outline: 3px solid color-mix(in srgb, var(--ui-primary, #00C16A) 25%, transparent); outline-offset: 2px; }"
+      "description": "Agrupamento reutilizável para conteúdo relacionado, plano em repouso.",
+      "html": "<section class=\"ds-card\"><h3 class=\"ds-card-title\">Resumo do escritório</h3><p class=\"ds-card-copy\">Informação contextual e ações relacionadas permanecem no mesmo plano.</p></section>",
+      "css": ".ds-card { padding:16px; border-radius:8px; background:var(--ui-bg-elevated,#F4F4F5); color:var(--ui-text-highlighted,#18181B); box-shadow:inset 0 0 0 1px var(--ui-border,#E4E4E7); font-family:'Public Sans',sans-serif; } .ds-card-title { margin:0; font-size:16px; line-height:24px; font-weight:600; } .ds-card-copy { margin:6px 0 0; color:var(--ui-text-muted,#71717A); font-size:14px; line-height:20px; } .ds-card:focus-within { box-shadow:inset 0 0 0 1px var(--ui-primary,#00C16A); }"
     },
     {
-      "name": "Item de navegação",
+      "name": "Active Navigation Item",
       "kind": "nav",
-      "refersTo": "navigation-item",
-      "description": "Destino compacto com ícone, estado ativo e foco visível.",
-      "html": "<a class=\"ds-nav-item\" href=\"#\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-8.5Z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linejoin=\"round\"></path></svg><span>Início</span></a>",
-      "css": ".ds-nav-item { position: relative; display: inline-flex; align-items: center; gap: 6px; border-radius: 6px; padding: 6px 10px; color: var(--ui-text-muted, #71717a); text-decoration: none; font: 500 14px/20px 'Public Sans', sans-serif; transition: color 150ms ease, background-color 150ms ease; } .ds-nav-item svg { width: 20px; height: 20px; color: var(--ui-text-dimmed, #a1a1aa); } .ds-nav-item:hover, .ds-nav-item:active { background: color-mix(in srgb, var(--ui-bg-elevated, #f4f4f5) 50%, transparent); color: var(--ui-text-highlighted, #18181b); } .ds-nav-item:focus-visible { outline: 3px solid color-mix(in srgb, var(--ui-primary, #00C16A) 25%, transparent); outline-offset: 2px; }"
+      "refersTo": "navigation-active",
+      "description": "Destino ativo da sidebar com contraste tonal e Verde Kontive.",
+      "html": "<a class=\"ds-nav-active\" href=\"#\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M3 12h18M3 6h18M3 18h18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/></svg><span>Clientes</span></a>",
+      "css": ".ds-nav-active { display:flex; align-items:center; gap:8px; min-height:36px; padding:8px 12px; border-radius:6px; background:var(--ui-bg-elevated,#F4F4F5); color:#00A155; font:500 14px/20px 'Public Sans',sans-serif; text-decoration:none; } .ds-nav-active svg { width:18px; height:18px; flex:none; } .ds-nav-active:hover { background:#E4E4E7; } .ds-nav-active:focus-visible { outline:2px solid var(--ui-primary,#00C16A); outline-offset:2px; }"
     },
     {
-      "name": "KPI operacional",
-      "kind": "custom",
-      "refersTo": "kpi-card",
-      "description": "Métrica compacta com rótulo curto, valor tabular e leading tonal.",
-      "html": "<article class=\"ds-kpi\"><span class=\"ds-kpi-icon\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 19V9m6 10V5m6 14v-7m4 7H2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\"></path></svg></span><span class=\"ds-kpi-label\">Pendências</span><strong>18</strong></article>",
-      "css": ".ds-kpi { display: grid; justify-items: start; gap: 6px; border-radius: 8px; background: color-mix(in srgb, var(--ui-bg-elevated, #f4f4f5) 50%, transparent); box-shadow: inset 0 0 0 1px var(--ui-border, #e4e4e7); padding: 16px; color: var(--ui-text-highlighted, #18181b); font-family: 'Public Sans', sans-serif; } .ds-kpi-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 9999px; background: color-mix(in srgb, var(--ui-primary, #00C16A) 10%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-primary, #00C16A) 25%, transparent); color: var(--ui-primary, #00C16A); } .ds-kpi-icon svg { width: 20px; height: 20px; } .ds-kpi-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ui-text-muted, #71717a); font-size: 12px; line-height: 16px; text-transform: uppercase; } .ds-kpi strong { font-size: 24px; line-height: 30px; font-weight: 600; font-variant-numeric: tabular-nums; } .ds-kpi:focus-within { outline: 3px solid color-mix(in srgb, var(--ui-primary, #00C16A) 25%, transparent); outline-offset: 2px; }"
+      "name": "Soft Status Badge",
+      "kind": "chip",
+      "refersTo": "badge-soft",
+      "description": "Estado textual compacto que não depende apenas da cor.",
+      "html": "<span class=\"ds-badge\">Em aberto</span>",
+      "css": ".ds-badge { display:inline-flex; align-items:center; min-height:20px; padding:2px 8px; border-radius:9999px; background:#EFFDF5; color:#007F45; font:500 12px/16px 'Public Sans',sans-serif; white-space:nowrap; } .ds-badge:hover { background:#D9FBE8; } .ds-badge:focus-visible { outline:2px solid var(--ui-primary,#00C16A); outline-offset:2px; }"
     },
     {
-      "name": "Tabela compacta",
+      "name": "Compact Data Row",
       "kind": "custom",
-      "refersTo": "table-compact",
-      "description": "Lista operacional densa com header tonal e divisores explícitos.",
-      "html": "<table class=\"ds-table\"><thead><tr><th>Cliente</th><th>Situação</th></tr></thead><tbody><tr><td>Almeida Comércio</td><td><span>Regular</span></td></tr></tbody></table>",
-      "css": ".ds-table { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; color: var(--ui-text, #3f3f46); font: 400 14px/20px 'Public Sans', sans-serif; } .ds-table th { border-top: 1px solid var(--ui-border, #e4e4e7); border-bottom: 1px solid var(--ui-border, #e4e4e7); background: color-mix(in srgb, var(--ui-bg-elevated, #f4f4f5) 50%, transparent); padding: 6px 12px; color: var(--ui-text-highlighted, #18181b); text-align: left; font-weight: 600; } .ds-table th:first-child { border-left: 1px solid var(--ui-border, #e4e4e7); border-radius: 8px 0 0 8px; } .ds-table th:last-child { border-right: 1px solid var(--ui-border, #e4e4e7); border-radius: 0 8px 8px 0; } .ds-table td { border-bottom: 1px solid var(--ui-border, #e4e4e7); padding: 4px 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-table tbody tr:hover { background: color-mix(in srgb, var(--ui-bg-elevated, #f4f4f5) 50%, transparent); } .ds-table tbody tr:focus-within { outline: 3px solid color-mix(in srgb, var(--ui-primary, #00C16A) 25%, transparent); outline-offset: -2px; } .ds-table td span { font-variant-numeric: tabular-nums; }"
+      "description": "Linha densa de tabela com identidade, contexto e ação alinhados.",
+      "html": "<div class=\"ds-data-row\"><strong>Empresa Exemplo Ltda.</strong><span class=\"ds-data-meta\">CNPJ 00.000.000/0001-00</span><button class=\"ds-row-action\" aria-label=\"Mais ações\">•••</button></div>",
+      "css": ".ds-data-row { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:12px; min-height:40px; padding:8px 12px; border-bottom:1px solid var(--ui-border,#E4E4E7); color:var(--ui-text-highlighted,#18181B); font:400 14px/20px 'Public Sans',sans-serif; } .ds-data-row strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:500; } .ds-data-meta { color:var(--ui-text-muted,#71717A); font-variant-numeric:tabular-nums; } .ds-row-action { width:28px; height:28px; border:0; border-radius:6px; background:transparent; color:var(--ui-text-muted,#71717A); cursor:pointer; } .ds-row-action:hover { background:var(--ui-bg-elevated,#F4F4F5); color:var(--ui-text-highlighted,#18181B); } .ds-row-action:focus-visible { outline:2px solid var(--ui-primary,#00C16A); outline-offset:2px; }"
+    },
+    {
+      "name": "Operational KPI",
+      "kind": "custom",
+      "description": "Indicador escaneável para valor, estado e tendência reais.",
+      "html": "<article class=\"ds-kpi\"><div class=\"ds-kpi-icon\" aria-hidden=\"true\">✓</div><div><p class=\"ds-kpi-label\">Clientes ativos</p><p class=\"ds-kpi-value\">128</p></div></article>",
+      "css": ".ds-kpi { display:flex; align-items:center; gap:12px; min-width:0; padding:16px; border-radius:8px; background:var(--ui-bg-elevated,#F4F4F5); box-shadow:inset 0 0 0 1px var(--ui-border,#E4E4E7); color:var(--ui-text-highlighted,#18181B); font-family:'Public Sans',sans-serif; } .ds-kpi-icon { display:grid; place-items:center; width:36px; height:36px; border-radius:9999px; background:#EFFDF5; color:#007F45; font-weight:700; } .ds-kpi-label { margin:0; color:var(--ui-text-muted,#71717A); font-size:12px; line-height:16px; font-weight:500; letter-spacing:.025em; text-transform:uppercase; } .ds-kpi-value { margin:2px 0 0; font-size:24px; line-height:32px; font-weight:600; font-variant-numeric:tabular-nums; } .ds-kpi:focus-within { outline:2px solid var(--ui-primary,#00C16A); outline-offset:2px; }"
     }
   ],
   "narrative": {
-    "northStar": "Mesa de Operações Confiável",
-    "overview": "O KontiveHub se comporta como uma mesa de trabalho preparada antes do início do expediente: cada instrumento tem lugar, o estado da operação é legível e nada compete com a próxima decisão. A personalidade é precisa, sóbria e operacional. O sistema aceita alta densidade porque seus usuários varrem carteiras, prazos, pendências e tarefas durante muitas horas, mas controla essa densidade com hierarquia, truncamento e estados consistentes.\n\nA identidade nasce do contraste entre o Verde Kontive, usado como sinal funcional, e o Grafite de Trabalho, que sustenta superfícies, texto e divisores em temas claro e escuro. O resultado deve parecer um produto operacional maduro, não uma landing page SaaS: gradientes decorativos, excesso de cards e efeitos sem função não pertencem a este sistema.",
+    "northStar": "Central Operacional do Escritório",
+    "overview": "KontiveHub combina a organização espacial de uma sala de operações com a atenção contínua de uma central fiscal. A interface deve permitir que equipes contábeis examinem carteira, trabalho, documentos, comunicação e estados fiscais com rapidez, sem parecer fria ou hostil. A densidade é pragmática e técnica; a linguagem, os vazios e os estados mantêm o sistema claro e humano.\n\nO dashboard de referência em `.local/references/dashboard` é a autoridade estrutural: hierarquia de painéis do Nuxt UI, sidebar colapsável e redimensionável, navegação vertical, toolbars, tabelas, filtros, overlays e transformação responsiva devem conservar seus arquétipos. A identidade evita a estética de fintech chamativa: não usa neon, glassmorphism, gradientes saturados, brilho especulativo ou ornamentação financeira para simular confiança.",
     "keyCharacteristics": [
-      "Denso sem ser apertado.",
-      "Sóbrio, legível e orientado a evidências.",
-      "Mobile-first, com transformação estrutural em vez de simples encolhimento.",
-      "Verde reservado a ação, foco, seleção e confirmação.",
-      "Bordas e camadas tonais antes de sombras."
+      "Operação compacta, escaneável e orientada a estados reais.",
+      "Verde Kontive reservado a ação, seleção, progresso e confirmação.",
+      "Neutros zinc sustentando conteúdo, estrutura e densidade.",
+      "Camadas tonais e bordas como profundidade padrão.",
+      "Componentes reutilizáveis como unidade de consistência.",
+      "Public Sans e ícones Lucide como linguagem direta e legível.",
+      "Responsividade que transforma tabelas e painéis, sem apenas comprimi-los."
     ],
     "rules": [
-      {
-        "name": "A Regra do Verde Funcional",
-        "body": "O Verde Kontive aparece quando há ação, foco, seleção ou confirmação; ele não colore grandes superfícies por decoração.",
-        "section": "colors"
-      },
-      {
-        "name": "A Regra do Estado Literal",
-        "body": "Cores de informação, atenção e erro representam um estado real do domínio. Nunca escolha uma delas apenas para variar a paleta.",
-        "section": "colors"
-      },
-      {
-        "name": "A Regra da Varredura",
-        "body": "A hierarquia deve permitir reconhecer título, estado, valor e próxima ação antes de exigir leitura contínua.",
-        "section": "typography"
-      },
-      {
-        "name": "A Regra da Transformação Responsiva",
-        "body": "Mobile não é desktop comprimido: tabela vira card, tabs viram select e ações mantêm ícone e nome acessível quando o rótulo visual precisa desaparecer.",
-        "section": "layout"
-      },
-      {
-        "name": "A Regra da Camada Antes da Sombra",
-        "body": "Tente primeiro fundo tonal e borda. Use sombra apenas quando o elemento ocupa fisicamente um plano flutuante.",
-        "section": "elevation"
-      },
-      {
-        "name": "A Regra do Canto com Função",
-        "body": "O raio comunica agrupamento e escala; não arredonde cada região apenas para transformá-la em mais um card.",
-        "section": "shapes"
-      }
+      { "name": "The Green Means Action Rule", "body": "Verde Kontive aparece quando há ação, seleção ou estado relevante; uma tela majoritariamente verde perdeu a hierarquia.", "section": "colors" },
+      { "name": "The Zinc Carries the Work Rule", "body": "Dados, containers, divisores e navegação repousam nos neutros; a ausência de cor é o que dá autoridade aos sinais semânticos.", "section": "colors" },
+      { "name": "The No Flashy Fintech Rule", "body": "Não introduza neon, glow, vidro, gradientes de alta saturação ou gráficos ornamentais para comunicar modernidade.", "section": "colors" },
+      { "name": "The Scan First Rule", "body": "Cada superfície deve revelar título, estado, valor e ação nessa ordem antes de oferecer explicação longa.", "section": "typography" },
+      { "name": "The One Family Rule", "body": "Public Sans é suficiente para toda a aplicação; não acrescente fonte display, manuscrita ou mono como ornamento.", "section": "typography" },
+      { "name": "The Panel Chain Rule", "body": "Não quebre a hierarquia de painel do arquétipo com wrappers visuais sem função ou shells paralelos.", "section": "layout" },
+      { "name": "The Density With Air Rule", "body": "Compacte controles e dados relacionados; use espaço maior apenas para separar decisões ou contextos diferentes.", "section": "layout" },
+      { "name": "The Transform, Don't Shrink Rule", "body": "Responsividade muda a composição — tabela para cards, detalhe para slideover, tabs para select — em vez de reduzir tudo até caber.", "section": "layout" },
+      { "name": "The Flat-by-Default Rule", "body": "Cards e painéis ficam planos em repouso; sombras são consequência de interação ou sobreposição.", "section": "elevation" },
+      { "name": "The Border Before Shadow Rule", "body": "Se uma borda ou mudança tonal expressar a hierarquia, não acrescente sombra.", "section": "elevation" },
+      { "name": "The Radius Ladder Rule", "body": "Controles usam 6px, containers usam 8px e formas maiores são exceções justificadas pelo componente; não misture raios arbitrários na mesma superfície.", "section": "shapes" },
+      { "name": "The Pill Has Meaning Rule", "body": "Cápsulas representam estado, filtro ou identidade curta; não transformam títulos, cards e botões comuns em pills.", "section": "shapes" },
+      { "name": "The Reuse Before Markup Rule", "body": "Antes de criar um componente visual, verifique Nuxt UI, `components/shell`, `utils/page-card.ts`, `utils/table-ui.ts`, `utils/list-filter-layout.ts` e o arquétipo correspondente.", "section": "components" },
+      { "name": "The Same Contract Rule", "body": "Um componente reutilizável encapsula também slots, estados, responsividade, foco e semântica; não aceite abstrações que compartilhem apenas aparência.", "section": "components" },
+      { "name": "The Real State Rule", "body": "Loading, erro, vazio, sucesso, indisponibilidade e permissão vêm de dados reais; nunca invente fallback visual que pareça informação válida.", "section": "components" }
     ],
     "dos": [
-      "Do reutilize ShellPagePanel, ShellPageNavbar, ShellDataTable, ShellSectionCard, ShellPanelAccordion e modais Shell*.",
-      "Do use Verde Kontive para ação, foco, seleção e confirmação verificável.",
-      "Do preserve foco visível, alvos adequados para toque, aria-label e comportamento por teclado.",
-      "Do transforme tabelas em cards e tabs em select nos breakpoints canônicos.",
-      "Do use truncamento, min-width: 0 e algarismos tabulares para sustentar densidade sem quebrar o layout."
+      "**Do** preserve os arquétipos do dashboard para casca global, visão analítica, listas administrativas, master-detail e configurações.",
+      "**Do** use tokens semânticos do Nuxt UI e a escala Verde Kontive definida no tema.",
+      "**Do** reutilize componentes `Shell*` e utilities canônicas quando o contrato visual e interativo coincidir.",
+      "**Do** componentize padrões recorrentes com props tipadas, slots claros, estados acessíveis e comportamento responsivo completo.",
+      "**Do** mantenha ações, estados e erros compreensíveis em português do Brasil.",
+      "**Do** compare alterações visuais em desktop e mobile, incluindo teclado, foco, loading, erro e vazio."
     ],
     "donts": [
-      "Don't faça a interface parecer uma landing page SaaS com gradientes decorativos, hero promocional ou efeitos sem função.",
-      "Don't envolva cada grupo em um card nem aninhe cards quando borda, espaçamento ou accordion resolvem a hierarquia.",
-      "Don't use sombras em cards de repouso ou elevação para compensar uma hierarquia fraca.",
-      "Don't introduza novas cores para “dar variedade”; estados usam os canais semânticos existentes.",
-      "Don't comprima tabelas desktop no telefone nem force largura mínima que produza rolagem horizontal como padrão."
+      "**Don't** adicione estética de fintech chamativa: neon, glow, glassmorphism, gradientes saturados, números gigantes sem contexto ou gráficos decorativos.",
+      "**Don't** crie uma segunda casca visual ou altere a cadeia de painéis do template.",
+      "**Don't** espalhe cores, paddings, raios e variantes arbitrários em componentes de domínio.",
+      "**Don't** transforme cada bloco em card elevado; agrupamento deve responder à estrutura da tarefa.",
+      "**Don't** esconda ação ou estado exclusivamente por cor, hover ou viewport desktop.",
+      "**Don't** copie branding, mocks, usuários, links ou regras de negócio do dashboard de referência."
     ]
   }
 }
