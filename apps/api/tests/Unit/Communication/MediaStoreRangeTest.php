@@ -4,6 +4,7 @@ namespace Tests\Unit\Communication;
 
 use App\Services\Communication\Media\MediaStore;
 use GuzzleHttp\Psr7\Utils;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 use Tests\TestCase;
@@ -75,5 +76,71 @@ final class MediaStoreRangeTest extends TestCase
         } catch (RuntimeException) {
             $this->addToAssertionCount(1);
         }
+    }
+
+    public function test_validated_range_supports_empty_object_sentinel(): void
+    {
+        $metadata = ['tenant_id' => 1, 'inbox_id' => 2];
+        $media = app(MediaStore::class);
+        $stored = $media->putStream(Utils::streamFor(''), $metadata);
+
+        $chunks = iterator_to_array($media->readValidatedRange(
+            $stored['object_id'],
+            $metadata,
+            0,
+            -1,
+            0,
+            $stored['sha256'],
+        ));
+
+        $this->assertSame('', implode('', $chunks));
+        $this->assertSame(0, $stored['size_bytes']);
+    }
+
+    public function test_validated_range_reuses_integrity_cache_for_subsequent_reads(): void
+    {
+        $bytes = str_repeat('range-cache-', 8_000);
+        $metadata = ['tenant_id' => 1, 'inbox_id' => 2];
+        $media = app(MediaStore::class);
+        $stored = $media->putStream(Utils::streamFor($bytes), $metadata);
+        $cacheKey = 'communication.media.integrity.'
+            .$stored['object_id'].'.0.'
+            .$stored['size_bytes'].'.'
+            .$stored['sha256'];
+
+        $this->assertFalse(Cache::get($cacheKey, false));
+
+        $first = iterator_to_array($media->readValidatedRange(
+            $stored['object_id'],
+            $metadata,
+            10,
+            40,
+            $stored['size_bytes'],
+            $stored['sha256'],
+        ));
+
+        $this->assertTrue(Cache::get($cacheKey) === true);
+
+        $second = iterator_to_array($media->readValidatedRange(
+            $stored['object_id'],
+            $metadata,
+            10,
+            40,
+            $stored['size_bytes'],
+            $stored['sha256'],
+        ));
+
+        $this->assertSame(substr($bytes, 10, 31), implode('', $first));
+        $this->assertSame(implode('', $first), implode('', $second));
+
+        $media->delete($stored['object_id']);
+        $this->assertSame(1, (int) Cache::get('communication.media.integrity.epoch.'.$stored['object_id']));
+        $this->assertFalse(Cache::get(
+            'communication.media.integrity.'
+            .$stored['object_id'].'.1.'
+            .$stored['size_bytes'].'.'
+            .$stored['sha256'],
+            false,
+        ));
     }
 }

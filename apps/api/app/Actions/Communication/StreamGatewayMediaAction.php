@@ -53,13 +53,23 @@ final readonly class StreamGatewayMediaAction
             basename((string) $attachment->original_name_encrypted),
         ) ?: 'documento';
 
+        $size = (int) $attachment->size_bytes;
+        $start = 0;
+        $end = $size > 0 ? $size - 1 : -1;
+
         try {
-            $contents = $this->media->readValidated(
+            // Stream chunk-by-chunk after integrity validation; avoid materializing the
+            // entire attachment as a single PHP string (OOM risk under concurrency).
+            $chunks = $this->media->readValidatedRange(
                 $attachment->object_id,
                 $attachment->storage_context,
-                (int) $attachment->size_bytes,
+                $start,
+                $end,
+                $size,
                 (string) $attachment->sha256,
             );
+            // Generators are lazy: force the integrity pass before HTTP headers are sent.
+            $chunks->rewind();
         } catch (Throwable $error) {
             Log::warning('communication.media.gateway_stream_unavailable', [
                 'error_code' => 'MEDIA_STREAM_UNAVAILABLE',
@@ -75,8 +85,22 @@ final readonly class StreamGatewayMediaAction
             );
         }
 
-        return response()->stream(function () use ($contents): void {
-            echo $contents;
+        return response()->stream(function () use ($chunks): void {
+            if (! $chunks->valid()) {
+                return;
+            }
+
+            do {
+                $chunk = $chunks->current();
+                if (is_string($chunk) && $chunk !== '') {
+                    echo $chunk;
+                    if (function_exists('ob_flush')) {
+                        @ob_flush();
+                    }
+                    flush();
+                }
+                $chunks->next();
+            } while ($chunks->valid());
         }, 200, [
             'Content-Type' => $attachment->mime_type,
             'Content-Length' => (string) $attachment->size_bytes,

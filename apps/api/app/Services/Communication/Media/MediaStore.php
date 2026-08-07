@@ -5,6 +5,7 @@ namespace App\Services\Communication\Media;
 use App\Services\Vault\EnvelopeCrypto;
 use Generator;
 use Illuminate\Contracts\Filesystem\Filesystem;
+use Illuminate\Support\Facades\Cache;
 use Psr\Http\Message\StreamInterface;
 use RuntimeException;
 use Throwable;
@@ -256,13 +257,35 @@ final readonly class MediaStore
     ): Generator {
         $maximum = max(1, (int) config('communication.media.max_bytes', 20_971_520));
         if ($start < 0
-            || $end < $start
-            || ($expectedSize > 0 && $end >= $expectedSize)
-            || ($expectedSize === 0 && ($start !== 0 || $end !== -1))
             || $expectedSize < 0
             || $expectedSize > $maximum
             || preg_match('/^[a-f0-9]{64}$/', $expectedSha256) !== 1) {
             throw new RuntimeException('Descritor de mídia inválido.');
+        }
+
+        // Empty objects use the sentinel range (0, -1); do not apply end < start to that case.
+        if ($expectedSize === 0) {
+            if ($start !== 0 || $end !== -1) {
+                throw new RuntimeException('Descritor de mídia inválido.');
+            }
+        } elseif ($end < $start || $end >= $expectedSize) {
+            throw new RuntimeException('Descritor de mídia inválido.');
+        }
+
+        // After a successful full integrity pass, subsequent Range requests can
+        // stream only the needed plaintext window (secretstream still authenticates
+        // each chunk) without re-hashing the entire object on every seek.
+        if ($this->hasVerifiedIntegrity($objectId, $expectedSize, $expectedSha256)) {
+            yield from $this->readRangeTrusted(
+                $objectId,
+                $metadata,
+                $start,
+                $end,
+                $expectedSize,
+                $expectedSha256,
+            );
+
+            return;
         }
 
         $range = tmpfile();
@@ -295,6 +318,7 @@ final readonly class MediaStore
             if ($size !== $expectedSize || ! hash_equals($expectedSha256, hash_final($hasher))) {
                 throw new RuntimeException('Integridade da mídia inválida.');
             }
+            $this->markVerifiedIntegrity($objectId, $expectedSize, $expectedSha256);
             if (fseek($range, 0) !== 0) {
                 throw new RuntimeException('Falha ao preparar a faixa de mídia.');
             }
@@ -313,12 +337,104 @@ final readonly class MediaStore
         }
     }
 
+    /**
+     * Stream a previously integrity-verified range without re-hashing the whole object.
+     * Stops decrypting once the requested window is complete.
+     *
+     * @param  array<string, scalar|null>  $metadata
+     * @return Generator<int, string>
+     */
+    private function readRangeTrusted(
+        string $objectId,
+        array $metadata,
+        int $start,
+        int $end,
+        int $expectedSize,
+        string $expectedSha256,
+    ): Generator {
+        $size = 0;
+        $offset = 0;
+        foreach ($this->readChunks($objectId, $metadata) as $chunk) {
+            $chunkSize = strlen($chunk);
+            $size += $chunkSize;
+            if ($size > $expectedSize) {
+                $this->forgetVerifiedIntegrity($objectId, $expectedSize, $expectedSha256);
+                throw new RuntimeException('Tamanho de mídia divergente.');
+            }
+
+            $chunkEnd = $offset + $chunkSize - 1;
+            if ($chunkEnd >= $start && $end >= $start) {
+                $sliceStart = max(0, $start - $offset);
+                $sliceEnd = min($chunkSize - 1, $end - $offset);
+                if ($sliceEnd >= $sliceStart) {
+                    yield substr($chunk, $sliceStart, $sliceEnd - $sliceStart + 1);
+                }
+            }
+            $offset += $chunkSize;
+
+            // Partial windows may stop early; full-object reads keep fail-closed size checks.
+            $partial = $end >= 0 && $expectedSize > 0 && $end < $expectedSize - 1;
+            if ($partial && $offset > $end) {
+                return;
+            }
+        }
+
+        if ($size !== $expectedSize) {
+            $this->forgetVerifiedIntegrity($objectId, $expectedSize, $expectedSha256);
+            throw new RuntimeException('Tamanho de mídia divergente.');
+        }
+    }
+
+    private function integrityEpochKey(string $objectId): string
+    {
+        return 'communication.media.integrity.epoch.'.$objectId;
+    }
+
+    private function integrityEpoch(string $objectId): int
+    {
+        return (int) Cache::get($this->integrityEpochKey($objectId), 0);
+    }
+
+    private function integrityCacheKey(string $objectId, int $expectedSize, string $expectedSha256): string
+    {
+        return 'communication.media.integrity.'
+            .$objectId.'.'
+            .$this->integrityEpoch($objectId).'.'
+            .$expectedSize.'.'
+            .$expectedSha256;
+    }
+
+    private function hasVerifiedIntegrity(string $objectId, int $expectedSize, string $expectedSha256): bool
+    {
+        return Cache::get($this->integrityCacheKey($objectId, $expectedSize, $expectedSha256)) === true;
+    }
+
+    private function markVerifiedIntegrity(string $objectId, int $expectedSize, string $expectedSha256): void
+    {
+        Cache::put(
+            $this->integrityCacheKey($objectId, $expectedSize, $expectedSha256),
+            true,
+            now()->addHour(),
+        );
+    }
+
+    private function forgetVerifiedIntegrity(string $objectId, int $expectedSize, string $expectedSha256): void
+    {
+        Cache::forget($this->integrityCacheKey($objectId, $expectedSize, $expectedSha256));
+    }
+
     public function delete(string $objectId): void
     {
         $path = $this->path($objectId);
         if ($this->disk->exists($path) && ! $this->disk->delete($path)) {
             throw new RuntimeException('Não foi possível excluir a mídia.');
         }
+
+        Cache::put(
+            $this->integrityEpochKey($objectId),
+            $this->integrityEpoch($objectId) + 1,
+            now()->addDay(),
+        );
     }
 
     public function exists(string $objectId): bool
