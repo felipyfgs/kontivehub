@@ -38,6 +38,7 @@ final class CommunicationSingularOutboundFamiliesTest extends TestCase
             'communication.enabled' => true,
             'communication.gateway.enabled' => true,
             'communication.media.disk_root' => sys_get_temp_dir().'/communication-singular-families-'.Str::ulid(),
+            'filesystems.disks.communication_media.root' => sys_get_temp_dir().'/communication-singular-families-'.Str::ulid(),
             'communication.outbound_features.contacts_array' => true,
             'communication.outbound_features.gif' => true,
             'communication.outbound_features.ptv' => true,

@@ -72,6 +72,7 @@ final class CommunicationGatewayFlowTest extends TestCase
             'communication.hmac.current_key_id' => 'test-key',
             'communication.hmac.current_secret' => str_repeat('h', 32),
             'communication.media.disk_root' => sys_get_temp_dir().'/communication-gateway-tests-'.Str::ulid(),
+            'filesystems.disks.communication_media.root' => sys_get_temp_dir().'/communication-gateway-tests-'.Str::ulid(),
         ]);
         Event::fake([CommunicationEventCommitted::class]);
         $this->transport = new FakeCommunicationTransport;

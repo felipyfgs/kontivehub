@@ -49,6 +49,7 @@ final class CommunicationSharedContentAndInitiationTest extends TestCase
             'communication.enabled' => true,
             'communication.gateway.enabled' => true,
             'communication.media.disk_root' => sys_get_temp_dir().'/communication-shared-content-tests-'.Str::ulid(),
+            'filesystems.disks.communication_media.root' => sys_get_temp_dir().'/communication-shared-content-tests-'.Str::ulid(),
             'communication.outbound_conversation.enabled' => true,
             'communication.outbound_conversation.kill_switch' => false,
             'communication.outbound_conversation.allow_all_tenants' => true,

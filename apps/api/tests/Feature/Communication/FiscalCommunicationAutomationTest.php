@@ -82,6 +82,7 @@ final class FiscalCommunicationAutomationTest extends TestCase
             'communication.hmac.current_key_id' => 'test-key',
             'communication.hmac.current_secret' => str_repeat('s', 32),
             'communication.media.disk_root' => sys_get_temp_dir().'/fiscal-hub-communication-tests-'.Str::ulid(),
+            'filesystems.disks.communication_media.root' => sys_get_temp_dir().'/fiscal-hub-communication-tests-'.Str::ulid(),
         ]);
     }
 

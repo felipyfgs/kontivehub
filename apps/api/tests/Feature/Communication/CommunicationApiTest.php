@@ -54,6 +54,7 @@ final class CommunicationApiTest extends TestCase
             'communication.enabled' => true,
             'communication.gateway.enabled' => true,
             'communication.media.disk_root' => sys_get_temp_dir().'/communication-api-tests-'.Str::ulid(),
+            'filesystems.disks.communication_media.root' => sys_get_temp_dir().'/communication-api-tests-'.Str::ulid(),
             'broadcasting.default' => 'reverb',
             'broadcasting.connections.reverb.key' => 'test-reverb-key',
             'broadcasting.connections.reverb.secret' => 'test-reverb-secret',
