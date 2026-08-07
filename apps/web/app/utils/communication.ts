@@ -5,6 +5,18 @@ import type { Message, MessageAvailability, MessagePollVote, MessageStatus } fro
 import type { ProfilePictureState } from '~/types/communication/contacts'
 import { resolveApiUrl } from '~/utils/api-url'
 
+const PROFILE_PICTURE_FAILURE_TTL_MS = 30_000
+export const COMMUNICATION_PROFILE_PICTURE_FAILURE_CACHE_LIMIT = 100
+const failedProfilePictureUrls = new Map<string, number>()
+
+function pruneProfilePictureFailureCache(): void {
+  while (failedProfilePictureUrls.size >= COMMUNICATION_PROFILE_PICTURE_FAILURE_CACHE_LIMIT) {
+    const oldest = failedProfilePictureUrls.keys().next().value
+    if (oldest === undefined) return
+    failedProfilePictureUrls.delete(oldest)
+  }
+}
+
 export function communicationProfilePictureUrl(
   subject?: {
     profile_picture_url?: string | null
@@ -17,10 +29,31 @@ export function communicationProfilePictureUrl(
 
 export function communicationProfilePictureSrc(
   subject: Parameters<typeof communicationProfilePictureUrl>[0],
-  apiBase: string
+  apiBase: string,
+  now = Date.now()
 ): string | undefined {
   const url = communicationProfilePictureUrl(subject)
-  return url ? resolveApiUrl(url, apiBase) : undefined
+  if (!url) return undefined
+
+  const resolved = resolveApiUrl(url, apiBase)
+  const failedUntil = failedProfilePictureUrls.get(resolved)
+  if (failedUntil === undefined) return resolved
+  if (failedUntil > now) return undefined
+
+  failedProfilePictureUrls.delete(resolved)
+
+  return resolved
+}
+
+/** Evita repetir uma foto quebrada enquanto listas virtualizadas são remontadas. */
+export function rememberCommunicationProfilePictureFailure(
+  src: string | null | undefined,
+  now = Date.now()
+): void {
+  if (!src) return
+  if (failedProfilePictureUrls.has(src)) failedProfilePictureUrls.delete(src)
+  pruneProfilePictureFailureCache()
+  failedProfilePictureUrls.set(src, now + PROFILE_PICTURE_FAILURE_TTL_MS)
 }
 
 export type BadgeColor

@@ -44,10 +44,36 @@ function focusMessage(id: number | null | undefined) {
   })
 }
 
+function selectFromKeyboard(event: KeyboardEvent, currentIndex: number) {
+  const keys = ['ArrowUp', 'ArrowDown', 'Home', 'End']
+  if (!keys.includes(event.key) || !props.messages.length) return
+
+  event.preventDefault()
+  const lastIndex = props.messages.length - 1
+  const nextIndex = event.key === 'Home'
+    ? 0
+    : event.key === 'End'
+      ? lastIndex
+      : Math.min(lastIndex, Math.max(0, currentIndex + (event.key === 'ArrowDown' ? 1 : -1)))
+  const message = props.messages[nextIndex]
+  if (!message) return
+
+  emit('select', message.id)
+  focusMessage(message.id)
+}
+
 defineExpose({ focusMessage })
 </script>
 
 <template>
+  <p class="sr-only" role="status" aria-live="polite">
+    <template v-if="selectedId">
+      Mensagem {{ props.messages.findIndex(message => message.id === selectedId) + 1 }} de {{ props.messages.length }} selecionada.
+    </template>
+    <template v-else-if="loading">
+      Carregando mensagens.
+    </template>
+  </p>
   <div
     class="min-h-0 flex-1 overflow-y-auto divide-y divide-default"
     data-testid="mailbox-list"
@@ -65,7 +91,7 @@ defineExpose({ focusMessage })
         name="i-lucide-loader-circle"
         class="size-8 animate-spin text-dimmed"
       />
-      <p class="text-sm text-muted">
+      <p class="text-sm text-muted" role="status">
         Carregando mensagens…
       </p>
     </div>
@@ -77,12 +103,12 @@ defineExpose({ focusMessage })
       data-testid="fiscal-empty"
     />
     <button
-      v-for="mail in props.messages"
+      v-for="(mail, index) in props.messages"
       :id="`mailbox-item-${mail.id}`"
       :key="mail.id"
       type="button"
       :data-mailbox-id="mail.id"
-      class="w-full cursor-pointer border-l-2 p-4 text-start text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:px-6"
+      class="min-h-11 w-full cursor-pointer border-l p-4 text-start text-sm transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:px-6"
       :class="[
         isUnread(mail) ? 'font-medium text-highlighted' : 'text-toned',
         selectedId === mail.id
@@ -91,8 +117,10 @@ defineExpose({ focusMessage })
       ]"
       :aria-current="selectedId === mail.id ? 'true' : undefined"
       :aria-selected="selectedId === mail.id"
+      :tabindex="selectedId === mail.id || (!selectedId && index === 0) ? 0 : -1"
       role="option"
       @click="emit('select', mail.id)"
+      @keydown="selectFromKeyboard($event, index)"
     >
       <div class="flex items-center justify-between gap-2">
         <div class="flex min-w-0 items-center gap-2">

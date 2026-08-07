@@ -46,7 +46,11 @@ type ChannelUiState = {
   hint: string
 }
 
-/** Estados honestos a partir do cursor (sem inventar “ok” em quiet/circuito). */
+function channelCountLabel(count: number): string {
+  return `${count} ${count === 1 ? 'canal' : 'canais'}`
+}
+
+/** Estados honestos a partir do cursor (sem inventar “ok” em espera/circuito). */
 function channelUiState(row: CteChannelCursor): ChannelUiState {
   const status = String(row.status || '').toUpperCase()
   const cstat = String(row.last_cstat || '')
@@ -60,24 +64,24 @@ function channelUiState(row: CteChannelCursor): ChannelUiState {
       label: 'Bloqueado / circuito',
       color: 'error',
       hint: quietFuture && row.next_sync_at
-        ? `Próxima tentativa após ${formatDateTime(row.next_sync_at)}. Sem retry antecipado.`
-        : 'Circuito aberto ou cursor bloqueado — sem retry antecipado nem salto de NSU.'
+        ? `Próxima tentativa após ${formatDateTime(row.next_sync_at)}. Sem nova tentativa antecipada.`
+        : 'Circuito aberto ou cursor bloqueado — sem nova tentativa antecipada nem salto de NSU.'
     }
   }
   if (quietFuture && cstat === '137') {
     return {
       key: 'quiet',
-      label: 'Quiet (fila vazia)',
+      label: 'Em espera (fila vazia)',
       color: 'info',
       hint: row.next_sync_at
         ? `cStat 137: sem documentos novos até ${formatDateTime(row.next_sync_at)}.`
-        : 'cStat 137: quiet mínimo — não é falha nem carga retroativa concluída.'
+        : 'cStat 137: intervalo mínimo — não é falha nem carga retroativa concluída.'
     }
   }
   if (quietFuture) {
     return {
       key: 'waiting',
-      label: 'Aguardando quiet',
+      label: 'Aguardando intervalo',
       color: 'warning',
       hint: row.next_sync_at
         ? `Próxima janela em ${formatDateTime(row.next_sync_at)}.`
@@ -98,7 +102,7 @@ function channelUiState(row: CteChannelCursor): ChannelUiState {
       label: 'Erro recuperável',
       color: 'warning',
       hint: row.retry_allowed === false
-        ? 'Retry ainda não permitido neste cursor.'
+        ? 'Nova tentativa ainda não permitida neste cursor.'
         : 'Última execução com erro — canal ainda elegível a nova tentativa.'
     }
   }
@@ -249,7 +253,7 @@ onMounted(refreshAll)
           <template v-else>
             <div class="flex flex-wrap items-center gap-2">
               <UBadge color="neutral" variant="subtle">
-                {{ clientChannelSummary.list.length || cteHealth?.summary.client_streams || 0 }} stream(s)
+                {{ channelCountLabel(clientChannelSummary.list.length || cteHealth?.summary.client_streams || 0) }}
               </UBadge>
               <UBadge
                 v-if="clientChannelSummary.primary"
@@ -271,7 +275,7 @@ onMounted(refreshAll)
                 color="info"
                 variant="subtle"
               >
-                {{ clientChannelSummary.quiet }} em quiet
+                {{ clientChannelSummary.quiet }} em espera
               </UBadge>
               <UBadge
                 v-if="clientChannelSummary.idle && !clientChannelSummary.blocked"
@@ -337,7 +341,7 @@ onMounted(refreshAll)
           <template v-else>
             <div class="flex flex-wrap items-center gap-2">
               <UBadge color="neutral" variant="subtle">
-                {{ tenantChannelSummary.list.length || cteHealth?.summary.tenant_streams || 0 }} stream(s)
+                {{ channelCountLabel(tenantChannelSummary.list.length || cteHealth?.summary.tenant_streams || 0) }}
               </UBadge>
               <UBadge
                 v-if="tenantChannelSummary.primary"
@@ -359,7 +363,7 @@ onMounted(refreshAll)
                 color="info"
                 variant="subtle"
               >
-                {{ tenantChannelSummary.quiet }} em quiet
+                {{ tenantChannelSummary.quiet }} em espera
               </UBadge>
             </div>
             <p
@@ -372,7 +376,7 @@ onMounted(refreshAll)
               v-else-if="!cteError"
               class="mt-2 text-sm text-muted"
             >
-              Stream central não inicializado. Configure autXML no catálogo CT-e.
+              Canal central não inicializado. Configure autXML no catálogo CT-e.
             </p>
             <div class="mt-3">
               <UButton

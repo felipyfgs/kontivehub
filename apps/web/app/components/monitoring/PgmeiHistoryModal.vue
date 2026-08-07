@@ -190,8 +190,8 @@ function itemStatus(item: PgmeiDebtItem): string {
                   </div>
                 </template>
 
-                <div v-if="observation.items?.length" class="overflow-x-auto">
-                  <table class="w-full min-w-[760px] text-left text-sm">
+                <div v-if="observation.items?.length">
+                  <table class="hidden w-full text-left text-sm md:table">
                     <thead class="text-xs text-muted">
                       <tr>
                         <th class="pb-2 pr-3 font-medium">
@@ -235,6 +235,45 @@ function itemStatus(item: PgmeiDebtItem): string {
                       </tr>
                     </tbody>
                   </table>
+                  <ul class="space-y-2 md:hidden">
+                    <li
+                      v-for="(item, index) in observation.items"
+                      :key="item.id || `${itemPeriod(item)}-${itemTribute(item)}-${index}`"
+                      class="rounded-md border border-default bg-elevated/30 p-3"
+                    >
+                      <div class="flex items-start justify-between gap-3">
+                        <div>
+                          <p class="text-sm font-medium tabular-nums text-highlighted">
+                            PA {{ itemPeriod(item) }}
+                          </p>
+                          <p class="mt-0.5 text-sm text-muted">
+                            {{ itemTribute(item) }}
+                          </p>
+                        </div>
+                        <span class="text-sm font-medium tabular-nums text-highlighted">
+                          {{ formatAmountCents(item.amount_cents) }}
+                        </span>
+                      </div>
+                      <dl class="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                        <div>
+                          <dt class="text-muted">
+                            Ente federado
+                          </dt>
+                          <dd class="mt-0.5 text-sm text-highlighted">
+                            {{ itemEntity(item) }}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt class="text-muted">
+                            Situação original
+                          </dt>
+                          <dd class="mt-0.5 text-sm text-highlighted">
+                            {{ itemStatus(item) }}
+                          </dd>
+                        </div>
+                      </dl>
+                    </li>
+                  </ul>
                 </div>
                 <p v-else class="text-sm text-muted">
                   Nenhum item de dívida armazenado nesta observação.

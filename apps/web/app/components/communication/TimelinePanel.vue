@@ -2,7 +2,8 @@
 import { usePreferredReducedMotion } from '@vueuse/core'
 import CommunicationConversationActions from './ConversationActions.vue'
 import type { CannedResponse } from '~/types/communication/quick-responses'
-import type { ComposerPayload, Message } from '~/types/communication/messages'
+import type { Message } from '~/types/communication/messages'
+import type { ComposerDraft, ComposerDestinationContext } from '~/types/communication/composer-draft'
 import type { MediaViewerItem } from '~/types/communication/media'
 import type { Conversation, ConversationActionPayload, ConversationTimelineState } from '~/types/communication/conversations'
 import type { ConversationSignals } from '~/types/communication/realtime'
@@ -26,6 +27,8 @@ import {
   isCommunicationTimelineNearBottom,
   shouldFollowCommunicationTimeline
 } from '~/utils/communication-timeline'
+
+defineOptions({ inheritAttrs: false })
 
 const apiBase = String(useRuntimeConfig().public.apiBase || '')
 const toast = useToast()
@@ -58,7 +61,7 @@ const emit = defineEmits<{
   toggleContext: []
   action: [payload: ConversationActionPayload]
   send: [
-    payload: ComposerPayload,
+    payload: ComposerDraft,
     acknowledge: (ok: boolean) => void
   ]
   download: [message: Message, attachmentId: number, filename: string]
@@ -81,6 +84,26 @@ const emit = defineEmits<{
 
 const messagesContainer = ref<HTMLElement | null>(null)
 const composerRef = ref<{ focusInput: () => Promise<boolean> } | null>(null)
+
+const destinationContext = computed<ComposerDestinationContext>(() => {
+  const conversation = props.conversation
+  const inboxName = props.inbox?.name?.trim() || (conversation.inbox_id ? `Inbox #${conversation.inbox_id}` : 'Caixa de entrada')
+  const clientNames = [...new Set((conversation.clients ?? []).map(client => client.name.trim()).filter(Boolean))]
+  const client = clientNames.length === 1
+    ? clientNames[0]!
+    : clientNames.length > 1
+      ? `${clientNames[0]} +${clientNames.length - 1}`
+      : (conversation.contact?.name?.trim() || null)
+  const conversationLabel = communicationDisplayName(conversation) || `Conversa #${conversation.id}`
+  // Prefira o endereço já mascarado pela API; nunca reconstruir a partir do telefone E.164 completo.
+  const destinationMasked = conversation.contact?.address_masked?.trim() || null
+  return {
+    conversation: conversationLabel,
+    client,
+    inbox: inboxName,
+    destinationMasked
+  }
+})
 const messagesContent = ref<HTMLElement | null>(null)
 const replyTo = ref<Message | null>(null)
 const editTarget = ref<Message | null>(null)
@@ -484,6 +507,7 @@ watch(
 
 <template>
   <UDashboardPanel
+    v-bind="$attrs"
     :id="`communication-timeline-${conversation.id}`"
     data-testid="communication-timeline-panel"
     class="min-w-0"
@@ -654,7 +678,7 @@ watch(
                   aria-label="Mensagens não lidas"
                 >
                   <div class="h-px flex-1 bg-primary/40" />
-                  <span class="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-primary">
+                  <span class="shrink-0 text-xs font-semibold uppercase tracking-wide text-primary">
                     Não lidas
                   </span>
                   <div class="h-px flex-1 bg-primary/40" />
@@ -667,7 +691,7 @@ watch(
                   <div class="min-w-0 w-fit max-w-[92%] sm:max-w-[78%] lg:max-w-[72%]">
                     <div
                       data-testid="communication-message-bubble"
-                      class="relative isolate inline-block w-fit max-w-full rounded-2xl px-3 py-2 shadow-xs ring-1 ring-inset transition sm:px-3.5 sm:py-2.5"
+                      class="relative isolate inline-block w-fit max-w-full rounded-2xl px-3 py-2 shadow-xs ring-1 ring-inset transition motion-reduce:transition-none sm:px-3.5 sm:py-2.5"
                       :class="[
                         message.direction === 'OUTBOUND'
                           ? 'rounded-br-md bg-primary/20 text-highlighted ring-primary/15'
@@ -687,7 +711,7 @@ watch(
                             : '-left-1 border-default bg-default'"
                       />
 
-                      <div class="relative mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold leading-none opacity-80">
+                      <div class="relative mb-1.5 flex items-center gap-1.5 text-xs font-semibold leading-none opacity-80">
                         <UIcon
                           v-if="message.direction === 'INTERNAL'"
                           name="i-lucide-sticky-note"
@@ -715,7 +739,7 @@ watch(
                       <button
                         v-if="quotedMessage(message)"
                         type="button"
-                        class="relative mb-2 block w-full rounded-lg border-l-2 border-primary bg-default/50 px-2.5 py-2 text-left text-xs text-muted transition-colors hover:bg-default/70 hover:text-default focus-visible:bg-default/70 focus-visible:text-default"
+                        class="relative mb-2 block w-full rounded-lg border-l border-primary bg-default/50 px-2.5 py-2 text-left text-xs text-muted transition-colors motion-reduce:transition-none hover:bg-default/70 hover:text-default focus-visible:bg-default/70 focus-visible:text-default"
                         title="Ir para a mensagem citada"
                         @click="focusQuotedMessage(quotedMessage(message)!.id)"
                       >
@@ -753,12 +777,12 @@ watch(
 
                       <div
                         data-testid="communication-message-meta"
-                        class="relative mt-1.5 flex min-h-6 items-end justify-end gap-1 text-[10px] leading-none opacity-75"
+                        class="relative mt-1.5 flex min-h-6 items-end justify-end gap-1 text-xs leading-none opacity-75"
                         aria-label="Metadados da mensagem"
                       >
                         <div
                           v-if="canReply && outboundOperational"
-                          class="mr-auto flex items-center gap-0.5 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/message:opacity-100 group-focus-within/message:opacity-100"
+                          class="mr-auto flex items-center gap-0.5 opacity-100 transition-opacity motion-reduce:transition-none [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/message:opacity-100 group-focus-within/message:opacity-100"
                           data-testid="communication-message-actions"
                         >
                           <UPopover v-if="isRemoteMessage(message)">
@@ -860,7 +884,9 @@ watch(
       :outbound-operational="outboundOperational"
       :unavailable-reason="unavailableReason"
       :sending="sending"
+      :destination-context="destinationContext"
       :conversation-id="conversation.id"
+      :inbox-id="inbox?.id ?? conversation.inbox_id"
       :canned-responses="cannedResponses"
       :reply-to="replyTo"
       @send="(payload, acknowledge) => emit('send', payload, acknowledge)"

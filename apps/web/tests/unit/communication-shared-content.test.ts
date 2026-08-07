@@ -100,13 +100,15 @@ describe('communication shared content e iniciação outbound', () => {
       .toBe('/api/sanctum/api/v1/communication/attachments/1/preview')
     expect(resolveApiUrl('https://cdn.example.test/avatar.jpg', '/api/sanctum'))
       .toBe('https://cdn.example.test/avatar.jpg')
-    expect(list).toContain('communicationProfilePictureSrc(conversation.contact, apiBase)')
+    expect(list).toContain('<CommunicationProfileAvatar')
+    expect(list).toContain(':subject="conversation.contact"')
     expect(timeline).toContain('communicationProfilePictureSrc(conversation.contact, apiBase)')
     expect(messageContent).toContain('import { resolveApiUrl } from \'~/utils/api-url\'')
     expect(messageContent).toContain('resolveApiUrl(url, apiBase)')
     expect(messageContent).toContain(':src="mediaUrl(stickerAttachment.preview_url)"')
     expect(messageContent).toContain(':src="mediaUrl(attachment.preview_url)"')
-    expect(profile).toContain('communicationProfilePictureSrc(contact, apiBase)')
+    expect(profile).toContain('<CommunicationProfileAvatar')
+    expect(profile).toContain(':subject="contact"')
   })
 
   it('deep-link de mensagem ancora a timeline e destaca a origem', () => {

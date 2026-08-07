@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { breakpointsTailwind, useBreakpoints, useEventListener } from '@vueuse/core'
 import type { CommandPaletteGroup, CommandPaletteItem, DropdownMenuItem } from '@nuxt/ui'
-import type { ComposerPayload, Message } from '~/types/communication/messages'
+import type { Message } from '~/types/communication/messages'
+import type { ComposerDraft } from '~/types/communication/composer-draft'
 import type { Contact } from '~/types/communication/contacts'
 import type { Conversation, ConversationActionPayload, ConversationQuickView, ConversationStatus } from '~/types/communication/conversations'
 import type { ConversationSavedViewPayload, SavedListFilter } from '~/types/saved-list-filters'
@@ -904,11 +905,11 @@ function toggleContext() {
 }
 
 async function send(
-  payload: ComposerPayload,
-  acknowledge?: (ok: boolean) => void
+  payload: ComposerDraft,
+  acknowledge?: (ok: boolean, messages?: Message[]) => void
 ) {
-  const ok = await workspace.sendMessage(payload)
-  acknowledge?.(ok)
+  const messages = await workspace.sendMessage(payload)
+  acknowledge?.(messages !== null, messages ?? undefined)
 }
 
 function loadOlderMessages(acknowledge: (ok: boolean) => void) {

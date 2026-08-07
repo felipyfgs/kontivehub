@@ -25,8 +25,8 @@
     "pw:snapshot": "playwright-cli snapshot",
     "pw:screenshot": "playwright-cli screenshot"
   },
-
   "dependencies": {
+    "@emoji-mart/data": "^1.2.1",
     "@iconify-json/lucide": "^1.2.116",
     "@internationalized/date": "^3.12.2",
     "@nuxt/ui": "^4.9.0",
@@ -39,6 +39,7 @@
     "@vueuse/core": "^14.3.0",
     "@vueuse/nuxt": "^14.3.0",
     "date-fns": "^4.4.0",
+    "emoji-mart": "^5.6.0",
     "laravel-echo": "^2.4.0",
     "nuxt": "^4.4.8",
     "nuxt-auth-sanctum": "^3.1.0",

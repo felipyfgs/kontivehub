@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { Contact } from '~/types/communication/contacts'
-import { communicationProfilePictureSrc } from '~/utils/communication'
 import {
   COMMUNICATION_CONTACT_SOLID_ACTION_CLASS,
   communicationContactDisplayName,
@@ -10,8 +9,6 @@ import {
   communicationContactStatusContrastClass,
   communicationContactStatusLabel
 } from '~/utils/communication-contacts'
-
-const apiBase = String(useRuntimeConfig().public.apiBase || '')
 
 defineProps<{
   contact: Contact
@@ -32,8 +29,8 @@ const emit = defineEmits<{
 <template>
   <section data-testid="communication-contact-profile-section">
     <div class="mb-5 flex items-center gap-3">
-      <UAvatar
-        :src="communicationProfilePictureSrc(contact, apiBase)"
+      <CommunicationProfileAvatar
+        :subject="contact"
         :text="communicationContactInitials(contact)"
         :alt="communicationContactDisplayName(contact)"
         size="lg"

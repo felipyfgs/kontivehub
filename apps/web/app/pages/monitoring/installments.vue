@@ -468,7 +468,7 @@ onMounted(() => {
           >
             <div
               v-if="detailOrders.length > 1"
-              class="flex min-w-0 gap-2 overflow-x-auto pb-1"
+              class="flex min-w-0 flex-wrap gap-2 pb-1 md:flex-nowrap md:overflow-x-auto"
               data-testid="installments-order-navigation"
             >
               <UButton

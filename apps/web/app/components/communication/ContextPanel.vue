@@ -7,12 +7,9 @@ import type { Label } from '~/types/communication/contacts'
 import {
   COMMUNICATION_CONVERSATION_STATUS,
   communicationDisplayName,
-  communicationProfilePictureSrc,
   formatCommunicationDate
 } from '~/utils/communication'
 import { communicationContactPath } from '~/utils/communication-routes'
-
-const apiBase = String(useRuntimeConfig().public.apiBase || '')
 
 const props = defineProps<{
   conversation: Conversation
@@ -159,8 +156,8 @@ const disappearingItems = [[
 
     <div class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
       <div class="flex items-start gap-3">
-        <UAvatar
-          :src="communicationProfilePictureSrc(conversation.contact, apiBase)"
+        <CommunicationProfileAvatar
+          :subject="conversation.contact"
           :alt="communicationDisplayName(conversation)"
           size="xl"
           data-testid="communication-context-avatar"

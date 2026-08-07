@@ -105,7 +105,7 @@ function severityLabel(severity: string): string {
           />
           <p
             v-if="item.created_at || item.due_at"
-            class="mt-1 text-[10px] text-muted"
+            class="mt-1 text-xs text-muted"
           >
             {{ formatDateTime(item.due_at || item.created_at) }}
           </p>

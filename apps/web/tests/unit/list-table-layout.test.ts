@@ -111,7 +111,8 @@ describe('list-table-layout (customers.vue @ 0f30c09)', () => {
     // Filhos do #body com `contents` — mesmo respiro de /clients (sem flex-1 aninhado).
     expect(moduleTableSource).toContain('fiscal-module-body')
     expect(moduleTableSource).toContain('class="contents"')
-    expect(moduleTableSource).toContain('class="w-full min-w-0 shrink-0 overflow-x-auto')
+    expect(moduleTableSource).toContain('class="w-full min-w-0 shrink-0"')
+    expect(moduleTableSource).not.toContain('class="w-full min-w-0 shrink-0 overflow-x-auto')
     expect(moduleTableSource).not.toContain('min-h-0 min-w-0 flex-1 flex-col gap-3')
     expect(moduleSource).toContain('fiscal-table-stack')
     expect(moduleTableSource).toContain('perPage: 20')

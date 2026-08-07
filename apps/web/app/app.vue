@@ -3,7 +3,7 @@ import { pt_br } from '@nuxt/ui/locale'
 
 const colorMode = useColorMode()
 
-const color = computed(() => colorMode.value === 'dark' ? '#1b1718' : 'white')
+const color = computed(() => colorMode.value === 'dark' ? '#09090b' : 'white')
 
 useHead({
   meta: [

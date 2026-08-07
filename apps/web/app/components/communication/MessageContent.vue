@@ -9,6 +9,8 @@ import {
 import { apiErrorMessage } from '~/utils/api-error'
 import { resolveApiUrl } from '~/utils/api-url'
 
+defineOptions({ inheritAttrs: false })
+
 const apiBase = String(useRuntimeConfig().public.apiBase || '')
 
 const props = defineProps<{
@@ -192,7 +194,7 @@ function locationUrl(latitude: number, longitude: number): string {
 </script>
 
 <template>
-  <div data-testid="communication-message-content">
+  <div v-bind="$attrs" data-testid="communication-message-content">
     <div
       v-if="message.metadata?.revoked"
       class="flex items-center gap-2 text-sm italic opacity-75"
@@ -207,7 +209,7 @@ function locationUrl(latitude: number, longitude: number): string {
         :href="locationUrl(message.content.location.latitude, message.content.location.longitude)"
         target="_blank"
         rel="noopener noreferrer"
-        class="block rounded-xl bg-elevated/50 p-3 ring-1 ring-inset ring-default transition-colors hover:bg-elevated focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        class="block rounded-xl bg-elevated/50 p-3 ring-1 ring-inset ring-default transition-colors motion-reduce:transition-none hover:bg-elevated focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         data-testid="communication-location-card"
       >
         <div class="flex items-start gap-2.5">
@@ -219,7 +221,7 @@ function locationUrl(latitude: number, longitude: number): string {
             <p v-if="message.content.location.address" class="mt-0.5 break-words text-xs opacity-80">
               {{ message.content.location.address }}
             </p>
-            <p class="mt-1 text-[11px] tabular-nums opacity-70">
+            <p class="mt-1 text-xs tabular-nums opacity-70">
               {{ message.content.location.latitude.toFixed(6) }}, {{ message.content.location.longitude.toFixed(6) }}
             </p>
             <span class="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary">
@@ -287,7 +289,7 @@ function locationUrl(latitude: number, longitude: number): string {
             <p class="break-words font-medium">
               {{ poll.name || body || 'Enquete' }}
             </p>
-            <p v-if="selectableOptions > 1" class="text-[11px] opacity-70">
+            <p v-if="selectableOptions > 1" class="text-xs opacity-70">
               Selecione até {{ selectableOptions }} opções
             </p>
           </div>
@@ -305,7 +307,7 @@ function locationUrl(latitude: number, longitude: number): string {
             @click="selectPollOption(option)"
           >
             <span class="min-w-0 break-words text-left">{{ option }}</span>
-            <span class="shrink-0 text-[11px] opacity-70">
+            <span class="shrink-0 text-xs opacity-70">
               {{ communicationPollVoteCount(message, option) }} voto(s)
             </span>
           </UButton>
@@ -349,7 +351,7 @@ function locationUrl(latitude: number, longitude: number): string {
             </dd>
           </div>
         </dl>
-        <p class="mt-2 text-[11px] text-muted">
+        <p class="mt-2 text-xs text-muted">
           Somente leitura
         </p>
       </div>
@@ -384,7 +386,7 @@ function locationUrl(latitude: number, longitude: number): string {
         :href="linkPreviewHref || undefined"
         :target="linkPreviewHref ? '_blank' : undefined"
         :rel="linkPreviewHref ? 'noopener noreferrer' : undefined"
-        class="mt-2 block max-w-full rounded-xl bg-elevated/50 p-3 ring-1 ring-inset ring-default transition-colors hover:bg-elevated focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        class="mt-2 block max-w-full rounded-xl bg-elevated/50 p-3 ring-1 ring-inset ring-default transition-colors motion-reduce:transition-none hover:bg-elevated focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         data-testid="communication-link-preview"
       >
         <div class="flex items-start gap-2">
@@ -396,7 +398,7 @@ function locationUrl(latitude: number, longitude: number): string {
             <p v-if="message.content.link_preview.description" class="mt-0.5 line-clamp-3 break-words text-xs opacity-80">
               {{ message.content.link_preview.description }}
             </p>
-            <p class="mt-1 truncate text-[11px] text-primary">
+            <p class="mt-1 truncate text-xs text-primary">
               {{ message.content.link_preview.url }}
             </p>
           </div>
@@ -519,7 +521,7 @@ function locationUrl(latitude: number, longitude: number): string {
             <p class="mt-0.5 text-xs opacity-80">
               O conteúdo foi contabilizado com segurança, mas não pode ser exibido nesta versão.
             </p>
-            <p v-if="message.provider_type" class="mt-1 break-all text-[11px] opacity-70">
+            <p v-if="message.provider_type" class="mt-1 break-all text-xs opacity-70">
               Tipo: {{ message.provider_type }}
             </p>
           </div>

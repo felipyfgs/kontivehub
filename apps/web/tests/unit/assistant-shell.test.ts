@@ -45,10 +45,10 @@ describe('contrato UI do assistente no shell', () => {
     expect(trigger).toContain('isAuthenticated.value && assistantAvailable.value')
   })
 
-  it('UserMenu só oferece Assistente quando assistantAvailable', () => {
+  it('UserMenu não oferece Assistente (abertura só no header/sidebar)', () => {
     const menu = source('app/components/UserMenu.vue')
-    expect(menu).toContain('assistantAvailable')
-    expect(menu).toContain('me.value && assistantAvailable.value')
-    expect(menu).toContain('label: \'Assistente\'')
+    expect(menu).not.toContain('assistantAvailable')
+    expect(menu).not.toContain('openAssistantSlideover')
+    expect(menu).not.toContain('label: \'Assistente\'')
   })
 })

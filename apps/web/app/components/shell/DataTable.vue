@@ -184,6 +184,7 @@ defineExpose({
   <div
     class="flex min-w-0 flex-1 flex-col gap-1.5"
     :data-testid="testId"
+    :aria-busy="loading || undefined"
   >
     <ShellMobileCards
       v-if="useMobileCards"
@@ -236,6 +237,9 @@ defineExpose({
         ? 'overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]'
         : undefined"
       data-testid="shell-data-table-desktop"
+      :role="horizontalScroll ? 'region' : undefined"
+      :aria-label="horizontalScroll ? 'Tabela de dados com rolagem horizontal' : undefined"
+      :tabindex="horizontalScroll ? 0 : undefined"
     >
       <UTable
         ref="table"

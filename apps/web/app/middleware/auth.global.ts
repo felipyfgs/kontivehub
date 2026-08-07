@@ -14,11 +14,14 @@ import {
 import {
   fetchInitialOnboardingAvailable,
   guestAuthPathWhenOnboardingAvailable,
+  invalidateInitialOnboardingAvailable,
   onboardingNavigateTarget
 } from '~/utils/initial-onboarding-gate'
+import { refreshIdentitySingleFlight } from '~/utils/identity-refresh'
 import { saveAuthReturn } from '~/utils/auth-return'
 
 export default defineNuxtRouteMiddleware(async (to) => {
+  const nuxtApp = useNuxtApp()
   const { isAuthenticated, refreshIdentity, user } = useSanctumAuth()
   // Rotas públicas de autenticação, ativação e onboarding.
   const guestOnly = isAuthPublicPath(to.path)
@@ -34,7 +37,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
   if (!guestOnly || isAuthenticated.value) {
     try {
-      await refreshIdentity()
+      await refreshIdentitySingleFlight(nuxtApp, refreshIdentity)
     } catch {
       // A ausência de sessão é tratada logo abaixo sem revelar o motivo.
       user.value = null
@@ -46,6 +49,9 @@ export default defineNuxtRouteMiddleware(async (to) => {
     saveAuthReturn(to.fullPath)
     return navigateTo('/login')
   }
+
+  // Uma transição autenticada pode ter concluído instalação ou trocado a sessão.
+  invalidateInitialOnboardingAvailable()
 
   const identity = unwrapMeUser(user.value as MeIdentity)
 

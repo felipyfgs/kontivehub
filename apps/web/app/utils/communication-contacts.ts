@@ -123,17 +123,17 @@ export function communicationContactStatusColor(
  * As variantes padrão do tema usam o tom 500, insuficiente para texto pequeno.
  */
 export function communicationContactStatusContrastClass(contact: Contact): string {
-  if (contact.purged_at) return '!text-red-900 dark:!text-red-100'
-  if (!contact.is_active) return '!text-zinc-900 dark:!text-zinc-100'
-  if (contact.is_provisional) return '!text-amber-900 dark:!text-amber-100'
-  return '!text-green-900 dark:!text-green-100'
+  if (contact.purged_at) return '!text-error'
+  if (!contact.is_active) return '!text-default'
+  if (contact.is_provisional) return '!text-warning'
+  return '!text-success'
 }
 
 /** Texto escuro sobre fundos saturados primário/error do tema. */
-export const COMMUNICATION_CONTACT_SOLID_ACTION_CLASS = '!text-zinc-950'
+export const COMMUNICATION_CONTACT_SOLID_ACTION_CLASS = '!text-inverted'
 
 /** Texto semântico com contraste AA sobre fundos `soft`/`subtle` de erro. */
-export const COMMUNICATION_CONTACT_DANGER_SOFT_CLASS = '!text-red-900 dark:!text-red-100'
+export const COMMUNICATION_CONTACT_DANGER_SOFT_CLASS = '!text-error'
 
 /** Rótulos de ações de linha / detalhes (pt-BR, estáveis para a11y e testes). */
 export const COMMUNICATION_CONTACT_ACTION_LABELS = {

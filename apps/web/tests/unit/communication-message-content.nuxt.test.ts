@@ -37,6 +37,27 @@ afterEach(() => {
 })
 
 describe('MessageContent — disponibilidade de mídia', () => {
+  it('encaminha attrs para a raiz visual sem warnings de fragmento', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    wrapper = await mountSuspended(MessageContent, {
+      attachTo: document.body,
+      attrs: {
+        'class': 'relative',
+        'data-layout-owner': 'message-bubble'
+      },
+      props: {
+        message: message(),
+        canReply: false
+      },
+      global: { stubs: { UIcon: true, UAvatar: true, UButton: UButtonStub, UBadge: true, UModal: true } }
+    })
+
+    const root = wrapper.get('[data-testid="communication-message-content"]')
+    expect(root.classes()).toContain('relative')
+    expect(root.attributes('data-layout-owner')).toBe('message-bubble')
+    expect(warn.mock.calls.flat().join(' ')).not.toContain('Extraneous non-props attributes')
+  })
+
   it.each(['INBOUND', 'OUTBOUND'] as const)(
     'apresenta caption e permite recovery para mídia recuperável %s',
     async (direction) => {

@@ -106,7 +106,7 @@ function notificationLink(item: MonitoringInsightsNotification): string | undefi
             </p>
             <p
               v-if="item.occurred_at"
-              class="mt-0.5 text-[10px] text-muted"
+              class="mt-0.5 text-xs text-muted"
             >
               {{ formatDateTime(item.occurred_at) }}
             </p>

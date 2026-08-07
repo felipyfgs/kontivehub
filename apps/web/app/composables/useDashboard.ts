@@ -24,7 +24,7 @@ import { createDashboardContextualCommandRegistry } from '~/utils/dashboard-cont
 const _useDashboard = () => {
   const route = useRoute()
   const router = useRouter()
-  const { user, isAuthenticated, refreshIdentity } = useSanctumAuth()
+  const { user, isAuthenticated } = useSanctumAuth()
   const isNotificationsSlideoverOpen = ref(false)
   const isAssistantSlideoverOpen = ref(false)
   const isClientFormOpen = ref(false)
@@ -36,14 +36,6 @@ const _useDashboard = () => {
 
   const me = computed(() => unwrapMeUser(user.value as MeIdentity))
   const assistantAvailable = computed(() => canUseAssistant(me.value))
-
-  if (import.meta.client) {
-    onMounted(() => {
-      if (isAuthenticated.value) {
-        void refreshIdentity().catch(() => {})
-      }
-    })
-  }
 
   const canManageClients = computed(() => userCanManageClients(me.value))
   const canManageClientCategoryCatalog = computed(() => userCanManageClientCategoryCatalog(me.value))
