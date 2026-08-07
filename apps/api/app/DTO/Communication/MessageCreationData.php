@@ -21,5 +21,9 @@ final readonly class MessageCreationData
         public ?MessageUploadData $upload,
         public ?int $receiptMessageId = null,
         public bool $outboundInitiation = false,
+        public bool $ptv = false,
+        public bool $viewOnce = false,
+        public ?string $libraryStickerId = null,
+        public ?string $libraryStickerTempPath = null,
     ) {}
 }

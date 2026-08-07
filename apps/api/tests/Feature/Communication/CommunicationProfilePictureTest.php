@@ -167,6 +167,7 @@ final class CommunicationProfilePictureTest extends TestCase
 
     public function test_ready_projection_with_missing_encrypted_object_returns_not_found(): void
     {
+        Queue::fake();
         $tenant = Tenant::factory()->create(['communication_enabled' => true]);
         $member = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
         $inbox = $this->inbox($tenant);
@@ -177,11 +178,22 @@ final class CommunicationProfilePictureTest extends TestCase
             $inbox,
             CommunicationIdentity::query()->withoutGlobalScopes()->findOrFail($conversation->identity_id),
         );
+        $version = (int) $profile->profile_picture_version;
         app(MediaStore::class)->delete((string) $profile->profile_picture_object_id);
 
         $this->authenticate($member);
-        $this->get('/api/v1/communication/profile-pictures/'.$profile->id.'/'.$profile->profile_picture_version)
+        $this->get('/api/v1/communication/profile-pictures/'.$profile->id.'/'.$version)
             ->assertNotFound();
+
+        $profile->refresh();
+        self::assertSame(ProfilePictureState::Pending, $profile->profile_picture_state);
+        self::assertNull($profile->profile_picture_object_id);
+        self::assertSame('OBJECT_MISSING', $profile->profile_picture_error_code);
+        Queue::assertPushed(RefreshProfilePictureJob::class, function (RefreshProfilePictureJob $job) use ($tenant, $profile, $version): bool {
+            return $job->tenantId === (int) $tenant->id
+                && $job->profileId === (int) $profile->id
+                && $job->version === $version;
+        });
     }
 
     public function test_ready_database_constraint_rejects_an_incomplete_projection(): void

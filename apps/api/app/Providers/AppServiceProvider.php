@@ -22,6 +22,7 @@ use App\Contracts\EsocialEventClient;
 use App\Contracts\FgtsDigitalPortalClient;
 use App\Contracts\FiscalMutationTransport;
 use App\Contracts\GatewayEventQueue;
+use App\Contracts\GifSearchProvider;
 use App\Contracts\GuideEmissionClient;
 use App\Contracts\IntegraContadorClient;
 use App\Contracts\IntegraEligibilityEvaluating;
@@ -53,6 +54,8 @@ use App\Models\Client;
 use App\Models\ClientCategory;
 use App\Models\ClientContact;
 use App\Models\ClientCredential;
+use App\Models\CommunicationInbox;
+use App\Models\CommunicationStickerObservation;
 use App\Models\Establishment;
 use App\Models\OutboundCaptureProfile;
 use App\Models\SavedListFilter;
@@ -68,6 +71,8 @@ use App\Policies\ClientCategoryPolicy;
 use App\Policies\ClientContactPolicy;
 use App\Policies\ClientCredentialPolicy;
 use App\Policies\ClientPolicy;
+use App\Policies\CommunicationInboxPolicy;
+use App\Policies\CommunicationStickerObservationPolicy;
 use App\Policies\EstablishmentPolicy;
 use App\Policies\OutboundCaptureProfilePolicy;
 use App\Policies\SavedListFilterPolicy;
@@ -90,6 +95,8 @@ use App\Services\Clients\NullCcmeiDadosFetcher;
 use App\Services\Clients\RegistrationLookupMerger;
 use App\Services\Clients\RegistrationLookupOrchestrator;
 use App\Services\Clients\SerproConsultaCnpjLookup;
+use App\Services\Communication\Gif\DisabledGifSearchProvider;
+use App\Services\Communication\Gif\HttpGifSearchProvider;
 use App\Services\Communication\Media\MediaStore;
 use App\Services\Communication\ProfilePicture\CurlProfilePictureDownloader;
 use App\Services\Communication\Transport\HttpTransport;
@@ -215,6 +222,12 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->app->singleton(GifSearchProvider::class, function ($app): GifSearchProvider {
+            return match ((string) config('communication.gif_provider.driver', 'disabled')) {
+                'http' => $app->make(HttpGifSearchProvider::class),
+                default => $app->make(DisabledGifSearchProvider::class),
+            };
+        });
         $this->app->scoped(CurrentTenant::class, fn () => new CurrentTenant);
         $this->app->scoped(
             TenantAuthorization::class,
@@ -508,6 +521,8 @@ class AppServiceProvider extends ServiceProvider
         }
 
         Gate::policy(Client::class, ClientPolicy::class);
+        Gate::policy(CommunicationInbox::class, CommunicationInboxPolicy::class);
+        Gate::policy(CommunicationStickerObservation::class, CommunicationStickerObservationPolicy::class);
         Gate::policy(ClientCategory::class, ClientCategoryPolicy::class);
         Gate::policy(Establishment::class, EstablishmentPolicy::class);
         Gate::policy(ClientCredential::class, ClientCredentialPolicy::class);

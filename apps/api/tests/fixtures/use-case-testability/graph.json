@@ -1,5 +1,5 @@
 {
-  "digest": "94eecf324004ab8aed14d4d5bf1d32a1c1170cdf1544d9546607f0062302b4f3",
+  "digest": "7686ad2b9c1e5600938e97974dfd65375706134bf3c67a7e998ee01641e123da",
   "schemaVersion": 1,
   "source": {
     "catalog": "apps/web/tests/fixtures/use-case-testability/catalog.json",
@@ -9,9 +9,9 @@
   "summary": {
     "journeys": 11,
     "criticalJourneys": 4,
-    "apiRoutes": 585,
+    "apiRoutes": 589,
     "pages": 83,
-    "handlers": 583,
+    "handlers": 587,
     "apiClients": 15,
     "tests": 12,
     "unmatchedApiClientEndpoints": 0
@@ -123,7 +123,7 @@
       "journeyId": "communication-inbox",
       "title": "Atendimento WhatsApp compartilhado",
       "critical": false,
-      "apiRoutes": 115,
+      "apiRoutes": 119,
       "pages": 12,
       "apiClients": 1,
       "levels": {
@@ -1411,6 +1411,7 @@
         "api/v1/communication/conversations/:param",
         "api/v1/communication/conversations/:param/disappearing",
         "api/v1/communication/conversations/:param/labels/:param",
+        "api/v1/communication/conversations/:param/message-batches",
         "api/v1/communication/conversations/:param/messages",
         "api/v1/communication/conversations/:param/messages/:param",
         "api/v1/communication/conversations/:param/messages/:param/contacts/:param/save",
@@ -1444,6 +1445,7 @@
         "api/v1/communication/flows/:param/publish",
         "api/v1/communication/flows/:param/validate",
         "api/v1/communication/flows/:param/versions/:param/clone",
+        "api/v1/communication/gifs/search",
         "api/v1/communication/identities/:param/links",
         "api/v1/communication/identities/:param/links/:param",
         "api/v1/communication/inboxes",
@@ -2476,6 +2478,15 @@
       "journeyId": "communication-inbox"
     },
     {
+      "method": "POST",
+      "uri": "api/v1/communication/conversations/{conversation}/message-batches",
+      "group": "communication",
+      "action": "MessageBatchController@store",
+      "id": "api:POST:api/v1/communication/conversations/{conversation}/message-batches",
+      "type": "api-route",
+      "journeyId": "communication-inbox"
+    },
+    {
       "method": "GET",
       "uri": "api/v1/communication/conversations/{conversation}/messages",
       "group": "communication",
@@ -2850,6 +2861,33 @@
       "group": "communication",
       "action": "FlowController@cloneVersion",
       "id": "api:POST:api/v1/communication/flows/{flow}/versions/{version}/clone",
+      "type": "api-route",
+      "journeyId": "communication-inbox"
+    },
+    {
+      "method": "GET",
+      "uri": "api/v1/communication/gifs/search",
+      "group": "communication",
+      "action": "GifController@search",
+      "id": "api:GET:api/v1/communication/gifs/search",
+      "type": "api-route",
+      "journeyId": "communication-inbox"
+    },
+    {
+      "method": "GET",
+      "uri": "api/v1/communication/gifs/{token}/asset",
+      "group": "communication",
+      "action": "GifController@asset",
+      "id": "api:GET:api/v1/communication/gifs/{token}/asset",
+      "type": "api-route",
+      "journeyId": "communication-inbox"
+    },
+    {
+      "method": "GET",
+      "uri": "api/v1/communication/gifs/{token}/preview",
+      "group": "communication",
+      "action": "GifController@preview",
+      "id": "api:GET:api/v1/communication/gifs/{token}/preview",
       "type": "api-route",
       "journeyId": "communication-inbox"
     },
@@ -8368,6 +8406,21 @@
       "action": "FlowRunController@stop"
     },
     {
+      "id": "handler:GifController@asset",
+      "type": "handler",
+      "action": "GifController@asset"
+    },
+    {
+      "id": "handler:GifController@preview",
+      "type": "handler",
+      "action": "GifController@preview"
+    },
+    {
+      "id": "handler:GifController@search",
+      "type": "handler",
+      "action": "GifController@search"
+    },
+    {
       "id": "handler:HomeController@index",
       "type": "handler",
       "action": "HomeController@index"
@@ -8646,6 +8699,11 @@
       "id": "handler:MeiDasController@store",
       "type": "handler",
       "action": "MeiDasController@store"
+    },
+    {
+      "id": "handler:MessageBatchController@store",
+      "type": "handler",
+      "action": "MessageBatchController@store"
     },
     {
       "id": "handler:MitController@encerrar",
@@ -10810,6 +10868,16 @@
     },
     {
       "from": "journey:communication-inbox",
+      "to": "api:POST:api/v1/communication/conversations/{conversation}/message-batches",
+      "type": "exposes"
+    },
+    {
+      "from": "api:POST:api/v1/communication/conversations/{conversation}/message-batches",
+      "to": "handler:MessageBatchController@store",
+      "type": "handled-by"
+    },
+    {
+      "from": "journey:communication-inbox",
       "to": "api:GET:api/v1/communication/conversations/{conversation}/messages",
       "type": "exposes"
     },
@@ -11226,6 +11294,36 @@
     {
       "from": "api:POST:api/v1/communication/flows/{flow}/versions/{version}/clone",
       "to": "handler:FlowController@cloneVersion",
+      "type": "handled-by"
+    },
+    {
+      "from": "journey:communication-inbox",
+      "to": "api:GET:api/v1/communication/gifs/search",
+      "type": "exposes"
+    },
+    {
+      "from": "api:GET:api/v1/communication/gifs/search",
+      "to": "handler:GifController@search",
+      "type": "handled-by"
+    },
+    {
+      "from": "journey:communication-inbox",
+      "to": "api:GET:api/v1/communication/gifs/{token}/asset",
+      "type": "exposes"
+    },
+    {
+      "from": "api:GET:api/v1/communication/gifs/{token}/asset",
+      "to": "handler:GifController@asset",
+      "type": "handled-by"
+    },
+    {
+      "from": "journey:communication-inbox",
+      "to": "api:GET:api/v1/communication/gifs/{token}/preview",
+      "type": "exposes"
+    },
+    {
+      "from": "api:GET:api/v1/communication/gifs/{token}/preview",
+      "to": "handler:GifController@preview",
       "type": "handled-by"
     },
     {
@@ -17675,6 +17773,11 @@
     },
     {
       "from": "api-client:app/composables/api/createCommunicationApi.ts",
+      "to": "api:POST:api/v1/communication/conversations/{conversation}/message-batches",
+      "type": "calls"
+    },
+    {
+      "from": "api-client:app/composables/api/createCommunicationApi.ts",
       "to": "api:GET:api/v1/communication/conversations/{conversation}/messages",
       "type": "calls"
     },
@@ -17871,6 +17974,11 @@
     {
       "from": "api-client:app/composables/api/createCommunicationApi.ts",
       "to": "api:POST:api/v1/communication/flows/{flow}/versions/{version}/clone",
+      "type": "calls"
+    },
+    {
+      "from": "api-client:app/composables/api/createCommunicationApi.ts",
+      "to": "api:GET:api/v1/communication/gifs/search",
       "type": "calls"
     },
     {

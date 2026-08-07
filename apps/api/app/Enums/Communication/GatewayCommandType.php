@@ -13,6 +13,7 @@ enum GatewayCommandType: string
     case DisconnectSession = 'SESSION_DISCONNECT';
     case SetPassive = 'SESSION_SET_PASSIVE';
     case SendMessage = 'MESSAGE_SEND';
+    case SendMessageBatch = 'MESSAGE_BATCH_SEND';
     case EditMessage = 'MESSAGE_EDIT';
     case RevokeMessage = 'MESSAGE_REVOKE';
     case ReactMessage = 'MESSAGE_REACT';
@@ -29,5 +30,6 @@ enum GatewayCommandType: string
     case UpdatePrivacy = 'PRIVACY_UPDATE';
     case SetDefaultDisappearing = 'DEFAULT_DISAPPEARING_SET';
     case RequestHistorySync = 'HISTORY_SYNC_REQUEST';
+    case MaterializeSticker = 'STICKER_MATERIALIZE';
     case LogoutSession = 'SESSION_LOGOUT';
 }

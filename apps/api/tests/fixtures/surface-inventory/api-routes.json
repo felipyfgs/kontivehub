@@ -402,6 +402,12 @@
     "action": "ConversationController@removeLabel"
   },
   {
+    "method": "POST",
+    "uri": "api/v1/communication/conversations/{conversation}/message-batches",
+    "group": "communication",
+    "action": "MessageBatchController@store"
+  },
+  {
     "method": "GET",
     "uri": "api/v1/communication/conversations/{conversation}/messages",
     "group": "communication",
@@ -652,6 +658,24 @@
     "uri": "api/v1/communication/flows/{flow}/versions/{version}/clone",
     "group": "communication",
     "action": "FlowController@cloneVersion"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/gifs/search",
+    "group": "communication",
+    "action": "GifController@search"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/gifs/{token}/asset",
+    "group": "communication",
+    "action": "GifController@asset"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/gifs/{token}/preview",
+    "group": "communication",
+    "action": "GifController@preview"
   },
   {
     "method": "POST",

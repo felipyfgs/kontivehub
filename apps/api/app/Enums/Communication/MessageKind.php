@@ -13,6 +13,7 @@ enum MessageKind: string
     case Location = 'LOCATION';
     case Contact = 'CONTACT';
     case Poll = 'POLL';
+    case Event = 'EVENT';
     case Interactive = 'INTERACTIVE';
     case Unsupported = 'UNSUPPORTED';
     case Note = 'NOTE';

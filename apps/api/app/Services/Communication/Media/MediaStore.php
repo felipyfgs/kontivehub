@@ -210,32 +210,106 @@ final readonly class MediaStore
         }
     }
 
+    /** @param  array<string, scalar|null>  $metadata */
+    public function readValidated(
+        string $objectId,
+        array $metadata,
+        int $expectedSize,
+        string $expectedSha256,
+    ): string {
+        $maximum = max(1, (int) config('communication.media.max_bytes', 20_971_520));
+        if ($expectedSize < 0
+            || $expectedSize > $maximum
+            || preg_match('/^[a-f0-9]{64}$/', $expectedSha256) !== 1) {
+            throw new RuntimeException('Descritor de mídia inválido.');
+        }
+
+        $contents = '';
+        $size = 0;
+        $hasher = hash_init('sha256');
+        foreach ($this->readChunks($objectId, $metadata) as $chunk) {
+            $size += strlen($chunk);
+            if ($size > $expectedSize) {
+                throw new RuntimeException('Tamanho de mídia divergente.');
+            }
+            $contents .= $chunk;
+            hash_update($hasher, $chunk);
+        }
+        if ($size !== $expectedSize || ! hash_equals($expectedSha256, hash_final($hasher))) {
+            throw new RuntimeException('Integridade da mídia inválida.');
+        }
+
+        return $contents;
+    }
+
     /**
      * @param  array<string, scalar|null>  $metadata
      * @return Generator<int, string>
      */
-    public function readRangeChunks(string $objectId, array $metadata, int $start, int $end): Generator
-    {
-        if ($start < 0 || $end < $start) {
-            throw new RuntimeException('Intervalo de mídia inválido.');
+    public function readValidatedRange(
+        string $objectId,
+        array $metadata,
+        int $start,
+        int $end,
+        int $expectedSize,
+        string $expectedSha256,
+    ): Generator {
+        $maximum = max(1, (int) config('communication.media.max_bytes', 20_971_520));
+        if ($start < 0
+            || $end < $start
+            || ($expectedSize > 0 && $end >= $expectedSize)
+            || ($expectedSize === 0 && ($start !== 0 || $end !== -1))
+            || $expectedSize < 0
+            || $expectedSize > $maximum
+            || preg_match('/^[a-f0-9]{64}$/', $expectedSha256) !== 1) {
+            throw new RuntimeException('Descritor de mídia inválido.');
         }
-        $offset = 0;
-        foreach ($this->readChunks($objectId, $metadata) as $chunk) {
-            $chunkEnd = $offset + strlen($chunk) - 1;
-            if ($chunkEnd < $start) {
-                $offset += strlen($chunk);
 
-                continue;
+        $range = tmpfile();
+        if (! is_resource($range)) {
+            throw new RuntimeException('Não foi possível criar o buffer da faixa de mídia.');
+        }
+
+        try {
+            $size = 0;
+            $offset = 0;
+            $hasher = hash_init('sha256');
+            foreach ($this->readChunks($objectId, $metadata) as $chunk) {
+                $chunkSize = strlen($chunk);
+                $size += $chunkSize;
+                if ($size > $expectedSize) {
+                    throw new RuntimeException('Tamanho de mídia divergente.');
+                }
+                hash_update($hasher, $chunk);
+
+                $chunkEnd = $offset + $chunkSize - 1;
+                if ($chunkEnd >= $start) {
+                    $sliceStart = max(0, $start - $offset);
+                    $sliceEnd = min($chunkSize - 1, $end - $offset);
+                    if ($sliceEnd >= $sliceStart) {
+                        $this->write($range, substr($chunk, $sliceStart, $sliceEnd - $sliceStart + 1));
+                    }
+                }
+                $offset += $chunkSize;
             }
-            $sliceStart = max(0, $start - $offset);
-            $sliceEnd = min(strlen($chunk) - 1, $end - $offset);
-            if ($sliceEnd >= $sliceStart) {
-                yield substr($chunk, $sliceStart, $sliceEnd - $sliceStart + 1);
+            if ($size !== $expectedSize || ! hash_equals($expectedSha256, hash_final($hasher))) {
+                throw new RuntimeException('Integridade da mídia inválida.');
             }
-            $offset += strlen($chunk);
-            if ($offset > $end) {
-                break;
+            if (fseek($range, 0) !== 0) {
+                throw new RuntimeException('Falha ao preparar a faixa de mídia.');
             }
+
+            while (! feof($range)) {
+                $chunk = fread($range, self::CHUNK_BYTES);
+                if ($chunk === false) {
+                    throw new RuntimeException('Falha ao ler a faixa de mídia.');
+                }
+                if ($chunk !== '') {
+                    yield $chunk;
+                }
+            }
+        } finally {
+            fclose($range);
         }
     }
 

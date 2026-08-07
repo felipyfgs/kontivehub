@@ -12,7 +12,19 @@ final class MessageResource extends JsonResource
     public function toArray(Request $request): array
     {
         $this->resource->loadMissing('attachments');
-        $availability = app(MessageAvailability::class)->forMessage($this->resource);
+        $availabilityService = app(MessageAvailability::class);
+        $viewOnce = (bool) data_get($this->metadata, 'view_once', false);
+        $availableAttachments = $viewOnce
+            ? $this->attachments->take(0)
+            : $this->attachments
+                ->filter(
+                    fn ($attachment): bool => $availabilityService->isAttachmentAvailable($attachment),
+                )
+                ->values();
+        $availability = $availabilityService->forMessage(
+            $this->resource,
+            $availableAttachments->isNotEmpty(),
+        );
         $available = $availability->state->value === 'AVAILABLE';
         $contentVisible = $available || $availability->state->value === 'UNSUPPORTED';
 
@@ -36,7 +48,7 @@ final class MessageResource extends JsonResource
             'played_at' => $this->played_at?->toIso8601String(),
             'revoked_at' => $this->revoked_at?->toIso8601String(),
             'metadata' => $this->safeMetadata(),
-            'attachments' => ! $available ? [] : $this->attachments->map(fn ($attachment) => [
+            'attachments' => ! $available ? [] : $availableAttachments->map(fn ($attachment) => [
                 'id' => $attachment->id,
                 'filename' => $attachment->original_name_encrypted ?: 'anexo-'.$attachment->id,
                 'mime_type' => $attachment->mime_type,
@@ -64,6 +76,33 @@ final class MessageResource extends JsonResource
             'media_state',
             'media_error_code',
         ]));
+        $gatewayActions = is_array($metadata['gateway_actions'] ?? null)
+            ? array_slice($metadata['gateway_actions'], -10, null, true)
+            : [];
+        $allowed['gateway_actions'] = array_values(array_filter(array_map(
+            static function (mixed $action, mixed $commandId): ?array {
+                if (! is_string($commandId)
+                    || preg_match('/^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/', $commandId) !== 1
+                    || ! is_array($action)
+                    || ! in_array($action['action'] ?? null, ['EDIT', 'REACTION', 'REVOKE'], true)
+                    || ! in_array($action['status'] ?? null, ['PENDING', 'SUCCEEDED', 'FAILED'], true)) {
+                    return null;
+                }
+
+                return array_filter([
+                    'command_id' => $commandId,
+                    'action' => $action['action'],
+                    'status' => $action['status'],
+                    'requested_at' => is_string($action['requested_at'] ?? null) ? $action['requested_at'] : null,
+                    'completed_at' => is_string($action['completed_at'] ?? null) ? $action['completed_at'] : null,
+                    'error_code' => in_array($action['error_code'] ?? null, [
+                        'ACTION_REJECTED', 'ACTION_RETRY_EXHAUSTED', 'ACTION_OUTCOME_UNKNOWN',
+                    ], true) ? $action['error_code'] : null,
+                ], static fn (mixed $value): bool => $value !== null);
+            },
+            $gatewayActions,
+            array_keys($gatewayActions),
+        )));
 
         return array_filter($allowed, static fn (mixed $value): bool => $value !== null && $value !== []);
     }
@@ -73,7 +112,7 @@ final class MessageResource extends JsonResource
     {
         $content = is_array($this->content_encrypted) ? $this->content_encrypted : [];
         $allowed = array_intersect_key($content, array_flip([
-            'text', 'caption', 'link_preview', 'location', 'contacts', 'poll', 'interactive', 'rich_card',
+            'text', 'caption', 'link_preview', 'location', 'contacts', 'poll', 'event', 'interactive', 'rich_card',
             'ptt', 'gif', 'animated', 'duration_seconds', 'content_present', 'variants',
             'interactive_response',
         ]));

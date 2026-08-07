@@ -552,6 +552,62 @@ final class CommunicationSharedContentAndInitiationTest extends TestCase
         $this->assertSame(1, CommunicationOutboxEntry::query()->withoutGlobalScopes()->count());
     }
 
+    public function test_outbound_initiation_replays_the_pre_rollout_idempotency_formula(): void
+    {
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $operator = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $inbox = $this->inbox($tenant, 'Compatibilidade início', '+5511000000046');
+        $this->member($inbox, $operator);
+        $membership = TenantMembership::query()->withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('user_id', $operator->id)
+            ->firstOrFail();
+        [$contact, $identity] = $this->contact($tenant, '+5511999990046');
+        $conversation = $this->conversation($tenant, $inbox, $identity);
+        $key = 'outbound-initiation-replay-0001';
+        $body = 'Iniciação aceita antes do rollout';
+        $providerId = 'message-'.substr(hash('sha256', "outbound-initiation\0".$key), 0, 40);
+        $contentDigest = hash('sha256', implode('|', [
+            'outbound-initiation',
+            MessageKind::Text->value,
+            $body,
+            '',
+            '',
+            'media',
+            '[]',
+            '',
+        ]));
+        $message = CommunicationMessage::query()->withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id,
+            'inbox_id' => $inbox->id,
+            'conversation_id' => $conversation->id,
+            'identity_id' => $identity->id,
+            'author_membership_id' => $membership->id,
+            'direction' => MessageDirection::Outbound,
+            'kind' => MessageKind::Text,
+            'source' => MessageSource::Human,
+            'status' => MessageStatus::Queued,
+            'body_encrypted' => $body,
+            'provider_message_id' => $providerId,
+            'content_digest' => $contentDigest,
+            'occurred_at' => now(),
+        ]);
+        $this->authenticate($operator);
+
+        $response = $this->post('/api/v1/communication/conversations', [
+            'contact_id' => $contact->id,
+            'identity_id' => $identity->id,
+            'inbox_id' => $inbox->id,
+            'body' => $body,
+        ], [
+            'Accept' => 'application/json',
+            'Idempotency-Key' => $key,
+        ])->assertOk();
+
+        $this->assertSame($message->id, $response->json('data.message.id'));
+        $this->assertSame(1, CommunicationMessage::query()->withoutGlobalScopes()->count());
+    }
+
     public function test_initiation_namespace_cannot_collide_with_composer_key(): void
     {
         $tenant = Tenant::factory()->create(['communication_enabled' => true]);
@@ -762,8 +818,8 @@ final class CommunicationSharedContentAndInitiationTest extends TestCase
         $webp = base64_decode('UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEALmk0mk0iIiIiIgBoSygABc6zbAAA', true);
         $this->assertIsString($webp);
         $cases = [
-            ['AUDIO', UploadedFile::fake()->create('inicio.ogg', 8, 'audio/ogg'), true],
-            ['VIDEO', UploadedFile::fake()->create('inicio.mp4', 8, 'video/mp4'), false],
+            ['AUDIO', UploadedFile::fake()->createWithContent('inicio.ogg', 'OggS'.str_repeat("\0", 20))->mimeType('audio/ogg'), true],
+            ['VIDEO', UploadedFile::fake()->createWithContent('inicio.mp4', "\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isomiso2")->mimeType('video/mp4'), false],
             ['DOCUMENT', UploadedFile::fake()->createWithContent('inicio.pdf', '%PDF-inicio'), false],
             ['STICKER', UploadedFile::fake()->createWithContent('inicio.webp', $webp), false],
         ];

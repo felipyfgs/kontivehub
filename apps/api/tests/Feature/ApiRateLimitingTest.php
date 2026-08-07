@@ -39,6 +39,9 @@ class ApiRateLimitingTest extends TestCase
                 max(1, (int) config('communication.profile_pictures.stream_rate_limit_per_minute', 600)),
                 max(1, (int) config('communication.profile_pictures.stream_ip_rate_limit_per_minute', 1_200)),
             ],
+            ApiRateLimit::CommunicationGifSearch->value => [
+                (int) config('communication.gif_provider.rate_limit_per_minute', 30),
+            ],
             ApiRateLimit::AssistantAccess->value => [60],
             ApiRateLimit::AssistantChat->value => [30],
             ApiRateLimit::CteIntegrationTokenAdministration->value => [(int) config(

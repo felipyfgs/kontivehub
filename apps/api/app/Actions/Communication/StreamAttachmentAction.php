@@ -5,10 +5,12 @@ namespace App\Actions\Communication;
 use App\Models\CommunicationAttachment;
 use App\Services\Communication\Media\MediaStore;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\HeaderUtils;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnsupportedMediaTypeHttpException;
+use Throwable;
 
 final class StreamAttachmentAction
 {
@@ -87,17 +89,54 @@ final class StreamAttachmentAction
         if ($range !== null) {
             $headers['Content-Range'] = "bytes {$start}-{$end}/{$size}";
         }
+        try {
+            $rangeChunks = $this->media->readValidatedRange(
+                $attachment->object_id,
+                $metadata,
+                $start,
+                $end,
+                $size,
+                (string) $attachment->sha256,
+            );
+            $firstChunk = $rangeChunks->current();
+            if (! $rangeChunks->valid()) {
+                $firstChunk = null;
+            }
+        } catch (Throwable $error) {
+            Log::warning('communication.media.attachment_stream_unavailable', [
+                'error_code' => 'MEDIA_STREAM_UNAVAILABLE',
+                'error_class' => $error::class,
+                'attachment_id' => (int) $attachment->id,
+                'message_id' => (int) $attachment->message_id,
+            ]);
+
+            throw new NotFoundHttpException('Mídia não encontrada.', $error);
+        }
         if ($request->isMethod('HEAD') || $size === 0) {
+            while ($rangeChunks->valid()) {
+                $rangeChunks->next();
+            }
+
             return response('', $status, $headers);
         }
 
-        return response()->stream(function () use ($attachment, $metadata, $start, $end): void {
-            foreach ($this->media->readRangeChunks($attachment->object_id, $metadata, $start, $end) as $chunk) {
-                echo $chunk;
+        return response()->stream(function () use ($rangeChunks, $firstChunk): void {
+            if ($firstChunk !== null && $firstChunk !== '') {
+                echo $firstChunk;
                 if (function_exists('ob_flush')) {
                     @ob_flush();
                 }
                 flush();
+            }
+            while ($rangeChunks->valid()) {
+                $rangeChunks->next();
+                if ($rangeChunks->valid()) {
+                    echo $rangeChunks->current();
+                    if (function_exists('ob_flush')) {
+                        @ob_flush();
+                    }
+                    flush();
+                }
             }
         }, $status, $headers);
     }

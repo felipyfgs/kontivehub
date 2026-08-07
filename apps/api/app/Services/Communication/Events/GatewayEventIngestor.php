@@ -7,6 +7,7 @@ use App\DTO\Communication\GatewayEventData;
 use App\DTO\Communication\MessageSemanticContent;
 use App\DTO\Communication\PayloadDigest;
 use App\Enums\Communication\ConversationStatus;
+use App\Enums\Communication\GatewayCommandType;
 use App\Enums\Communication\GatewayEventType;
 use App\Enums\Communication\InboxStatus;
 use App\Enums\Communication\MessageDirection;
@@ -14,6 +15,7 @@ use App\Enums\Communication\MessageKind;
 use App\Enums\Communication\MessageSource;
 use App\Enums\Communication\MessageStatus;
 use App\Enums\CommunicationChannel;
+use App\Exceptions\CommunicationTransportException;
 use App\Exceptions\GatewayEventConflictException;
 use App\Jobs\Communication\CorrelateFlowEventJob;
 use App\Jobs\Communication\DeleteMediaObjectJob;
@@ -23,6 +25,7 @@ use App\Models\CommunicationEvent;
 use App\Models\CommunicationIdentity;
 use App\Models\CommunicationInbox;
 use App\Models\CommunicationMessage;
+use App\Models\CommunicationOutboxEntry;
 use App\Services\Communication\Automation\FiscalDispatchStatusProjector;
 use App\Services\Communication\Contact\InboxIdentityProfileMerger;
 use App\Services\Communication\Conversation\ConversationReadStateService;
@@ -31,6 +34,8 @@ use App\Services\Communication\Flows\FlowAvailability;
 use App\Services\Communication\Media\MediaStore;
 use App\Services\Communication\Pairing\PairingStateStore;
 use App\Services\Communication\ProfilePicture\ProfilePictureRefreshScheduler;
+use App\Services\Communication\StickerLibrary\StickerObservationIngestor;
+use App\Services\Communication\StickerLibrary\StickerMaterializationService;
 use App\Services\Communication\WhatsAppAddressNormalizer;
 use App\Services\Communication\WhatsAppPeerCorrelationService;
 use App\Services\Communication\WhatsAppPeerResolver;
@@ -55,6 +60,8 @@ final readonly class GatewayEventIngestor
         private InboxIdentityProfileMerger $identityProfiles,
         private ConversationReadStateService $readState,
         private ProfilePictureRefreshScheduler $profilePictures,
+        private StickerObservationIngestor $stickers,
+        private StickerMaterializationService $stickerMaterialization,
     ) {}
 
     /** @return 'processed'|'duplicate' */
@@ -80,6 +87,7 @@ final readonly class GatewayEventIngestor
         }
 
         $storedMedia = null;
+        $mediaFetchError = null;
         if (in_array($incoming->type, [GatewayEventType::MessageReceived, GatewayEventType::MediaRetryUpdated], true)
             && is_string($incoming->payload['spool_id'] ?? null)) {
             $retry = $incoming->type === GatewayEventType::MediaRetryUpdated;
@@ -88,18 +96,30 @@ final readonly class GatewayEventIngestor
             if (! preg_match('/^[a-f0-9]{64}$/', $expectedSha) || $expectedSize < 0) {
                 throw new RuntimeException('Descriptor de mídia do gateway inválido.');
             }
-            $storedMedia = $this->media->putStream(
-                $this->transport->downloadMedia((string) $incoming->payload['spool_id']),
-                [
-                    'tenant_id' => (int) $inbox->tenant_id,
-                    'inbox_id' => (int) $inbox->id,
-                    'gateway_event_id' => $incoming->gatewayEventId,
-                    'sha256' => $expectedSha,
-                ],
-            );
-            if ($storedMedia['size_bytes'] !== $expectedSize || ! hash_equals($expectedSha, $storedMedia['sha256'])) {
-                $this->media->delete($storedMedia['object_id']);
-                throw new RuntimeException('Mídia recebida não corresponde ao descriptor do gateway.');
+            try {
+                $storedMedia = $this->media->putStream(
+                    $this->transport->downloadMedia((string) $incoming->payload['spool_id']),
+                    [
+                        'tenant_id' => (int) $inbox->tenant_id,
+                        'inbox_id' => (int) $inbox->id,
+                        'gateway_event_id' => $incoming->gatewayEventId,
+                        'sha256' => $expectedSha,
+                    ],
+                );
+                if ($storedMedia['size_bytes'] !== $expectedSize || ! hash_equals($expectedSha, $storedMedia['sha256'])) {
+                    $this->media->delete($storedMedia['object_id']);
+                    throw new RuntimeException('Mídia recebida não corresponde ao descriptor do gateway.');
+                }
+            } catch (CommunicationTransportException $error) {
+                // Missing/expired spool must not HOL-block the JetStream consumer.
+                // MessageReceived continues without bytes; MediaRetry keeps retryable failures.
+                if ($incoming->type === GatewayEventType::MessageReceived
+                    && $this->isSoftMediaFetchFailure($error)) {
+                    $storedMedia = null;
+                    $mediaFetchError = $error->errorCode;
+                } else {
+                    throw $error;
+                }
             }
         }
 
@@ -111,7 +131,7 @@ final readonly class GatewayEventIngestor
                 GatewayEventType::MessageActionReceived,
                 GatewayEventType::HistorySynced,
             ], true) ? 3 : 1;
-            $result = DB::transaction(function () use ($incoming, $digest, $inbox, $storedMedia, &$flowCorrelation): string {
+            $result = DB::transaction(function () use ($incoming, $digest, $inbox, $storedMedia, $mediaFetchError, &$flowCorrelation): string {
                 $flowCorrelation = null;
                 $this->lockAdvisory('gateway-event', $incoming->gatewayEventId);
                 $duplicate = CommunicationEvent::query()->withoutGlobalScopes()
@@ -126,14 +146,18 @@ final readonly class GatewayEventIngestor
                 }
 
                 [$conversationId, $messageId, $safePayload] = match ($incoming->type) {
-                    GatewayEventType::MessageReceived => $this->ingestInbound($incoming, $inbox, $storedMedia),
+                    GatewayEventType::MessageReceived => $this->ingestInbound($incoming, $inbox, $storedMedia, $mediaFetchError),
                     GatewayEventType::MessageStatusChanged => $this->ingestReceipt($incoming, $inbox),
                     GatewayEventType::MessageActionReceived => $this->ingestMessageAction($incoming, $inbox),
+                    GatewayEventType::MessageActionResult => $this->ingestMessageActionResult($incoming, $inbox),
                     GatewayEventType::SessionStatusChanged => $this->ingestSessionStatus($incoming, $inbox),
                     GatewayEventType::PairingUpdated => $this->ingestPairing($incoming, $inbox),
                     GatewayEventType::MediaReady => [null, null, ['media_ready' => true]],
                     GatewayEventType::HistorySynced => $this->ingestHistory($incoming, $inbox),
                     GatewayEventType::MediaRetryUpdated => $this->ingestMediaRetry($incoming, $inbox, $storedMedia),
+                    GatewayEventType::StickerObserved,
+                    GatewayEventType::StickerFavoriteChanged => [null, null, $this->stickers->ingest($incoming, $inbox)],
+                    GatewayEventType::StickerMaterialized => [null, null, $this->stickerMaterialization->commit($incoming, $inbox)],
                     GatewayEventType::ChatPresenceChanged,
                     GatewayEventType::ContactPresenceChanged => $this->ingestPresenceSignal($incoming, $inbox),
                     GatewayEventType::ContactProfileChanged => $this->ingestContactProfile($incoming, $inbox),
@@ -201,8 +225,12 @@ final readonly class GatewayEventIngestor
      * @param  array{object_id:string,size_bytes:int,sha256:string}|null  $storedMedia
      * @return array{0:int,1:int,2:array<string,mixed>}
      */
-    private function ingestInbound(GatewayEventData $incoming, CommunicationInbox $inbox, ?array $storedMedia): array
-    {
+    private function ingestInbound(
+        GatewayEventData $incoming,
+        CommunicationInbox $inbox,
+        ?array $storedMedia,
+        ?string $mediaFetchError = null,
+    ): array {
         $history = (bool) ($incoming->payload['history'] ?? false);
         $providerId = (string) ($incoming->payload['provider_message_id'] ?? '');
         if (! preg_match('/^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$/', $providerId)) {
@@ -271,6 +299,9 @@ final readonly class GatewayEventIngestor
         if ($storedMedia !== null) {
             $metadata['media_state'] = 'READY';
             unset($metadata['media_error_code']);
+        } elseif ($mediaFetchError !== null) {
+            $metadata['media_state'] = 'UNAVAILABLE';
+            $metadata['media_error_code'] = $mediaFetchError;
         }
 
         if ($existing !== null) {
@@ -409,6 +440,18 @@ final readonly class GatewayEventIngestor
 
         $metadata = is_array($message->metadata) ? $message->metadata : [];
         $content = is_array($message->content_encrypted) ? $message->content_encrypted : [];
+        $pendingActions = is_array($metadata['gateway_actions'] ?? null) ? $metadata['gateway_actions'] : [];
+        $echoCommandId = (string) ($incoming->payload['provider_message_id'] ?? '');
+        if (isset($pendingActions[$echoCommandId])
+            && ($pendingActions[$echoCommandId]['action'] ?? null) === $action) {
+            $pendingActions[$echoCommandId]['received_event_id'] = $incoming->gatewayEventId;
+            $metadata['gateway_actions'] = array_slice($pendingActions, -10, null, true);
+            $message->forceFill(['metadata' => $metadata])->save();
+
+            return [(int) $message->conversation_id, (int) $message->id, [
+                'action' => $action, 'target_message_id' => $targetProviderId, 'echo' => true,
+            ]];
+        }
         $actorKey = hash('sha256', $sender);
         switch ($action) {
             case 'EDIT':
@@ -470,6 +513,97 @@ final readonly class GatewayEventIngestor
             'provider_message_id' => $incoming->payload['provider_message_id'] ?? null,
             'emoji' => $action === 'REACTION' ? (string) ($incoming->payload['emoji'] ?? '') : null,
         ], static fn (mixed $value): bool => $value !== null)];
+    }
+
+    /** @return array{0:?int,1:?int,2:array<string,mixed>} */
+    private function ingestMessageActionResult(GatewayEventData $incoming, CommunicationInbox $inbox): array
+    {
+        $payload = $incoming->payload;
+        $entry = CommunicationOutboxEntry::query()->withoutGlobalScopes()
+            ->where('command_id', $payload['command_id'])
+            ->where('tenant_id', $inbox->tenant_id)
+            ->where('inbox_id', $inbox->id)
+            ->where('session_id', $inbox->session_id)
+            ->lockForUpdate()->first();
+        if ($entry === null || ! in_array($entry->type, [
+            GatewayCommandType::EditMessage,
+            GatewayCommandType::RevokeMessage,
+            GatewayCommandType::ReactMessage,
+        ], true) || $entry->message_id === null) {
+            throw new RuntimeException('Resultado de ação sem comando correlacionado.');
+        }
+        $action = match ($entry->type) {
+            GatewayCommandType::EditMessage => 'EDIT',
+            GatewayCommandType::RevokeMessage => 'REVOKE',
+            GatewayCommandType::ReactMessage => 'REACTION',
+        };
+        $command = is_array($entry->payload_encrypted) ? $entry->payload_encrypted : [];
+        if ($action !== $payload['action']
+            || ! hash_equals((string) $entry->command_id, (string) $payload['provider_message_id'])
+            || ! hash_equals((string) ($command['target_message_id'] ?? ''), (string) $payload['target_message_id'])) {
+            throw new RuntimeException('Resultado de ação incompatível com o comando.');
+        }
+        $message = CommunicationMessage::query()->withoutGlobalScopes()
+            ->whereKey($entry->message_id)->where('tenant_id', $inbox->tenant_id)->where('inbox_id', $inbox->id)
+            ->lockForUpdate()->first();
+        if ($message === null || ! hash_equals((string) $message->provider_message_id, (string) $payload['target_message_id'])) {
+            throw new RuntimeException('Resultado de ação não pertence à mensagem alvo.');
+        }
+        $metadata = is_array($message->metadata) ? $message->metadata : [];
+        $actions = is_array($metadata['gateway_actions'] ?? null) ? $metadata['gateway_actions'] : [];
+        $existingStatus = $actions[$entry->command_id]['status'] ?? null;
+        if (in_array($existingStatus, ['SUCCEEDED', 'FAILED'], true)) {
+            if ($existingStatus !== $payload['status']) {
+                throw new RuntimeException('Resultado terminal de ação conflitante.');
+            }
+
+            return [(int) $message->conversation_id, (int) $message->id, [
+                'command_id' => $entry->command_id,
+                'action' => $action,
+                'status' => $existingStatus,
+            ]];
+        }
+        $result = [
+            'action' => $action,
+            'status' => $payload['status'],
+            'provider_message_id' => $payload['provider_message_id'],
+            'completed_at' => $incoming->occurredAt->format(DATE_ATOM),
+        ];
+        if ($payload['status'] === 'FAILED') {
+            $result['error_code'] = $payload['error_code'];
+        } else {
+            $content = is_array($message->content_encrypted) ? $message->content_encrypted : [];
+            if ($action === 'EDIT') {
+                $previous = trim((string) ($content['text'] ?? $message->body_encrypted ?? ''));
+                if ($previous !== '') {
+                    $history = is_array($content['edit_history'] ?? null) ? $content['edit_history'] : [];
+                    $history[] = ['text' => $previous, 'occurred_at' => $incoming->occurredAt->format(DATE_ATOM)];
+                    $content['edit_history'] = array_slice($history, -10);
+                }
+                $content['text'] = (string) $command['text'];
+                $message->body_encrypted = (string) $command['text'];
+                $metadata['edited_at'] = $incoming->occurredAt->format(DATE_ATOM);
+            } elseif ($action === 'REVOKE') {
+                $metadata['revoked'] = true;
+                $message->revoked_at = $incoming->occurredAt;
+            } else {
+                $content['reactions'] = is_array($content['reactions'] ?? null) ? $content['reactions'] : [];
+                $emoji = (string) ($command['emoji'] ?? '');
+                if ($emoji === '') {
+                    unset($content['reactions']['self']);
+                } else {
+                    $content['reactions']['self'] = mb_substr($emoji, 0, 32);
+                }
+            }
+            MessageSemanticContent::assertShape($content, $message->kind);
+            $message->content_encrypted = $content;
+        }
+        $actions[$entry->command_id] = $result;
+        $metadata['gateway_actions'] = array_slice($actions, -10, null, true);
+        $message->metadata = $metadata;
+        $message->save();
+
+        return [(int) $message->conversation_id, (int) $message->id, ['command_id' => $entry->command_id, 'action' => $action, 'status' => $payload['status'], 'error_code' => $payload['error_code'] ?? null]];
     }
 
     /** @return array{0:null,1:null,2:array<string,mixed>} */
@@ -1191,5 +1325,19 @@ final readonly class GatewayEventIngestor
         }
 
         return mb_substr($filename, 0, 255);
+    }
+
+    private function isSoftMediaFetchFailure(CommunicationTransportException $error): bool
+    {
+        if (! $error->retryable) {
+            return true;
+        }
+
+        return in_array($error->errorCode, [
+            'GATEWAY_MEDIA_UNAVAILABLE',
+            'MEDIA_NOT_FOUND',
+            'MEDIA_SPOOL_UNAVAILABLE',
+            'GATEWAY_HTTP_404',
+        ], true);
     }
 }

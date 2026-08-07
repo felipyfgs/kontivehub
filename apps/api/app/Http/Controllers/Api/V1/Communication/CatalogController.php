@@ -49,7 +49,7 @@ final class CatalogController extends Controller
         ViewOutboundCapabilitiesRequest $request,
     ): JsonResponse {
         return (new OutboundCapabilitiesResource(
-            $this->catalog->outboundCapabilities($request->user()),
+            $this->catalog->outboundCapabilities($request->user(), $request->inbox()),
         ))->response()->header('Cache-Control', 'private, no-store');
     }
 

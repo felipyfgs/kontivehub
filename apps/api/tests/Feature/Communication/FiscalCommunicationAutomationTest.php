@@ -62,6 +62,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -373,6 +374,12 @@ final class FiscalCommunicationAutomationTest extends TestCase
             ->assertJson(['error' => 'MEDIA_NOT_FOUND']);
 
         $message->forceFill(['revoked_at' => null])->save();
+        $objectPath = strtolower(substr($attachment->object_id, 0, 2))
+            .'/'.$attachment->object_id.'.media';
+        Storage::disk((string) config('communication.media.disk'))->put($objectPath, 'corrompido');
+        $this->get($path, app(HmacSigner::class)->headers('GET', $path))
+            ->assertServiceUnavailable();
+
         app(MediaStore::class)->delete($attachment->object_id);
         $this->get($path, app(HmacSigner::class)->headers('GET', $path))
             ->assertNotFound()

@@ -5,7 +5,10 @@ namespace App\Services\Communication;
 use App\DTO\Communication\MessageAvailabilityData;
 use App\Enums\Communication\MessageAvailabilityState;
 use App\Enums\Communication\MessageKind;
+use App\Models\CommunicationAttachment;
 use App\Models\CommunicationMessage;
+use App\Services\Communication\Media\MediaStore;
+use RuntimeException;
 
 final class MessageAvailability
 {
@@ -23,8 +26,14 @@ final class MessageAvailability
         'MEDIA_RETRY_NOT_AVAILABLE',
     ];
 
-    public function forMessage(CommunicationMessage $message): MessageAvailabilityData
-    {
+    public function __construct(
+        private readonly MediaStore $media,
+    ) {}
+
+    public function forMessage(
+        CommunicationMessage $message,
+        ?bool $hasAvailableAttachment = null,
+    ): MessageAvailabilityData {
         if ($message->quarantined_at !== null
             || $message->purged_at !== null
             || $message->revoked_at !== null) {
@@ -43,10 +52,17 @@ final class MessageAvailability
             return $this->state(MessageAvailabilityState::Unavailable);
         }
         $mediaState = strtoupper(trim((string) ($metadata['media_state'] ?? '')));
-        $hasAttachment = $message->relationLoaded('attachments')
-            ? $message->attachments->contains(static fn ($attachment): bool => $attachment->purged_at === null)
-            : $message->attachments()->whereNull('purged_at')->exists();
-        if ($hasAttachment || $mediaState === 'READY') {
+        $hasAvailableAttachment ??= $message->relationLoaded('attachments')
+            ? $message->attachments->contains(
+                fn (CommunicationAttachment $attachment): bool => $this->isAttachmentAvailable($attachment),
+            )
+            : $message->attachments()
+                ->whereNull('purged_at')
+                ->get()
+                ->contains(
+                    fn (CommunicationAttachment $attachment): bool => $this->isAttachmentAvailable($attachment),
+                );
+        if ($hasAvailableAttachment) {
             return $this->state(MessageAvailabilityState::Available);
         }
 
@@ -71,6 +87,19 @@ final class MessageAvailability
     public function isRecoverable(CommunicationMessage $message): bool
     {
         return $this->forMessage($message)->recoverable;
+    }
+
+    public function isAttachmentAvailable(CommunicationAttachment $attachment): bool
+    {
+        if ($attachment->purged_at !== null) {
+            return false;
+        }
+
+        try {
+            return $this->media->exists((string) $attachment->object_id);
+        } catch (RuntimeException) {
+            return false;
+        }
     }
 
     private function state(

@@ -9,13 +9,13 @@ final class MessageSemanticContent
 {
     /** @var list<string> */
     public const KEYS = [
-        'text', 'caption', 'link_preview', 'location', 'contacts', 'poll', 'interactive', 'rich_card',
+        'text', 'caption', 'link_preview', 'location', 'contacts', 'poll', 'event', 'interactive', 'rich_card',
         'ptt', 'gif', 'animated', 'duration_seconds', 'content_present', 'variants',
     ];
 
     /** @var list<string> */
     public const STORED_KEYS = [
-        ...self::KEYS, 'reactions', 'poll_votes', 'interactive_response',
+        ...self::KEYS, 'reactions', 'poll_votes', 'interactive_response', 'edit_history',
     ];
 
     /** @param array<string, mixed> $payload */
@@ -105,6 +105,27 @@ final class MessageSemanticContent
                 throw new InvalidArgumentException('poll.selectable_options inválido.');
             }
         }
+        if (isset($content['event'])) {
+            self::assertObject($content['event'], [
+                'title', 'description', 'start_at', 'end_at', 'timezone', 'location_name', 'location_address', 'participation_enabled',
+            ], 'event');
+            self::assertRequiredStrings($content['event'], ['title' => 512, 'start_at' => 64, 'timezone' => 64], 'event');
+            self::assertStrings($content['event'], [
+                'description' => 2048, 'end_at' => 64, 'location_name' => 512, 'location_address' => 2048,
+            ], 'event');
+            foreach (['start_at', 'end_at'] as $field) {
+                if (isset($content['event'][$field]) && strtotime($content['event'][$field]) === false) {
+                    throw new InvalidArgumentException("event.{$field} inválido.");
+                }
+            }
+            if (isset($content['event']['end_at'])
+                && strtotime((string) $content['event']['end_at']) <= strtotime((string) $content['event']['start_at'])) {
+                throw new InvalidArgumentException('event.end_at inválido.');
+            }
+            if (isset($content['event']['participation_enabled']) && ! is_bool($content['event']['participation_enabled'])) {
+                throw new InvalidArgumentException('event.participation_enabled inválido.');
+            }
+        }
         if (isset($content['interactive'])) {
             self::assertObject($content['interactive'], [
                 'mode', 'title', 'description', 'selected_id', 'display_text', 'name',
@@ -167,6 +188,18 @@ final class MessageSemanticContent
         if (isset($content['interactive_response'])) {
             self::assertObject($content['interactive_response'], ['text', 'selected_id'], 'interactive_response');
             self::assertStrings($content['interactive_response'], ['text' => 4096, 'selected_id' => 1024], 'interactive_response');
+        }
+        if (isset($content['edit_history'])) {
+            if (! is_array($content['edit_history']) || count($content['edit_history']) > 10 || ! array_is_list($content['edit_history'])) {
+                throw new InvalidArgumentException('edit_history inválido.');
+            }
+            foreach ($content['edit_history'] as $entry) {
+                self::assertObject($entry, ['text', 'occurred_at'], 'edit_history');
+                self::assertRequiredStrings($entry, ['text' => 65_536, 'occurred_at' => 64], 'edit_history');
+                if (strtotime($entry['occurred_at']) === false) {
+                    throw new InvalidArgumentException('edit_history.occurred_at inválido.');
+                }
+            }
         }
         if ($kind === MessageKind::Unsupported && ! isset($content['content_present']) && ! isset($content['variants'])) {
             throw new InvalidArgumentException('UNSUPPORTED exige envelope semântico limitado.');
