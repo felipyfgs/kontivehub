@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/domain"
+	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/protocol/catalog"
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/types"
 )
@@ -188,6 +189,90 @@ func TestTypedMessageSenderStreamsMediaAndKeepsProviderID(t *testing.T) {
 	}
 	if client.extra.ID != "provider-typed-0001" {
 		t.Fatalf("provider ID changed: %s", client.extra.ID)
+	}
+}
+
+func TestTypedMessageSenderRejectsPTVBeforeUpload(t *testing.T) {
+	t.Parallel()
+	client := &fakeClient{connected: true}
+	adapter := NewWhatsMeowAdapter(&fakeResolver{client: client})
+	payload := domain.MessageSendPayload{
+		To: "+5511999991234", Kind: domain.MessageVideo,
+		Media: &domain.MediaReference{Filename: "video-ptv.mp4", MIMEType: "video/mp4", PTV: true},
+	}
+	if err := adapter.SendTypedMessage(
+		t.Context(), "session-ptv-0001", payload, "provider-ptv-0001", []byte("video"),
+	); err == nil || err.Error() != "PTV builder is unavailable" {
+		t.Fatalf("PTV must fail before upload: err=%v", err)
+	}
+	if client.streamed {
+		t.Fatalf("PTV reached UploadReader: streamed=%v", client.streamed)
+	}
+	if client.message != nil {
+		t.Fatalf("PTV reached SendMessage: %+v", client.message)
+	}
+}
+
+func TestEventBuilderAndCatalogRemainFailClosed(t *testing.T) {
+	t.Parallel()
+	client := &fakeClient{connected: true}
+	to := types.NewJID("5511999991234", types.DefaultUserServer)
+	message, err := buildTypedMessage(client, to, domain.MessageSendPayload{
+		To: "+5511999991234", Kind: domain.MessageEvent,
+		Event: &domain.EventPayload{
+			Title: "Reunião", StartAt: "2026-08-04T10:00:00-03:00", Timezone: "America/Sao_Paulo",
+		},
+	}, nil)
+	if err == nil || err.Error() != "event builder is unavailable" || message != nil {
+		t.Fatalf("event builder must fail closed: message=%+v err=%v", message, err)
+	}
+	if client.streamed {
+		t.Fatal("event builder reached UploadReader")
+	}
+	for _, entry := range catalog.OutboundBuilders {
+		if entry.Capability != catalog.OutboundEvent {
+			continue
+		}
+		if entry.BuilderEnabled || entry.ContractTested ||
+			entry.UnavailableReason != catalog.UnavailableEventBuilder || entry.Evidence == "" {
+			t.Fatalf("event capability must remain disabled and documented: %#v", entry)
+		}
+		return
+	}
+	t.Fatal("event capability missing from outbound catalog")
+}
+
+func TestTypedMessageBuilderPreservesContactOrderAndMediaVariants(t *testing.T) {
+	t.Parallel()
+	client := &fakeClient{connected: true}
+	to := types.NewJID("5511999991234", types.DefaultUserServer)
+
+	contacts, err := buildTypedMessage(client, to, domain.MessageSendPayload{
+		Kind: domain.MessageContact, Contacts: []domain.ContactPayload{
+			{DisplayName: "Primeiro", VCard: "BEGIN:VCARD\nFN:Primeiro\nEND:VCARD"},
+			{DisplayName: "Segundo", VCard: "BEGIN:VCARD\nFN:Segundo\nEND:VCARD"},
+		},
+	}, nil)
+	if err != nil {
+		t.Fatalf("build contacts array: %v", err)
+	}
+	array := contacts.GetContactsArrayMessage()
+	if array == nil || len(array.GetContacts()) != 2 || array.GetContacts()[0].GetDisplayName() != "Primeiro" || array.GetContacts()[1].GetDisplayName() != "Segundo" {
+		t.Fatalf("contact order was not preserved: %+v", array)
+	}
+
+	video, err := buildTypedMessage(client, to, domain.MessageSendPayload{
+		Kind: domain.MessageVideo, Caption: "animação", Media: &domain.MediaReference{MIMEType: "video/mp4", GIF: true},
+	}, &whatsmeow.UploadResponse{})
+	if err != nil || video.GetVideoMessage() == nil || !video.GetVideoMessage().GetGifPlayback() || video.GetVideoMessage().GetCaption() != "animação" {
+		t.Fatalf("GIF video variant was not preserved: message=%+v err=%v", video, err)
+	}
+
+	viewOnce, err := buildTypedMessage(client, to, domain.MessageSendPayload{
+		Kind: domain.MessageImage, Media: &domain.MediaReference{MIMEType: "image/jpeg", ViewOnce: true},
+	}, &whatsmeow.UploadResponse{})
+	if err != nil || viewOnce.GetViewOnceMessageV2().GetMessage().GetImageMessage() == nil {
+		t.Fatalf("view-once image was not wrapped: message=%+v err=%v", viewOnce, err)
 	}
 }
 

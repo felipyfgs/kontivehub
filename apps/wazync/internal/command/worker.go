@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strconv"
 	"time"
@@ -17,7 +18,10 @@ import (
 	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/store"
 )
 
-var errLeaseUnavailable = errors.New("session lease unavailable")
+var (
+	errLeaseUnavailable         = errors.New("session lease unavailable")
+	errOutboundMediaUnavailable = errors.New("outbound media unavailable")
+)
 
 type Transport interface {
 	SendTypedMessage(context.Context, string, domain.MessageSendPayload, string, []byte) error
@@ -55,6 +59,10 @@ type AccountPolicyTransport interface {
 type RecoveryTransport interface {
 	RequestHistorySync(context.Context, string, domain.HistorySyncPayload) error
 	RetryMedia(context.Context, string, domain.MediaRetryPayload) error
+}
+
+type StickerMaterializationTransport interface {
+	MaterializeSticker(context.Context, string, domain.StickerMaterializationPayload) (protocol.StickerMaterializationResult, error)
 }
 
 type MediaSource interface {
@@ -113,7 +121,13 @@ func (w *Worker) ProcessOnce(ctx context.Context) error {
 		return err
 	}
 	for _, pending := range commands {
-		err := w.process(ctx, pending.Command)
+		if pending.Command.Type == domain.CommandMaterializeSticker {
+			if err := w.processStickerMaterialization(ctx, pending); err != nil {
+				return err
+			}
+			continue
+		}
+		err := w.process(ctx, pending.Command, pending.Attempts)
 		if errors.Is(err, protocol.ErrMediaRetryClaimLost) {
 			// The receipt generation was claimed by another execution. Acknowledge
 			// this duplicate only if this worker still owns the command attempt;
@@ -128,10 +142,24 @@ func (w *Worker) ProcessOnce(ctx context.Context) error {
 		if err == nil {
 			if pending.Command.Type == domain.CommandRetryMedia {
 				err = w.store.FinalizeMediaRetryCommandProcessed(ctx, pending.Command.CommandID, pending.Attempts, now)
+			} else if pending.Command.Type == domain.CommandSendMessageBatch {
+				err = w.store.FinalizeMessageBatchCommandProcessed(
+					ctx, pending.Command.CommandID, pending.Attempts, now,
+				)
+			} else if isTerminalMessageAction(pending.Command.Type) {
+				event, eventErr := w.messageActionResultEvent(pending.Command, "SUCCEEDED", "", now)
+				if eventErr != nil {
+					return eventErr
+				}
+				err = w.store.FinalizeCommandProcessedWithEvent(
+					ctx, pending.Command.CommandID, pending.Attempts, now, event,
+				)
 			} else {
 				err = w.store.MarkCommandProcessed(ctx, pending.Command.CommandID, now)
 			}
-			if err != nil && !(pending.Command.Type == domain.CommandRetryMedia && errors.Is(err, domain.ErrStateConflict)) {
+			if err != nil && !((pending.Command.Type == domain.CommandRetryMedia ||
+				pending.Command.Type == domain.CommandSendMessageBatch ||
+				isTerminalMessageAction(pending.Command.Type)) && errors.Is(err, domain.ErrStateConflict)) {
 				return err
 			}
 			continue
@@ -141,9 +169,24 @@ func (w *Worker) ProcessOnce(ctx context.Context) error {
 			terminal = terminal || errors.Is(err, protocol.ErrMediaRetryStateMissing) ||
 				errors.Is(err, protocol.ErrHistoryRecoveryInvalid)
 		}
-		terminal = terminal || pending.Attempts >= w.maxAttempts
+		terminalByAttempts := pending.Attempts >= w.maxAttempts
+		terminal = terminal || terminalByAttempts
 		if terminal && pending.Command.Type == domain.CommandSendMessage {
-			if eventErr := w.appendStatusEvent(ctx, pending.Command, "UNKNOWN", now); eventErr != nil {
+			status, errorCode := "UNKNOWN", ""
+			if errors.Is(err, errOutboundMediaUnavailable) {
+				status, errorCode = "FAILED", "OUTBOUND_MEDIA_UNAVAILABLE"
+				event := w.messageStatusEvent(
+					pending.Command, status, errorCode, now,
+					"message-status-terminal-"+stableCommandEventID(pending.Command.CommandID, status, errorCode),
+				)
+				if finalizeErr := w.store.FinalizeCommandFailureWithEvent(
+					ctx, pending.Command.CommandID, pending.Attempts, now, errorCode, event,
+				); finalizeErr != nil && !errors.Is(finalizeErr, domain.ErrStateConflict) {
+					return finalizeErr
+				}
+				continue
+			}
+			if eventErr := w.appendStatusEvent(ctx, pending.Command, status, errorCode, now); eventErr != nil {
 				return eventErr
 			}
 		}
@@ -167,6 +210,27 @@ func (w *Worker) ProcessOnce(ctx context.Context) error {
 			)
 			continue
 		}
+		if terminal && pending.Command.Type == domain.CommandSendMessageBatch {
+			if finalizeErr := w.finalizeRemainingBatchItems(
+				ctx, pending.Command, pending.Attempts, domain.MessageBatchItemUnknown,
+				"BATCH_SEND_OUTCOME_UNKNOWN", now,
+			); finalizeErr != nil && !errors.Is(finalizeErr, domain.ErrStateConflict) {
+				return finalizeErr
+			}
+		}
+		if terminal && isTerminalMessageAction(pending.Command.Type) {
+			actionErrorCode := terminalMessageActionErrorCode(err, terminalByAttempts)
+			event, eventErr := w.messageActionResultEvent(pending.Command, "FAILED", actionErrorCode, now)
+			if eventErr != nil {
+				return eventErr
+			}
+			if finalizeErr := w.store.FinalizeCommandFailureWithEvent(
+				ctx, pending.Command.CommandID, pending.Attempts, now, actionErrorCode, event,
+			); finalizeErr != nil && !errors.Is(finalizeErr, domain.ErrStateConflict) {
+				return finalizeErr
+			}
+			continue
+		}
 		slog.Warn("command execution failed",
 			"command_id", pending.Command.CommandID,
 			"type", pending.Command.Type,
@@ -179,17 +243,128 @@ func (w *Worker) ProcessOnce(ctx context.Context) error {
 				ctx, pending.Command.CommandID, pending.Attempts,
 				now.Add(retryDelay(pending.Attempts)), commandErrorCode(err),
 			)
+		} else if pending.Command.Type == domain.CommandSendMessageBatch {
+			err = w.store.FinalizeMessageBatchCommandFailed(
+				ctx, pending.Command.CommandID, pending.Attempts,
+				now.Add(retryDelay(pending.Attempts)), commandErrorCode(err), terminal,
+			)
 		} else {
 			err = w.store.MarkCommandFailed(
 				ctx, pending.Command.CommandID, now.Add(retryDelay(pending.Attempts)),
 				commandErrorCode(err), terminal,
 			)
 		}
-		if err != nil && !(pending.Command.Type == domain.CommandRetryMedia && errors.Is(err, domain.ErrStateConflict)) {
+		if err != nil && !((pending.Command.Type == domain.CommandRetryMedia ||
+			pending.Command.Type == domain.CommandSendMessageBatch) && errors.Is(err, domain.ErrStateConflict)) {
 			return err
 		}
 	}
 	return w.reconcilePairingSessions(ctx)
+}
+
+func (w *Worker) processStickerMaterialization(ctx context.Context, pending domain.PendingCommand) error {
+	command := pending.Command
+	if _, owns := w.sessions.Owns(ctx, command.SessionID); !owns {
+		return w.store.MarkCommandFailed(
+			ctx, command.CommandID, w.now().UTC().Add(retryDelay(pending.Attempts)),
+			"SESSION_LEASE_UNAVAILABLE", false,
+		)
+	}
+	materializer, ok := w.transport.(StickerMaterializationTransport)
+	if !ok {
+		return w.finalizeStickerMaterializationFailure(
+			ctx, command, pending.Attempts, "UNSUPPORTED", w.now().UTC(),
+		)
+	}
+	var payload domain.StickerMaterializationPayload
+	if err := json.Unmarshal(command.Payload, &payload); err != nil {
+		return w.finalizeStickerMaterializationFailure(
+			ctx, command, pending.Attempts, "INVALID_REQUEST", w.now().UTC(),
+		)
+	}
+	result, err := materializer.MaterializeSticker(ctx, command.SessionID, payload)
+	if err == nil {
+		event := stickerMaterializationEvent(command, payload, result, "READY", "", pending.Attempts, w.now().UTC())
+		err = w.store.FinalizeCommandProcessedWithEvent(
+			ctx, command.CommandID, pending.Attempts, w.now().UTC(), event,
+		)
+		if errors.Is(err, domain.ErrStateConflict) {
+			return nil
+		}
+		return err
+	}
+
+	reason, retryable := "DOWNLOAD_FAILED", true
+	var materializationError *protocol.StickerMaterializationError
+	if errors.As(err, &materializationError) {
+		reason, retryable = materializationError.Reason, materializationError.Retryable
+	}
+	if retryable && pending.Attempts < w.maxAttempts {
+		return w.store.MarkCommandFailed(
+			ctx, command.CommandID, w.now().UTC().Add(retryDelay(pending.Attempts)), reason, false,
+		)
+	}
+	return w.finalizeStickerMaterializationFailure(
+		ctx, command, pending.Attempts, reason, w.now().UTC(),
+	)
+}
+
+func (w *Worker) finalizeStickerMaterializationFailure(
+	ctx context.Context,
+	command domain.Command,
+	attempt int,
+	reason string,
+	at time.Time,
+) error {
+	var payload domain.StickerMaterializationPayload
+	if err := json.Unmarshal(command.Payload, &payload); err != nil {
+		payload.ObservationID = "invalid-request"
+	}
+	event := stickerMaterializationEvent(
+		command, payload, protocol.StickerMaterializationResult{}, "FAILED", reason, attempt, at,
+	)
+	err := w.store.FinalizeCommandFailureWithEvent(
+		ctx, command.CommandID, attempt, at, reason, event,
+	)
+	if errors.Is(err, domain.ErrStateConflict) {
+		return nil
+	}
+	return err
+}
+
+func stickerMaterializationEvent(
+	command domain.Command,
+	request domain.StickerMaterializationPayload,
+	result protocol.StickerMaterializationResult,
+	status string,
+	errorCode string,
+	attempt int,
+	at time.Time,
+) domain.Event {
+	payload := map[string]any{
+		"command_id": command.CommandID, "observation_id": request.ObservationID,
+		"status": status, "attempt": attempt,
+	}
+	if errorCode != "" {
+		payload["error_code"] = errorCode
+	}
+	if status == "READY" {
+		payload["spool_id"] = result.SpoolID
+		payload["size_bytes"] = result.SizeBytes
+		payload["sha256"] = result.SHA256
+		payload["mime_type"] = result.MIMEType
+	}
+	encoded, _ := json.Marshal(payload)
+	digest := sha256.Sum256(encoded)
+	return domain.Event{
+		ContractVersion: "v1",
+		EventID:         "sticker-materialization-" + stableCommandEventID(command.CommandID),
+		SessionID:       command.SessionID,
+		Type:            domain.EventStickerMaterialized,
+		OccurredAt:      at,
+		Payload:         encoded,
+		Digest:          hex.EncodeToString(digest[:]),
+	}
 }
 
 func (w *Worker) reconcilePairingSessions(ctx context.Context) error {
@@ -221,7 +396,7 @@ func (w *Worker) reconcilePairingSessions(ctx context.Context) error {
 	return nil
 }
 
-func (w *Worker) process(ctx context.Context, command domain.Command) error {
+func (w *Worker) process(ctx context.Context, command domain.Command, attempt int) error {
 	switch command.Type {
 	case domain.CommandProvisionSession:
 		var payload struct {
@@ -277,6 +452,9 @@ func (w *Worker) process(ctx context.Context, command domain.Command) error {
 		if err := json.Unmarshal(command.Payload, &payload); err != nil || payload.To == "" {
 			return errors.New("invalid message payload")
 		}
+		if payload.Media != nil && payload.Media.PTV {
+			return errors.New("PTV builder is unavailable")
+		}
 		var content []byte
 		if payload.Media != nil {
 			if w.mediaSource == nil || payload.Media.Filename == "" || payload.Media.MIMEType == "" {
@@ -284,7 +462,7 @@ func (w *Worker) process(ctx context.Context, command domain.Command) error {
 			}
 			fetched, err := w.mediaSource.Fetch(ctx, command.CommandID, payload.Media.SHA256, payload.Media.SizeBytes)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w: %v", errOutboundMediaUnavailable, err)
 			}
 			content = fetched
 		}
@@ -293,7 +471,10 @@ func (w *Worker) process(ctx context.Context, command domain.Command) error {
 		); err != nil {
 			return err
 		}
-		return w.appendStatusEvent(ctx, command, "SENT", w.now().UTC())
+		return w.appendStatusEvent(ctx, command, "SENT", "", w.now().UTC())
+
+	case domain.CommandSendMessageBatch:
+		return w.processMessageBatch(ctx, command, attempt)
 
 	case domain.CommandEditMessage, domain.CommandRevokeMessage, domain.CommandReactMessage,
 		domain.CommandVotePoll, domain.CommandMarkMessage, domain.CommandSetDisappearing,
@@ -479,6 +660,149 @@ func (w *Worker) process(ctx context.Context, command domain.Command) error {
 	}
 }
 
+func (w *Worker) processMessageBatch(
+	ctx context.Context,
+	command domain.Command,
+	attempt int,
+) error {
+	if _, owns := w.sessions.Owns(ctx, command.SessionID); !owns {
+		return errLeaseUnavailable
+	}
+	var payload domain.MessageBatchPayload
+	if err := json.Unmarshal(command.Payload, &payload); err != nil {
+		return errors.New("invalid message batch payload")
+	}
+	if err := payload.Validate(); err != nil {
+		return err
+	}
+
+	for _, item := range payload.OrderedItems() {
+		state, err := w.store.GetMessageBatchItemState(ctx, command.CommandID, item.Position)
+		if err != nil {
+			return err
+		}
+		if state.BatchID != item.BatchID || state.Size != item.Size ||
+			state.ProviderMessageID != item.ProviderMessageID {
+			return domain.ErrStateConflict
+		}
+		if state.Status.Terminal() {
+			continue
+		}
+
+		message := item.Message
+		if message.Media == nil || w.mediaSource == nil || message.Media.Filename == "" || message.Media.MIMEType == "" {
+			return errors.New("invalid batch media payload")
+		}
+		if message.Media.PTV {
+			return errors.New("PTV builder is unavailable")
+		}
+		content, err := w.mediaSource.Fetch(
+			ctx, item.ProviderMessageID, message.Media.SHA256, message.Media.SizeBytes,
+		)
+		if err != nil {
+			if attempt < w.maxAttempts {
+				return fmt.Errorf("%w: %v", errOutboundMediaUnavailable, err)
+			}
+			if err := w.finalizeBatchItem(
+				ctx, command, attempt, item, domain.MessageBatchItemFailed,
+				"OUTBOUND_MEDIA_UNAVAILABLE", w.now().UTC(),
+			); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := w.transport.SendTypedMessage(
+			ctx, command.SessionID, message, item.ProviderMessageID, content,
+		); err != nil {
+			if attempt < w.maxAttempts {
+				return err
+			}
+			if err := w.finalizeBatchItem(
+				ctx, command, attempt, item, domain.MessageBatchItemUnknown,
+				"BATCH_SEND_OUTCOME_UNKNOWN", w.now().UTC(),
+			); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := w.finalizeBatchItem(
+			ctx, command, attempt, item, domain.MessageBatchItemSent, "", w.now().UTC(),
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (w *Worker) finalizeRemainingBatchItems(
+	ctx context.Context,
+	command domain.Command,
+	attempt int,
+	status domain.MessageBatchItemStatus,
+	errorCode string,
+	at time.Time,
+) error {
+	var payload domain.MessageBatchPayload
+	if err := json.Unmarshal(command.Payload, &payload); err != nil {
+		return err
+	}
+	for _, item := range payload.OrderedItems() {
+		state, err := w.store.GetMessageBatchItemState(ctx, command.CommandID, item.Position)
+		if err != nil {
+			return err
+		}
+		if state.Status.Terminal() {
+			continue
+		}
+		if err := w.finalizeBatchItem(ctx, command, attempt, item, status, errorCode, at); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (w *Worker) finalizeBatchItem(
+	ctx context.Context,
+	command domain.Command,
+	attempt int,
+	item domain.MessageBatchItemPayload,
+	status domain.MessageBatchItemStatus,
+	errorCode string,
+	at time.Time,
+) error {
+	event := batchItemStatusEvent(command, item, status, errorCode, at)
+	return w.store.FinalizeMessageBatchItemWithEvent(
+		ctx, command.CommandID, attempt, item, status, errorCode, at, event,
+	)
+}
+
+func batchItemStatusEvent(
+	command domain.Command,
+	item domain.MessageBatchItemPayload,
+	status domain.MessageBatchItemStatus,
+	errorCode string,
+	at time.Time,
+) domain.Event {
+	payloadValues := map[string]string{
+		"provider_message_id": item.ProviderMessageID,
+		"status":              string(status),
+	}
+	if errorCode != "" {
+		payloadValues["error_code"] = errorCode
+	}
+	payload, _ := json.Marshal(payloadValues)
+	digest := sha256.Sum256(payload)
+	return domain.Event{
+		ContractVersion: "v1",
+		EventID: "batch-item-" + stableCommandEventID(
+			command.CommandID, item.BatchID, strconv.Itoa(item.Position), string(status), errorCode,
+		),
+		SessionID: command.SessionID,
+		Type:      domain.EventMessageStatusChanged, OccurredAt: at,
+		Payload: payload, Digest: hex.EncodeToString(digest[:]),
+	}
+}
+
 func (w *Worker) connectSession(ctx context.Context, sessionID string) error {
 	current, err := w.ensureSession(ctx, sessionID)
 	if err != nil {
@@ -529,12 +853,111 @@ func (w *Worker) ensureSession(ctx context.Context, sessionID string) (domain.Se
 	return current, err
 }
 
-func (w *Worker) appendStatusEvent(ctx context.Context, command domain.Command, status string, at time.Time) error {
-	payload, _ := json.Marshal(map[string]string{
+func (w *Worker) appendStatusEvent(
+	ctx context.Context,
+	command domain.Command,
+	status, errorCode string,
+	at time.Time,
+) error {
+	event := w.messageStatusEvent(command, status, errorCode, at, eventID())
+	_, err := w.store.AppendEvent(ctx, event)
+	return err
+}
+
+func (w *Worker) messageStatusEvent(
+	command domain.Command,
+	status, errorCode string,
+	at time.Time,
+	id string,
+) domain.Event {
+	payloadValues := map[string]string{
 		"provider_message_id": command.ProviderMessageID,
 		"status":              status,
-	})
-	return w.appendEvent(ctx, command.SessionID, domain.EventMessageStatusChanged, payload, at)
+	}
+	if errorCode != "" {
+		payloadValues["error_code"] = errorCode
+	}
+	payload, _ := json.Marshal(payloadValues)
+	digest := sha256.Sum256(payload)
+	return domain.Event{
+		ContractVersion: "v1", EventID: id, SessionID: command.SessionID,
+		Type: domain.EventMessageStatusChanged, OccurredAt: at,
+		Payload: payload, Digest: hex.EncodeToString(digest[:]),
+	}
+}
+
+func isTerminalMessageAction(commandType domain.CommandType) bool {
+	switch commandType {
+	case domain.CommandEditMessage, domain.CommandRevokeMessage, domain.CommandReactMessage:
+		return true
+	default:
+		return false
+	}
+}
+
+func terminalMessageActionErrorCode(err error, exhaustedAttempts bool) string {
+	if exhaustedAttempts {
+		return "ACTION_RETRY_EXHAUSTED"
+	}
+	if errors.Is(err, session.ErrPairingTerminal) {
+		return "ACTION_REJECTED"
+	}
+	return "ACTION_OUTCOME_UNKNOWN"
+}
+
+func (w *Worker) messageActionResultEvent(
+	command domain.Command,
+	status string,
+	errorCode string,
+	at time.Time,
+) (domain.Event, error) {
+	var targetMessageID, action string
+	switch command.Type {
+	case domain.CommandEditMessage:
+		var payload domain.MessageEditPayload
+		if err := json.Unmarshal(command.Payload, &payload); err != nil {
+			return domain.Event{}, err
+		}
+		targetMessageID, action = payload.TargetMessageID, "EDIT"
+	case domain.CommandRevokeMessage:
+		var payload domain.MessageTargetPayload
+		if err := json.Unmarshal(command.Payload, &payload); err != nil {
+			return domain.Event{}, err
+		}
+		targetMessageID, action = payload.TargetMessageID, "REVOKE"
+	case domain.CommandReactMessage:
+		var payload domain.MessageReactionPayload
+		if err := json.Unmarshal(command.Payload, &payload); err != nil {
+			return domain.Event{}, err
+		}
+		targetMessageID, action = payload.TargetMessageID, "REACTION"
+	default:
+		return domain.Event{}, errors.New("unsupported terminal message action")
+	}
+	payload := map[string]string{
+		"command_id":          command.CommandID,
+		"action":              action,
+		"status":              status,
+		"provider_message_id": command.ProviderMessageID,
+		"target_message_id":   targetMessageID,
+	}
+	if errorCode != "" {
+		payload["error_code"] = errorCode
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return domain.Event{}, err
+	}
+	digest := sha256.Sum256(encoded)
+	return domain.Event{
+		ContractVersion: "v1",
+		EventID:         "message-action-result-" + stableCommandEventID(command.CommandID),
+		SessionID:       command.SessionID,
+		Type:            domain.EventMessageActionResult,
+		OccurredAt:      at,
+		Payload:         encoded,
+		Digest:          hex.EncodeToString(digest[:]),
+	}, nil
 }
 
 func (w *Worker) appendSessionEvent(ctx context.Context, sessionID, status string, at time.Time) error {

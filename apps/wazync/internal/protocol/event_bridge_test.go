@@ -1354,6 +1354,14 @@ func assertEventPayloadAllowlist(t *testing.T, event domain.Event) {
 			"provider_message_id", "status", "spool_id", "error_code", "generation", "attempt",
 			"size_bytes", "sha256", "mime_type", "filename",
 		},
+		domain.EventStickerObserved: {
+			"observation_id", "source", "availability", "mime_type", "size_bytes",
+			"width", "height", "is_lottie", "content_digest",
+		},
+		domain.EventStickerFavoriteChanged: {
+			"observation_id", "source", "favorite", "mime_type", "size_bytes",
+			"width", "height", "is_lottie",
+		},
 		domain.EventGatewayAlert: {"code", "severity", "retryable", "retry_after_seconds"},
 	}
 	allowedList, known := allowedByType[event.Type]
@@ -1366,23 +1374,25 @@ func assertEventPayloadAllowlist(t *testing.T, event domain.Event) {
 	}
 	payload := decodeEventPayload(t, event.Payload)
 	requiredByType := map[domain.EventType][]string{
-		domain.EventMessageReceived:       {"provider_message_id", "from", "kind"},
-		domain.EventMessageStatusChanged:  {"provider_message_id", "status"},
-		domain.EventMessageActionReceived: {"action", "target_message_id", "from"},
-		domain.EventSessionStatusChanged:  {"status"},
-		domain.EventPairingUpdated:        {"event"},
-		domain.EventMediaReady:            {"provider_message_id", "spool_id", "size_bytes", "sha256", "mime_type"},
-		domain.EventChatPresenceChanged:   {"from", "presence", "ttl_seconds"},
-		domain.EventPresenceChanged:       {"from", "available", "ttl_seconds"},
-		domain.EventContactProfileChanged: {"user"},
-		domain.EventIdentityChanged:       {"user", "change"},
-		domain.EventPrivacyChanged:        {"settings"},
-		domain.EventBlocklistChanged:      {"action", "users"},
-		domain.EventChatStateChanged:      {"to", "action"},
-		domain.EventHistorySynced:         {"batch_id", "messages", "complete"},
-		domain.EventSyncStatusChanged:     {"component", "status"},
-		domain.EventMediaRetryUpdated:     {"provider_message_id", "status"},
-		domain.EventGatewayAlert:          {"code", "severity", "retryable"},
+		domain.EventMessageReceived:        {"provider_message_id", "from", "kind"},
+		domain.EventMessageStatusChanged:   {"provider_message_id", "status"},
+		domain.EventStickerObserved:        {"observation_id", "source", "availability"},
+		domain.EventStickerFavoriteChanged: {"observation_id", "source", "favorite"},
+		domain.EventMessageActionReceived:  {"action", "target_message_id", "from"},
+		domain.EventSessionStatusChanged:   {"status"},
+		domain.EventPairingUpdated:         {"event"},
+		domain.EventMediaReady:             {"provider_message_id", "spool_id", "size_bytes", "sha256", "mime_type"},
+		domain.EventChatPresenceChanged:    {"from", "presence", "ttl_seconds"},
+		domain.EventPresenceChanged:        {"from", "available", "ttl_seconds"},
+		domain.EventContactProfileChanged:  {"user"},
+		domain.EventIdentityChanged:        {"user", "change"},
+		domain.EventPrivacyChanged:         {"settings"},
+		domain.EventBlocklistChanged:       {"action", "users"},
+		domain.EventChatStateChanged:       {"to", "action"},
+		domain.EventHistorySynced:          {"batch_id", "messages", "complete"},
+		domain.EventSyncStatusChanged:      {"component", "status"},
+		domain.EventMediaRetryUpdated:      {"provider_message_id", "status"},
+		domain.EventGatewayAlert:           {"code", "severity", "retryable"},
 	}
 	for _, required := range requiredByType[event.Type] {
 		if _, exists := payload[required]; !exists {

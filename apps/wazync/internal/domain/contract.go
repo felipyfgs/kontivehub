@@ -5,7 +5,20 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"sort"
 	"strings"
+	"time"
+)
+
+const (
+	maxOutboundContacts       = 10
+	maxContactDisplayNameByte = 512
+	maxContactVCardBytes      = 64 * 1024
+	maxEventTitleBytes        = 512
+	maxEventDescriptionBytes  = 2048
+	maxEventTimezoneBytes     = 64
+	maxEventLocationNameBytes = 512
+	maxEventLocationAddrBytes = 2048
 )
 
 type MessageKind string
@@ -19,6 +32,7 @@ const (
 	MessageSticker     MessageKind = "STICKER"
 	MessageLocation    MessageKind = "LOCATION"
 	MessageContact     MessageKind = "CONTACT"
+	MessageEvent       MessageKind = "EVENT"
 	MessagePoll        MessageKind = "POLL"
 	MessageInteractive MessageKind = "INTERACTIVE"
 	MessageUnsupported MessageKind = "UNSUPPORTED"
@@ -27,7 +41,7 @@ const (
 func (k MessageKind) Valid() bool {
 	switch k {
 	case MessageText, MessageImage, MessageAudio, MessageVideo, MessageDocument,
-		MessageSticker, MessageLocation, MessageContact, MessagePoll, MessageInteractive,
+		MessageSticker, MessageLocation, MessageContact, MessageEvent, MessagePoll, MessageInteractive,
 		MessageUnsupported:
 		return true
 	default:
@@ -74,6 +88,9 @@ type MediaReference struct {
 	SizeBytes    int64  `json:"size_bytes"`
 	SHA256       string `json:"sha256"`
 	PTT          bool   `json:"ptt,omitempty"`
+	GIF          bool   `json:"gif,omitempty"`
+	PTV          bool   `json:"ptv,omitempty"`
+	ViewOnce     bool   `json:"view_once,omitempty"`
 }
 
 type LinkPreviewPayload struct {
@@ -93,6 +110,37 @@ type LocationPayload struct {
 type ContactPayload struct {
 	DisplayName string `json:"display_name"`
 	VCard       string `json:"vcard"`
+}
+
+// EventPayload is deliberately a product DTO. The pinned protocol descriptor
+// is checked separately before this family can be advertised or sent.
+type EventPayload struct {
+	Title                string `json:"title"`
+	Description          string `json:"description,omitempty"`
+	StartAt              string `json:"start_at"`
+	EndAt                string `json:"end_at,omitempty"`
+	Timezone             string `json:"timezone"`
+	LocationName         string `json:"location_name,omitempty"`
+	LocationAddress      string `json:"location_address,omitempty"`
+	ParticipationEnabled bool   `json:"participation_enabled,omitempty"`
+}
+
+type MessageBatchItemPayload struct {
+	BatchID           string             `json:"batch_id"`
+	Position          int                `json:"position"`
+	Size              int                `json:"size"`
+	ProviderMessageID string             `json:"provider_message_id"`
+	Message           MessageSendPayload `json:"message"`
+}
+
+// MessageBatchPayload is a complete, bounded command envelope. Items carry
+// their stable correlation explicitly so JSON order can never define delivery
+// order accidentally.
+type MessageBatchPayload struct {
+	BatchID     string                    `json:"batch_id"`
+	Size        int                       `json:"size"`
+	AlbumNative bool                      `json:"album_native"`
+	Items       []MessageBatchItemPayload `json:"items"`
 }
 
 type PollPayload struct {
@@ -118,6 +166,8 @@ type MessageSendPayload struct {
 	Media       *MediaReference     `json:"media,omitempty"`
 	Location    *LocationPayload    `json:"location,omitempty"`
 	Contact     *ContactPayload     `json:"contact,omitempty"`
+	Contacts    []ContactPayload    `json:"contacts,omitempty"`
+	Event       *EventPayload       `json:"event,omitempty"`
 	Poll        *PollPayload        `json:"poll,omitempty"`
 	Interactive *InteractivePayload `json:"interactive,omitempty"`
 }
@@ -218,6 +268,15 @@ type MediaRetryPayload struct {
 	FromMe bool   `json:"from_me,omitempty"`
 }
 
+const MaxStickerMaterializationBytes int64 = 1 << 20
+
+type StickerMaterializationPayload struct {
+	ObservationID    string `json:"observation_id"`
+	ExpectedSHA256   string `json:"expected_sha256"`
+	ExpectedMIMEType string `json:"expected_mime_type"`
+	MaxBytes         int64  `json:"max_bytes"`
+}
+
 func (p MediaRetryPayload) MarshalJSON() ([]byte, error) {
 	type wirePayload struct {
 		To                string `json:"to"`
@@ -282,6 +341,12 @@ func (c Command) ValidatePayload() error {
 			return err
 		}
 		return payload.Validate()
+	case CommandSendMessageBatch:
+		var payload MessageBatchPayload
+		if err := decodePayload(c.Payload, &payload); err != nil {
+			return err
+		}
+		return payload.Validate()
 	case CommandEditMessage:
 		return decodePayload(c.Payload, &MessageEditPayload{})
 	case CommandRevokeMessage, CommandRequestUnavailableMessage:
@@ -298,6 +363,17 @@ func (c Command) ValidatePayload() error {
 			return err
 		}
 		return validateMediaRetryPayload(c.Payload, payload)
+	case CommandMaterializeSticker:
+		var payload StickerMaterializationPayload
+		if err := decodePayload(c.Payload, &payload); err != nil {
+			return err
+		}
+		if !identifierPattern.MatchString(payload.ObservationID) ||
+			!validSHA256Hex(payload.ExpectedSHA256) || payload.ExpectedMIMEType != "image/webp" ||
+			payload.MaxBytes < 1 || payload.MaxBytes > MaxStickerMaterializationBytes {
+			return errors.New("invalid sticker materialization payload")
+		}
+		return nil
 	case CommandSetPresence:
 		return decodePayload(c.Payload, &PresencePayload{})
 	case CommandSubscribePresence:
@@ -387,37 +463,140 @@ func (p MessageSendPayload) Validate() error {
 	switch p.Kind {
 	case MessageText:
 		if strings.TrimSpace(p.Text) == "" || p.Media != nil || p.Location != nil ||
-			p.Contact != nil || p.Poll != nil || p.Interactive != nil {
+			p.Contact != nil || len(p.Contacts) != 0 || p.Event != nil || p.Poll != nil || p.Interactive != nil {
 			return errors.New("invalid text message payload")
 		}
 	case MessageImage, MessageAudio, MessageVideo, MessageDocument, MessageSticker:
 		if p.Media == nil || strings.TrimSpace(p.Media.Filename) == "" ||
 			strings.TrimSpace(p.Media.MIMEType) == "" || p.Location != nil ||
-			p.Contact != nil || p.Poll != nil || p.Interactive != nil {
+			p.Contact != nil || len(p.Contacts) != 0 || p.Event != nil || p.Poll != nil || p.Interactive != nil {
 			return errors.New("invalid media message payload")
 		}
+		if p.Media.PTT && p.Kind != MessageAudio {
+			return errors.New("PTT flag is only valid for audio messages")
+		}
+		if p.Media.GIF && p.Kind != MessageVideo {
+			return errors.New("GIF flag is only valid for video messages")
+		}
+		if p.Media.PTV && p.Kind != MessageVideo {
+			return errors.New("PTV flag is only valid for video messages")
+		}
+		if p.Media.ViewOnce && p.Kind != MessageImage && p.Kind != MessageVideo {
+			return errors.New("view-once flag is only valid for image or video messages")
+		}
+		if (p.Media.GIF && p.Media.PTV) || (p.Media.GIF && p.Media.ViewOnce) || (p.Media.PTV && p.Media.ViewOnce) {
+			return errors.New("incompatible media variants")
+		}
 	case MessageLocation:
-		if p.Location == nil || p.Media != nil || p.Contact != nil ||
+		if p.Location == nil || p.Media != nil || p.Contact != nil || len(p.Contacts) != 0 || p.Event != nil ||
 			p.Poll != nil || p.Interactive != nil {
 			return errors.New("invalid location message payload")
 		}
 	case MessageContact:
-		if p.Contact == nil || p.Media != nil || p.Location != nil ||
+		if (p.Contact == nil && len(p.Contacts) == 0) || (p.Contact != nil && len(p.Contacts) != 0) || len(p.Contacts) > maxOutboundContacts || p.Media != nil || p.Location != nil || p.Event != nil ||
 			p.Poll != nil || p.Interactive != nil {
 			return errors.New("invalid contact message payload")
 		}
+		if p.Contact != nil {
+			return validateOutboundContact(*p.Contact)
+		}
+		for _, contact := range p.Contacts {
+			if err := validateOutboundContact(contact); err != nil {
+				return err
+			}
+		}
+	case MessageEvent:
+		if p.Event == nil || p.Media != nil || p.Location != nil || p.Contact != nil || len(p.Contacts) != 0 || p.Poll != nil || p.Interactive != nil {
+			return errors.New("invalid event message payload")
+		}
+		return validateOutboundEvent(*p.Event)
 	case MessagePoll:
-		if p.Poll == nil || p.Media != nil || p.Location != nil ||
-			p.Contact != nil || p.Interactive != nil {
+		if p.Poll == nil || p.Media != nil || p.Location != nil || p.Event != nil ||
+			p.Contact != nil || len(p.Contacts) != 0 || p.Interactive != nil {
 			return errors.New("invalid poll message payload")
 		}
 	case MessageInteractive:
-		if p.Interactive == nil || p.Media != nil || p.Location != nil ||
-			p.Contact != nil || p.Poll != nil {
+		if p.Interactive == nil || p.Media != nil || p.Location != nil || p.Event != nil ||
+			p.Contact != nil || len(p.Contacts) != 0 || p.Poll != nil {
 			return errors.New("invalid interactive message payload")
 		}
 	}
 
+	return nil
+}
+
+func (p MessageBatchPayload) Validate() error {
+	if !identifierPattern.MatchString(p.BatchID) || p.Size < 2 || p.Size > 10 || len(p.Items) != p.Size {
+		return errors.New("batch ID and 2 to 10 ordered media items are required")
+	}
+	if p.AlbumNative {
+		return errors.New("native albums are unavailable")
+	}
+	positions := make(map[int]struct{}, p.Size)
+	recipient := ""
+	for _, item := range p.Items {
+		if item.BatchID != p.BatchID || item.Size != p.Size || item.Position < 0 || item.Position >= p.Size ||
+			!identifierPattern.MatchString(item.ProviderMessageID) {
+			return errors.New("invalid batch item correlation")
+		}
+		if _, duplicate := positions[item.Position]; duplicate {
+			return errors.New("duplicate batch item position")
+		}
+		positions[item.Position] = struct{}{}
+		if err := item.Message.Validate(); err != nil {
+			return err
+		}
+		if item.Message.Kind != MessageImage && item.Message.Kind != MessageVideo && item.Message.Kind != MessageDocument {
+			return errors.New("batch items must be image, video, or document media")
+		}
+		if recipient == "" {
+			recipient = item.Message.To
+		} else if item.Message.To != recipient {
+			return errors.New("batch items must have one recipient")
+		}
+	}
+	for position := range p.Size {
+		if _, ok := positions[position]; !ok {
+			return errors.New("batch item positions are incomplete")
+		}
+	}
+	return nil
+}
+
+func (p MessageBatchPayload) OrderedItems() []MessageBatchItemPayload {
+	items := append([]MessageBatchItemPayload(nil), p.Items...)
+	sort.Slice(items, func(left, right int) bool {
+		return items[left].Position < items[right].Position
+	})
+	return items
+}
+
+func validateOutboundContact(contact ContactPayload) error {
+	if strings.TrimSpace(contact.DisplayName) == "" || strings.TrimSpace(contact.VCard) == "" ||
+		len(contact.DisplayName) > maxContactDisplayNameByte || len(contact.VCard) > maxContactVCardBytes {
+		return errors.New("invalid bounded contact payload")
+	}
+	return nil
+}
+
+func validateOutboundEvent(event EventPayload) error {
+	if strings.TrimSpace(event.Title) == "" || strings.TrimSpace(event.StartAt) == "" || strings.TrimSpace(event.Timezone) == "" ||
+		len(event.Title) > maxEventTitleBytes || len(event.Description) > maxEventDescriptionBytes ||
+		len(event.Timezone) > maxEventTimezoneBytes || len(event.LocationName) > maxEventLocationNameBytes ||
+		len(event.LocationAddress) > maxEventLocationAddrBytes {
+		return errors.New("invalid bounded event payload")
+	}
+	start, err := time.Parse(time.RFC3339, event.StartAt)
+	if err != nil {
+		return errors.New("event start_at must be RFC3339")
+	}
+	if strings.TrimSpace(event.EndAt) == "" {
+		return nil
+	}
+	end, err := time.Parse(time.RFC3339, event.EndAt)
+	if err != nil || !end.After(start) {
+		return errors.New("event end_at must be after start_at")
+	}
 	return nil
 }
 
@@ -450,4 +629,16 @@ func decodePayload(payload json.RawMessage, destination any) error {
 		return errors.New("unexpected content after payload")
 	}
 	return nil
+}
+
+func validSHA256Hex(value string) bool {
+	if len(value) != 64 || value != strings.ToLower(value) {
+		return false
+	}
+	for _, character := range value {
+		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
+			return false
+		}
+	}
+	return true
 }

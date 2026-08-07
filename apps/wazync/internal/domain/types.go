@@ -10,13 +10,14 @@ import (
 var identifierPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$`)
 
 var (
-	ErrDigestConflict       = errors.New("identifier already exists with another digest")
-	ErrNotFound             = errors.New("record not found")
-	ErrProfilePictureHidden = errors.New("profile picture unavailable due to privacy")
-	ErrProfilePictureNotSet = errors.New("profile picture not set")
-	ErrStateConflict        = errors.New("record state conflict")
-	ErrFeatureOff           = errors.New("gateway is disabled")
-	ErrSessionAlreadyPaired = errors.New("WhatsApp session already paired")
+	ErrDigestConflict            = errors.New("identifier already exists with another digest")
+	ErrNotFound                  = errors.New("record not found")
+	ErrProfilePictureHidden      = errors.New("profile picture unavailable due to privacy")
+	ErrProfilePictureNotSet      = errors.New("profile picture not set")
+	ErrStateConflict             = errors.New("record state conflict")
+	ErrFeatureOff                = errors.New("gateway is disabled")
+	ErrSessionAlreadyPaired      = errors.New("WhatsApp session already paired")
+	ErrStickerObservationExpired = errors.New("sticker observation metadata expired")
 )
 
 type CommandType string
@@ -32,6 +33,7 @@ const (
 	CommandSetPassive                CommandType = "SESSION_SET_PASSIVE"
 	CommandLogoutSession             CommandType = "SESSION_LOGOUT"
 	CommandSendMessage               CommandType = "MESSAGE_SEND"
+	CommandSendMessageBatch          CommandType = "MESSAGE_BATCH_SEND"
 	CommandEditMessage               CommandType = "MESSAGE_EDIT"
 	CommandRevokeMessage             CommandType = "MESSAGE_REVOKE"
 	CommandReactMessage              CommandType = "MESSAGE_REACT"
@@ -48,18 +50,19 @@ const (
 	CommandUpdatePrivacy             CommandType = "PRIVACY_UPDATE"
 	CommandSetDefaultDisappearing    CommandType = "DEFAULT_DISAPPEARING_SET"
 	CommandRequestHistorySync        CommandType = "HISTORY_SYNC_REQUEST"
+	CommandMaterializeSticker        CommandType = "STICKER_MATERIALIZE"
 )
 
 func (t CommandType) Valid() bool {
 	switch t {
 	case CommandProvisionSession, CommandPairSession, CommandPairPhone, CommandPasskeyRespond,
 		CommandPasskeyConfirm, CommandConnectSession, CommandDisconnectSession,
-		CommandSetPassive, CommandLogoutSession, CommandSendMessage, CommandEditMessage,
+		CommandSetPassive, CommandLogoutSession, CommandSendMessage, CommandSendMessageBatch, CommandEditMessage,
 		CommandRevokeMessage, CommandReactMessage, CommandVotePoll, CommandMarkMessage,
 		CommandRequestUnavailableMessage, CommandRetryMedia, CommandSetPresence, CommandSubscribePresence,
 		CommandSetChatPresence, CommandSetDisappearing, CommandUpdateChatState,
 		CommandUpdateBlocklist, CommandUpdatePrivacy, CommandSetDefaultDisappearing,
-		CommandRequestHistorySync:
+		CommandRequestHistorySync, CommandMaterializeSticker:
 		return true
 	default:
 		return false
@@ -90,35 +93,65 @@ type PendingCommand struct {
 	Attempts int
 }
 
+type MessageBatchItemStatus string
+
+const (
+	MessageBatchItemPending MessageBatchItemStatus = "PENDING"
+	MessageBatchItemSent    MessageBatchItemStatus = "SENT"
+	MessageBatchItemFailed  MessageBatchItemStatus = "FAILED"
+	MessageBatchItemUnknown MessageBatchItemStatus = "UNKNOWN"
+)
+
+func (s MessageBatchItemStatus) Terminal() bool {
+	return s == MessageBatchItemSent || s == MessageBatchItemFailed || s == MessageBatchItemUnknown
+}
+
+type MessageBatchItemState struct {
+	CommandID         string
+	SessionID         string
+	BatchID           string
+	Position          int
+	Size              int
+	ProviderMessageID string
+	Status            MessageBatchItemStatus
+	ErrorCode         string
+	UpdatedAt         time.Time
+}
+
 type EventType string
 
 const (
-	EventMessageReceived       EventType = "MESSAGE_RECEIVED"
-	EventMessageStatusChanged  EventType = "MESSAGE_STATUS_CHANGED"
-	EventMessageActionReceived EventType = "MESSAGE_ACTION_RECEIVED"
-	EventSessionStatusChanged  EventType = "SESSION_STATUS_CHANGED"
-	EventPairingUpdated        EventType = "PAIRING_UPDATED"
-	EventMediaReady            EventType = "MEDIA_READY"
-	EventChatPresenceChanged   EventType = "CHAT_PRESENCE_CHANGED"
-	EventPresenceChanged       EventType = "CONTACT_PRESENCE_CHANGED"
-	EventContactProfileChanged EventType = "CONTACT_PROFILE_CHANGED"
-	EventIdentityChanged       EventType = "CONTACT_IDENTITY_CHANGED"
-	EventPrivacyChanged        EventType = "PRIVACY_SETTINGS_CHANGED"
-	EventBlocklistChanged      EventType = "BLOCKLIST_CHANGED"
-	EventChatStateChanged      EventType = "CHAT_STATE_CHANGED"
-	EventHistorySynced         EventType = "HISTORY_SYNCED"
-	EventSyncStatusChanged     EventType = "SYNC_STATUS_CHANGED"
-	EventMediaRetryUpdated     EventType = "MEDIA_RETRY_UPDATED"
-	EventGatewayAlert          EventType = "GATEWAY_ALERT"
+	EventMessageReceived        EventType = "MESSAGE_RECEIVED"
+	EventMessageStatusChanged   EventType = "MESSAGE_STATUS_CHANGED"
+	EventMessageActionReceived  EventType = "MESSAGE_ACTION_RECEIVED"
+	EventMessageActionResult    EventType = "MESSAGE_ACTION_RESULT"
+	EventSessionStatusChanged   EventType = "SESSION_STATUS_CHANGED"
+	EventPairingUpdated         EventType = "PAIRING_UPDATED"
+	EventMediaReady             EventType = "MEDIA_READY"
+	EventChatPresenceChanged    EventType = "CHAT_PRESENCE_CHANGED"
+	EventPresenceChanged        EventType = "CONTACT_PRESENCE_CHANGED"
+	EventContactProfileChanged  EventType = "CONTACT_PROFILE_CHANGED"
+	EventIdentityChanged        EventType = "CONTACT_IDENTITY_CHANGED"
+	EventPrivacyChanged         EventType = "PRIVACY_SETTINGS_CHANGED"
+	EventBlocklistChanged       EventType = "BLOCKLIST_CHANGED"
+	EventChatStateChanged       EventType = "CHAT_STATE_CHANGED"
+	EventHistorySynced          EventType = "HISTORY_SYNCED"
+	EventSyncStatusChanged      EventType = "SYNC_STATUS_CHANGED"
+	EventMediaRetryUpdated      EventType = "MEDIA_RETRY_UPDATED"
+	EventStickerObserved        EventType = "STICKER_OBSERVED"
+	EventStickerFavoriteChanged EventType = "STICKER_FAVORITE_CHANGED"
+	EventStickerMaterialized    EventType = "STICKER_MATERIALIZED"
+	EventGatewayAlert           EventType = "GATEWAY_ALERT"
 )
 
 func (t EventType) Valid() bool {
 	switch t {
-	case EventMessageReceived, EventMessageStatusChanged, EventMessageActionReceived,
+	case EventMessageReceived, EventMessageStatusChanged, EventMessageActionReceived, EventMessageActionResult,
 		EventSessionStatusChanged, EventPairingUpdated, EventMediaReady, EventChatPresenceChanged,
 		EventPresenceChanged, EventContactProfileChanged, EventIdentityChanged, EventPrivacyChanged,
 		EventBlocklistChanged, EventChatStateChanged, EventHistorySynced, EventSyncStatusChanged,
-		EventMediaRetryUpdated, EventGatewayAlert:
+		EventMediaRetryUpdated, EventStickerObserved, EventStickerFavoriteChanged,
+		EventStickerMaterialized, EventGatewayAlert:
 		return true
 	default:
 		return false
@@ -283,4 +316,17 @@ type MediaRetryState struct {
 	Attempts   int
 	UpdatedAt  time.Time
 	ExpiresAt  time.Time
+}
+
+// StickerObservationState retains only the short-lived encrypted provider
+// descriptor needed to materialize an observed sticker. CorrelationAliases
+// are one-way hashes of provider-supplied hashes and never define content
+// identity; the verified plaintext digest remains authoritative.
+type StickerObservationState struct {
+	SessionID          string
+	ObservationID      string
+	Descriptor         []byte
+	CorrelationAliases []string
+	UpdatedAt          time.Time
+	ExpiresAt          time.Time
 }

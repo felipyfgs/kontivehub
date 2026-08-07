@@ -17,7 +17,9 @@ import (
 	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/spool"
 	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/store"
 	"go.mau.fi/whatsmeow"
+	"go.mau.fi/whatsmeow/appstate"
 	"go.mau.fi/whatsmeow/proto/waE2E"
+	"go.mau.fi/whatsmeow/proto/waHistorySync"
 	"go.mau.fi/whatsmeow/proto/waMmsRetry"
 	"go.mau.fi/whatsmeow/proto/waWeb"
 	"go.mau.fi/whatsmeow/types"
@@ -30,6 +32,8 @@ const (
 	chatPresenceTTLSeconds = 15
 	contactPresenceTTL     = 60
 	maxHistoryMessages     = 100
+	maxRecentStickers      = 100
+	maxSyncedStickerBytes  = 1 << 20
 	mediaRetryRetention    = 7 * 24 * time.Hour
 )
 
@@ -87,6 +91,41 @@ type deferredEventCollector struct {
 }
 
 type deferredEventCollectorKey struct{}
+
+type stickerObservationPayload struct {
+	ObservationID, Source, Availability, MIMEType, ContentDigest string
+	SizeBytes                                                    uint64
+	Width, Height                                                uint32
+	IsLottie                                                     bool
+}
+
+func (p stickerObservationPayload) allowlisted() map[string]any {
+	result := map[string]any{
+		"observation_id": p.ObservationID, "source": p.Source, "availability": p.Availability,
+		"mime_type": p.MIMEType, "size_bytes": p.SizeBytes, "width": p.Width,
+		"height": p.Height, "is_lottie": p.IsLottie,
+	}
+	if p.ContentDigest != "" {
+		result["content_digest"] = p.ContentDigest
+	}
+	return result
+}
+
+type stickerFavoritePayload struct {
+	ObservationID, MIMEType string
+	Favorite                bool
+	SizeBytes               uint64
+	Width, Height           uint32
+	IsLottie                bool
+}
+
+func (p stickerFavoritePayload) allowlisted() map[string]any {
+	return map[string]any{
+		"observation_id": p.ObservationID, "source": "DEVICE_FAVORITE", "favorite": p.Favorite,
+		"mime_type": p.MIMEType, "size_bytes": p.SizeBytes, "width": p.Width,
+		"height": p.Height, "is_lottie": p.IsLottie,
+	}
+}
 
 func NewEventBridge(persistence store.Store, mediaSpool *spool.Store, maxMediaBytes int64) *EventBridge {
 	return &EventBridge{store: persistence, spool: mediaSpool, maxMediaBytes: maxMediaBytes}
@@ -227,8 +266,7 @@ func (b *EventBridge) handle(ctx context.Context, sessionID string, client event
 				"component": "APP_STATE", "status": "FAILED", "error_code": "APP_STATE_SYNC_ERROR",
 			})
 	case *events.AppState:
-		// Raw app-state actions are intentionally never serialized. The higher
-		// level allowlisted events above are the supported projection.
+		b.handleStickerFavorite(ctx, sessionID, event)
 	case *events.UserStatusMute:
 		// Status/broadcast is outside the 1:1 conversation scope.
 		b.rejectedScope.Add(1)
@@ -319,6 +357,9 @@ func (b *EventBridge) handleMessage(
 ) {
 	if event == nil || event.Message == nil {
 		return
+	}
+	if sticker := event.Message.GetStickerMessage(); sticker != nil {
+		b.handleMessageStickerObservation(ctx, sessionID, event, sticker)
 	}
 	peer, err := normalizeMessageSource(event.Info.MessageSource)
 	if err != nil {
@@ -588,6 +629,7 @@ func (b *EventBridge) handleHistorySync(
 	if event == nil || event.Data == nil {
 		return
 	}
+	b.handleRecentStickers(ctx, sessionID, event.Data.GetRecentStickers())
 	messages := make([]map[string]any, 0)
 	messageIDs := make([]string, 0)
 	actions := &deferredEventCollector{}
@@ -685,6 +727,144 @@ func (b *EventBridge) handleHistorySync(
 	for _, deferred := range actions.events {
 		b.append(ctx, deferred.eventID, deferred.sessionID, deferred.eventType, deferred.occurredAt, deferred.payload)
 	}
+}
+
+func (b *EventBridge) handleRecentStickers(
+	ctx context.Context,
+	sessionID string,
+	stickers []*waHistorySync.StickerMetadata,
+) {
+	seen := make(map[string]struct{}, min(len(stickers), maxRecentStickers))
+	for index, sticker := range stickers {
+		if index >= maxRecentStickers || sticker == nil {
+			break
+		}
+		contentDigest := hex.EncodeToString(sticker.GetFileSHA256())
+		identity := stableID("sticker", sessionID, contentDigest, sticker.GetImageHash())
+		if _, duplicate := seen[identity]; duplicate {
+			continue
+		}
+		seen[identity] = struct{}{}
+		availability := syncedStickerAvailability(
+			sticker.GetMimetype(), sticker.GetFileLength(), sticker.GetWidth(), sticker.GetHeight(),
+			sticker.GetDirectPath(), sticker.GetMediaKey(), sticker.GetFileSHA256(), sticker.GetFileEncSHA256(),
+		)
+		observedAt := time.Now().UTC()
+		if sticker.GetLastStickerSentTS() > 0 {
+			observedAt = time.Unix(sticker.GetLastStickerSentTS(), 0).UTC()
+		}
+		payload := stickerObservationPayload{
+			ObservationID: identity, Source: "DEVICE_RECENT", Availability: availability,
+			MIMEType: sticker.GetMimetype(), SizeBytes: sticker.GetFileLength(),
+			Width: sticker.GetWidth(), Height: sticker.GetHeight(), IsLottie: sticker.GetIsLottie(),
+		}
+		if len(sticker.GetFileSHA256()) == sha256.Size {
+			payload.ContentDigest = contentDigest
+		}
+		if err := b.rememberStickerObservation(
+			ctx, sessionID, identity, availability, sticker,
+			stickerCorrelationAliases(sticker.GetImageHash(), sticker.GetFileEncSHA256(), sticker.GetFileSHA256()),
+		); err != nil {
+			markEventHandlingFailure(ctx)
+			continue
+		}
+		b.append(ctx, stableID("sticker-observed", sessionID, identity), sessionID,
+			domain.EventStickerObserved, observedAt, payload.allowlisted())
+	}
+}
+
+func (b *EventBridge) handleStickerFavorite(
+	ctx context.Context,
+	sessionID string,
+	event *events.AppState,
+) {
+	if event == nil || len(event.Index) == 0 || event.Index[0] != appstate.IndexFavoriteSticker ||
+		event.SyncActionValue == nil || event.GetStickerAction() == nil {
+		return
+	}
+	action := event.GetStickerAction()
+	if (action.GetMimetype() != "" && action.GetMimetype() != "image/webp") ||
+		action.GetFileLength() > maxSyncedStickerBytes || action.GetWidth() > 512 || action.GetHeight() > 512 {
+		return
+	}
+	indexIdentity := ""
+	if len(event.Index) > 1 {
+		indexIdentity = event.Index[1]
+	}
+	if indexIdentity == "" && action.GetImageHash() == "" && len(action.GetFileEncSHA256()) == 0 {
+		return
+	}
+	identity := stableID("sticker-favorite", sessionID, indexIdentity, action.GetImageHash(), action.GetFileEncSHA256())
+	if err := b.rememberStickerObservation(
+		ctx, sessionID, identity, "INCOMPLETE_METADATA", nil,
+		stickerCorrelationAliases(action.GetImageHash(), action.GetFileEncSHA256(), nil),
+	); err != nil {
+		markEventHandlingFailure(ctx)
+		return
+	}
+	observedAt := time.Now().UTC()
+	if event.GetTimestamp() > 0 {
+		observedAt = time.UnixMilli(event.GetTimestamp()).UTC()
+	}
+	b.append(ctx, stableID("sticker-favorite-changed", sessionID, identity, action.GetIsFavorite()), sessionID,
+		domain.EventStickerFavoriteChanged, observedAt, stickerFavoritePayload{
+			ObservationID: identity, Favorite: action.GetIsFavorite(), MIMEType: action.GetMimetype(),
+			SizeBytes: action.GetFileLength(), Width: action.GetWidth(), Height: action.GetHeight(),
+			IsLottie: action.GetIsLottie(),
+		}.allowlisted())
+}
+
+func (b *EventBridge) handleMessageStickerObservation(
+	ctx context.Context,
+	sessionID string,
+	event *events.Message,
+	sticker *waE2E.StickerMessage,
+) {
+	if event == nil || sticker == nil || event.Info.ID == "" {
+		return
+	}
+	contentDigest := hex.EncodeToString(sticker.GetFileSHA256())
+	identity := stableID("sticker", sessionID, contentDigest, event.Info.ID)
+	availability := syncedStickerAvailability(
+		sticker.GetMimetype(), sticker.GetFileLength(), sticker.GetWidth(), sticker.GetHeight(),
+		sticker.GetDirectPath(), sticker.GetMediaKey(), sticker.GetFileSHA256(), sticker.GetFileEncSHA256(),
+	)
+	payload := stickerObservationPayload{
+		ObservationID: identity, Source: "DEVICE_MESSAGE", Availability: availability,
+		MIMEType: sticker.GetMimetype(), SizeBytes: sticker.GetFileLength(),
+		Width: sticker.GetWidth(), Height: sticker.GetHeight(), IsLottie: sticker.GetIsLottie(),
+	}
+	if len(sticker.GetFileSHA256()) == sha256.Size {
+		payload.ContentDigest = contentDigest
+	}
+	if err := b.rememberStickerObservation(
+		ctx, sessionID, identity, availability, sticker,
+		stickerCorrelationAliases("", sticker.GetFileEncSHA256(), sticker.GetFileSHA256()),
+	); err != nil {
+		markEventHandlingFailure(ctx)
+		return
+	}
+	b.append(ctx, stableID("sticker-observed", sessionID, identity), sessionID,
+		domain.EventStickerObserved, eventTimestamp(event.Info.Timestamp), payload.allowlisted())
+}
+
+func syncedStickerAvailability(
+	mimeType string,
+	size uint64,
+	width uint32,
+	height uint32,
+	directPath string,
+	mediaKey []byte,
+	fileSHA256 []byte,
+	fileEncSHA256 []byte,
+) string {
+	if mimeType != "image/webp" || size == 0 || size > maxSyncedStickerBytes || width > 512 || height > 512 {
+		return "UNSUPPORTED"
+	}
+	if directPath == "" || len(mediaKey) == 0 || len(fileSHA256) != sha256.Size || len(fileEncSHA256) != sha256.Size {
+		return "INCOMPLETE_METADATA"
+	}
+	return "AVAILABLE"
 }
 
 func normalizedHistoryMessage(event *events.Message, peer OneToOneAddress) map[string]any {

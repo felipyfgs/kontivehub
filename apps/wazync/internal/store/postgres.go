@@ -3,6 +3,7 @@ package store
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -16,6 +17,11 @@ import (
 
 type commandFinalizer interface {
 	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+}
+
+type eventInserter interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
 type Postgres struct {
@@ -65,6 +71,28 @@ CREATE UNIQUE INDEX IF NOT EXISTS wazync_provider_message_uq
     ON wazync.commands (session_id, provider_message_id)
     WHERE provider_message_id IS NOT NULL;
 
+CREATE TABLE IF NOT EXISTS wazync.message_batch_items (
+    command_id varchar(128) NOT NULL REFERENCES wazync.commands(command_id) ON DELETE CASCADE,
+    session_id varchar(128) NOT NULL,
+    batch_id varchar(128) NOT NULL,
+    position smallint NOT NULL,
+    batch_size smallint NOT NULL,
+    provider_message_id varchar(128) NOT NULL,
+    status varchar(32) NOT NULL DEFAULT 'PENDING'
+        CHECK (status IN ('PENDING', 'SENT', 'FAILED', 'UNKNOWN')),
+    error_code varchar(80),
+    terminal_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (command_id, position),
+    UNIQUE (session_id, batch_id, position),
+    UNIQUE (session_id, provider_message_id),
+    CHECK (position >= 0 AND position < batch_size),
+    CHECK (batch_size >= 2 AND batch_size <= 10)
+);
+CREATE INDEX IF NOT EXISTS wazync_message_batch_items_state_idx
+    ON wazync.message_batch_items (command_id, status, position);
+
 CREATE TABLE IF NOT EXISTS wazync.events (
     event_id varchar(128) PRIMARY KEY,
     session_id varchar(128) NOT NULL,
@@ -97,6 +125,31 @@ CREATE TABLE IF NOT EXISTS wazync.media_retry_states (
     updated_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (session_id, provider_message_id)
 );
+
+CREATE TABLE IF NOT EXISTS wazync.sticker_observations (
+    session_id varchar(128) NOT NULL,
+    observation_id varchar(128) NOT NULL,
+    descriptor_cipher bytea,
+    descriptor_nonce bytea,
+    expires_at timestamptz NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (session_id, observation_id),
+    CHECK ((descriptor_cipher IS NULL) = (descriptor_nonce IS NULL))
+);
+CREATE INDEX IF NOT EXISTS wazync_sticker_observations_expiry_idx
+    ON wazync.sticker_observations (expires_at);
+
+CREATE TABLE IF NOT EXISTS wazync.sticker_observation_aliases (
+    session_id varchar(128) NOT NULL,
+    observation_id varchar(128) NOT NULL,
+    alias_digest char(64) NOT NULL,
+    PRIMARY KEY (session_id, observation_id, alias_digest),
+    FOREIGN KEY (session_id, observation_id)
+        REFERENCES wazync.sticker_observations(session_id, observation_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS wazync_sticker_observation_alias_lookup_idx
+    ON wazync.sticker_observation_aliases (session_id, alias_digest);
 
 CREATE TABLE IF NOT EXISTS wazync.nonces (
     nonce_digest char(64) PRIMARY KEY,
@@ -285,11 +338,22 @@ WHERE session_id = $1 AND provider_message_id = $2`, sessionID, messageID)
 }
 
 func (s *Postgres) AcceptCommand(ctx context.Context, command domain.Command) (bool, error) {
+	var batch domain.MessageBatchPayload
+	if command.Type == domain.CommandSendMessageBatch {
+		if err := json.Unmarshal(command.Payload, &batch); err != nil || batch.Validate() != nil {
+			return false, errors.New("invalid message batch command")
+		}
+	}
 	ciphertext, nonce, err := s.box.Seal(command.Payload, []byte(command.CommandID))
 	if err != nil {
 		return false, fmt.Errorf("encrypt command payload: %w", err)
 	}
-	result, err := s.pool.Exec(ctx, `
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return false, fmt.Errorf("begin command acceptance: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	result, err := tx.Exec(ctx, `
 INSERT INTO wazync.commands (
     command_id, session_id, command_type, provider_message_id,
     payload_cipher, payload_nonce, payload_digest, accepted_at
@@ -301,20 +365,40 @@ ON CONFLICT (command_id) DO NOTHING`,
 	if err != nil {
 		return false, fmt.Errorf("persist command: %w", err)
 	}
-	if result.RowsAffected() == 1 {
-		return false, nil
+	if result.RowsAffected() == 0 {
+		var digest string
+		if err := tx.QueryRow(ctx,
+			`SELECT payload_digest FROM wazync.commands WHERE command_id = $1`, command.CommandID,
+		).Scan(&digest); err != nil {
+			return false, fmt.Errorf("read existing command: %w", err)
+		}
+		if digest != command.Digest {
+			return false, domain.ErrDigestConflict
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return false, fmt.Errorf("commit duplicate command acceptance: %w", err)
+		}
+		return true, nil
 	}
 
-	var digest string
-	if err := s.pool.QueryRow(ctx,
-		`SELECT payload_digest FROM wazync.commands WHERE command_id = $1`, command.CommandID,
-	).Scan(&digest); err != nil {
-		return false, fmt.Errorf("read existing command: %w", err)
+	for _, item := range batch.Items {
+		if _, err := tx.Exec(ctx, `
+INSERT INTO wazync.message_batch_items (
+    command_id, session_id, batch_id, position, batch_size, provider_message_id
+) VALUES ($1, $2, $3, $4, $5, $6)`,
+			command.CommandID, command.SessionID, batch.BatchID, item.Position, batch.Size, item.ProviderMessageID,
+		); err != nil {
+			var databaseError *pgconn.PgError
+			if errors.As(err, &databaseError) && databaseError.Code == "23505" {
+				return false, domain.ErrDigestConflict
+			}
+			return false, fmt.Errorf("persist message batch item: %w", err)
+		}
 	}
-	if digest != command.Digest {
-		return false, domain.ErrDigestConflict
+	if err := tx.Commit(ctx); err != nil {
+		return false, fmt.Errorf("commit command acceptance: %w", err)
 	}
-	return true, nil
+	return false, nil
 }
 
 func (s *Postgres) NextCommands(
@@ -514,6 +598,112 @@ WHERE command_id = $1 AND command_type = $5
 	return nil
 }
 
+func (s *Postgres) FinalizeCommandProcessedWithEvent(
+	ctx context.Context,
+	commandID string,
+	expectedAttempts int,
+	processedAt time.Time,
+	event domain.Event,
+) error {
+	ciphertext, nonce, err := s.box.Seal(event.Payload, []byte(event.EventID))
+	if err != nil {
+		return fmt.Errorf("encrypt processed event payload: %w", err)
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin processed command finalization: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var status string
+	var attempts int
+	if err := tx.QueryRow(ctx, `
+SELECT status, attempt_count
+FROM wazync.commands
+WHERE command_id = $1
+FOR UPDATE`, commandID).Scan(&status, &attempts); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.ErrStateConflict
+		}
+		return fmt.Errorf("lock processed command: %w", err)
+	}
+	if status == "PROCESSED" {
+		var digest string
+		if err := tx.QueryRow(ctx, `SELECT payload_digest FROM wazync.events WHERE event_id = $1`, event.EventID).Scan(&digest); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return domain.ErrStateConflict
+			}
+			return fmt.Errorf("read idempotent processed event: %w", err)
+		}
+		if digest != event.Digest {
+			return domain.ErrDigestConflict
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return fmt.Errorf("commit idempotent processed command: %w", err)
+		}
+		return nil
+	}
+	if status != "PROCESSING" || attempts != expectedAttempts {
+		return domain.ErrStateConflict
+	}
+
+	if err := insertEventIfAbsent(ctx, tx, event, ciphertext, nonce); err != nil {
+		if errors.Is(err, domain.ErrDigestConflict) {
+			return domain.ErrDigestConflict
+		}
+		return fmt.Errorf("persist processed event: %w", err)
+	}
+
+	result, err := tx.Exec(ctx, `
+UPDATE wazync.commands
+SET status = 'PROCESSED', processed_at = $2, locked_at = NULL, updated_at = $2
+WHERE command_id = $1 AND status = 'PROCESSING' AND attempt_count = $3`,
+		commandID, processedAt, expectedAttempts,
+	)
+	if err != nil {
+		return fmt.Errorf("mark command processed with event: %w", err)
+	}
+	if result.RowsAffected() != 1 {
+		return domain.ErrStateConflict
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit processed command with event: %w", err)
+	}
+	return nil
+}
+
+func insertEventIfAbsent(
+	ctx context.Context,
+	executor eventInserter,
+	event domain.Event,
+	ciphertext, nonce []byte,
+) error {
+	result, err := executor.Exec(ctx, `
+INSERT INTO wazync.events (
+    event_id, session_id, event_type, occurred_at,
+    payload_cipher, payload_nonce, payload_digest
+) VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (event_id) DO NOTHING`,
+		event.EventID, event.SessionID, event.Type, event.OccurredAt,
+		ciphertext, nonce, event.Digest,
+	)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		var digest string
+		if err := executor.QueryRow(
+			ctx, `SELECT payload_digest FROM wazync.events WHERE event_id = $1`, event.EventID,
+		).Scan(&digest); err != nil {
+			return err
+		}
+		if digest != event.Digest {
+			return domain.ErrDigestConflict
+		}
+	}
+	return nil
+}
+
 func (s *Postgres) FinalizeCommandFailureWithEvent(
 	ctx context.Context,
 	commandID string,
@@ -602,6 +792,209 @@ WHERE command_id = $1 AND status = 'PROCESSING' AND attempt_count = $4`,
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit terminal command failure: %w", err)
+	}
+	return nil
+}
+
+func (s *Postgres) GetMessageBatchItemState(
+	ctx context.Context,
+	commandID string,
+	position int,
+) (domain.MessageBatchItemState, error) {
+	var state domain.MessageBatchItemState
+	err := s.pool.QueryRow(ctx, `
+SELECT command_id, session_id, batch_id, position, batch_size,
+       provider_message_id, status, COALESCE(error_code, ''), updated_at
+FROM wazync.message_batch_items
+WHERE command_id = $1 AND position = $2`, commandID, position).Scan(
+		&state.CommandID, &state.SessionID, &state.BatchID, &state.Position, &state.Size,
+		&state.ProviderMessageID, &state.Status, &state.ErrorCode, &state.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.MessageBatchItemState{}, domain.ErrNotFound
+	}
+	if err != nil {
+		return domain.MessageBatchItemState{}, fmt.Errorf("read message batch item: %w", err)
+	}
+	return state, nil
+}
+
+func (s *Postgres) FinalizeMessageBatchItemWithEvent(
+	ctx context.Context,
+	commandID string,
+	expectedAttempts int,
+	item domain.MessageBatchItemPayload,
+	status domain.MessageBatchItemStatus,
+	errorCode string,
+	at time.Time,
+	event domain.Event,
+) error {
+	if !status.Terminal() {
+		return domain.ErrStateConflict
+	}
+	ciphertext, nonce, err := s.box.Seal(event.Payload, []byte(event.EventID))
+	if err != nil {
+		return fmt.Errorf("encrypt batch item event: %w", err)
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin batch item finalization: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var commandStatus string
+	var attempts int
+	var commandType domain.CommandType
+	if err := tx.QueryRow(ctx, `
+SELECT status, attempt_count, command_type
+FROM wazync.commands
+WHERE command_id = $1
+FOR UPDATE`, commandID).Scan(&commandStatus, &attempts, &commandType); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.ErrStateConflict
+		}
+		return fmt.Errorf("lock batch command: %w", err)
+	}
+	var persisted domain.MessageBatchItemState
+	if err := tx.QueryRow(ctx, `
+SELECT command_id, session_id, batch_id, position, batch_size,
+       provider_message_id, status, COALESCE(error_code, ''), updated_at
+FROM wazync.message_batch_items
+WHERE command_id = $1 AND position = $2
+FOR UPDATE`, commandID, item.Position).Scan(
+		&persisted.CommandID, &persisted.SessionID, &persisted.BatchID, &persisted.Position, &persisted.Size,
+		&persisted.ProviderMessageID, &persisted.Status, &persisted.ErrorCode, &persisted.UpdatedAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.ErrStateConflict
+		}
+		return fmt.Errorf("lock batch item: %w", err)
+	}
+	if commandType != domain.CommandSendMessageBatch || persisted.BatchID != item.BatchID ||
+		persisted.Size != item.Size || persisted.ProviderMessageID != item.ProviderMessageID {
+		return domain.ErrStateConflict
+	}
+	if persisted.Status.Terminal() {
+		if persisted.Status != status || persisted.ErrorCode != errorCode {
+			return domain.ErrStateConflict
+		}
+		var digest string
+		if err := tx.QueryRow(ctx,
+			`SELECT payload_digest FROM wazync.events WHERE event_id = $1`, event.EventID,
+		).Scan(&digest); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return domain.ErrStateConflict
+			}
+			return fmt.Errorf("read idempotent batch item event: %w", err)
+		}
+		if digest != event.Digest {
+			return domain.ErrDigestConflict
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return fmt.Errorf("commit idempotent batch item finalization: %w", err)
+		}
+		return nil
+	}
+	if commandStatus != "PROCESSING" || attempts != expectedAttempts {
+		return domain.ErrStateConflict
+	}
+
+	result, err := tx.Exec(ctx, `
+INSERT INTO wazync.events (
+    event_id, session_id, event_type, occurred_at,
+    payload_cipher, payload_nonce, payload_digest
+) VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (event_id) DO NOTHING`,
+		event.EventID, event.SessionID, event.Type, event.OccurredAt,
+		ciphertext, nonce, event.Digest,
+	)
+	if err != nil {
+		return fmt.Errorf("persist batch item event: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		var digest string
+		if err := tx.QueryRow(ctx,
+			`SELECT payload_digest FROM wazync.events WHERE event_id = $1`, event.EventID,
+		).Scan(&digest); err != nil {
+			return fmt.Errorf("read batch item event: %w", err)
+		}
+		if digest != event.Digest {
+			return domain.ErrDigestConflict
+		}
+	}
+	result, err = tx.Exec(ctx, `
+UPDATE wazync.message_batch_items
+SET status = $3, error_code = NULLIF($4, ''), terminal_at = $5, updated_at = $5
+WHERE command_id = $1 AND position = $2 AND status = 'PENDING'`,
+		commandID, item.Position, status, errorCode, at,
+	)
+	if err != nil {
+		return fmt.Errorf("mark batch item terminal: %w", err)
+	}
+	if result.RowsAffected() != 1 {
+		return domain.ErrStateConflict
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit batch item finalization: %w", err)
+	}
+	return nil
+}
+
+func (s *Postgres) FinalizeMessageBatchCommandProcessed(
+	ctx context.Context,
+	commandID string,
+	expectedAttempts int,
+	processedAt time.Time,
+) error {
+	result, err := s.pool.Exec(ctx, `
+UPDATE wazync.commands c
+SET status = 'PROCESSED', processed_at = $3, locked_at = NULL, updated_at = $3
+WHERE c.command_id = $1 AND c.command_type = $4
+  AND c.status = 'PROCESSING' AND c.attempt_count = $2
+  AND NOT EXISTS (
+      SELECT 1 FROM wazync.message_batch_items item
+      WHERE item.command_id = c.command_id AND item.status = 'PENDING'
+  )`, commandID, expectedAttempts, processedAt, string(domain.CommandSendMessageBatch))
+	if err != nil {
+		return fmt.Errorf("finalize message batch command: %w", err)
+	}
+	if result.RowsAffected() != 1 {
+		return domain.ErrStateConflict
+	}
+	return nil
+}
+
+func (s *Postgres) FinalizeMessageBatchCommandFailed(
+	ctx context.Context,
+	commandID string,
+	expectedAttempts int,
+	availableAt time.Time,
+	errorCode string,
+	terminal bool,
+) error {
+	status := "RETRY"
+	if terminal {
+		status = "ERROR"
+	}
+	result, err := s.pool.Exec(ctx, `
+UPDATE wazync.commands c
+SET status = $3, available_at = $4, error_code = $5, locked_at = NULL, updated_at = now()
+WHERE c.command_id = $1 AND c.command_type = $6
+  AND c.status = 'PROCESSING' AND c.attempt_count = $2
+  AND (
+      $7 = false OR NOT EXISTS (
+          SELECT 1 FROM wazync.message_batch_items item
+          WHERE item.command_id = c.command_id AND item.status = 'PENDING'
+      )
+  )`,
+		commandID, expectedAttempts, status, availableAt, errorCode,
+		string(domain.CommandSendMessageBatch), terminal,
+	)
+	if err != nil {
+		return fmt.Errorf("finalize failed message batch command: %w", err)
+	}
+	if result.RowsAffected() != 1 {
+		return domain.ErrStateConflict
 	}
 	return nil
 }

@@ -95,7 +95,9 @@ func main() {
 		api.WithRecipientScopeMetrics(eventBridge)
 		eventBridge.SetDeviceRecorder(deviceResolver)
 		deviceResolver.SetEventSink(eventBridge.HandleWithSuccess)
-		adapter := protocol.NewWhatsMeowAdapter(deviceResolver, clientSettings).WithRecoveryStore(persistence)
+		adapter := protocol.NewWhatsMeowAdapter(deviceResolver, clientSettings).
+			WithRecoveryStore(persistence).
+			WithStickerMaterialization(persistence, mediaSpool, cfg.MaxMediaBytes)
 		api.WithQueryExecutor(adapter).WithSessionInspector(adapter)
 		sessionManager := session.NewManager(
 			persistence, adapter, cfg.ReplicaID, cfg.SessionCapacity, cfg.LeaseTTL, cfg.HeartbeatEvery,

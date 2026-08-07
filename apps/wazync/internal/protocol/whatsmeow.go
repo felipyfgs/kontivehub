@@ -7,6 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/spool"
 	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/store"
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/proto/waE2E"
@@ -113,11 +114,25 @@ type WhatsMeowAdapter struct {
 	recoveryMu                    sync.Mutex
 	mediaRetries                  map[string]mediaRetrySecret
 	recoveryStore                 store.Store
+	stickerStore                  store.Store
+	stickerSpool                  *spool.Store
+	stickerMaxBytes               int64
 	profilePictureQueriesInFlight atomic.Int64
 }
 
 func (a *WhatsMeowAdapter) WithRecoveryStore(persistence store.Store) *WhatsMeowAdapter {
 	a.recoveryStore = persistence
+	return a
+}
+
+func (a *WhatsMeowAdapter) WithStickerMaterialization(
+	persistence store.Store,
+	mediaSpool *spool.Store,
+	maxBytes int64,
+) *WhatsMeowAdapter {
+	a.stickerStore = persistence
+	a.stickerSpool = mediaSpool
+	a.stickerMaxBytes = maxBytes
 	return a
 }
 

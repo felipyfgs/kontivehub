@@ -22,6 +22,17 @@ func ValidateCommandRecipientScope(command domain.Command) error {
 		if payload.ReplyTo != nil && payload.ReplyTo.Sender != "" {
 			recipients = append(recipients, payload.ReplyTo.Sender)
 		}
+	case domain.CommandSendMessageBatch:
+		var payload domain.MessageBatchPayload
+		if err := json.Unmarshal(command.Payload, &payload); err != nil {
+			return ErrRecipientInvalid
+		}
+		for _, item := range payload.Items {
+			recipients = append(recipients, item.Message.To)
+			if item.Message.ReplyTo != nil && item.Message.ReplyTo.Sender != "" {
+				recipients = append(recipients, item.Message.ReplyTo.Sender)
+			}
+		}
 	case domain.CommandEditMessage:
 		var payload domain.MessageEditPayload
 		if err := json.Unmarshal(command.Payload, &payload); err != nil {
