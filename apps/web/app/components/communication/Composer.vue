@@ -2489,6 +2489,7 @@ defineExpose({ focusInput })
       <template #body>
         <UInput
           v-model="contactsQuery"
+          aria-label="Buscar contato"
           placeholder="Buscar contato"
           icon="i-lucide-search"
           class="mb-3"
