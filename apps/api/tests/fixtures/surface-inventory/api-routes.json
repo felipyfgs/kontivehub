@@ -859,6 +859,24 @@
   },
   {
     "method": "GET",
+    "uri": "api/v1/communication/inboxes/{inbox}/stickers",
+    "group": "communication",
+    "action": "StickerLibraryController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/inboxes/{inbox}/stickers/import",
+    "group": "communication",
+    "action": "StickerLibraryController@import"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/inboxes/{inbox}/stickers/status",
+    "group": "communication",
+    "action": "StickerLibraryController@status"
+  },
+  {
+    "method": "GET",
     "uri": "api/v1/communication/labels",
     "group": "communication",
     "action": "CatalogController@labels"
@@ -892,6 +910,24 @@
     "uri": "api/v1/communication/settings",
     "group": "communication",
     "action": "InboxController@updateTenantSettings"
+  },
+  {
+    "method": "DELETE",
+    "uri": "api/v1/communication/stickers/{sticker}",
+    "group": "communication",
+    "action": "StickerLibraryController@remove"
+  },
+  {
+    "method": "PUT",
+    "uri": "api/v1/communication/stickers/{sticker}/favorite",
+    "group": "communication",
+    "action": "StickerLibraryController@favorite"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/stickers/{sticker}/preview",
+    "group": "communication",
+    "action": "StickerLibraryController@preview"
   },
   {
     "method": "GET",

@@ -1,8 +1,8 @@
 # Grafo de testabilidade dos casos de uso
 
-Snapshot: `83f7427d10f251129d8080df8e83deac2a0bc41ff774950a7ff7bd7a6e3759cc`
+Snapshot: `3b69ad57c81bb66fba6b2a62cabb31f475136690025516ebbad0d68143bdfd3d`
 
-O levantamento classifica **589 rotas API**, **83 páginas Nuxt** e **15 clientes HTTP** em **11 jornadas**. 4 jornadas são críticas e exigem evidência L1–L3.
+O levantamento classifica **595 rotas API**, **83 páginas Nuxt** e **15 clientes HTTP** em **11 jornadas**. 4 jornadas são críticas e exigem evidência L1–L3.
 
 | Jornada | Crítica | Rotas | Páginas | Clientes HTTP | L0 | L1 | L2 | L3 | Lacunas |
 |---|:---:|---:|---:|---:|:---:|:---:|:---:|:---:|---|
@@ -12,7 +12,7 @@ O levantamento classifica **589 rotas API**, **83 páginas Nuxt** e **15 cliente
 | Configuração e onboarding do escritório (`tenant-operations`) | não | 31 | 0 | 1 | ✓ | ✓ | ✓ | — | L3 |
 | Catálogo e ciclo de vida de clientes (`client-lifecycle`) | sim | 21 | 10 | 1 | ✓ | ✓ | ✓ | ✓ | nenhuma |
 | Documentos, notas e exportações (`documents-notes`) | não | 18 | 9 | 1 | ✓ | — | — | — | L1, L2, L3 |
-| Atendimento WhatsApp compartilhado (`communication-inbox`) | não | 119 | 12 | 1 | ✓ | ✓ | ✓ | — | L3 |
+| Atendimento WhatsApp compartilhado (`communication-inbox`) | não | 125 | 12 | 1 | ✓ | ✓ | ✓ | — | L3 |
 | Monitoramento fiscal e consultas (`fiscal-monitoring`) | sim | 199 | 17 | 3 | ✓ | ✓ | ✓ | ✓ | nenhuma |
 | Fila e processos operacionais (`operational-work`) | sim | 64 | 10 | 3 | ✓ | ✓ | ✓ | ✓ | nenhuma |
 | Captura, integrações e documentos de saída (`outbound-capture`) | não | 42 | 1 | 1 | ✓ | — | — | — | L1, L2, L3 |
@@ -30,4 +30,4 @@ O levantamento classifica **589 rotas API**, **83 páginas Nuxt** e **15 cliente
 - Lacunas não críticas permanecem explícitas; referência textual não conta como cobertura behavioral.
 - Playwright permanece fora do CI e bloqueia hosts externos.
 - SERPRO, Integra, SEFAZ, portal MEI e comunicação permanecem fail-closed nos testes.
-- Endpoints de clientes HTTP sem correspondência estrutural: **5**.
+- Endpoints de clientes HTTP sem correspondência estrutural: **0**.

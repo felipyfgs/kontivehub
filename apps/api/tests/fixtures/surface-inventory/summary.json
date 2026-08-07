@@ -1,11 +1,11 @@
 {
-  "apiTotal": 589,
+  "apiTotal": 595,
   "apiByMethod": {
-    "DELETE": 14,
-    "GET": 271,
+    "DELETE": 15,
+    "GET": 274,
     "PATCH": 38,
-    "POST": 242,
-    "PUT": 24
+    "POST": 243,
+    "PUT": 25
   },
   "apiByGroup": {
     "activations": 2,
@@ -14,7 +14,7 @@
     "client-categories": 3,
     "clients": 16,
     "cnpj": 1,
-    "communication": 119,
+    "communication": 125,
     "cte": 5,
     "documents": 13,
     "establishments": 1,

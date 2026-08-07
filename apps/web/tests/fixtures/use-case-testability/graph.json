@@ -1,5 +1,5 @@
 {
-  "digest": "83f7427d10f251129d8080df8e83deac2a0bc41ff774950a7ff7bd7a6e3759cc",
+  "digest": "3b69ad57c81bb66fba6b2a62cabb31f475136690025516ebbad0d68143bdfd3d",
   "schemaVersion": 1,
   "source": {
     "catalog": "apps/web/tests/fixtures/use-case-testability/catalog.json",
@@ -9,12 +9,12 @@
   "summary": {
     "journeys": 11,
     "criticalJourneys": 4,
-    "apiRoutes": 589,
+    "apiRoutes": 595,
     "pages": 83,
-    "handlers": 587,
+    "handlers": 593,
     "apiClients": 15,
     "tests": 12,
-    "unmatchedApiClientEndpoints": 5
+    "unmatchedApiClientEndpoints": 0
   },
   "matrix": [
     {
@@ -123,7 +123,7 @@
       "journeyId": "communication-inbox",
       "title": "Atendimento WhatsApp compartilhado",
       "critical": false,
-      "apiRoutes": 119,
+      "apiRoutes": 125,
       "pages": 12,
       "apiClients": 1,
       "levels": {
@@ -205,28 +205,7 @@
       ]
     }
   ],
-  "unmatchedApiClientEndpoints": [
-    {
-      "file": "app/composables/api/createCommunicationApi.ts",
-      "endpoint": "api/v1/communication/inboxes/:param/stickers"
-    },
-    {
-      "file": "app/composables/api/createCommunicationApi.ts",
-      "endpoint": "api/v1/communication/inboxes/:param/stickers/import"
-    },
-    {
-      "file": "app/composables/api/createCommunicationApi.ts",
-      "endpoint": "api/v1/communication/stickers/:param"
-    },
-    {
-      "file": "app/composables/api/createCommunicationApi.ts",
-      "endpoint": "api/v1/communication/stickers/:param/favorite"
-    },
-    {
-      "file": "app/composables/api/createCommunicationApi.ts",
-      "endpoint": "api/v1/communication/stickers/:param/preview"
-    }
-  ],
+  "unmatchedApiClientEndpoints": [],
   "evidence": [
     {
       "level": "L1",
@@ -3189,6 +3168,33 @@
     },
     {
       "method": "GET",
+      "uri": "api/v1/communication/inboxes/{inbox}/stickers",
+      "group": "communication",
+      "action": "StickerLibraryController@index",
+      "id": "api:GET:api/v1/communication/inboxes/{inbox}/stickers",
+      "type": "api-route",
+      "journeyId": "communication-inbox"
+    },
+    {
+      "method": "POST",
+      "uri": "api/v1/communication/inboxes/{inbox}/stickers/import",
+      "group": "communication",
+      "action": "StickerLibraryController@import",
+      "id": "api:POST:api/v1/communication/inboxes/{inbox}/stickers/import",
+      "type": "api-route",
+      "journeyId": "communication-inbox"
+    },
+    {
+      "method": "GET",
+      "uri": "api/v1/communication/inboxes/{inbox}/stickers/status",
+      "group": "communication",
+      "action": "StickerLibraryController@status",
+      "id": "api:GET:api/v1/communication/inboxes/{inbox}/stickers/status",
+      "type": "api-route",
+      "journeyId": "communication-inbox"
+    },
+    {
+      "method": "GET",
       "uri": "api/v1/communication/labels",
       "group": "communication",
       "action": "CatalogController@labels",
@@ -3238,6 +3244,33 @@
       "group": "communication",
       "action": "InboxController@updateTenantSettings",
       "id": "api:PATCH:api/v1/communication/settings",
+      "type": "api-route",
+      "journeyId": "communication-inbox"
+    },
+    {
+      "method": "DELETE",
+      "uri": "api/v1/communication/stickers/{sticker}",
+      "group": "communication",
+      "action": "StickerLibraryController@remove",
+      "id": "api:DELETE:api/v1/communication/stickers/{sticker}",
+      "type": "api-route",
+      "journeyId": "communication-inbox"
+    },
+    {
+      "method": "PUT",
+      "uri": "api/v1/communication/stickers/{sticker}/favorite",
+      "group": "communication",
+      "action": "StickerLibraryController@favorite",
+      "id": "api:PUT:api/v1/communication/stickers/{sticker}/favorite",
+      "type": "api-route",
+      "journeyId": "communication-inbox"
+    },
+    {
+      "method": "GET",
+      "uri": "api/v1/communication/stickers/{sticker}/preview",
+      "group": "communication",
+      "action": "StickerLibraryController@preview",
+      "id": "api:GET:api/v1/communication/stickers/{sticker}/preview",
       "type": "api-route",
       "journeyId": "communication-inbox"
     },
@@ -9632,6 +9665,36 @@
       "action": "SitfisSituationController@show"
     },
     {
+      "id": "handler:StickerLibraryController@favorite",
+      "type": "handler",
+      "action": "StickerLibraryController@favorite"
+    },
+    {
+      "id": "handler:StickerLibraryController@import",
+      "type": "handler",
+      "action": "StickerLibraryController@import"
+    },
+    {
+      "id": "handler:StickerLibraryController@index",
+      "type": "handler",
+      "action": "StickerLibraryController@index"
+    },
+    {
+      "id": "handler:StickerLibraryController@preview",
+      "type": "handler",
+      "action": "StickerLibraryController@preview"
+    },
+    {
+      "id": "handler:StickerLibraryController@remove",
+      "type": "handler",
+      "action": "StickerLibraryController@remove"
+    },
+    {
+      "id": "handler:StickerLibraryController@status",
+      "type": "handler",
+      "action": "StickerLibraryController@status"
+    },
+    {
       "id": "handler:SvrsNfceRecoveryController@attempts",
       "type": "handler",
       "action": "SvrsNfceRecoveryController@attempts"
@@ -11654,6 +11717,36 @@
     },
     {
       "from": "journey:communication-inbox",
+      "to": "api:GET:api/v1/communication/inboxes/{inbox}/stickers",
+      "type": "exposes"
+    },
+    {
+      "from": "api:GET:api/v1/communication/inboxes/{inbox}/stickers",
+      "to": "handler:StickerLibraryController@index",
+      "type": "handled-by"
+    },
+    {
+      "from": "journey:communication-inbox",
+      "to": "api:POST:api/v1/communication/inboxes/{inbox}/stickers/import",
+      "type": "exposes"
+    },
+    {
+      "from": "api:POST:api/v1/communication/inboxes/{inbox}/stickers/import",
+      "to": "handler:StickerLibraryController@import",
+      "type": "handled-by"
+    },
+    {
+      "from": "journey:communication-inbox",
+      "to": "api:GET:api/v1/communication/inboxes/{inbox}/stickers/status",
+      "type": "exposes"
+    },
+    {
+      "from": "api:GET:api/v1/communication/inboxes/{inbox}/stickers/status",
+      "to": "handler:StickerLibraryController@status",
+      "type": "handled-by"
+    },
+    {
+      "from": "journey:communication-inbox",
       "to": "api:GET:api/v1/communication/labels",
       "type": "exposes"
     },
@@ -11710,6 +11803,36 @@
     {
       "from": "api:PATCH:api/v1/communication/settings",
       "to": "handler:InboxController@updateTenantSettings",
+      "type": "handled-by"
+    },
+    {
+      "from": "journey:communication-inbox",
+      "to": "api:DELETE:api/v1/communication/stickers/{sticker}",
+      "type": "exposes"
+    },
+    {
+      "from": "api:DELETE:api/v1/communication/stickers/{sticker}",
+      "to": "handler:StickerLibraryController@remove",
+      "type": "handled-by"
+    },
+    {
+      "from": "journey:communication-inbox",
+      "to": "api:PUT:api/v1/communication/stickers/{sticker}/favorite",
+      "type": "exposes"
+    },
+    {
+      "from": "api:PUT:api/v1/communication/stickers/{sticker}/favorite",
+      "to": "handler:StickerLibraryController@favorite",
+      "type": "handled-by"
+    },
+    {
+      "from": "journey:communication-inbox",
+      "to": "api:GET:api/v1/communication/stickers/{sticker}/preview",
+      "type": "exposes"
+    },
+    {
+      "from": "api:GET:api/v1/communication/stickers/{sticker}/preview",
+      "to": "handler:StickerLibraryController@preview",
       "type": "handled-by"
     },
     {
@@ -18064,6 +18187,16 @@
     },
     {
       "from": "api-client:app/composables/api/createCommunicationApi.ts",
+      "to": "api:GET:api/v1/communication/inboxes/{inbox}/stickers",
+      "type": "calls"
+    },
+    {
+      "from": "api-client:app/composables/api/createCommunicationApi.ts",
+      "to": "api:POST:api/v1/communication/inboxes/{inbox}/stickers/import",
+      "type": "calls"
+    },
+    {
+      "from": "api-client:app/composables/api/createCommunicationApi.ts",
       "to": "api:GET:api/v1/communication/labels",
       "type": "calls"
     },
@@ -18085,6 +18218,21 @@
     {
       "from": "api-client:app/composables/api/createCommunicationApi.ts",
       "to": "api:PATCH:api/v1/communication/settings",
+      "type": "calls"
+    },
+    {
+      "from": "api-client:app/composables/api/createCommunicationApi.ts",
+      "to": "api:DELETE:api/v1/communication/stickers/{sticker}",
+      "type": "calls"
+    },
+    {
+      "from": "api-client:app/composables/api/createCommunicationApi.ts",
+      "to": "api:PUT:api/v1/communication/stickers/{sticker}/favorite",
+      "type": "calls"
+    },
+    {
+      "from": "api-client:app/composables/api/createCommunicationApi.ts",
+      "to": "api:GET:api/v1/communication/stickers/{sticker}/preview",
       "type": "calls"
     },
     {
