@@ -23,7 +23,7 @@ instalar dependências de desenvolvimento e executar HMR. Esses recursos não s�
 usados pela entrega. Quando `develop` é promovida para `main`, o workflow de
 publicação constrói somente os targets finais multi-stage e envia imagens
 versionadas ao registry. Produção usa `docker-compose.prod.yml` ou
-`docker-stack.yml`, ambos sem `build` e sem acesso ao checkout. Os valores são
+`docker-compose.swarm.yaml`, ambos sem `build` e sem acesso ao checkout. Os valores são
 fornecidos por um `.env` externo e declarados explicitamente nos manifestos.
 Ambientes de teste isolados continuam restritos aos gates para proteger dados.
 

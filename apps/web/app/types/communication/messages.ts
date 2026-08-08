@@ -10,9 +10,10 @@ export type MessageKind
     | 'CONTACT'
     | 'POLL'
     | 'INTERACTIVE'
+    | 'UNSUPPORTED'
     | 'NOTE'
 export type SendKind = Extract<MessageKind, 'TEXT' | 'IMAGE' | 'AUDIO' | 'VIDEO' | 'DOCUMENT' | 'STICKER'>
-export type MessageSource = 'HUMAN' | 'FISCAL_AUTOMATION' | 'GATEWAY'
+export type MessageSource = 'HUMAN' | 'FISCAL_AUTOMATION' | 'GATEWAY' | 'FLOW_AUTOMATION'
 export type MessageStatus = 'QUEUED' | 'ACCEPTED' | 'SENT' | 'DELIVERED' | 'READ' | 'PLAYED' | 'FAILED' | 'UNKNOWN' | 'CANCELED'
 export type MessageAvailabilityState = 'AVAILABLE' | 'UNSUPPORTED' | 'MEDIA_RETRY_AVAILABLE' | 'MEDIA_REQUESTED' | 'MEDIA_FAILED' | 'UNAVAILABLE'
 
@@ -32,11 +33,21 @@ export interface MessageLocation {
   longitude: number
   name?: string | null
   address?: string | null
+  caption?: string | null
+  live?: boolean
+  accuracy_meters?: number | null
+  sequence?: number | null
+}
+
+export interface MessageContactPhone {
+  label: string
+  phone: string
 }
 
 export interface MessageContact {
   display_name?: string | null
   vcard?: string | null
+  phones?: MessageContactPhone[]
 }
 
 export interface MessagePoll {
@@ -54,7 +65,9 @@ export interface MessageInteractive {
   mode?: string | null
   title?: string | null
   description?: string | null
-  options?: string[]
+  selected_id?: string | null
+  display_text?: string | null
+  name?: string | null
 }
 
 export interface MessageInteractiveResponse {
@@ -66,6 +79,30 @@ export interface MessageInteractiveResponse {
 export interface MessageContent {
   text?: string | null
   caption?: string | null
+  link_preview?: {
+    url: string
+    title?: string | null
+    description?: string | null
+  } | null
+  location?: MessageLocation | null
+  contacts?: MessageContact[]
+  poll?: MessagePoll | null
+  interactive?: MessageInteractive | null
+  rich_card?: {
+    category: 'PRODUCT' | 'ORDER' | 'PAYMENT' | 'EVENT' | 'CALL' | 'INVITE' | 'SYSTEM'
+    title: string
+    description?: string | null
+    facts?: Array<{ label: string, value: string }>
+  } | null
+  ptt?: boolean
+  gif?: boolean
+  animated?: boolean
+  duration_seconds?: number | null
+  reactions?: string[]
+  poll_votes?: MessagePollVote[]
+  interactive_response?: MessageInteractiveResponse | null
+  content_present?: boolean
+  variants?: string[]
 }
 
 /** Estado público allowlisted de conteúdo/mídia, sem detalhes do gateway. */
@@ -78,18 +115,11 @@ export interface MessageMetadata {
   edited_at?: string | null
   revoked?: boolean
   revoked_at?: string | null
-  poll?: MessagePoll | null
-  poll_votes?: Record<string, MessagePollVote> | MessagePollVote[]
-  location?: MessageLocation | null
-  contact?: MessageContact | null
-  interactive?: MessageInteractive | null
-  interactive_response?: MessageInteractiveResponse | null
   history?: boolean
   ephemeral?: boolean
   view_once?: boolean
   media_state?: string | null
   media_error_code?: string | null
-  reactions?: string[]
 }
 
 export interface Message {
@@ -97,6 +127,7 @@ export interface Message {
   conversation_id: number
   direction: MessageDirection
   kind: MessageKind
+  provider_type?: string | null
   source: MessageSource
   status: MessageStatus
   body?: string | null
@@ -108,6 +139,8 @@ export interface Message {
   sent_at?: string | null
   delivered_at?: string | null
   read_at?: string | null
+  played_at?: string | null
+  revoked_at?: string | null
   metadata?: MessageMetadata
   attachments?: Attachment[]
 }

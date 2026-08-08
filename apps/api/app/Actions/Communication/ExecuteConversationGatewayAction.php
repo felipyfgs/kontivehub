@@ -45,6 +45,45 @@ final readonly class ExecuteConversationGatewayAction
         $conversation->loadMissing(['inbox', 'identity']);
         $this->assertMessageBelongsToConversation($conversation, $message);
         $payload = $this->payload($conversation, $type, $data, $message);
+        $isTerminalAction = $message instanceof CommunicationMessage && in_array($type, [
+            GatewayCommandType::EditMessage,
+            GatewayCommandType::RevokeMessage,
+            GatewayCommandType::ReactMessage,
+        ], true);
+        if ($isTerminalAction) {
+            return DB::transaction(function () use ($actor, $conversation, $type, $payload, $message): GatewayCommandResult {
+                $target = CommunicationMessage::query()
+                    ->withoutGlobalScopes()
+                    ->whereKey($message->id)
+                    ->where('tenant_id', $conversation->tenant_id)
+                    ->where('inbox_id', $conversation->inbox_id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+                $entry = $this->operations->enqueue(
+                    $actor,
+                    $conversation->inbox,
+                    $type,
+                    $payload,
+                    $target,
+                );
+                $metadata = is_array($target->metadata) ? $target->metadata : [];
+                $actions = is_array($metadata['gateway_actions'] ?? null) ? $metadata['gateway_actions'] : [];
+                $actions[$entry->command_id] = [
+                    'action' => match ($type) {
+                        GatewayCommandType::EditMessage => 'EDIT',
+                        GatewayCommandType::RevokeMessage => 'REVOKE',
+                        GatewayCommandType::ReactMessage => 'REACTION',
+                    },
+                    'status' => 'PENDING',
+                    'requested_at' => now()->toAtomString(),
+                ];
+                $metadata['gateway_actions'] = array_slice($actions, -10, null, true);
+                $target->forceFill(['metadata' => $metadata])->save();
+
+                return GatewayCommandResult::fromEntry($entry);
+            }, 3);
+        }
+
         $entry = $this->operations->enqueue(
             $actor,
             $conversation->inbox,

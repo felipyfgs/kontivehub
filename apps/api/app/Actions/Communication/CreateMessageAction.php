@@ -3,6 +3,7 @@
 namespace App\Actions\Communication;
 
 use App\Contracts\CommunicationOutboundMessageWriter;
+use App\DTO\Communication\MessageBatchItemContext;
 use App\DTO\Communication\MessageCreationData;
 use App\DTO\Communication\MessageCreationResult;
 use App\Enums\Communication\GatewayCommandType;
@@ -10,17 +11,21 @@ use App\Enums\Communication\MessageDirection;
 use App\Enums\Communication\MessageKind;
 use App\Enums\Communication\MessageSource;
 use App\Enums\Communication\MessageStatus;
+use App\Enums\Communication\OutboundCapabilityUnavailableReason;
 use App\Exceptions\CommunicationConversationApiException;
 use App\Exceptions\UnsupportedMessageKindException;
 use App\Models\CommunicationAttachment;
 use App\Models\CommunicationConversation;
 use App\Models\CommunicationMessage;
+use App\Models\CommunicationStickerObservation;
 use App\Services\Communication\Availability;
+use App\Services\Communication\Catalog\OutboundCapabilityEvaluator;
 use App\Services\Communication\Conversation\MessageIdempotency;
 use App\Services\Communication\ConversationCanonicalizer;
 use App\Services\Communication\Events\EventRecorder;
 use App\Services\Communication\Flows\FlowRunControlService;
 use App\Services\Communication\Media\MediaStore;
+use App\Services\Communication\Media\OutboundMediaValidator;
 use App\Services\Communication\Outbox\OutboxService;
 use App\Support\CurrentTenant;
 use Illuminate\Database\QueryException;
@@ -37,17 +42,32 @@ final readonly class CreateMessageAction implements CommunicationOutboundMessage
     public function __construct(
         private CurrentTenant $currentTenant,
         private Availability $availability,
+        private OutboundCapabilityEvaluator $capabilities,
         private ConversationCanonicalizer $canonicalizer,
         private MessageIdempotency $idempotency,
         private OutboxService $outbox,
         private EventRecorder $events,
         private MediaStore $media,
+        private OutboundMediaValidator $mediaValidator,
         private FlowRunControlService $flowRuns,
     ) {}
 
     public function handle(
         CommunicationConversation $conversation,
         MessageCreationData $data,
+        ?MessageBatchItemContext $batchItem = null,
+    ): MessageCreationResult {
+        try {
+            return $this->createMessage($conversation, $data, $batchItem);
+        } finally {
+            $this->forgetLibraryStickerTemp($data);
+        }
+    }
+
+    private function createMessage(
+        CommunicationConversation $conversation,
+        MessageCreationData $data,
+        ?MessageBatchItemContext $batchItem = null,
     ): MessageCreationResult {
         $conversation = $this->canonicalizer->conversation($conversation);
         $conversation->loadMissing(['inbox', 'identity']);
@@ -63,19 +83,10 @@ final readonly class CreateMessageAction implements CommunicationOutboundMessage
         if ($data->requestedKind === MessageKind::Unsupported) {
             throw CommunicationConversationApiException::unsupportedMessageKind();
         }
-        if ($data->gif) {
-            throw CommunicationConversationApiException::unsupportedMessageKind(
-                'GIF animado ainda não possui builder outbound contratual.',
-            );
-        }
-
-        $mime = $data->upload !== null
-            ? $this->normalizeUploadMime(
-                $this->safeMime($data->upload->detectedMime),
-                $this->safeMime($data->upload->clientMime),
-                $data->requestedKind,
-            )
+        $validatedMedia = $data->upload !== null
+            ? $this->mediaValidator->inspect($data->upload, $data->requestedKind)
             : null;
+        $mime = $validatedMedia?->mime;
         $this->assertPayloadFamiliesAreCompatible($data);
         $kind = $this->resolveMessageKind(
             $data->internalNote,
@@ -88,6 +99,7 @@ final readonly class CreateMessageAction implements CommunicationOutboundMessage
                 'ptt' => 'PTT exige um arquivo de áudio.',
             ]);
         }
+        $this->assertNewFamilyIsEnabled($data, $kind);
 
         $replyTo = $data->replyToMessageId !== null
             ? CommunicationMessage::query()
@@ -102,16 +114,16 @@ final readonly class CreateMessageAction implements CommunicationOutboundMessage
         $providerId = $data->internalNote
             ? null
             : $this->idempotency->providerId($data->idempotencyKey, $data->outboundInitiation);
-        $uploadDigest = $data->upload !== null
-            ? hash_file('sha256', $data->upload->path)
-            : null;
-        $uploadDigest = is_string($uploadDigest) ? $uploadDigest : null;
+        $uploadDigest = $validatedMedia?->sha256;
         $contentDigestParts = [
             $kind->value,
             $data->body,
             $uploadDigest ?? '',
             $replyProviderId ?? '',
             $data->ptt ? 'ptt' : 'media',
+            $data->gif ? 'gif' : 'not-gif',
+            $data->ptv ? 'ptv' : 'not-ptv',
+            $data->viewOnce ? 'view-once' : 'not-view-once',
             json_encode($data->richPayload, JSON_THROW_ON_ERROR),
             $receiptTarget?->id ?? '',
         ];
@@ -119,6 +131,13 @@ final readonly class CreateMessageAction implements CommunicationOutboundMessage
             array_unshift($contentDigestParts, $this->idempotency->namespace(true));
         }
         $contentDigest = hash('sha256', implode('|', $contentDigestParts));
+        $previousContentDigest = $this->previousContentDigest(
+            $kind,
+            $data,
+            $uploadDigest,
+            $replyProviderId,
+            $receiptTarget,
+        );
 
         if ($providerId !== null) {
             $existing = $this->existingMessage(
@@ -130,6 +149,7 @@ final readonly class CreateMessageAction implements CommunicationOutboundMessage
                     $conversation,
                     $providerId,
                     $contentDigest,
+                    $previousContentDigest,
                 ): MessageCreationResult {
                     $canonical = $this->canonicalizer->lockConversation($conversation);
                     $locked = CommunicationMessage::query()
@@ -138,7 +158,12 @@ final readonly class CreateMessageAction implements CommunicationOutboundMessage
                         ->lockForUpdate()
                         ->firstOrFail();
 
-                    return $this->idempotentResult($locked, $contentDigest, (int) $canonical->id);
+                    return $this->idempotentResult(
+                        $locked,
+                        $contentDigest,
+                        (int) $canonical->id,
+                        $previousContentDigest,
+                    );
                 });
             }
         }
@@ -147,29 +172,29 @@ final readonly class CreateMessageAction implements CommunicationOutboundMessage
 
         $stored = null;
         $storageContext = null;
-        if ($data->upload !== null) {
-            $stream = fopen($data->upload->path, 'rb');
-            if (! is_resource($stream)) {
-                throw CommunicationConversationApiException::invalidAttachment();
-            }
-
-            $storageContext = [
-                'tenant_id' => (int) $conversation->tenant_id,
-                'inbox_id' => (int) $conversation->inbox_id,
-                'upload_id' => (string) Str::uuid(),
-            ];
-            try {
-                $stored = $this->media->putStream($stream, $storageContext);
-            } finally {
-                fclose($stream);
-            }
-            if ($uploadDigest === null || ! hash_equals($uploadDigest, $stored['sha256'])) {
-                $this->media->delete($stored['object_id']);
-                throw CommunicationConversationApiException::attachmentIntegrityFailure();
-            }
-        }
-
         try {
+            if ($data->upload !== null) {
+                $stream = fopen($data->upload->path, 'rb');
+                if (! is_resource($stream)) {
+                    throw CommunicationConversationApiException::invalidAttachment();
+                }
+
+                $storageContext = [
+                    'tenant_id' => (int) $conversation->tenant_id,
+                    'inbox_id' => (int) $conversation->inbox_id,
+                    'upload_id' => (string) Str::uuid(),
+                ];
+                try {
+                    $stored = $this->media->putStream($stream, $storageContext);
+                } finally {
+                    fclose($stream);
+                }
+                if ($uploadDigest === null || ! hash_equals($uploadDigest, $stored['sha256'])) {
+                    $this->media->delete($stored['object_id']);
+                    throw CommunicationConversationApiException::attachmentIntegrityFailure();
+                }
+            }
+
             $message = DB::transaction(function () use (
                 $conversation,
                 $data,
@@ -182,6 +207,7 @@ final readonly class CreateMessageAction implements CommunicationOutboundMessage
                 $receiptTarget,
                 $stored,
                 $storageContext,
+                $batchItem,
             ): CommunicationMessage {
                 $lockedConversation = $this->canonicalizer
                     ->lockConversation($conversation)
@@ -196,20 +222,26 @@ final readonly class CreateMessageAction implements CommunicationOutboundMessage
                     'identity_id' => $lockedConversation->identity_id,
                     'reply_to_message_id' => $replyTo?->id,
                     'author_membership_id' => $this->currentTenant->realMembership()?->id,
+                    'message_batch_id' => $batchItem?->batchId,
+                    'batch_position' => $batchItem?->position,
                     'direction' => $data->internalNote
                         ? MessageDirection::Internal
                         : MessageDirection::Outbound,
                     'kind' => $kind,
-                    'provider_type' => $this->outboundProviderType($kind, $data->richPayload),
+                    'provider_type' => $this->outboundProviderType($kind, $data->richPayload, $data->ptv),
                     'source' => MessageSource::Human,
                     'status' => $data->internalNote ? MessageStatus::Sent : MessageStatus::Queued,
                     'body_encrypted' => $data->body !== '' ? $data->body : null,
-                    'content_encrypted' => $data->richPayload !== []
-                        ? $this->outboundContent($data->richPayload)
+                    'content_encrypted' => $this->hasSemanticContent($data)
+                        ? $this->outboundContent($data)
                         : null,
                     'metadata' => array_filter([
                         'receipt_message_id' => $receiptTarget?->id,
                         'outbound_initiation' => $data->outboundInitiation ?: null,
+                        'view_once' => $data->viewOnce ?: null,
+                        'batch_id' => $batchItem?->gatewayBatchId,
+                        'batch_position' => $batchItem?->position,
+                        'batch_size' => $batchItem?->size,
                     ], static fn (mixed $value): bool => $value !== null),
                     'provider_message_id' => $providerId,
                     'content_digest' => $contentDigest,
@@ -230,7 +262,7 @@ final readonly class CreateMessageAction implements CommunicationOutboundMessage
                     'lock_version' => (int) $lockedConversation->lock_version + 1,
                 ])->save();
 
-                if (! $data->internalNote) {
+                if (! $data->internalNote && $batchItem === null) {
                     $this->enqueueOutbound(
                         $lockedConversation,
                         $message,
@@ -264,6 +296,18 @@ final readonly class CreateMessageAction implements CommunicationOutboundMessage
 
                 return $message;
             });
+
+            if ($data->libraryStickerId !== null) {
+                $observation = CommunicationStickerObservation::query()
+                    ->where('inbox_id', $conversation->inbox_id)
+                    ->where('public_id', $data->libraryStickerId)
+                    ->with('content')
+                    ->first();
+                $content = $observation?->content;
+                if ($content !== null && ! $content->retention_protected) {
+                    $content->forceFill(['retention_protected' => true])->save();
+                }
+            }
         } catch (Throwable $error) {
             if (is_array($stored)) {
                 $this->media->delete($stored['object_id']);
@@ -277,7 +321,12 @@ final readonly class CreateMessageAction implements CommunicationOutboundMessage
                     $providerId,
                 );
                 if ($existing !== null) {
-                    return $this->idempotentResult($existing, $contentDigest, (int) $conversation->id);
+                    return $this->idempotentResult(
+                        $existing,
+                        $contentDigest,
+                        (int) $conversation->id,
+                        $previousContentDigest,
+                    );
                 }
             }
 
@@ -288,6 +337,13 @@ final readonly class CreateMessageAction implements CommunicationOutboundMessage
             message: $message->load('attachments'),
             httpStatus: $data->internalNote ? 201 : 202,
         );
+    }
+
+    private function forgetLibraryStickerTemp(MessageCreationData $data): void
+    {
+        if (is_string($data->libraryStickerTempPath) && $data->libraryStickerTempPath !== '') {
+            @unlink($data->libraryStickerTempPath);
+        }
     }
 
     private function assertPayloadFamiliesAreCompatible(
@@ -301,7 +357,7 @@ final readonly class CreateMessageAction implements CommunicationOutboundMessage
 
         $familyPayloads = array_intersect_key(
             $data->richPayload,
-            array_flip(['location', 'contact', 'poll', 'interactive']),
+            array_flip(['location', 'contact', 'contacts', 'poll', 'event', 'interactive']),
         );
         if (count($familyPayloads) > 1
             || ($data->upload !== null && $data->richPayload !== [])
@@ -310,6 +366,47 @@ final readonly class CreateMessageAction implements CommunicationOutboundMessage
             throw ValidationException::withMessages([
                 'kind' => 'Envie exatamente um DTO de família por mensagem.',
             ]);
+        }
+
+        if (($data->gif || $data->ptv || $data->viewOnce) && $data->upload === null) {
+            throw ValidationException::withMessages([
+                'kind' => 'Variantes de mídia exigem um arquivo compatível.',
+            ]);
+        }
+        if (count(array_filter([$data->gif, $data->ptv, $data->viewOnce])) > 1) {
+            throw ValidationException::withMessages([
+                'kind' => 'GIF, PTV e view-once são variantes incompatíveis entre si.',
+            ]);
+        }
+    }
+
+    private function assertNewFamilyIsEnabled(MessageCreationData $data, MessageKind $kind): void
+    {
+        $feature = match (true) {
+            isset($data->richPayload['contacts']) => 'contacts_array',
+            isset($data->richPayload['event']) => 'event',
+            $data->gif => 'gif',
+            $data->ptv => 'ptv',
+            $data->viewOnce => 'view_once',
+            default => null,
+        };
+        if ($feature !== null) {
+            $this->capabilities->assertFeatureEnabled($feature, match ($feature) {
+                'contacts_array' => OutboundCapabilityUnavailableReason::ContactsArrayBuilderUnimplemented,
+                'gif' => OutboundCapabilityUnavailableReason::GifPlaybackBuilderUnimplemented,
+                'ptv' => OutboundCapabilityUnavailableReason::PtvBuilderUnimplemented,
+                'event' => OutboundCapabilityUnavailableReason::EventBuilderUnimplemented,
+                'view_once' => OutboundCapabilityUnavailableReason::ViewOnceBuilderUnimplemented,
+            });
+        }
+        if ($data->gif && $kind !== MessageKind::Video) {
+            throw ValidationException::withMessages(['gif' => 'GIF exige um arquivo de vídeo.']);
+        }
+        if ($data->ptv && $kind !== MessageKind::Video) {
+            throw ValidationException::withMessages(['ptv' => 'PTV exige um arquivo de vídeo.']);
+        }
+        if ($data->viewOnce && ! in_array($kind, [MessageKind::Image, MessageKind::Video], true)) {
+            throw ValidationException::withMessages(['view_once' => 'View-once exige imagem ou vídeo.']);
         }
     }
 
@@ -369,8 +466,12 @@ final readonly class CreateMessageAction implements CommunicationOutboundMessage
         CommunicationMessage $existing,
         string $contentDigest,
         ?int $conversationId = null,
+        ?string $previousContentDigest = null,
     ): MessageCreationResult {
-        if (! hash_equals((string) $existing->content_digest, $contentDigest)
+        $digestMatches = hash_equals((string) $existing->content_digest, $contentDigest)
+            || ($previousContentDigest !== null
+                && hash_equals((string) $existing->content_digest, $previousContentDigest));
+        if (! $digestMatches
             || ($conversationId !== null && (int) $existing->conversation_id !== $conversationId)) {
             throw CommunicationConversationApiException::idempotencyConflict();
         }
@@ -379,6 +480,29 @@ final readonly class CreateMessageAction implements CommunicationOutboundMessage
             message: $existing->load('attachments'),
             httpStatus: 200,
         );
+    }
+
+    private function previousContentDigest(
+        MessageKind $kind,
+        MessageCreationData $data,
+        ?string $uploadDigest,
+        ?string $replyProviderId,
+        ?CommunicationMessage $receiptTarget,
+    ): string {
+        $parts = [
+            $kind->value,
+            $data->body,
+            $uploadDigest ?? '',
+            $replyProviderId ?? '',
+            $data->ptt ? 'ptt' : 'media',
+            json_encode($data->richPayload, JSON_THROW_ON_ERROR),
+            $receiptTarget?->id ?? '',
+        ];
+        if ($data->outboundInitiation) {
+            array_unshift($parts, $this->idempotency->namespace(true));
+        }
+
+        return hash('sha256', implode('|', $parts));
     }
 
     /**
@@ -434,7 +558,7 @@ final readonly class CreateMessageAction implements CommunicationOutboundMessage
         )) {
             $payload['caption'] = $data->body;
         }
-        foreach (['location', 'contact', 'poll', 'interactive'] as $field) {
+        foreach (['location', 'contact', 'contacts', 'poll', 'event', 'interactive'] as $field) {
             if (isset($data->richPayload[$field])) {
                 $payload[$field] = $data->richPayload[$field];
             }
@@ -455,6 +579,9 @@ final readonly class CreateMessageAction implements CommunicationOutboundMessage
                 'size_bytes' => (int) $attachment->size_bytes,
                 'sha256' => $attachment->sha256,
                 'ptt' => $data->ptt,
+                'gif' => $data->gif,
+                'ptv' => $data->ptv,
+                'view_once' => $data->viewOnce,
             ];
         }
 
@@ -488,7 +615,9 @@ final readonly class CreateMessageAction implements CommunicationOutboundMessage
             $expectedRich = match (true) {
                 isset($richPayload['location']) => MessageKind::Location,
                 isset($richPayload['contact']) => MessageKind::Contact,
+                isset($richPayload['contacts']) => MessageKind::Contact,
                 isset($richPayload['poll']) => MessageKind::Poll,
+                isset($richPayload['event']) => MessageKind::Event,
                 isset($richPayload['interactive']) => MessageKind::Interactive,
                 default => MessageKind::Text,
             };
@@ -528,6 +657,7 @@ final readonly class CreateMessageAction implements CommunicationOutboundMessage
     private function outboundProviderType(
         MessageKind $kind,
         array $richPayload,
+        bool $ptv,
     ): string {
         return match ($kind) {
             MessageKind::Text => isset($richPayload['link_preview'])
@@ -535,12 +665,15 @@ final readonly class CreateMessageAction implements CommunicationOutboundMessage
                 : 'conversation',
             MessageKind::Image => 'imageMessage',
             MessageKind::Audio => 'audioMessage',
-            MessageKind::Video => 'videoMessage',
+            MessageKind::Video => $ptv ? 'ptvMessage' : 'videoMessage',
             MessageKind::Document => 'documentMessage',
             MessageKind::Sticker => 'stickerMessage',
             MessageKind::Location => 'locationMessage',
-            MessageKind::Contact => 'contactMessage',
+            MessageKind::Contact => count($richPayload['contacts'] ?? []) > 1
+                ? 'contactsArrayMessage'
+                : 'contactMessage',
             MessageKind::Poll => 'pollCreationMessageV3',
+            MessageKind::Event => 'eventMessage',
             MessageKind::Interactive => 'interactiveMessage',
             MessageKind::Note => 'internalNote',
             MessageKind::Unsupported => throw new UnsupportedMessageKindException,
@@ -551,38 +684,29 @@ final readonly class CreateMessageAction implements CommunicationOutboundMessage
      * @param  array<string, mixed>  $richPayload
      * @return array<string, mixed>
      */
-    private function outboundContent(array $richPayload): array
+    private function outboundContent(MessageCreationData $data): array
     {
-        $content = $richPayload;
+        $content = $data->richPayload;
         if (isset($content['contact'])) {
             $content['contacts'] = [$content['contact']];
             unset($content['contact']);
+        }
+        if ($data->ptt) {
+            $content['ptt'] = true;
+        }
+        if ($data->gif) {
+            $content['gif'] = true;
+        }
+        if ($data->ptv) {
+            $content['variants'] = ['ptv'];
         }
 
         return $content;
     }
 
-    private function safeMime(string $mime): string
+    private function hasSemanticContent(MessageCreationData $data): bool
     {
-        $mime = strtolower(trim(explode(';', $mime, 2)[0]));
-
-        return preg_match('#^[a-z0-9.+-]+/[a-z0-9.+-]+$#', $mime)
-            ? $mime
-            : 'application/octet-stream';
-    }
-
-    private function normalizeUploadMime(
-        string $detectedMime,
-        string $clientMime,
-        ?MessageKind $requestedKind,
-    ): string {
-        if ($requestedKind === MessageKind::Audio
-            && $detectedMime === 'video/webm'
-            && $clientMime === 'audio/webm') {
-            return 'audio/webm';
-        }
-
-        return $detectedMime;
+        return $data->richPayload !== [] || $data->ptt || $data->gif || $data->ptv;
     }
 
     private function safeFilename(string $filename): string

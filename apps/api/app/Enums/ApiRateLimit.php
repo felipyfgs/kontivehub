@@ -16,6 +16,7 @@ enum ApiRateLimit: string
     case CommunicationMessageSend = 'communication-message-send';
     case CommunicationConversationListSnapshot = 'communication-conversation-list-snapshot';
     case CommunicationProfilePicture = 'communication-profile-picture';
+    case CommunicationGifSearch = 'communication-gif-search';
     case AssistantAccess = 'assistant-access';
     case AssistantChat = 'assistant-chat';
     case CteIntegrationTokenAdministration = 'cte-integration-token-administration';

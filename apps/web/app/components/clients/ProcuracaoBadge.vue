@@ -39,19 +39,19 @@ const validity = computed(() => procuracaoValidityLabel(props.status, props.vali
     </UBadge>
     <p
       v-if="validity && !compact"
-      class="mt-0.5 text-[10px] text-muted"
+      class="mt-0.5 text-xs text-muted"
     >
       {{ validity }}
     </p>
     <p
       v-if="checkedAt && !compact"
-      class="mt-0.5 text-[10px] text-muted"
+      class="mt-0.5 text-xs text-muted"
     >
       Verificado {{ formatDateTime(checkedAt) }}
     </p>
     <p
       v-if="hint && !compact"
-      class="mt-0.5 text-[10px] text-muted"
+      class="mt-0.5 text-xs text-muted"
     >
       {{ hint }}
     </p>

@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/broker"
 	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/command"
 	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/config"
 	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/cryptobox"
@@ -41,6 +42,7 @@ func main() {
 	defer persistence.Close()
 	var deviceResolver *protocol.DeviceResolver
 	var mediaSpool *spool.Store
+	var messageBroker *broker.JetStream
 	clientSettings := protocol.ClientSettings{
 		ConnectTimeout:           cfg.WhatsAppConnectTimeout,
 		ReadyTimeout:             cfg.WhatsAppReadyTimeout,
@@ -60,6 +62,19 @@ func main() {
 			os.Exit(1)
 		}
 		defer deviceResolver.Close()
+		if cfg.NATSURL != "" {
+			messageBroker, err = broker.Open(broker.Config{
+				URL: cfg.NATSURL, User: cfg.NATSUser, Password: cfg.NATSPassword,
+				Stream: cfg.NATSStream, EventSubject: cfg.NATSEventSubject,
+				CommandSubject: cfg.NATSCommandSubject, CommandConsumer: cfg.NATSCommandConsumer,
+				MaxBodyBytes: cfg.MaxBodyBytes,
+			}, persistence)
+			if err != nil {
+				slog.Error("Wazync JetStream initialization failed", "error", err.Error())
+				os.Exit(1)
+			}
+			defer messageBroker.Close()
+		}
 	}
 
 	keys := map[string]string{}
@@ -71,13 +86,18 @@ func main() {
 	}
 	verifier := security.NewVerifier(keys, cfg.HMACWindow, cfg.NonceTTL, persistence)
 	api := httpapi.New(cfg.Enabled, cfg.MaxBodyBytes, persistence, verifier)
+	if messageBroker != nil {
+		api.WithBrokerMetrics(messageBroker)
+	}
 	if cfg.Enabled {
 		api.WithSpoolStore(mediaSpool)
 		eventBridge := protocol.NewEventBridge(persistence, mediaSpool, cfg.MaxMediaBytes)
 		api.WithRecipientScopeMetrics(eventBridge)
 		eventBridge.SetDeviceRecorder(deviceResolver)
 		deviceResolver.SetEventSink(eventBridge.HandleWithSuccess)
-		adapter := protocol.NewWhatsMeowAdapter(deviceResolver, clientSettings).WithRecoveryStore(persistence)
+		adapter := protocol.NewWhatsMeowAdapter(deviceResolver, clientSettings).
+			WithRecoveryStore(persistence).
+			WithStickerMaterialization(persistence, mediaSpool, cfg.MaxMediaBytes)
 		api.WithQueryExecutor(adapter).WithSessionInspector(adapter)
 		sessionManager := session.NewManager(
 			persistence, adapter, cfg.ReplicaID, cfg.SessionCapacity, cfg.LeaseTTL, cfg.HeartbeatEvery,
@@ -92,6 +112,15 @@ func main() {
 		eventDispatcher := dispatcher.New(
 			persistence, cfg.LaravelEventIngestURL, cfg.CurrentKeyID, cfg.CurrentSecret, nil,
 		).WithSpool(mediaSpool)
+		if messageBroker != nil {
+			eventDispatcher.WithPublisher(messageBroker)
+			go func() {
+				if err := messageBroker.RunCommandConsumer(ctx); err != nil && !errors.Is(err, context.Canceled) {
+					slog.Error("Wazync JetStream command consumer stopped", "error", err.Error())
+					cancel()
+				}
+			}()
+		}
 		go sessionManager.Run(ctx)
 		go worker.Run(ctx, 250*time.Millisecond)
 		go eventDispatcher.Run(ctx, time.Second)

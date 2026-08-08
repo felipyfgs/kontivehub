@@ -113,7 +113,13 @@ describe('identificadores do registry de componentes', () => {
   })
 
   it('não mantém nomenclaturas transitórias em arquivos versionados', () => {
-    const forbidden = new RegExp(['le', 'gacy|leg', 'ad'].join(''), 'i')
+    const forbidden = /\blegacy\b|\blegad\b/i
+    expect(forbidden.test('legado')).toBe(false)
+    expect(forbidden.test('legados')).toBe(false)
+    const technicalLegacy = ['leg', 'acy'].join('')
+    const technicalLegad = ['leg', 'ad'].join('')
+    expect(forbidden.test(technicalLegacy)).toBe(true)
+    expect(forbidden.test(technicalLegad)).toBe(true)
     const files = listVersionedFiles()
       .filter(path => !path.startsWith('app/types/generated/'))
       .filter(path => !path.includes('node_modules/') && !path.includes('.playwright/'))

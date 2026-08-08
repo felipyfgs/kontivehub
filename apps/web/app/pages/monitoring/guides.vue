@@ -214,7 +214,7 @@ async function loadOverview() {
     overviewError.value = null
   } catch (caught) {
     if (!stillCurrent(seq, 'overview', epoch)) return
-    overviewError.value = apiErrorMessage(caught, 'Falha no overview de guias.')
+    overviewError.value = apiErrorMessage(caught, 'Falha ao carregar o resumo das guias.')
   }
 }
 
@@ -431,7 +431,7 @@ const columns: TableColumn<Record<string, unknown>>[] = [
             size: 'xs',
             color: 'neutral',
             variant: 'ghost',
-            label: 'Download',
+            label: 'Baixar',
             onClick: () => downloadGuide(id)
           })
         )
@@ -658,7 +658,7 @@ onMounted(() => {
             size="xs"
             color="neutral"
             variant="outline"
-            label="Retry overview"
+            label="Tentar carregar resumo"
             @click="loadOverview"
           />
         </template>
@@ -667,7 +667,7 @@ onMounted(() => {
         v-if="unpaidAmountCents != null"
         class="text-sm text-muted"
       >
-        Em aberto (métrica do overview):
+        Em aberto (métrica do resumo):
         <span class="font-medium text-highlighted">
           {{ formatAmountCents(unpaidAmountCents) }}
         </span>
@@ -784,7 +784,7 @@ onMounted(() => {
             </dl>
             <UButton
               icon="i-lucide-download"
-              label="Download protegido"
+              label="Baixar documento protegido"
               :loading="downloading"
               @click="downloadGuide(Number(detail.id))"
             />

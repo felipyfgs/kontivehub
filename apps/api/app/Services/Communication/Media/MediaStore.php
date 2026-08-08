@@ -4,6 +4,8 @@ namespace App\Services\Communication\Media;
 
 use App\Services\Vault\EnvelopeCrypto;
 use Generator;
+use Illuminate\Contracts\Filesystem\Filesystem;
+use Illuminate\Support\Facades\Cache;
 use Psr\Http\Message\StreamInterface;
 use RuntimeException;
 use Throwable;
@@ -16,7 +18,7 @@ final readonly class MediaStore
 
     public function __construct(
         private EnvelopeCrypto $crypto,
-        private string $root,
+        private Filesystem $disk,
     ) {}
 
     /**
@@ -32,17 +34,10 @@ final readonly class MediaStore
 
         $objectId = (string) str()->ulid();
         $path = $this->path($objectId);
-        $directory = dirname($path);
-        if (! is_dir($directory) && ! mkdir($directory, 0700, true) && ! is_dir($directory)) {
-            throw new RuntimeException('Não foi possível criar o diretório de mídia.');
-        }
-
-        $temporary = $path.'.incoming-'.bin2hex(random_bytes(6));
-        $output = fopen($temporary, 'x+b');
+        $output = tmpfile();
         if (! is_resource($output)) {
             throw new RuntimeException('Não foi possível criar o spool cifrado de mídia.');
         }
-        chmod($temporary, 0600);
 
         $streamKey = sodium_crypto_secretstream_xchacha20poly1305_keygen();
         [$state, $streamHeader] = sodium_crypto_secretstream_xchacha20poly1305_init_push($streamKey);
@@ -107,12 +102,9 @@ final readonly class MediaStore
             if (function_exists('fsync')) {
                 fsync($output);
             }
-            fclose($output);
-            $output = null;
-            if (! rename($temporary, $path)) {
-                throw new RuntimeException('Não foi possível promover a mídia cifrada.');
+            if (fseek($output, 0) !== 0 || ! $this->disk->writeStream($path, $output, ['visibility' => 'private'])) {
+                throw new RuntimeException('Não foi possível armazenar a mídia cifrada.');
             }
-            chmod($path, 0600);
 
             return [
                 'object_id' => $objectId,
@@ -120,12 +112,14 @@ final readonly class MediaStore
                 'sha256' => hash_final($hasher),
             ];
         } catch (Throwable $error) {
+            if ($this->disk->exists($path)) {
+                $this->disk->delete($path);
+            }
+            throw $error;
+        } finally {
             if (is_resource($output)) {
                 fclose($output);
             }
-            @unlink($temporary);
-            @unlink($path);
-            throw $error;
         }
     }
 
@@ -135,7 +129,7 @@ final readonly class MediaStore
      */
     public function readChunks(string $objectId, array $metadata): Generator
     {
-        $input = fopen($this->path($objectId), 'rb');
+        $input = $this->disk->readStream($this->path($objectId));
         if (! is_resource($input)) {
             throw new RuntimeException('Mídia não encontrada.');
         }
@@ -217,17 +211,235 @@ final readonly class MediaStore
         }
     }
 
+    /** @param  array<string, scalar|null>  $metadata */
+    public function readValidated(
+        string $objectId,
+        array $metadata,
+        int $expectedSize,
+        string $expectedSha256,
+    ): string {
+        $maximum = max(1, (int) config('communication.media.max_bytes', 20_971_520));
+        if ($expectedSize < 0
+            || $expectedSize > $maximum
+            || preg_match('/^[a-f0-9]{64}$/', $expectedSha256) !== 1) {
+            throw new RuntimeException('Descritor de mídia inválido.');
+        }
+
+        $contents = '';
+        $size = 0;
+        $hasher = hash_init('sha256');
+        foreach ($this->readChunks($objectId, $metadata) as $chunk) {
+            $size += strlen($chunk);
+            if ($size > $expectedSize) {
+                throw new RuntimeException('Tamanho de mídia divergente.');
+            }
+            $contents .= $chunk;
+            hash_update($hasher, $chunk);
+        }
+        if ($size !== $expectedSize || ! hash_equals($expectedSha256, hash_final($hasher))) {
+            throw new RuntimeException('Integridade da mídia inválida.');
+        }
+
+        return $contents;
+    }
+
+    /**
+     * @param  array<string, scalar|null>  $metadata
+     * @return Generator<int, string>
+     */
+    public function readValidatedRange(
+        string $objectId,
+        array $metadata,
+        int $start,
+        int $end,
+        int $expectedSize,
+        string $expectedSha256,
+    ): Generator {
+        $maximum = max(1, (int) config('communication.media.max_bytes', 20_971_520));
+        if ($start < 0
+            || $expectedSize < 0
+            || $expectedSize > $maximum
+            || preg_match('/^[a-f0-9]{64}$/', $expectedSha256) !== 1) {
+            throw new RuntimeException('Descritor de mídia inválido.');
+        }
+
+        // Empty objects use the sentinel range (0, -1); do not apply end < start to that case.
+        if ($expectedSize === 0) {
+            if ($start !== 0 || $end !== -1) {
+                throw new RuntimeException('Descritor de mídia inválido.');
+            }
+        } elseif ($end < $start || $end >= $expectedSize) {
+            throw new RuntimeException('Descritor de mídia inválido.');
+        }
+
+        // After a successful full integrity pass, subsequent Range requests can
+        // stream only the needed plaintext window (secretstream still authenticates
+        // each chunk) without re-hashing the entire object on every seek.
+        if ($this->hasVerifiedIntegrity($objectId, $expectedSize, $expectedSha256)) {
+            yield from $this->readRangeTrusted(
+                $objectId,
+                $metadata,
+                $start,
+                $end,
+                $expectedSize,
+                $expectedSha256,
+            );
+
+            return;
+        }
+
+        $range = tmpfile();
+        if (! is_resource($range)) {
+            throw new RuntimeException('Não foi possível criar o buffer da faixa de mídia.');
+        }
+
+        try {
+            $size = 0;
+            $offset = 0;
+            $hasher = hash_init('sha256');
+            foreach ($this->readChunks($objectId, $metadata) as $chunk) {
+                $chunkSize = strlen($chunk);
+                $size += $chunkSize;
+                if ($size > $expectedSize) {
+                    throw new RuntimeException('Tamanho de mídia divergente.');
+                }
+                hash_update($hasher, $chunk);
+
+                $chunkEnd = $offset + $chunkSize - 1;
+                if ($chunkEnd >= $start) {
+                    $sliceStart = max(0, $start - $offset);
+                    $sliceEnd = min($chunkSize - 1, $end - $offset);
+                    if ($sliceEnd >= $sliceStart) {
+                        $this->write($range, substr($chunk, $sliceStart, $sliceEnd - $sliceStart + 1));
+                    }
+                }
+                $offset += $chunkSize;
+            }
+            if ($size !== $expectedSize || ! hash_equals($expectedSha256, hash_final($hasher))) {
+                throw new RuntimeException('Integridade da mídia inválida.');
+            }
+            $this->markVerifiedIntegrity($objectId, $expectedSize, $expectedSha256);
+            if (fseek($range, 0) !== 0) {
+                throw new RuntimeException('Falha ao preparar a faixa de mídia.');
+            }
+
+            while (! feof($range)) {
+                $chunk = fread($range, self::CHUNK_BYTES);
+                if ($chunk === false) {
+                    throw new RuntimeException('Falha ao ler a faixa de mídia.');
+                }
+                if ($chunk !== '') {
+                    yield $chunk;
+                }
+            }
+        } finally {
+            fclose($range);
+        }
+    }
+
+    /**
+     * Stream a previously integrity-verified range without re-hashing the whole object.
+     * Stops decrypting once the requested window is complete.
+     *
+     * @param  array<string, scalar|null>  $metadata
+     * @return Generator<int, string>
+     */
+    private function readRangeTrusted(
+        string $objectId,
+        array $metadata,
+        int $start,
+        int $end,
+        int $expectedSize,
+        string $expectedSha256,
+    ): Generator {
+        $size = 0;
+        $offset = 0;
+        foreach ($this->readChunks($objectId, $metadata) as $chunk) {
+            $chunkSize = strlen($chunk);
+            $size += $chunkSize;
+            if ($size > $expectedSize) {
+                $this->forgetVerifiedIntegrity($objectId, $expectedSize, $expectedSha256);
+                throw new RuntimeException('Tamanho de mídia divergente.');
+            }
+
+            $chunkEnd = $offset + $chunkSize - 1;
+            if ($chunkEnd >= $start && $end >= $start) {
+                $sliceStart = max(0, $start - $offset);
+                $sliceEnd = min($chunkSize - 1, $end - $offset);
+                if ($sliceEnd >= $sliceStart) {
+                    yield substr($chunk, $sliceStart, $sliceEnd - $sliceStart + 1);
+                }
+            }
+            $offset += $chunkSize;
+
+            // Partial windows may stop early; full-object reads keep fail-closed size checks.
+            $partial = $end >= 0 && $expectedSize > 0 && $end < $expectedSize - 1;
+            if ($partial && $offset > $end) {
+                return;
+            }
+        }
+
+        if ($size !== $expectedSize) {
+            $this->forgetVerifiedIntegrity($objectId, $expectedSize, $expectedSha256);
+            throw new RuntimeException('Tamanho de mídia divergente.');
+        }
+    }
+
+    private function integrityEpochKey(string $objectId): string
+    {
+        return 'communication.media.integrity.epoch.'.$objectId;
+    }
+
+    private function integrityEpoch(string $objectId): int
+    {
+        return (int) Cache::get($this->integrityEpochKey($objectId), 0);
+    }
+
+    private function integrityCacheKey(string $objectId, int $expectedSize, string $expectedSha256): string
+    {
+        return 'communication.media.integrity.'
+            .$objectId.'.'
+            .$this->integrityEpoch($objectId).'.'
+            .$expectedSize.'.'
+            .$expectedSha256;
+    }
+
+    private function hasVerifiedIntegrity(string $objectId, int $expectedSize, string $expectedSha256): bool
+    {
+        return Cache::get($this->integrityCacheKey($objectId, $expectedSize, $expectedSha256)) === true;
+    }
+
+    private function markVerifiedIntegrity(string $objectId, int $expectedSize, string $expectedSha256): void
+    {
+        Cache::put(
+            $this->integrityCacheKey($objectId, $expectedSize, $expectedSha256),
+            true,
+            now()->addHour(),
+        );
+    }
+
+    private function forgetVerifiedIntegrity(string $objectId, int $expectedSize, string $expectedSha256): void
+    {
+        Cache::forget($this->integrityCacheKey($objectId, $expectedSize, $expectedSha256));
+    }
+
     public function delete(string $objectId): void
     {
         $path = $this->path($objectId);
-        if (is_file($path) && ! unlink($path)) {
+        if ($this->disk->exists($path) && ! $this->disk->delete($path)) {
             throw new RuntimeException('Não foi possível excluir a mídia.');
         }
+
+        Cache::put(
+            $this->integrityEpochKey($objectId),
+            $this->integrityEpoch($objectId) + 1,
+            now()->addDay(),
+        );
     }
 
     public function exists(string $objectId): bool
     {
-        return is_file($this->path($objectId));
+        return $this->disk->exists($this->path($objectId));
     }
 
     /** @return Generator<int, string> Object ids older than the supplied cutoff; never returns paths. */
@@ -238,14 +450,11 @@ final readonly class MediaStore
         }
 
         $remaining = min($limit, 500);
-        $root = rtrim($this->root, '/');
-        if (! is_dir($root)) {
-            return;
-        }
         $directories = [];
-        foreach (new \DirectoryIterator($root) as $directory) {
-            if ($directory->isDir() && ! $directory->isDot()) {
-                $directories[$directory->getFilename()] = $directory->getPathname();
+        foreach ($this->disk->directories() as $directory) {
+            $directoryName = basename($directory);
+            if (preg_match('/^[0-9a-hjkmnp-tv-z]{2}$/i', $directoryName)) {
+                $directories[$directoryName] = $directory;
             }
         }
         ksort($directories, SORT_STRING);
@@ -263,10 +472,10 @@ final readonly class MediaStore
                 continue;
             }
             $files = [];
-            foreach (new \DirectoryIterator($directory) as $file) {
-                $name = pathinfo($file->getFilename(), PATHINFO_FILENAME);
-                if ($file->isFile() && $file->getExtension() === 'media'
-                    && $file->getMTime() <= $cutoff->getTimestamp()
+            foreach ($this->disk->files($directory) as $file) {
+                $name = pathinfo($file, PATHINFO_FILENAME);
+                if (pathinfo($file, PATHINFO_EXTENSION) === 'media'
+                    && $this->disk->lastModified($file) <= $cutoff->getTimestamp()
                     && preg_match('/^[0-9A-HJKMNP-TV-Z]{26}$/i', $name)) {
                     if ($afterObjectId !== null && strcmp($name, $afterObjectId) <= 0) {
                         continue;
@@ -296,7 +505,7 @@ final readonly class MediaStore
             throw new RuntimeException('Identificador de mídia inválido.');
         }
 
-        return rtrim($this->root, '/').'/'.strtolower(substr($objectId, 0, 2)).'/'.$objectId.'.media';
+        return strtolower(substr($objectId, 0, 2)).'/'.$objectId.'.media';
     }
 
     /** @param resource $output */

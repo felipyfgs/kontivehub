@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -229,6 +230,55 @@ func TestTerminalCommandFailureRejectsConflictingEventDigestOnReplay(t *testing.
 	}
 }
 
+func TestProcessedCommandWithEventIsAtomicAndAttemptFenced(t *testing.T) {
+	t.Parallel()
+	persistence := NewMemory()
+	now := time.Now().UTC()
+	command := domain.Command{
+		CommandID: "command-action-result-fence-0001", SessionID: "session-action-result-fence-0001",
+		Type: domain.CommandEditMessage, Digest: "action-result-fence", AcceptedAt: now,
+	}
+	if err := persistence.UpsertSession(t.Context(), domain.Session{SessionID: command.SessionID, Status: domain.SessionConnecting}); err != nil {
+		t.Fatalf("seed session: %v", err)
+	}
+	if _, claimed, err := persistence.ClaimSession(t.Context(), command.SessionID, "replica-a", 1, now, time.Minute); err != nil || !claimed {
+		t.Fatalf("claim session: claimed=%v err=%v", claimed, err)
+	}
+	if _, err := persistence.AcceptCommand(t.Context(), command); err != nil {
+		t.Fatalf("accept command: %v", err)
+	}
+	pending, err := persistence.NextCommands(t.Context(), "replica-a", 1, now)
+	if err != nil || len(pending) != 1 {
+		t.Fatalf("claim command: pending=%+v err=%v", pending, err)
+	}
+	event := domain.Event{EventID: "event-action-result-fence-0001", Digest: "action-result-digest", OccurredAt: now}
+	if err := persistence.FinalizeCommandProcessedWithEvent(
+		t.Context(), command.CommandID, pending[0].Attempts+1, now, event,
+	); !errors.Is(err, domain.ErrStateConflict) {
+		t.Fatalf("stale finalization error = %v, want state conflict", err)
+	}
+	metrics, err := persistence.Metrics(t.Context())
+	if err != nil || metrics.PendingEvents != 0 || metrics.PendingCommands != 1 {
+		t.Fatalf("stale finalization changed state: metrics=%+v err=%v", metrics, err)
+	}
+	if err := persistence.FinalizeCommandProcessedWithEvent(
+		t.Context(), command.CommandID, pending[0].Attempts, now, event,
+	); err != nil {
+		t.Fatalf("finalize command with event: %v", err)
+	}
+	if err := persistence.FinalizeCommandProcessedWithEvent(
+		t.Context(), command.CommandID, pending[0].Attempts, now, event,
+	); err != nil {
+		t.Fatalf("idempotent finalization: %v", err)
+	}
+	event.Digest = "conflicting-action-result-digest"
+	if err := persistence.FinalizeCommandProcessedWithEvent(
+		t.Context(), command.CommandID, pending[0].Attempts, now, event,
+	); !errors.Is(err, domain.ErrDigestConflict) {
+		t.Fatalf("conflicting replay error = %v, want digest conflict", err)
+	}
+}
+
 func TestTerminalCommandFailureTreatsMissingCommandAsStateConflict(t *testing.T) {
 	t.Parallel()
 
@@ -241,6 +291,43 @@ func TestTerminalCommandFailureTreatsMissingCommandAsStateConflict(t *testing.T)
 		t.Context(), "command-missing-terminal-0001", 1, time.Now().UTC(), "FAILED", event,
 	); !errors.Is(err, domain.ErrStateConflict) {
 		t.Fatalf("missing terminal command error = %v, want state conflict", err)
+	}
+}
+
+func TestMessageBatchCommandFailedTerminalRejectsPendingItems(t *testing.T) {
+	t.Parallel()
+	persistence, command, _, attempts := newProcessingMessageBatch(t, "command-batch-terminal-pending-0001")
+	now := time.Now().UTC()
+	if err := persistence.FinalizeMessageBatchCommandFailed(
+		t.Context(), command.CommandID, attempts, now.Add(time.Minute), "BATCH_FAILED", true,
+	); !errors.Is(err, domain.ErrStateConflict) {
+		t.Fatalf("terminal finalization with pending items error = %v, want state conflict", err)
+	}
+	if err := persistence.FinalizeMessageBatchCommandFailed(
+		t.Context(), command.CommandID, attempts, now.Add(time.Minute), "BATCH_FAILED", false,
+	); err != nil {
+		t.Fatalf("rejected terminal finalization mutated command: %v", err)
+	}
+}
+
+func TestMessageBatchCommandFailedTerminalAllowsWithoutPendingItems(t *testing.T) {
+	t.Parallel()
+	persistence, command, batch, attempts := newProcessingMessageBatch(t, "command-batch-terminal-clear-0001")
+	now := time.Now().UTC()
+	eventIDs := []string{"event-batch-terminal-clear-0", "event-batch-terminal-clear-1"}
+	for position, eventID := range eventIDs {
+		event := domain.Event{EventID: eventID, Digest: "event-digest"}
+		if err := persistence.FinalizeMessageBatchItemWithEvent(
+			t.Context(), command.CommandID, attempts, batch.Items[position],
+			domain.MessageBatchItemSent, "", now, event,
+		); err != nil {
+			t.Fatalf("finalize batch item %d: %v", position, err)
+		}
+	}
+	if err := persistence.FinalizeMessageBatchCommandFailed(
+		t.Context(), command.CommandID, attempts, now.Add(time.Minute), "BATCH_FAILED", true,
+	); err != nil {
+		t.Fatalf("terminal finalization without pending items: %v", err)
 	}
 }
 
@@ -275,4 +362,65 @@ func TestClaimSessionAcquiresOnlyTheRequestedSessionAndRespectsFencing(t *testin
 	if err != nil || !claimed || takeover.FencingToken <= lease.FencingToken {
 		t.Fatalf("takeover did not advance fencing: old=%+v new=%+v claimed=%v err=%v", lease, takeover, claimed, err)
 	}
+}
+
+func newProcessingMessageBatch(
+	t *testing.T,
+	commandID string,
+) (*Memory, domain.Command, domain.MessageBatchPayload, int) {
+	t.Helper()
+	now := time.Now().UTC()
+	batch := domain.MessageBatchPayload{
+		BatchID: "batch-" + commandID,
+		Size:    2,
+		Items: []domain.MessageBatchItemPayload{
+			{
+				BatchID: "batch-" + commandID, Position: 0, Size: 2,
+				ProviderMessageID: "provider-batch-item-0001",
+				Message: domain.MessageSendPayload{
+					To: "recipient-batch-0001", Kind: domain.MessageImage,
+					Media: &domain.MediaReference{Filename: "first.jpg", MIMEType: "image/jpeg"},
+				},
+			},
+			{
+				BatchID: "batch-" + commandID, Position: 1, Size: 2,
+				ProviderMessageID: "provider-batch-item-0002",
+				Message: domain.MessageSendPayload{
+					To: "recipient-batch-0001", Kind: domain.MessageImage,
+					Media: &domain.MediaReference{Filename: "second.jpg", MIMEType: "image/jpeg"},
+				},
+			},
+		},
+	}
+	payload, err := json.Marshal(batch)
+	if err != nil {
+		t.Fatalf("marshal message batch: %v", err)
+	}
+	command := domain.Command{
+		CommandID:  commandID,
+		SessionID:  "session-batch-terminal-0001",
+		Type:       domain.CommandSendMessageBatch,
+		Digest:     "batch-digest",
+		AcceptedAt: now,
+		Payload:    payload,
+	}
+	persistence := NewMemory()
+	if err := persistence.UpsertSession(t.Context(), domain.Session{
+		SessionID: command.SessionID, Status: domain.SessionConnecting,
+	}); err != nil {
+		t.Fatalf("seed session: %v", err)
+	}
+	if _, claimed, err := persistence.ClaimSession(
+		t.Context(), command.SessionID, "replica-batch", 1, now, time.Minute,
+	); err != nil || !claimed {
+		t.Fatalf("claim session: claimed=%v err=%v", claimed, err)
+	}
+	if _, err := persistence.AcceptCommand(t.Context(), command); err != nil {
+		t.Fatalf("accept message batch command: %v", err)
+	}
+	pending, err := persistence.NextCommands(t.Context(), "replica-batch", 1, now)
+	if err != nil || len(pending) != 1 {
+		t.Fatalf("claim message batch command: pending=%+v err=%v", pending, err)
+	}
+	return persistence, command, batch, pending[0].Attempts
 }

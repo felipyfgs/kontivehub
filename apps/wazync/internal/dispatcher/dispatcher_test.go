@@ -23,6 +23,13 @@ func (s *recordingSpoolAck) Ack(id string) error {
 	return nil
 }
 
+type recordingEventPublisher struct{ ids []string }
+
+func (p *recordingEventPublisher) PublishEvent(_ context.Context, event domain.Event) error {
+	p.ids = append(p.ids, event.EventID)
+	return nil
+}
+
 func TestDispatcherRetriesPersistedEventUntilLaravelAcknowledges(t *testing.T) {
 	t.Parallel()
 	var calls atomic.Int32
@@ -116,5 +123,53 @@ func TestDispatcherRetainsRetryDescriptorUntilLaravelACKThenDeletesIt(t *testing
 	}
 	if len(spoolAck.ids) != 1 || spoolAck.ids[0] != "spool-media-ack" {
 		t.Fatalf("spool was not ACKed with retry event: %+v", spoolAck.ids)
+	}
+}
+
+func TestDispatcherRetainsSpoolAndCleansRetryStateAfterJetStreamPublishAcknowledgement(t *testing.T) {
+	t.Parallel()
+	persistence := store.NewMemory()
+	state := domain.MediaRetryState{
+		SessionID: "session-media-jetstream", MessageID: "provider-media-jetstream",
+		Descriptor: []byte("encrypted-by-durable-store"),
+	}
+	if err := persistence.PutMediaRetryState(t.Context(), state); err != nil {
+		t.Fatalf("put retry state: %v", err)
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"provider_message_id": "provider-media-jetstream",
+		"spool_id":            "spool-media-jetstream",
+		"status":              "READY",
+	})
+	digest := sha256.Sum256(payload)
+	_, err := persistence.AppendEvent(t.Context(), domain.Event{
+		ContractVersion: "v1", EventID: "event-media-jetstream", SessionID: "session-media-jetstream",
+		Type: domain.EventMediaRetryUpdated, OccurredAt: time.Now(), Payload: payload,
+		Digest: hex.EncodeToString(digest[:]),
+	})
+	if err != nil {
+		t.Fatalf("append media event: %v", err)
+	}
+
+	spoolAck := &recordingSpoolAck{}
+	publisher := &recordingEventPublisher{}
+	d := New(persistence, "", "", "", nil).WithSpool(spoolAck).WithPublisher(publisher)
+	if err := d.DispatchOnce(t.Context()); err != nil {
+		t.Fatalf("publish media event: %v", err)
+	}
+	if len(publisher.ids) != 1 || publisher.ids[0] != "event-media-jetstream" {
+		t.Fatalf("event was not published: %+v", publisher.ids)
+	}
+	if len(spoolAck.ids) != 0 {
+		t.Fatalf("spool was deleted before Laravel ingestion: %+v", spoolAck.ids)
+	}
+	if _, err := persistence.GetMediaRetryState(
+		context.Background(), state.SessionID, state.MessageID,
+	); err != domain.ErrNotFound {
+		t.Fatalf("retry descriptor remained after JetStream ACK: %v", err)
+	}
+	metrics, _ := persistence.Metrics(t.Context())
+	if metrics.PendingEvents != 0 {
+		t.Fatalf("published outbox event remained pending: %+v", metrics)
 	}
 }

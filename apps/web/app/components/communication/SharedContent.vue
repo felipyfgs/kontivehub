@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { SharedContentCategory, SharedContentItem } from '~/types/communication/shared-content'
+import type { MediaViewerItem } from '~/types/communication/media'
 import { apiErrorMessage } from '~/utils/api-error'
 import { resolveApiUrl } from '~/utils/api-url'
 
@@ -24,15 +25,10 @@ const cursor = ref<string | null>(null)
 const loading = ref(false)
 const loaded = ref(false)
 const error = ref<string | null>(null)
-const viewer = ref<SharedContentItem | null>(null)
 const expanded = ref(false)
-const zoom = ref(1)
-const rotation = ref(0)
+const viewerOpen = ref(false)
+const viewerIndex = ref(0)
 let requestEpoch = 0
-const viewerOpen = computed({
-  get: () => viewer.value !== null,
-  set: (value) => { if (!value) viewer.value = null }
-})
 
 const tabs = [
   { label: 'Mídias', value: 'media', icon: 'i-lucide-images' },
@@ -43,9 +39,16 @@ const tabs = [
 const megabyteFormatter = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 })
 
 const mediaItems = computed(() => items.value.filter(item => item.attachment))
+const viewerItems = computed<MediaViewerItem[]>(() => mediaItems.value.flatMap((item) => {
+  if (!item.attachment) return []
+  return [{
+    id: item.id,
+    conversationId: item.conversation_id,
+    messageId: item.message_id,
+    attachment: item.attachment
+  }]
+}))
 const effectiveCompact = computed(() => Boolean(props.compact) && !expanded.value)
-const viewerIndex = computed(() => mediaItems.value.findIndex(item => item.id === viewer.value?.id))
-const viewerIsImage = computed(() => Boolean(viewer.value?.attachment?.mime_type.startsWith('image/')))
 
 function mediaUrl(url: string | null | undefined): string | undefined {
   return url ? resolveApiUrl(url, apiBase) : undefined
@@ -102,39 +105,18 @@ watch(() => [props.conversationId, props.contactId, props.inboxId], () => {
 
 function open(item: SharedContentItem) {
   if (!item.attachment) return
-  viewer.value = item
-}
-
-function resetViewerTransform() {
-  zoom.value = 1
-  rotation.value = 0
-}
-
-function zoomOut() {
-  zoom.value = Math.max(0.5, zoom.value - 0.25)
-}
-
-function zoomIn() {
-  zoom.value = Math.min(3, zoom.value + 0.25)
-}
-
-function rotate() {
-  rotation.value = (rotation.value + 90) % 360
-}
-
-function previous() {
-  const index = viewerIndex.value
-  viewer.value = mediaItems.value[(index - 1 + mediaItems.value.length) % mediaItems.value.length] ?? null
-}
-
-function next() {
-  const index = viewerIndex.value
-  viewer.value = mediaItems.value[(index + 1) % mediaItems.value.length] ?? null
+  viewerIndex.value = Math.max(0, viewerItems.value.findIndex(viewerItem => viewerItem.id === item.id))
+  viewerOpen.value = true
 }
 
 function jump(item: SharedContentItem) {
-  viewer.value = null
+  viewerOpen.value = false
   emit('jump', { conversationId: item.conversation_id, messageId: item.message_id })
+}
+
+function jumpFromViewer(item: MediaViewerItem) {
+  viewerOpen.value = false
+  emit('jump', { conversationId: item.conversationId, messageId: item.messageId })
 }
 
 function showAll() {
@@ -150,29 +132,13 @@ function collapse() {
   void load()
 }
 
-function onViewerKeydown(event: KeyboardEvent) {
-  if (!viewerOpen.value) return
-  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
-  const target = event.target
-  if (target instanceof HTMLElement && (
-    target.isContentEditable
-    || ['INPUT', 'TEXTAREA', 'SELECT', 'AUDIO', 'VIDEO'].includes(target.tagName)
-  )) return
-  if (event.key === 'ArrowLeft') {
-    event.preventDefault()
-    previous()
-  } else if (event.key === 'ArrowRight') {
-    event.preventDefault()
-    next()
-  }
-}
-
-watch(viewer, resetViewerTransform)
-onMounted(() => window.addEventListener('keydown', onViewerKeydown))
-onBeforeUnmount(() => window.removeEventListener('keydown', onViewerKeydown))
-
 function downloadAttachment(item: SharedContentItem) {
   if (!item.attachment?.download_url) return
+  void download.download(item.attachment.download_url, item.attachment.filename)
+}
+
+function downloadViewerItem(item: MediaViewerItem) {
+  if (!item.attachment.download_url) return
   void download.download(item.attachment.download_url, item.attachment.filename)
 }
 
@@ -301,96 +267,12 @@ function displaySize(bytes?: number) {
     </template>
   </section>
 
-  <UModal v-model:open="viewerOpen" :title="viewer?.attachment?.filename || 'Mídia'" :ui="{ content: 'max-w-3xl' }">
-    <template #body>
-      <div v-if="viewer?.attachment" class="space-y-4">
-        <div v-if="viewerIsImage" class="flex max-h-[65vh] min-h-64 items-center justify-center overflow-auto rounded-lg bg-elevated/60 p-3">
-          <img
-            :src="mediaUrl(viewer.attachment.preview_url || viewer.attachment.download_url)"
-            :alt="viewer.attachment.filename"
-            data-testid="communication-shared-content-viewer-image"
-            class="max-h-[60vh] max-w-full object-contain transition-transform duration-200"
-            :style="{ transform: `scale(${zoom}) rotate(${rotation}deg)` }"
-            @dblclick="zoom = zoom === 1 ? 1.5 : 1"
-          >
-        </div>
-        <video
-          v-else-if="viewer.attachment.mime_type.startsWith('video/')"
-          :src="mediaUrl(viewer.attachment.download_url)"
-          :poster="mediaUrl(viewer.attachment.preview_url)"
-          controls
-          class="max-h-[65vh] w-full"
-        />
-        <audio
-          v-else
-          :src="mediaUrl(viewer.attachment.download_url)"
-          controls
-          class="w-full"
-        />
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <div class="flex items-center gap-2">
-            <UButton
-              color="neutral"
-              variant="outline"
-              icon="i-lucide-chevron-left"
-              aria-label="Mídia anterior"
-              :disabled="mediaItems.length < 2"
-              @click="previous"
-            />
-            <span class="min-w-16 text-center text-sm tabular-nums text-muted">{{ viewerIndex + 1 }} de {{ mediaItems.length }}</span>
-            <UButton
-              color="neutral"
-              variant="outline"
-              icon="i-lucide-chevron-right"
-              aria-label="Próxima mídia"
-              :disabled="mediaItems.length < 2"
-              @click="next"
-            />
-          </div>
-          <div v-if="viewerIsImage" class="flex items-center gap-1">
-            <UButton
-              color="neutral"
-              variant="ghost"
-              icon="i-lucide-zoom-out"
-              aria-label="Reduzir imagem"
-              :disabled="zoom <= 0.5"
-              @click="zoomOut"
-            />
-            <UButton
-              color="neutral"
-              variant="ghost"
-              icon="i-lucide-rotate-cw"
-              aria-label="Girar imagem"
-              @click="rotate"
-            />
-            <UButton
-              color="neutral"
-              variant="ghost"
-              icon="i-lucide-zoom-in"
-              aria-label="Ampliar imagem"
-              :disabled="zoom >= 3"
-              @click="zoomIn"
-            />
-          </div>
-          <div class="flex gap-2">
-            <UButton
-              v-if="viewer.attachment.download_url"
-              color="neutral"
-              variant="outline"
-              icon="i-lucide-download"
-              label="Baixar"
-              @click="downloadAttachment(viewer)"
-            />
-            <UButton
-              color="neutral"
-              variant="outline"
-              icon="i-lucide-message-square"
-              label="Ir para mensagem"
-              @click="jump(viewer)"
-            />
-          </div>
-        </div>
-      </div>
-    </template>
-  </UModal>
+  <CommunicationMediaViewer
+    v-model:open="viewerOpen"
+    v-model:index="viewerIndex"
+    :items="viewerItems"
+    image-test-id="communication-shared-content-viewer-image"
+    @download="downloadViewerItem"
+    @jump="jumpFromViewer"
+  />
 </template>

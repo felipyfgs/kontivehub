@@ -5,6 +5,7 @@ namespace App\Actions\Communication;
 use App\Enums\Communication\ProfilePictureState;
 use App\Models\CommunicationInboxIdentityProfile;
 use App\Services\Communication\Media\MediaStore;
+use App\Services\Communication\ProfilePicture\ProfilePictureMissingObjectHealer;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
@@ -13,6 +14,7 @@ final readonly class StreamProfilePictureAction
 {
     public function __construct(
         private MediaStore $media,
+        private ProfilePictureMissingObjectHealer $missingObjectHealer,
     ) {}
 
     public function execute(CommunicationInboxIdentityProfile $profile, int $version, ?string $ifNoneMatch): Response|StreamedResponse|null
@@ -29,8 +31,12 @@ final readonly class StreamProfilePictureAction
             || (int) $profile->profile_picture_size_bytes > (int) config('communication.profile_pictures.max_bytes', 2_097_152)
             || ! is_string($profile->profile_picture_sha256)
             || preg_match('/^[a-f0-9]{64}$/', $profile->profile_picture_sha256) !== 1
-            || ! $this->contextMatches($profile->profile_picture_storage_context, $context)
-            || ! $this->objectExists($profile->profile_picture_object_id)) {
+            || ! $this->contextMatches($profile->profile_picture_storage_context, $context)) {
+            return null;
+        }
+        if (! $this->objectExists($profile->profile_picture_object_id)) {
+            $this->missingObjectHealer->heal($profile, $version);
+
             return null;
         }
         $etag = '"'.$profile->profile_picture_sha256.'"';
@@ -55,6 +61,7 @@ final readonly class StreamProfilePictureAction
             }
         } catch (Throwable) {
             fclose($stream);
+            $this->missingObjectHealer->heal($profile, $version);
 
             return null;
         }

@@ -32,12 +32,14 @@ const emit = defineEmits<{
 
 const { fetchHistory, artifactDownloadUrl } = usePgdasdMonitoring()
 const { download: downloadAuthenticated, downloading: downloadBusy } = useAuthenticatedDownload()
+const { sessionEpoch } = useDashboard()
 const apiBase = useRuntimeConfig().public.apiBase as string
 
 const loading = ref(false)
 const error = ref<string | null>(null)
 const history = ref<PgdasdHistoryPayload | null>(null)
 const yearFilter = ref<number | 'all'>('all')
+const openPeriods = ref<Record<string, boolean>>({})
 let requestGeneration = 0
 
 const payload = computed<PgdasdHistoryPayload>(() => history.value || {})
@@ -147,6 +149,10 @@ function periodKeyFallback(period: PgdasdHistoryPeriod): string {
   return period.period_key || `periodo-${period.declarations?.length || 0}-${period.das?.length || 0}`
 }
 
+function periodId(period: PgdasdHistoryPeriod): string {
+  return period.period_key || periodKeyFallback(period)
+}
+
 function totalValue(period: PgdasdHistoryPeriod): string {
   const cents = period.rbt12?.total_cents
   if (typeof cents === 'number' && Number.isFinite(cents)) {
@@ -164,18 +170,19 @@ async function loadHistory() {
   const clientId = props.clientId
   if (!props.open || !clientId) return
   const generation = ++requestGeneration
+  const epoch = sessionEpoch.value
   loading.value = true
   error.value = null
   try {
     const params = yearFilter.value === 'all' ? undefined : { year: yearFilter.value }
     const response = await fetchHistory(clientId, params)
-    if (generation === requestGeneration) history.value = response
+    if (generation === requestGeneration && epoch === sessionEpoch.value) history.value = response
   } catch (caught) {
-    if (generation !== requestGeneration) return
+    if (generation !== requestGeneration || epoch !== sessionEpoch.value) return
     error.value = apiErrorMessage(caught, 'Não foi possível carregar o histórico local.')
     history.value = null
   } finally {
-    if (generation === requestGeneration) loading.value = false
+    if (generation === requestGeneration && epoch === sessionEpoch.value) loading.value = false
   }
 }
 
@@ -184,6 +191,7 @@ watch(
   ([open]) => {
     if (open) {
       yearFilter.value = 'all'
+      openPeriods.value = {}
       void loadHistory()
       return
     }
@@ -196,6 +204,15 @@ watch(
 )
 
 watch(yearFilter, () => {
+  if (props.open && props.clientId) void loadHistory()
+})
+
+watch(sessionEpoch, () => {
+  requestGeneration += 1
+  history.value = null
+  error.value = null
+  loading.value = false
+  openPeriods.value = {}
   if (props.open && props.clientId) void loadHistory()
 })
 </script>
@@ -267,6 +284,8 @@ watch(yearFilter, () => {
           class="space-y-3"
           aria-label="Carregando histórico DAS"
           aria-live="polite"
+          aria-busy="true"
+          role="status"
         >
           <USkeleton class="h-10 w-full" />
           <USkeleton class="h-48 w-full" />
@@ -280,88 +299,158 @@ watch(yearFilter, () => {
           {{ yearFilter === 'all' ? '' : ` para ${yearFilter}` }}.
         </div>
 
-        <div
-          v-else
-          class="overflow-x-auto rounded-lg border border-default"
-          role="region"
-          aria-label="Histórico DAS Simples Nacional"
-          data-testid="pgdasd-das-history-table"
-        >
-          <table class="w-full min-w-[960px] border-separate border-spacing-0 text-left text-sm">
-            <thead class="bg-elevated/60 text-xs text-muted">
-              <tr>
-                <th class="border-b border-default px-3 py-2.5 font-medium">
-                  Período
-                </th>
-                <th class="border-b border-default px-3 py-2.5 font-medium">
-                  Pagamento
-                </th>
-                <th class="border-b border-default px-3 py-2.5 font-medium">
-                  Busca
-                </th>
-                <th class="border-b border-default px-3 py-2.5 font-medium">
-                  Valor total
-                </th>
-                <th class="border-b border-default px-3 py-2.5 font-medium">
-                  Vencimento
-                </th>
-                <th class="border-b border-default px-3 py-2.5 text-center font-medium">
-                  Malha
-                </th>
-                <th class="border-b border-default px-3 py-2.5 text-center font-medium">
-                  MAED
-                </th>
-                <th class="border-b border-default px-3 py-2.5 font-medium">
-                  Download
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="period in periods"
-                :key="period.period_key || periodKeyFallback(period)"
-                class="group"
-              >
-                <td class="border-b border-default px-3 py-3 font-medium text-highlighted group-hover:bg-elevated/40">
-                  {{ formatPgdasdPeriod(period.period_key) }}
-                </td>
-                <td class="border-b border-default px-3 py-3 text-xs group-hover:bg-elevated/40">
-                  {{ paymentLabel(period) }}
-                </td>
-                <td class="whitespace-nowrap border-b border-default px-3 py-3 text-xs group-hover:bg-elevated/40">
-                  {{ formatDateTime(period.last_valid_query_at) }}
-                </td>
-                <td class="border-b border-default px-3 py-3 tabular-nums group-hover:bg-elevated/40">
-                  {{ totalValue(period) }}
-                </td>
-                <td class="border-b border-default px-3 py-3 text-xs text-muted group-hover:bg-elevated/40">
-                  —
-                </td>
-                <td class="border-b border-default px-3 py-3 text-center group-hover:bg-elevated/40">
-                  {{ malhaLabel(period) }}
-                </td>
-                <td class="border-b border-default px-3 py-3 text-center group-hover:bg-elevated/40">
-                  {{ maedLabel(period) }}
-                </td>
-                <td class="border-b border-default px-3 py-3 group-hover:bg-elevated/40">
-                  <UButton
-                    v-if="dasDownload(period)"
-                    size="xs"
-                    color="neutral"
-                    variant="soft"
-                    icon="i-lucide-download"
-                    label="Baixar DAS"
-                    :loading="downloadBusy"
-                    :disabled="downloadBusy"
-                    data-testid="pgdasd-das-download"
-                    @click="downloadDas(period)"
-                  />
-                  <span v-else class="text-muted">—</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <template v-else>
+          <div
+            class="md:hidden"
+            data-testid="pgdasd-das-history-cards"
+          >
+            <article
+              v-for="period in periods"
+              :key="periodId(period)"
+              class="border-b border-default py-3 first:pt-0 last:border-b-0"
+            >
+              <div class="flex min-w-0 items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <p class="font-medium text-highlighted">
+                    {{ formatPgdasdPeriod(period.period_key) }}
+                  </p>
+                  <p class="text-xs text-muted">
+                    {{ totalValue(period) }} · Pagamento {{ paymentLabel(period) }}
+                  </p>
+                </div>
+                <UButton
+                  v-if="dasDownload(period)"
+                  class="min-h-11 shrink-0"
+                  size="sm"
+                  color="neutral"
+                  variant="soft"
+                  icon="i-lucide-download"
+                  label="Baixar DAS"
+                  :loading="downloadBusy"
+                  :disabled="downloadBusy"
+                  data-testid="pgdasd-das-download"
+                  @click="downloadDas(period)"
+                />
+              </div>
+              <UCollapsible v-model:open="openPeriods[periodId(period)]" :unmount-on-hide="false" class="mt-2">
+                <UButton
+                  class="min-h-11 w-full justify-between px-0"
+                  color="neutral"
+                  variant="ghost"
+                  size="sm"
+                  :label="openPeriods[periodId(period)] ? 'Ocultar detalhes' : 'Ver detalhes'"
+                  :trailing-icon="openPeriods[periodId(period)] ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
+                />
+                <template #content>
+                  <dl class="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-default pt-3 text-xs">
+                    <div>
+                      <dt class="text-muted">
+                        Busca
+                      </dt><dd>{{ formatDateTime(period.last_valid_query_at) }}</dd>
+                    </div>
+                    <div>
+                      <dt class="text-muted">
+                        Vencimento
+                      </dt><dd>—</dd>
+                    </div>
+                    <div>
+                      <dt class="text-muted">
+                        Malha
+                      </dt><dd>{{ malhaLabel(period) }}</dd>
+                    </div>
+                    <div>
+                      <dt class="text-muted">
+                        MAED
+                      </dt><dd>{{ maedLabel(period) }}</dd>
+                    </div>
+                  </dl>
+                </template>
+              </UCollapsible>
+            </article>
+          </div>
+
+          <div
+            class="hidden overflow-x-auto rounded-lg border border-default md:block"
+            role="region"
+            aria-label="Histórico DAS Simples Nacional"
+            data-testid="pgdasd-das-history-table"
+          >
+            <table class="w-full min-w-[960px] border-separate border-spacing-0 text-left text-sm">
+              <thead class="bg-elevated/60 text-xs text-muted">
+                <tr>
+                  <th class="border-b border-default px-3 py-2.5 font-medium">
+                    Período
+                  </th>
+                  <th class="border-b border-default px-3 py-2.5 font-medium">
+                    Pagamento
+                  </th>
+                  <th class="border-b border-default px-3 py-2.5 font-medium">
+                    Busca
+                  </th>
+                  <th class="border-b border-default px-3 py-2.5 font-medium">
+                    Valor total
+                  </th>
+                  <th class="border-b border-default px-3 py-2.5 font-medium">
+                    Vencimento
+                  </th>
+                  <th class="border-b border-default px-3 py-2.5 text-center font-medium">
+                    Malha
+                  </th>
+                  <th class="border-b border-default px-3 py-2.5 text-center font-medium">
+                    MAED
+                  </th>
+                  <th class="border-b border-default px-3 py-2.5 font-medium">
+                    Download
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="period in periods"
+                  :key="period.period_key || periodKeyFallback(period)"
+                  class="group"
+                >
+                  <td class="border-b border-default px-3 py-3 font-medium text-highlighted group-hover:bg-elevated/40">
+                    {{ formatPgdasdPeriod(period.period_key) }}
+                  </td>
+                  <td class="border-b border-default px-3 py-3 text-xs group-hover:bg-elevated/40">
+                    {{ paymentLabel(period) }}
+                  </td>
+                  <td class="whitespace-nowrap border-b border-default px-3 py-3 text-xs group-hover:bg-elevated/40">
+                    {{ formatDateTime(period.last_valid_query_at) }}
+                  </td>
+                  <td class="border-b border-default px-3 py-3 tabular-nums group-hover:bg-elevated/40">
+                    {{ totalValue(period) }}
+                  </td>
+                  <td class="border-b border-default px-3 py-3 text-xs text-muted group-hover:bg-elevated/40">
+                    —
+                  </td>
+                  <td class="border-b border-default px-3 py-3 text-center group-hover:bg-elevated/40">
+                    {{ malhaLabel(period) }}
+                  </td>
+                  <td class="border-b border-default px-3 py-3 text-center group-hover:bg-elevated/40">
+                    {{ maedLabel(period) }}
+                  </td>
+                  <td class="border-b border-default px-3 py-3 group-hover:bg-elevated/40">
+                    <UButton
+                      v-if="dasDownload(period)"
+                      size="xs"
+                      color="neutral"
+                      variant="soft"
+                      icon="i-lucide-download"
+                      label="Baixar DAS"
+                      :loading="downloadBusy"
+                      :disabled="downloadBusy"
+                      data-testid="pgdasd-das-download"
+                      @click="downloadDas(period)"
+                    />
+                    <span v-else class="text-muted">—</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </template>
       </div>
     </template>
   </ShellScrollableModal>

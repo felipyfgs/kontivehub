@@ -7,6 +7,7 @@ enum GatewayEventType: string
     case MessageReceived = 'MESSAGE_RECEIVED';
     case MessageStatusChanged = 'MESSAGE_STATUS_CHANGED';
     case MessageActionReceived = 'MESSAGE_ACTION_RECEIVED';
+    case MessageActionResult = 'MESSAGE_ACTION_RESULT';
     case SessionStatusChanged = 'SESSION_STATUS_CHANGED';
     case PairingUpdated = 'PAIRING_UPDATED';
     case MediaReady = 'MEDIA_READY';
@@ -20,5 +21,8 @@ enum GatewayEventType: string
     case HistorySynced = 'HISTORY_SYNCED';
     case SyncStatusChanged = 'SYNC_STATUS_CHANGED';
     case MediaRetryUpdated = 'MEDIA_RETRY_UPDATED';
+    case StickerObserved = 'STICKER_OBSERVED';
+    case StickerFavoriteChanged = 'STICKER_FAVORITE_CHANGED';
+    case StickerMaterialized = 'STICKER_MATERIALIZED';
     case GatewayAlert = 'GATEWAY_ALERT';
 }

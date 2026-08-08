@@ -820,6 +820,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/communication/conversations/{conversation}/message-batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** MessageBatchController store */
+        post: operations["postCommunicationConversationsConversationMessageBatches"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/communication/conversations/{conversation}/messages": {
         parameters: {
             query?: never;
@@ -850,6 +867,23 @@ export interface paths {
         post?: never;
         /** ConversationGatewayController revoke */
         delete: operations["deleteCommunicationConversationsConversationMessagesMessage"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/communication/conversations/{conversation}/messages/{message}/contacts/{contactIndex}/save": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** SharedContactController save */
+        post: operations["postCommunicationConversationsConversationMessagesMessageContactsContactIndexSave"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1405,6 +1439,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/communication/gifs/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GifController search */
+        get: operations["getCommunicationGifsSearch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/communication/gifs/{token}/asset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GifController asset */
+        get: operations["getCommunicationGifsTokenAsset"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/communication/gifs/{token}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GifController preview */
+        get: operations["getCommunicationGifsTokenPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/communication/identities/{identity}/links": {
         parameters: {
             query?: never;
@@ -1851,6 +1936,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/communication/inboxes/{inbox}/stickers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** StickerLibraryController index */
+        get: operations["getCommunicationInboxesInboxStickers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/communication/inboxes/{inbox}/stickers/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** StickerLibraryController import */
+        post: operations["postCommunicationInboxesInboxStickersImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/communication/inboxes/{inbox}/stickers/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** StickerLibraryController status */
+        get: operations["getCommunicationInboxesInboxStickersStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/communication/labels": {
         parameters: {
             query?: never;
@@ -1935,6 +2071,57 @@ export interface paths {
         head?: never;
         /** InboxController updateTenantSettings */
         patch: operations["patchCommunicationSettings"];
+        trace?: never;
+    };
+    "/api/v1/communication/stickers/{sticker}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** StickerLibraryController remove */
+        delete: operations["deleteCommunicationStickersSticker"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/communication/stickers/{sticker}/favorite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** StickerLibraryController favorite */
+        put: operations["putCommunicationStickersStickerFavorite"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/communication/stickers/{sticker}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** StickerLibraryController preview */
+        get: operations["getCommunicationStickersStickerPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/cte/coverage": {
@@ -8433,25 +8620,292 @@ export interface components {
             state: components["schemas"]["CommunicationMessageAvailabilityState"];
             recoverable: boolean;
         };
-        CommunicationMessageContent: ({
-            text?: string | null;
-            caption?: string | null;
-        } & {
-            [key: string]: unknown;
-        }) | null;
+        CommunicationMessageLinkPreview: {
+            /** Format: uri */
+            url: string;
+            title?: string;
+            description?: string;
+        };
+        CommunicationMessageLocation: {
+            latitude: number;
+            longitude: number;
+            name?: string;
+            address?: string;
+            caption?: string;
+            live?: boolean;
+            accuracy_meters?: number;
+            sequence?: number;
+        };
+        CommunicationSharedPhone: {
+            label: string;
+            phone: string;
+        };
+        CommunicationSharedContact: {
+            display_name: string;
+            vcard: string;
+            phones: components["schemas"]["CommunicationSharedPhone"][];
+        };
+        CommunicationMessagePoll: {
+            name: string;
+            options: string[];
+            selectable_options?: number;
+        };
+        CommunicationMessageInteractive: {
+            mode: string;
+            title?: string;
+            description?: string;
+            selected_id?: string;
+            display_text?: string;
+            name?: string;
+        };
+        CommunicationMessageEvent: {
+            title: string;
+            description?: string;
+            /** Format: date-time */
+            start_at: string;
+            /** Format: date-time */
+            end_at?: string;
+            timezone: string;
+            location_name?: string;
+            location_address?: string;
+            participation_enabled?: boolean;
+        };
+        CommunicationRichCardFact: {
+            label: string;
+            value: string;
+        };
+        CommunicationRichCard: {
+            /** @enum {string} */
+            category: "PRODUCT" | "ORDER" | "PAYMENT" | "EVENT" | "CALL" | "INVITE" | "SYSTEM";
+            title: string;
+            description?: string;
+            facts?: components["schemas"]["CommunicationRichCardFact"][];
+        };
+        CommunicationPollVote: {
+            option_names: string[];
+            option_hashes: string[];
+        };
+        CommunicationInteractiveResponse: {
+            text?: string;
+            selected_id?: string;
+        };
+        CommunicationMessageContent: {
+            text?: string;
+            caption?: string;
+            link_preview?: components["schemas"]["CommunicationMessageLinkPreview"];
+            location?: components["schemas"]["CommunicationMessageLocation"];
+            contacts?: components["schemas"]["CommunicationSharedContact"][];
+            poll?: components["schemas"]["CommunicationMessagePoll"];
+            event?: components["schemas"]["CommunicationMessageEvent"];
+            interactive?: components["schemas"]["CommunicationMessageInteractive"];
+            rich_card?: components["schemas"]["CommunicationRichCard"];
+            ptt?: boolean;
+            gif?: boolean;
+            animated?: boolean;
+            duration_seconds?: number;
+            reactions?: string[];
+            poll_votes?: components["schemas"]["CommunicationPollVote"][];
+            interactive_response?: components["schemas"]["CommunicationInteractiveResponse"];
+            content_present?: boolean;
+            variants?: string[];
+        } | null;
+        CommunicationGatewayAction: {
+            command_id: string;
+            /** @enum {string} */
+            action: "EDIT" | "REACTION" | "REVOKE";
+            /** @enum {string} */
+            status: "PENDING" | "SUCCEEDED" | "FAILED";
+            /** Format: date-time */
+            requested_at?: string;
+            /** Format: date-time */
+            completed_at?: string;
+            /** @enum {string} */
+            error_code?: "ACTION_REJECTED" | "ACTION_RETRY_EXHAUSTED" | "ACTION_OUTCOME_UNKNOWN";
+        };
+        CommunicationMessageMetadata: {
+            /** Format: date-time */
+            edited_at?: string;
+            revoked?: boolean;
+            history?: boolean;
+            ephemeral?: boolean;
+            view_once?: boolean;
+            /** @enum {string} */
+            media_state?: "READY" | "UNAVAILABLE" | "RETRY_AVAILABLE" | "REQUESTED" | "FAILED";
+            media_error_code?: string;
+            gateway_actions?: components["schemas"]["CommunicationGatewayAction"][];
+        };
+        CommunicationMessageAttachment: {
+            id: number;
+            filename: string;
+            mime_type: string;
+            size_bytes: number;
+            sha256: string;
+            /** Format: uri-reference */
+            download_url: string;
+            preview_url: string | null;
+            /** Format: date-time */
+            purged_at: string | null;
+        };
         CommunicationMessage: {
             id: number;
             conversation_id: number;
             /** @enum {string} */
             direction: "INBOUND" | "OUTBOUND" | "INTERNAL";
-            kind: string;
-            source: string;
-            status: string;
-            body?: string | null;
-            content?: components["schemas"]["CommunicationMessageContent"];
+            /** @enum {string} */
+            kind: "TEXT" | "IMAGE" | "AUDIO" | "VIDEO" | "DOCUMENT" | "STICKER" | "LOCATION" | "CONTACT" | "POLL" | "EVENT" | "INTERACTIVE" | "UNSUPPORTED" | "NOTE";
+            provider_type: string | null;
+            /** @enum {string} */
+            source: "HUMAN" | "FISCAL_AUTOMATION" | "GATEWAY" | "FLOW_AUTOMATION";
+            /** @enum {string} */
+            status: "QUEUED" | "ACCEPTED" | "SENT" | "DELIVERED" | "READ" | "PLAYED" | "FAILED" | "UNKNOWN" | "CANCELED";
+            body: string | null;
+            content: components["schemas"]["CommunicationMessageContent"];
             availability: components["schemas"]["CommunicationMessageAvailability"];
-        } & {
-            [key: string]: unknown;
+            reply_to_message_id: number | null;
+            author_membership_id: number | null;
+            /** Format: date-time */
+            occurred_at: string | null;
+            /** Format: date-time */
+            sent_at: string | null;
+            /** Format: date-time */
+            delivered_at: string | null;
+            /** Format: date-time */
+            read_at: string | null;
+            /** Format: date-time */
+            played_at: string | null;
+            /** Format: date-time */
+            revoked_at: string | null;
+            metadata: components["schemas"]["CommunicationMessageMetadata"];
+            attachments: components["schemas"]["CommunicationMessageAttachment"][];
+        };
+        CommunicationMessageResponse: {
+            data: components["schemas"]["CommunicationMessage"];
+        };
+        CommunicationSendMessageBody: {
+            body?: string;
+            /** Format: binary */
+            file?: string;
+            /** @description Opaque KontiveHub sticker library ID. Resolves private WebP into the STICKER outbound path; does not mutate WhatsApp mobile favorites. */
+            library_sticker_id?: string;
+            /** @enum {string} */
+            kind?: "TEXT" | "IMAGE" | "AUDIO" | "VIDEO" | "DOCUMENT" | "STICKER" | "LOCATION" | "CONTACT" | "POLL" | "EVENT" | "INTERACTIVE" | "UNSUPPORTED" | "NOTE";
+            ptt?: boolean;
+            gif?: boolean;
+            ptv?: boolean;
+            view_once?: boolean;
+            link_preview?: components["schemas"]["CommunicationMessageLinkPreview"];
+            location?: components["schemas"]["CommunicationMessageLocation"];
+            contact?: components["schemas"]["CommunicationSharedContact"];
+            contacts?: components["schemas"]["CommunicationSharedContact"][];
+            poll?: components["schemas"]["CommunicationMessagePoll"];
+            event?: components["schemas"]["CommunicationMessageEvent"];
+            interactive?: components["schemas"]["CommunicationMessageInteractive"];
+            reply_to_message_id?: number;
+            receipt_message_id?: number;
+            internal_note?: boolean;
+            idempotency_key?: string;
+        };
+        CommunicationStickerLibraryItem: {
+            id: string;
+            inbox_id: number;
+            /** @enum {string} */
+            source: "DEVICE_RECENT" | "DEVICE_FAVORITE" | "DEVICE_MESSAGE" | "LOCAL_IMPORT";
+            availability: string;
+            available: boolean;
+            unavailable_reason?: string | null;
+            /** @description Observed WhatsApp device favorite; distinct from KontiveHub app_favorite. */
+            device_favorite: boolean;
+            /** @description KontiveHub operator preference only; does not mutate WhatsApp mobile favorites. */
+            app_favorite: boolean;
+            mime_type?: string | null;
+            size_bytes?: number | null;
+            width?: number | null;
+            height?: number | null;
+            animated?: boolean | null;
+            preview_url?: string | null;
+            /** Format: date-time */
+            last_observed_at?: string | null;
+        };
+        CommunicationStickerLibraryCollection: {
+            data: components["schemas"]["CommunicationStickerLibraryItem"][];
+            meta: {
+                current_page?: number;
+                last_page?: number;
+                per_page?: number;
+                total?: number;
+                /** @enum {string} */
+                sync_status: "partial" | "not_observed" | "syncing" | "failed";
+                sync_reason?: string | null;
+                /** Format: date-time */
+                last_observed_at?: string | null;
+            };
+        };
+        CommunicationStickerLibraryItemResponse: {
+            data: components["schemas"]["CommunicationStickerLibraryItem"];
+        };
+        CommunicationStickerLibraryStatus: {
+            /** @enum {string} */
+            status: "partial" | "not_observed" | "syncing" | "failed";
+            reason_code: string;
+            /** Format: date-time */
+            last_observed_at?: string | null;
+            /** @constant */
+            complete: false;
+            capability: {
+                [key: string]: unknown;
+            };
+        };
+        CommunicationStickerLibraryStatusResponse: {
+            data: components["schemas"]["CommunicationStickerLibraryStatus"];
+        };
+        CommunicationMessageBatchItemBody: {
+            /** Format: binary */
+            file: string;
+            /** @enum {string} */
+            kind: "IMAGE" | "VIDEO" | "DOCUMENT";
+            caption?: string;
+            gif?: boolean;
+            ptv?: boolean;
+            view_once?: boolean;
+        };
+        CommunicationMessageBatchBody: {
+            client_batch_id: string;
+            items: components["schemas"]["CommunicationMessageBatchItemBody"][];
+        };
+        CommunicationMessageBatch: {
+            id: number;
+            client_batch_id: string;
+            conversation_id: number;
+            /** @enum {string} */
+            status: "QUEUED";
+            item_count: number;
+            messages: components["schemas"]["CommunicationMessage"][];
+            /** Format: date-time */
+            created_at: string | null;
+        };
+        CommunicationMessageBatchResponse: {
+            data: components["schemas"]["CommunicationMessageBatch"];
+        };
+        CommunicationGifSearchResult: {
+            id: string;
+            title: string;
+            preview_path: string;
+            asset_path: string;
+            asset_token: string;
+        };
+        CommunicationGifSearchResponse: {
+            data: components["schemas"]["CommunicationGifSearchResult"][];
+        };
+        CommunicationSaveSharedContactBody: {
+            phone_index: number;
+        };
+        CommunicationSaveSharedContactData: {
+            /** @enum {string} */
+            outcome: "created" | "existing";
+            contact: components["schemas"]["CommunicationContact"];
+        };
+        CommunicationSaveSharedContactResponse: {
+            data: components["schemas"]["CommunicationSaveSharedContactData"];
         };
         CommunicationMessageCollection: {
             data: components["schemas"]["CommunicationMessage"][];
@@ -9324,7 +9778,10 @@ export interface operations {
     getCommunicationAttachmentsAttachmentDownload: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Um único intervalo de bytes para reprodução privada de áudio/vídeo. */
+                Range?: string;
+            };
             path: {
                 attachment: string;
             };
@@ -9332,21 +9789,49 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Resposta definida pela operação Laravel. */
-            default: {
+            /** @description Objeto privado completo. */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JsonResponse"];
+                    "application/octet-stream": string;
                 };
+            };
+            /** @description Intervalo privado autorizado. */
+            206: {
+                headers: {
+                    "Accept-Ranges"?: "bytes";
+                    "Content-Range"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description Objeto ausente ou não autorizado. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Intervalo de bytes inválido. */
+            416: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
     getCommunicationAttachmentsAttachmentPreview: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Um único intervalo de bytes para reprodução privada de áudio/vídeo. */
+                Range?: string;
+            };
             path: {
                 attachment: string;
             };
@@ -9354,14 +9839,39 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Resposta definida pela operação Laravel. */
-            default: {
+            /** @description Objeto privado completo. */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JsonResponse"];
+                    "application/octet-stream": string;
                 };
+            };
+            /** @description Intervalo privado autorizado. */
+            206: {
+                headers: {
+                    "Accept-Ranges"?: "bytes";
+                    "Content-Range"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description Objeto ausente ou não autorizado. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Intervalo de bytes inválido. */
+            416: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -10173,6 +10683,59 @@ export interface operations {
             };
         };
     };
+    postCommunicationConversationsConversationMessageBatches: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["CommunicationMessageBatchBody"];
+            };
+        };
+        responses: {
+            /** @description Resposta canônica. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunicationMessageBatchResponse"];
+                };
+            };
+            /** @description Resposta canônica. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunicationMessageBatchResponse"];
+                };
+            };
+            /** @description Resposta canônica. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JsonResponse"];
+                };
+            };
+            /** @description Resposta canônica. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JsonResponse"];
+                };
+            };
+        };
+    };
     getCommunicationConversationsConversationMessages: {
         parameters: {
             query?: {
@@ -10207,10 +10770,42 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommunicationSendMessageBody"];
+                "multipart/form-data": components["schemas"]["CommunicationSendMessageBody"];
+            };
+        };
         responses: {
-            /** @description Resposta definida pela operação Laravel. */
-            default: {
+            /** @description Resposta canônica. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunicationMessageResponse"];
+                };
+            };
+            /** @description Resposta canônica. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunicationMessageResponse"];
+                };
+            };
+            /** @description Resposta canônica. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunicationMessageResponse"];
+                };
+            };
+            /** @description Resposta canônica. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10234,6 +10829,70 @@ export interface operations {
         responses: {
             /** @description Resposta definida pela operação Laravel. */
             default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JsonResponse"];
+                };
+            };
+        };
+    };
+    postCommunicationConversationsConversationMessagesMessageContactsContactIndexSave: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation: string;
+                message: string;
+                contactIndex: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommunicationSaveSharedContactBody"];
+            };
+        };
+        responses: {
+            /** @description Resposta canônica. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunicationSaveSharedContactResponse"];
+                };
+            };
+            /** @description Resposta canônica. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunicationSaveSharedContactResponse"];
+                };
+            };
+            /** @description Resposta canônica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JsonResponse"];
+                };
+            };
+            /** @description Resposta canônica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JsonResponse"];
+                };
+            };
+            /** @description Resposta canônica. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -11086,6 +11745,132 @@ export interface operations {
             };
         };
     };
+    getCommunicationGifsSearch: {
+        parameters: {
+            query: {
+                inbox_id: number;
+                q: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resposta canônica. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunicationGifSearchResponse"];
+                };
+            };
+            /** @description Resposta canônica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JsonResponse"];
+                };
+            };
+            /** @description Resposta canônica. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JsonResponse"];
+                };
+            };
+            /** @description Resposta canônica. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JsonResponse"];
+                };
+            };
+        };
+    };
+    getCommunicationGifsTokenAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Asset GIF privado, autorizado e revalidado para materialização antes do envio. */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    "X-Content-Type-Options"?: "nosniff";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "video/mp4": string;
+                    "video/webm": string;
+                };
+            };
+            /** @description Asset ausente, expirado, não autorizado ou de origem não allowlisted. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Resposta canônica. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JsonResponse"];
+                };
+            };
+        };
+    };
+    getCommunicationGifsTokenPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Prévia privada e autorizada do GIF remoto allowlisted. */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    "X-Content-Type-Options"?: "nosniff";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/gif": string;
+                    "image/webp": string;
+                    "image/jpeg": string;
+                    "image/png": string;
+                };
+            };
+            /** @description Prévia ausente, expirada ou não autorizada. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     postCommunicationIdentitiesIdentityLinks: {
         parameters: {
             query?: never;
@@ -11743,6 +12528,83 @@ export interface operations {
             };
         };
     };
+    getCommunicationInboxesInboxStickers: {
+        parameters: {
+            query?: {
+                favorite?: "app" | "device" | "any";
+                source?: "DEVICE_RECENT" | "DEVICE_FAVORITE" | "DEVICE_MESSAGE" | "LOCAL_IMPORT";
+                per_page?: number;
+            };
+            header?: never;
+            path: {
+                inbox: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resposta canônica. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunicationStickerLibraryCollection"];
+                };
+            };
+        };
+    };
+    postCommunicationInboxesInboxStickersImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                inbox: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Resposta canônica. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunicationStickerLibraryItemResponse"];
+                };
+            };
+        };
+    };
+    getCommunicationInboxesInboxStickersStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                inbox: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resposta canônica. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunicationStickerLibraryStatusResponse"];
+                };
+            };
+        };
+    };
     getCommunicationLabels: {
         parameters: {
             query?: never;
@@ -11807,7 +12669,9 @@ export interface operations {
     };
     getCommunicationOutboundCapabilities: {
         parameters: {
-            query?: never;
+            query?: {
+                inbox_id?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -11894,6 +12758,92 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["JsonResponse"];
                 };
+            };
+        };
+    };
+    deleteCommunicationStickersSticker: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sticker: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Referência removida da biblioteca do inbox. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    putCommunicationStickersStickerFavorite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sticker: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description KontiveHub favorite only; does not mutate WhatsApp mobile favorites. */
+                    favorite: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Resposta canônica. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunicationStickerLibraryItemResponse"];
+                };
+            };
+        };
+    };
+    getCommunicationStickersStickerPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sticker: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Preview privado autorizado da figurinha. */
+            200: {
+                headers: {
+                    "Cache-Control"?: "private, no-store, max-age=0";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/webp": string;
+                };
+            };
+            /** @description Figurinha ausente ou não autorizada. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Objeto privado temporariamente ilegível. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

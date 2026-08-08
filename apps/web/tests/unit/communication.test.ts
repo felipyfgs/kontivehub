@@ -6,12 +6,14 @@ import type { Conversation } from '~/types/communication/conversations'
 import type { Event } from '~/types/communication/realtime'
 import type { Message } from '~/types/communication/messages'
 import {
+  COMMUNICATION_PROFILE_PICTURE_FAILURE_CACHE_LIMIT,
   communicationContactLabel,
   communicationAvailabilityPlaceholder,
   communicationConversationImageEvidence,
   communicationDisplayName,
   communicationMessageBody,
   communicationMessageSummary,
+  communicationProfilePictureSrc,
   communicationProfilePictureUrl,
   communicationPollVoteCount,
   communicationSignalFromEvent,
@@ -22,7 +24,8 @@ import {
   mergeCommunicationEvents,
   mergeCommunicationMessages,
   mergeCommunicationMessageStatus,
-  normalizeCommunicationCursor
+  normalizeCommunicationCursor,
+  rememberCommunicationProfilePictureFailure
 } from '~/utils/communication'
 import {
   communicationRecordingExtension,
@@ -86,6 +89,38 @@ describe('projeção local da comunicação', () => {
       profile_picture_url: null,
       profile_picture_state: 'READY'
     })).toBeNull()
+  })
+
+  it('evita repetir temporariamente uma foto que falhou ao carregar', () => {
+    const subject = {
+      profile_picture_url: '/api/v1/communication/profile-pictures/7036/1',
+      profile_picture_state: 'READY' as const
+    }
+    const src = '/api/sanctum/api/v1/communication/profile-pictures/7036/1'
+
+    expect(communicationProfilePictureSrc(subject, '/api/sanctum', 1_000)).toBe(src)
+    rememberCommunicationProfilePictureFailure(src, 1_000)
+    expect(communicationProfilePictureSrc(subject, '/api/sanctum', 30_999)).toBeUndefined()
+    expect(communicationProfilePictureSrc(subject, '/api/sanctum', 31_000)).toBe(src)
+  })
+
+  it('limita o cache de fotos que falharam sem reter URLs antigas', () => {
+    const now = 2_000
+    for (let index = 0; index <= COMMUNICATION_PROFILE_PICTURE_FAILURE_CACHE_LIMIT; index++) {
+      rememberCommunicationProfilePictureFailure(
+        `/api/sanctum/api/v1/communication/profile-pictures/${index}/1`,
+        now
+      )
+    }
+
+    expect(communicationProfilePictureSrc({
+      profile_picture_url: '/api/v1/communication/profile-pictures/0/1',
+      profile_picture_state: 'READY'
+    }, '/api/sanctum', now + 1_000)).toBe('/api/sanctum/api/v1/communication/profile-pictures/0/1')
+    expect(communicationProfilePictureSrc({
+      profile_picture_url: `/api/v1/communication/profile-pictures/${COMMUNICATION_PROFILE_PICTURE_FAILURE_CACHE_LIMIT}/1`,
+      profile_picture_state: 'READY'
+    }, '/api/sanctum', now + 1_000)).toBeUndefined()
   })
 
   it('mantém receipts monotônicos inclusive diante de falha e ordem invertida', () => {
@@ -264,12 +299,12 @@ describe('projeção local da comunicação', () => {
       direction: 'INBOUND' as const,
       kind: 'POLL' as const,
       body: null,
-      metadata: {
-        poll: { name: 'Escolha', options: ['A', 'B'], selectable_options: 1 },
-        poll_votes: {
-          actor_a: { option_names: ['A'], option_hashes: ['a'.repeat(64)] },
-          actor_b: { option_names: ['A', 'B'], option_hashes: ['b'.repeat(64)] }
-        }
+      content: {
+        poll: { name: 'Escolha', options: ['A', 'B'], selectable_options: 2 },
+        poll_votes: [
+          { option_names: ['A'], option_hashes: ['a'.repeat(64)] },
+          { option_names: ['A', 'B'], option_hashes: ['b'.repeat(64)] }
+        ]
       }
     }
 
@@ -486,9 +521,9 @@ describe('Reverb fail-closed e recuperável', () => {
     expect(workspace).toContain('silent: true')
     expect(workspace).toContain('await refreshConversationDetail(selectedId, { reportError: false })')
     expect(workspace).toContain('refreshConversationDetail(conversation.id, { reportError: false })')
-    expect(composer).toContain('acknowledge')
-    expect(composer).toContain('if (ok) clearDraft()')
-    expect(page).toContain('acknowledge?.(ok)')
+    expect(composer).toContain('acknowledgeSubmission(context, draft, epoch, ok, messages)')
+    expect(composer).toContain('clearAcknowledgedDraft(context, draft, epoch)')
+    expect(page).toContain('acknowledge?.(messages !== null, messages ?? undefined)')
     expect(page).toContain('void workspace.initialize()')
     expect(page).toContain('applyRouteConversation')
     expect(page).toContain('communicationConversationPath')

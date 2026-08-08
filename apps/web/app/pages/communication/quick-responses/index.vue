@@ -3,14 +3,11 @@
  * Gestão de respostas rápidas — composição da lista de gestão.
  * Arquétipo: customers.vue + cascas Shell produtivas.
  */
-import { canViewCommunication } from '~/utils/permissions'
+definePageMeta({
+  middleware: [requireCommunicationView]
+})
 
-const { me, sessionEpoch } = useDashboard()
-const canView = computed(() => canViewCommunication(me.value))
-
-if (!canView.value) {
-  await navigateTo('/')
-}
+const { sessionEpoch } = useDashboard()
 
 const catalog = useCommunicationQuickResponsesCatalog()
 </script>

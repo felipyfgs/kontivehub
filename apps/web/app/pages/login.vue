@@ -116,7 +116,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
 
         <template #footer>
           <p class="text-center text-xs text-muted text-pretty">
-            Ambiente interno · não compartilhe credenciais · sessões protegidas por CSRF
+            Ambiente protegido · não compartilhe credenciais · sessões protegidas por CSRF
           </p>
         </template>
       </UAuthForm>

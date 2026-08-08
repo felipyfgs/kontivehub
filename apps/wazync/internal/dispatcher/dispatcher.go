@@ -26,10 +26,20 @@ type Dispatcher struct {
 	maxAttempts    int
 	now            func() time.Time
 	spool          interface{ Ack(string) error }
+	publisher      interface {
+		PublishEvent(context.Context, domain.Event) error
+	}
 }
 
 func (d *Dispatcher) WithSpool(spool interface{ Ack(string) error }) *Dispatcher {
 	d.spool = spool
+	return d
+}
+
+func (d *Dispatcher) WithPublisher(publisher interface {
+	PublishEvent(context.Context, domain.Event) error
+}) *Dispatcher {
+	d.publisher = publisher
 	return d
 }
 
@@ -75,17 +85,18 @@ func (d *Dispatcher) DispatchOnce(ctx context.Context) error {
 			}
 			continue
 		}
-		acked, ackErr := d.ackSpool(item.Event)
+		// A JetStream publish acknowledgement only proves that the event is
+		// durable in NATS. Laravel still needs the encrypted spool object to
+		// ingest the media, so its consumer acknowledges the spool explicitly
+		// after the database transaction commits.
+		ackErr := error(nil)
+		if d.publisher == nil {
+			_, ackErr = d.ackSpool(item.Event)
+		}
 		if ackErr != nil {
 			if markErr := d.store.MarkEventFailed(
 				ctx, item.Event.EventID, now.Add(retryDelay(item.Attempts)), "MEDIA_SPOOL_ACK_FAILED", false,
 			); markErr != nil {
-				return markErr
-			}
-			continue
-		}
-		if !acked && d.spool != nil {
-			if markErr := d.store.MarkEventDelivered(ctx, item.Event.EventID, now); markErr != nil {
 				return markErr
 			}
 			continue
@@ -137,6 +148,9 @@ func (d *Dispatcher) ackSpool(event domain.Event) (bool, error) {
 }
 
 func (d *Dispatcher) deliver(ctx context.Context, event domain.Event, now time.Time) error {
+	if d.publisher != nil {
+		return d.publisher.PublishEvent(ctx, event)
+	}
 	body, err := json.Marshal(event)
 	if err != nil {
 		return err

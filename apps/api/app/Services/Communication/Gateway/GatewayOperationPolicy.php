@@ -17,6 +17,7 @@ final class GatewayOperationPolicy
 
         return match ($type) {
             GatewayCommandType::SendMessage,
+            GatewayCommandType::SendMessageBatch,
             GatewayCommandType::EditMessage,
             GatewayCommandType::RevokeMessage,
             GatewayCommandType::ReactMessage,
@@ -24,6 +25,7 @@ final class GatewayOperationPolicy
             GatewayCommandType::MarkMessage,
             GatewayCommandType::RequestUnavailableMessage,
             GatewayCommandType::RequestMediaRetry,
+            GatewayCommandType::MaterializeSticker,
             GatewayCommandType::SubscribePresence,
             GatewayCommandType::SetChatPresence,
             GatewayCommandType::SetChatDisappearing,

@@ -22,6 +22,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'reply_to_message_id',
     'author_membership_id',
     'client_communication_dispatch_id',
+    'message_batch_id',
+    'batch_position',
     'direction',
     'kind',
     'provider_type',
@@ -67,6 +69,7 @@ class CommunicationMessage extends Model
             'failed_at' => 'immutable_datetime',
             'purged_at' => 'immutable_datetime',
             'quarantined_at' => 'immutable_datetime',
+            'batch_position' => 'integer',
         ];
     }
 
@@ -112,6 +115,11 @@ class CommunicationMessage extends Model
     public function fiscalDispatch(): BelongsTo
     {
         return $this->belongsTo(ClientCommunicationDispatch::class, 'client_communication_dispatch_id');
+    }
+
+    public function batch(): BelongsTo
+    {
+        return $this->belongsTo(CommunicationMessageBatch::class, 'message_batch_id');
     }
 
     public function attachments(): HasMany

@@ -912,7 +912,7 @@ onMounted(() => {
               data-testid="work-process-group-mobile-summary"
             >
               <div class="min-w-0">
-                <dt class="text-[11px] text-muted">
+                <dt class="text-xs text-muted">
                   {{ isClientMode ? 'Processos' : 'Instâncias' }}
                 </dt>
                 <dd class="truncate text-xs font-medium text-highlighted tabular-nums">
@@ -920,7 +920,7 @@ onMounted(() => {
                 </dd>
               </div>
               <div class="min-w-0">
-                <dt class="text-[11px] text-muted">
+                <dt class="text-xs text-muted">
                   Tarefas abertas
                 </dt>
                 <dd class="truncate text-xs font-medium text-highlighted tabular-nums">
@@ -928,7 +928,7 @@ onMounted(() => {
                 </dd>
               </div>
               <div class="min-w-0">
-                <dt class="text-[11px] text-muted">
+                <dt class="text-xs text-muted">
                   Progresso
                 </dt>
                 <dd class="truncate text-xs font-medium text-highlighted tabular-nums">
@@ -936,7 +936,7 @@ onMounted(() => {
                 </dd>
               </div>
               <div class="min-w-0">
-                <dt class="text-[11px] text-muted">
+                <dt class="text-xs text-muted">
                   Próximo prazo
                 </dt>
                 <dd class="truncate text-xs font-medium text-highlighted tabular-nums">

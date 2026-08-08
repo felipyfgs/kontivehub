@@ -256,6 +256,7 @@ watch(() => props.rows, () => {
   <div
     class="flex min-w-0 flex-col gap-3"
     :data-testid="testId"
+    :aria-busy="loading || undefined"
   >
     <template v-if="loading && !rows.length">
       <UCard
@@ -386,7 +387,7 @@ watch(() => props.rows, () => {
         :unmount-on-hide="false"
       >
         <UButton
-          class="group w-full justify-between rounded-none px-3 py-2"
+          class="group min-h-11 w-full justify-between rounded-none px-3 py-2"
           color="neutral"
           variant="ghost"
           size="sm"
@@ -396,7 +397,7 @@ watch(() => props.rows, () => {
             : 'i-lucide-chevron-down'"
           :ui="{
             base: 'font-normal text-muted',
-            trailingIcon: 'size-4 transition-transform'
+            trailingIcon: 'size-4 transition-transform motion-reduce:transition-none'
           }"
           :data-testid="`${testId}-toggle`"
         />

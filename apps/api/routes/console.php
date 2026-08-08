@@ -35,6 +35,7 @@ $lock(Schedule::command('communication:dispatch-profile-picture-refreshes')->eve
 $lock(Schedule::command('communication:reconcile-inbox-contact-profiles')->hourly(), 55);
 $lock(Schedule::command('communication:dispatch-media-deletions')->everyFiveMinutes(), 4);
 $lock(Schedule::command('communication:dispatch-media-deletions --sweep')->hourly(), 55);
+$lock(Schedule::command('communication:cleanup-sticker-library')->dailyAt('04:10'), 120);
 $lock(Schedule::command('work:dispatch-due-recurrence')->everyMinute());
 
 $lock(Schedule::command('outbound:deadline-plan')->hourly(), 55);

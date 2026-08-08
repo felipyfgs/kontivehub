@@ -26,6 +26,7 @@ final readonly class HttpTransport implements CommunicationTransport
         'COMMAND_PERSISTENCE_UNAVAILABLE',
         'GATEWAY_DISABLED',
         'INVALID_COMMAND',
+        'INVALID_MEDIA_IDENTIFIER',
         'INVALID_INTERNAL_SIGNATURE',
         'INVALID_QUERY',
         'MEDIA_NOT_FOUND',
@@ -187,6 +188,24 @@ final readonly class HttpTransport implements CommunicationTransport
         $this->assertSuccessful($response, [200]);
 
         return $response->toPsrResponse()->getBody();
+    }
+
+    public function acknowledgeMedia(string $spoolId): void
+    {
+        $this->assertEnabled();
+        if (! preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]{7,127}$/', $spoolId)) {
+            throw new CommunicationTransportException('INVALID_MEDIA_IDENTIFIER', false, null);
+        }
+        $path = '/internal/v1/media/'.rawurlencode($spoolId);
+
+        try {
+            $response = Http::timeout($this->timeout())
+                ->withHeaders($this->signer->headers('DELETE', $path))
+                ->delete($this->url($path));
+        } catch (ConnectionException) {
+            throw new CommunicationTransportException('GATEWAY_MEDIA_UNAVAILABLE', true, null);
+        }
+        $this->assertSuccessful($response, [204]);
     }
 
     private function assertEnabled(): void

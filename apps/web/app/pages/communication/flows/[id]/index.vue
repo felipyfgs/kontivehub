@@ -21,21 +21,19 @@ import {
   parseCommunicationFlowId
 } from '~/utils/communication-routes'
 import {
-  canManageCommunicationFlows,
-  canViewCommunication
+  canManageCommunicationFlows
 } from '~/utils/permissions'
+
+definePageMeta({
+  middleware: [requireCommunicationView]
+})
 
 const api = useApi()
 const route = useRoute()
 const toast = useToast()
 const { me, sessionEpoch } = useDashboard()
 
-const canView = computed(() => canViewCommunication(me.value))
 const canManage = computed(() => canManageCommunicationFlows(me.value))
-
-if (!canView.value) {
-  await navigateTo('/')
-}
 
 const flowId = computed(() => parseCommunicationFlowId(route.params.id))
 const flow = ref<Flow | null>(null)

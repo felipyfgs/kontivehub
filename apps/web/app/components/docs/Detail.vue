@@ -816,7 +816,7 @@ async function submitManifest() {
               <button
                 v-if="documentMeta?.sha256"
                 type="button"
-                class="group inline-flex max-w-full items-start gap-1 break-all text-left font-mono text-[11px] leading-snug text-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                class="group inline-flex max-w-full items-start gap-1 break-all text-left font-mono text-xs leading-snug text-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 @click="copyText('SHA-256', documentMeta.sha256)"
               >
                 <span class="break-all">{{ documentMeta.sha256 }}</span>

@@ -20,26 +20,21 @@ describe('tema do dashboard de referência', () => {
     expect(css).not.toContain('--color-orange-500')
   })
 
-  it('oferece as paletas primária e neutra do seletor de referência', () => {
+  it('mantém somente a alternância de aparência no menu do produto', () => {
     const menu = source('app/components/UserMenu.vue')
 
-    expect(menu).toContain('const colors = [\'red\', \'orange\', \'amber\', \'yellow\', \'lime\', \'green\', \'emerald\', \'teal\', \'cyan\', \'sky\', \'blue\', \'indigo\', \'violet\', \'purple\', \'fuchsia\', \'pink\', \'rose\']')
-    expect(menu).toContain('const neutrals = [\'slate\', \'gray\', \'zinc\', \'neutral\', \'stone\']')
-    expect(menu).toContain('label: \'Tema\'')
-    expect(menu).toContain('label: \'Cor primária\'')
-    expect(menu).toContain('label: \'Cor neutra\'')
-    expect(menu).toContain('checked: appConfig.ui.colors.primary === color')
-    expect(menu).toContain('checked: appConfig.ui.colors.neutral === color')
+    expect(menu).toContain('label: \'Aparência\'')
+    expect(menu).not.toContain('label: \'Tema\'')
+    expect(menu).not.toContain('Cor primária')
+    expect(menu).not.toContain('Cor neutra')
   })
 
-  it('aplica a seleção no app config e preserva o menu do produto', () => {
+  it('não permite mutação runtime da identidade e preserva o menu do produto', () => {
     const menu = source('app/components/UserMenu.vue')
 
-    expect(menu).toContain('const appConfig = useAppConfig()')
-    expect(menu).toContain('appConfig.ui.colors.primary = color')
-    expect(menu).toContain('appConfig.ui.colors.neutral = color')
-    expect(menu).toContain('<template #chip-leading="{ item }">')
-    expect(menu).toContain('var(--color-${(item as any).chip}-500)')
+    expect(menu).not.toContain('useAppConfig')
+    expect(menu).not.toContain('appConfig.ui.colors')
+    expect(menu).not.toContain('chip-leading')
     expect(menu).toContain('label: \'Aparência\'')
     expect(menu).toContain('label: \'Instalar aplicativo\'')
     expect(menu).toContain('label: \'Sair\'')

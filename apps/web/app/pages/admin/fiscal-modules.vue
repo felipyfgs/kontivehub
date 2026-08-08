@@ -188,16 +188,21 @@ async function loadGlobal() {
   }
 }
 
+let tenantListLoadSeq = 0
 async function loadTenants() {
   if (!canAccessPlatformAdmin.value) return
+  const seq = ++tenantListLoadSeq
+  const epoch = sessionEpoch.value
   loadingTenants.value = true
   try {
     const response = await api.platform.tenants.list({ page: 1, per_page: 100 })
+    if (seq !== tenantListLoadSeq || epoch !== sessionEpoch.value) return
     tenants.value = response.data.tenants || []
   } catch (caught) {
+    if (seq !== tenantListLoadSeq || epoch !== sessionEpoch.value) return
     toast.add({ title: apiErrorMessage(caught, 'Falha ao listar escritórios.'), color: 'error' })
   } finally {
-    loadingTenants.value = false
+    if (seq === tenantListLoadSeq && epoch === sessionEpoch.value) loadingTenants.value = false
   }
 }
 
@@ -321,9 +326,6 @@ onMounted(reloadAll)
           <ShellDataTable
             test-id="fiscal-global-modules-table"
             ui-preset="monitoring-compact"
-            table-class="min-w-[70rem]"
-            horizontal-scroll
-            :mobile-cards="false"
             :columns="globalColumns"
             :data="globalModules"
             :loading="loadingGlobal"
@@ -333,6 +335,14 @@ onMounted(reloadAll)
             :show-pagination="false"
             :show-per-page="false"
             :error="loadError"
+            primary-column-id="label"
+            status-column-id="state"
+            :summary-column-ids="['control', 'updated']"
+            :column-labels="{
+              control: 'Restrição',
+              updated: 'Última alteração',
+              blocked_jobs_count: 'Jobs bloqueados'
+            }"
             @retry="loadGlobal"
           >
             <template #state-cell="{ row }">
@@ -408,9 +418,6 @@ onMounted(reloadAll)
             v-else
             test-id="fiscal-tenant-modules-table"
             ui-preset="monitoring-compact"
-            table-class="min-w-[78rem]"
-            horizontal-scroll
-            :mobile-cards="false"
             :columns="tenantColumns"
             :data="tenantModules"
             :loading="loadingTenantModules"
@@ -420,6 +427,15 @@ onMounted(reloadAll)
             :show-pagination="false"
             :show-per-page="false"
             :error="tenantLoadError"
+            primary-column-id="label"
+            status-column-id="state"
+            :summary-column-ids="['global', 'tenant', 'control']"
+            :column-labels="{
+              global: 'Restrição global',
+              tenant: 'Restrição do escritório',
+              control: 'Motivo / responsável',
+              blocked_jobs_count: 'Jobs bloqueados'
+            }"
             @retry="loadTenantModules"
           >
             <template #global-cell="{ row }">

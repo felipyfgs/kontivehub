@@ -33,8 +33,8 @@ const items = [
     :items="items"
     class="h-full min-h-0 w-full"
     :ui="{
-      list: 'flex w-full overflow-x-auto',
-      trigger: 'min-w-max flex-1 justify-center px-2',
+      list: 'flex w-full flex-wrap md:flex-nowrap md:overflow-x-auto',
+      trigger: 'min-h-11 min-w-fit flex-1 justify-center px-2',
       label: 'text-xs',
       content: 'min-h-0 flex-1 overflow-y-auto pt-2'
     }"

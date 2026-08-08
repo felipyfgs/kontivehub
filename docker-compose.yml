@@ -50,6 +50,23 @@ x-api-environment: &api-environment
   WAZYNC_HMAC_SECRET: ${WAZYNC_HMAC_SECRET:-}
   WAZYNC_HMAC_PREVIOUS_KEY_ID: ${WAZYNC_HMAC_PREVIOUS_KEY_ID:-}
   WAZYNC_HMAC_PREVIOUS_SECRET: ${WAZYNC_HMAC_PREVIOUS_SECRET:-}
+  COMMUNICATION_WHATSAPP_TRANSPORT: ${COMMUNICATION_WHATSAPP_TRANSPORT:-jetstream}
+  COMMUNICATION_NATS_URL: ${COMMUNICATION_NATS_URL:-nats://nats:4222}
+  COMMUNICATION_NATS_USER: ${COMMUNICATION_NATS_USER:-}
+  COMMUNICATION_NATS_PASSWORD: ${COMMUNICATION_NATS_PASSWORD:-}
+  COMMUNICATION_NATS_STREAM: ${COMMUNICATION_NATS_STREAM:-KONTIVEHUB_WHATSAPP}
+  COMMUNICATION_NATS_EVENT_SUBJECT: ${COMMUNICATION_NATS_EVENT_SUBJECT:-kontivehub.whatsapp.events}
+  COMMUNICATION_NATS_COMMAND_SUBJECT: ${COMMUNICATION_NATS_COMMAND_SUBJECT:-kontivehub.whatsapp.commands}
+  COMMUNICATION_NATS_EVENT_CONSUMER: ${COMMUNICATION_NATS_EVENT_CONSUMER:-communication-events}
+  COMMUNICATION_MEDIA_DISK: communication_media
+  COMMUNICATION_MEDIA_DRIVER: ${COMMUNICATION_MEDIA_DRIVER:-local}
+  COMMUNICATION_MEDIA_DISK_ROOT: /var/vault/communication
+  COMMUNICATION_MEDIA_ENDPOINT: ${COMMUNICATION_MEDIA_ENDPOINT:-http://minio:9000}
+  COMMUNICATION_MEDIA_ACCESS_KEY_ID: ${COMMUNICATION_MEDIA_ACCESS_KEY_ID:-kontivehub-local}
+  COMMUNICATION_MEDIA_SECRET_ACCESS_KEY: ${COMMUNICATION_MEDIA_SECRET_ACCESS_KEY:-kontivehub-local-secret}
+  COMMUNICATION_MEDIA_REGION: ${COMMUNICATION_MEDIA_REGION:-us-east-1}
+  COMMUNICATION_MEDIA_BUCKET: ${COMMUNICATION_MEDIA_BUCKET:-kontivehub-communication}
+  COMMUNICATION_MEDIA_USE_PATH_STYLE_ENDPOINT: "true"
   VAULT_MASTER_KEY: ${VAULT_MASTER_KEY:?defina VAULT_MASTER_KEY no .env}
   VAULT_MASTER_KEY_VERSION: ${VAULT_MASTER_KEY_VERSION:-1}
   VAULT_DISK_ROOT: /var/vault
@@ -157,6 +174,21 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+  communication-events:
+    <<: *api-service
+    command: ["php", "artisan", "communication:consume-gateway-events"]
+    depends_on:
+      api:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php", "-r", "$$path='/tmp/kontivehub-communication-events-heartbeat'; $$now=time(); $$mtime=@filemtime($$path); exit($$mtime !== false && $$mtime <= $$now && $$now - $$mtime <= 90 ? 0 : 1);"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   reverb:
     <<: *api-service
@@ -301,6 +333,13 @@ services:
       WAZYNC_WHATSAPP_HTTP_TIMEOUT: ${WAZYNC_WHATSAPP_HTTP_TIMEOUT:-45s}
       WAZYNC_WHATSAPP_PROXY_URL: ${WAZYNC_WHATSAPP_PROXY_URL:-}
       WAZYNC_WHATSAPP_RETRY_HANDLERS: ${WAZYNC_WHATSAPP_RETRY_HANDLERS:-4}
+      WAZYNC_NATS_URL: ${COMMUNICATION_NATS_URL:-nats://nats:4222}
+      WAZYNC_NATS_USER: ${COMMUNICATION_NATS_USER:-}
+      WAZYNC_NATS_PASSWORD: ${COMMUNICATION_NATS_PASSWORD:-}
+      WAZYNC_NATS_STREAM: ${COMMUNICATION_NATS_STREAM:-KONTIVEHUB_WHATSAPP}
+      WAZYNC_NATS_EVENT_SUBJECT: ${COMMUNICATION_NATS_EVENT_SUBJECT:-kontivehub.whatsapp.events}
+      WAZYNC_NATS_COMMAND_SUBJECT: ${COMMUNICATION_NATS_COMMAND_SUBJECT:-kontivehub.whatsapp.commands}
+      WAZYNC_NATS_COMMAND_CONSUMER: ${COMMUNICATION_NATS_COMMAND_CONSUMER:-wazync-commands}
     volumes:
       - ./apps/wazync:/src/apps/wazync
       - wazync_spool:/var/lib/wazync/spool
@@ -310,6 +349,8 @@ services:
       wazync-db-init:
         condition: service_completed_successfully
       nginx:
+        condition: service_healthy
+      nats:
         condition: service_healthy
     restart: unless-stopped
     networks:
@@ -332,6 +373,58 @@ services:
     networks:
       - app
 
+  nats:
+    image: nats:2-alpine
+    command: ["--http_port=8222", "--js", "--store_dir=/data"]
+    volumes:
+      - nats_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - app
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2024-01-13T07-53-03Z-cpuv1
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${COMMUNICATION_MEDIA_ACCESS_KEY_ID:-kontivehub-local}
+      MINIO_ROOT_PASSWORD: ${COMMUNICATION_MEDIA_SECRET_ACCESS_KEY:-kontivehub-local-secret}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/9000' 2>/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - app
+
+  minio-init:
+    image: quay.io/minio/mc:RELEASE.2024-01-11T05-49-32Z
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        mc alias set communication http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        mc mb --ignore-existing "communication/$$MINIO_BUCKET"
+        mc anonymous set none "communication/$$MINIO_BUCKET"
+    environment:
+      MINIO_ROOT_USER: ${COMMUNICATION_MEDIA_ACCESS_KEY_ID:-kontivehub-local}
+      MINIO_ROOT_PASSWORD: ${COMMUNICATION_MEDIA_SECRET_ACCESS_KEY:-kontivehub-local-secret}
+      MINIO_BUCKET: ${COMMUNICATION_MEDIA_BUCKET:-kontivehub-communication}
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - app
+
 volumes:
   postgres_data:
   redis_data:
@@ -339,6 +432,8 @@ volumes:
   private_storage:
   web_node_modules:
   wazync_spool:
+  nats_data:
+  minio_data:
 
 networks:
   app:

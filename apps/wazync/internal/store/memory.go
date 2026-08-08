@@ -3,8 +3,10 @@ package store
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -14,13 +16,15 @@ import (
 const mediaRetryDefaultTTL = 7 * 24 * time.Hour
 
 type Memory struct {
-	mu           sync.Mutex
-	commands     map[string]*memoryCommand
-	events       map[string]*memoryEvent
-	nonces       map[string]time.Time
-	sessions     map[string]domain.Session
-	leases       map[string]domain.Lease
-	mediaRetries map[string]domain.MediaRetryState
+	mu                  sync.Mutex
+	commands            map[string]*memoryCommand
+	events              map[string]*memoryEvent
+	nonces              map[string]time.Time
+	sessions            map[string]domain.Session
+	leases              map[string]domain.Lease
+	mediaRetries        map[string]domain.MediaRetryState
+	batchItems          map[string]domain.MessageBatchItemState
+	stickerObservations map[string]domain.StickerObservationState
 }
 
 type memoryEvent struct {
@@ -39,12 +43,14 @@ type memoryCommand struct {
 
 func NewMemory() *Memory {
 	return &Memory{
-		commands:     make(map[string]*memoryCommand),
-		events:       make(map[string]*memoryEvent),
-		nonces:       make(map[string]time.Time),
-		sessions:     make(map[string]domain.Session),
-		leases:       make(map[string]domain.Lease),
-		mediaRetries: make(map[string]domain.MediaRetryState),
+		commands:            make(map[string]*memoryCommand),
+		events:              make(map[string]*memoryEvent),
+		nonces:              make(map[string]time.Time),
+		sessions:            make(map[string]domain.Session),
+		leases:              make(map[string]domain.Lease),
+		mediaRetries:        make(map[string]domain.MediaRetryState),
+		batchItems:          make(map[string]domain.MessageBatchItemState),
+		stickerObservations: make(map[string]domain.StickerObservationState),
 	}
 }
 
@@ -133,7 +139,33 @@ func (s *Memory) AcceptCommand(_ context.Context, command domain.Command) (bool,
 	if availableAt.IsZero() {
 		availableAt = time.Now()
 	}
+	var batch domain.MessageBatchPayload
+	if command.Type == domain.CommandSendMessageBatch {
+		if err := json.Unmarshal(command.Payload, &batch); err != nil || batch.Validate() != nil {
+			return false, errors.New("invalid message batch command")
+		}
+		for _, item := range batch.Items {
+			for _, existing := range s.batchItems {
+				if existing.SessionID != command.SessionID {
+					continue
+				}
+				if existing.ProviderMessageID == item.ProviderMessageID ||
+					(existing.BatchID == batch.BatchID && existing.Position == item.Position) {
+					return false, domain.ErrDigestConflict
+				}
+			}
+		}
+	}
 	s.commands[command.CommandID] = &memoryCommand{command: command, status: "PENDING", availableAt: availableAt}
+	if command.Type == domain.CommandSendMessageBatch {
+		for _, item := range batch.Items {
+			s.batchItems[batchItemKey(command.CommandID, item.Position)] = domain.MessageBatchItemState{
+				CommandID: command.CommandID, SessionID: command.SessionID, BatchID: batch.BatchID,
+				Position: item.Position, Size: batch.Size, ProviderMessageID: item.ProviderMessageID,
+				Status: domain.MessageBatchItemPending, UpdatedAt: availableAt,
+			}
+		}
+	}
 	return false, nil
 }
 
@@ -240,6 +272,43 @@ func (s *Memory) FinalizeMediaRetryCommandFailed(
 	return nil
 }
 
+func (s *Memory) FinalizeCommandProcessedWithEvent(
+	_ context.Context,
+	commandID string,
+	expectedAttempts int,
+	processedAt time.Time,
+	event domain.Event,
+) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	command, ok := s.commands[commandID]
+	if !ok {
+		return domain.ErrStateConflict
+	}
+	if command.status == "PROCESSED" {
+		existing, exists := s.events[event.EventID]
+		if !exists {
+			return domain.ErrStateConflict
+		}
+		if existing.event.Digest != event.Digest {
+			return domain.ErrDigestConflict
+		}
+		return nil
+	}
+	if command.status != "PROCESSING" || command.attempts != expectedAttempts {
+		return domain.ErrStateConflict
+	}
+	if existing, exists := s.events[event.EventID]; exists {
+		if existing.event.Digest != event.Digest {
+			return domain.ErrDigestConflict
+		}
+	} else {
+		s.events[event.EventID] = &memoryEvent{event: event, status: "PENDING", availableAt: processedAt}
+	}
+	command.status = "PROCESSED"
+	return nil
+}
+
 func (s *Memory) FinalizeCommandFailureWithEvent(
 	_ context.Context,
 	commandID string,
@@ -272,11 +341,132 @@ func (s *Memory) FinalizeCommandFailureWithEvent(
 			return domain.ErrDigestConflict
 		}
 	} else {
-		s.events[event.EventID] = &memoryEvent{event: event, status: "PENDING", availableAt: time.Now()}
+		s.events[event.EventID] = &memoryEvent{event: event, status: "PENDING", availableAt: availableAt}
 	}
 	command.status = "ERROR"
 	command.availableAt = availableAt
 	return nil
+}
+
+func (s *Memory) GetMessageBatchItemState(
+	_ context.Context,
+	commandID string,
+	position int,
+) (domain.MessageBatchItemState, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	state, ok := s.batchItems[batchItemKey(commandID, position)]
+	if !ok {
+		return domain.MessageBatchItemState{}, domain.ErrNotFound
+	}
+	return state, nil
+}
+
+func (s *Memory) FinalizeMessageBatchItemWithEvent(
+	_ context.Context,
+	commandID string,
+	expectedAttempts int,
+	item domain.MessageBatchItemPayload,
+	status domain.MessageBatchItemStatus,
+	errorCode string,
+	at time.Time,
+	event domain.Event,
+) error {
+	if !status.Terminal() {
+		return domain.ErrStateConflict
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	command, ok := s.commands[commandID]
+	if !ok || command.command.Type != domain.CommandSendMessageBatch {
+		return domain.ErrStateConflict
+	}
+	key := batchItemKey(commandID, item.Position)
+	state, ok := s.batchItems[key]
+	if !ok || state.BatchID != item.BatchID || state.Size != item.Size ||
+		state.ProviderMessageID != item.ProviderMessageID {
+		return domain.ErrStateConflict
+	}
+	if state.Status.Terminal() {
+		existing, exists := s.events[event.EventID]
+		if state.Status != status || state.ErrorCode != errorCode || !exists {
+			return domain.ErrStateConflict
+		}
+		if existing.event.Digest != event.Digest {
+			return domain.ErrDigestConflict
+		}
+		return nil
+	}
+	if command.status != "PROCESSING" || command.attempts != expectedAttempts {
+		return domain.ErrStateConflict
+	}
+	if existing, exists := s.events[event.EventID]; exists {
+		if existing.event.Digest != event.Digest {
+			return domain.ErrDigestConflict
+		}
+	} else {
+		s.events[event.EventID] = &memoryEvent{event: event, status: "PENDING", availableAt: at}
+	}
+	state.Status = status
+	state.ErrorCode = errorCode
+	state.UpdatedAt = at
+	s.batchItems[key] = state
+	return nil
+}
+
+func (s *Memory) FinalizeMessageBatchCommandProcessed(
+	_ context.Context,
+	commandID string,
+	expectedAttempts int,
+	_ time.Time,
+) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	command, ok := s.commands[commandID]
+	if !ok || command.command.Type != domain.CommandSendMessageBatch ||
+		command.status != "PROCESSING" || command.attempts != expectedAttempts {
+		return domain.ErrStateConflict
+	}
+	for _, state := range s.batchItems {
+		if state.CommandID == commandID && !state.Status.Terminal() {
+			return domain.ErrStateConflict
+		}
+	}
+	command.status = "PROCESSED"
+	return nil
+}
+
+func (s *Memory) FinalizeMessageBatchCommandFailed(
+	_ context.Context,
+	commandID string,
+	expectedAttempts int,
+	availableAt time.Time,
+	_ string,
+	terminal bool,
+) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	command, ok := s.commands[commandID]
+	if !ok || command.command.Type != domain.CommandSendMessageBatch ||
+		command.status != "PROCESSING" || command.attempts != expectedAttempts {
+		return domain.ErrStateConflict
+	}
+	if terminal {
+		for _, state := range s.batchItems {
+			if state.CommandID == commandID && state.Status == domain.MessageBatchItemPending {
+				return domain.ErrStateConflict
+			}
+		}
+		command.status = "ERROR"
+	} else {
+		command.status = "RETRY"
+	}
+	command.availableAt = availableAt
+	return nil
+}
+
+func batchItemKey(commandID string, position int) string {
+	return commandID + "\x00" + strconv.Itoa(position)
 }
 
 func (s *Memory) AppendEvent(_ context.Context, event domain.Event) (bool, error) {

@@ -343,6 +343,7 @@ watch(sessionEpoch, () => {
       <UDashboardToolbar>
         <div class="flex w-full min-w-0 flex-wrap items-center gap-1">
           <UButton
+            class="min-h-11 min-w-11"
             icon="i-lucide-chevron-left"
             color="neutral"
             variant="ghost"
@@ -350,6 +351,7 @@ watch(sessionEpoch, () => {
             @click="() => { void navigate(-1) }"
           />
           <UButton
+            class="min-h-11"
             color="neutral"
             variant="ghost"
             size="sm"
@@ -357,6 +359,7 @@ watch(sessionEpoch, () => {
             @click="() => { void navigate(0) }"
           />
           <UButton
+            class="min-h-11 min-w-11"
             icon="i-lucide-chevron-right"
             color="neutral"
             variant="ghost"
@@ -378,7 +381,7 @@ watch(sessionEpoch, () => {
             test-id="work-calendar-view-tabs"
           />
           <UButton
-            class="ms-auto lg:hidden"
+            class="ms-auto min-h-11 min-w-11 lg:hidden"
             icon="i-lucide-panel-right"
             color="neutral"
             variant="ghost"
@@ -445,7 +448,7 @@ watch(sessionEpoch, () => {
               v-for="cell in monthCells"
               :key="cell.date"
               type="button"
-              class="min-h-14 border-e border-b border-default p-1 text-left transition-colors hover:bg-elevated/60 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:min-h-16"
+              class="min-h-14 border-e border-b border-default p-1 text-left transition-colors motion-reduce:transition-none hover:bg-elevated/60 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:min-h-16"
               :class="[
                 !cell.inMonth && 'opacity-40',
                 cell.date === date && 'relative z-10 ring-2 ring-inset ring-primary',
@@ -473,7 +476,7 @@ watch(sessionEpoch, () => {
             >
               <button
                 type="button"
-                class="mb-1 flex w-full items-center justify-between gap-2 text-left text-sm font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                class="mb-1 flex min-h-11 w-full items-center justify-between gap-2 text-left text-sm font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 :aria-label="`Abrir agenda de ${formatDueDate(lane.date)}`"
                 @click="openDay(lane.date)"
               >
@@ -489,7 +492,7 @@ watch(sessionEpoch, () => {
                 >
                   <button
                     type="button"
-                    class="w-full py-1.5 text-left text-xs hover:bg-elevated/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    class="min-h-11 w-full py-1.5 text-left text-xs hover:bg-elevated/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     :aria-label="`Abrir tarefa ${item.title}`"
                     @click="navigateTo(`/work/tasks/${item.id}`)"
                   >
@@ -543,7 +546,7 @@ watch(sessionEpoch, () => {
             >
               <button
                 type="button"
-                class="flex w-full items-start justify-between gap-2 px-1 py-2.5 text-left hover:bg-elevated/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                class="flex min-h-11 w-full items-start justify-between gap-2 px-1 py-2.5 text-left hover:bg-elevated/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 @click="navigateTo(`/work/tasks/${item.id}`)"
               >
                 <div class="min-w-0">
@@ -620,7 +623,7 @@ watch(sessionEpoch, () => {
           >
             <button
               type="button"
-              class="w-full px-1 py-2 text-left text-sm hover:bg-elevated/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              class="min-h-11 w-full px-1 py-2 text-left text-sm hover:bg-elevated/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               @click="navigateTo(`/work/tasks/${item.id}`)"
             >
               <span class="block truncate font-medium">{{ item.title }}</span>
@@ -680,7 +683,7 @@ watch(sessionEpoch, () => {
           >
             <button
               type="button"
-              class="w-full px-1 py-2 text-left text-sm hover:bg-elevated/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              class="min-h-11 w-full px-1 py-2 text-left text-sm hover:bg-elevated/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               @click="navigateTo(`/work/tasks/${item.id}`)"
             >
               <span class="block truncate font-medium">{{ item.title }}</span>

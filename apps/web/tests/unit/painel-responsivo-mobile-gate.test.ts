@@ -139,10 +139,11 @@ describe('painel-responsivo-mobile-gate', () => {
     expect(mailbox).toContain('detailPaneVisible')
   })
 
-  it('conta segue arquétipo settings (toolbar UNavigationMenu + NuxtPage)', () => {
+  it('conta segue arquétipo settings com navegação transformada no mobile', () => {
     const conta = readFileSync(root('app/pages/conta.vue'), 'utf8')
     expect(conta).toContain('ShellSettingsShell')
-    expect(conta).toContain('UNavigationMenu')
+    expect(conta).toContain('NavigationSectionNavigation')
+    expect(conta).toContain('accountNavigationTree')
     expect(conta).toContain('account-section-navigation')
     expect(conta).toContain('<NuxtPage')
     expect(conta).toContain('width="comfortable"')

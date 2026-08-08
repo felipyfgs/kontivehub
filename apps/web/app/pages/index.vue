@@ -181,7 +181,7 @@ watch(sessionEpoch, () => {
         >
           <h2
             id="home-ops-heading"
-            class="mb-2 text-xs font-normal uppercase text-muted"
+            class="mb-2 text-sm font-semibold text-highlighted"
           >
             Operações
           </h2>

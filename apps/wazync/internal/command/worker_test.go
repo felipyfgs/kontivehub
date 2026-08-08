@@ -1,9 +1,11 @@
 package command
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -48,7 +50,50 @@ func (f *fakeTransport) SendTypedMessage(
 }
 func (f *fakeTransport) Logout(context.Context, string) error { f.connected = false; return nil }
 
-type fakeMediaSource struct{ content []byte }
+type fakeMediaSource struct {
+	content []byte
+	err     error
+}
+
+type recordingMediaSource struct {
+	contents map[string][]byte
+	fetched  []string
+}
+
+func (s *recordingMediaSource) Fetch(
+	_ context.Context,
+	_ string,
+	sha256 string,
+	_ int64,
+) ([]byte, error) {
+	s.fetched = append(s.fetched, sha256)
+	return append([]byte(nil), s.contents[sha256]...), nil
+}
+
+type orderedBatchTransport struct {
+	fakeTransport
+	calls []batchTransportCall
+}
+
+type batchTransportCall struct {
+	payload           domain.MessageSendPayload
+	providerMessageID string
+	content           []byte
+}
+
+func (f *orderedBatchTransport) SendTypedMessage(
+	_ context.Context,
+	_ string,
+	payload domain.MessageSendPayload,
+	providerMessageID string,
+	content []byte,
+) error {
+	f.calls = append(f.calls, batchTransportCall{
+		payload: payload, providerMessageID: providerMessageID,
+		content: append([]byte(nil), content...),
+	})
+	return nil
+}
 
 type terminalPairer struct{ calls int }
 
@@ -126,7 +171,7 @@ func (p *controllablePairer) StartPairing(ctx context.Context, _ string) (<-chan
 }
 
 func (f fakeMediaSource) Fetch(context.Context, string, string, int64) ([]byte, error) {
-	return append([]byte(nil), f.content...), nil
+	return append([]byte(nil), f.content...), f.err
 }
 
 type fakeTypedTransport struct {
@@ -137,8 +182,21 @@ type fakeTypedTransport struct {
 
 type fakeActionTransport struct {
 	fakeTransport
-	action string
-	target string
+	action    string
+	target    string
+	actionErr error
+}
+
+type failingActionResultStore struct {
+	*store.Memory
+	finalizeCalls int
+}
+
+func (s *failingActionResultStore) FinalizeCommandProcessedWithEvent(
+	context.Context, string, int, time.Time, domain.Event,
+) error {
+	s.finalizeCalls++
+	return errors.New("action result persistence failed")
 }
 
 type fakePresenceTransport struct {
@@ -171,21 +229,21 @@ func (f *fakeActionTransport) EditMessage(
 	_ context.Context, _ string, payload domain.MessageEditPayload, _ string,
 ) error {
 	f.action, f.target = "edit", payload.TargetMessageID
-	return nil
+	return f.actionErr
 }
 
 func (f *fakeActionTransport) RevokeMessage(
 	_ context.Context, _ string, payload domain.MessageTargetPayload, _ string,
 ) error {
 	f.action, f.target = "revoke", payload.TargetMessageID
-	return nil
+	return f.actionErr
 }
 
 func (f *fakeActionTransport) ReactMessage(
 	_ context.Context, _ string, payload domain.MessageReactionPayload, _ string,
 ) error {
 	f.action, f.target = "react:"+payload.Emoji, payload.TargetMessageID
-	return nil
+	return f.actionErr
 }
 
 func (f *fakeActionTransport) VotePoll(
@@ -522,6 +580,198 @@ func TestWorkerFetchesAndSendsDocumentForMediaCommand(t *testing.T) {
 	}
 }
 
+func TestWorkerPublishesTerminalFailureWhenOutboundMediaCannotBeFetched(t *testing.T) {
+	t.Parallel()
+	persistence := store.NewMemory()
+	transport := &fakeTransport{}
+	manager := session.NewManager(persistence, transport, "replica-media-failure", 10, time.Minute, 10*time.Second)
+	worker := New(persistence, manager, nil, transport, "replica-media-failure").WithMediaSource(
+		fakeMediaSource{err: errors.New("private object unreadable")},
+	)
+	worker.maxAttempts = 1
+	now := time.Now().UTC()
+	worker.now = func() time.Time { return now }
+	if err := persistence.UpsertSession(t.Context(), domain.Session{
+		SessionID: "session-media-failure-0001", Status: domain.SessionConnecting, DesiredConnected: true,
+	}); err != nil {
+		t.Fatalf("provision session: %v", err)
+	}
+	if err := manager.Reconcile(t.Context()); err != nil {
+		t.Fatalf("claim session: %v", err)
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"to": "+5511999991234", "kind": "DOCUMENT",
+		"media": map[string]any{
+			"filename": "guia.pdf", "mime_type": "application/pdf", "size_bytes": 13,
+			"sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		},
+	})
+	if _, err := persistence.AcceptCommand(t.Context(), domain.Command{
+		ContractVersion: "v1", CommandID: "command-media-failure-0001", SessionID: "session-media-failure-0001",
+		Type: domain.CommandSendMessage, ProviderMessageID: "provider-media-failure-0001",
+		Payload: payload, Digest: "media-failure-digest", AcceptedAt: now,
+	}); err != nil {
+		t.Fatalf("accept media command: %v", err)
+	}
+	if err := worker.ProcessOnce(t.Context()); err != nil {
+		t.Fatalf("process media command: %v", err)
+	}
+	events, err := persistence.NextEvents(t.Context(), 1, now)
+	if err != nil || len(events) != 1 {
+		t.Fatalf("terminal media event missing: events=%+v err=%v", events, err)
+	}
+	var result map[string]string
+	if err := json.Unmarshal(events[0].Event.Payload, &result); err != nil {
+		t.Fatalf("decode terminal media event: %v", err)
+	}
+	if result["status"] != "FAILED" || result["error_code"] != "OUTBOUND_MEDIA_UNAVAILABLE" {
+		t.Fatalf("terminal media result = %#v", result)
+	}
+	if transport.providerMessageID != "" {
+		t.Fatalf("transport was called without media: %q", transport.providerMessageID)
+	}
+}
+
+func TestWorkerRejectsPTVBeforeMediaFetch(t *testing.T) {
+	t.Parallel()
+	persistence := store.NewMemory()
+	transport := &fakeTransport{}
+	manager := session.NewManager(persistence, transport, "replica-ptv-no-fetch", 10, time.Minute, 10*time.Second)
+	source := &recordingMediaSource{contents: map[string][]byte{
+		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": []byte("video"),
+	}}
+	worker := New(persistence, manager, nil, transport, "replica-ptv-no-fetch").WithMediaSource(source)
+	now := time.Now().UTC()
+	worker.now = func() time.Time { return now }
+	if err := persistence.UpsertSession(t.Context(), domain.Session{
+		SessionID: "session-ptv-no-fetch-0001", Status: domain.SessionConnecting, DesiredConnected: true,
+	}); err != nil {
+		t.Fatalf("provision PTV session: %v", err)
+	}
+	if err := manager.Reconcile(t.Context()); err != nil {
+		t.Fatalf("claim PTV session: %v", err)
+	}
+	payload, _ := json.Marshal(domain.MessageSendPayload{
+		To: "+5511999991234", Kind: domain.MessageVideo,
+		Media: &domain.MediaReference{
+			Filename: "video-ptv.mp4", MIMEType: "video/mp4",
+			SHA256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", PTV: true,
+		},
+	})
+	command := domain.Command{
+		ContractVersion: "v1", CommandID: "command-ptv-no-fetch-0001", SessionID: "session-ptv-no-fetch-0001",
+		Type: domain.CommandSendMessage, ProviderMessageID: "provider-ptv-no-fetch-0001",
+		Payload: payload, Digest: "ptv-no-fetch-digest", AcceptedAt: now,
+	}
+	if err := worker.process(t.Context(), command, 1); err == nil || err.Error() != "PTV builder is unavailable" {
+		t.Fatalf("PTV command must fail before fetch: err=%v", err)
+	}
+	if len(source.fetched) != 0 || transport.providerMessageID != "" {
+		t.Fatalf("PTV reached media or transport: fetched=%d transport_id=%q", len(source.fetched), transport.providerMessageID)
+	}
+}
+
+func TestWorkerSendsBatchItemsInCorrelatedPositionOrder(t *testing.T) {
+	t.Parallel()
+	persistence := store.NewMemory()
+	transport := &orderedBatchTransport{}
+	manager := session.NewManager(persistence, transport, "replica-batch-order", 10, time.Minute, 10*time.Second)
+	sha1 := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	sha2 := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	sha3 := "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+	source := &recordingMediaSource{contents: map[string][]byte{
+		sha1: []byte("primeiro"),
+		sha2: []byte("segundo"),
+		sha3: []byte("terceiro"),
+	}}
+	worker := New(persistence, manager, nil, transport, "replica-batch-order").WithMediaSource(source)
+	now := time.Now().UTC()
+	worker.now = func() time.Time { return now }
+	if err := persistence.UpsertSession(t.Context(), domain.Session{
+		SessionID: "session-batch-order-0001", Status: domain.SessionConnecting, DesiredConnected: true,
+	}); err != nil {
+		t.Fatalf("provision batch session: %v", err)
+	}
+	if err := manager.Reconcile(t.Context()); err != nil {
+		t.Fatalf("claim batch session: %v", err)
+	}
+
+	media := func(name, mime, sha string) domain.MessageSendPayload {
+		return domain.MessageSendPayload{
+			To: "+5511999991234", Kind: domain.MessageDocument,
+			Media: &domain.MediaReference{Filename: name, MIMEType: mime, SHA256: sha},
+		}
+	}
+	batch := domain.MessageBatchPayload{
+		BatchID: "batch-order-0001", Size: 3,
+		Items: []domain.MessageBatchItemPayload{
+			{
+				BatchID: "batch-order-0001", Position: 2, Size: 3,
+				ProviderMessageID: "provider-batch-0003", Message: media("terceiro.pdf", "application/pdf", sha3),
+			},
+			{
+				BatchID: "batch-order-0001", Position: 0, Size: 3,
+				ProviderMessageID: "provider-batch-0001", Message: media("primeiro.pdf", "application/pdf", sha1),
+			},
+			{
+				BatchID: "batch-order-0001", Position: 1, Size: 3,
+				ProviderMessageID: "provider-batch-0002", Message: media("segundo.pdf", "application/pdf", sha2),
+			},
+		},
+	}
+	payload, _ := json.Marshal(batch)
+	if _, err := persistence.AcceptCommand(t.Context(), domain.Command{
+		ContractVersion: "v1", CommandID: "command-batch-order-0001", SessionID: "session-batch-order-0001",
+		Type: domain.CommandSendMessageBatch, Payload: payload, Digest: "batch-order-digest", AcceptedAt: now,
+	}); err != nil {
+		t.Fatalf("accept batch command: %v", err)
+	}
+	if err := worker.ProcessOnce(t.Context()); err != nil {
+		t.Fatalf("process batch command: %v", err)
+	}
+
+	wantIDs := []string{"provider-batch-0001", "provider-batch-0002", "provider-batch-0003"}
+	if len(transport.calls) != len(wantIDs) {
+		t.Fatalf("batch transport calls = %d, want %d", len(transport.calls), len(wantIDs))
+	}
+	for index, call := range transport.calls {
+		if call.providerMessageID != wantIDs[index] {
+			t.Fatalf("batch transport order[%d] = %q, want %q", index, call.providerMessageID, wantIDs[index])
+		}
+		if call.payload.To != "+5511999991234" {
+			t.Fatalf("batch item %q changed recipient: %+v", call.providerMessageID, call.payload)
+		}
+	}
+	if len(source.fetched) != len(wantIDs) {
+		t.Fatalf("batch media fetches = %d, want %d", len(source.fetched), len(wantIDs))
+	}
+
+	for index, position := range []int{0, 1, 2} {
+		state, err := persistence.GetMessageBatchItemState(t.Context(), "command-batch-order-0001", position)
+		if err != nil {
+			t.Fatalf("read batch item state[%d]: %v", position, err)
+		}
+		if state.ProviderMessageID != wantIDs[index] || state.Status != domain.MessageBatchItemSent {
+			t.Fatalf("batch item state[%d] = %#v, want provider %q status %q",
+				position, state, wantIDs[index], domain.MessageBatchItemSent)
+		}
+	}
+
+	callsBeforeSecondTick := len(transport.calls)
+	if err := worker.ProcessOnce(t.Context()); err != nil {
+		t.Fatalf("second worker tick: %v", err)
+	}
+	if len(transport.calls) != callsBeforeSecondTick {
+		t.Fatalf("batch command sent again: calls before=%d after=%d", callsBeforeSecondTick, len(transport.calls))
+	}
+	for index, call := range transport.calls {
+		sha := []string{sha1, sha2, sha3}[index]
+		if !bytes.Equal(call.content, source.contents[sha]) {
+			t.Fatalf("batch transport content[%d] = %q, want %q", index, call.content, source.contents[sha])
+		}
+	}
+}
+
 func TestWorkerDispatchesTypedMessageExactlyOnceForDuplicateCommand(t *testing.T) {
 	t.Parallel()
 	persistence := store.NewMemory()
@@ -598,6 +848,107 @@ func TestWorkerRoutesMessageActionThroughOwnedSession(t *testing.T) {
 	}
 	if transport.action != "react:✅" || transport.target != "target-message-0001" {
 		t.Fatalf("action route changed: action=%q target=%q", transport.action, transport.target)
+	}
+	events, err := persistence.NextEvents(t.Context(), 1, now)
+	if err != nil || len(events) != 1 {
+		t.Fatalf("action result was not persisted: events=%+v err=%v", events, err)
+	}
+	if events[0].Event.Type != domain.EventMessageActionResult {
+		t.Fatalf("action result type = %q", events[0].Event.Type)
+	}
+	var result map[string]string
+	if err := json.Unmarshal(events[0].Event.Payload, &result); err != nil {
+		t.Fatalf("decode action result: %v", err)
+	}
+	want := map[string]string{
+		"command_id": "command-action-0001", "action": "REACTION", "status": "SUCCEEDED",
+		"provider_message_id": "provider-action-0001", "target_message_id": "target-message-0001",
+	}
+	if !reflect.DeepEqual(result, want) {
+		t.Fatalf("action result payload = %#v, want %#v", result, want)
+	}
+}
+
+func TestWorkerFinalizesTerminalActionFailureWithBoundedResult(t *testing.T) {
+	t.Parallel()
+	persistence := store.NewMemory()
+	transport := &fakeActionTransport{actionErr: errors.New("provider details must not leak")}
+	manager := session.NewManager(persistence, transport, "replica-action-terminal", 10, time.Minute, 10*time.Second)
+	worker := New(persistence, manager, nil, transport, "replica-action-terminal")
+	worker.maxAttempts = 1
+	now := time.Now().UTC()
+	worker.now = func() time.Time { return now }
+	if err := persistence.UpsertSession(t.Context(), domain.Session{
+		SessionID: "session-action-terminal-0001", Status: domain.SessionConnecting, DesiredConnected: true,
+	}); err != nil {
+		t.Fatalf("provision action session: %v", err)
+	}
+	if err := manager.Reconcile(t.Context()); err != nil {
+		t.Fatalf("claim action session: %v", err)
+	}
+	payload, _ := json.Marshal(domain.MessageTargetPayload{To: "+5511999991234", TargetMessageID: "target-action-terminal-0001"})
+	if _, err := persistence.AcceptCommand(t.Context(), domain.Command{
+		ContractVersion: "v1", CommandID: "command-action-terminal-0001", SessionID: "session-action-terminal-0001",
+		Type: domain.CommandRevokeMessage, ProviderMessageID: "provider-action-terminal-0001",
+		Payload: payload, Digest: "action-terminal-digest", AcceptedAt: now,
+	}); err != nil {
+		t.Fatalf("accept terminal action: %v", err)
+	}
+	if err := worker.ProcessOnce(t.Context()); err != nil {
+		t.Fatalf("process terminal action: %v", err)
+	}
+	events, err := persistence.NextEvents(t.Context(), 1, now)
+	if err != nil || len(events) != 1 {
+		t.Fatalf("terminal result was not persisted: events=%+v err=%v", events, err)
+	}
+	var result map[string]string
+	if err := json.Unmarshal(events[0].Event.Payload, &result); err != nil {
+		t.Fatalf("decode terminal result: %v", err)
+	}
+	if result["action"] != "REVOKE" || result["status"] != "FAILED" || result["error_code"] != "ACTION_RETRY_EXHAUSTED" {
+		t.Fatalf("terminal result lost bounded fields: %#v", result)
+	}
+	if len(result) != 6 {
+		t.Fatalf("terminal result leaked unallowlisted fields: %#v", result)
+	}
+}
+
+func TestWorkerDoesNotMarkActionProcessedWhenResultPersistenceFails(t *testing.T) {
+	t.Parallel()
+	persistence := &failingActionResultStore{Memory: store.NewMemory()}
+	transport := &fakeActionTransport{}
+	manager := session.NewManager(persistence, transport, "replica-action-event-failure", 10, time.Minute, 10*time.Second)
+	worker := New(persistence, manager, nil, transport, "replica-action-event-failure")
+	now := time.Now().UTC()
+	worker.now = func() time.Time { return now }
+	if err := persistence.UpsertSession(t.Context(), domain.Session{
+		SessionID: "session-action-event-failure-0001", Status: domain.SessionConnecting, DesiredConnected: true,
+	}); err != nil {
+		t.Fatalf("provision action session: %v", err)
+	}
+	if err := manager.Reconcile(t.Context()); err != nil {
+		t.Fatalf("claim action session: %v", err)
+	}
+	payload, _ := json.Marshal(domain.MessageEditPayload{
+		MessageTargetPayload: domain.MessageTargetPayload{To: "+5511999991234", TargetMessageID: "target-action-event-failure-0001"},
+		Text:                 "edited",
+	})
+	if _, err := persistence.AcceptCommand(t.Context(), domain.Command{
+		ContractVersion: "v1", CommandID: "command-action-event-failure-0001", SessionID: "session-action-event-failure-0001",
+		Type: domain.CommandEditMessage, ProviderMessageID: "provider-action-event-failure-0001",
+		Payload: payload, Digest: "action-event-failure-digest", AcceptedAt: now,
+	}); err != nil {
+		t.Fatalf("accept action: %v", err)
+	}
+	if err := worker.ProcessOnce(t.Context()); err == nil {
+		t.Fatal("processed action despite failed result persistence")
+	}
+	if persistence.finalizeCalls != 1 {
+		t.Fatalf("result finalizer calls = %d, want 1", persistence.finalizeCalls)
+	}
+	metrics, err := persistence.Metrics(t.Context())
+	if err != nil || metrics.PendingCommands != 1 || metrics.PendingEvents != 0 {
+		t.Fatalf("action command was finalized without result: metrics=%+v err=%v", metrics, err)
 	}
 }
 

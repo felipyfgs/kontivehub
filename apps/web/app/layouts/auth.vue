@@ -11,14 +11,10 @@ const year = new Date().getFullYear()
   <div class="min-h-dvh lg:grid lg:grid-cols-2 bg-default">
     <!-- Painel de marca (desktop) -->
     <aside
-      class="relative hidden lg:flex min-h-dvh flex-col justify-between overflow-hidden bg-elevated/40 border-r border-default p-10 xl:p-14"
+      class="hidden min-h-dvh flex-col justify-between border-r border-default bg-elevated/50 p-10 lg:flex xl:p-14"
       aria-hidden="true"
     >
-      <div class="absolute inset-0 bg-gradient-to-br from-primary/15 via-transparent to-primary/5 pointer-events-none" />
-      <div class="absolute -right-24 -top-24 size-80 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
-      <div class="absolute -left-16 bottom-0 size-64 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
-
-      <div class="relative z-10">
+      <div>
         <div class="inline-flex items-center gap-2.5">
           <span class="flex size-10 items-center justify-center rounded-lg bg-primary/15 ring-1 ring-primary/25">
             <UIcon
@@ -37,7 +33,7 @@ const year = new Date().getFullYear()
         </div>
       </div>
 
-      <div class="relative z-10 max-w-md space-y-6">
+      <div class="max-w-md space-y-6">
         <h2 class="text-3xl xl:text-4xl font-semibold text-highlighted text-pretty tracking-tight">
           Painel do escritório
         </h2>
@@ -69,8 +65,8 @@ const year = new Date().getFullYear()
         </ul>
       </div>
 
-      <p class="relative z-10 text-xs text-muted">
-        © {{ year }} KontiveHub · uso interno
+      <p class="text-xs text-muted">
+        © {{ year }} KontiveHub
       </p>
     </aside>
 

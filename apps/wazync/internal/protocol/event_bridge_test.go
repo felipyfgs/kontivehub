@@ -698,6 +698,29 @@ func TestMessageActionCarriesTheSameRemoteSourceIdentity(t *testing.T) {
 	}
 }
 
+func TestMessageActionsAreDetectedInsideSupportedWrappers(t *testing.T) {
+	t.Parallel()
+	persistence := store.NewMemory()
+	bridge := NewEventBridge(persistence, nil, 20<<20)
+	source := types.MessageSource{
+		Chat:   types.NewJID("5511999991234", types.DefaultUserServer),
+		Sender: types.NewJID("5511999991234", types.DefaultUserServer),
+	}
+	bridge.handle(t.Context(), "session-wrapped-action", nil, &events.Message{
+		Info: types.MessageInfo{MessageSource: source, ID: "provider-wrapped-reaction", Timestamp: time.Now()},
+		Message: &waE2E.Message{EphemeralMessage: &waE2E.FutureProofMessage{Message: &waE2E.Message{
+			ReactionMessage: &waE2E.ReactionMessage{
+				Key: &waCommon.MessageKey{ID: proto.String("provider-wrapped-target")}, Text: proto.String("👍"),
+			},
+		}}},
+	})
+
+	action := payloadForAction(t, pendingEvents(t, persistence), "REACTION")
+	if action["target_message_id"] != "provider-wrapped-target" || action["emoji"] != "👍" {
+		t.Fatalf("wrapped reaction semantics were lost: %+v", action)
+	}
+}
+
 func TestEventBridgeProjectsMessageKindsActionsAndQuotes(t *testing.T) {
 	t.Parallel()
 	persistence := store.NewMemory()
@@ -1299,8 +1322,8 @@ func assertEventPayloadAllowlist(t *testing.T, event domain.Event) {
 			"provider_message_id", "provider_type", "family", "from", "source_identity", "kind", "text", "caption",
 			"occurred_at", "reply_to", "spool_id",
 			"media_size_bytes", "media_sha256", "mime_type", "filename", "media_error_code", "location",
-			"contacts", "poll", "interactive", "ptt", "gif", "animated", "duration_seconds",
-			"content_present", "variants", "direction", "history", "media_state",
+			"contacts", "poll", "interactive", "rich_card", "link_preview", "ptt", "gif", "animated", "duration_seconds",
+			"content_present", "variants", "direction", "history", "media_state", "ephemeral",
 		},
 		domain.EventMessageStatusChanged: {"provider_message_id", "status", "error_code"},
 		domain.EventMessageActionReceived: {
@@ -1331,6 +1354,14 @@ func assertEventPayloadAllowlist(t *testing.T, event domain.Event) {
 			"provider_message_id", "status", "spool_id", "error_code", "generation", "attempt",
 			"size_bytes", "sha256", "mime_type", "filename",
 		},
+		domain.EventStickerObserved: {
+			"observation_id", "source", "availability", "mime_type", "size_bytes",
+			"width", "height", "is_lottie", "content_digest",
+		},
+		domain.EventStickerFavoriteChanged: {
+			"observation_id", "source", "favorite", "mime_type", "size_bytes",
+			"width", "height", "is_lottie",
+		},
 		domain.EventGatewayAlert: {"code", "severity", "retryable", "retry_after_seconds"},
 	}
 	allowedList, known := allowedByType[event.Type]
@@ -1343,23 +1374,25 @@ func assertEventPayloadAllowlist(t *testing.T, event domain.Event) {
 	}
 	payload := decodeEventPayload(t, event.Payload)
 	requiredByType := map[domain.EventType][]string{
-		domain.EventMessageReceived:       {"provider_message_id", "from", "kind"},
-		domain.EventMessageStatusChanged:  {"provider_message_id", "status"},
-		domain.EventMessageActionReceived: {"action", "target_message_id", "from"},
-		domain.EventSessionStatusChanged:  {"status"},
-		domain.EventPairingUpdated:        {"event"},
-		domain.EventMediaReady:            {"provider_message_id", "spool_id", "size_bytes", "sha256", "mime_type"},
-		domain.EventChatPresenceChanged:   {"from", "presence", "ttl_seconds"},
-		domain.EventPresenceChanged:       {"from", "available", "ttl_seconds"},
-		domain.EventContactProfileChanged: {"user"},
-		domain.EventIdentityChanged:       {"user", "change"},
-		domain.EventPrivacyChanged:        {"settings"},
-		domain.EventBlocklistChanged:      {"action", "users"},
-		domain.EventChatStateChanged:      {"to", "action"},
-		domain.EventHistorySynced:         {"batch_id", "messages", "complete"},
-		domain.EventSyncStatusChanged:     {"component", "status"},
-		domain.EventMediaRetryUpdated:     {"provider_message_id", "status"},
-		domain.EventGatewayAlert:          {"code", "severity", "retryable"},
+		domain.EventMessageReceived:        {"provider_message_id", "from", "kind"},
+		domain.EventMessageStatusChanged:   {"provider_message_id", "status"},
+		domain.EventStickerObserved:        {"observation_id", "source", "availability"},
+		domain.EventStickerFavoriteChanged: {"observation_id", "source", "favorite"},
+		domain.EventMessageActionReceived:  {"action", "target_message_id", "from"},
+		domain.EventSessionStatusChanged:   {"status"},
+		domain.EventPairingUpdated:         {"event"},
+		domain.EventMediaReady:             {"provider_message_id", "spool_id", "size_bytes", "sha256", "mime_type"},
+		domain.EventChatPresenceChanged:    {"from", "presence", "ttl_seconds"},
+		domain.EventPresenceChanged:        {"from", "available", "ttl_seconds"},
+		domain.EventContactProfileChanged:  {"user"},
+		domain.EventIdentityChanged:        {"user", "change"},
+		domain.EventPrivacyChanged:         {"settings"},
+		domain.EventBlocklistChanged:       {"action", "users"},
+		domain.EventChatStateChanged:       {"to", "action"},
+		domain.EventHistorySynced:          {"batch_id", "messages", "complete"},
+		domain.EventSyncStatusChanged:      {"component", "status"},
+		domain.EventMediaRetryUpdated:      {"provider_message_id", "status"},
+		domain.EventGatewayAlert:           {"code", "severity", "retryable"},
 	}
 	for _, required := range requiredByType[event.Type] {
 		if _, exists := payload[required]; !exists {

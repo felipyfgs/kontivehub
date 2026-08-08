@@ -52,6 +52,7 @@ final class CommunicationMessageLossPreventionTest extends TestCase
             'communication.hmac.current_key_id' => 'message-loss-key',
             'communication.hmac.current_secret' => str_repeat('m', 32),
             'communication.media.disk_root' => sys_get_temp_dir().'/communication-message-loss-'.Str::ulid(),
+            'filesystems.disks.communication_media.root' => sys_get_temp_dir().'/communication-message-loss-'.Str::ulid(),
             'communication.history_media_recovery.enabled' => true,
             'communication.history_media_recovery.kill_switch' => false,
             'communication.history_media_recovery.max_batch' => 2,

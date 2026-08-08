@@ -25,8 +25,9 @@ flags fail-closed e permanecem desativadas por padrão.
 │   └── wazync/              # gateway Go e seu Dockerfile
 ├── docker/nginx/            # imagem do proxy interno
 ├── docker-compose.yml       # desenvolvimento com hot reload
+├── docker-compose.test.yml  # testes herméticos e descartáveis
 ├── docker-compose.prod.yml  # produção Docker Compose
-└── docker-stack.yml         # produção Docker Swarm
+└── docker-compose.swarm.yaml # produção Docker Swarm
 ```
 
 Cada aplicação possui sua própria imagem. PostgreSQL e Redis são serviços
@@ -90,9 +91,24 @@ docker run --rm -v "$PWD:/workspace" -w /workspace/apps/wazync golang:1.25-alpin
 ./docker/nginx/verify-upstream-recovery.sh
 ```
 
+Para reproduzir todos os gates em imagens construídas exclusivamente a partir
+do checkout, sem reutilizar o `.env`, portas ou volumes persistentes locais:
+
+```bash
+./docker/test-gate.sh
+```
+
+O script constrói os targets `test` da API, Web e Wazync, inicia PostgreSQL e
+Redis descartáveis, executa os três gates e remove todo o projeto Compose ao
+terminar. Cada execução recebe um project name exclusivo; defina
+`KONTIVEHUB_TEST_PROJECT` apenas quando precisar de um nome estável e isolado.
+Use o script como ponto de entrada para impedir que o `COMPOSE_PROJECT_NAME` do
+ambiente de desenvolvimento seja reutilizado acidentalmente.
+
 ## Configuração
 
-O `.env` da raiz é a fonte de valores dos três manifestos Docker. Os YAMLs
+O `.env` da raiz é a fonte de valores dos manifestos de desenvolvimento e
+produção. O manifesto de testes não consome esse arquivo. Os YAMLs
 declaram explicitamente as variáveis entregues a cada serviço e usam referências
 `${VAR}`. Domínios públicos possuem defaults reservados como
 `app.example.com`; senhas, tokens e chaves obrigatórias não têm default de
@@ -100,6 +116,15 @@ produção.
 
 O arquivo `.env.example` é seguro para versionamento, mas não é implantável em
 produção. O Dockerfile nunca copia o `.env` para as imagens.
+
+Para os contratos outbound de comunicação, limites, motivos de capability e a
+configuração opcional de GIF, consulte
+[docs/communication.md](docs/communication.md).
+
+O NATS externo de produção deve exigir usuário e senha e limitar os subjects de
+eventos e comandos aos workloads autorizados. Os manifests recusam
+`COMMUNICATION_NATS_USER` ou `COMMUNICATION_NATS_PASSWORD` vazios; configure a
+mesma credencial no serviço NATS antes do rollout.
 
 ## Produção com Docker Compose
 
@@ -123,10 +148,10 @@ docker node update --label-add kontivehub-data=true NOME_DO_NO
 set -a
 . ./.env
 set +a
-docker stack deploy --with-registry-auth -c docker-stack.yml kontivehub
+docker stack deploy --with-registry-auth -c docker-compose.swarm.yaml kontivehub
 ```
 
-O `docker-stack.yml` mantém os serviços que usam volumes no nó rotulado, define
+O `docker-compose.swarm.yaml` mantém os serviços que usam volumes no nó rotulado, define
 overlay interno criptografado, healthchecks, limites, atualização e rollback.
 Faça backup dos volumes desse nó. Para reverter, ajuste `KONTIVEHUB_VERSION`
 para uma tag anterior e repita o deploy. TLS deve terminar no ingress externo.

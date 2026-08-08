@@ -21,3 +21,10 @@
 [data-slot='overlay']:has(+ .dashboard-search-layer) {
   z-index: 70;
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-spin,
+  .animate-pulse {
+    animation: none !important;
+  }
+}

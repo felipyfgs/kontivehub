@@ -4,13 +4,11 @@
  * Arquétipo: lista de gestão. Análogo: communication/quick-responses/index.vue.
  * Editor visual vive em /communication/flows/:id/editor.
  */
-import { canViewCommunication } from '~/utils/permissions'
+definePageMeta({
+  middleware: [requireCommunicationView]
+})
 
-const { me, sessionEpoch } = useDashboard()
-
-if (!canViewCommunication(me.value)) {
-  await navigateTo('/')
-}
+const { sessionEpoch } = useDashboard()
 
 const catalog = useCommunicationFlowsCatalog()
 </script>

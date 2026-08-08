@@ -43,6 +43,8 @@ jobs:
       REDIS_PASSWORD: ci-redis-password
       VAULT_MASTER_KEY: QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=
       WAZYNC_DATABASE_URL: postgres://wazync:ci@postgres:5432/kontivehub?search_path=wazync&sslmode=disable
+      COMMUNICATION_NATS_USER: ci-nats-user
+      COMMUNICATION_NATS_PASSWORD: ci-nats-password
       NGINX_EDGE_TOKEN: 1111111111111111111111111111111111111111111111111111111111111111
       KONTIVEHUB_VERSION: sha-ci
     steps:
@@ -51,14 +53,24 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Validate development Compose
-        run: docker compose -f docker-compose.yml config --quiet
+      - name: Validate development and test Compose
+        run: |
+          docker compose -f docker-compose.yml config --quiet
+          docker compose -f docker-compose.test.yml config --format json > /tmp/compose-test.json
+
+          jq -e '[.services[].ports[]?] | length == 0' /tmp/compose-test.json >/dev/null
+          jq -e '[.services[].volumes[]? | select(.type != "tmpfs")] | length == 0' /tmp/compose-test.json >/dev/null
+          jq -e '[.networks[].internal] | all(. == true)' /tmp/compose-test.json >/dev/null
+          jq -e '.services["api-test"].build.target == "test"' /tmp/compose-test.json >/dev/null
+          jq -e '.services["web-test"].build.target == "test"' /tmp/compose-test.json >/dev/null
+          jq -e '.services["wazync-test"].build.target == "test"' /tmp/compose-test.json >/dev/null
+          docker compose -f docker-compose.test.yml build --check
 
       - name: Validate production manifests
         run: |
           docker compose -f docker-compose.prod.yml config --format json > /tmp/compose-prod.json
-          docker compose -f docker-stack.yml config --format json > /tmp/stack.json
-          docker stack config -c docker-stack.yml >/dev/null
+          docker compose -f docker-compose.swarm.yaml config --format json > /tmp/stack.json
+          docker stack config -c docker-compose.swarm.yaml >/dev/null
 
           jq -e '[.services[].build?] | all(. == null)' /tmp/compose-prod.json >/dev/null
           jq -e '[.services[].volumes[]? | select(.type == "bind")] | length == 0' /tmp/compose-prod.json >/dev/null
@@ -70,10 +82,11 @@ jobs:
 
       - name: Require production credentials
         run: |
-          for manifest in docker-compose.prod.yml docker-stack.yml; do
+          for manifest in docker-compose.prod.yml docker-compose.swarm.yaml; do
             for variable in \
               APP_KEY DB_PASSWORD REDIS_PASSWORD VAULT_MASTER_KEY \
-              WAZYNC_DATABASE_URL NGINX_EDGE_TOKEN KONTIVEHUB_VERSION
+              WAZYNC_DATABASE_URL NGINX_EDGE_TOKEN KONTIVEHUB_VERSION \
+              COMMUNICATION_NATS_USER COMMUNICATION_NATS_PASSWORD
             do
               if env "$variable=" docker compose -f "$manifest" config --quiet 2>/dev/null; then
                 echo "$manifest aceitou $variable vazia." >&2
@@ -88,6 +101,41 @@ jobs:
           test ! -e infra/swarm
           test ! -e infra/docker
           ! git grep -nE 'infra/(docker|swarm)|(^[[:space:]]*(\$[[:space:]]+|[-*][[:space:]]+)?make([[:space:]]|$))|([;&|][[:space:]]*make([[:space:]]|$))|(`make([[:space:]]|$))' -- ':!.github/workflows/ci.yml'
+
+  container-test-images:
+    name: Test image (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: infrastructure
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: api
+            dockerfile: apps/api/Dockerfile
+          - image: web
+            dockerfile: apps/web/Dockerfile
+          - image: wazync
+            dockerfile: apps/wazync/Dockerfile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Build hermetic test target
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          target: test
+          outputs: type=cacheonly
+          cache-from: type=gha,scope=test-${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=test-${{ matrix.image }}
+          provenance: false
 
   api:
     name: API (Laravel)

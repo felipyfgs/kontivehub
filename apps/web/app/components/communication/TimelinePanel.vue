@@ -2,7 +2,9 @@
 import { usePreferredReducedMotion } from '@vueuse/core'
 import CommunicationConversationActions from './ConversationActions.vue'
 import type { CannedResponse } from '~/types/communication/quick-responses'
-import type { ComposerPayload, Message } from '~/types/communication/messages'
+import type { Message } from '~/types/communication/messages'
+import type { ComposerDraft, ComposerDestinationContext } from '~/types/communication/composer-draft'
+import type { MediaViewerItem } from '~/types/communication/media'
 import type { Conversation, ConversationActionPayload, ConversationTimelineState } from '~/types/communication/conversations'
 import type { ConversationSignals } from '~/types/communication/realtime'
 import type { Inbox } from '~/types/communication/inboxes'
@@ -26,6 +28,8 @@ import {
   shouldFollowCommunicationTimeline
 } from '~/utils/communication-timeline'
 
+defineOptions({ inheritAttrs: false })
+
 const apiBase = String(useRuntimeConfig().public.apiBase || '')
 const toast = useToast()
 
@@ -38,6 +42,7 @@ const props = defineProps<{
   labels: Label[]
   canView: boolean
   canReply: boolean
+  canManageContacts?: boolean
   operational: boolean
   outboundOperational: boolean
   unavailableReason?: string
@@ -56,7 +61,7 @@ const emit = defineEmits<{
   toggleContext: []
   action: [payload: ConversationActionPayload]
   send: [
-    payload: ComposerPayload,
+    payload: ComposerDraft,
     acknowledge: (ok: boolean) => void
   ]
   download: [message: Message, attachmentId: number, filename: string]
@@ -79,6 +84,26 @@ const emit = defineEmits<{
 
 const messagesContainer = ref<HTMLElement | null>(null)
 const composerRef = ref<{ focusInput: () => Promise<boolean> } | null>(null)
+
+const destinationContext = computed<ComposerDestinationContext>(() => {
+  const conversation = props.conversation
+  const inboxName = props.inbox?.name?.trim() || (conversation.inbox_id ? `Inbox #${conversation.inbox_id}` : 'Caixa de entrada')
+  const clientNames = [...new Set((conversation.clients ?? []).map(client => client.name.trim()).filter(Boolean))]
+  const client = clientNames.length === 1
+    ? clientNames[0]!
+    : clientNames.length > 1
+      ? `${clientNames[0]} +${clientNames.length - 1}`
+      : (conversation.contact?.name?.trim() || null)
+  const conversationLabel = communicationDisplayName(conversation) || `Conversa #${conversation.id}`
+  // Prefira o endereço já mascarado pela API; nunca reconstruir a partir do telefone E.164 completo.
+  const destinationMasked = conversation.contact?.address_masked?.trim() || null
+  return {
+    conversation: conversationLabel,
+    client,
+    inbox: inboxName,
+    destinationMasked
+  }
+})
 const messagesContent = ref<HTMLElement | null>(null)
 const replyTo = ref<Message | null>(null)
 const editTarget = ref<Message | null>(null)
@@ -86,6 +111,8 @@ const editDraft = ref('')
 const revokeTarget = ref<Message | null>(null)
 const activeHighlightedMessageId = ref<number | null>(null)
 const pendingNewMessages = ref(0)
+const mediaViewerOpen = ref(false)
+const mediaViewerIndex = ref(0)
 const followingLatest = ref(true)
 const paginationDirection = ref<'older' | 'newer' | null>(null)
 const preferredReducedMotion = usePreferredReducedMotion()
@@ -93,11 +120,49 @@ let highlightTimer: ReturnType<typeof setTimeout> | null = null
 let messagesResizeObserver: ResizeObserver | null = null
 let renderedConversationId: number | null = null
 let renderedMessageIds = new Set<number>()
+const playedReceiptMessageIds = new Set<number>()
 let messagesWatchEpoch = 0
 let paginationScrollHeight = 0
 let paginationScrollTop = 0
 let paginationRequestEpoch = 0
 let paginationResetTimer: ReturnType<typeof setTimeout> | null = null
+
+const mediaViewerItems = computed<MediaViewerItem[]>(() => (
+  props.conversation.messages ?? []
+).flatMap(message => (message.attachments ?? []).flatMap((attachment) => {
+  if (attachment.purged_at || !['image/', 'audio/', 'video/'].some(prefix => attachment.mime_type.startsWith(prefix))) {
+    return []
+  }
+  return [{
+    id: `${message.id}:${attachment.id}`,
+    conversationId: message.conversation_id,
+    messageId: message.id,
+    attachment
+  }]
+})))
+
+function openMedia(message: Message, attachmentId: number): void {
+  const index = mediaViewerItems.value.findIndex(item => (
+    item.messageId === message.id && item.attachment.id === attachmentId
+  ))
+  if (index < 0) return
+  mediaViewerIndex.value = index
+  mediaViewerOpen.value = true
+}
+
+function downloadViewerItem(item: MediaViewerItem): void {
+  const message = props.conversation.messages?.find(candidate => candidate.id === item.messageId)
+  if (!message) return
+  emit('download', message, item.attachment.id, item.attachment.filename)
+}
+
+function markViewerItemPlayed(item: MediaViewerItem): void {
+  const message = props.conversation.messages?.find(candidate => candidate.id === item.messageId)
+  if (!message || message.direction !== 'INBOUND' || !props.canReply || !props.outboundOperational) return
+  if (playedReceiptMessageIds.has(message.id)) return
+  playedReceiptMessageIds.add(message.id)
+  emit('receipt', message, 'PLAYED')
+}
 
 const chatPresenceLabel = computed(() => {
   const signal = props.signals?.chat
@@ -442,6 +507,7 @@ watch(
 
 <template>
   <UDashboardPanel
+    v-bind="$attrs"
     :id="`communication-timeline-${conversation.id}`"
     data-testid="communication-timeline-panel"
     class="min-w-0"
@@ -612,7 +678,7 @@ watch(
                   aria-label="Mensagens não lidas"
                 >
                   <div class="h-px flex-1 bg-primary/40" />
-                  <span class="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-primary">
+                  <span class="shrink-0 text-xs font-semibold uppercase tracking-wide text-primary">
                     Não lidas
                   </span>
                   <div class="h-px flex-1 bg-primary/40" />
@@ -625,7 +691,7 @@ watch(
                   <div class="min-w-0 w-fit max-w-[92%] sm:max-w-[78%] lg:max-w-[72%]">
                     <div
                       data-testid="communication-message-bubble"
-                      class="relative isolate inline-block w-fit max-w-full rounded-2xl px-3 py-2 shadow-xs ring-1 ring-inset transition sm:px-3.5 sm:py-2.5"
+                      class="relative isolate inline-block w-fit max-w-full rounded-2xl px-3 py-2 shadow-xs ring-1 ring-inset transition motion-reduce:transition-none sm:px-3.5 sm:py-2.5"
                       :class="[
                         message.direction === 'OUTBOUND'
                           ? 'rounded-br-md bg-primary/20 text-highlighted ring-primary/15'
@@ -645,7 +711,7 @@ watch(
                             : '-left-1 border-default bg-default'"
                       />
 
-                      <div class="relative mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold leading-none opacity-80">
+                      <div class="relative mb-1.5 flex items-center gap-1.5 text-xs font-semibold leading-none opacity-80">
                         <UIcon
                           v-if="message.direction === 'INTERNAL'"
                           name="i-lucide-sticky-note"
@@ -673,7 +739,7 @@ watch(
                       <button
                         v-if="quotedMessage(message)"
                         type="button"
-                        class="relative mb-2 block w-full rounded-lg border-l-2 border-primary bg-default/50 px-2.5 py-2 text-left text-xs text-muted transition-colors hover:bg-default/70 hover:text-default focus-visible:bg-default/70 focus-visible:text-default"
+                        class="relative mb-2 block w-full rounded-lg border-l border-primary bg-default/50 px-2.5 py-2 text-left text-xs text-muted transition-colors motion-reduce:transition-none hover:bg-default/70 hover:text-default focus-visible:bg-default/70 focus-visible:text-default"
                         title="Ir para a mensagem citada"
                         @click="focusQuotedMessage(quotedMessage(message)!.id)"
                       >
@@ -686,16 +752,18 @@ watch(
                         class="relative"
                         :message="message"
                         :can-reply="canReply && outboundOperational"
+                        :can-manage-contacts="canManageContacts"
                         :action-loading="actionLoadingId === message.id"
                         @download="(target: Message, attachmentId: number, filename: string) => emit('download', target, attachmentId, filename)"
+                        @open-media="openMedia"
                         @vote="(target: Message, options: string[]) => emit('vote', target, options)"
                         @receipt="(target: Message, receipt: 'READ' | 'PLAYED') => emit('receipt', target, receipt)"
                         @recover="(target: Message, operation: 'UNAVAILABLE' | 'MEDIA_RETRY') => emit('recover', target, operation)"
                       />
 
-                      <div v-if="message.metadata?.reactions?.length" class="relative mt-2 flex flex-wrap gap-1">
+                      <div v-if="message.content?.reactions?.length" class="relative mt-2 flex flex-wrap gap-1">
                         <UButton
-                          v-for="(emoji, index) in message.metadata.reactions"
+                          v-for="(emoji, index) in message.content.reactions"
                           :key="`${emoji}-${index}`"
                           :label="emoji"
                           color="neutral"
@@ -709,12 +777,12 @@ watch(
 
                       <div
                         data-testid="communication-message-meta"
-                        class="relative mt-1.5 flex min-h-6 items-end justify-end gap-1 text-[10px] leading-none opacity-75"
+                        class="relative mt-1.5 flex min-h-6 items-end justify-end gap-1 text-xs leading-none opacity-75"
                         aria-label="Metadados da mensagem"
                       >
                         <div
                           v-if="canReply && outboundOperational"
-                          class="mr-auto flex items-center gap-0.5 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/message:opacity-100 group-focus-within/message:opacity-100"
+                          class="mr-auto flex items-center gap-0.5 opacity-100 transition-opacity motion-reduce:transition-none [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/message:opacity-100 group-focus-within/message:opacity-100"
                           data-testid="communication-message-actions"
                         >
                           <UPopover v-if="isRemoteMessage(message)">
@@ -816,7 +884,9 @@ watch(
       :outbound-operational="outboundOperational"
       :unavailable-reason="unavailableReason"
       :sending="sending"
+      :destination-context="destinationContext"
       :conversation-id="conversation.id"
+      :inbox-id="inbox?.id ?? conversation.inbox_id"
       :canned-responses="cannedResponses"
       :reply-to="replyTo"
       @send="(payload, acknowledge) => emit('send', payload, acknowledge)"
@@ -865,4 +935,13 @@ watch(
       @confirm="confirmRevoke"
     />
   </UDashboardPanel>
+
+  <CommunicationMediaViewer
+    v-model:open="mediaViewerOpen"
+    v-model:index="mediaViewerIndex"
+    :items="mediaViewerItems"
+    :show-jump="false"
+    @download="downloadViewerItem"
+    @played="markViewerItemPlayed"
+  />
 </template>
