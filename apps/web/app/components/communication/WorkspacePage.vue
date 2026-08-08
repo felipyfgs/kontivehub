@@ -1510,7 +1510,6 @@ onBeforeUnmount(() => {
 
     <ClientOnly>
       <USlideover
-        v-if="isMobile"
         v-model:open="mobileConversationOpen"
         :transition="false"
         data-testid="communication-mobile-timeline"
