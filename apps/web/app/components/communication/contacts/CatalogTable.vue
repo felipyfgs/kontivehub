@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { Contact } from '~/types/communication/contacts'
-import { communicationProfilePictureSrc } from '~/utils/communication'
 import {
   communicationContactDisplayName,
   communicationContactDisplaySourceColor,
@@ -13,8 +12,6 @@ import {
   communicationContactStatusContrastClass,
   communicationContactStatusLabel
 } from '~/utils/communication-contacts'
-
-const apiBase = String(useRuntimeConfig().public.apiBase || '')
 
 const props = defineProps<{
   items: Contact[]
@@ -206,8 +203,8 @@ watch(discardOpen, (open) => {
         data-testid="communication-contact-card"
       >
         <div class="flex min-w-0 items-center gap-3 p-4 sm:px-5">
-          <UAvatar
-            :src="communicationProfilePictureSrc(contact, apiBase)"
+          <CommunicationProfileAvatar
+            :subject="contact"
             :alt="communicationContactDisplayName(contact)"
             :text="communicationContactInitials(contact)"
             class="size-[42px] shrink-0 rounded-lg"

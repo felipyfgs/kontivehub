@@ -54,6 +54,23 @@ x-api-environment: &api-environment
   WAZYNC_HMAC_SECRET: ${WAZYNC_HMAC_SECRET:-communication-disabled}
   WAZYNC_HMAC_PREVIOUS_KEY_ID: ${WAZYNC_HMAC_PREVIOUS_KEY_ID:-}
   WAZYNC_HMAC_PREVIOUS_SECRET: ${WAZYNC_HMAC_PREVIOUS_SECRET:-}
+  COMMUNICATION_WHATSAPP_TRANSPORT: ${COMMUNICATION_WHATSAPP_TRANSPORT:-jetstream}
+  COMMUNICATION_NATS_URL: ${COMMUNICATION_NATS_URL:-nats://wzap_nats:4222}
+  COMMUNICATION_NATS_USER: ${COMMUNICATION_NATS_USER:?defina COMMUNICATION_NATS_USER no .env}
+  COMMUNICATION_NATS_PASSWORD: ${COMMUNICATION_NATS_PASSWORD:?defina COMMUNICATION_NATS_PASSWORD no .env}
+  COMMUNICATION_NATS_STREAM: ${COMMUNICATION_NATS_STREAM:-KONTIVEHUB_WHATSAPP}
+  COMMUNICATION_NATS_EVENT_SUBJECT: ${COMMUNICATION_NATS_EVENT_SUBJECT:-kontivehub.whatsapp.events}
+  COMMUNICATION_NATS_COMMAND_SUBJECT: ${COMMUNICATION_NATS_COMMAND_SUBJECT:-kontivehub.whatsapp.commands}
+  COMMUNICATION_NATS_EVENT_CONSUMER: ${COMMUNICATION_NATS_EVENT_CONSUMER:-communication-events}
+  COMMUNICATION_MEDIA_DISK: communication_media
+  COMMUNICATION_MEDIA_DRIVER: ${COMMUNICATION_MEDIA_DRIVER:-local}
+  COMMUNICATION_MEDIA_DISK_ROOT: /var/vault/communication
+  COMMUNICATION_MEDIA_ENDPOINT: ${COMMUNICATION_MEDIA_ENDPOINT:-http://wzap_minio:9000}
+  COMMUNICATION_MEDIA_ACCESS_KEY_ID: ${COMMUNICATION_MEDIA_ACCESS_KEY_ID:-}
+  COMMUNICATION_MEDIA_SECRET_ACCESS_KEY: ${COMMUNICATION_MEDIA_SECRET_ACCESS_KEY:-}
+  COMMUNICATION_MEDIA_REGION: ${COMMUNICATION_MEDIA_REGION:-us-east-1}
+  COMMUNICATION_MEDIA_BUCKET: ${COMMUNICATION_MEDIA_BUCKET:-kontivehub-communication}
+  COMMUNICATION_MEDIA_USE_PATH_STYLE_ENDPOINT: "true"
   VAULT_MASTER_KEY: ${VAULT_MASTER_KEY:?defina VAULT_MASTER_KEY no .env}
   VAULT_MASTER_KEY_VERSION: ${VAULT_MASTER_KEY_VERSION:-1}
   VAULT_DISK_ROOT: /var/vault
@@ -81,6 +98,13 @@ x-wazync-environment: &wazync-environment
   WAZYNC_WHATSAPP_HTTP_TIMEOUT: ${WAZYNC_WHATSAPP_HTTP_TIMEOUT:-45s}
   WAZYNC_WHATSAPP_PROXY_URL: ${WAZYNC_WHATSAPP_PROXY_URL:-}
   WAZYNC_WHATSAPP_RETRY_HANDLERS: ${WAZYNC_WHATSAPP_RETRY_HANDLERS:-4}
+  WAZYNC_NATS_URL: ${COMMUNICATION_NATS_URL:-nats://wzap_nats:4222}
+  WAZYNC_NATS_USER: ${COMMUNICATION_NATS_USER:?defina COMMUNICATION_NATS_USER no .env}
+  WAZYNC_NATS_PASSWORD: ${COMMUNICATION_NATS_PASSWORD:?defina COMMUNICATION_NATS_PASSWORD no .env}
+  WAZYNC_NATS_STREAM: ${COMMUNICATION_NATS_STREAM:-KONTIVEHUB_WHATSAPP}
+  WAZYNC_NATS_EVENT_SUBJECT: ${COMMUNICATION_NATS_EVENT_SUBJECT:-kontivehub.whatsapp.events}
+  WAZYNC_NATS_COMMAND_SUBJECT: ${COMMUNICATION_NATS_COMMAND_SUBJECT:-kontivehub.whatsapp.commands}
+  WAZYNC_NATS_COMMAND_CONSUMER: ${COMMUNICATION_NATS_COMMAND_CONSUMER:-wazync-commands}
 
 x-stateless-deploy: &stateless-deploy
   replicas: 1
@@ -179,6 +203,7 @@ services:
     networks:
       - app
       - egress
+      - gacont
     healthcheck:
       test: ["CMD", "php", "-r", "$$s=@fsockopen('127.0.0.1',9000); exit($$s ? 0 : 1);"]
       interval: 15s
@@ -215,6 +240,7 @@ services:
     networks:
       - app
       - egress
+      - gacont
     healthcheck:
       test: ["CMD-SHELL", "gosu www-data php artisan horizon:status"]
       interval: 30s
@@ -242,6 +268,7 @@ services:
     networks:
       - app
       - egress
+      - gacont
     healthcheck:
       test: ["CMD", "php", "-r", "$$path='/tmp/kontivehub-scheduler-heartbeat'; $$now=time(); $$mtime=@filemtime($$path); exit($$mtime !== false && $$mtime <= $$now && $$now - $$mtime <= 180 ? 0 : 1);"]
       interval: 30s
@@ -263,9 +290,6 @@ services:
     image: ${KONTIVEHUB_REGISTRY:-ghcr.io/felipyfgs/kontivehub}/api:${KONTIVEHUB_VERSION:?defina KONTIVEHUB_VERSION no .env}
     command: ["php", "artisan", "reverb:start", "--host=0.0.0.0", "--port=8081"]
     environment: *api-environment
-    volumes:
-      - vault_data:/var/vault
-      - private_storage:/var/www/html/storage/app/private
     networks:
       - app
     healthcheck:
@@ -285,6 +309,34 @@ services:
           cpus: "0.20"
           memory: 128M
 
+  communication-events:
+    image: ${KONTIVEHUB_REGISTRY:-ghcr.io/felipyfgs/kontivehub}/api:${KONTIVEHUB_VERSION:?defina KONTIVEHUB_VERSION no .env}
+    command: ["php", "artisan", "communication:consume-gateway-events"]
+    environment: *api-environment
+    volumes:
+      - vault_data:/var/vault
+      - private_storage:/var/www/html/storage/app/private
+    networks:
+      - app
+      - egress
+      - gacont
+    healthcheck:
+      test: ["CMD", "php", "-r", "$$path='/tmp/kontivehub-communication-events-heartbeat'; $$now=time(); $$mtime=@filemtime($$path); exit($$mtime !== false && $$mtime <= $$now && $$now - $$mtime <= 90 ? 0 : 1);"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    stop_grace_period: 30s
+    deploy:
+      <<: *singleton-deploy
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
+        reservations:
+          cpus: "0.10"
+          memory: 128M
+
   wazync:
     image: ${KONTIVEHUB_REGISTRY:-ghcr.io/felipyfgs/kontivehub}/wazync:${KONTIVEHUB_VERSION:?defina KONTIVEHUB_VERSION no .env}
     environment: *wazync-environment
@@ -293,6 +345,7 @@ services:
     networks:
       - app
       - egress
+      - gacont
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
       interval: 15s
@@ -387,6 +440,9 @@ networks:
   egress:
     driver: overlay
     attachable: false
+  gacont:
+    external: true
+    name: ${GACONT_NETWORK:-Gacont}
 
 volumes:
   postgres_data:

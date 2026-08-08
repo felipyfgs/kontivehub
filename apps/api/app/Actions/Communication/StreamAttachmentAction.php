@@ -4,10 +4,13 @@ namespace App\Actions\Communication;
 
 use App\Models\CommunicationAttachment;
 use App\Services\Communication\Media\MediaStore;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\HeaderUtils;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnsupportedMediaTypeHttpException;
+use Throwable;
 
 final class StreamAttachmentAction
 {
@@ -15,12 +18,12 @@ final class StreamAttachmentAction
         private readonly MediaStore $media,
     ) {}
 
-    public function download(CommunicationAttachment $attachment): StreamedResponse
+    public function download(CommunicationAttachment $attachment, Request $request): Response
     {
-        return $this->stream($attachment, 'attachment');
+        return $this->stream($attachment, $request, 'attachment');
     }
 
-    public function preview(CommunicationAttachment $attachment): StreamedResponse
+    public function preview(CommunicationAttachment $attachment, Request $request): Response
     {
         $mimeType = (string) $attachment->mime_type;
         if (! str_starts_with($mimeType, 'image/')
@@ -31,13 +34,14 @@ final class StreamAttachmentAction
             );
         }
 
-        return $this->stream($attachment, 'inline');
+        return $this->stream($attachment, $request, 'inline');
     }
 
     private function stream(
         CommunicationAttachment $attachment,
+        Request $request,
         string $disposition,
-    ): StreamedResponse {
+    ): Response {
         $attachment->loadMissing('message.inbox');
         if ($attachment->purged_at !== null
             || $attachment->message?->purged_at !== null
@@ -61,25 +65,110 @@ final class StreamAttachmentAction
         $fallback = preg_replace('/[^\x20-\x7E]/', '_', $name)
             ?: 'anexo-'.$attachment->id;
 
-        return response()->stream(function () use ($attachment, $metadata): void {
-            foreach ($this->media->readChunks($attachment->object_id, $metadata) as $chunk) {
-                echo $chunk;
+        $size = (int) $attachment->size_bytes;
+        $range = $this->parseRange($request->header('Range'), $size);
+        if ($range === false) {
+            return response('', 416, [
+                'Content-Range' => 'bytes */'.$size,
+                'Accept-Ranges' => 'bytes',
+                'Cache-Control' => 'private, no-store, max-age=0',
+                'X-Content-Type-Options' => 'nosniff',
+            ]);
+        }
+        [$start, $end] = $range ?? ($size > 0 ? [0, $size - 1] : [0, -1]);
+        $status = $range === null ? 200 : 206;
+        $headers = [
+            'Content-Type' => $attachment->mime_type,
+            'Content-Length' => (string) max(0, $end - $start + 1),
+            'Content-Disposition' => HeaderUtils::makeDisposition($disposition, $name, $fallback),
+            'Accept-Ranges' => 'bytes',
+            'Cache-Control' => 'private, no-store, max-age=0',
+            'Pragma' => 'no-cache',
+            'X-Content-Type-Options' => 'nosniff',
+        ];
+        if ($range !== null) {
+            $headers['Content-Range'] = "bytes {$start}-{$end}/{$size}";
+        }
+        try {
+            $rangeChunks = $this->media->readValidatedRange(
+                $attachment->object_id,
+                $metadata,
+                $start,
+                $end,
+                $size,
+                (string) $attachment->sha256,
+            );
+            $firstChunk = $rangeChunks->current();
+            if (! $rangeChunks->valid()) {
+                $firstChunk = null;
+            }
+        } catch (Throwable $error) {
+            Log::warning('communication.media.attachment_stream_unavailable', [
+                'error_code' => 'MEDIA_STREAM_UNAVAILABLE',
+                'error_class' => $error::class,
+                'attachment_id' => (int) $attachment->id,
+                'message_id' => (int) $attachment->message_id,
+            ]);
+
+            throw new NotFoundHttpException('Mídia não encontrada.', $error);
+        }
+        if ($request->isMethod('HEAD') || $size === 0) {
+            while ($rangeChunks->valid()) {
+                $rangeChunks->next();
+            }
+
+            return response('', $status, $headers);
+        }
+
+        return response()->stream(function () use ($rangeChunks, $firstChunk): void {
+            if ($firstChunk !== null && $firstChunk !== '') {
+                echo $firstChunk;
                 if (function_exists('ob_flush')) {
                     @ob_flush();
                 }
                 flush();
             }
-        }, 200, [
-            'Content-Type' => $attachment->mime_type,
-            'Content-Length' => (string) $attachment->size_bytes,
-            'Content-Disposition' => HeaderUtils::makeDisposition(
-                $disposition,
-                $name,
-                $fallback,
-            ),
-            'Cache-Control' => 'private, no-store, max-age=0',
-            'Pragma' => 'no-cache',
-            'X-Content-Type-Options' => 'nosniff',
-        ]);
+            while ($rangeChunks->valid()) {
+                $rangeChunks->next();
+                if ($rangeChunks->valid()) {
+                    echo $rangeChunks->current();
+                    if (function_exists('ob_flush')) {
+                        @ob_flush();
+                    }
+                    flush();
+                }
+            }
+        }, $status, $headers);
+    }
+
+    /** @return array{0:int,1:int}|null|false */
+    private function parseRange(?string $header, int $size): array|null|false
+    {
+        if ($header === null || trim($header) === '') {
+            return null;
+        }
+        if (str_contains($header, ',')) {
+            return null;
+        }
+        if ($size < 1
+            || preg_match('/^bytes=(\d*)-(\d*)$/', trim($header), $matches) !== 1
+            || ($matches[1] === '' && $matches[2] === '')) {
+            return false;
+        }
+        if ($matches[1] === '') {
+            $suffix = (int) $matches[2];
+            if ($suffix < 1) {
+                return false;
+            }
+
+            return [max(0, $size - $suffix), $size - 1];
+        }
+        $start = (int) $matches[1];
+        $end = $matches[2] === '' ? $size - 1 : (int) $matches[2];
+        if ($start >= $size || $end < $start) {
+            return false;
+        }
+
+        return [$start, min($end, $size - 1)];
     }
 }

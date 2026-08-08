@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'tenant_id',
     'inbox_id',
     'message_id',
+    'message_batch_id',
     'command_id',
     'effect_key',
     'session_id',
@@ -54,5 +55,10 @@ class CommunicationOutboxEntry extends Model
     public function message(): BelongsTo
     {
         return $this->belongsTo(CommunicationMessage::class, 'message_id');
+    }
+
+    public function messageBatch(): BelongsTo
+    {
+        return $this->belongsTo(CommunicationMessageBatch::class, 'message_batch_id');
     }
 }

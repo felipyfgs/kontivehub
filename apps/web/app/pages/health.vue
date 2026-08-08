@@ -297,7 +297,7 @@ watch(typeFilter, (value) => {
 
     <template #body>
       <p class="mb-4 text-sm text-muted">
-        Restore de backup fora do painel.
+        A restauração de backup é realizada fora do painel.
       </p>
 
       <div data-testid="ma-kill-switch-card" class="mb-4">
@@ -308,13 +308,13 @@ watch(typeFilter, (value) => {
         >
           <div class="flex flex-wrap items-center gap-3 text-sm">
             <UBadge :color="killSwitch.global_active ? 'error' : 'success'" variant="subtle">
-              {{ killSwitch.global_active ? 'GLOBAL ATIVO' : 'Global off' }}
+              {{ killSwitch.global_active ? 'GLOBAL ATIVO' : 'Global desativado' }}
             </UBadge>
-            <span class="text-muted">Canal {{ killSwitch.enabled ? 'enabled' : 'disabled' }}</span>
+            <span class="text-muted">Canal {{ killSwitch.enabled ? 'habilitado' : 'desabilitado' }}</span>
             <span class="text-muted">M2M: {{ killSwitch.m2m_status }}</span>
           </div>
           <div v-if="canManageCredentials" class="mt-3 flex flex-wrap items-end gap-2">
-            <UFormField label="Motivo" class="min-w-[16rem] flex-1">
+            <UFormField label="Motivo" class="w-full sm:min-w-[16rem] sm:flex-1">
               <UInput v-model="killReason" class="w-full" placeholder="Motivo auditável…" />
             </UFormField>
             <UButton

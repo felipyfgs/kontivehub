@@ -488,8 +488,8 @@ onBeforeUnmount(clearTimers)
           <UProgress v-if="dasnPolling" animation="carousel" aria-label="Consulta DASN-SIMEI em processamento" />
           <ShellLoadingModalBody v-if="dasnLoading && !dasnHistory" :rows="2" />
 
-          <div v-else-if="dasnHistory?.declarations.length" class="overflow-x-auto">
-            <table class="w-full min-w-[640px] text-left text-sm">
+          <div v-else-if="dasnHistory?.declarations.length">
+            <table class="hidden w-full text-left text-sm md:table">
               <thead class="text-xs text-muted">
                 <tr>
                   <th class="pb-2 pr-3 font-medium">
@@ -537,6 +537,55 @@ onBeforeUnmount(clearTimers)
                 </tr>
               </tbody>
             </table>
+            <ul class="space-y-2 md:hidden">
+              <li
+                v-for="declaration in dasnHistory.declarations"
+                :key="`${declaration.calendar_year}-${declaration.transmitted_at || declaration.status}`"
+                class="rounded-md border border-default bg-elevated/30 p-3"
+              >
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <p class="text-sm font-medium tabular-nums text-highlighted">
+                      Ano {{ declaration.calendar_year }}
+                    </p>
+                    <p class="mt-0.5 text-sm text-muted">
+                      {{ declaration.status }}
+                    </p>
+                  </div>
+                  <UBadge :color="coverageMeta(declaration.coverage).color" :label="coverageMeta(declaration.coverage).label" variant="subtle" />
+                </div>
+                <dl class="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                  <div>
+                    <dt class="text-muted">
+                      Transmissão
+                    </dt>
+                    <dd class="mt-0.5 text-sm text-highlighted">
+                      {{ formatDateTime(declaration.transmitted_at) }}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt class="text-muted">
+                      Evidência
+                    </dt>
+                    <dd class="mt-1">
+                      <UButton
+                        v-if="hasIntegralDasnReceipt(declaration.coverage, declaration.receipt_available) && declaration.artifact?.href"
+                        class="min-h-11"
+                        icon="i-lucide-download"
+                        color="neutral"
+                        variant="outline"
+                        label="Recibo"
+                        :to="declaration.artifact.href"
+                        external
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      />
+                      <span v-else class="text-sm text-muted">Resumo público</span>
+                    </dd>
+                  </div>
+                </dl>
+              </li>
+            </ul>
           </div>
           <MonitoringTableEmptyState v-else-if="!dasnLoading" :title="`Nenhuma declaração armazenada para ${dasnYear}`" />
         </section>

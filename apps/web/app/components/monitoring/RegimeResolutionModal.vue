@@ -82,8 +82,8 @@ watch(
         <ShellLoadingModalBody v-else-if="loading" :rows="2" />
 
         <template v-else>
-          <div v-if="history?.data.length" class="overflow-x-auto">
-            <table class="w-full text-left text-sm">
+          <div v-if="history?.data.length">
+            <table class="hidden w-full text-left text-sm md:table">
               <thead class="text-xs text-muted">
                 <tr>
                   <th class="pb-2 pr-3 font-medium">
@@ -117,6 +117,32 @@ watch(
                 </tr>
               </tbody>
             </table>
+            <ul class="space-y-2 md:hidden">
+              <li
+                v-for="item in history.data"
+                :key="item.calendar_year"
+                class="rounded-md border border-default bg-elevated/30 p-3"
+              >
+                <p class="text-sm font-medium tabular-nums text-highlighted">
+                  Ano-calendário {{ item.calendar_year }}
+                </p>
+                <UButton
+                  v-if="item.document.available && item.document.href"
+                  class="mt-3 min-h-11"
+                  color="primary"
+                  variant="soft"
+                  icon="i-lucide-file-text"
+                  :label="item.document.label"
+                  :href="item.document.href"
+                  target="_blank"
+                  rel="noopener"
+                  data-testid="regime-resolution-document"
+                />
+                <p v-else class="mt-2 text-sm text-muted">
+                  Documento indisponível
+                </p>
+              </li>
+            </ul>
           </div>
           <p v-else class="text-sm text-muted">
             Nenhuma resolução armazenada para este cliente.

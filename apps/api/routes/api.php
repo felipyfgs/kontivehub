@@ -22,9 +22,13 @@ use App\Http\Controllers\Api\V1\Communication\ConversationListPreferenceControll
 use App\Http\Controllers\Api\V1\Communication\DataController;
 use App\Http\Controllers\Api\V1\Communication\FlowController;
 use App\Http\Controllers\Api\V1\Communication\FlowRunController;
+use App\Http\Controllers\Api\V1\Communication\GifController;
 use App\Http\Controllers\Api\V1\Communication\InboxController;
 use App\Http\Controllers\Api\V1\Communication\InboxGatewayController;
+use App\Http\Controllers\Api\V1\Communication\MessageBatchController;
 use App\Http\Controllers\Api\V1\Communication\ProfilePictureController;
+use App\Http\Controllers\Api\V1\Communication\SharedContactController;
+use App\Http\Controllers\Api\V1\Communication\StickerLibraryController;
 use App\Http\Controllers\Api\V1\CteEmitterPushController;
 use App\Http\Controllers\Api\V1\CteOperationsController;
 use App\Http\Controllers\Api\V1\DocumentImportBatchController;
@@ -384,11 +388,15 @@ Route::prefix('v1')->group(function (): void {
                 Route::put('/conversations/{conversation}/read-state', [ConversationController::class, 'updateReadState']);
                 Route::post('/conversations/{conversation}/messages', [ConversationController::class, 'send'])
                     ->middleware(ThrottleRequests::using(ApiRateLimit::CommunicationMessageSend));
+                Route::post('/conversations/{conversation}/message-batches', [MessageBatchController::class, 'store'])
+                    ->middleware(ThrottleRequests::using(ApiRateLimit::CommunicationMessageSend));
                 Route::put('/conversations/{conversation}/messages/{message}/edit', [ConversationGatewayController::class, 'edit']);
                 Route::delete('/conversations/{conversation}/messages/{message}', [ConversationGatewayController::class, 'revoke']);
                 Route::put('/conversations/{conversation}/messages/{message}/reaction', [ConversationGatewayController::class, 'react']);
                 Route::post('/conversations/{conversation}/messages/{message}/poll-votes', [ConversationGatewayController::class, 'votePoll']);
                 Route::post('/conversations/{conversation}/messages/{message}/receipts', [ConversationGatewayController::class, 'receipt']);
+                Route::post('/conversations/{conversation}/messages/{message}/contacts/{contactIndex}/save', [SharedContactController::class, 'save'])
+                    ->whereNumber('contactIndex');
                 Route::post('/conversations/{conversation}/messages/{message}/history', [ConversationGatewayController::class, 'history'])
                     ->middleware(ThrottleRequests::using(ApiRateLimit::AuthenticatedSensitive));
                 Route::post('/conversations/{conversation}/messages/{message}/recovery', [ConversationGatewayController::class, 'recovery'])
@@ -402,6 +410,20 @@ Route::prefix('v1')->group(function (): void {
 
                 Route::get('/labels', [CatalogController::class, 'labels']);
                 Route::get('/outbound-capabilities', [CatalogController::class, 'outboundCapabilities']);
+                Route::get('/inboxes/{inbox}/stickers', [StickerLibraryController::class, 'index']);
+                Route::post('/inboxes/{inbox}/stickers/import', [StickerLibraryController::class, 'import'])
+                    ->middleware(ThrottleRequests::using(ApiRateLimit::CommunicationMessageSend));
+                Route::get('/inboxes/{inbox}/stickers/status', [StickerLibraryController::class, 'status']);
+                Route::get('/stickers/{sticker}/preview', [StickerLibraryController::class, 'preview'])
+                    ->name('communication.stickers.preview');
+                Route::put('/stickers/{sticker}/favorite', [StickerLibraryController::class, 'favorite']);
+                Route::delete('/stickers/{sticker}', [StickerLibraryController::class, 'remove']);
+                Route::get('/gifs/search', [GifController::class, 'search'])
+                    ->middleware(ThrottleRequests::using(ApiRateLimit::CommunicationGifSearch));
+                Route::get('/gifs/{token}/preview', [GifController::class, 'preview'])
+                    ->middleware(ThrottleRequests::using(ApiRateLimit::CommunicationGifSearch));
+                Route::get('/gifs/{token}/asset', [GifController::class, 'asset'])
+                    ->middleware(ThrottleRequests::using(ApiRateLimit::CommunicationGifSearch));
                 Route::post('/labels', [CatalogController::class, 'storeLabel']);
                 Route::delete('/labels/{label}', [CatalogController::class, 'deleteLabel']);
                 Route::get('/canned-responses', [CatalogController::class, 'cannedResponses']);

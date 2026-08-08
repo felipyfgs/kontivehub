@@ -189,6 +189,8 @@ describe('ciclo de vida do workspace de comunicação', () => {
     const stalePrefetches = detailCalls.slice(1, 3)
 
     workspace.dispose()
+    expect(workspace.conversationsLoading.value).toBe(false)
+    expect(workspace.conversationsLoadingMore.value).toBe(false)
     workspace.queueConversationPrefetch([2, 3, 4])
     await vi.waitFor(() => expect(detailCalls).toHaveLength(5))
     const currentPrefetches = detailCalls.slice(3, 5)
@@ -271,6 +273,7 @@ describe('ciclo de vida do workspace de comunicação', () => {
     await vi.waitFor(() => expect(workspace.initialized.value).toBe(true))
     expect(workspace.inboxes.value[0]?.id).toBe(7)
     expect(workspace.loading.value).toBe(false)
+    expect(workspace.conversationsLoading.value).toBe(false)
 
     staleInboxesRequest.resolve({
       data: [{

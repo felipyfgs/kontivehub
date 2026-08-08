@@ -46,6 +46,9 @@ func (a *WhatsMeowAdapter) SendTypedMessage(
 	if strings.TrimSpace(providerMessageID) == "" {
 		return errors.New("provider message ID is required")
 	}
+	if err := validateTypedMessageCompatibility(payload); err != nil {
+		return err
+	}
 	streaming, ok := client.(streamingMessageClient)
 	if !ok {
 		return errors.New("WhatsApp client does not support typed streaming messages")
@@ -98,6 +101,9 @@ func buildTypedMessage(
 	if len(payload.Text) > maxMessageTextBytes || len(payload.Caption) > maxMessageTextBytes {
 		return nil, errors.New("message text exceeds limit")
 	}
+	if err := validateTypedMessageCompatibility(payload); err != nil {
+		return nil, err
+	}
 	contextInfo, err := messageContext(to, payload.ReplyTo)
 	if err != nil {
 		return nil, err
@@ -127,11 +133,19 @@ func buildTypedMessage(
 		if err := validateMediaKind(kind, payload.Media.MIMEType); err != nil {
 			return nil, err
 		}
-		if payload.Media.PTT && kind != domain.MessageAudio {
-			return nil, errors.New("PTT flag is only valid for audio messages")
+		if payload.Media.PTV {
+			// The descriptor exposes PTV, but its wire builder has not passed the
+			// pinned-version contract. Do not silently turn it into normal video.
+			return nil, errors.New("PTV builder is unavailable")
 		}
 		message = typedMediaMessage(*uploaded, kind, payload)
 		setMessageContext(message, contextInfo)
+		if payload.Media.ViewOnce {
+			if kind != domain.MessageImage && kind != domain.MessageVideo {
+				return nil, errors.New("view-once flag is only valid for image or video messages")
+			}
+			message = &waE2E.Message{ViewOnceMessageV2: &waE2E.FutureProofMessage{Message: message}}
+		}
 	case domain.MessageLocation:
 		if payload.Location == nil {
 			return nil, errors.New("location payload is required")
@@ -147,13 +161,37 @@ func buildTypedMessage(
 			Comment: proto.String(payload.Caption), ContextInfo: contextInfo,
 		}}
 	case domain.MessageContact:
-		if payload.Contact == nil || strings.TrimSpace(payload.Contact.VCard) == "" {
+		if payload.Contact == nil && len(payload.Contacts) == 0 {
 			return nil, errors.New("contact vcard is required")
 		}
-		message = &waE2E.Message{ContactMessage: &waE2E.ContactMessage{
-			DisplayName: proto.String(payload.Contact.DisplayName), Vcard: proto.String(payload.Contact.VCard),
-			ContextInfo: contextInfo,
-		}}
+		contacts := payload.Contacts
+		if payload.Contact != nil {
+			contacts = []domain.ContactPayload{*payload.Contact}
+		}
+		for _, contact := range contacts {
+			if strings.TrimSpace(contact.VCard) == "" {
+				return nil, errors.New("contact vcard is required")
+			}
+		}
+		if len(contacts) == 1 {
+			message = &waE2E.Message{ContactMessage: &waE2E.ContactMessage{
+				DisplayName: proto.String(contacts[0].DisplayName), Vcard: proto.String(contacts[0].VCard),
+				ContextInfo: contextInfo,
+			}}
+		} else {
+			items := make([]*waE2E.ContactMessage, 0, len(contacts))
+			for _, contact := range contacts {
+				items = append(items, &waE2E.ContactMessage{DisplayName: proto.String(contact.DisplayName), Vcard: proto.String(contact.VCard)})
+			}
+			message = &waE2E.Message{ContactsArrayMessage: &waE2E.ContactsArrayMessage{
+				Contacts: items, ContextInfo: contextInfo,
+			}}
+		}
+	case domain.MessageEvent:
+		// EventMessage remains descriptor-only until its pinned whatsmeow builder
+		// contract is proved. Keeping the DTO accepted lets Laravel capability-gate
+		// it without accepting arbitrary protobuf fields.
+		return nil, errors.New("event builder is unavailable")
 	case domain.MessagePoll:
 		if payload.Poll == nil || strings.TrimSpace(payload.Poll.Name) == "" ||
 			len(payload.Poll.Options) < 2 || len(payload.Poll.Options) > maxPollOptions {
@@ -205,6 +243,32 @@ func validateMediaKind(kind domain.MessageKind, mimeType string) error {
 	return nil
 }
 
+func validateTypedMessageCompatibility(payload domain.MessageSendPayload) error {
+	media := payload.Media
+	if media == nil {
+		return nil
+	}
+	if media.PTT && payload.Kind != domain.MessageAudio {
+		return errors.New("PTT flag is only valid for audio messages")
+	}
+	if media.GIF && payload.Kind != domain.MessageVideo {
+		return errors.New("GIF flag is only valid for video messages")
+	}
+	if media.PTV && payload.Kind != domain.MessageVideo {
+		return errors.New("PTV flag is only valid for video messages")
+	}
+	if media.PTV {
+		return errors.New("PTV builder is unavailable")
+	}
+	if media.ViewOnce && payload.Kind != domain.MessageImage && payload.Kind != domain.MessageVideo {
+		return errors.New("view-once flag is only valid for image or video messages")
+	}
+	if (media.GIF && media.PTV) || (media.GIF && media.ViewOnce) || (media.PTV && media.ViewOnce) {
+		return errors.New("incompatible media variants")
+	}
+	return nil
+}
+
 func typedMediaMessage(
 	uploaded whatsmeow.UploadResponse,
 	kind domain.MessageKind,
@@ -235,7 +299,7 @@ func typedMediaMessage(
 			URL: proto.String(uploaded.URL), DirectPath: proto.String(uploaded.DirectPath),
 			MediaKey: uploaded.MediaKey, FileEncSHA256: uploaded.FileEncSHA256,
 			FileSHA256: uploaded.FileSHA256, FileLength: proto.Uint64(uploaded.FileLength),
-			Mimetype: proto.String(media.MIMEType), Caption: proto.String(caption),
+			Mimetype: proto.String(media.MIMEType), Caption: proto.String(caption), GifPlayback: proto.Bool(media.GIF),
 		}}
 	case domain.MessageSticker:
 		return &waE2E.Message{StickerMessage: &waE2E.StickerMessage{

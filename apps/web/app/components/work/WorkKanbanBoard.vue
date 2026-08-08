@@ -307,7 +307,7 @@ async function onColumnDrop(
 
     <div
       v-else-if="loading && !items.length"
-      class="flex gap-3 overflow-x-auto pb-2"
+      class="flex flex-col gap-3 pb-2 md:flex-row md:overflow-x-auto"
     >
       <USkeleton
         v-for="i in 4"
@@ -318,7 +318,7 @@ async function onColumnDrop(
 
     <DnDProvider v-else>
       <div
-        class="flex min-h-0 flex-1 gap-3 overflow-x-auto pb-2"
+        class="flex min-h-0 flex-1 flex-col gap-3 pb-2 md:flex-row md:overflow-x-auto"
         data-testid="work-kanban-columns"
       >
         <WorkKanbanColumn

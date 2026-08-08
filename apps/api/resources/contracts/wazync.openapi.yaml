@@ -311,6 +311,7 @@ components:
         - SESSION_SET_PASSIVE
         - SESSION_LOGOUT
         - MESSAGE_SEND
+        - MESSAGE_BATCH_SEND
         - MESSAGE_EDIT
         - MESSAGE_REVOKE
         - MESSAGE_REACT
@@ -327,6 +328,7 @@ components:
         - PRIVACY_UPDATE
         - DEFAULT_DISAPPEARING_SET
         - HISTORY_SYNC_REQUEST
+        - STICKER_MATERIALIZE
     GatewayQueryType:
       type: string
       enum:
@@ -346,6 +348,7 @@ components:
         - MESSAGE_RECEIVED
         - MESSAGE_STATUS_CHANGED
         - MESSAGE_ACTION_RECEIVED
+        - MESSAGE_ACTION_RESULT
         - SESSION_STATUS_CHANGED
         - PAIRING_UPDATED
         - MEDIA_READY
@@ -359,6 +362,9 @@ components:
         - HISTORY_SYNCED
         - SYNC_STATUS_CHANGED
         - MEDIA_RETRY_UPDATED
+        - STICKER_OBSERVED
+        - STICKER_FAVORITE_CHANGED
+        - STICKER_MATERIALIZED
         - GATEWAY_ALERT
     MessageKind:
       type: string
@@ -372,6 +378,7 @@ components:
         - LOCATION
         - CONTACT
         - POLL
+        - EVENT
         - INTERACTIVE
         - UNSUPPORTED
     GatewayCommand:
@@ -442,6 +449,11 @@ components:
             required: [type]
           then:
             properties: {payload: {$ref: '#/components/schemas/MessageSendPayload'}}
+        - if:
+            properties: {type: {const: MESSAGE_BATCH_SEND}}
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/MessageBatchSendPayload'}}
         - if:
             properties: {type: {const: MESSAGE_EDIT}}
             required: [type]
@@ -519,6 +531,11 @@ components:
             required: [type]
           then:
             properties: {payload: {$ref: '#/components/schemas/HistoryPayload'}}
+        - if:
+            properties: {type: {const: STICKER_MATERIALIZE}}
+            required: [type]
+          then:
+            properties: {payload: {$ref: '#/components/schemas/StickerMaterializationPayload'}}
     EmptyPayload:
       type: object
       additionalProperties: false
@@ -585,6 +602,44 @@ components:
         - $ref: '#/components/schemas/ContactMessageSendPayload'
         - $ref: '#/components/schemas/PollMessageSendPayload'
         - $ref: '#/components/schemas/InteractiveMessageSendPayload'
+    MessageBatchSendPayload:
+      type: object
+      additionalProperties: false
+      required: [batch_id, size, album_native, items]
+      properties:
+        batch_id:
+          $ref: '#/components/schemas/Identifier'
+        size:
+          type: integer
+          minimum: 2
+          maximum: 10
+        album_native:
+          const: false
+        items:
+          type: array
+          minItems: 2
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/MessageBatchSendItemPayload'
+    MessageBatchSendItemPayload:
+      type: object
+      additionalProperties: false
+      required: [batch_id, position, size, provider_message_id, message]
+      properties:
+        batch_id:
+          $ref: '#/components/schemas/Identifier'
+        position:
+          type: integer
+          minimum: 0
+          maximum: 9
+        size:
+          type: integer
+          minimum: 2
+          maximum: 10
+        provider_message_id:
+          $ref: '#/components/schemas/Identifier'
+        message:
+          $ref: '#/components/schemas/MessageSendPayload'
     TextMessageSendPayload:
       type: object
       additionalProperties: false
@@ -714,6 +769,12 @@ components:
           type: string
           pattern: '^[a-f0-9]{64}$'
         ptt:
+          type: boolean
+        gif:
+          type: boolean
+        ptv:
+          type: boolean
+        view_once:
           type: boolean
     LinkPreviewPayload:
       type: object
@@ -1126,6 +1187,23 @@ components:
           type: integer
           minimum: 1
           maximum: 50
+    StickerMaterializationPayload:
+      type: object
+      additionalProperties: false
+      required: [observation_id, expected_sha256, expected_mime_type, max_bytes]
+      properties:
+        observation_id:
+          $ref: '#/components/schemas/Identifier'
+        expected_sha256:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+        expected_mime_type:
+          type: string
+          enum: [image/webp]
+        max_bytes:
+          type: integer
+          minimum: 1
+          maximum: 1048576
     GatewayQuery:
       type: object
       additionalProperties: false
@@ -1442,6 +1520,8 @@ components:
           then: {properties: {payload: {$ref: '#/components/schemas/MessageStatusEventPayload'}}}
         - if: {properties: {type: {const: MESSAGE_ACTION_RECEIVED}}, required: [type]}
           then: {properties: {payload: {$ref: '#/components/schemas/MessageActionEventPayload'}}}
+        - if: {properties: {type: {const: MESSAGE_ACTION_RESULT}}, required: [type]}
+          then: {properties: {payload: {$ref: '#/components/schemas/MessageActionResultEventPayload'}}}
         - if: {properties: {type: {const: SESSION_STATUS_CHANGED}}, required: [type]}
           then: {properties: {payload: {$ref: '#/components/schemas/SessionStatusEventPayload'}}}
         - if: {properties: {type: {const: PAIRING_UPDATED}}, required: [type]}
@@ -1572,6 +1652,8 @@ components:
           then: {properties: {family: {const: CONTACT}}, required: [contacts]}
         - if: {properties: {kind: {const: POLL}}, required: [kind]}
           then: {properties: {family: {const: POLL}}, required: [poll]}
+        - if: {properties: {kind: {const: EVENT}}, required: [kind]}
+          then: {properties: {family: {const: EVENT}}, required: [event]}
         - if: {properties: {kind: {const: INTERACTIVE}}, required: [kind]}
           then: {properties: {family: {const: INTERACTIVE}}, required: [interactive]}
         - if: {properties: {kind: {const: UNSUPPORTED}}, required: [kind]}
@@ -1640,6 +1722,22 @@ components:
           uniqueItems: true
           items: {type: string, pattern: '^[a-f0-9]{64}$'}
         history: {type: boolean}
+    MessageActionResultEventPayload:
+      type: object
+      additionalProperties: false
+      required: [command_id, action, status, provider_message_id, target_message_id]
+      properties:
+        command_id: {$ref: '#/components/schemas/Identifier'}
+        action: {enum: [EDIT, REACTION, REVOKE]}
+        status: {enum: [SUCCEEDED, FAILED]}
+        provider_message_id: {$ref: '#/components/schemas/Identifier'}
+        target_message_id: {$ref: '#/components/schemas/Identifier'}
+        error_code: {enum: [ACTION_REJECTED, ACTION_RETRY_EXHAUSTED, ACTION_OUTCOME_UNKNOWN]}
+      allOf:
+        - if: {properties: {status: {const: FAILED}}, required: [status]}
+          then: {required: [error_code]}
+        - if: {properties: {status: {const: SUCCEEDED}}, required: [status]}
+          then: {not: {required: [error_code]}}
     SessionStatusEventPayload:
       type: object
       additionalProperties: false

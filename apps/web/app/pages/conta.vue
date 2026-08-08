@@ -4,11 +4,11 @@
  * Fonte: `.local/reference/nuxt-dashboard-template/app/pages/settings.vue`
  * Uma seção = um path (sem subtabs).
  */
-import { accountNavigationMenu } from '~/utils/account-navigation'
+import { accountNavigationTree } from '~/utils/account-navigation'
 
 const { me } = useDashboard()
 
-const links = computed(() => accountNavigationMenu(me.value))
+const links = computed(() => accountNavigationTree(me.value))
 </script>
 
 <template>
@@ -23,11 +23,9 @@ const links = computed(() => accountNavigationMenu(me.value))
       v-if="links.length"
       #toolbar
     >
-      <UNavigationMenu
+      <NavigationSectionNavigation
         :items="links"
-        highlight
-        class="-mx-1 flex-1"
-        data-testid="account-section-navigation"
+        test-id="account-section-navigation"
         aria-label="Navegação da conta"
       />
     </template>

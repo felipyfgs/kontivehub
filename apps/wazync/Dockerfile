@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM golang:1.25-alpine AS builder
+FROM golang:1.25-alpine AS go-dependencies
 
 RUN apk add --no-cache ca-certificates git
 
@@ -9,6 +9,14 @@ WORKDIR /src/apps/wazync
 COPY apps/wazync/go.mod apps/wazync/go.sum ./
 RUN go mod download
 
+FROM go-dependencies AS test
+
+COPY apps/wazync/ ./
+
+CMD ["sh", "-ec", "go test ./... && go vet ./..."]
+
+FROM go-dependencies AS builder
+
 COPY apps/wazync/ ./
 
 ARG TARGETOS=linux
@@ -16,15 +24,9 @@ ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags="-s -w" -o /out/wazync ./cmd/wazync
 
-FROM golang:1.25-alpine AS development
+FROM go-dependencies AS development
 
-RUN apk add --no-cache ca-certificates git \
-    && go install github.com/air-verse/air@v1.63.0
-
-WORKDIR /src/apps/wazync
-
-COPY apps/wazync/go.mod apps/wazync/go.sum ./
-RUN go mod download
+RUN go install github.com/air-verse/air@v1.63.0
 
 COPY apps/wazync/docker/air.toml /etc/wazync/air.toml
 

@@ -9,6 +9,7 @@ use App\Contracts\AutenticarProcuradorClient;
 use App\Contracts\CaixaPostalClient;
 use App\Contracts\CaixaPostalIndicatorClient;
 use App\Contracts\CnpjRegistrationLookup;
+use App\Contracts\CommunicationCommandPublisher;
 use App\Contracts\CommunicationOutboundMessageWriter;
 use App\Contracts\CommunicationProfilePictureDownloader;
 use App\Contracts\CommunicationTransport;
@@ -20,6 +21,8 @@ use App\Contracts\EsocialBxSoapTransport;
 use App\Contracts\EsocialEventClient;
 use App\Contracts\FgtsDigitalPortalClient;
 use App\Contracts\FiscalMutationTransport;
+use App\Contracts\GatewayEventQueue;
+use App\Contracts\GifSearchProvider;
 use App\Contracts\GuideEmissionClient;
 use App\Contracts\IntegraContadorClient;
 use App\Contracts\IntegraEligibilityEvaluating;
@@ -51,6 +54,8 @@ use App\Models\Client;
 use App\Models\ClientCategory;
 use App\Models\ClientContact;
 use App\Models\ClientCredential;
+use App\Models\CommunicationInbox;
+use App\Models\CommunicationStickerObservation;
 use App\Models\Establishment;
 use App\Models\OutboundCaptureProfile;
 use App\Models\SavedListFilter;
@@ -66,6 +71,8 @@ use App\Policies\ClientCategoryPolicy;
 use App\Policies\ClientContactPolicy;
 use App\Policies\ClientCredentialPolicy;
 use App\Policies\ClientPolicy;
+use App\Policies\CommunicationInboxPolicy;
+use App\Policies\CommunicationStickerObservationPolicy;
 use App\Policies\EstablishmentPolicy;
 use App\Policies\OutboundCaptureProfilePolicy;
 use App\Policies\SavedListFilterPolicy;
@@ -88,9 +95,13 @@ use App\Services\Clients\NullCcmeiDadosFetcher;
 use App\Services\Clients\RegistrationLookupMerger;
 use App\Services\Clients\RegistrationLookupOrchestrator;
 use App\Services\Clients\SerproConsultaCnpjLookup;
+use App\Services\Communication\Gif\DisabledGifSearchProvider;
+use App\Services\Communication\Gif\HttpGifSearchProvider;
 use App\Services\Communication\Media\MediaStore;
 use App\Services\Communication\ProfilePicture\CurlProfilePictureDownloader;
 use App\Services\Communication\Transport\HttpTransport;
+use App\Services\Communication\Transport\JetStreamBroker;
+use App\Services\Communication\Transport\JetStreamTransport;
 use App\Services\Esocial\CurlEsocialBxSoapTransport;
 use App\Services\Esocial\DisabledEsocialEventClient;
 use App\Services\Esocial\FgtsEsocialSourceAdapter;
@@ -193,6 +204,8 @@ use App\Services\Vault\FilesystemSecureObjectStore;
 use App\Support\CurrentTenant;
 use App\Support\FiscalDataModel\PrivilegedTenantContext;
 use App\Support\MultitenantRbac\EffectivePermissionsResolver;
+use Basis\Nats\Client as NatsClient;
+use Basis\Nats\Configuration as NatsConfiguration;
 use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Database\Eloquent\Model;
@@ -202,12 +215,19 @@ use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->app->singleton(GifSearchProvider::class, function ($app): GifSearchProvider {
+            return match ((string) config('communication.gif_provider.driver', 'disabled')) {
+                'http' => $app->make(HttpGifSearchProvider::class),
+                default => $app->make(DisabledGifSearchProvider::class),
+            };
+        });
         $this->app->scoped(CurrentTenant::class, fn () => new CurrentTenant);
         $this->app->scoped(
             TenantAuthorization::class,
@@ -243,14 +263,57 @@ class AppServiceProvider extends ServiceProvider
         });
 
         $this->app->singleton(MediaStore::class, function ($app) {
+            $diskName = (string) config('communication.media.disk');
+            $diskConfig = config('filesystems.disks.'.$diskName, []);
+            $driver = is_array($diskConfig) ? (string) ($diskConfig['driver'] ?? '') : '';
+            if (! in_array($driver, ['local', 's3'], true)) {
+                throw new \RuntimeException('COMMUNICATION_MEDIA_DRIVER deve ser local ou s3.');
+            }
+            if ($driver === 's3') {
+                $endpoint = (string) ($diskConfig['endpoint'] ?? '');
+                $scheme = parse_url($endpoint, PHP_URL_SCHEME);
+                if (trim((string) ($diskConfig['key'] ?? '')) === ''
+                    || trim((string) ($diskConfig['secret'] ?? '')) === ''
+                    || trim((string) ($diskConfig['bucket'] ?? '')) === ''
+                    || ! in_array($scheme, ['http', 'https'], true)) {
+                    throw new \RuntimeException('Storage S3/MinIO de comunicação exige endpoint, bucket e credenciais explícitas.');
+                }
+            }
+
             return new MediaStore(
                 $app->make(EnvelopeCrypto::class),
-                (string) config('communication.media.disk_root'),
+                Storage::disk($diskName),
             );
         });
         $this->app->bind(CommunicationProfilePictureDownloader::class, CurlProfilePictureDownloader::class);
         $this->app->bind(CommunicationOutboundMessageWriter::class, CreateMessageAction::class);
-        $this->app->bind(CommunicationTransport::class, HttpTransport::class);
+        $this->app->singleton(JetStreamBroker::class, function (): JetStreamBroker {
+            $url = (string) config('communication.nats.url');
+            $parts = parse_url($url);
+            if (! is_array($parts) || ! isset($parts['host'])
+                || ! in_array($parts['scheme'] ?? null, ['nats', 'tls'], true)) {
+                throw new \RuntimeException('COMMUNICATION_NATS_URL inválida.');
+            }
+            $user = (string) (config('communication.nats.user') ?: ($parts['user'] ?? ''));
+            $password = (string) (config('communication.nats.password') ?: ($parts['pass'] ?? ''));
+            $configuration = new NatsConfiguration(
+                host: (string) $parts['host'],
+                port: (int) ($parts['port'] ?? 4222),
+                user: $user !== '' ? $user : null,
+                pass: $password !== '' ? $password : null,
+                timeout: 5,
+                maxReconnectAttempts: -1,
+            );
+
+            return new JetStreamBroker(new NatsClient($configuration));
+        });
+        $this->app->alias(JetStreamBroker::class, CommunicationCommandPublisher::class);
+        $this->app->alias(JetStreamBroker::class, GatewayEventQueue::class);
+        $this->app->bind(CommunicationTransport::class, function ($app): CommunicationTransport {
+            return config('communication.transport') === 'jetstream'
+                ? $app->make(JetStreamTransport::class)
+                : $app->make(HttpTransport::class);
+        });
         $this->app->bind(AssistantLlmGateway::class, OpenAiAssistantLlmGateway::class);
 
         $this->app->singleton(CurlMtlsTransport::class, function () {
@@ -458,6 +521,8 @@ class AppServiceProvider extends ServiceProvider
         }
 
         Gate::policy(Client::class, ClientPolicy::class);
+        Gate::policy(CommunicationInbox::class, CommunicationInboxPolicy::class);
+        Gate::policy(CommunicationStickerObservation::class, CommunicationStickerObservationPolicy::class);
         Gate::policy(ClientCategory::class, ClientCategoryPolicy::class);
         Gate::policy(Establishment::class, EstablishmentPolicy::class);
         Gate::policy(ClientCredential::class, ClientCredentialPolicy::class);

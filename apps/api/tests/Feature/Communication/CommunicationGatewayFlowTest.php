@@ -72,6 +72,7 @@ final class CommunicationGatewayFlowTest extends TestCase
             'communication.hmac.current_key_id' => 'test-key',
             'communication.hmac.current_secret' => str_repeat('h', 32),
             'communication.media.disk_root' => sys_get_temp_dir().'/communication-gateway-tests-'.Str::ulid(),
+            'filesystems.disks.communication_media.root' => sys_get_temp_dir().'/communication-gateway-tests-'.Str::ulid(),
         ]);
         Event::fake([CommunicationEventCommitted::class]);
         $this->transport = new FakeCommunicationTransport;
@@ -125,6 +126,40 @@ final class CommunicationGatewayFlowTest extends TestCase
         $attachment = CommunicationAttachment::query()->withoutGlobalScopes()->firstOrFail();
         $this->assertSame(hash('sha256', $bytes), $attachment->sha256);
         $this->assertSame('comprovante.pdf', $attachment->original_name_encrypted);
+        $this->assertSame(1, $this->transport->downloadCalls);
+    }
+
+    public function test_inbound_with_expired_media_spool_is_ingested_without_blocking(): void
+    {
+        [, $inbox] = $this->context();
+        $event = $this->event($inbox, GatewayEventType::MessageReceived, 'gateway-inbound-media-miss-0001', [
+            'provider_message_id' => 'provider-inbound-media-miss-0001',
+            'from' => '+5511999990088',
+            'kind' => 'IMAGE',
+            'provider_type' => 'imageMessage',
+            'family' => 'IMAGE',
+            'text' => 'Foto sem spool',
+            'spool_id' => 'spool-missing-0001',
+            'media_sha256' => str_repeat('a', 64),
+            'media_size_bytes' => 12,
+            'mime_type' => 'image/jpeg',
+        ]);
+        $this->transport->mediaFailures['spool-missing-0001'] = new CommunicationTransportException(
+            'GATEWAY_MEDIA_UNAVAILABLE',
+            true,
+            null,
+        );
+
+        $this->postSignedEvent($event)
+            ->assertNoContent()
+            ->assertHeader('X-Communication-Result', 'processed');
+
+        $message = CommunicationMessage::query()->withoutGlobalScopes()
+            ->where('provider_message_id', 'provider-inbound-media-miss-0001')
+            ->firstOrFail();
+        $this->assertSame('UNAVAILABLE', data_get($message->metadata, 'media_state'));
+        $this->assertSame('GATEWAY_MEDIA_UNAVAILABLE', data_get($message->metadata, 'media_error_code'));
+        $this->assertDatabaseCount('communication_attachments', 0);
         $this->assertSame(1, $this->transport->downloadCalls);
     }
 
@@ -1014,6 +1049,42 @@ final class CommunicationGatewayFlowTest extends TestCase
         $this->assertSame(MessageStatus::Failed, $failedMessage->refresh()->status);
     }
 
+    public function test_outbox_acceptance_does_not_regress_gateway_receipts_on_retries(): void
+    {
+        [$tenant, $inbox] = $this->context();
+        [$identity, $conversation] = $this->identityAndConversation($tenant, $inbox);
+        $dispatcher = app(OutboxDispatcher::class);
+
+        foreach ([
+            MessageStatus::Sent,
+            MessageStatus::Delivered,
+            MessageStatus::Read,
+            MessageStatus::Played,
+        ] as $status) {
+            $suffix = strtolower($status->value);
+            $message = $this->outboundMessage($tenant, $inbox, $identity, $conversation, $suffix);
+            $entry = $this->outbox($tenant, $inbox, $message, 'command-acceptance-'.$suffix.'-0001');
+
+            $this->postSignedEvent($this->event($inbox, GatewayEventType::MessageStatusChanged, 'gateway-receipt-'.$suffix.'-0001', [
+                'provider_message_id' => $message->provider_message_id,
+                'status' => $status->value,
+            ]))->assertNoContent();
+
+            $dispatcher->dispatch((int) $entry->id);
+            $this->assertSame(OutboxStatus::Accepted, $entry->refresh()->status);
+            $this->assertSame($status, $message->refresh()->status);
+
+            $entry->forceFill([
+                'status' => OutboxStatus::Retry,
+                'available_at' => now()->subSecond(),
+            ])->save();
+            $dispatcher->dispatch((int) $entry->id);
+
+            $this->assertSame(OutboxStatus::Accepted, $entry->refresh()->status);
+            $this->assertSame($status, $message->refresh()->status);
+        }
+    }
+
     public function test_accepted_human_outbound_persists_read_receipt_follow_up_atomically(): void
     {
         Queue::fake();
@@ -1443,6 +1514,9 @@ final class FakeCommunicationTransport implements CommunicationTransport
     /** @var array<string,CommunicationTransportException> */
     public array $failures = [];
 
+    /** @var array<string,CommunicationTransportException> */
+    public array $mediaFailures = [];
+
     public int $downloadCalls = 0;
 
     public function dispatch(GatewayCommandData $command): GatewayCommandReceipt
@@ -1480,6 +1554,9 @@ final class FakeCommunicationTransport implements CommunicationTransport
     public function downloadMedia(string $spoolId): StreamInterface
     {
         $this->downloadCalls++;
+        if (isset($this->mediaFailures[$spoolId])) {
+            throw $this->mediaFailures[$spoolId];
+        }
 
         return Utils::streamFor($this->media[$spoolId] ?? '');
     }

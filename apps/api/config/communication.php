@@ -7,6 +7,17 @@ return [
         'base_url' => env('WAZYNC_URL', 'http://wazync:8080'),
         'timeout_seconds' => (int) env('WAZYNC_TIMEOUT_SECONDS', 10),
     ],
+    'transport' => env('COMMUNICATION_WHATSAPP_TRANSPORT', 'http'),
+    'nats' => [
+        'url' => env('COMMUNICATION_NATS_URL', 'nats://nats:4222'),
+        'user' => env('COMMUNICATION_NATS_USER'),
+        'password' => env('COMMUNICATION_NATS_PASSWORD'),
+        'stream' => env('COMMUNICATION_NATS_STREAM', 'KONTIVEHUB_WHATSAPP'),
+        'event_subject' => env('COMMUNICATION_NATS_EVENT_SUBJECT', 'kontivehub.whatsapp.events'),
+        'command_subject' => env('COMMUNICATION_NATS_COMMAND_SUBJECT', 'kontivehub.whatsapp.commands'),
+        'event_consumer' => env('COMMUNICATION_NATS_EVENT_CONSUMER', 'communication-events'),
+        'max_message_bytes' => (int) env('COMMUNICATION_NATS_MAX_MESSAGE_BYTES', 1_048_576),
+    ],
     'flows' => [
         // Fail-closed: modelagem/publish/enable de fluxos permanece OFF por default.
         'enabled' => filter_var(env('COMMUNICATION_FLOWS_ENABLED', false), FILTER_VALIDATE_BOOL),
@@ -25,7 +36,50 @@ return [
     ],
     'media' => [
         'max_bytes' => (int) env('COMMUNICATION_MEDIA_MAX_BYTES', 20_971_520),
+        'disk' => env('COMMUNICATION_MEDIA_DISK', 'communication_media'),
         'disk_root' => env('COMMUNICATION_MEDIA_DISK_ROOT', '/var/vault/communication'),
+    ],
+
+    'sticker_library' => [
+        // Biblioteca/importação local independente da observação parcial do dispositivo.
+        'enabled' => (bool) env('COMMUNICATION_STICKER_LIBRARY_ENABLED', true),
+        'device_sync_enabled' => (bool) env('COMMUNICATION_STICKER_DEVICE_SYNC_ENABLED', false),
+        'max_item_bytes' => (int) env('COMMUNICATION_STICKER_MAX_ITEM_BYTES', 1_048_576),
+        'max_dimension' => (int) env('COMMUNICATION_STICKER_MAX_DIMENSION', 512),
+        'allow_animated' => (bool) env('COMMUNICATION_STICKER_ALLOW_ANIMATED', true),
+        'max_items_per_tenant' => (int) env('COMMUNICATION_STICKER_MAX_ITEMS_PER_TENANT', 500),
+        'max_bytes_per_tenant' => (int) env('COMMUNICATION_STICKER_MAX_BYTES_PER_TENANT', 104_857_600),
+        'retention_days' => (int) env('COMMUNICATION_STICKER_RETENTION_DAYS', 30),
+    ],
+    // Famílias dependentes de builders Wazync ainda não liberados: todas fail-closed.
+    'outbound_features' => [
+        'contacts_array' => filter_var(env('COMMUNICATION_OUTBOUND_CONTACTS_ARRAY_ENABLED', false), FILTER_VALIDATE_BOOL),
+        'gif' => filter_var(env('COMMUNICATION_OUTBOUND_GIF_ENABLED', false), FILTER_VALIDATE_BOOL),
+        'ptv' => filter_var(env('COMMUNICATION_OUTBOUND_PTV_ENABLED', false), FILTER_VALIDATE_BOOL),
+        'event' => filter_var(env('COMMUNICATION_OUTBOUND_EVENT_ENABLED', false), FILTER_VALIDATE_BOOL),
+        'view_once' => filter_var(env('COMMUNICATION_OUTBOUND_VIEW_ONCE_ENABLED', false), FILTER_VALIDATE_BOOL),
+        'media_batch' => filter_var(env('COMMUNICATION_OUTBOUND_MEDIA_BATCH_ENABLED', false), FILTER_VALIDATE_BOOL),
+    ],
+    // Inventário fixado no Wazync. Um rollout nunca pode habilitar sozinho um
+    // builder que ainda não possui contrato testado no gateway.
+    'outbound_builders' => [
+        'contacts_array' => false,
+        'gif' => false,
+        'ptv' => false,
+        'event' => false,
+        'view_once' => false,
+        'media_batch' => true,
+    ],
+    'gif_provider' => [
+        'driver' => env('COMMUNICATION_GIF_PROVIDER', 'disabled'),
+        'base_url' => env('COMMUNICATION_GIF_PROVIDER_URL', ''),
+        'api_key' => env('COMMUNICATION_GIF_PROVIDER_API_KEY', ''),
+        'allowed_hosts' => array_values(array_filter(array_map('trim', explode(',', (string) env('COMMUNICATION_GIF_PROVIDER_ALLOWED_HOSTS', ''))))),
+        'connect_timeout_seconds' => 2,
+        'timeout_seconds' => 5,
+        'cache_ttl_seconds' => 120,
+        'rate_limit_per_minute' => 30,
+        'preview_max_bytes' => 2_097_152,
     ],
     'profile_pictures' => [
         'max_bytes' => min(2_097_152, max(1, (int) env('COMMUNICATION_PROFILE_PICTURES_MAX_BYTES', 2_097_152))),

@@ -70,7 +70,8 @@ final class GatewayContractPayload
         'SESSION_DISCONNECT' => ['allowed' => [], 'required' => []],
         'SESSION_SET_PASSIVE' => ['allowed' => ['passive'], 'required' => ['passive']],
         'SESSION_LOGOUT' => ['allowed' => [], 'required' => []],
-        'MESSAGE_SEND' => ['allowed' => ['to', 'kind', 'text', 'caption', 'reply_to', 'link_preview', 'media', 'location', 'contact', 'poll', 'interactive'], 'required' => ['to', 'kind']],
+        'MESSAGE_SEND' => ['allowed' => ['to', 'kind', 'text', 'caption', 'reply_to', 'link_preview', 'media', 'location', 'contact', 'contacts', 'poll', 'event', 'interactive'], 'required' => ['to', 'kind']],
+        'MESSAGE_BATCH_SEND' => ['allowed' => ['batch_id', 'size', 'album_native', 'items'], 'required' => ['batch_id', 'size', 'album_native', 'items']],
         'MESSAGE_EDIT' => ['allowed' => ['to', 'target_message_id', 'sender', 'text'], 'required' => ['to', 'target_message_id', 'text']],
         'MESSAGE_REVOKE' => ['allowed' => ['to', 'target_message_id', 'sender'], 'required' => ['to', 'target_message_id']],
         'MESSAGE_REACT' => ['allowed' => ['to', 'target_message_id', 'sender', 'emoji'], 'required' => ['to', 'target_message_id', 'emoji']],
@@ -87,6 +88,7 @@ final class GatewayContractPayload
         'PRIVACY_UPDATE' => ['allowed' => ['name', 'value'], 'required' => ['name', 'value']],
         'DEFAULT_DISAPPEARING_SET' => ['allowed' => ['timer_seconds'], 'required' => ['timer_seconds']],
         'HISTORY_SYNC_REQUEST' => ['allowed' => ['to', 'last_message_id', 'last_message_from', 'last_message_timestamp', 'last_message_from_me', 'count'], 'required' => ['to', 'last_message_id', 'last_message_from', 'last_message_timestamp', 'last_message_from_me', 'count']],
+        'STICKER_MATERIALIZE' => ['allowed' => ['observation_id', 'expected_sha256', 'expected_mime_type', 'max_bytes'], 'required' => ['observation_id', 'expected_sha256', 'expected_mime_type', 'max_bytes']],
     ];
 
     /** @var array<string, array{allowed: list<string>, required: list<string>}> */
@@ -110,6 +112,9 @@ final class GatewayContractPayload
         if ($type === GatewayCommandType::SendMessage) {
             self::assertOutboundMessage($payload);
         }
+        if ($type === GatewayCommandType::SendMessageBatch) {
+            self::assertOutboundBatch($payload);
+        }
         if ($type === GatewayCommandType::UpdateChatState) {
             $action = strtoupper(trim((string) ($payload['action'] ?? '')));
             if ($action === 'MARK_CLEAN' && (int) ($payload['timestamp'] ?? 0) <= 0) {
@@ -122,6 +127,9 @@ final class GatewayContractPayload
         }
         if ($type === GatewayCommandType::RequestMediaRetry) {
             self::assertMediaRetryCommand($payload);
+        }
+        if ($type === GatewayCommandType::MaterializeSticker) {
+            self::assertStickerMaterializeCommand($payload);
         }
     }
 
@@ -157,7 +165,11 @@ final class GatewayContractPayload
             GatewayEventType::MediaRetryUpdated => self::assertMediaRetry($payload),
             GatewayEventType::MessageStatusChanged => self::assertMessageStatus($payload),
             GatewayEventType::MessageActionReceived => self::assertMessageAction($payload),
+            GatewayEventType::MessageActionResult => self::assertMessageActionResult($payload),
             GatewayEventType::ContactProfileChanged => self::assertContactProfile($payload),
+            GatewayEventType::StickerObserved => self::assertStickerObserved($payload),
+            GatewayEventType::StickerFavoriteChanged => self::assertStickerFavoriteChanged($payload),
+            GatewayEventType::StickerMaterialized => self::assertStickerMaterialized($payload),
             default => null,
         };
     }
@@ -182,6 +194,15 @@ final class GatewayContractPayload
             GatewayCommandType::RevokeMessage,
             GatewayCommandType::ReactMessage,
             GatewayCommandType::VotePoll,
+        ], true);
+    }
+
+    public static function usesCommandIdAsProviderMessageId(GatewayCommandType $type): bool
+    {
+        return in_array($type, [
+            GatewayCommandType::EditMessage,
+            GatewayCommandType::RevokeMessage,
+            GatewayCommandType::ReactMessage,
         ], true);
     }
 
@@ -327,6 +348,8 @@ final class GatewayContractPayload
                 ?: throw new InvalidArgumentException('contacts obrigatório em MESSAGE_RECEIVED CONTACT.'),
             MessageKind::Poll => isset($content['poll'])
                 ?: throw new InvalidArgumentException('poll obrigatório em MESSAGE_RECEIVED POLL.'),
+            MessageKind::Event => isset($content['event'])
+                ?: throw new InvalidArgumentException('event obrigatório em MESSAGE_RECEIVED EVENT.'),
             MessageKind::Interactive => isset($content['interactive'])
                 ?: throw new InvalidArgumentException('interactive obrigatório em MESSAGE_RECEIVED INTERACTIVE.'),
             MessageKind::Unsupported => (($payload['content_present'] ?? false) === true)
@@ -412,6 +435,124 @@ final class GatewayContractPayload
                 }
                 self::assertMessageReceived($message);
             }
+        }
+    }
+
+    /** @param array<string, mixed> $payload */
+    private static function assertStickerObserved(array $payload): void
+    {
+        self::assertAllowedKeys($payload, [
+            'observation_id', 'source', 'availability', 'mime_type', 'size_bytes',
+            'width', 'height', 'is_lottie', 'content_digest',
+        ], 'STICKER_OBSERVED');
+        self::assertStickerIdentity($payload, false);
+        if (! in_array((string) ($payload['source'] ?? ''), ['DEVICE_RECENT', 'DEVICE_MESSAGE'], true)) {
+            throw new InvalidArgumentException('source inválido em STICKER_OBSERVED.');
+        }
+        if (! in_array((string) ($payload['availability'] ?? ''), ['AVAILABLE', 'INCOMPLETE_METADATA', 'UNSUPPORTED'], true)) {
+            throw new InvalidArgumentException('availability inválida em STICKER_OBSERVED.');
+        }
+        if (isset($payload['content_digest'])
+            && preg_match('/^[a-f0-9]{64}$/', (string) $payload['content_digest']) !== 1) {
+            throw new InvalidArgumentException('content_digest inválido em STICKER_OBSERVED.');
+        }
+    }
+
+    /** @param array<string, mixed> $payload */
+    private static function assertStickerFavoriteChanged(array $payload): void
+    {
+        self::assertAllowedKeys($payload, [
+            'observation_id', 'source', 'favorite', 'mime_type', 'size_bytes',
+            'width', 'height', 'is_lottie',
+        ], 'STICKER_FAVORITE_CHANGED');
+        self::assertStickerIdentity($payload, true);
+        if (($payload['source'] ?? null) !== 'DEVICE_FAVORITE' || ! is_bool($payload['favorite'] ?? null)) {
+            throw new InvalidArgumentException('Favorito de sticker inválido.');
+        }
+    }
+
+    /** @param array<string, mixed> $payload */
+    private static function assertStickerMaterializeCommand(array $payload): void
+    {
+        if (preg_match('/^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/', (string) ($payload['observation_id'] ?? '')) !== 1) {
+            throw new InvalidArgumentException('observation_id inválido em STICKER_MATERIALIZE.');
+        }
+        if (preg_match('/^[a-f0-9]{64}$/', (string) ($payload['expected_sha256'] ?? '')) !== 1) {
+            throw new InvalidArgumentException('expected_sha256 inválido em STICKER_MATERIALIZE.');
+        }
+        if (($payload['expected_mime_type'] ?? null) !== 'image/webp') {
+            throw new InvalidArgumentException('expected_mime_type inválido em STICKER_MATERIALIZE.');
+        }
+        if (! is_int($payload['max_bytes'] ?? null)
+            || (int) $payload['max_bytes'] < 1
+            || (int) $payload['max_bytes'] > 1_048_576) {
+            throw new InvalidArgumentException('max_bytes inválido em STICKER_MATERIALIZE.');
+        }
+    }
+
+    /** @param array<string, mixed> $payload */
+    private static function assertStickerMaterialized(array $payload): void
+    {
+        self::assertAllowedKeys($payload, [
+            'command_id', 'observation_id', 'status', 'attempt', 'error_code',
+            'spool_id', 'size_bytes', 'sha256', 'mime_type',
+        ], 'STICKER_MATERIALIZED');
+        if (preg_match('/^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/', (string) ($payload['observation_id'] ?? '')) !== 1) {
+            throw new InvalidArgumentException('observation_id inválido em STICKER_MATERIALIZED.');
+        }
+        $status = (string) ($payload['status'] ?? '');
+        if (! in_array($status, ['READY', 'FAILED'], true)) {
+            throw new InvalidArgumentException('status inválido em STICKER_MATERIALIZED.');
+        }
+        if (! is_int($payload['attempt'] ?? null) || (int) $payload['attempt'] < 1) {
+            throw new InvalidArgumentException('attempt inválido em STICKER_MATERIALIZED.');
+        }
+        if ($status === 'READY') {
+            foreach (['spool_id', 'sha256', 'mime_type'] as $required) {
+                if (trim((string) ($payload[$required] ?? '')) === '') {
+                    throw new InvalidArgumentException("{$required} obrigatório em STICKER_MATERIALIZED READY.");
+                }
+            }
+            if (preg_match('/^[a-f0-9]{64}$/', (string) $payload['sha256']) !== 1) {
+                throw new InvalidArgumentException('sha256 inválido em STICKER_MATERIALIZED.');
+            }
+            if (($payload['mime_type'] ?? null) !== 'image/webp') {
+                throw new InvalidArgumentException('mime_type inválido em STICKER_MATERIALIZED.');
+            }
+            if (! is_int($payload['size_bytes'] ?? null) || (int) $payload['size_bytes'] < 1) {
+                throw new InvalidArgumentException('size_bytes inválido em STICKER_MATERIALIZED.');
+            }
+        }
+        if ($status === 'FAILED' && array_key_exists('spool_id', $payload)) {
+            throw new InvalidArgumentException('spool_id só é permitido em STICKER_MATERIALIZED READY.');
+        }
+    }
+
+    /** @param array<string, mixed> $payload */
+    private static function assertStickerIdentity(array $payload, bool $stateOnlyAllowed): void
+    {
+        if (preg_match('/^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/', (string) ($payload['observation_id'] ?? '')) !== 1) {
+            throw new InvalidArgumentException('observation_id inválido em evento de sticker.');
+        }
+        foreach (['size_bytes', 'width', 'height'] as $field) {
+            if (! is_int($payload[$field] ?? null) || (int) $payload[$field] < 0) {
+                throw new InvalidArgumentException("{$field} inválido em evento de sticker.");
+            }
+        }
+        if (($payload['size_bytes'] ?? 0) > 1_048_576
+            || ($payload['width'] ?? 0) > 512
+            || ($payload['height'] ?? 0) > 512) {
+            throw new InvalidArgumentException('Limites excedidos em evento de sticker.');
+        }
+        $mime = (string) ($payload['mime_type'] ?? '');
+        if ($mime !== '' && $mime !== 'image/webp') {
+            throw new InvalidArgumentException('mime_type inválido em evento de sticker.');
+        }
+        if (! is_bool($payload['is_lottie'] ?? null)) {
+            throw new InvalidArgumentException('is_lottie inválido em evento de sticker.');
+        }
+        if (! $stateOnlyAllowed && ($mime === '' || ($payload['size_bytes'] ?? 0) < 1)) {
+            throw new InvalidArgumentException('Observação de sticker exige metadados de mídia.');
         }
     }
 
@@ -656,6 +797,37 @@ final class GatewayContractPayload
         }
     }
 
+    /** @param array<string,mixed> $payload */
+    private static function assertMessageActionResult(array $payload): void
+    {
+        self::assertAllowedKeys($payload, [
+            'command_id', 'action', 'status', 'provider_message_id', 'target_message_id', 'error_code',
+        ], 'MESSAGE_ACTION_RESULT');
+        foreach (['command_id', 'provider_message_id', 'target_message_id'] as $required) {
+            if (! is_string($payload[$required] ?? null)
+                || preg_match('/^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/', $payload[$required]) !== 1) {
+                throw new InvalidArgumentException("{$required} obrigatório em MESSAGE_ACTION_RESULT.");
+            }
+        }
+        $action = $payload['action'] ?? null;
+        if (! is_string($action) || ! in_array($action, ['EDIT', 'REACTION', 'REVOKE'], true)) {
+            throw new InvalidArgumentException('action inválida em MESSAGE_ACTION_RESULT.');
+        }
+        $status = $payload['status'] ?? null;
+        if (! is_string($status) || ! in_array($status, ['SUCCEEDED', 'FAILED'], true)) {
+            throw new InvalidArgumentException('status inválido em MESSAGE_ACTION_RESULT.');
+        }
+        $failed = $status === 'FAILED';
+        if ($failed !== array_key_exists('error_code', $payload)) {
+            throw new InvalidArgumentException('error_code obrigatório somente em MESSAGE_ACTION_RESULT FAILED.');
+        }
+        if ($failed && ! in_array($payload['error_code'], [
+            'ACTION_REJECTED', 'ACTION_RETRY_EXHAUSTED', 'ACTION_OUTCOME_UNKNOWN',
+        ], true)) {
+            throw new InvalidArgumentException('error_code inválido em MESSAGE_ACTION_RESULT FAILED.');
+        }
+    }
+
     /** @param array<string, mixed> $payload @param list<string> $allowed */
     private static function assertAllowedKeys(array $payload, array $allowed, string $context): void
     {
@@ -677,15 +849,22 @@ final class GatewayContractPayload
             MessageKind::Image, MessageKind::Audio, MessageKind::Video,
             MessageKind::Document, MessageKind::Sticker => 'media',
             MessageKind::Location => 'location',
-            MessageKind::Contact => 'contact',
+            MessageKind::Contact => isset($payload['contacts']) ? 'contacts' : 'contact',
             MessageKind::Poll => 'poll',
+            MessageKind::Event => 'event',
             MessageKind::Interactive => 'interactive',
             default => throw new InvalidArgumentException('MESSAGE_KIND_UNSUPPORTED'),
         };
         if (! isset($payload[$required])) {
             throw new InvalidArgumentException("{$required} obrigatório para {$kind->value}.");
         }
-        foreach (['text', 'media', 'location', 'contact', 'poll', 'interactive'] as $field) {
+        if ($kind === MessageKind::Contact && isset($payload['contacts'])) {
+            MessageSemanticContent::assertShape(['contacts' => $payload['contacts']], $kind);
+        }
+        if ($kind === MessageKind::Event) {
+            MessageSemanticContent::assertShape(['event' => $payload['event']], $kind);
+        }
+        foreach (['text', 'media', 'location', 'contact', 'contacts', 'poll', 'event', 'interactive'] as $field) {
             if ($field !== $required && isset($payload[$field])
                 && ! ($kind === MessageKind::Text && $field === 'text')) {
                 throw new InvalidArgumentException("{$field} incompatível com {$kind->value}.");
@@ -694,7 +873,7 @@ final class GatewayContractPayload
         if (isset($payload['media'])) {
             self::assertObject($payload['media'], 'media');
             self::assertAllowedKeys($payload['media'], [
-                'attachment_id', 'mime_type', 'filename', 'size_bytes', 'sha256', 'ptt',
+                'attachment_id', 'mime_type', 'filename', 'size_bytes', 'sha256', 'ptt', 'gif', 'ptv', 'view_once',
             ], 'media');
             $mime = strtolower((string) ($payload['media']['mime_type'] ?? ''));
             $mimeAllowed = match ($kind) {
@@ -705,9 +884,84 @@ final class GatewayContractPayload
                 MessageKind::Document => $mime !== '',
                 default => false,
             };
-            if (! $mimeAllowed || (($payload['media']['ptt'] ?? false) && $kind !== MessageKind::Audio)) {
+            foreach (['ptt', 'gif', 'ptv', 'view_once'] as $variant) {
+                if (array_key_exists($variant, $payload['media']) && ! is_bool($payload['media'][$variant])) {
+                    throw new InvalidArgumentException("media.{$variant} inválido.");
+                }
+            }
+            $enabledVariants = array_filter([
+                (bool) ($payload['media']['gif'] ?? false),
+                (bool) ($payload['media']['ptv'] ?? false),
+                (bool) ($payload['media']['view_once'] ?? false),
+            ]);
+            if (! $mimeAllowed || (($payload['media']['ptt'] ?? false) && $kind !== MessageKind::Audio)
+                || (($payload['media']['gif'] ?? false) && $kind !== MessageKind::Video)
+                || (($payload['media']['ptv'] ?? false) && $kind !== MessageKind::Video)
+                || (($payload['media']['view_once'] ?? false) && ! in_array($kind, [MessageKind::Image, MessageKind::Video], true))
+                || count($enabledVariants) > 1) {
                 throw new InvalidArgumentException('MIME/PTT incompatível com kind.');
             }
+        }
+    }
+
+    /** @param array<string, mixed> $payload */
+    private static function assertOutboundBatch(array $payload): void
+    {
+        $batchId = (string) ($payload['batch_id'] ?? '');
+        $size = $payload['size'] ?? null;
+        $items = $payload['items'] ?? null;
+        if (preg_match('/^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/', $batchId) !== 1
+            || ! is_int($size)
+            || $size < 2
+            || $size > 10
+            || ! is_bool($payload['album_native'] ?? null)
+            || $payload['album_native'] !== false
+            || ! is_array($items)
+            || ! array_is_list($items)
+            || count($items) !== $size) {
+            throw new InvalidArgumentException('Lote outbound inválido.');
+        }
+
+        $positions = [];
+        $recipient = null;
+        foreach ($items as $item) {
+            if (! is_array($item) || array_is_list($item)) {
+                throw new InvalidArgumentException('Item de lote outbound inválido.');
+            }
+            self::assertAllowedKeys(
+                $item,
+                ['batch_id', 'position', 'size', 'provider_message_id', 'message'],
+                'MESSAGE_BATCH_SEND.items',
+            );
+            $position = $item['position'] ?? null;
+            $providerMessageId = (string) ($item['provider_message_id'] ?? '');
+            if (($item['batch_id'] ?? null) !== $batchId
+                || ($item['size'] ?? null) !== $size
+                || ! is_int($position)
+                || $position < 0
+                || $position >= $size
+                || isset($positions[$position])
+                || preg_match('/^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/', $providerMessageId) !== 1
+                || ! is_array($item['message'] ?? null)) {
+                throw new InvalidArgumentException('Correlação de item de lote inválida.');
+            }
+            self::assertOutboundMessage($item['message']);
+            $kind = MessageKind::tryFrom(strtoupper((string) ($item['message']['kind'] ?? '')));
+            if (! in_array($kind, [MessageKind::Image, MessageKind::Video, MessageKind::Document], true)) {
+                throw new InvalidArgumentException('Lote aceita somente imagem, vídeo ou documento.');
+            }
+            $itemRecipient = (string) ($item['message']['to'] ?? '');
+            $recipient ??= $itemRecipient;
+            if ($itemRecipient === '' || ! hash_equals($recipient, $itemRecipient)) {
+                throw new InvalidArgumentException('Todos os itens do lote devem ter o mesmo destinatário.');
+            }
+            $positions[$position] = true;
+        }
+
+        $orderedPositions = array_keys($positions);
+        sort($orderedPositions);
+        if ($orderedPositions !== range(0, $size - 1)) {
+            throw new InvalidArgumentException('Posições do lote incompletas.');
         }
     }
 }

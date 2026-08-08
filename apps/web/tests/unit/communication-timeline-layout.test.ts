@@ -8,6 +8,11 @@ const timeline = readFileSync(
 )
 
 describe('layout da timeline de comunicação', () => {
+  it('encaminha os attrs do painel desktop à raiz UDashboardPanel', () => {
+    expect(timeline).toContain('defineOptions({ inheritAttrs: false })')
+    expect(timeline).toMatch(/<UDashboardPanel\s+v-bind="\$attrs"/)
+  })
+
   it('ancora conversas curtas no rodapé sem esconder o início de históricos longos', () => {
     expect(timeline).toContain('ref="messagesContent" class="flex min-h-full flex-col"')
     expect(timeline).toContain('data-testid="communication-timeline-content"')

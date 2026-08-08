@@ -60,6 +60,20 @@ return [
             'report' => false,
         ],
 
+        'communication_media' => [
+            'driver' => env('COMMUNICATION_MEDIA_DRIVER', 'local'),
+            'root' => env('COMMUNICATION_MEDIA_DISK_ROOT', '/var/vault/communication'),
+            'key' => env('COMMUNICATION_MEDIA_ACCESS_KEY_ID'),
+            'secret' => env('COMMUNICATION_MEDIA_SECRET_ACCESS_KEY'),
+            'region' => env('COMMUNICATION_MEDIA_REGION', 'us-east-1'),
+            'bucket' => env('COMMUNICATION_MEDIA_BUCKET', 'kontivehub-communication'),
+            'endpoint' => env('COMMUNICATION_MEDIA_ENDPOINT'),
+            'use_path_style_endpoint' => env('COMMUNICATION_MEDIA_USE_PATH_STYLE_ENDPOINT', true),
+            'visibility' => 'private',
+            'throw' => true,
+            'report' => true,
+        ],
+
     ],
 
     /*

@@ -83,8 +83,8 @@ watch(
         </UAlert>
         <ShellLoadingModalBody v-else-if="loading" :rows="2" />
         <template v-else>
-          <div v-if="history?.data.length" class="overflow-x-auto">
-            <table class="w-full text-left text-sm">
+          <div v-if="history?.data.length">
+            <table class="hidden w-full text-left text-sm md:table">
               <thead class="text-xs text-muted">
                 <tr>
                   <th class="pb-2 pr-3 font-medium">
@@ -105,6 +105,18 @@ watch(
                 </tr>
               </tbody>
             </table>
+            <ul class="space-y-2 md:hidden">
+              <li
+                v-for="item in history.data"
+                :key="item.calendar_year"
+                class="flex items-center justify-between gap-3 rounded-md border border-default bg-elevated/30 p-3"
+              >
+                <span class="text-sm font-medium tabular-nums text-highlighted">
+                  {{ item.calendar_year }}
+                </span>
+                <UBadge color="primary" variant="subtle" :label="regimeLabel(item.regime_apuracao)" />
+              </li>
+            </ul>
           </div>
           <p v-else class="text-sm text-muted">
             Nenhuma opção anual armazenada para este cliente.

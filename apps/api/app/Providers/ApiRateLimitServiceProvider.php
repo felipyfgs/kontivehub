@@ -67,6 +67,13 @@ final class ApiRateLimitServiceProvider extends ServiceProvider
             fn (Request $request): array => $this->profilePictureLimits($request),
         );
         RateLimiter::for(
+            ApiRateLimit::CommunicationGifSearch,
+            fn (Request $request): Limit => $this->perMinuteForUserOrIp(
+                $request,
+                (int) config('communication.gif_provider.rate_limit_per_minute', 30),
+            ),
+        );
+        RateLimiter::for(
             ApiRateLimit::AssistantAccess,
             fn (Request $request): Limit => $this->perMinuteForUserOrIp($request, 60),
         );

@@ -206,6 +206,88 @@ func TestCatalogedNormalizerUnwrapsLiveAndHistoryIdentically(t *testing.T) {
 	assertNormalizedPayloadSanitized(t, live)
 }
 
+func TestCatalogedNormalizerProjectsAssociatedChildAndKeepsViewOnceUnavailable(t *testing.T) {
+	t.Parallel()
+
+	child := normalizeCatalogedMessage(&waE2E.Message{
+		AssociatedChildMessage: &waE2E.FutureProofMessage{
+			Message: &waE2E.Message{ImageMessage: &waE2E.ImageMessage{Caption: proto.String("filho do álbum")}},
+		},
+	})
+	if child.Kind != domain.MessageImage || child.ProviderType != "imageMessage" || child.Content["caption"] != "filho do álbum" {
+		t.Fatalf("associated child hid visible media: %+v", child)
+	}
+
+	viewOnce := normalizeCatalogedMessage(&waE2E.Message{
+		ViewOnceMessageV2: &waE2E.FutureProofMessage{
+			Message: &waE2E.Message{ImageMessage: &waE2E.ImageMessage{Caption: proto.String("não expor")}},
+		},
+	})
+	if viewOnce.Kind != domain.MessageUnsupported || viewOnce.ProviderType != "viewOnceMessageV2" ||
+		viewOnce.Content["content_present"] != false || viewOnce.Content["view_once"] != true {
+		t.Fatalf("view-once privacy placeholder was lost: %+v", viewOnce)
+	}
+	assertNormalizedPayloadSanitized(t, normalizedMessagePayload(viewOnce))
+}
+
+func TestCatalogedNormalizerKeepsActionsDistinctFromControls(t *testing.T) {
+	t.Parallel()
+
+	normalized := normalizeCatalogedMessage(&waE2E.Message{ReactionMessage: &waE2E.ReactionMessage{}})
+	if normalized.Family != "ACTION" || normalized.ProviderType != "reactionMessage" {
+		t.Fatalf("message action was collapsed into control: %+v", normalized)
+	}
+}
+
+func TestPollCreationWrapperDepthIsBounded(t *testing.T) {
+	t.Parallel()
+
+	withinLimit := &waE2E.Message{PollCreationMessage: &waE2E.PollCreationMessage{Name: proto.String("Enquete")}}
+	for range 7 {
+		withinLimit = &waE2E.Message{PollCreationMessageV4: &waE2E.FutureProofMessage{Message: withinLimit}}
+	}
+	if pollCreation(withinLimit) == nil {
+		t.Fatal("poll within wrapper depth limit was rejected")
+	}
+
+	beyondLimit := withinLimit
+	for range 2 {
+		beyondLimit = &waE2E.Message{PollCreationMessageV4: &waE2E.FutureProofMessage{Message: beyondLimit}}
+	}
+	if pollCreation(beyondLimit) != nil {
+		t.Fatal("poll beyond wrapper depth limit was recursively accepted")
+	}
+}
+
+func TestCatalogedNormalizerProjectsRareTypesAsAllowlistedReadOnlyCards(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name, category string
+		message        *waE2E.Message
+	}{
+		{name: "product", category: "PRODUCT", message: &waE2E.Message{ProductMessage: &waE2E.ProductMessage{}}},
+		{name: "order", category: "ORDER", message: &waE2E.Message{OrderMessage: &waE2E.OrderMessage{}}},
+		{name: "payment", category: "PAYMENT", message: &waE2E.Message{SendPaymentMessage: &waE2E.SendPaymentMessage{}}},
+		{name: "invite", category: "INVITE", message: &waE2E.Message{GroupInviteMessage: &waE2E.GroupInviteMessage{}}},
+		{name: "event", category: "EVENT", message: &waE2E.Message{EventMessage: &waE2E.EventMessage{}}},
+		{name: "call", category: "CALL", message: &waE2E.Message{CallLogMesssage: &waE2E.CallLogMessage{}}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			normalized := normalizeCatalogedMessage(test.message)
+			if normalized.Kind != domain.MessageInteractive {
+				t.Fatalf("rare type was not projected as interactive: %+v", normalized)
+			}
+			card, ok := normalized.Content["rich_card"].(map[string]any)
+			if !ok || card["category"] != test.category || card["title"] == "" {
+				t.Fatalf("invalid rich card: %+v", normalized.Content)
+			}
+			assertNormalizedPayloadSanitized(t, normalizedMessagePayload(normalized))
+		})
+	}
+}
+
 func assertNormalizedPayloadSanitized(t *testing.T, payload map[string]any) {
 	t.Helper()
 	encoded, err := json.Marshal(payload)

@@ -232,6 +232,28 @@ final class CommunicationGatewayTransportTest extends TestCase
         }
     }
 
+    public function test_media_spool_ack_is_signed_and_idempotent_at_the_http_boundary(): void
+    {
+        Http::fake(fn () => Http::response('', 204));
+
+        app(HttpTransport::class)->acknowledgeMedia('media-ack-0001');
+
+        Http::assertSent(function (Request $request): bool {
+            $timestamp = (int) $this->header($request, 'X-Communication-Timestamp');
+            $verification = app(HmacVerifier::class)->verify(
+                'DELETE',
+                '/internal/v1/media/media-ack-0001',
+                '',
+                $request->headers(),
+                $timestamp,
+            );
+
+            return $request->method() === 'DELETE'
+                && $request->url() === 'http://wazync.test/internal/v1/media/media-ack-0001'
+                && $verification === SignatureVerificationResult::Valid;
+        });
+    }
+
     public function test_operations_apply_reply_manage_and_tenant_inbox_boundaries(): void
     {
         $tenant = Tenant::factory()->create(['communication_enabled' => true]);

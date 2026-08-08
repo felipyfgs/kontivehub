@@ -10,11 +10,8 @@ import {
   communicationDisplayName,
   communicationListPhoneLine,
   communicationPreviewText,
-  communicationProfilePictureSrc,
   formatCommunicationDate
 } from '~/utils/communication'
-
-const apiBase = String(useRuntimeConfig().public.apiBase || '')
 
 const props = withDefaults(defineProps<{
   conversations: Conversation[]
@@ -276,7 +273,7 @@ function onCheckboxChange(conversationId: number, value: boolean | 'indeterminat
             role="listitem"
             :aria-posinset="virtualRange.start + offset + 1"
             :aria-setsize="total ?? conversations.length"
-            class="group/row flex w-full shrink-0 items-center gap-1.5 overflow-hidden border-l-2 px-2 py-2.5 transition-colors"
+            class="group/row flex w-full shrink-0 items-center gap-1.5 overflow-hidden border-l-2 px-2 py-2.5 transition-colors motion-reduce:transition-none"
             :style="rowHeightStyle"
             :class="[
               selectedId === conversation.id
@@ -293,15 +290,17 @@ function onCheckboxChange(conversationId: number, value: boolean | 'indeterminat
               class="group/avatar relative size-8 shrink-0"
               :data-testid="`communication-conversation-avatar-select-${conversation.id}`"
             >
-              <UAvatar
-                :src="communicationProfilePictureSrc(conversation.contact, apiBase)"
+              <CommunicationProfileAvatar
+                :subject="conversation.contact"
                 :alt="communicationDisplayName(conversation)"
+                loading="lazy"
+                decoding="async"
                 size="md"
                 class="size-8"
                 :data-testid="`communication-conversation-avatar-${conversation.id}`"
               />
               <div
-                class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-full bg-default/45 opacity-0 backdrop-blur-[2px] transition-[opacity,background-color] group-hover/avatar:pointer-events-auto group-hover/avatar:opacity-100 group-focus-within/row:pointer-events-auto group-focus-within/row:opacity-100 [@media(pointer:coarse)]:pointer-events-auto [@media(pointer:coarse)]:opacity-100"
+                class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-full bg-default/45 opacity-0 backdrop-blur-[2px] transition-[opacity,background-color] motion-reduce:transition-none group-hover/avatar:pointer-events-auto group-hover/avatar:opacity-100 group-focus-within/row:pointer-events-auto group-focus-within/row:opacity-100 [@media(pointer:coarse)]:pointer-events-auto [@media(pointer:coarse)]:opacity-100"
                 :class="isSelected(conversation.id)
                   ? 'pointer-events-auto bg-default/75 opacity-100'
                   : ''"
@@ -350,13 +349,13 @@ function onCheckboxChange(conversationId: number, value: boolean | 'indeterminat
                     size="sm"
                     class="min-w-5 shrink-0 justify-center px-1.5"
                   />
-                  <span class="shrink-0 text-[11px] leading-4 tabular-nums text-muted">
+                  <span class="shrink-0 text-xs leading-4 tabular-nums text-muted">
                     {{ formatCommunicationDate(conversation.last_message_at) }}
                   </span>
                 </div>
 
                 <p
-                  class="truncate text-[11px] leading-4 text-muted"
+                  class="truncate text-xs leading-4 text-muted"
                   data-testid="communication-conversation-secondary"
                 >
                   {{ phoneLine(conversation) }}
@@ -372,7 +371,7 @@ function onCheckboxChange(conversationId: number, value: boolean | 'indeterminat
                   </p>
                   <span
                     v-if="showInboxName"
-                    class="max-w-14 shrink-0 truncate text-[10px] text-dimmed"
+                    class="max-w-14 shrink-0 truncate text-xs text-dimmed"
                   >
                     {{ inboxName(conversation.inbox_id) }}
                   </span>
@@ -467,7 +466,7 @@ function onCheckboxChange(conversationId: number, value: boolean | 'indeterminat
         />
         <p
           v-if="total !== undefined"
-          class="text-[11px] text-muted"
+          class="text-xs text-muted"
         >
           {{ conversations.length }} de {{ total }} conversas carregadas
         </p>

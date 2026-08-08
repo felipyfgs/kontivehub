@@ -5,9 +5,11 @@ namespace Tests\Feature\Communication;
 use App\Contracts\CommunicationTransport;
 use App\DTO\Communication\GatewayCommandData;
 use App\DTO\Communication\GatewayCommandReceipt;
+use App\DTO\Communication\GatewayEventData;
 use App\DTO\Communication\GatewayQueryData;
 use App\Enums\Communication\ConversationStatus;
 use App\Enums\Communication\GatewayCommandType;
+use App\Enums\Communication\GatewayEventType;
 use App\Enums\Communication\GatewayQueryType;
 use App\Enums\Communication\InboxStatus;
 use App\Enums\Communication\MessageDirection;
@@ -17,6 +19,7 @@ use App\Enums\Communication\MessageStatus;
 use App\Enums\TenantPermission;
 use App\Enums\TenantRole;
 use App\Exceptions\CommunicationTransportException;
+use App\Http\Resources\Communication\MessageResource;
 use App\Jobs\Communication\RefreshProfilePictureJob;
 use App\Models\CommunicationContact;
 use App\Models\CommunicationConversation;
@@ -29,8 +32,10 @@ use App\Models\Tenant;
 use App\Models\TenantMembership;
 use App\Models\TenantPermissionProfile;
 use App\Models\User;
+use App\Services\Communication\Events\GatewayEventIngestor;
 use App\Services\Communication\Outbox\OutboxDispatcher;
 use App\Support\CurrentTenant;
+use DateTimeImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
@@ -101,7 +106,7 @@ final class CommunicationGatewayActionApiTest extends TestCase
         $this->assertSame('provider-inbound-0001', $reaction->payload_encrypted['target_message_id']);
         $this->assertSame('', $reaction->payload_encrypted['emoji']);
         $this->assertSame('+5511999997001', $reaction->payload_encrypted['sender']);
-        $this->assertNull($reaction->message_id);
+        $this->assertSame($inbound->id, $reaction->message_id);
 
         $editEntry = CommunicationOutboxEntry::query()->withoutGlobalScopes()
             ->where('command_id', $edit->json('data.command_id'))->firstOrFail();
@@ -109,6 +114,111 @@ final class CommunicationGatewayActionApiTest extends TestCase
         $this->assertCount(1, $this->transport->commands);
         $this->assertSame($editEntry->command_id, $this->transport->commands[0]->providerMessageId);
         $this->assertSame('provider-outbound-0001', $this->transport->commands[0]->payload['target_message_id']);
+    }
+
+    public function test_terminal_edit_result_is_correlated_idempotent_and_does_not_regress_message_status(): void
+    {
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $operator = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $inbox = $this->inbox($tenant);
+        $this->member($inbox, $operator);
+        [$conversation, , $outbound] = $this->conversation($tenant, $inbox);
+        $this->authenticate($operator);
+
+        $response = $this->putJson(
+            '/api/v1/communication/conversations/'.$conversation->id.'/messages/'.$outbound->id.'/edit',
+            ['text' => 'Texto confirmado'],
+        )->assertAccepted();
+        $entry = CommunicationOutboxEntry::query()->withoutGlobalScopes()
+            ->where('command_id', $response->json('data.command_id'))
+            ->firstOrFail();
+        $this->assertSame($outbound->id, $entry->message_id);
+        $this->assertSame('PENDING', $outbound->refresh()->metadata['gateway_actions'][$entry->command_id]['status']);
+
+        app(OutboxDispatcher::class)->dispatch((int) $entry->id);
+        $this->assertSame(MessageStatus::Sent, $outbound->refresh()->status);
+        $this->assertSame($entry->command_id, $this->transport->commands[0]->providerMessageId);
+
+        $result = new GatewayEventData(
+            gatewayEventId: 'gateway-action-result-edit-0001',
+            sessionId: (string) $inbox->session_id,
+            type: GatewayEventType::MessageActionResult,
+            occurredAt: new DateTimeImmutable('2026-08-04T12:00:00Z'),
+            payload: [
+                'command_id' => $entry->command_id,
+                'action' => 'EDIT',
+                'status' => 'SUCCEEDED',
+                'provider_message_id' => $entry->command_id,
+                'target_message_id' => (string) $outbound->provider_message_id,
+            ],
+        );
+        $this->assertSame('processed', app(GatewayEventIngestor::class)->ingest($result));
+        $this->assertSame('duplicate', app(GatewayEventIngestor::class)->ingest($result));
+
+        $outbound->refresh();
+        $this->assertSame('Texto confirmado', $outbound->body_encrypted);
+        $this->assertSame('SUCCEEDED', $outbound->metadata['gateway_actions'][$entry->command_id]['status']);
+        $this->assertCount(1, $outbound->content_encrypted['edit_history']);
+
+        app(GatewayEventIngestor::class)->ingest(new GatewayEventData(
+            gatewayEventId: 'gateway-action-echo-edit-0001',
+            sessionId: (string) $inbox->session_id,
+            type: GatewayEventType::MessageActionReceived,
+            occurredAt: new DateTimeImmutable('2026-08-04T12:00:01Z'),
+            payload: [
+                'action' => 'EDIT',
+                'provider_message_id' => $entry->command_id,
+                'target_message_id' => (string) $outbound->provider_message_id,
+                'from' => '+5511999997001',
+                'kind' => 'TEXT',
+                'provider_type' => 'conversation',
+                'family' => 'TEXT',
+                'text' => 'Texto confirmado',
+            ],
+        ));
+        $this->assertCount(1, $outbound->refresh()->content_encrypted['edit_history']);
+
+        $resource = (new MessageResource($outbound))->resolve(request());
+        $this->assertSame('SUCCEEDED', $resource['metadata']['gateway_actions'][0]['status']);
+        $this->assertArrayNotHasKey('text', $resource['metadata']['gateway_actions'][0]);
+    }
+
+    public function test_terminal_reaction_failure_is_exposed_without_mutating_target_content(): void
+    {
+        $tenant = Tenant::factory()->create(['communication_enabled' => true]);
+        $operator = User::factory()->forTenant($tenant, TenantRole::TenantUser)->create();
+        $inbox = $this->inbox($tenant);
+        $this->member($inbox, $operator);
+        [$conversation, $inbound] = $this->conversation($tenant, $inbox);
+        $this->authenticate($operator);
+
+        $response = $this->putJson(
+            '/api/v1/communication/conversations/'.$conversation->id.'/messages/'.$inbound->id.'/reaction',
+            ['emoji' => '👍'],
+        )->assertAccepted();
+        $entry = CommunicationOutboxEntry::query()->withoutGlobalScopes()
+            ->where('command_id', $response->json('data.command_id'))
+            ->firstOrFail();
+        app(GatewayEventIngestor::class)->ingest(new GatewayEventData(
+            gatewayEventId: 'gateway-action-result-reaction-0001',
+            sessionId: (string) $inbox->session_id,
+            type: GatewayEventType::MessageActionResult,
+            occurredAt: new DateTimeImmutable('2026-08-04T12:10:00Z'),
+            payload: [
+                'command_id' => $entry->command_id,
+                'action' => 'REACTION',
+                'status' => 'FAILED',
+                'provider_message_id' => $entry->command_id,
+                'target_message_id' => (string) $inbound->provider_message_id,
+                'error_code' => 'ACTION_RETRY_EXHAUSTED',
+            ],
+        ));
+
+        $inbound->refresh();
+        $this->assertNull($inbound->content_encrypted);
+        $this->assertSame(MessageStatus::Delivered, $inbound->status);
+        $this->assertSame('FAILED', $inbound->metadata['gateway_actions'][$entry->command_id]['status']);
+        $this->assertSame('ACTION_RETRY_EXHAUSTED', $inbound->metadata['gateway_actions'][$entry->command_id]['error_code']);
     }
 
     public function test_history_and_recovery_apply_manage_and_reply_boundaries(): void

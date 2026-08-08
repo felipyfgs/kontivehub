@@ -17,58 +17,85 @@ import { createAssistantApi } from './api/createAssistantApi'
 
 export type { ClientListParams, DocumentListParams, InboxListParams } from './api/types'
 
+function lazyValue<T>(factory: () => T): () => T {
+  let initialized = false
+  let value: T
+
+  return () => {
+    if (!initialized) {
+      value = factory()
+      initialized = true
+    }
+    return value
+  }
+}
+
+function createApiFacade(client: ApiClient, apiUrl: ApiUrl) {
+  const auth = lazyValue(() => createAuthApi(client))
+  const activationApi = lazyValue(() => createActivationApi(client))
+  const onboardingApi = lazyValue(() => createOnboardingApi(client))
+  const tenantApi = lazyValue(() => createTenantApi(client))
+  const fiscalApi = lazyValue(() => createFiscalApi(client, apiUrl))
+  const clientsApi = lazyValue(() => createClientsApi(client))
+  const documentsApi = lazyValue(() => createDocumentsApi(client, apiUrl))
+  const workApi = lazyValue(() => createWorkApi(client, apiUrl))
+  const outboundApi = lazyValue(() => createOutboundApi(client))
+  const operationsApi = lazyValue(() => createOperationsApi(client, apiUrl))
+  const platformApi = lazyValue(() => createPlatformApi(client))
+  const savedListFiltersApi = lazyValue(() => createSavedListFiltersApi(client))
+  const communicationApi = lazyValue(() => createCommunicationApi(client, apiUrl))
+  const assistantApi = lazyValue(() => createAssistantApi(client))
+
+  return {
+    get me() { return auth().me },
+    get account() { return auth().account },
+    get tenants() { return auth().tenants },
+    get confirmPassword() { return auth().confirmPassword },
+    get activations() { return activationApi().activations },
+    get onboarding() { return onboardingApi().onboarding },
+    get tenant() { return tenantApi().tenant },
+    get fiscal() { return fiscalApi().fiscal },
+    get clients() { return clientsApi().clients },
+    get clientCategories() { return clientsApi().clientCategories },
+    get cnpj() { return clientsApi().cnpj },
+    get establishments() { return clientsApi().establishments },
+    get contacts() { return clientsApi().contacts },
+    get credentials() { return clientsApi().credentials },
+    get documents() { return documentsApi().documents },
+    get quarantine() { return operationsApi().quarantine },
+    get tenantAutXml() { return tenantApi().tenantAutXml },
+    get sync() { return operationsApi().sync },
+    get cte() { return operationsApi().cte },
+    get exports() { return operationsApi().exports },
+    get operations() { return operationsApi().operations },
+    get work() { return workApi().work },
+    get outbound() { return outboundApi().outbound },
+    get platform() { return platformApi().platform },
+    get savedListFilters() { return savedListFiltersApi().savedListFilters },
+    get communication() { return communicationApi().communication },
+    get assistant() { return assistantApi().assistant }
+  }
+}
+
+type ApiFacade = ReturnType<typeof createApiFacade>
+
+const facadeByClient = new WeakMap<object, ApiFacade>()
+
 /**
  * Fachada pública da API SPA — mesma árvore de chaves de topo.
  * Implementação por domínio em `composables/api/*`.
+ * Cada cliente/fábrica é inicializado somente no primeiro acesso e a fachada é
+ * reutilizada enquanto o Sanctum client permanecer o mesmo.
  */
 export function useApi() {
   const client = useSanctumClient() as ApiClient
   const apiBase = useRuntimeConfig().public.apiBase.replace(/\/$/, '')
   const apiUrl: ApiUrl = (path: string) => `${apiBase}${path}`
+  const key = client as unknown as object
+  const existing = facadeByClient.get(key)
+  if (existing) return existing
 
-  const auth = createAuthApi(client)
-  const activationApi = createActivationApi(client)
-  const onboardingApi = createOnboardingApi(client)
-  const tenantApi = createTenantApi(client)
-  const fiscalApi = createFiscalApi(client, apiUrl)
-  const clientsApi = createClientsApi(client)
-  const documentsApi = createDocumentsApi(client, apiUrl)
-  const workApi = createWorkApi(client, apiUrl)
-  const outboundApi = createOutboundApi(client)
-  const operationsApi = createOperationsApi(client, apiUrl)
-  const platformApi = createPlatformApi(client)
-  const savedListFiltersApi = createSavedListFiltersApi(client)
-  const communicationApi = createCommunicationApi(client, apiUrl)
-  const assistantApi = createAssistantApi(client)
-
-  // Ordem de chaves idêntica à fachada monólito (acesso por nome; ordem estável).
-  return {
-    me: auth.me,
-    account: auth.account,
-    tenants: auth.tenants,
-    confirmPassword: auth.confirmPassword,
-    activations: activationApi.activations,
-    onboarding: onboardingApi.onboarding,
-    tenant: tenantApi.tenant,
-    fiscal: fiscalApi.fiscal,
-    clients: clientsApi.clients,
-    clientCategories: clientsApi.clientCategories,
-    cnpj: clientsApi.cnpj,
-    establishments: clientsApi.establishments,
-    contacts: clientsApi.contacts,
-    credentials: clientsApi.credentials,
-    documents: documentsApi.documents,
-    quarantine: operationsApi.quarantine,
-    tenantAutXml: tenantApi.tenantAutXml,
-    sync: operationsApi.sync,
-    cte: operationsApi.cte,
-    exports: operationsApi.exports,
-    operations: operationsApi.operations,
-    work: workApi.work,
-    outbound: outboundApi.outbound,
-    platform: platformApi.platform,
-    savedListFilters: savedListFiltersApi.savedListFilters,
-    communication: communicationApi.communication,
-    assistant: assistantApi.assistant
-  }
+  const facade = createApiFacade(client, apiUrl)
+  facadeByClient.set(key, facade)
+  return facade
 }

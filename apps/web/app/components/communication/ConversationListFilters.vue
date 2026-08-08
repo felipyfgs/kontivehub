@@ -657,7 +657,7 @@ defineExpose({ focusSearch })
                     >
                       Filtrar conversas
                     </h2>
-                    <p class="mt-0.5 text-[11px] text-muted">
+                    <p class="mt-0.5 text-xs text-muted">
                       Todas as regras são combinadas com “E”.
                     </p>
                   </div>
@@ -680,7 +680,7 @@ defineExpose({ focusSearch })
                         color="neutral"
                         variant="soft"
                         size="xs"
-                        class="ms-2 self-start text-[10px]"
+                        class="ms-2 self-start text-xs"
                         role="presentation"
                         aria-hidden="true"
                       />

@@ -5,6 +5,18 @@ import type { Message, MessageAvailability, MessagePollVote, MessageStatus } fro
 import type { ProfilePictureState } from '~/types/communication/contacts'
 import { resolveApiUrl } from '~/utils/api-url'
 
+const PROFILE_PICTURE_FAILURE_TTL_MS = 30_000
+export const COMMUNICATION_PROFILE_PICTURE_FAILURE_CACHE_LIMIT = 100
+const failedProfilePictureUrls = new Map<string, number>()
+
+function pruneProfilePictureFailureCache(): void {
+  while (failedProfilePictureUrls.size >= COMMUNICATION_PROFILE_PICTURE_FAILURE_CACHE_LIMIT) {
+    const oldest = failedProfilePictureUrls.keys().next().value
+    if (oldest === undefined) return
+    failedProfilePictureUrls.delete(oldest)
+  }
+}
+
 export function communicationProfilePictureUrl(
   subject?: {
     profile_picture_url?: string | null
@@ -17,10 +29,31 @@ export function communicationProfilePictureUrl(
 
 export function communicationProfilePictureSrc(
   subject: Parameters<typeof communicationProfilePictureUrl>[0],
-  apiBase: string
+  apiBase: string,
+  now = Date.now()
 ): string | undefined {
   const url = communicationProfilePictureUrl(subject)
-  return url ? resolveApiUrl(url, apiBase) : undefined
+  if (!url) return undefined
+
+  const resolved = resolveApiUrl(url, apiBase)
+  const failedUntil = failedProfilePictureUrls.get(resolved)
+  if (failedUntil === undefined) return resolved
+  if (failedUntil > now) return undefined
+
+  failedProfilePictureUrls.delete(resolved)
+
+  return resolved
+}
+
+/** Evita repetir uma foto quebrada enquanto listas virtualizadas são remontadas. */
+export function rememberCommunicationProfilePictureFailure(
+  src: string | null | undefined,
+  now = Date.now()
+): void {
+  if (!src) return
+  if (failedProfilePictureUrls.has(src)) failedProfilePictureUrls.delete(src)
+  pruneProfilePictureFailureCache()
+  failedProfilePictureUrls.set(src, now + PROFILE_PICTURE_FAILURE_TTL_MS)
 }
 
 export type BadgeColor
@@ -90,6 +123,7 @@ export const COMMUNICATION_MESSAGE_KIND: Record<Message['kind'], StatusMeta> = {
   CONTACT: { label: 'Contato', color: 'primary', icon: 'i-lucide-contact' },
   POLL: { label: 'Enquete', color: 'primary', icon: 'i-lucide-list-checks' },
   INTERACTIVE: { label: 'Interação', color: 'primary', icon: 'i-lucide-mouse-pointer-click' },
+  UNSUPPORTED: { label: 'Não compatível', color: 'warning', icon: 'i-lucide-circle-alert' },
   NOTE: { label: 'Nota interna', color: 'warning', icon: 'i-lucide-sticky-note' }
 }
 
@@ -163,7 +197,12 @@ function mergeCommunicationMessageContent(
   if (!incoming) return current
   const text = incoming.text?.trim() || current?.text?.trim() || null
   const caption = incoming.caption?.trim() || current?.caption?.trim() || null
-  return text || caption ? { ...current, ...incoming, text, caption } : current
+  return {
+    ...current,
+    ...incoming,
+    ...(text ? { text } : {}),
+    ...(caption ? { caption } : {})
+  }
 }
 
 /** Texto compatível para recursos antigos e a projeção pública aditiva. */
@@ -184,6 +223,11 @@ export function communicationAvailabilityPlaceholder(message: Message): string |
     default: {
       const hasContent = Boolean(communicationMessageBody(message))
         || Boolean(message.attachments?.length)
+        || Boolean(message.content?.location)
+        || Boolean(message.content?.contacts?.length)
+        || Boolean(message.content?.poll)
+        || Boolean(message.content?.interactive)
+        || Boolean(message.content?.rich_card)
       return hasContent ? null : 'Conteúdo indisponível.'
     }
   }
@@ -299,10 +343,14 @@ export function communicationMessageSummary(message?: Message | null): string {
   if (message.metadata?.revoked) return 'Mensagem apagada'
   const body = communicationMessageBody(message)
   if (body) return body
-  if (message.kind === 'LOCATION') return message.metadata?.location?.name || 'Localização compartilhada'
-  if (message.kind === 'CONTACT') return message.metadata?.contact?.display_name || 'Contato compartilhado'
-  if (message.kind === 'POLL') return message.metadata?.poll?.name || 'Enquete'
-  if (message.kind === 'INTERACTIVE') return message.metadata?.interactive?.title || 'Mensagem interativa'
+  if (message.kind === 'LOCATION') return message.content?.location?.name || 'Localização compartilhada'
+  if (message.kind === 'CONTACT') {
+    const contacts = message.content?.contacts ?? []
+    if (contacts.length > 1) return `${contacts.length} contatos compartilhados`
+    return contacts[0]?.display_name || 'Contato compartilhado'
+  }
+  if (message.kind === 'POLL') return message.content?.poll?.name || 'Enquete'
+  if (message.kind === 'INTERACTIVE') return message.content?.rich_card?.title || message.content?.interactive?.title || 'Mensagem interativa'
   return COMMUNICATION_MESSAGE_KIND[message.kind].label
 }
 
@@ -329,9 +377,7 @@ export function communicationConversationImageEvidence(
 }
 
 export function communicationPollVotes(message: Message): MessagePollVote[] {
-  const votes = message.metadata?.poll_votes
-  if (!votes) return []
-  return Array.isArray(votes) ? votes : Object.values(votes)
+  return message.content?.poll_votes ?? []
 }
 
 export function communicationPollVoteCount(message: Message, option: string): number {

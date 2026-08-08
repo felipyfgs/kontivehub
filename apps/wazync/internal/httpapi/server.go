@@ -25,6 +25,7 @@ type Server struct {
 	verifier     *security.Verifier
 	spool        interface {
 		Reader(context.Context, string) (io.ReadCloser, error)
+		Ack(string) error
 	}
 	queries  QueryExecutor
 	sessions interface {
@@ -33,6 +34,10 @@ type Server struct {
 	}
 	scopeMetrics interface {
 		RejectedScopeCount() uint64
+	}
+	brokerMetrics interface {
+		Connected() bool
+		QueueMetrics(context.Context) (uint64, uint64, uint64, error)
 	}
 	mux *http.ServeMux
 }
@@ -53,6 +58,7 @@ func New(enabled bool, maxBodyBytes int64, persistence store.Store, verifier *se
 	server.mux.HandleFunc("POST /internal/v1/queries", server.executeQuery)
 	server.mux.HandleFunc("GET /internal/v1/sessions/{sessionID}", server.sessionStatus)
 	server.mux.HandleFunc("GET /internal/v1/media/{spoolID}", server.downloadSpoolMedia)
+	server.mux.HandleFunc("DELETE /internal/v1/media/{spoolID}", server.acknowledgeSpoolMedia)
 	server.mux.HandleFunc("GET /healthz", server.health)
 	server.mux.HandleFunc("GET /metrics", server.metrics)
 	return server
@@ -78,11 +84,40 @@ func (s *Server) WithRecipientScopeMetrics(metrics interface {
 	return s
 }
 
+func (s *Server) WithBrokerMetrics(metrics interface {
+	Connected() bool
+	QueueMetrics(context.Context) (uint64, uint64, uint64, error)
+}) *Server {
+	s.brokerMetrics = metrics
+	return s
+}
+
 func (s *Server) WithSpoolStore(spool interface {
 	Reader(context.Context, string) (io.ReadCloser, error)
+	Ack(string) error
 }) *Server {
 	s.spool = spool
 	return s
+}
+
+func (s *Server) acknowledgeSpoolMedia(w http.ResponseWriter, r *http.Request) {
+	if !s.enabled {
+		writeError(w, http.StatusServiceUnavailable, "GATEWAY_DISABLED")
+		return
+	}
+	if err := s.verifier.Verify(r.Context(), r.Method, r.URL.EscapedPath(), nil, r.Header); err != nil {
+		writeError(w, http.StatusUnauthorized, "INVALID_INTERNAL_SIGNATURE")
+		return
+	}
+	if s.spool == nil {
+		writeError(w, http.StatusServiceUnavailable, "MEDIA_SPOOL_UNAVAILABLE")
+		return
+	}
+	if err := s.spool.Ack(r.PathValue("spoolID")); err != nil {
+		writeError(w, http.StatusUnprocessableEntity, "INVALID_MEDIA_IDENTIFIER")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) downloadSpoolMedia(w http.ResponseWriter, r *http.Request) {
@@ -307,6 +342,19 @@ func (s *Server) metrics(w http.ResponseWriter, r *http.Request) {
 	_, _ = fmt.Fprintf(w, "wazync_sessions_active %d\n", metrics.ActiveSessions)
 	_, _ = fmt.Fprintf(w, "wazync_leases_active %d\n", metrics.ActiveLeases)
 	_, _ = fmt.Fprintf(w, "wazync_spool_files %d\n", metrics.SpoolFiles)
+	if s.brokerMetrics != nil {
+		connected := 0
+		if s.brokerMetrics.Connected() {
+			connected = 1
+		}
+		_, _ = fmt.Fprintf(w, "wazync_jetstream_connected %d\n", connected)
+		streamMessages, commandPending, commandAckPending, brokerErr := s.brokerMetrics.QueueMetrics(r.Context())
+		if brokerErr == nil {
+			_, _ = fmt.Fprintf(w, "wazync_jetstream_stream_messages %d\n", streamMessages)
+			_, _ = fmt.Fprintf(w, "wazync_jetstream_command_pending %d\n", commandPending)
+			_, _ = fmt.Fprintf(w, "wazync_jetstream_command_ack_pending %d\n", commandAckPending)
+		}
+	}
 	if queryMetrics, ok := s.queries.(interface{ ProfilePictureQueriesInFlight() int64 }); ok {
 		_, _ = fmt.Fprintf(
 			w,
@@ -326,6 +374,9 @@ func (s *Server) metrics(w http.ResponseWriter, r *http.Request) {
 				"wazync_protocol_control_rejections_total %d\n",
 				protocolMetrics.ProtocolControlRejectedCount(),
 			)
+		}
+		if unsupportedMetrics, ok := s.scopeMetrics.(interface{ UnsupportedMessageCount() uint64 }); ok {
+			_, _ = fmt.Fprintf(w, "wazync_unsupported_messages_total %d\n", unsupportedMetrics.UnsupportedMessageCount())
 		}
 	}
 }

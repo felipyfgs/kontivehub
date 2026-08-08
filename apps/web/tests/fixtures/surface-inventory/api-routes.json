@@ -402,6 +402,12 @@
     "action": "ConversationController@removeLabel"
   },
   {
+    "method": "POST",
+    "uri": "api/v1/communication/conversations/{conversation}/message-batches",
+    "group": "communication",
+    "action": "MessageBatchController@store"
+  },
+  {
     "method": "GET",
     "uri": "api/v1/communication/conversations/{conversation}/messages",
     "group": "communication",
@@ -418,6 +424,12 @@
     "uri": "api/v1/communication/conversations/{conversation}/messages/{message}",
     "group": "communication",
     "action": "ConversationGatewayController@revoke"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/conversations/{conversation}/messages/{message}/contacts/{contactIndex}/save",
+    "group": "communication",
+    "action": "SharedContactController@save"
   },
   {
     "method": "PUT",
@@ -648,6 +660,24 @@
     "action": "FlowController@cloneVersion"
   },
   {
+    "method": "GET",
+    "uri": "api/v1/communication/gifs/search",
+    "group": "communication",
+    "action": "GifController@search"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/gifs/{token}/asset",
+    "group": "communication",
+    "action": "GifController@asset"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/gifs/{token}/preview",
+    "group": "communication",
+    "action": "GifController@preview"
+  },
+  {
     "method": "POST",
     "uri": "api/v1/communication/identities/{identity}/links",
     "group": "communication",
@@ -829,6 +859,24 @@
   },
   {
     "method": "GET",
+    "uri": "api/v1/communication/inboxes/{inbox}/stickers",
+    "group": "communication",
+    "action": "StickerLibraryController@index"
+  },
+  {
+    "method": "POST",
+    "uri": "api/v1/communication/inboxes/{inbox}/stickers/import",
+    "group": "communication",
+    "action": "StickerLibraryController@import"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/inboxes/{inbox}/stickers/status",
+    "group": "communication",
+    "action": "StickerLibraryController@status"
+  },
+  {
+    "method": "GET",
     "uri": "api/v1/communication/labels",
     "group": "communication",
     "action": "CatalogController@labels"
@@ -862,6 +910,24 @@
     "uri": "api/v1/communication/settings",
     "group": "communication",
     "action": "InboxController@updateTenantSettings"
+  },
+  {
+    "method": "DELETE",
+    "uri": "api/v1/communication/stickers/{sticker}",
+    "group": "communication",
+    "action": "StickerLibraryController@remove"
+  },
+  {
+    "method": "PUT",
+    "uri": "api/v1/communication/stickers/{sticker}/favorite",
+    "group": "communication",
+    "action": "StickerLibraryController@favorite"
+  },
+  {
+    "method": "GET",
+    "uri": "api/v1/communication/stickers/{sticker}/preview",
+    "group": "communication",
+    "action": "StickerLibraryController@preview"
   },
   {
     "method": "GET",
@@ -3003,301 +3069,301 @@
     "method": "GET",
     "uri": "api/v1/work/calendar",
     "group": "work",
-    "action": "WorkDashboardController@calendar"
+    "action": "DashboardController@calendar"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/calendar/day",
     "group": "work",
-    "action": "WorkDashboardController@calendarDay"
+    "action": "DashboardController@calendarDay"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/departments",
     "group": "work",
-    "action": "WorkDepartmentController@index"
+    "action": "DepartmentController@index"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/departments",
     "group": "work",
-    "action": "WorkDepartmentController@store"
+    "action": "DepartmentController@store"
   },
   {
     "method": "PATCH",
     "uri": "api/v1/work/departments/{department}",
     "group": "work",
-    "action": "WorkDepartmentController@update"
+    "action": "DepartmentController@update"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/departments/{department}/assign-membership",
     "group": "work",
-    "action": "WorkDepartmentController@assignMembership"
+    "action": "DepartmentController@assignMembership"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/exports",
     "group": "work",
-    "action": "WorkDashboardController@createExport"
+    "action": "DashboardController@createExport"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/exports/{export}",
     "group": "work",
-    "action": "WorkDashboardController@showExport"
+    "action": "DashboardController@showExport"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/exports/{export}/download",
     "group": "work",
-    "action": "WorkDashboardController@downloadExport"
+    "action": "DashboardController@downloadExport"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/generation-batches/{batch}",
     "group": "work",
-    "action": "WorkProcessGenerationController@show"
+    "action": "ProcessGenerationController@show"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/generation-batches/{batch}/confirm",
     "group": "work",
-    "action": "WorkProcessGenerationController@confirm"
+    "action": "ProcessGenerationController@confirm"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/generation-batches/{batch}/retry",
     "group": "work",
-    "action": "WorkProcessGenerationController@retry"
+    "action": "ProcessGenerationController@retry"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/kpis",
     "group": "work",
-    "action": "WorkDashboardController@kpis"
+    "action": "DashboardController@kpis"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/process-groups",
     "group": "work",
-    "action": "WorkProcessGroupController@index"
+    "action": "ProcessGroupController@index"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/processes",
     "group": "work",
-    "action": "WorkProcessController@index"
+    "action": "ProcessController@index"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/processes",
     "group": "work",
-    "action": "WorkProcessController@store"
+    "action": "ProcessController@store"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/processes/bulk",
     "group": "work",
-    "action": "WorkProcessController@bulk"
+    "action": "ProcessController@bulk"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/processes/{process}",
     "group": "work",
-    "action": "WorkProcessController@show"
+    "action": "ProcessController@show"
   },
   {
     "method": "PATCH",
     "uri": "api/v1/work/processes/{process}",
     "group": "work",
-    "action": "WorkProcessController@update"
+    "action": "ProcessController@update"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/processes/{process}/archive",
     "group": "work",
-    "action": "WorkProcessController@archive"
+    "action": "ProcessController@archive"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/processes/{process}/comments",
     "group": "work",
-    "action": "WorkProcessController@comment"
+    "action": "ProcessController@comment"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/processes/{process}/tasks",
     "group": "work",
-    "action": "WorkTaskController@storeOnProcess"
+    "action": "TaskController@storeOnProcess"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/processes/{process}/tasks/reorder",
     "group": "work",
-    "action": "WorkTaskController@reorder"
+    "action": "TaskController@reorder"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/processes/{process}/timeline",
     "group": "work",
-    "action": "WorkProcessController@timeline"
+    "action": "ProcessController@timeline"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/queue",
     "group": "work",
-    "action": "WorkTaskController@queue"
+    "action": "TaskController@queue"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/tasks/bulk",
     "group": "work",
-    "action": "WorkTaskController@bulk"
+    "action": "TaskController@bulk"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/tasks/{task}",
     "group": "work",
-    "action": "WorkTaskController@show"
+    "action": "TaskController@show"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/tasks/{task}/assign",
     "group": "work",
-    "action": "WorkTaskController@assign"
+    "action": "TaskController@assign"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/tasks/{task}/block",
     "group": "work",
-    "action": "WorkTaskController@block"
+    "action": "TaskController@block"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/tasks/{task}/claim",
     "group": "work",
-    "action": "WorkTaskController@claim"
+    "action": "TaskController@claim"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/tasks/{task}/comments",
     "group": "work",
-    "action": "WorkTaskController@comment"
+    "action": "TaskController@comment"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/tasks/{task}/complete",
     "group": "work",
-    "action": "WorkTaskController@complete"
+    "action": "TaskController@complete"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/tasks/{task}/dispense",
     "group": "work",
-    "action": "WorkTaskController@dispense"
+    "action": "TaskController@dispense"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/tasks/{task}/evidences",
     "group": "work",
-    "action": "WorkTaskController@uploadEvidence"
+    "action": "TaskController@uploadEvidence"
   },
   {
     "method": "DELETE",
     "uri": "api/v1/work/tasks/{task}/evidences/{evidence}",
     "group": "work",
-    "action": "WorkTaskController@removeEvidence"
+    "action": "TaskController@removeEvidence"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/tasks/{task}/evidences/{evidence}/download",
     "group": "work",
-    "action": "WorkTaskController@downloadEvidence"
+    "action": "TaskController@downloadEvidence"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/tasks/{task}/reopen",
     "group": "work",
-    "action": "WorkTaskController@reopen"
+    "action": "TaskController@reopen"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/tasks/{task}/resume",
     "group": "work",
-    "action": "WorkTaskController@resume"
+    "action": "TaskController@resume"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/tasks/{task}/start",
     "group": "work",
-    "action": "WorkTaskController@start"
+    "action": "TaskController@start"
   },
   {
     "method": "PATCH",
     "uri": "api/v1/work/tasks/{task}/structure",
     "group": "work",
-    "action": "WorkTaskController@updateStructure"
+    "action": "TaskController@updateStructure"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/template-catalog",
     "group": "work",
-    "action": "WorkProcessTemplateCatalogController@index"
+    "action": "ProcessTemplateCatalogController@index"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/template-catalog/{catalogKey}/install",
     "group": "work",
-    "action": "WorkProcessTemplateCatalogController@install"
+    "action": "ProcessTemplateCatalogController@install"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/templates",
     "group": "work",
-    "action": "WorkProcessTemplateController@index"
+    "action": "ProcessTemplateController@index"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/templates",
     "group": "work",
-    "action": "WorkProcessTemplateController@store"
+    "action": "ProcessTemplateController@store"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/templates/{template}",
     "group": "work",
-    "action": "WorkProcessTemplateController@show"
+    "action": "ProcessTemplateController@show"
   },
   {
     "method": "PATCH",
     "uri": "api/v1/work/templates/{template}",
     "group": "work",
-    "action": "WorkProcessTemplateController@update"
+    "action": "ProcessTemplateController@update"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/templates/{template}/generation-batches",
     "group": "work",
-    "action": "WorkProcessTemplateController@generationBatches"
+    "action": "ProcessTemplateController@generationBatches"
   },
   {
     "method": "POST",
     "uri": "api/v1/work/templates/{template}/preview",
     "group": "work",
-    "action": "WorkProcessGenerationController@preview"
+    "action": "ProcessGenerationController@preview"
   },
   {
     "method": "GET",
     "uri": "api/v1/work/templates/{template}/recurrence",
     "group": "work",
-    "action": "WorkProcessTemplateController@showRecurrence"
+    "action": "ProcessTemplateController@showRecurrence"
   },
   {
     "method": "PATCH",
     "uri": "api/v1/work/templates/{template}/recurrence",
     "group": "work",
-    "action": "WorkProcessTemplateController@updateRecurrence"
+    "action": "ProcessTemplateController@updateRecurrence"
   },
   {
     "method": "POST",

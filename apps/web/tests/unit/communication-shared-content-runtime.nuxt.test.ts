@@ -4,6 +4,7 @@ import { flushPromises } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
 import NewConversationModal from '../../app/components/communication/NewConversationModal.vue'
+import MediaViewer from '../../app/components/communication/MediaViewer.vue'
 import SharedContent from '../../app/components/communication/SharedContent.vue'
 import type { Contact } from '../../app/types/communication/contacts'
 import type { Inbox } from '../../app/types/communication/inboxes'
@@ -135,7 +136,7 @@ function mediaItem(
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
+  vi.resetAllMocks()
   vi.stubGlobal('useApi', () => ({
     communication: {
       catalog: {
@@ -164,6 +165,26 @@ afterEach(() => {
 })
 
 describe('Communication shared content — comportamento', () => {
+  it('normaliza o índice e fecha o viewer quando a coleção fica vazia', async () => {
+    const first = mediaItem('media-1', 101, 'foto.jpg', 'image/jpeg')
+    const second = mediaItem('media-2', 102, 'video.mp4', 'video/mp4')
+    wrapper = await mountSuspended(MediaViewer, {
+      attachTo: document.body,
+      props: { items: [first, second], open: true, index: -2 },
+      global: { stubs: globalStubs }
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain('1 de 2')
+
+    await wrapper.setProps({ index: 9 })
+    await flushPromises()
+    expect(wrapper.text()).toContain('2 de 2')
+
+    await wrapper.setProps({ items: [] })
+    await flushPromises()
+    expect(wrapper.emitted('update:open')?.at(-1)).toEqual([false])
+  })
+
   it('pagina, navega no viewer, transforma a imagem, baixa e salta para a origem', async () => {
     const first = mediaItem('media-1', 101, 'foto.jpg', 'image/jpeg')
     const second = mediaItem('media-2', 102, 'video.mp4', 'video/mp4')
@@ -181,7 +202,10 @@ describe('Communication shared content — comportamento', () => {
     wrapper = await mountSuspended(SharedContent, {
       attachTo: document.body,
       props: { conversationId: 42 },
-      global: { stubs: globalStubs }
+      global: {
+        stubs: globalStubs,
+        components: { CommunicationMediaViewer: MediaViewer }
+      }
     })
     await flushPromises()
 
@@ -199,8 +223,7 @@ describe('Communication shared content — comportamento', () => {
 
     await wrapper.get('button[aria-label="Próxima mídia"]').trigger('click')
     const video = wrapper.get('video')
-    expect(video.attributes('src')).toContain('/attachments/102/download')
-    expect(video.attributes('poster')).toContain('/attachments/102/preview')
+    expect(video.attributes('src')).toContain('/attachments/102/preview')
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft' }))
     await flushPromises()
     expect(viewerImage().exists()).toBe(true)
@@ -232,7 +255,10 @@ describe('Communication shared content — comportamento', () => {
     wrapper = await mountSuspended(SharedContent, {
       attachTo: document.body,
       props: { conversationId: 42 },
-      global: { stubs: globalStubs }
+      global: {
+        stubs: globalStubs,
+        components: { CommunicationMediaViewer: MediaViewer }
+      }
     })
     await flushPromises()
 
@@ -252,7 +278,10 @@ describe('Communication shared content — comportamento', () => {
     wrapper = await mountSuspended(SharedContent, {
       attachTo: document.body,
       props: { conversationId: 42 },
-      global: { stubs: globalStubs }
+      global: {
+        stubs: globalStubs,
+        components: { CommunicationMediaViewer: MediaViewer }
+      }
     })
     await flushPromises()
     await wrapper.findAll('button').find(button => button.text() === 'Carregar mais')!.trigger('click')

@@ -45,7 +45,7 @@ const { isDragOver, isAllowed } = makeDroppable(
 <template>
   <section
     ref="el"
-    class="flex w-72 shrink-0 flex-col rounded-lg border border-default bg-elevated/40"
+    class="flex w-full flex-col rounded-lg border border-default bg-elevated/40 md:w-72 md:shrink-0"
     :class="[
       isDragOver && isAllowed ? 'ring-2 ring-primary/50' : '',
       isDragOver && !isAllowed ? 'ring-2 ring-error/40' : ''

@@ -88,6 +88,26 @@ describe('communication flows — helpers', () => {
   })
 })
 
+describe('communication flows — deep-link fail-closed', () => {
+  it('executa o middleware de permissão antes de instanciar loaders de lista, detalhe e editor', () => {
+    const guard = read('app/utils/communication-route-access.ts')
+    expect(guard).toContain('canViewCommunication(identity)')
+    expect(guard).toContain('identity?.context_status !== \'ok\'')
+    expect(guard).toContain('!identity.current_tenant')
+
+    for (const path of [
+      'app/pages/communication/flows/index.vue',
+      'app/pages/communication/flows/[id]/index.vue',
+      'app/pages/communication/flows/[id]/editor.vue',
+      'app/pages/communication/quick-responses/index.vue'
+    ]) {
+      const page = read(path)
+      expect(page).toContain('middleware: [requireCommunicationView]')
+      expect(page).not.toContain('await navigateTo(\'/\')')
+    }
+  })
+})
+
 describe('communication flows — permissões, nav e rotas', () => {
   it('separa manage_flows de inboxes/contacts/quick_replies', () => {
     const viewOnly = {

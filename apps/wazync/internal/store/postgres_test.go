@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/domain"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -24,6 +25,46 @@ func (f *recordingCommandFinalizer) Exec(_ context.Context, query string, args .
 	f.args = args
 
 	return f.tag, nil
+}
+
+type recordingEventExecutor struct {
+	tag    pgconn.CommandTag
+	query  string
+	args   []any
+	digest string
+	rowErr error
+}
+
+func (e *recordingEventExecutor) Exec(_ context.Context, query string, args ...any) (pgconn.CommandTag, error) {
+	e.query = query
+	e.args = args
+	return e.tag, nil
+}
+
+func (e *recordingEventExecutor) QueryRow(_ context.Context, query string, args ...any) pgx.Row {
+	e.query = query
+	e.args = args
+	return recordingEventRow{digest: e.digest, err: e.rowErr}
+}
+
+type recordingEventRow struct {
+	digest string
+	err    error
+}
+
+func (r recordingEventRow) Scan(dest ...any) error {
+	if r.err != nil {
+		return r.err
+	}
+	if len(dest) != 1 {
+		return errors.New("unexpected scan destination count")
+	}
+	target, ok := dest[0].(*string)
+	if !ok {
+		return errors.New("unexpected scan destination type")
+	}
+	*target = r.digest
+	return nil
 }
 
 func TestMigrationUsesOnlyWazyncSchema(t *testing.T) {
@@ -123,5 +164,35 @@ func TestPostgresMediaRetryFinalizationRejectsStaleAttempt(t *testing.T) {
 		if err := finalize(recorder); !errors.Is(err, domain.ErrStateConflict) {
 			t.Fatalf("stale finalization error = %v, want state conflict", err)
 		}
+	}
+}
+
+func TestPostgresProcessedEventConflictReadUsesEventID(t *testing.T) {
+	t.Parallel()
+	executor := &recordingEventExecutor{
+		tag:    pgconn.NewCommandTag("INSERT 0"),
+		digest: "event-digest",
+	}
+	event := domain.Event{EventID: "event-processed-conflict-read", Digest: "event-digest"}
+	if err := insertEventIfAbsent(t.Context(), executor, event, []byte("cipher"), []byte("nonce")); err != nil {
+		t.Fatalf("insert processed event: %v", err)
+	}
+	if len(executor.args) != 1 || executor.args[0] != event.EventID {
+		t.Fatalf("event conflict read args = %#v, want %q", executor.args, event.EventID)
+	}
+	if !strings.Contains(executor.query, "SELECT payload_digest FROM wazync.events WHERE event_id = $1") {
+		t.Fatalf("event conflict read query = %q", executor.query)
+	}
+}
+
+func TestPostgresProcessedEventConflictReadRejectsDifferentDigest(t *testing.T) {
+	t.Parallel()
+	executor := &recordingEventExecutor{
+		tag:    pgconn.NewCommandTag("INSERT 0"),
+		digest: "stored-digest",
+	}
+	event := domain.Event{EventID: "event-processed-conflict-digest", Digest: "incoming-digest"}
+	if err := insertEventIfAbsent(t.Context(), executor, event, []byte("cipher"), []byte("nonce")); !errors.Is(err, domain.ErrDigestConflict) {
+		t.Fatalf("conflicting event digest error = %v, want digest conflict", err)
 	}
 }

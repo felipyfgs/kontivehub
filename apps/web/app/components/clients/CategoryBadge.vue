@@ -19,7 +19,7 @@ const props = withDefaults(defineProps<{
 const item = computed(() => clientCategoryColorItem(props.color))
 
 const sizeClass = computed(() => ({
-  xs: 'px-1.5 py-0.5 text-[11px]',
+  xs: 'px-1.5 py-0.5 text-xs',
   sm: 'px-2 py-0.5 text-xs',
   md: 'px-2.5 py-1 text-sm'
 }[props.size]))

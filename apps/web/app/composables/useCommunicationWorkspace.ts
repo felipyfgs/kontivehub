@@ -4,12 +4,14 @@ import type { AutomationMeta, AutomationPolicy, RecipientConfiguration, Recipien
 import type { BulkAction, BulkOperation, BulkOperationParams, Conversation, ConversationListMeta, ConversationListPreferences, ConversationSortBy, ConversationStatus, ConversationTimelineMeta, ConversationTimelineState, ListPreferenceStatus } from '~/types/communication/conversations'
 import type { CannedResponse } from '~/types/communication/quick-responses'
 import type { ChatPresence, ChatPresenceSignal, ContactPresenceSignal, ConversationSignals, Event, RealtimeEvent } from '~/types/communication/realtime'
-import type { ComposerPayload, Message } from '~/types/communication/messages'
+import type { Message } from '~/types/communication/messages'
+import type { ComposerDraft, ComposerDraftContext } from '~/types/communication/composer-draft'
 import type { FeatureMeta, Inbox, PairingState, SessionStatus } from '~/types/communication/inboxes'
 import type { Label } from '~/types/communication/contacts'
 import type { WorkDepartment } from '~/types/work'
 import type { ConversationSavedViewPayload } from '~/types/saved-list-filters'
 import { apiErrorCode, apiErrorMessage, apiErrorStatus } from '~/utils/api-error'
+import { serializeComposerDraft } from '~/utils/communication-composer-draft-api'
 import {
   buildConversationBulkItems,
   communicationSelectionQueryKey,
@@ -1840,38 +1842,27 @@ const _useCommunicationWorkspace = () => {
     }
   }
 
-  async function sendMessage(input: ComposerPayload): Promise<boolean> {
+  async function sendMessage(input: ComposerDraft): Promise<Message[] | null> {
     const conversation = selectedConversation.value
-    if (!conversation || !canReply.value || sending.value) return false
+    if (!conversation || !canReply.value || sending.value) return null
     sending.value = true
     try {
-      const receiptMessageId = input.internalNote
-        ? undefined
-        : [...(conversation.messages ?? [])]
-            .reverse()
-            .find(message => message.direction === 'INBOUND' && !message.metadata?.revoked)
-            ?.id
-      const response = await api.communication.conversations.send(conversation.id, {
-        body: input.body,
-        internal_note: input.internalNote,
-        reply_to_message_id: input.replyToMessageId,
-        idempotency_key: input.internalNote
-          ? undefined
-          : `web-${Date.now()}-${crypto.randomUUID()}`,
-        file: input.file,
-        kind: input.internalNote ? undefined : input.kind,
-        ptt: input.internalNote ? undefined : input.ptt,
-        receipt_message_id: receiptMessageId
-      })
-      storeConversationMessages(conversation.id, [response.data], false)
+      const response = await api.communication.conversations.sendDraft(conversation.id, serializeComposerDraft({
+        tenantId: me.value?.current_tenant?.id ?? 0,
+        inboxId: conversation.inbox_id,
+        conversationId: conversation.id
+      } satisfies ComposerDraftContext, input))
+      const responseData = response.data as Message & { messages?: Message[] }
+      const responseMessages = responseData.messages ?? [responseData]
+      storeConversationMessages(conversation.id, responseMessages, false)
       await Promise.all([
         refreshConversationDetail(conversation.id, { reportError: false }),
         loadConversations({ silent: true })
       ])
-      return true
+      return responseMessages
     } catch (caught) {
       toast.add({ title: apiErrorMessage(caught, 'Falha ao enviar mensagem.'), color: 'error' })
-      return false
+      return null
     } finally {
       sending.value = false
     }
@@ -2368,6 +2359,10 @@ const _useCommunicationWorkspace = () => {
     synchronizeGeneration++
     synchronizeAgain = false
     loading.value = false
+    conversationsLoading.value = false
+    conversationsRefreshing.value = false
+    conversationsLoadingMore.value = false
+    conversationsLoadMoreError.value = null
     syncing.value = false
     detailRequests.clear()
     initialTimelineRequests.clear()

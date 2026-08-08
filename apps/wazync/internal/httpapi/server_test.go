@@ -18,10 +18,20 @@ import (
 	"github.com/inovaicontabil/fiscal-hub/apps/wazync/internal/store"
 )
 
-type testSpoolStore struct{ content string }
+type testSpoolStore struct {
+	content string
+	acked   *[]string
+}
 
 func (s testSpoolStore) Reader(context.Context, string) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader(s.content)), nil
+}
+
+func (s testSpoolStore) Ack(id string) error {
+	if s.acked != nil {
+		*s.acked = append(*s.acked, id)
+	}
+	return nil
 }
 
 type testQueryExecutor struct {
@@ -33,6 +43,13 @@ type testQueryExecutor struct {
 type testScopeMetrics struct {
 	rejectedScope   uint64
 	rejectedControl uint64
+}
+
+type testBrokerMetrics struct{}
+
+func (testBrokerMetrics) Connected() bool { return true }
+func (testBrokerMetrics) QueueMetrics(context.Context) (uint64, uint64, uint64, error) {
+	return 7, 3, 1, nil
 }
 
 type testSessionInspector struct {
@@ -190,7 +207,8 @@ func TestMetricsUseOnlyWazyncPrefix(t *testing.T) {
 	executor := &testQueryExecutor{inFlight: 2}
 	server := newTestServer(store.NewMemory()).
 		WithQueryExecutor(executor).
-		WithRecipientScopeMetrics(testScopeMetrics{rejectedScope: 3, rejectedControl: 4})
+		WithRecipientScopeMetrics(testScopeMetrics{rejectedScope: 3, rejectedControl: 4}).
+		WithBrokerMetrics(testBrokerMetrics{})
 	request := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 	response := httptest.NewRecorder()
 	server.Handler().ServeHTTP(response, request)
@@ -215,6 +233,16 @@ func TestMetricsUseOnlyWazyncPrefix(t *testing.T) {
 	}
 	if !strings.Contains(response.Body.String(), "wazync_protocol_control_rejections_total 4") {
 		t.Fatalf("protocol control counter missing: %s", response.Body.String())
+	}
+	for _, expected := range []string{
+		"wazync_jetstream_connected 1",
+		"wazync_jetstream_stream_messages 7",
+		"wazync_jetstream_command_pending 3",
+		"wazync_jetstream_command_ack_pending 1",
+	} {
+		if !strings.Contains(response.Body.String(), expected) {
+			t.Fatalf("JetStream metric missing %q: %s", expected, response.Body.String())
+		}
 	}
 }
 
@@ -306,6 +334,35 @@ func TestMediaEndpointRequiresSignatureAndStreamsPlaintextOnlyAfterAuthenticatio
 	server.Handler().ServeHTTP(signedResponse, signed)
 	if signedResponse.Code != http.StatusOK || signedResponse.Body.String() != "media-bytes" {
 		t.Fatalf("unexpected media response: %d %q", signedResponse.Code, signedResponse.Body.String())
+	}
+}
+
+func TestMediaEndpointDeletesSpoolOnlyAfterSignedLaravelAcknowledgement(t *testing.T) {
+	t.Parallel()
+	acked := []string{}
+	server := newTestServer(store.NewMemory()).WithSpoolStore(testSpoolStore{acked: &acked})
+	path := "/internal/v1/media/media-ack-0001"
+
+	unsigned := httptest.NewRequest(http.MethodDelete, path, nil)
+	unsignedResponse := httptest.NewRecorder()
+	server.Handler().ServeHTTP(unsignedResponse, unsigned)
+	if unsignedResponse.Code != http.StatusUnauthorized || len(acked) != 0 {
+		t.Fatalf("unsigned ACK changed spool state: status=%d acked=%v", unsignedResponse.Code, acked)
+	}
+
+	timestamp := time.Now().Unix()
+	nonce := "nonce-media-ack-0001"
+	signed := httptest.NewRequest(http.MethodDelete, path, nil)
+	signed.Header.Set(security.HeaderKeyID, "test-v1")
+	signed.Header.Set(security.HeaderTimestamp, strconv.FormatInt(timestamp, 10))
+	signed.Header.Set(security.HeaderNonce, nonce)
+	signed.Header.Set(security.HeaderSignature, security.Sign(
+		testSecret, signed.Method, signed.URL.EscapedPath(), nil, timestamp, nonce,
+	))
+	signedResponse := httptest.NewRecorder()
+	server.Handler().ServeHTTP(signedResponse, signed)
+	if signedResponse.Code != http.StatusNoContent || len(acked) != 1 || acked[0] != "media-ack-0001" {
+		t.Fatalf("signed ACK was not applied: status=%d acked=%v", signedResponse.Code, acked)
 	}
 }
 

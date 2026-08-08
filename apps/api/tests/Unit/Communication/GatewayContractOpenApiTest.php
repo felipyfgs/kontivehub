@@ -64,6 +64,8 @@ class GatewayContractOpenApiTest extends TestCase
             'PairPhonePayload',
             'TextMessageSendPayload',
             'MediaMessageSendPayload',
+            'MessageBatchSendPayload',
+            'MessageBatchSendItemPayload',
             'MessageTargetPayload',
             'MessageEditPayload',
             'MessageReactionPayload',

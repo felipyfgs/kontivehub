@@ -6,6 +6,12 @@ import type { Event, SyncMeta } from '~/types/communication/realtime'
 import type { FeatureMeta, Inbox, PairingState, QueuedCommand, SessionStatus } from '~/types/communication/inboxes'
 import type { Message, SendKind } from '~/types/communication/messages'
 import type { SharedContentCategory, SharedContentItem, SharedContentMeta } from '~/types/communication/shared-content'
+import type { ComposerDraftApiRequest } from '~/utils/communication-composer-draft-api'
+import type {
+  StickerLibraryFilter,
+  StickerLibraryItem,
+  StickerLibraryListResponse
+} from '~/types/communication/sticker-library'
 import type {
   Flow,
   FlowBinding,
@@ -63,6 +69,10 @@ export interface PolicyBody {
 
 export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
   const base = '/api/v1/communication'
+
+  function validStickerId(id: string): boolean {
+    return /^[A-Za-z0-9_-]{8,128}$/.test(id)
+  }
 
   return {
     communication: {
@@ -268,6 +278,15 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
         }) => client<{ data: SharedContentItem[], meta: SharedContentMeta }>(
           `${base}/conversations/${id}/shared-content`, { query: params }
         ),
+        saveSharedContact: (
+          conversationId: number,
+          messageId: number,
+          contactIndex: number,
+          phoneIndex: number
+        ) => client<{ data: { outcome: 'created' | 'existing', contact: Contact } }>(
+          `${base}/conversations/${conversationId}/messages/${messageId}/contacts/${contactIndex}/save`,
+          { method: 'POST', body: { phone_index: phoneIndex } }
+        ),
         updateReadState: (id: number, body:
           | { state: 'READ', through_message_id: number }
           | { state: 'UNREAD', expected_version: number }
@@ -323,6 +342,15 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
             body: payload
           })
         },
+        sendDraft: (id: number, request: ComposerDraftApiRequest) => client<{
+          data: Message | { messages?: Message[] }
+        }>(request.path.includes('/message-batches')
+          ? `${base}/conversations/${id}/message-batches`
+          : `${base}/conversations/${id}/messages`, {
+          method: 'POST',
+          body: request.body,
+          headers: request.headers
+        }),
         editMessage: (conversationId: number, messageId: number, text: string) =>
           client<{ data: QueuedCommand }>(
             `${base}/conversations/${conversationId}/messages/${messageId}/edit`,
@@ -383,10 +411,73 @@ export function createCommunicationApi(client: ApiClient, apiUrl: ApiUrl) {
         removeLabel: (conversationId: number, labelId: number) =>
           client<unknown>(`${base}/conversations/${conversationId}/labels/${labelId}`, { method: 'DELETE' })
       },
+      stickers: {
+        list: (
+          params: {
+            inbox_id: number
+            filter: StickerLibraryFilter
+            page?: number
+            per_page?: number
+          },
+          options?: { signal?: AbortSignal }
+        ) => client<StickerLibraryListResponse>(`${base}/inboxes/${params.inbox_id}/stickers`, {
+          query: {
+            ...(params.filter === 'favorites' ? { favorite: 'any' } : {}),
+            page: params.page,
+            per_page: params.per_page
+          },
+          signal: options?.signal
+        }),
+        preview: (id: string, options?: { signal?: AbortSignal }) => {
+          if (!validStickerId(id)) return Promise.reject(new Error('Figurinha inválida.'))
+          return client<Blob>(`${base}/stickers/${id}/preview`, {
+            method: 'GET',
+            signal: options?.signal,
+            responseType: 'blob' as 'json',
+            headers: { Accept: 'image/webp' }
+          })
+        },
+        import: (body: { inbox_id: number, file: File }) => {
+          const payload = new FormData()
+          payload.set('file', body.file, body.file.name)
+          return client<{ data: StickerLibraryItem }>(`${base}/inboxes/${body.inbox_id}/stickers/import`, {
+            method: 'POST',
+            body: payload
+          })
+        },
+        favorite: (id: string, favorite: boolean) => {
+          if (!validStickerId(id)) return Promise.reject(new Error('Figurinha inválida.'))
+          return client<{ data: StickerLibraryItem }>(`${base}/stickers/${id}/favorite`, {
+            method: 'PUT',
+            body: { favorite }
+          })
+        },
+        remove: (id: string) => {
+          if (!validStickerId(id)) return Promise.reject(new Error('Figurinha inválida.'))
+          return client<unknown>(`${base}/stickers/${id}`, { method: 'DELETE' })
+        }
+      },
       catalog: {
-        outboundCapabilities: () => client<{ data: OutboundCapabilities }>(
-          `${base}/outbound-capabilities`
-        ),
+        fetchGifAsset: (assetPath: string) => {
+          if (!/^\/api\/v1\/communication\/gifs\/[A-Za-z0-9]{40}\/asset$/.test(assetPath)) {
+            return Promise.reject(new Error('Arquivo de GIF inválido.'))
+          }
+          return client<Blob>(assetPath, {
+            method: 'GET',
+            // Sanctum client types responseType as json; blob is supported at runtime.
+            responseType: 'blob' as 'json',
+            headers: { Accept: 'video/mp4,video/webm' }
+          })
+        },
+        searchGifs: (params: { inbox_id: number, q: string, limit?: number }) => client<{
+          data: Array<{ id: string, title: string, preview_path: string, asset_path: string, asset_token: string }>
+        }>(`${base}/gifs/search`, { query: params }),
+        outboundCapabilities: (params?: { inbox_id?: number }) => client<{
+          data: OutboundCapabilities
+        }>(`${base}/outbound-capabilities`, {
+          query: params?.inbox_id ? { inbox_id: params.inbox_id } : undefined,
+          timeout: 10_000
+        }),
         labels: () => client<{ data: Label[] }>(`${base}/labels`),
         createLabel: (body: { name: string, color?: string }) =>
           client<{ data: Label }>(`${base}/labels`, { method: 'POST', body }),

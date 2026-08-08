@@ -12,6 +12,7 @@ use App\Exceptions\CommunicationOperationException;
 use App\Jobs\Communication\DispatchOutboxJob;
 use App\Models\CommunicationInbox;
 use App\Models\CommunicationMessage;
+use App\Models\CommunicationMessageBatch;
 use App\Models\CommunicationOutboxEntry;
 use App\Services\Communication\Availability;
 use App\Services\Communication\Gateway\GatewayOperationPolicy;
@@ -46,6 +47,25 @@ final readonly class OutboxService
     }
 
     /** @param array<string, mixed> $payload */
+    public function enqueueBatch(
+        CommunicationInbox $inbox,
+        array $payload,
+        CommunicationMessageBatch $batch,
+        ?string $commandId = null,
+    ): CommunicationOutboxEntry {
+        return $this->persist(
+            $inbox,
+            GatewayCommandType::SendMessageBatch,
+            $payload,
+            null,
+            $commandId,
+            null,
+            true,
+            $batch,
+        );
+    }
+
+    /** @param array<string, mixed> $payload */
     public function enqueueAcceptedFollowUp(
         CommunicationInbox $inbox,
         GatewayCommandType $type,
@@ -73,8 +93,9 @@ final readonly class OutboxService
         ?string $commandId,
         ?string $effectKey,
         bool $assertAvailability,
+        ?CommunicationMessageBatch $batch = null,
     ): CommunicationOutboxEntry {
-        $this->assertTenantConsistency($inbox, $message);
+        $this->assertTenantConsistency($inbox, $message, $batch);
         if ($effectKey !== null && $effectKey !== '') {
             $existing = CommunicationOutboxEntry::query()
                 ->withoutGlobalScopes()
@@ -95,7 +116,11 @@ final readonly class OutboxService
 
         $commandId ??= $effectKey ?? ('command-'.strtolower((string) Str::ulid()));
         $providerMessageId = $message?->provider_message_id;
-        if ($providerMessageId === null && GatewayContractPayload::requiresProviderMessageId($type)) {
+        if (GatewayContractPayload::usesCommandIdAsProviderMessageId($type)) {
+            // The target message is linked through message_id. The remote ID
+            // belongs to the action frame and must stay stable across retries.
+            $providerMessageId = $commandId;
+        } elseif ($providerMessageId === null && GatewayContractPayload::requiresProviderMessageId($type)) {
             // Ações (edit/revoke/reaction/vote) não criam uma nova mensagem
             // de timeline. O command_id persistido fornece o ID remoto estável
             // sem reaproveitar indevidamente o ID da mensagem alvo.
@@ -109,11 +134,12 @@ final readonly class OutboxService
             providerMessageId: is_string($providerMessageId) ? $providerMessageId : null,
         );
 
-        $entry = DB::transaction(function () use ($inbox, $message, $commandId, $effectKey, $type, $payload, $command): CommunicationOutboxEntry {
+        $entry = DB::transaction(function () use ($inbox, $message, $batch, $commandId, $effectKey, $type, $payload, $command): CommunicationOutboxEntry {
             return CommunicationOutboxEntry::query()->create([
                 'tenant_id' => $inbox->tenant_id,
                 'inbox_id' => $inbox->id,
                 'message_id' => $message?->id,
+                'message_batch_id' => $batch?->id,
                 'command_id' => $commandId,
                 'effect_key' => $effectKey,
                 'session_id' => $inbox->session_id,
@@ -133,6 +159,7 @@ final readonly class OutboxService
     private function assertTenantConsistency(
         CommunicationInbox $inbox,
         ?CommunicationMessage $message,
+        ?CommunicationMessageBatch $batch,
     ): void {
         if (! $inbox->exists || trim((string) $inbox->session_id) === '') {
             throw new CommunicationOperationException(OperationFailure::InboxSessionInvalid);
@@ -142,6 +169,14 @@ final readonly class OutboxService
             ! $message->exists
             || (int) $message->tenant_id !== (int) $inbox->tenant_id
             || (int) $message->inbox_id !== (int) $inbox->id
+        )) {
+            throw new CommunicationOperationException(OperationFailure::OutboxTenantScopeInvalid);
+        }
+
+        if ($batch !== null && (
+            ! $batch->exists
+            || (int) $batch->tenant_id !== (int) $inbox->tenant_id
+            || (int) $batch->inbox_id !== (int) $inbox->id
         )) {
             throw new CommunicationOperationException(OperationFailure::OutboxTenantScopeInvalid);
         }

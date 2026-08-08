@@ -333,6 +333,66 @@ class PublicOpenApiContractTest extends TestCase
         $this->assertSame('private, no-store, max-age=0', $document['paths']['/api/v1/communication/conversations/{conversation}/shared-content']['get']['responses']['200']['headers']['Cache-Control']['schema']['const']);
     }
 
+    public function test_communication_gif_proxy_contract_is_explicit_private_and_allowlisted(): void
+    {
+        $document = $this->document();
+        $schemas = $document['components']['schemas'];
+        $search = $document['paths']['/api/v1/communication/gifs/search']['get'];
+        $parameters = collect($search['parameters'])->keyBy('name');
+
+        $this->assertTrue($parameters['inbox_id']['required']);
+        $this->assertSame(2, $parameters['q']['schema']['minLength']);
+        $this->assertSame(25, $parameters['limit']['schema']['maximum']);
+        $this->assertSame(
+            '#/components/schemas/CommunicationGifSearchResponse',
+            $search['responses']['200']['content']['application/json']['schema']['$ref'],
+        );
+        foreach (['403', '422', '503'] as $status) {
+            $this->assertSame(
+                '#/components/schemas/JsonResponse',
+                $search['responses'][$status]['content']['application/json']['schema']['$ref'],
+            );
+        }
+
+        $result = $schemas['CommunicationGifSearchResult'];
+        $this->assertFalse($result['additionalProperties']);
+        $this->assertSame(
+            '^/api/v1/communication/gifs/[A-Za-z0-9]{40}/preview$',
+            $result['properties']['preview_path']['pattern'],
+        );
+        $this->assertSame(
+            '^/api/v1/communication/gifs/[A-Za-z0-9]{40}/asset$',
+            $result['properties']['asset_path']['pattern'],
+        );
+        $this->assertArrayNotHasKey('media_url', $result['properties']);
+
+        $preview = $document['paths']['/api/v1/communication/gifs/{token}/preview']['get'];
+        $this->assertSame('^[A-Za-z0-9]{40}$', $preview['parameters'][0]['schema']['pattern']);
+        $this->assertSame(
+            '(?=.*\\bprivate\\b)(?=.*\\bno-store\\b)',
+            $preview['responses']['200']['headers']['Cache-Control']['schema']['pattern'],
+        );
+        $this->assertSame(
+            'binary',
+            $preview['responses']['200']['content']['image/gif']['schema']['format'],
+        );
+
+        $asset = $document['paths']['/api/v1/communication/gifs/{token}/asset']['get'];
+        $this->assertSame('^[A-Za-z0-9]{40}$', $asset['parameters'][0]['schema']['pattern']);
+        $this->assertSame(
+            '(?=.*\\bprivate\\b)(?=.*\\bno-store\\b)',
+            $asset['responses']['200']['headers']['Cache-Control']['schema']['pattern'],
+        );
+        $this->assertSame(
+            'binary',
+            $asset['responses']['200']['content']['video/mp4']['schema']['format'],
+        );
+        $this->assertSame(
+            '#/components/schemas/JsonResponse',
+            $asset['responses']['503']['content']['application/json']['schema']['$ref'],
+        );
+    }
+
     /**
      * @return array<string, mixed>
      */

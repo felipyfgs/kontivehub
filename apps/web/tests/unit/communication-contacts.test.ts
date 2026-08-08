@@ -198,21 +198,21 @@ describe('communication contacts — rotas e helpers', () => {
       export: 'Exportar',
       purge: 'Expurgar'
     })
-    expect(COMMUNICATION_CONTACT_SOLID_ACTION_CLASS).toContain('text-zinc-950')
-    expect(COMMUNICATION_CONTACT_DANGER_SOFT_CLASS).toContain('text-red-900')
-    expect(communicationContactStatusContrastClass(sampleContact)).toContain('text-green-900')
+    expect(COMMUNICATION_CONTACT_SOLID_ACTION_CLASS).toContain('text-inverted')
+    expect(COMMUNICATION_CONTACT_DANGER_SOFT_CLASS).toContain('text-error')
+    expect(communicationContactStatusContrastClass(sampleContact)).toContain('text-success')
     expect(communicationContactStatusContrastClass({
       ...sampleContact,
       is_provisional: true
-    })).toContain('text-amber-900')
+    })).toContain('text-warning')
     expect(communicationContactStatusContrastClass({
       ...sampleContact,
       is_active: false
-    })).toContain('text-zinc-900')
+    })).toContain('text-default')
     expect(communicationContactStatusContrastClass({
       ...sampleContact,
       purged_at: '2026-07-28T10:00:00Z'
-    })).toContain('text-red-900')
+    })).toContain('text-error')
     expect(communicationContactPrimaryPhone({
       ...sampleContact,
       identities: [
@@ -404,7 +404,8 @@ describe('communication contacts — superfícies e contrato Shell', () => {
     expect(table).toContain('aria-label="Carregando contatos"')
     expect(table).toContain('communication-contacts-stale-error')
     expect(table).toContain('A última leitura válida permanece disponível.')
-    expect(table).toContain('<UAvatar')
+    expect(table).toContain('<CommunicationProfileAvatar')
+    expect(table).toContain(':subject="contact"')
     expect(table).toContain('rounded-xl')
     expect(table).toContain('gap-4')
     expect(table).toContain('space-y-4')

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\Communication\InboxStatus;
 use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -29,6 +30,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class CommunicationInbox extends Model
 {
     use BelongsToTenant;
+    use HasFactory;
 
     protected function casts(): array
     {
@@ -63,5 +65,15 @@ class CommunicationInbox extends Model
     public function messages(): HasMany
     {
         return $this->hasMany(CommunicationMessage::class, 'inbox_id');
+    }
+
+    public function stickerObservations(): HasMany
+    {
+        return $this->hasMany(CommunicationStickerObservation::class, 'inbox_id');
+    }
+
+    public function stickerSyncWatermarks(): HasMany
+    {
+        return $this->hasMany(CommunicationStickerSyncWatermark::class, 'inbox_id');
     }
 }

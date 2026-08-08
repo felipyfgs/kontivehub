@@ -11,7 +11,7 @@ COPY --chmod=755 apps/web/docker/entrypoint.sh /usr/local/bin/app-entrypoint
 ENTRYPOINT ["app-entrypoint"]
 CMD ["dev"]
 
-FROM node:24-bookworm AS web-builder
+FROM node:24-bookworm AS web-dependencies
 
 WORKDIR /workspace/apps/web
 
@@ -21,7 +21,31 @@ COPY apps/web/package.json apps/web/pnpm-lock.yaml apps/web/pnpm-workspace.yaml 
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     corepack pnpm install --frozen-lockfile
 
+FROM web-dependencies AS test
+
 COPY apps/web/ ./
+COPY apps/api/resources/contracts /workspace/api-contracts
+COPY apps/api/app/Services/FiscalMonitoring/Surfaces /workspace/api-monitoring-surfaces
+COPY docker/nginx /workspace/nginx
+
+ENV CI=true \
+    NODE_ENV=test \
+    NUXT_DEVTOOLS=false \
+    NUXT_UI_FONTS=false \
+    CHOKIDAR_USEPOLLING=false \
+    PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN=false
+
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    corepack pnpm install --offline --frozen-lockfile
+
+CMD ["corepack", "pnpm", "run", "test:gate"]
+
+FROM web-dependencies AS web-builder
+
+COPY apps/web/ ./
+
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    corepack pnpm install --offline --frozen-lockfile
 
 ARG NUXT_PUBLIC_COMMUNICATION_ENABLED=false
 ARG NUXT_PUBLIC_REVERB_APP_KEY=communication-disabled
